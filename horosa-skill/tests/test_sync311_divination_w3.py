@@ -31,6 +31,14 @@ GUAZHAN = CORE_JS_SRC / "vendor" / "guazhan" / "GuaZhanMain.js"
 DOCTRINE_CACHE = CORE_JS_SRC / "vendor" / "gua" / "data" / "liuyaoDoctrineCache.js"
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _UPSTREAM_ROOT else None
+
+
+def read_facade_source(path: Path) -> str:
+    """上游 v3.12.0 把 aiAnalysisContext.js / aiExport.js 拆成「门面 + 同名目录」，门面注明读源码的检查一律读
+    「本文件 + 该目录」；只读门面会读不到实现（与 scripts/_upstream_preset.read_aiexport_source 同一口径）。"""
+    folder = path.with_suffix("")
+    files = [path, *sorted(folder.glob("*.js"))] if folder.is_dir() else [path]
+    return "\n".join(f.read_text(encoding="utf-8") for f in files)
 requires_upstream = pytest.mark.skipif(
     UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
@@ -333,7 +341,7 @@ def test_yizhangjing_annual_method_unset_mirrors_the_headless_mount(tmp_path) ->
 def test_yizhangjing_headless_default_evidence_still_holds_upstream() -> None:
     """证据链源码锚：无头挂载传 record.annualMethod、引擎把非 xiaoxian/liunian 归 ''、挂载齿轮缺省 'xiaoxian'（拨「小限」
     被 prune 成无覆盖）、页面出厂 'xiaoxian'。任一处上游改了就红 —— 提示重审 skill 的缺省。"""
-    ctx = (UPSTREAM_UI / "utils" / "aiAnalysisContext.js").read_text(encoding="utf-8")
+    ctx = read_facade_source(UPSTREAM_UI / "utils" / "aiAnalysisContext.js")   # v3.12.0：门面 + aiAnalysisContext/ 目录
     report = (UPSTREAM_UI / "utils" / "yizhangjingReport.js").read_text(encoding="utf-8")
     mount = (UPSTREAM_UI / "utils" / "techniqueMountSettings.js").read_text(encoding="utf-8")
     page = (UPSTREAM_UI / "components" / "kinastro" / "KinAstroMain.js").read_text(encoding="utf-8")
@@ -341,7 +349,7 @@ def test_yizhangjing_headless_default_evidence_still_holds_upstream() -> None:
     assert "annualMethod: record.annualMethod," in call[: call.index("});")]
     assert "const annualMethod = (o.annualMethod === 'liunian' || o.annualMethod === 'xiaoxian') ? o.annualMethod : '';" in report
     assert "{ name: 'annualMethod', label: '逐年法', type: 'select', default: 'xiaoxian'" in mount
-    assert "yizhangjingAnnual: { def: 'xiaoxian'" in page
+    assert "yizhangjingAnnual: { label: '一掌经·逐年法', def: 'xiaoxian'" in page   # v3.12.0 加 label，缺省不变
 
 
 # ── 4. 地占：所问宫 / 读取范围 / 黄道体系恒发（上游两路同形） ────────────────────────────────────

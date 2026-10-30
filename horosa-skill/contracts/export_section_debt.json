@@ -1,14 +1,14 @@
 {
   "_comment": "上游 preset 段级欠账基线（棘轮：只减不增）。回填后跑 --update-baseline 收紧。",
   "source": {
-    "kind": "vendored",
-    "aiexport_settings_version": 56
+    "kind": "upstream",
+    "aiexport_settings_version": 60
   },
   "totals": {
-    "missing_sections": 14,
-    "extra_sections": 39,
+    "missing_sections": 8,
+    "extra_sections": 29,
     "absent_keys": 0,
-    "keys_with_debt": 27
+    "keys_with_debt": 17
   },
   "keys": {
     "acg": {
@@ -78,16 +78,6 @@
         "十六卦目录"
       ]
     },
-    "givenyear": {
-      "missing": [],
-      "extra": [
-        "当前时点"
-      ]
-    },
-    "guolao": {
-      "missing": [],
-      "extra": []
-    },
     "harmonic": {
       "missing": [],
       "extra": [
@@ -107,15 +97,7 @@
     "indiachart": {
       "missing": [],
       "extra": [
-        "宫位宫头",
-        "星与虚点",
-        "月宿"
-      ]
-    },
-    "lunarreturn": {
-      "missing": [],
-      "extra": [
-        "当前时点"
+        "未能计算"
       ]
     },
     "persiandirected": {
@@ -140,56 +122,16 @@
         "本命盘星与虚点"
       ]
     },
-    "profection": {
-      "missing": [],
-      "extra": [
-        "当前时点"
-      ]
-    },
-    "qizhengzeri": {
-      "missing": [],
-      "extra": []
-    },
     "relocation": {
       "missing": [],
       "extra": [
         "月宿"
       ]
     },
-    "solararc": {
-      "missing": [],
-      "extra": [
-        "当前时点"
-      ]
-    },
-    "solarreturn": {
-      "missing": [],
-      "extra": [
-        "当前时点"
-      ]
-    },
     "tianxing": {
       "missing": [],
       "extra": [
         "单时判读"
-      ]
-    },
-    "vedicprog": {
-      "missing": [],
-      "extra": [
-        "起盘信息"
-      ]
-    },
-    "wangji": {
-      "missing": [],
-      "extra": [
-        "心易起卦"
-      ]
-    },
-    "zodialrelease": {
-      "missing": [],
-      "extra": [
-        "本命盘星与虚点"
       ]
     }
   }

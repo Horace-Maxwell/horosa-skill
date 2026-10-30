@@ -9,8 +9,10 @@ from typing import Any
 from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
 from horosa_skill.astro_sidereal import zodiacal_display_text
+from horosa_skill.civil_calendar import _civil_wall_ms, _civil_wall_ms_of_moment
 from horosa_skill.engine import astro_snapshot as _astro_snap
-from horosa_skill.engine.astroextra_snapshots import fmt_num
+from horosa_skill.engine.astroextra_snapshots import _UNDEFINED, _js_number, ai_msg, fmt_num
+from horosa_skill.engine.astroextra_snapshots import _js_str as _ai_js_str
 from horosa_skill.service._common import (
     _join_lines,
     _js_round3,
@@ -216,7 +218,8 @@ def _germany_house_frames_lines(germany_result: Any, dial_points: list[dict[str,
 
 # uranianDial.js:289 太阳弧速率；AstroMidpoint.js:432 校时事件类型中文。
 _SOLAR_ARC_RATE = {"naibod": 0.9856473, "oneDeg": 1.0, "cardan": 0.9866667}
-_SOLAR_ARC_LABEL = {"oneDeg": "1°/年", "cardan": "Cardan", "naibod": "Naibod"}
+# v3.13.0 AstroMidpoint.js buildRectifySection：太阳弧三档改人话（cardan 59′12″ / naibod 均日弧）。
+_SOLAR_ARC_LABEL = {"oneDeg": "1°/年", "cardan": "59′12″", "naibod": "均日弧"}
 _RECTIFY_TYPE_CN = {"marriage": "婚姻", "children": "生育", "career": "事业", "move": "迁居", "loss": "丧亲", "accident": "意外", "other": "其他"}
 _RECTIFY_DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M")
 
@@ -244,7 +247,12 @@ def _germany_rectify_lines(payload: dict[str, Any], rectify_events: Any, dial_po
     events = [event for event in (rectify_events or []) if isinstance(event, dict) and event.get("date")] if isinstance(rectify_events, list) else []
     if not events:
         return []
-    birth = _parse_local_moment(f"{payload.get('date') or ''} {payload.get('time') or '00:00:00'}") if payload.get("date") else None
+    # v3.12.0：出生时刻经民用历单源 momentOfCivilDateTimeStr（公元前 / 1582 以前儒略历 / 公元 1–99 年都对）；
+    # 事件日期仍是 moment(ev.date)（引擎解析，现代日期）。两者都落到墙钟毫秒再相减。
+    birth = (
+        _civil_wall_ms_of_moment(f"{payload.get('date') or ''} {payload.get('time') or '00:00:00'}", strict=False)
+        if payload.get("date") else None
+    )
     if birth is None:
         return []
 
@@ -269,7 +277,11 @@ def _germany_rectify_lines(payload: dict[str, Any], rectify_events: Any, dial_po
     for index, event in enumerate(events):
         label = f"{event['label']}" if event.get("label") and f"{event['label']}".strip() else f"事件{index + 1}"
         when = _parse_local_moment(event.get("date"))
-        years = (when - birth).total_seconds() * 1000 / (86400000 * 365.2422) if when is not None else None
+        when_ms = (
+            _civil_wall_ms(when.year, when.month, when.day, when.hour, when.minute, when.second) + when.microsecond // 1000
+            if when is not None else None
+        )
+        years = (when_ms - birth) / (86400000 * 365.2422) if when_ms is not None else None
         hits: list[tuple[str, str, float]] = []
         arc: float | None = None
         if years is not None:
@@ -288,12 +300,102 @@ def _germany_rectify_lines(payload: dict[str, Any], rectify_events: Any, dial_po
         type_text = _RECTIFY_TYPE_CN.get(str(event.get("type")), "其他")
         rows.append(f"| {label} | {type_text} | {date_text or '—'} | {arc_text} | {hit_text} |")
     return [
-        f"（已录事件推进 MC/Asc 看是否触动本命因子，只预览不改盘；盘基 {_js_template_str(base)}°·容许 {_js_template_str(orb)}°·太阳弧 {_SOLAR_ARC_LABEL.get(sa_key) or 'Naibod'}；1°MC≈4 分钟出生时间）",
+        f"（已录事件推进 MC/Asc 看是否触动本命因子，只预览不改盘；盘基 {_dial_base_deg_text(base)}·容许 {_js_template_str(orb)}°·太阳弧 {_SOLAR_ARC_LABEL.get(sa_key) or '均日弧'}；1°MC≈4 分钟出生时间）",
         "| 事件 | 类型 | 日期 | 弧° | 命中(轴→本命因子·角距) |",
         "| --- | --- | --- | --- | --- |",
         *rows,
         f"命中合计：{total}",
     ]
+
+
+def _dial_base_deg_text(base: float) -> str:
+    """v3.13.0 UranianDialStyle.js dialBaseDegText：有限小数照原样 `${b}°`；`${b}` 超 9 字符（H7 这类无限小数）才改度分秒。
+    本仓盘基恒为缺省 90（headless 无显示仓），故只实现前一支；长串小数分支不可达，遇到即原样输出以免静默错字。"""
+    text = _js_template_str(base)
+    return f"{text}°"
+
+
+def _js_fixed2(value: Any) -> str:
+    """`Number(v).toFixed(2)`：非有限 → JS 的 'NaN' / 'Infinity'。"""
+    num = _js_number(value)
+    if not math.isfinite(num):
+        return _ai_js_str(num)
+    return fmt_num(num, 2)
+
+
+def _germany_declination_lines(payload: dict[str, Any], germany_result: Any) -> list[str]:
+    """[赤纬接触]（v3.13.0 上游 AstroMidpoint.js buildDeclinationSection；aiExport v59 自 [汉堡学派要素] 拆出、缺省开）。
+
+    门控 = 左栏「赤纬接触」开着（disp.showDeclination≠false；本仓 = 请求 `declination` 不是 false，缺省开），且后端给了
+    `declination` 字段（关了赤纬 / 旧后端 = 不产段）。不受汉堡门控；平行 / 反平行全表（不截前 6 对）。
+    """
+    if payload.get("declination") is False:
+        return []
+    decl = germany_result.get("declination") if isinstance(germany_result, dict) else None
+    if not isinstance(decl, dict):  # JS：`{}` 也是真值 → 照样成段（「暂无」行）
+        return []
+    par = decl.get("parallel") if isinstance(decl.get("parallel"), list) else []
+    cp = decl.get("contraParallel") if isinstance(decl.get("contraParallel"), list) else []
+
+    def get(item: Any, key: str) -> Any:
+        return item.get(key, _UNDEFINED) if isinstance(item, dict) else _UNDEFINED
+
+    def deg(value: Any) -> str:
+        num = _js_number(value)
+        if not math.isfinite(num):
+            return "—"
+        return f"{'+' if num >= 0 else ''}{fmt_num(num, 2)}°"
+
+    def delta(value: Any) -> str:
+        num = _js_number(value)
+        return fmt_num(num, 2) if math.isfinite(num) else "—"
+
+    out = [
+        "（平行≈合：两点赤纬同号、相差在容许度内；反平行≈冲：异号、绝对值相差在容许度内；行星与虚星入算，四轴不入算）",
+    ]
+    if not par and not cp:
+        out.append("容许度内暂无平行 / 反平行")
+        return out
+    out.append("| 接触 | 点对 | 赤纬 | 差 |")
+    out.append("| --- | --- | --- | --- |")
+    for p in par:
+        out.append(f"| 平行 | {ai_msg(get(p, 'a'))} ∥ {ai_msg(get(p, 'b'))} | {deg(get(p, 'decA'))} / {deg(get(p, 'decB'))} | {delta(get(p, 'delta'))}° |")
+    for p in cp:
+        out.append(f"| 反平行 | {ai_msg(get(p, 'a'))} ⥮ {ai_msg(get(p, 'b'))} | {deg(get(p, 'decA'))} / {deg(get(p, 'decB'))} | {delta(get(p, 'delta'))}° |")
+    return out
+
+
+def _germany_coord_midpoint_lines(payload: dict[str, Any], germany_result: Any) -> list[str]:
+    """[中点坐标]（v3.13.0 上游 AstroMidpoint.js buildCoordMidpointSection，aiExport v60）。
+
+    门控 = 挂载/页面「中点坐标」选了 ra 赤经 / decl 赤纬（本仓 = 请求 `mpCoord`，原样透传给 /germany/midpoint），且后端
+    `coordMidpoints.coord` 与之相同；黄经（缺省）不成段。接触表前 80 行。
+    """
+    coord = payload.get("mpCoord") if payload.get("mpCoord") in ("ra", "decl") else None
+    cm = germany_result.get("coordMidpoints") if isinstance(germany_result, dict) else None
+    if not coord or not isinstance(cm, dict) or cm.get("coord") != coord:
+        return []
+    unit = "赤经" if coord == "ra" else "赤纬"
+    out = [f"坐标：{unit}({'赤经近轴中点,合 / 刑 / 冲' if coord == 'ra' else '两点赤纬平均,平行 / 反平行'})"]
+
+    def asp(value: Any) -> str:
+        if value == "parallel":
+            return "平行"
+        if value == "contraParallel":
+            return "反平行"
+        return f"{_ai_js_str(value)}°"
+
+    rows = cm.get("contacts") if isinstance(cm.get("contacts"), list) else []
+    if not rows:
+        out.append(f"容许度内没有星体落在{unit}中点上")
+        return out
+    for c in rows[:80]:
+        item = c if isinstance(c, dict) else {}
+        out.append(
+            f"{ai_msg(item.get('id', _UNDEFINED))} {asp(item.get('aspect', _UNDEFINED))} "
+            f"{ai_msg(item.get('idA', _UNDEFINED))}/{ai_msg(item.get('idB', _UNDEFINED))} · 差 {_js_fixed2(item.get('delta', _UNDEFINED))}°"
+        )
+    return out
 
 
 def _build_germany_snapshot_text(
@@ -383,9 +485,17 @@ def _build_germany_snapshot_text(
     frames_lines = _germany_house_frames_lines(germany_result, dial_points)
     if frames_lines:
         tail_sections.append(("六宫框落宫", "\n".join(frames_lines)))
+    # v3.13.0 段序（buildGermanySnapshotText）：六宫框落宫 → 赤纬接触 → 校时预览 → 中点坐标 → 公式求解 → 汉堡学派要素。
+    # [公式求解] 只认显示仓 disp.formula（90°中点盘右栏手输），挂载齿轮无此项、headless 显示仓缺省空串 → 不产段，本仓不移植。
+    declination_lines = _germany_declination_lines(payload, germany_result)
+    if declination_lines:
+        tail_sections.append(("赤纬接触", "\n".join(declination_lines)))
     rectify_lines = _germany_rectify_lines(payload, rectify_events, dial_points)
     if rectify_lines:
         tail_sections.append(("校时预览", "\n".join(rectify_lines)))
+    coord_lines = _germany_coord_midpoint_lines(payload, germany_result)
+    if coord_lines:
+        tail_sections.append(("中点坐标", "\n".join(coord_lines)))
     return _render_snapshot_text(
         [
             (
@@ -747,8 +857,27 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
         zodiacal_text = zodiacal_display_text(zodiacal_key, payload.get("siderealAyanamsa") or "")
     else:
         zodiacal_text = zodiacal_raw
-    lines.append(f"宫制：{hsys_text}")
+    tab = _RELATIVE_TAB_BY_CODE.get(f"{payload.get('relative', 0)}", "Comp")
+    # v3.13.0（AstroRelative.js:146-150）：组合盘所选宫制合不出 / 属整宫一类时后端回落（响应带 compositeHouseNote 与
+    # 回显的实际宫制 params.hsys）→ 表头如实写「所选 X,本盘实际 Y」（逗号是上游原文的半角「,」）。
+    house_note = response.get("compositeHouseNote")
+    res_params = response.get("params") if isinstance(response.get("params"), dict) else None
+    sel_hsys_str = _js_template_str(hsys_raw) if hsys_raw is not None else "undefined"
+    actual_hsys = (
+        res_params.get("hsys")
+        if tab in ("Composite", "TimeSpace") and house_note and res_params is not None and "hsys" in res_params
+        and _js_template_str(res_params.get("hsys")) != sel_hsys_str
+        else None
+    )
+    if actual_hsys is not None:
+        actual_text = HOUSE_SYSTEM_LABELS.get(_js_template_str(actual_hsys)) or _js_template_str(actual_hsys)
+        lines.append(f"宫制：所选 {hsys_text},本盘实际 {actual_text}")
+    else:
+        lines.append(f"宫制：{hsys_text}")
     lines.append(f"黄道：{zodiacal_text}")
+    # v3.13.0（:154）：AI 双盘挂载（aiAnalysisContext/pair.js 传 unifiedByA）才出的口径行；合盘页 / 本仓 relative 工具不传。
+    if payload.get("unifiedByA"):
+        lines.append("口径：两盘统一按星盘A的宫制 / 黄道 / 古典口径起盘(星盘B 的单盘段仍按它自己记录的口径)")
     rendered: list[tuple[str, str]] = [("关系起盘信息", _join_lines(lines[1:]))]
 
     def add(title: str, body_lines: list[str]) -> None:
@@ -756,7 +885,6 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
         if body:
             rendered.append((title, body))
 
-    tab = _RELATIVE_TAB_BY_CODE.get(f"{payload.get('relative', 0)}", "Comp")
     # 合成盘/比较盘响应无请求 fields：上游把工作台宫制数字位喂进去（:174/:191，`{ hsys: comp.params.hsys }`），
     # 否则 [分宫制宫神星表] 只能靠后端回显文本反查（hsys 8/24 与 1/0 撞名）。影响盘两盘传 null（:199/:204）。
     hsys_fields = {"hsys": payload.get("hsys")} if payload.get("hsys") is not None else {}
@@ -774,7 +902,14 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
             if isinstance(one, dict) and isinstance(one.get("chart"), dict):
                 add(title, [_headerless_astro_snapshot_text(hsys_fields, one)])
     if tab in ("Composite", "TimeSpace") and isinstance(response.get("chart"), dict):
-        add("时空中点·合成图盘" if tab == "TimeSpace" else "合成图盘", [_headerless_astro_snapshot_text(hsys_fields, response)])
+        # v3.13.0（:187-193）：后端回落整宫 / Porphyry 时先写「宫制说明：…」，宫制数字位改取回显的实际值（snapHsys）。
+        composite_lines: list[str] = [f"宫制说明：{_js_template_str(house_note)}"] if house_note else []
+        if house_note and res_params is not None and "hsys" in res_params:
+            snap_fields: dict[str, Any] = {"hsys": res_params.get("hsys")}
+        else:
+            snap_fields = hsys_fields
+        composite_lines.append(_headerless_astro_snapshot_text(snap_fields, response))
+        add("时空中点·合成图盘" if tab == "TimeSpace" else "合成图盘", composite_lines)
     if tab in ("Synastry", "Marks"):
         prefix = "马克斯·" if tab == "Marks" else ""
         for title, key in ((f"{prefix}影响图盘-星盘A", "inner"), (f"{prefix}影响图盘-星盘B", "outer")):

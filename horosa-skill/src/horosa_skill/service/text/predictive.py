@@ -15,10 +15,17 @@ from horosa_skill.engine.decennials import (
 )
 from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS
 from horosa_skill.service import _clock
+from horosa_skill.civil_calendar import (
+    _MS_PER_DAY,
+    _UNIX_EPOCH_JDN,
+    _civil_date_str_of_jdn,
+    _civil_wall_ms,
+    _civil_wall_ms_of_moment,
+    _greg_ymd_of_jdn,
+)
 from horosa_skill.service._common import (
     _finite_number,
     _join_lines,
-    _js_date_parse,
     _render_snapshot_text,
 )
 from horosa_skill.service.text.astro_core import (
@@ -39,8 +46,11 @@ from horosa_skill.service.text.astro_core import (
 # 星运族 [方法说明]：每键 2-4 行公开通行机理与读法（零书名零章节）。键=导出 technique 名。
 _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
     "primarydirect": [
+        # 上游 astroAiSnapshot.js:2007-2012（v3.13.0 +黄纬 / 日期两行）。
         "主限法：天体按周日运动(赤经/方位弧)推进,约 1 度合 1 年;迫星抵达应星的弧量换算年龄,用于判大事应期。",
         "读法：表中每行=一次抵达事件;以应星宫职与迫星性质合断吉凶主题。",
+        "黄纬：黄道制里迫星相位点缺省在黄道上(黄纬 0),「相位点黄纬」可改为合冲带黄纬 / 余弦递减 / 线性递减 / 按宫位(按宫位 = 相位点离黄道垂足的宫位偏移与迫星本体相同,只对 Placidus / Regiomontanus / Campanus / Topocentric / Horizontal / Koch / Alcabitius / Meridian 起作用;见扩展设置行);应星用自身黄纬。",
+        "日期：整年取第 N 个周年(出生时刻按公历加 N 年)、年内零头按「日期年长」折成天数(默认到下一周年日的实际天数,或 365 / 366 定长年,两档最多差 1 天,见扩展设置行);2 月 29 日生于平年,主限周年取 2 月 28 日(小限 / 太阳弧 / 行星弧年表的行取 3 月 1 日,同一周岁两表可差一天)。",
     ],
     "zodialrelease": [
         # 上游 astroAiSnapshot.js:2029-2033 [Q-363/T-344]：缺省基点=福点，期长=各座守护星小年（非行星大年）。
@@ -52,13 +62,16 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "读法：主期星定大主题、子期星定阶段事项,两星本命状态与彼此关系定吉凶成色。",
     ],
     "distributions": [
-        # 上游 astroAiSnapshot.js:2038-2042 [Q-170/T-109]：恒以上升为释放点，界表随全局界系。
-        "界推运(分配法)：上升按主限速率行经黄道各界,界主星即该段\"分配星\";界表用当前全局界系设置。",
-        "读法：分配星与其间同行的本命星(参与星)共同定该段境遇;换界即换阶段。",
+        # 上游 astroAiSnapshot.js:2022-2027（v3.13.0 重写：发放点 / 时间算法 / 年长 / 年限四项可选，伙伴星）。
+        "界推运(分配法)：周日运动把黄道各度依次带上地平,发放点(默认上升)顺黄道走过其后各界,每一界一期,界主星即该期的\"分配星\";界表用当前全局界系设置。",
+        "时间：上升时间法(古典)每度年数 = 该星座在出生纬度的上升时间 ÷ 30;斜升差法逐度取斜升差;Qisma 每度 1 年。伙伴星 = 发放点最近经过的七星本体或其左右 60° / 90° / 120°、180° 相位点,各管到下一点为止。",
+        "读法：分配星定该期大方向,伙伴星定其中的具体境遇;换界、换伙伴即换阶段。",
     ],
     "agepoint": [
-        "年龄推进点：心理占星年龄点每宫约 6 年匀速推进,逐宫走完十二宫。",
-        "读法：落宫定人生课题场域,与本命星的合相/相位标记该年龄的关键事件与心理主题。",
+        # 上游 astroAiSnapshot.js:2028-2033（v3.13.0 重写：推进方式 / 事件 / 年长 / 年限四项可选）。
+        "年龄推进点：年龄点自上升点起逐宫顺行,每宫 6 年、72 年回到上升。Koch 宫档在每宫内按黄道跨度匀速(宽宫走得快);等速档自上升每年 5°(= 上升起等宫)。",
+        "事件：年龄点经过本命点(日月五星、天王 / 海王 / 冥王、北交、福点、四轴)或其左右六合 / 四分 / 三分与冲的位置,按精确穿越岁数列出;只报合档只看合七星。",
+        "读法：落宫定人生课题场域,事件岁数标记该年龄的关键主题;合与冲最强,四分次之,三分 / 六合较顺。",
     ],
     # [Q-106/T-10] 星运三页上线（上游 astroAiSnapshot.js:2045-2057 逐字；ASCII 逗号/分号亦照抄）
     "ephemeris": [
@@ -125,13 +138,15 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "指定日期：传 datetime=YYYY-MM-DD 可整铸该日向运盘(「指定日期向运盘」段:directed 点位+向运→本命命中);rateKey/direction 可换速率与顺逆。",
     ],
     "yearsystem129": [
-        # 上游 astroAiSnapshot.js:2111-2115 [Q-170/T-109]：小年 Σ=129，子限=主限小年七等分。
-        "129 年系统：以七星小年合计 129 年为总周期,按小年切主限,主限内再七等分为子限。",
+        # 上游 astroAiSnapshot.js:2096-2101（v3.13.0：引擎改前端 utils/yearSystem129，子限三种铺法）。
+        "129 年系统：七星各管其小年(土30木12火15日19金8水20月25,合 129 年);主限长度 = 小年 × 年长,七星按所选次序(本命黄经序或迦勒底序)从起始星铺开。",
+        "子限从本主限星起按同一次序:日数法每颗 = 子星小年 × ⌊2.5 × 主星小年⌋ 日(一轮不填满主限,余下时段无子限);比例法 = 主限 × 子星小年 ⁄ 129;七等分 = 主限 ⁄ 7。",
         "读法：主限星定大阶段,子限星定小阶段,起讫日期定应期窗口。",
     ],
     "balbillus": [
-        # 上游 astroAiSnapshot.js:2116-2121 [Q-170/T-109·T-110]：旺距削减主限 + 子限按削减年数×本层单位铺开。
-        "主/子限期法(Balbillus)：罗马期法,主限长度=该星小年 ×(1 − 离擢升度角距/360),七星按本命黄经序自起始星铺开;子限以「子星削减年数 × 本层时间单位(L2=月)」顺序铺开,末段填满父期。",
+        # 上游 astroAiSnapshot.js:2102-2107（v3.13.0：主限 = N′ ×(360 − d)⁄360，子限 ÷12 / 铺法可选）。
+        "主/子限期法(Balbillus)：罗马期法,主限长度 = N′ ×(360 − d)⁄ 360 年,d 为本命星所在度(黄经取整加一)离其擢升度的整度角距,N′ = 水20 / 金8 / 木12 / 土30 / 日18 / 月24 / 火14;七星按本命黄经序自起始星铺开。",
+        "子限从父期主星起按同一次序,每颗 = 该星上一层时长 ÷ 12(第三层 ÷ 144);一轮合计不到父期,铺法见快照首行(一轮不填满 / 循环到父期末 / 末段填满)。",
         "读法：主限星与子限星组合断该段主题;换限日期为节点。",
     ],
     "triplicityrulers": [
@@ -145,12 +160,13 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "读法：命中即激活年;k 越小复现越密;结合被激活点的本命性质定主题。",
     ],
     "lunationphase": [
-        "月相推运：二次推运的日月相位约 30 年走完一轮朔望循环,分八相。",
+        # 上游 astroAiSnapshot.js:2119-2123（v3.13.0：推运日月差按星历逐日精算）。
+        "月相推运：二次推运(一日为一年)的日月黄经差约 29.5 年走完一轮朔望循环,分八相;N 岁的推运日月差 = 出生后第 N 天真实的月日黄经差,各相起始岁数按星历精算。",
         "读法：新月=起始、上弦=建设、满月=显化、下弦=释放;当前相定人生大节奏。",
     ],
     "extrareturns": [
-        # 上游 astroAiSnapshot.js:2137-2141 [Q-170/T-109]：后端只求整回归，不产 1/4、1/2 周期行。
-        "多重回归：木星/土星等回归本命位置的整回归时刻表。",
+        # 上游 astroAiSnapshot.js:2124-2128（v3.13.0：三体 + 黄道 / 平真交点随本盘）。
+        "多重回归：土星 / 木星 / 月交回到本命黄经的整回归时刻表(第 n 回 = 走满 n 圈;逆行同一回三过逐过列出;黄道与平 / 真交点随本盘)。",
         "读法：整回归=大周期重启(如土星回归约 29.5 岁);两次回归之间可自行取中点作阶段参照,表内不列。",
     ],
 }
@@ -224,7 +240,13 @@ def _predictive_common_sections_text(
             except ValueError:
                 birth_dt = None
         if birth_dt is not None:
-            age = (now - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
+            # 上游 v3.12.0 birthInstantMsInZone(params.birth, params.zone)：出生钟面按**本盘时区**解读（此前按本机时区，
+            # 本机与盘不在同一时区时年龄差出时差）；「导出时刻」仍是本机钟面（上游 new Date()）。
+            try:
+                birth_instant = _birth_instant_in_zone(birth_dt, payload.get("zone"))
+                age = (now.astimezone() - birth_instant).total_seconds() / (365.2425 * 24 * 3600)
+            except (OverflowError, OSError, ValueError):
+                age = (now - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
             if -1 < age < 200:
                 # 上游 `Math.round(age * 100) / 100`（半数向 +∞，整数不带 .0）。
                 moment_lines.append(f"盘主当前年龄：{_ptext.js_str(_ptext.js_round2(age))} 岁")
@@ -247,132 +269,9 @@ def _ap_name(value: Any) -> str:
     return _ptext.astro_txt(value)
 
 
-def _fmt_age(value: Any) -> str:
-    """上游 AstroAgePoint.js:37 fmtAge：整数原样，其余 toFixed(2) 去尾零。"""
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return f"{value}"
-    if not math.isfinite(number):
-        return f"{value}"
-    if number == int(number):
-        return str(int(number))
-    return re.sub(r"\.?0+$", "", _ptext.js_to_fixed(number, 2))
-
-
-def _agepoint_row_aspects(point: dict[str, Any]) -> list[dict[str, Any]]:
-    """上游 AstroAgePoint.js:25 rowAspects：新后端 aspects=[{aspectTo,aspectAge}]；旧字段 aspectTo 兼容回退。"""
-    aspects = point.get("aspects")
-    if isinstance(aspects, list) and aspects:
-        return [a for a in aspects if isinstance(a, dict)]
-    if point.get("aspectTo"):
-        return [{"aspectTo": point.get("aspectTo"), "aspectAge": point.get("aspectAge")}]
-    return []
-
-
-def _agepoint_aspect_text(point: dict[str, Any]) -> str:
-    parts = []
-    for asp in _agepoint_row_aspects(point):
-        age = _finite_number(asp.get("aspectAge"))
-        parts.append(f"{_ap_name(asp.get('aspectTo'))}{f'({_fmt_age(age)}岁)' if age is not None else ''}")
-    return "、".join(parts)
-
-
-def _agepoint_sign_text(point: dict[str, Any]) -> str:
-    signlon = point.get("signlon")
-    return f"{_ap_name(point.get('sign'))}{(' ' + _ptext.js_str(signlon) + '°') if signlon is not None else ''}"
-
-
-def _build_agepoint_snapshot_text(response: dict[str, Any]) -> str:
-    # 逐字镜像上游 components/astro/AstroAgePoint.js:44-100 buildAgePointSnapshotText。
-    # [Q-184/T-103]：后端给连续穿越解 crossings（精确岁数）+ 每行 aspects 列表；旧后端无 crossings 时由行拼出。
-    ap = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
-    points = [p for p in (ap.get("points") if isinstance(ap.get("points"), list) else []) if isinstance(p, dict)]
-    if not points:
-        # 无年龄推进点数据 = 该技法在本盘缺失（与 star阙 "挂载显示缺失" 一致）。
-        return _render_snapshot_text([("年龄推进点（Age Point / Huber）", "（本盘无年龄推进点数据）")])
-    crossings = ap.get("crossings") if isinstance(ap.get("crossings"), list) else []
-    crossings = [c for c in crossings if isinstance(c, dict)]
-    if not crossings:
-        for point in points:
-            for asp in _agepoint_row_aspects(point):
-                age = _finite_number(asp.get("aspectAge"))
-                crossings.append({"age": age if age is not None else point.get("age"), "aspectTo": asp.get("aspectTo")})
-    lines = ["年龄点自上升点起，沿 Koch 宫顺行，每宫 6 年、72 年回归上升；落于本命星处（合相）为人生关键节点。"]
-    if crossings:
-        lines.append("")
-        lines.append(
-            "关键岁数（合本命，精确穿越岁数）："
-            + "；".join(f"{_fmt_age(c.get('age'))}岁合{_ap_name(c.get('aspectTo'))}" for c in crossings)
-        )
-    lines.append("")
-    lines.append("| 年龄 | 落座 | 宫 | 合本命（穿越岁数） |")
-    lines.append("| --- | --- | --- | --- |")
-    for point in points:
-        asp = _agepoint_aspect_text(point)
-        lines.append(f"| {_ptext.js_str(point.get('age'))}岁 | {_agepoint_sign_text(point)} | {_ptext.js_str(point.get('house'))}宫 | {asp or '—'} |")
-    return _render_snapshot_text([("年龄推进点（Age Point / Huber）", "\n".join(lines))])
-
-
-def _agepoint_moment_line(response: dict[str, Any], birth: Any, now: datetime | None = None) -> str:
-    """上游 AstroAgePoint.js:81-92：定位行 = age ≤ 当前年龄的最大行（年长 365.2425 天）。"""
-    ap = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
-    points = [p for p in (ap.get("points") if isinstance(ap.get("points"), list) else []) if isinstance(p, dict)]
-    birth_dt = _js_date_parse(birth)
-    if birth_dt is None or not points:
-        return ""
-    cur_age = ((now or _clock.now()) - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
-    current = None
-    for point in points:
-        age = _finite_number(point.get("age"))
-        if age is not None and age <= cur_age and (current is None or age > _finite_number(current.get("age"))):
-            current = point
-    if current is None:
-        return ""
-    asp = _agepoint_aspect_text(current)
-    return (
-        f"当前年龄点：{_ptext.js_str(current.get('age'))}岁 落{_agepoint_sign_text(current)}，"
-        f"第{_ptext.js_str(current.get('house'))}宫{f'，合本命{asp}' if asp else ''}"
-    )
-
-
-def _distributions_moment_line(response: dict[str, Any], now: datetime | None = None) -> str:
-    """上游 AstroDistributions.js:57-67：今日所在分配段（起止可解析且含今日才出）。"""
-    rows = response.get("dist") if isinstance(response.get("dist"), list) else []
-    moment = now or _clock.now()
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        start, end = _js_date_parse(row.get("startDate")), _js_date_parse(row.get("endDate"))
-        if start is not None and end is not None and start <= moment <= end:
-            return (
-                f"当前分配星：{_ap_name(row.get('distributor'))}（{_ap_name(row.get('sign'))} 界，"
-                f"{row.get('startDate') or '-'} ~ {row.get('endDate') or '-'}）"
-            )
-    return ""
-
-
-def _build_distributions_snapshot_text(response: dict[str, Any]) -> str:
-    # 逐字镜像上游 components/astro/AstroDistributions.js:27-56 buildDistributionsSnapshotText。
-    # [Q-176/T-116a] 界表随全局界系（后端 TermDirection 收 terms_variant），不是写死埃及界。
-    rows = response.get("dist") if isinstance(response.get("dist"), list) else []
-    if not rows:
-        return _render_snapshot_text([("界推运（分配法 / Distributions）", "（本盘无界推运数据）")])
-    lines = [
-        "上升点经主限运动穿越黄道各界（界表用当前全局界系设置）；分配星=界主星，参与星=该期间内上升点触及的行星。",
-        "",
-        "| 分配星 | 界(座) | 参与星 | 起 | 止 |",
-        "| --- | --- | --- | --- | --- |",
-    ]
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        participants = row.get("participants") if isinstance(row.get("participants"), list) else []
-        part = "、".join(_ap_name(x) for x in participants) if participants else "—"
-        lines.append(
-            f"| {_ap_name(row.get('distributor'))} | {_ap_name(row.get('sign'))} | {part} | {row.get('startDate') or '-'} | {row.get('endDate') or '-'} |"
-        )
-    return _render_snapshot_text([("界推运（分配法 / Distributions）", "\n".join(lines))])
+# 年龄推进点 / 界推运的快照（上游 v3.13.0 重写）由 vendored 上游 buildAgePointSnapshotFromResult /
+# buildDistributionsSnapshotFromResult 出（horosa-core-js progextra FROM_RESULT 分支；runner 见
+# service/runners/predictive.py::_run_predict_result_tool）。此前这里是两份 Python 手抄移植，上游改写时零信号滞留。
 
 
 def _aspect_label(deg: Any) -> str:
@@ -471,10 +370,13 @@ def _build_jaynesprog_snapshot_text(
 _ARC_SOURCES = ("Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Sun")
 
 
-def _planetaryarc_default_datetime(now: datetime | None = None) -> str:
-    """上游 AstroPlanetaryArc.js:46 todayStr()：[Q-174/T-114] 缺省目标时刻 = 「明天此刻」（与页面构造期
-    dt.addDate(1) 同律；函数名叫 today 但取的是 now+24h）。"""
-    return ((now or _clock.now()) + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+def _planetaryarc_default_datetime(now: datetime | None = None, *, zone: Any = None) -> str:
+    """上游 AstroPlanetaryArc.js:49-53 todayStr(zone)：[Q-174/T-114] 缺省目标时刻 = 「明天此刻」（与页面构造期
+    dt.addDate(1) 同律；函数名叫 today 但取的是 now+24h）。v3.12.0：给了本盘时区 → 按它取此刻（DateTime.nowForChart）；
+    不给 = 本机钟面（原样）。"""
+    if now is None:
+        now = _now_for_chart(zone) if zone else _clock.now()
+    return (now + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _build_planetaryarc_snapshot_text(response: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
@@ -538,17 +440,18 @@ def _full_years_between(birth: Any, when: datetime) -> int | None:
     """上游 moment(now).diff(birth,'years',true) 的整数部分（按月日时逐级比，= 日历周岁）。
 
     moment 以「生日 + 整月数」为锚，月末钳位：2/29 生人在平年的锚是 2/28（当天即满岁）。
+    v3.12.0 planetaryAges.parseBirthMoment = civilMoment.birthMomentOfChart：出生日经民用历单源读（公元前 / 1582 以前
+    儒略历 / 五位年），moment 里装的是**同一天**的外推格里历年月日——所以这里先换到外推格里历（天文年）再按月日比。
     """
-    birth_dt = _persian_birth_date(birth)
-    if birth_dt is None:
+    parts = _civil_birth_greg_parts(birth)
+    if parts is None:
         return None
-    years = when.year - birth_dt.year
-    anchor_day = birth_dt.day
-    if birth_dt.month == 2 and birth_dt.day == 29 and not (when.year % 4 == 0 and (when.year % 100 != 0 or when.year % 400 == 0)):
+    b_year, b_month, b_day, b_hour, b_minute, b_second = parts
+    years = when.year - b_year
+    anchor_day = b_day
+    if b_month == 2 and b_day == 29 and not (when.year % 4 == 0 and (when.year % 100 != 0 or when.year % 400 == 0)):
         anchor_day = 28
-    if (when.month, when.day, when.hour, when.minute, when.second) < (
-        birth_dt.month, anchor_day, birth_dt.hour, birth_dt.minute, birth_dt.second
-    ):
+    if (when.month, when.day, when.hour, when.minute, when.second) < (b_month, anchor_day, b_hour, b_minute, b_second):
         years -= 1
     return years
 
@@ -567,7 +470,7 @@ def _build_planetaryages_snapshot_text(
     params = response.get("params") if isinstance(response.get("params"), dict) else (chart.get("params") if isinstance(chart.get("params"), dict) else {})
     objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
     obj_by_id = {o.get("id"): o for o in objects if isinstance(o, dict)}
-    reference = _persian_birth_date(as_of) if as_of else None
+    reference = _moment_format_parse(as_of) if as_of else None
     if reference is None:
         reference = (now or _clock.now()).replace(microsecond=0)
     cur_age = _full_years_between(params.get("birth"), reference)
@@ -603,34 +506,11 @@ def _build_planetaryages_snapshot_text(
     return _render_snapshot_text([("行星年龄（Ages of Man）", "\n".join(lines))])
 
 
-def _build_yearsystem129_snapshot_text(response: dict[str, Any]) -> str:
-    # Port of 星阙 AstroYearSystem129.buildYearSystem129SnapshotText. The 129-year data is computed
-    # server-side (perpredict.getYearSystem129) and carried in response.predictives.yearsystem129
-    # whenever the chart is cast with predictive truthy.
-    predictives = response.get("predictives") if isinstance(response.get("predictives"), dict) else {}
-    data = predictives.get("yearsystem129") if isinstance(predictives.get("yearsystem129"), list) else []
-    if not data:
-        return _render_snapshot_text([("129年系统表格", "（本盘无 129 年系统数据）")])
-    lines = [
-        "七政各管其小年（土30木12火15日19金8水20月25 = 129 年一轮），按 sect 起始、含子限。（succession 序实验性，待校准）",
-        "",
-        "| 主限 | 子限 | 日期 |",
-        "| --- | --- | --- |",
-    ]
-    for main in data:
-        if not isinstance(main, dict):
-            continue
-        subs = main.get("subDirect") if isinstance(main.get("subDirect"), list) else []
-        # 上游 AstroYearSystem129.js:26 cn = AstroTxtMsg[id] || id（单字行星名）。
-        main_name = _ptext.astro_txt(main.get("mainDirect"))
-        if not subs:
-            lines.append(f"| {main_name} | - | - |")
-            continue
-        for sub in subs:
-            if not isinstance(sub, dict):
-                continue
-            lines.append(f"| {main_name} | {_ptext.astro_txt(sub.get('subDirect'))} | {sub.get('date') or '-'} |")
-    return _render_snapshot_text([("129年系统表格", "\n".join(lines))])
+# 时主类星运（129 年系统 / Balbillus）共用的年制键（上游 utils/timeLordYears.js TIME_LORD_YEAR_TYPES，v3.13.0 起六档；
+# 值域与 vendored horosa-core-js/src/vendor/utils/timeLordYears.js 互锚：tests/test_sync313_predictive.py）。
+# 129 年系统的快照由 vendored yearSystem129.js 出（runner 走 progextra），本仓不再有 Python 移植——上游 v3.13.0 删了
+# 后端 yearsystem129.py，旧移植读的 predictives.yearsystem129 字段已不存在。
+_TIME_LORD_YEAR_TYPES = ("solar", "sidereal", "hellenistic", "abumashar", "mashaallah", "bija")
 
 
 _PERSIAN_MOVERS = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"]
@@ -668,14 +548,40 @@ _PERSIAN_MAX_YEARS_OPTIONS = (50, 90, 120, 150, 200)
 _PERSIAN_YEAR_DAYS = 365.2421904
 
 
-def _persian_birth_date(birth: Any) -> datetime | None:
-    raw = f"{birth or ''}".strip().replace("/", "-")
+def _moment_format_parse(text: Any) -> datetime | None:
+    """moment(串, ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-MM-DD']) 的现代子集——只给「此刻 / asOf」这类
+    引擎时刻用；命盘出生日期一律走 `_civil_birth_wall_ms`（上游 v3.12.0 起不再拿 moment 的格式解析读命盘日期）。"""
+    raw = f"{text or ''}".strip().replace("/", "-")
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             return datetime.strptime(raw, fmt)
         except ValueError:
             continue
     return None
+
+
+def _civil_birth_wall_ms(birth: Any) -> int | None:
+    """civilMoment.momentOfCivilDateTimeStr(`${birth}`) 的墙钟毫秒（民用历：公元前历史纪年、1582 以前儒略历、1–6 位年；
+    不验民用历存在性，与上游同）。缺 / 认不出 / 年 0 → None。"""
+    if not birth:
+        return None
+    return _civil_wall_ms_of_moment(f"{birth}".strip(), strict=False)
+
+
+def _civil_birth_greg_parts(birth: Any) -> tuple[int, int, int, int, int, int] | None:
+    """出生时刻 → moment 里装的外推格里历 (天文年, 月, 日, 时, 分, 秒)（civilMoment.momentOfCivilJdn 同式）。"""
+    wall = _civil_birth_wall_ms(birth)
+    if wall is None:
+        return None
+    day_n, rem = divmod(int(wall), _MS_PER_DAY)
+    year, month, day = _greg_ymd_of_jdn(day_n + _UNIX_EPOCH_JDN)
+    seconds = rem // 1000
+    return year, month, day, seconds // 3600, seconds // 60 % 60, seconds % 60
+
+
+def _wall_ms_of_naive(when: datetime) -> int:
+    """本机钟面 datetime（现代、格里历）→ 墙钟毫秒（= moment().format(...) 再经民用历单源读回，1582 以后两者同值）。"""
+    return _civil_wall_ms(when.year, when.month, when.day, when.hour, when.minute, when.second)
 
 
 def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float, direction: str) -> list[dict[str, Any]]:
@@ -702,7 +608,8 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
         lon = _persian_lon_of(house) if isinstance(house, dict) else None
         if lon is not None:
             targets.append((f"{index + 1}宫头", lon))
-    birth = _persian_birth_date(params.get("birth"))
+    birth_wall = _civil_birth_wall_ms(params.get("birth"))
+    birth_jdn = (int(birth_wall) // _MS_PER_DAY + _UNIX_EPOCH_JDN) if birth_wall is not None else None
     hits: list[dict[str, Any]] = []
     for mover in _PERSIAN_MOVERS:
         mover_lon = by_id.get(mover)
@@ -723,8 +630,9 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
                             break
                         if age > 0:
                             date = ""
-                            if birth is not None:
-                                date = (birth + timedelta(days=_ptext.js_round(age * _PERSIAN_YEAR_DAYS))).strftime("%Y-%m-%d")
+                            if birth_jdn is not None:
+                                # v3.12.0 civilDateAfterDays：出生日序 + Math.round(天) → 民用历日期标签
+                                date = _civil_date_str_of_jdn(birth_jdn + _ptext.js_round(age * _PERSIAN_YEAR_DAYS))
                             hits.append({
                                 "age": _ptext.js_round2(age), "promittor": mover, "aspect": aspect,
                                 "significator": target_id, "date": date,
@@ -736,12 +644,15 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
 
 
 def _persian_directed_age_years(birth: Any, when: Any) -> float | None:
-    """上游 AstroPersianDirected.js:161 directedAgeYears：两个墙钟时刻之差（天）/ 365.2421904。"""
-    birth_dt = _persian_birth_date(birth)
-    when_dt = when if isinstance(when, datetime) else _persian_birth_date(when)
-    if birth_dt is None or when_dt is None:
+    """上游 AstroPersianDirected.js directedAgeYears：两个时刻都经民用历单源（momentOfCivilDateTimeStr），
+    d.diff(b, 'days', true) / 365.2421904（墙钟差）。`when` 是 datetime 时 = 「此刻」的本机钟面。"""
+    if not birth or not when:
         return None
-    return (when_dt - birth_dt).total_seconds() / 86400.0 / _PERSIAN_YEAR_DAYS
+    birth_ms = _civil_birth_wall_ms(birth)
+    when_ms = _wall_ms_of_naive(when) if isinstance(when, datetime) else _civil_birth_wall_ms(when)
+    if birth_ms is None or when_ms is None:
+        return None
+    return (when_ms - birth_ms) / 86400000.0 / _PERSIAN_YEAR_DAYS
 
 
 def _select_nearby_persian_hits(hits: list[dict[str, Any]], current_age: float | None, limit: int = 12) -> list[dict[str, Any]]:
@@ -977,7 +888,13 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
     true_solar = chart.get("nongli", {}).get("birth", "无") if isinstance(chart, dict) else "无"
     order_label = "迦勒底星序" if settings.get("orderType") == DECENNIAL_ORDER_CHALDEAN else "实际黄道次序"
     day_label = "Hephaistio（原表日数）" if settings.get("dayMethod") == DECENNIAL_DAY_METHOD_HEPHAISTIO else "Valens（精确）"
-    cal_label = "365.25天/年（按回归年换算）" if settings.get("calendarType") == DECENNIAL_CALENDAR_ACTUAL else "360天/年（按30天/月换算）"
+    # 上游 utils/decennials.js:577-582 getDecennialCalendarLabel（AstroDecennials.js:193 [时间口径] 行逐字取它）：
+    # 1461/1440 的换算比是儒略年，不是回归年（v3.11.3 起上游即此文案，本仓此前一直印「按回归年换算」）。
+    cal_label = (
+        "365.25天/年（儒略年；回归年为 365.2422 天）"
+        if settings.get("calendarType") == DECENNIAL_CALENDAR_ACTUAL
+        else "360天/年（按30天/月换算）"
+    )
     start_label = f"得时光体（{resolved}）" if settings.get("startMode") == DECENNIAL_START_MODE_SECT_LIGHT else settings.get("startMode", resolved)
 
     def safe_idx(index: Any, length: int) -> int:
@@ -1189,9 +1106,87 @@ def _pd_display_rows(rows: Any, pd_method: str, show_pd_bounds: Any) -> list[lis
     return out
 
 
-def _upstream_now_wall_clock() -> datetime:
-    """上游 `new DateTime()` 的「此刻」：[Q-141] 缺省钟面 = 真实此刻换算到 +08:00（DateTime 缺省时区）。"""
-    return _clock.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
+# ── 「此刻」按本盘时区（上游 v3.12.0 components/comp/DateTime.js:26-46）────────────────────────────────────
+# 上游把推运 / 返照 / 行运类的缺省「此刻 / 今日 / 今年」统一改成按**这张盘的时区**取钟面：此前一律东八区钟面（或本机钟面）
+# 再配本命时区下发，不在东八区的盘错开时差那么多小时。东八区盘逐位不变。两个入口语义不同，照抄：
+#   nowForChart(zone)       盘时区合法 → 该时区钟面；否则 = new DateTime()（+08:00 钟面）
+#   wallClockForChart(zone) 盘时区合法 → 该时区钟面；否则 = new Date()（本机钟面）
+# 一切「此刻」都从 `_clock.now()`（本机钟面，测试可冻结）换成真实瞬时再平移，冻结时钟对这几路同样生效。
+_CHART_ZONE_RE = re.compile(r"^([+-])(\d{2}):(\d{2})(?::(\d{2}))?$")
+
+
+def _chart_zone_seconds(zone: Any) -> int | None:
+    """上游 nowForChart / wallClockForChart / birthInstantMsInZone 同一判据：`±HH:MM` 或带秒 `±HH:MM:SS`，否则 None。"""
+    match = _CHART_ZONE_RE.match(zone) if isinstance(zone, str) else None
+    if not match:
+        return None
+    sign = -1 if match.group(1) == "-" else 1
+    return sign * (int(match.group(2)) * 3600 + int(match.group(3)) * 60 + int(match.group(4) or 0))
+
+
+def _now_instant() -> datetime:
+    """真实此刻（带时区）。`_clock.now()` 是本机钟面（naive），`.astimezone()` 按本机时区解读成瞬时。"""
+    return _clock.now().astimezone()
+
+
+def _wall_clock_in(zone_seconds: int) -> datetime:
+    return _now_instant().astimezone(timezone(timedelta(seconds=zone_seconds))).replace(tzinfo=None)
+
+
+def _now_for_chart(zone: Any) -> datetime:
+    """上游 DateTime.nowForChart(zone)：盘时区合法 → 该时区此刻钟面；否则 new DateTime()（+08:00 钟面）。"""
+    seconds = _chart_zone_seconds(zone)
+    return _wall_clock_in(8 * 3600 if seconds is None else seconds)
+
+
+def _wall_clock_for_chart(zone: Any) -> datetime:
+    """上游 DateTime.wallClockForChart(zone)：盘时区合法 → 该时区此刻钟面；否则本机钟面（new Date()）。"""
+    seconds = _chart_zone_seconds(zone)
+    return _clock.now() if seconds is None else _wall_clock_in(seconds)
+
+
+def _today_for_chart(zone: Any) -> str:
+    """上游 astroProgSnapshot.js:18-21 today(zone) / regenHoraryElection.js:196-199 todayDateStr(zone)：
+    给了 zone（非空）= nowForChart(zone) 的日期；不给 = 本机今日。"""
+    return (_now_for_chart(zone) if zone else _clock.now()).strftime("%Y-%m-%d")
+
+
+def _birth_instant_in_zone(birth_wall: datetime, zone: Any) -> datetime:
+    """上游 astroAiSnapshot.js birthInstantMsInZone(birth, zone)：出生钟面按本盘时区解读；时区不合法 → 按本机时区（原样）。"""
+    seconds = _chart_zone_seconds(zone)
+    if seconds is None:
+        return birth_wall.astimezone()
+    return birth_wall.replace(tzinfo=timezone(timedelta(seconds=seconds)))
+
+
+def _is_gregorian_leap(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
+def _return_picker_seed(birth: Any, now: datetime) -> str:
+    """上游 utils/returnPickerSeed.js（v3.12.0）：三返照 / 流年缺省目标时刻 = 今年 + 出生月日 + 出生时分（'YYYY-MM-DD HH:mm'）。
+
+    出生串按民用历日期串解析（前导负号 / 1–5 位年都对），不按「前 4 位是年」切片——旧写法 `今年 + birth[4:]` 对
+    '-0003-03-10' 拼出「20263 年」。2 月 29 日出生、今年没有 2 月 29 日 → 落 3 月 1 日（上游 addCivilYears 同规则）。
+    birth 不可解析 → 此刻本身。`now` 是调用方取的 nowForChart(zone) 钟面（今年在盘时区里算）。
+    """
+    parts = f"{birth or ''}".strip().split()
+    match = re.fullmatch(r"(-?)(\d{1,5})-(\d{1,2})-(\d{1,2})", parts[0].replace("/", "-")) if parts else None
+    if not match or not 1 <= int(match.group(3)) <= 12 or not 1 <= int(match.group(4)) <= 31:
+        return now.strftime("%Y-%m-%d %H:%M")
+    month, day = int(match.group(3)), int(match.group(4))
+    # 今年（公历、近现代）落不到的 2/29 → 3/1；其余月日原样（出生串已是合法民用历日期）。
+    if month == 2 and day == 29 and not _is_gregorian_leap(now.year):
+        month, day = 3, 1
+
+    def num(value: str) -> int:
+        found = re.match(r"\s*([+-]?\d+)", value)
+        return int(found.group(1)) if found else 0
+
+    hms = f"{parts[1] if len(parts) > 1 else '12:00:00'}".split(":")
+    hour = num(hms[0])
+    minute = num(hms[1]) if len(hms) > 1 else 0
+    return f"{now.year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
 
 
 # 上游 predictiveAiSnapshot.js:106-139 pickInfoBlocks 的块标题白名单（[本命盘配置]「信息」子块）。

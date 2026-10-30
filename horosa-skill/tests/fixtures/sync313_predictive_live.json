@@ -1,0 +1,4827 @@
+{
+ "_source": "vendored v3.13.0 chart service :8877 实抓（scripts: scratch capture.py），请求 = BIRTH 1995-06-03 05:30 +08:00 上海 hsys0 回归黄道",
+ "request": {
+  "date": "1995/06/03",
+  "time": "05:30:00",
+  "zone": "+08:00",
+  "lat": "31n13",
+  "lon": "121e28",
+  "hsys": 0,
+  "zodiacal": 0,
+  "predictive": 1,
+  "ad": 1
+ },
+ "agepoint": {
+  "default": {
+   "agepoint": {
+    "settings": {
+     "apMethod": "koch",
+     "apEvents": "full",
+     "apYear": "tropical",
+     "apMaxAge": 72
+    },
+    "points": [
+     {
+      "age": 0,
+      "date": "1995-06-03",
+      "apLon": 80.66,
+      "sign": "Gemini",
+      "signlon": 20.66,
+      "house": 1,
+      "aspectTo": "Saturn",
+      "aspect": "四分",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 0.76,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 0.76
+     },
+     {
+      "age": 1,
+      "date": "1996-06-02",
+      "apLon": 84.86,
+      "sign": "Gemini",
+      "signlon": 24.86,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 2,
+      "date": "1997-06-02",
+      "apLon": 89.07,
+      "sign": "Gemini",
+      "signlon": 29.07,
+      "house": 1,
+      "aspectTo": "IC",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "IC",
+        "aspectAge": 2.91,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 2.91,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 2.91
+     },
+     {
+      "age": 3,
+      "date": "1998-06-02",
+      "apLon": 93.27,
+      "sign": "Cancer",
+      "signlon": 3.27,
+      "house": 1,
+      "aspectTo": "North Node",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 3.09,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 3.13,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 3.09
+     },
+     {
+      "age": 4,
+      "date": "1999-06-03",
+      "apLon": 97.48,
+      "sign": "Cancer",
+      "signlon": 7.48,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 5,
+      "date": "2000-06-02",
+      "apLon": 101.69,
+      "sign": "Cancer",
+      "signlon": 11.69,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 6,
+      "date": "2001-06-02",
+      "apLon": 105.89,
+      "sign": "Cancer",
+      "signlon": 15.89,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 7,
+      "date": "2002-06-02",
+      "apLon": 109.81,
+      "sign": "Cancer",
+      "signlon": 19.81,
+      "house": 2,
+      "aspectTo": "Venus",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 7.18,
+        "aspectType": 60,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 7.18
+     },
+     {
+      "age": 8,
+      "date": "2003-06-03",
+      "apLon": 113.73,
+      "sign": "Cancer",
+      "signlon": 23.73,
+      "house": 2,
+      "aspectTo": "Saturn",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 8.03,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 8.38,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 8.03
+     },
+     {
+      "age": 9,
+      "date": "2004-06-02",
+      "apLon": 117.66,
+      "sign": "Cancer",
+      "signlon": 27.66,
+      "house": 2,
+      "aspectTo": "Pluto",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 9.31,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 9.64,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 9.88,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 9.31
+     },
+     {
+      "age": 10,
+      "date": "2005-06-02",
+      "apLon": 121.58,
+      "sign": "Leo",
+      "signlon": 1.58,
+      "house": 2,
+      "aspectTo": "North Node",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 10.53,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 10.53
+     },
+     {
+      "age": 11,
+      "date": "2006-06-02",
+      "apLon": 125.5,
+      "sign": "Leo",
+      "signlon": 5.5,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 12,
+      "date": "2007-06-03",
+      "apLon": 129.42,
+      "sign": "Leo",
+      "signlon": 9.42,
+      "house": 3,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "合",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 12.12,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 12.23,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 12.63,
+        "aspectType": 60,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 12.12
+     },
+     {
+      "age": 13,
+      "date": "2008-06-02",
+      "apLon": 133.33,
+      "sign": "Leo",
+      "signlon": 13.33,
+      "house": 3,
+      "aspectTo": "Mercury",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 13.53,
+        "aspectType": 60,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 13.53
+     },
+     {
+      "age": 14,
+      "date": "2009-06-02",
+      "apLon": 137.24,
+      "sign": "Leo",
+      "signlon": 17.24,
+      "house": 3,
+      "aspectTo": "Venus",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 14.84,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 14.87,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 14.87,
+        "aspectType": 120,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 14.84
+     },
+     {
+      "age": 15,
+      "date": "2010-06-02",
+      "apLon": 141.16,
+      "sign": "Leo",
+      "signlon": 21.16,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 16,
+      "date": "2011-06-03",
+      "apLon": 145.07,
+      "sign": "Leo",
+      "signlon": 25.07,
+      "house": 3,
+      "aspectTo": "Pluto",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 16.97,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 16.97
+     },
+     {
+      "age": 17,
+      "date": "2012-06-02",
+      "apLon": 148.98,
+      "sign": "Leo",
+      "signlon": 28.98,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 18,
+      "date": "2013-06-02",
+      "apLon": 152.9,
+      "sign": "Virgo",
+      "signlon": 2.9,
+      "house": 4,
+      "aspectTo": "IC",
+      "aspect": "合",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "IC",
+        "aspectAge": 18.0,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 18.0,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 18.11,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 18.14,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 18.0
+     },
+     {
+      "age": 19,
+      "date": "2014-06-02",
+      "apLon": 159.65,
+      "sign": "Virgo",
+      "signlon": 9.65,
+      "house": 4,
+      "aspectTo": "Jupiter",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 19.1,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 19.33,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 19.85,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 19.1
+     },
+     {
+      "age": 20,
+      "date": "2015-06-03",
+      "apLon": 166.4,
+      "sign": "Virgo",
+      "signlon": 16.4,
+      "house": 4,
+      "aspectTo": "Venus",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 20.61,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 20.63,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 20.63,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 20.61
+     },
+     {
+      "age": 21,
+      "date": "2016-06-02",
+      "apLon": 173.15,
+      "sign": "Virgo",
+      "signlon": 23.15,
+      "house": 4,
+      "aspectTo": "Saturn",
+      "aspect": "冲",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 21.1,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 21.31,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 21.85,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 21.1
+     },
+     {
+      "age": 22,
+      "date": "2017-06-02",
+      "apLon": 179.91,
+      "sign": "Virgo",
+      "signlon": 29.91,
+      "house": 4,
+      "aspectTo": "Uranus",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 22.04,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 22.18,
+        "aspectType": 60,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 22.04
+     },
+     {
+      "age": 23,
+      "date": "2018-06-02",
+      "apLon": 186.66,
+      "sign": "Libra",
+      "signlon": 6.66,
+      "house": 4,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 23.48,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 23.54,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 23.77,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 23.48
+     },
+     {
+      "age": 24,
+      "date": "2019-06-03",
+      "apLon": 193.41,
+      "sign": "Libra",
+      "signlon": 13.41,
+      "house": 5,
+      "aspectTo": "Mercury",
+      "aspect": "三分",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 24.32,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 24.32
+     },
+     {
+      "age": 25,
+      "date": "2020-06-02",
+      "apLon": 199.63,
+      "sign": "Libra",
+      "signlon": 19.63,
+      "house": 5,
+      "aspectTo": "Asc",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 25.16,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 25.16,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 25.9,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 25.16
+     },
+     {
+      "age": 26,
+      "date": "2021-06-02",
+      "apLon": 205.85,
+      "sign": "Libra",
+      "signlon": 25.85,
+      "house": 5,
+      "aspectTo": "Uranus",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 26.69,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 26.85,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 26.69
+     },
+     {
+      "age": 27,
+      "date": "2022-06-02",
+      "apLon": 212.07,
+      "sign": "Scorpio",
+      "signlon": 2.07,
+      "house": 5,
+      "aspectTo": "IC",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "IC",
+        "aspectAge": 27.13,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 27.13,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 27.26,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 27.28,
+        "aspectType": 60,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 27.13
+     },
+     {
+      "age": 28,
+      "date": "2023-06-03",
+      "apLon": 218.29,
+      "sign": "Scorpio",
+      "signlon": 8.29,
+      "house": 5,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 28.26,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 28.26
+     },
+     {
+      "age": 29,
+      "date": "2024-06-02",
+      "apLon": 224.51,
+      "sign": "Scorpio",
+      "signlon": 14.51,
+      "house": 5,
+      "aspectTo": "Venus",
+      "aspect": "冲",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 29.97,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 29.97
+     },
+     {
+      "age": 30,
+      "date": "2025-06-02",
+      "apLon": 230.73,
+      "sign": "Scorpio",
+      "signlon": 20.73,
+      "house": 6,
+      "aspectTo": "Saturn",
+      "aspect": "三分",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 30.62,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 30.9,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 30.62
+     },
+     {
+      "age": 31,
+      "date": "2026-06-02",
+      "apLon": 235.72,
+      "sign": "Scorpio",
+      "signlon": 25.72,
+      "house": 6,
+      "aspectTo": "Pluto",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 31.63,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 31.89,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 31.63
+     },
+     {
+      "age": 32,
+      "date": "2027-06-02",
+      "apLon": 240.71,
+      "sign": "Sagittarius",
+      "signlon": 0.71,
+      "house": 6,
+      "aspectTo": "Moon",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 32.08,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "IC",
+        "aspectAge": 32.44,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 32.44,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 32.63,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 32.08
+     },
+     {
+      "age": 33,
+      "date": "2028-06-02",
+      "apLon": 245.69,
+      "sign": "Sagittarius",
+      "signlon": 5.69,
+      "house": 6,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 33.84,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 33.93,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 33.84
+     },
+     {
+      "age": 34,
+      "date": "2029-06-02",
+      "apLon": 250.68,
+      "sign": "Sagittarius",
+      "signlon": 10.68,
+      "house": 6,
+      "aspectTo": "Sun",
+      "aspect": "冲",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 34.24,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 34.95,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 34.24
+     },
+     {
+      "age": 35,
+      "date": "2030-06-02",
+      "apLon": 255.67,
+      "sign": "Sagittarius",
+      "signlon": 15.67,
+      "house": 6,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 36,
+      "date": "2031-06-02",
+      "apLon": 260.66,
+      "sign": "Sagittarius",
+      "signlon": 20.66,
+      "house": 7,
+      "aspectTo": "Asc",
+      "aspect": "冲",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 36.0,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 36.0,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 36.76,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 36.0
+     },
+     {
+      "age": 37,
+      "date": "2032-06-02",
+      "apLon": 264.86,
+      "sign": "Sagittarius",
+      "signlon": 24.86,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 38,
+      "date": "2033-06-02",
+      "apLon": 269.07,
+      "sign": "Sagittarius",
+      "signlon": 29.07,
+      "house": 7,
+      "aspectTo": "IC",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "IC",
+        "aspectAge": 38.91,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 38.91,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 38.91
+     },
+     {
+      "age": 39,
+      "date": "2034-06-02",
+      "apLon": 273.27,
+      "sign": "Capricorn",
+      "signlon": 3.27,
+      "house": 7,
+      "aspectTo": "North Node",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 39.09,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 39.13,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 39.09
+     },
+     {
+      "age": 40,
+      "date": "2035-06-02",
+      "apLon": 277.48,
+      "sign": "Capricorn",
+      "signlon": 7.48,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 41,
+      "date": "2036-06-02",
+      "apLon": 281.69,
+      "sign": "Capricorn",
+      "signlon": 11.69,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 42,
+      "date": "2037-06-02",
+      "apLon": 285.89,
+      "sign": "Capricorn",
+      "signlon": 15.89,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 43,
+      "date": "2038-06-02",
+      "apLon": 289.81,
+      "sign": "Capricorn",
+      "signlon": 19.81,
+      "house": 8,
+      "aspectTo": "Venus",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 43.18,
+        "aspectType": 120,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 43.18
+     },
+     {
+      "age": 44,
+      "date": "2039-06-02",
+      "apLon": 293.73,
+      "sign": "Capricorn",
+      "signlon": 23.73,
+      "house": 8,
+      "aspectTo": "Saturn",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 44.03,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 44.38,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 44.03
+     },
+     {
+      "age": 45,
+      "date": "2040-06-02",
+      "apLon": 297.66,
+      "sign": "Capricorn",
+      "signlon": 27.66,
+      "house": 8,
+      "aspectTo": "Pluto",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 45.31,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 45.64,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 45.88,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 45.31
+     },
+     {
+      "age": 46,
+      "date": "2041-06-02",
+      "apLon": 301.58,
+      "sign": "Aquarius",
+      "signlon": 1.58,
+      "house": 8,
+      "aspectTo": "North Node",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 46.53,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 46.53
+     },
+     {
+      "age": 47,
+      "date": "2042-06-02",
+      "apLon": 305.5,
+      "sign": "Aquarius",
+      "signlon": 5.5,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 48,
+      "date": "2043-06-02",
+      "apLon": 309.42,
+      "sign": "Aquarius",
+      "signlon": 9.42,
+      "house": 9,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "冲",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 48.12,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 48.23,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 48.63,
+        "aspectType": 120,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 48.12
+     },
+     {
+      "age": 49,
+      "date": "2044-06-02",
+      "apLon": 313.33,
+      "sign": "Aquarius",
+      "signlon": 13.33,
+      "house": 9,
+      "aspectTo": "Mercury",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 49.53,
+        "aspectType": 120,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 49.53
+     },
+     {
+      "age": 50,
+      "date": "2045-06-02",
+      "apLon": 317.24,
+      "sign": "Aquarius",
+      "signlon": 17.24,
+      "house": 9,
+      "aspectTo": "Venus",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 50.84,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 50.87,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 50.87,
+        "aspectType": 60,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 50.84
+     },
+     {
+      "age": 51,
+      "date": "2046-06-02",
+      "apLon": 321.16,
+      "sign": "Aquarius",
+      "signlon": 21.16,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 52,
+      "date": "2047-06-02",
+      "apLon": 325.07,
+      "sign": "Aquarius",
+      "signlon": 25.07,
+      "house": 9,
+      "aspectTo": "Pluto",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 52.97,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 52.97
+     },
+     {
+      "age": 53,
+      "date": "2048-06-02",
+      "apLon": 328.98,
+      "sign": "Aquarius",
+      "signlon": 28.98,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 54,
+      "date": "2049-06-02",
+      "apLon": 332.9,
+      "sign": "Pisces",
+      "signlon": 2.9,
+      "house": 10,
+      "aspectTo": "IC",
+      "aspect": "冲",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "IC",
+        "aspectAge": 54.0,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 54.0,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 54.11,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 54.14,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 54.0
+     },
+     {
+      "age": 55,
+      "date": "2050-06-02",
+      "apLon": 339.65,
+      "sign": "Pisces",
+      "signlon": 9.65,
+      "house": 10,
+      "aspectTo": "Jupiter",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 55.1,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 55.33,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 55.85,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 55.1
+     },
+     {
+      "age": 56,
+      "date": "2051-06-02",
+      "apLon": 346.4,
+      "sign": "Pisces",
+      "signlon": 16.4,
+      "house": 10,
+      "aspectTo": "Venus",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 56.61,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 56.63,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 56.63,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 56.61
+     },
+     {
+      "age": 57,
+      "date": "2052-06-02",
+      "apLon": 353.15,
+      "sign": "Pisces",
+      "signlon": 23.15,
+      "house": 10,
+      "aspectTo": "Saturn",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 57.1,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 57.31,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 57.85,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 57.1
+     },
+     {
+      "age": 58,
+      "date": "2053-06-02",
+      "apLon": 359.91,
+      "sign": "Pisces",
+      "signlon": 29.91,
+      "house": 10,
+      "aspectTo": "Uranus",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 58.04,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 58.18,
+        "aspectType": 120,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 58.04
+     },
+     {
+      "age": 59,
+      "date": "2054-06-02",
+      "apLon": 6.66,
+      "sign": "Aries",
+      "signlon": 6.66,
+      "house": 10,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 59.48,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 59.54,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 59.77,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 59.48
+     },
+     {
+      "age": 60,
+      "date": "2055-06-02",
+      "apLon": 13.41,
+      "sign": "Aries",
+      "signlon": 13.41,
+      "house": 11,
+      "aspectTo": "Mercury",
+      "aspect": "六合",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 60.32,
+        "aspectType": 60,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 60.32
+     },
+     {
+      "age": 61,
+      "date": "2056-06-02",
+      "apLon": 19.63,
+      "sign": "Aries",
+      "signlon": 19.63,
+      "house": 11,
+      "aspectTo": "Asc",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 61.16,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 61.16,
+        "aspectType": 120,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 61.9,
+        "aspectType": 90,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 61.16
+     },
+     {
+      "age": 62,
+      "date": "2057-06-02",
+      "apLon": 25.85,
+      "sign": "Aries",
+      "signlon": 25.85,
+      "house": 11,
+      "aspectTo": "Uranus",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 62.69,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 62.85,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 62.69
+     },
+     {
+      "age": 63,
+      "date": "2058-06-02",
+      "apLon": 32.07,
+      "sign": "Taurus",
+      "signlon": 2.07,
+      "house": 11,
+      "aspectTo": "IC",
+      "aspect": "三分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "IC",
+        "aspectAge": 63.13,
+        "aspectType": 120,
+        "side": "D"
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 63.13,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "North Node",
+        "aspectAge": 63.26,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 63.28,
+        "aspectType": 120,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 63.13
+     },
+     {
+      "age": 64,
+      "date": "2059-06-02",
+      "apLon": 38.29,
+      "sign": "Taurus",
+      "signlon": 8.29,
+      "house": 11,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "四分",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 64.26,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 64.26
+     },
+     {
+      "age": 65,
+      "date": "2060-06-01",
+      "apLon": 44.51,
+      "sign": "Taurus",
+      "signlon": 14.51,
+      "house": 11,
+      "aspectTo": "Venus",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 65.97,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 65.97
+     },
+     {
+      "age": 66,
+      "date": "2061-06-02",
+      "apLon": 50.73,
+      "sign": "Taurus",
+      "signlon": 20.73,
+      "house": 12,
+      "aspectTo": "Saturn",
+      "aspect": "六合",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 66.62,
+        "aspectType": 60,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Neptune",
+        "aspectAge": 66.9,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 66.62
+     },
+     {
+      "age": 67,
+      "date": "2062-06-02",
+      "apLon": 55.72,
+      "sign": "Taurus",
+      "signlon": 25.72,
+      "house": 12,
+      "aspectTo": "Pluto",
+      "aspect": "冲",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pluto",
+        "aspectAge": 67.63,
+        "aspectType": 180,
+        "side": ""
+       },
+       {
+        "aspectTo": "Uranus",
+        "aspectAge": 67.89,
+        "aspectType": 120,
+        "side": "S"
+       }
+      ],
+      "aspectAge": 67.63
+     },
+     {
+      "age": 68,
+      "date": "2063-06-02",
+      "apLon": 60.71,
+      "sign": "Gemini",
+      "signlon": 0.71,
+      "house": 12,
+      "aspectTo": "Moon",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 68.08,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "IC",
+        "aspectAge": 68.44,
+        "aspectType": 90,
+        "side": "D"
+       },
+       {
+        "aspectTo": "MC",
+        "aspectAge": 68.44,
+        "aspectType": 90,
+        "side": "S"
+       },
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 68.63,
+        "aspectType": 90,
+        "side": "D"
+       }
+      ],
+      "aspectAge": 68.08
+     },
+     {
+      "age": 69,
+      "date": "2064-06-01",
+      "apLon": 65.69,
+      "sign": "Gemini",
+      "signlon": 5.69,
+      "house": 12,
+      "aspectTo": "Pars Fortuna",
+      "aspect": "六合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Pars Fortuna",
+        "aspectAge": 69.84,
+        "aspectType": 60,
+        "side": "D"
+       },
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 69.93,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 69.84
+     },
+     {
+      "age": 70,
+      "date": "2065-06-02",
+      "apLon": 70.68,
+      "sign": "Gemini",
+      "signlon": 10.68,
+      "house": 12,
+      "aspectTo": "Sun",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 70.24,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 70.95,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 70.24
+     },
+     {
+      "age": 71,
+      "date": "2066-06-02",
+      "apLon": 75.67,
+      "sign": "Gemini",
+      "signlon": 15.67,
+      "house": 12,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 72,
+      "date": "2067-06-02",
+      "apLon": 80.66,
+      "sign": "Gemini",
+      "signlon": 20.66,
+      "house": 1,
+      "aspectTo": "Asc",
+      "aspect": "合",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Asc",
+        "aspectAge": 72.0,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Desc",
+        "aspectAge": 72.0,
+        "aspectType": 180,
+        "side": ""
+       }
+      ],
+      "aspectAge": 72.0
+     }
+    ],
+    "crossings": [
+     {
+      "age": 0.76,
+      "aspectTo": "Saturn",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 83.83,
+      "date": "1996-03-06"
+     },
+     {
+      "age": 2.91,
+      "aspectTo": "IC",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 92.9,
+      "date": "1998-05-01"
+     },
+     {
+      "age": 2.91,
+      "aspectTo": "MC",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 92.9,
+      "date": "1998-05-01"
+     },
+     {
+      "age": 3.09,
+      "aspectTo": "North Node",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 93.67,
+      "date": "1998-07-05"
+     },
+     {
+      "age": 3.13,
+      "aspectTo": "Mars",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 93.83,
+      "date": "1998-07-20"
+     },
+     {
+      "age": 7.18,
+      "aspectTo": "Venus",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 110.54,
+      "date": "2002-08-07"
+     },
+     {
+      "age": 8.03,
+      "aspectTo": "Saturn",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 113.83,
+      "date": "2003-06-14"
+     },
+     {
+      "age": 8.38,
+      "aspectTo": "Neptune",
+      "aspect": 180,
+      "side": "",
+      "apLon": 115.22,
+      "date": "2003-10-19"
+     },
+     {
+      "age": 9.31,
+      "aspectTo": "Pluto",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 118.87,
+      "date": "2004-09-23"
+     },
+     {
+      "age": 9.64,
+      "aspectTo": "Uranus",
+      "aspect": 180,
+      "side": "",
+      "apLon": 120.15,
+      "date": "2005-01-22"
+     },
+     {
+      "age": 9.88,
+      "aspectTo": "Moon",
+      "aspect": 0,
+      "side": "",
+      "apLon": 121.12,
+      "date": "2005-04-19"
+     },
+     {
+      "age": 10.53,
+      "aspectTo": "North Node",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 123.67,
+      "date": "2005-12-13"
+     },
+     {
+      "age": 12.12,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 0,
+      "side": "",
+      "apLon": 129.89,
+      "date": "2007-07-16"
+     },
+     {
+      "age": 12.23,
+      "aspectTo": "Jupiter",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 130.33,
+      "date": "2007-08-26"
+     },
+     {
+      "age": 12.63,
+      "aspectTo": "Sun",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 131.88,
+      "date": "2008-01-19"
+     },
+     {
+      "age": 13.53,
+      "aspectTo": "Mercury",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 135.41,
+      "date": "2008-12-12"
+     },
+     {
+      "age": 14.84,
+      "aspectTo": "Venus",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 140.54,
+      "date": "2010-04-05"
+     },
+     {
+      "age": 14.87,
+      "aspectTo": "Asc",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 140.66,
+      "date": "2010-04-16"
+     },
+     {
+      "age": 14.87,
+      "aspectTo": "Desc",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 140.66,
+      "date": "2010-04-16"
+     },
+     {
+      "age": 16.97,
+      "aspectTo": "Pluto",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 148.87,
+      "date": "2012-05-22"
+     },
+     {
+      "age": 18.0,
+      "aspectTo": "IC",
+      "aspect": 0,
+      "side": "",
+      "apLon": 152.9,
+      "date": "2013-06-02"
+     },
+     {
+      "age": 18.0,
+      "aspectTo": "MC",
+      "aspect": 180,
+      "side": "",
+      "apLon": 152.9,
+      "date": "2013-06-02"
+     },
+     {
+      "age": 18.11,
+      "aspectTo": "North Node",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 153.67,
+      "date": "2013-07-12"
+     },
+     {
+      "age": 18.14,
+      "aspectTo": "Mars",
+      "aspect": 0,
+      "side": "",
+      "apLon": 153.83,
+      "date": "2013-07-23"
+     },
+     {
+      "age": 19.1,
+      "aspectTo": "Jupiter",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 160.33,
+      "date": "2014-07-09"
+     },
+     {
+      "age": 19.33,
+      "aspectTo": "Sun",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 161.88,
+      "date": "2014-10-01"
+     },
+     {
+      "age": 19.85,
+      "aspectTo": "Mercury",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 165.41,
+      "date": "2015-04-09"
+     },
+     {
+      "age": 20.61,
+      "aspectTo": "Venus",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 170.54,
+      "date": "2016-01-11"
+     },
+     {
+      "age": 20.63,
+      "aspectTo": "Asc",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 170.66,
+      "date": "2016-01-19"
+     },
+     {
+      "age": 20.63,
+      "aspectTo": "Desc",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 170.66,
+      "date": "2016-01-19"
+     },
+     {
+      "age": 21.1,
+      "aspectTo": "Saturn",
+      "aspect": 180,
+      "side": "",
+      "apLon": 173.83,
+      "date": "2016-07-08"
+     },
+     {
+      "age": 21.31,
+      "aspectTo": "Neptune",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 175.22,
+      "date": "2016-09-23"
+     },
+     {
+      "age": 21.85,
+      "aspectTo": "Pluto",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 178.87,
+      "date": "2017-04-08"
+     },
+     {
+      "age": 22.04,
+      "aspectTo": "Uranus",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 180.15,
+      "date": "2017-06-17"
+     },
+     {
+      "age": 22.18,
+      "aspectTo": "Moon",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 181.12,
+      "date": "2017-08-07"
+     },
+     {
+      "age": 23.48,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 189.89,
+      "date": "2018-11-25"
+     },
+     {
+      "age": 23.54,
+      "aspectTo": "Jupiter",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 190.33,
+      "date": "2018-12-17"
+     },
+     {
+      "age": 23.77,
+      "aspectTo": "Sun",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 191.88,
+      "date": "2019-03-11"
+     },
+     {
+      "age": 24.32,
+      "aspectTo": "Mercury",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 195.41,
+      "date": "2019-09-27"
+     },
+     {
+      "age": 25.16,
+      "aspectTo": "Asc",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 200.66,
+      "date": "2020-07-30"
+     },
+     {
+      "age": 25.16,
+      "aspectTo": "Desc",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 200.66,
+      "date": "2020-07-30"
+     },
+     {
+      "age": 25.9,
+      "aspectTo": "Neptune",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 205.22,
+      "date": "2021-04-27"
+     },
+     {
+      "age": 26.69,
+      "aspectTo": "Uranus",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 210.15,
+      "date": "2022-02-09"
+     },
+     {
+      "age": 26.85,
+      "aspectTo": "Moon",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 211.12,
+      "date": "2022-04-08"
+     },
+     {
+      "age": 27.13,
+      "aspectTo": "IC",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 212.9,
+      "date": "2022-07-20"
+     },
+     {
+      "age": 27.13,
+      "aspectTo": "MC",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 212.9,
+      "date": "2022-07-20"
+     },
+     {
+      "age": 27.26,
+      "aspectTo": "North Node",
+      "aspect": 0,
+      "side": "",
+      "apLon": 213.67,
+      "date": "2022-09-05"
+     },
+     {
+      "age": 27.28,
+      "aspectTo": "Mars",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 213.83,
+      "date": "2022-09-13"
+     },
+     {
+      "age": 28.26,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 219.89,
+      "date": "2023-09-05"
+     },
+     {
+      "age": 29.97,
+      "aspectTo": "Venus",
+      "aspect": 180,
+      "side": "",
+      "apLon": 230.54,
+      "date": "2025-05-22"
+     },
+     {
+      "age": 30.62,
+      "aspectTo": "Saturn",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 233.83,
+      "date": "2026-01-14"
+     },
+     {
+      "age": 30.9,
+      "aspectTo": "Neptune",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 235.22,
+      "date": "2026-04-27"
+     },
+     {
+      "age": 31.63,
+      "aspectTo": "Pluto",
+      "aspect": 0,
+      "side": "",
+      "apLon": 238.87,
+      "date": "2027-01-18"
+     },
+     {
+      "age": 31.89,
+      "aspectTo": "Uranus",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 240.15,
+      "date": "2027-04-23"
+     },
+     {
+      "age": 32.08,
+      "aspectTo": "Moon",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 241.12,
+      "date": "2027-07-02"
+     },
+     {
+      "age": 32.44,
+      "aspectTo": "IC",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 242.9,
+      "date": "2027-11-10"
+     },
+     {
+      "age": 32.44,
+      "aspectTo": "MC",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 242.9,
+      "date": "2027-11-10"
+     },
+     {
+      "age": 32.63,
+      "aspectTo": "Mars",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 243.83,
+      "date": "2028-01-19"
+     },
+     {
+      "age": 33.84,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 249.89,
+      "date": "2029-04-05"
+     },
+     {
+      "age": 33.93,
+      "aspectTo": "Jupiter",
+      "aspect": 0,
+      "side": "",
+      "apLon": 250.33,
+      "date": "2029-05-07"
+     },
+     {
+      "age": 34.24,
+      "aspectTo": "Sun",
+      "aspect": 180,
+      "side": "",
+      "apLon": 251.88,
+      "date": "2029-08-29"
+     },
+     {
+      "age": 34.95,
+      "aspectTo": "Mercury",
+      "aspect": 180,
+      "side": "",
+      "apLon": 255.41,
+      "date": "2030-05-15"
+     },
+     {
+      "age": 36.0,
+      "aspectTo": "Asc",
+      "aspect": 180,
+      "side": "",
+      "apLon": 260.66,
+      "date": "2031-06-02"
+     },
+     {
+      "age": 36.0,
+      "aspectTo": "Desc",
+      "aspect": 0,
+      "side": "",
+      "apLon": 260.66,
+      "date": "2031-06-02"
+     },
+     {
+      "age": 36.76,
+      "aspectTo": "Saturn",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 263.83,
+      "date": "2032-03-06"
+     },
+     {
+      "age": 38.91,
+      "aspectTo": "IC",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 272.9,
+      "date": "2034-04-30"
+     },
+     {
+      "age": 38.91,
+      "aspectTo": "MC",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 272.9,
+      "date": "2034-04-30"
+     },
+     {
+      "age": 39.09,
+      "aspectTo": "North Node",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 273.67,
+      "date": "2034-07-05"
+     },
+     {
+      "age": 39.13,
+      "aspectTo": "Mars",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 273.83,
+      "date": "2034-07-20"
+     },
+     {
+      "age": 43.18,
+      "aspectTo": "Venus",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 290.54,
+      "date": "2038-08-07"
+     },
+     {
+      "age": 44.03,
+      "aspectTo": "Saturn",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 293.83,
+      "date": "2039-06-13"
+     },
+     {
+      "age": 44.38,
+      "aspectTo": "Neptune",
+      "aspect": 0,
+      "side": "",
+      "apLon": 295.22,
+      "date": "2039-10-19"
+     },
+     {
+      "age": 45.31,
+      "aspectTo": "Pluto",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 298.87,
+      "date": "2040-09-23"
+     },
+     {
+      "age": 45.64,
+      "aspectTo": "Uranus",
+      "aspect": 0,
+      "side": "",
+      "apLon": 300.15,
+      "date": "2041-01-21"
+     },
+     {
+      "age": 45.88,
+      "aspectTo": "Moon",
+      "aspect": 180,
+      "side": "",
+      "apLon": 301.12,
+      "date": "2041-04-19"
+     },
+     {
+      "age": 46.53,
+      "aspectTo": "North Node",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 303.67,
+      "date": "2041-12-12"
+     },
+     {
+      "age": 48.12,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 180,
+      "side": "",
+      "apLon": 309.89,
+      "date": "2043-07-16"
+     },
+     {
+      "age": 48.23,
+      "aspectTo": "Jupiter",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 310.33,
+      "date": "2043-08-25"
+     },
+     {
+      "age": 48.63,
+      "aspectTo": "Sun",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 311.88,
+      "date": "2044-01-18"
+     },
+     {
+      "age": 49.53,
+      "aspectTo": "Mercury",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 315.41,
+      "date": "2044-12-12"
+     },
+     {
+      "age": 50.84,
+      "aspectTo": "Venus",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 320.54,
+      "date": "2046-04-05"
+     },
+     {
+      "age": 50.87,
+      "aspectTo": "Asc",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 320.66,
+      "date": "2046-04-16"
+     },
+     {
+      "age": 50.87,
+      "aspectTo": "Desc",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 320.66,
+      "date": "2046-04-16"
+     },
+     {
+      "age": 52.97,
+      "aspectTo": "Pluto",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 328.87,
+      "date": "2048-05-22"
+     },
+     {
+      "age": 54.0,
+      "aspectTo": "IC",
+      "aspect": 180,
+      "side": "",
+      "apLon": 332.9,
+      "date": "2049-06-02"
+     },
+     {
+      "age": 54.0,
+      "aspectTo": "MC",
+      "aspect": 0,
+      "side": "",
+      "apLon": 332.9,
+      "date": "2049-06-02"
+     },
+     {
+      "age": 54.11,
+      "aspectTo": "North Node",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 333.67,
+      "date": "2049-07-12"
+     },
+     {
+      "age": 54.14,
+      "aspectTo": "Mars",
+      "aspect": 180,
+      "side": "",
+      "apLon": 333.83,
+      "date": "2049-07-23"
+     },
+     {
+      "age": 55.1,
+      "aspectTo": "Jupiter",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 340.33,
+      "date": "2050-07-09"
+     },
+     {
+      "age": 55.33,
+      "aspectTo": "Sun",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 341.88,
+      "date": "2050-10-01"
+     },
+     {
+      "age": 55.85,
+      "aspectTo": "Mercury",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 345.41,
+      "date": "2051-04-09"
+     },
+     {
+      "age": 56.61,
+      "aspectTo": "Venus",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 350.54,
+      "date": "2052-01-11"
+     },
+     {
+      "age": 56.63,
+      "aspectTo": "Asc",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 350.66,
+      "date": "2052-01-18"
+     },
+     {
+      "age": 56.63,
+      "aspectTo": "Desc",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 350.66,
+      "date": "2052-01-18"
+     },
+     {
+      "age": 57.1,
+      "aspectTo": "Saturn",
+      "aspect": 0,
+      "side": "",
+      "apLon": 353.83,
+      "date": "2052-07-08"
+     },
+     {
+      "age": 57.31,
+      "aspectTo": "Neptune",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 355.22,
+      "date": "2052-09-23"
+     },
+     {
+      "age": 57.85,
+      "aspectTo": "Pluto",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 358.87,
+      "date": "2053-04-08"
+     },
+     {
+      "age": 58.04,
+      "aspectTo": "Uranus",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 0.15,
+      "date": "2053-06-16"
+     },
+     {
+      "age": 58.18,
+      "aspectTo": "Moon",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 1.12,
+      "date": "2053-08-07"
+     },
+     {
+      "age": 59.48,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 9.89,
+      "date": "2054-11-24"
+     },
+     {
+      "age": 59.54,
+      "aspectTo": "Jupiter",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 10.33,
+      "date": "2054-12-16"
+     },
+     {
+      "age": 59.77,
+      "aspectTo": "Sun",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 11.88,
+      "date": "2055-03-10"
+     },
+     {
+      "age": 60.32,
+      "aspectTo": "Mercury",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 15.41,
+      "date": "2055-09-27"
+     },
+     {
+      "age": 61.16,
+      "aspectTo": "Asc",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 20.66,
+      "date": "2056-07-30"
+     },
+     {
+      "age": 61.16,
+      "aspectTo": "Desc",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 20.66,
+      "date": "2056-07-30"
+     },
+     {
+      "age": 61.9,
+      "aspectTo": "Neptune",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 25.22,
+      "date": "2057-04-26"
+     },
+     {
+      "age": 62.69,
+      "aspectTo": "Uranus",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 30.15,
+      "date": "2058-02-09"
+     },
+     {
+      "age": 62.85,
+      "aspectTo": "Moon",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 31.12,
+      "date": "2058-04-08"
+     },
+     {
+      "age": 63.13,
+      "aspectTo": "IC",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 32.9,
+      "date": "2058-07-19"
+     },
+     {
+      "age": 63.13,
+      "aspectTo": "MC",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 32.9,
+      "date": "2058-07-19"
+     },
+     {
+      "age": 63.26,
+      "aspectTo": "North Node",
+      "aspect": 180,
+      "side": "",
+      "apLon": 33.67,
+      "date": "2058-09-05"
+     },
+     {
+      "age": 63.28,
+      "aspectTo": "Mars",
+      "aspect": 120,
+      "side": "D",
+      "apLon": 33.83,
+      "date": "2058-09-12"
+     },
+     {
+      "age": 64.26,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 39.89,
+      "date": "2059-09-05"
+     },
+     {
+      "age": 65.97,
+      "aspectTo": "Venus",
+      "aspect": 0,
+      "side": "",
+      "apLon": 50.54,
+      "date": "2061-05-22"
+     },
+     {
+      "age": 66.62,
+      "aspectTo": "Saturn",
+      "aspect": 60,
+      "side": "S",
+      "apLon": 53.83,
+      "date": "2062-01-14"
+     },
+     {
+      "age": 66.9,
+      "aspectTo": "Neptune",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 55.22,
+      "date": "2062-04-26"
+     },
+     {
+      "age": 67.63,
+      "aspectTo": "Pluto",
+      "aspect": 180,
+      "side": "",
+      "apLon": 58.87,
+      "date": "2063-01-18"
+     },
+     {
+      "age": 67.89,
+      "aspectTo": "Uranus",
+      "aspect": 120,
+      "side": "S",
+      "apLon": 60.15,
+      "date": "2063-04-23"
+     },
+     {
+      "age": 68.08,
+      "aspectTo": "Moon",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 61.12,
+      "date": "2063-07-01"
+     },
+     {
+      "age": 68.44,
+      "aspectTo": "IC",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 62.9,
+      "date": "2063-11-10"
+     },
+     {
+      "age": 68.44,
+      "aspectTo": "MC",
+      "aspect": 90,
+      "side": "S",
+      "apLon": 62.9,
+      "date": "2063-11-10"
+     },
+     {
+      "age": 68.63,
+      "aspectTo": "Mars",
+      "aspect": 90,
+      "side": "D",
+      "apLon": 63.83,
+      "date": "2064-01-18"
+     },
+     {
+      "age": 69.84,
+      "aspectTo": "Pars Fortuna",
+      "aspect": 60,
+      "side": "D",
+      "apLon": 69.89,
+      "date": "2065-04-04"
+     },
+     {
+      "age": 69.93,
+      "aspectTo": "Jupiter",
+      "aspect": 180,
+      "side": "",
+      "apLon": 70.33,
+      "date": "2065-05-07"
+     },
+     {
+      "age": 70.24,
+      "aspectTo": "Sun",
+      "aspect": 0,
+      "side": "",
+      "apLon": 71.88,
+      "date": "2065-08-28"
+     },
+     {
+      "age": 70.95,
+      "aspectTo": "Mercury",
+      "aspect": 0,
+      "side": "",
+      "apLon": 75.41,
+      "date": "2066-05-15"
+     },
+     {
+      "age": 72.0,
+      "aspectTo": "Asc",
+      "aspect": 0,
+      "side": "",
+      "apLon": 80.66,
+      "date": "2067-06-02"
+     },
+     {
+      "age": 72.0,
+      "aspectTo": "Desc",
+      "aspect": 180,
+      "side": "",
+      "apLon": 80.66,
+      "date": "2067-06-02"
+     }
+    ]
+   }
+  },
+  "equal5_conj_100": {
+   "agepoint": {
+    "settings": {
+     "apMethod": "equal5",
+     "apEvents": "conj",
+     "apYear": "tropical",
+     "apMaxAge": 100
+    },
+    "points": [
+     {
+      "age": 0,
+      "date": "1995-06-03",
+      "apLon": 80.66,
+      "sign": "Gemini",
+      "signlon": 20.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 1,
+      "date": "1996-06-02",
+      "apLon": 85.66,
+      "sign": "Gemini",
+      "signlon": 25.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 2,
+      "date": "1997-06-02",
+      "apLon": 90.66,
+      "sign": "Cancer",
+      "signlon": 0.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 3,
+      "date": "1998-06-02",
+      "apLon": 95.66,
+      "sign": "Cancer",
+      "signlon": 5.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 4,
+      "date": "1999-06-03",
+      "apLon": 100.66,
+      "sign": "Cancer",
+      "signlon": 10.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 5,
+      "date": "2000-06-02",
+      "apLon": 105.66,
+      "sign": "Cancer",
+      "signlon": 15.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 6,
+      "date": "2001-06-02",
+      "apLon": 110.66,
+      "sign": "Cancer",
+      "signlon": 20.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 7,
+      "date": "2002-06-02",
+      "apLon": 115.66,
+      "sign": "Cancer",
+      "signlon": 25.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 8,
+      "date": "2003-06-03",
+      "apLon": 120.66,
+      "sign": "Leo",
+      "signlon": 0.66,
+      "house": 2,
+      "aspectTo": "Moon",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 8.09,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 8.09
+     },
+     {
+      "age": 9,
+      "date": "2004-06-02",
+      "apLon": 125.66,
+      "sign": "Leo",
+      "signlon": 5.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 10,
+      "date": "2005-06-02",
+      "apLon": 130.66,
+      "sign": "Leo",
+      "signlon": 10.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 11,
+      "date": "2006-06-02",
+      "apLon": 135.66,
+      "sign": "Leo",
+      "signlon": 15.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 12,
+      "date": "2007-06-03",
+      "apLon": 140.66,
+      "sign": "Leo",
+      "signlon": 20.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 13,
+      "date": "2008-06-02",
+      "apLon": 145.66,
+      "sign": "Leo",
+      "signlon": 25.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 14,
+      "date": "2009-06-02",
+      "apLon": 150.66,
+      "sign": "Virgo",
+      "signlon": 0.66,
+      "house": 3,
+      "aspectTo": "Mars",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 14.63,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 14.63
+     },
+     {
+      "age": 15,
+      "date": "2010-06-02",
+      "apLon": 155.66,
+      "sign": "Virgo",
+      "signlon": 5.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 16,
+      "date": "2011-06-03",
+      "apLon": 160.66,
+      "sign": "Virgo",
+      "signlon": 10.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 17,
+      "date": "2012-06-02",
+      "apLon": 165.66,
+      "sign": "Virgo",
+      "signlon": 15.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 18,
+      "date": "2013-06-02",
+      "apLon": 170.66,
+      "sign": "Virgo",
+      "signlon": 20.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 19,
+      "date": "2014-06-02",
+      "apLon": 175.66,
+      "sign": "Virgo",
+      "signlon": 25.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 20,
+      "date": "2015-06-03",
+      "apLon": 180.66,
+      "sign": "Libra",
+      "signlon": 0.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 21,
+      "date": "2016-06-02",
+      "apLon": 185.66,
+      "sign": "Libra",
+      "signlon": 5.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 22,
+      "date": "2017-06-02",
+      "apLon": 190.66,
+      "sign": "Libra",
+      "signlon": 10.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 23,
+      "date": "2018-06-02",
+      "apLon": 195.66,
+      "sign": "Libra",
+      "signlon": 15.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 24,
+      "date": "2019-06-03",
+      "apLon": 200.66,
+      "sign": "Libra",
+      "signlon": 20.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 25,
+      "date": "2020-06-02",
+      "apLon": 205.66,
+      "sign": "Libra",
+      "signlon": 25.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 26,
+      "date": "2021-06-02",
+      "apLon": 210.66,
+      "sign": "Scorpio",
+      "signlon": 0.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 27,
+      "date": "2022-06-02",
+      "apLon": 215.66,
+      "sign": "Scorpio",
+      "signlon": 5.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 28,
+      "date": "2023-06-03",
+      "apLon": 220.66,
+      "sign": "Scorpio",
+      "signlon": 10.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 29,
+      "date": "2024-06-02",
+      "apLon": 225.66,
+      "sign": "Scorpio",
+      "signlon": 15.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 30,
+      "date": "2025-06-02",
+      "apLon": 230.66,
+      "sign": "Scorpio",
+      "signlon": 20.66,
+      "house": 6,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 31,
+      "date": "2026-06-02",
+      "apLon": 235.66,
+      "sign": "Scorpio",
+      "signlon": 25.66,
+      "house": 6,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 32,
+      "date": "2027-06-02",
+      "apLon": 240.66,
+      "sign": "Sagittarius",
+      "signlon": 0.66,
+      "house": 6,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 33,
+      "date": "2028-06-02",
+      "apLon": 245.66,
+      "sign": "Sagittarius",
+      "signlon": 5.66,
+      "house": 6,
+      "aspectTo": "Jupiter",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Jupiter",
+        "aspectAge": 33.94,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 33.94
+     },
+     {
+      "age": 34,
+      "date": "2029-06-02",
+      "apLon": 250.66,
+      "sign": "Sagittarius",
+      "signlon": 10.66,
+      "house": 6,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 35,
+      "date": "2030-06-02",
+      "apLon": 255.66,
+      "sign": "Sagittarius",
+      "signlon": 15.66,
+      "house": 6,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 36,
+      "date": "2031-06-02",
+      "apLon": 260.66,
+      "sign": "Sagittarius",
+      "signlon": 20.66,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 37,
+      "date": "2032-06-02",
+      "apLon": 265.66,
+      "sign": "Sagittarius",
+      "signlon": 25.66,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 38,
+      "date": "2033-06-02",
+      "apLon": 270.66,
+      "sign": "Capricorn",
+      "signlon": 0.66,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 39,
+      "date": "2034-06-02",
+      "apLon": 275.66,
+      "sign": "Capricorn",
+      "signlon": 5.66,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 40,
+      "date": "2035-06-02",
+      "apLon": 280.66,
+      "sign": "Capricorn",
+      "signlon": 10.66,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 41,
+      "date": "2036-06-02",
+      "apLon": 285.66,
+      "sign": "Capricorn",
+      "signlon": 15.66,
+      "house": 7,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 42,
+      "date": "2037-06-02",
+      "apLon": 290.66,
+      "sign": "Capricorn",
+      "signlon": 20.66,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 43,
+      "date": "2038-06-02",
+      "apLon": 295.66,
+      "sign": "Capricorn",
+      "signlon": 25.66,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 44,
+      "date": "2039-06-02",
+      "apLon": 300.66,
+      "sign": "Aquarius",
+      "signlon": 0.66,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 45,
+      "date": "2040-06-02",
+      "apLon": 305.66,
+      "sign": "Aquarius",
+      "signlon": 5.66,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 46,
+      "date": "2041-06-02",
+      "apLon": 310.66,
+      "sign": "Aquarius",
+      "signlon": 10.66,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 47,
+      "date": "2042-06-02",
+      "apLon": 315.66,
+      "sign": "Aquarius",
+      "signlon": 15.66,
+      "house": 8,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 48,
+      "date": "2043-06-02",
+      "apLon": 320.66,
+      "sign": "Aquarius",
+      "signlon": 20.66,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 49,
+      "date": "2044-06-02",
+      "apLon": 325.66,
+      "sign": "Aquarius",
+      "signlon": 25.66,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 50,
+      "date": "2045-06-02",
+      "apLon": 330.66,
+      "sign": "Pisces",
+      "signlon": 0.66,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 51,
+      "date": "2046-06-02",
+      "apLon": 335.66,
+      "sign": "Pisces",
+      "signlon": 5.66,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 52,
+      "date": "2047-06-02",
+      "apLon": 340.66,
+      "sign": "Pisces",
+      "signlon": 10.66,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 53,
+      "date": "2048-06-02",
+      "apLon": 345.66,
+      "sign": "Pisces",
+      "signlon": 15.66,
+      "house": 9,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 54,
+      "date": "2049-06-02",
+      "apLon": 350.66,
+      "sign": "Pisces",
+      "signlon": 20.66,
+      "house": 10,
+      "aspectTo": "Saturn",
+      "aspect": "合",
+      "cuspCrossing": true,
+      "aspects": [
+       {
+        "aspectTo": "Saturn",
+        "aspectAge": 54.64,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 54.64
+     },
+     {
+      "age": 55,
+      "date": "2050-06-02",
+      "apLon": 355.66,
+      "sign": "Pisces",
+      "signlon": 25.66,
+      "house": 10,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 56,
+      "date": "2051-06-02",
+      "apLon": 0.66,
+      "sign": "Aries",
+      "signlon": 0.66,
+      "house": 10,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 57,
+      "date": "2052-06-02",
+      "apLon": 5.66,
+      "sign": "Aries",
+      "signlon": 5.66,
+      "house": 10,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 58,
+      "date": "2053-06-02",
+      "apLon": 10.66,
+      "sign": "Aries",
+      "signlon": 10.66,
+      "house": 10,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 59,
+      "date": "2054-06-02",
+      "apLon": 15.66,
+      "sign": "Aries",
+      "signlon": 15.66,
+      "house": 10,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 60,
+      "date": "2055-06-02",
+      "apLon": 20.66,
+      "sign": "Aries",
+      "signlon": 20.66,
+      "house": 11,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 61,
+      "date": "2056-06-02",
+      "apLon": 25.66,
+      "sign": "Aries",
+      "signlon": 25.66,
+      "house": 11,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 62,
+      "date": "2057-06-02",
+      "apLon": 30.66,
+      "sign": "Taurus",
+      "signlon": 0.66,
+      "house": 11,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 63,
+      "date": "2058-06-02",
+      "apLon": 35.66,
+      "sign": "Taurus",
+      "signlon": 5.66,
+      "house": 11,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 64,
+      "date": "2059-06-02",
+      "apLon": 40.66,
+      "sign": "Taurus",
+      "signlon": 10.66,
+      "house": 11,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 65,
+      "date": "2060-06-01",
+      "apLon": 45.66,
+      "sign": "Taurus",
+      "signlon": 15.66,
+      "house": 11,
+      "aspectTo": "Venus",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Venus",
+        "aspectAge": 65.98,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 65.98
+     },
+     {
+      "age": 66,
+      "date": "2061-06-02",
+      "apLon": 50.66,
+      "sign": "Taurus",
+      "signlon": 20.66,
+      "house": 12,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 67,
+      "date": "2062-06-02",
+      "apLon": 55.66,
+      "sign": "Taurus",
+      "signlon": 25.66,
+      "house": 12,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 68,
+      "date": "2063-06-02",
+      "apLon": 60.66,
+      "sign": "Gemini",
+      "signlon": 0.66,
+      "house": 12,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 69,
+      "date": "2064-06-01",
+      "apLon": 65.66,
+      "sign": "Gemini",
+      "signlon": 5.66,
+      "house": 12,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 70,
+      "date": "2065-06-02",
+      "apLon": 70.66,
+      "sign": "Gemini",
+      "signlon": 10.66,
+      "house": 12,
+      "aspectTo": "Sun",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Sun",
+        "aspectAge": 70.24,
+        "aspectType": 0,
+        "side": ""
+       },
+       {
+        "aspectTo": "Mercury",
+        "aspectAge": 70.95,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 70.24
+     },
+     {
+      "age": 71,
+      "date": "2066-06-02",
+      "apLon": 75.66,
+      "sign": "Gemini",
+      "signlon": 15.66,
+      "house": 12,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 72,
+      "date": "2067-06-02",
+      "apLon": 80.66,
+      "sign": "Gemini",
+      "signlon": 20.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 73,
+      "date": "2068-06-01",
+      "apLon": 85.66,
+      "sign": "Gemini",
+      "signlon": 25.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 74,
+      "date": "2069-06-02",
+      "apLon": 90.66,
+      "sign": "Cancer",
+      "signlon": 0.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 75,
+      "date": "2070-06-02",
+      "apLon": 95.66,
+      "sign": "Cancer",
+      "signlon": 5.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 76,
+      "date": "2071-06-02",
+      "apLon": 100.66,
+      "sign": "Cancer",
+      "signlon": 10.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 77,
+      "date": "2072-06-01",
+      "apLon": 105.66,
+      "sign": "Cancer",
+      "signlon": 15.66,
+      "house": 1,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 78,
+      "date": "2073-06-02",
+      "apLon": 110.66,
+      "sign": "Cancer",
+      "signlon": 20.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 79,
+      "date": "2074-06-02",
+      "apLon": 115.66,
+      "sign": "Cancer",
+      "signlon": 25.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 80,
+      "date": "2075-06-02",
+      "apLon": 120.66,
+      "sign": "Leo",
+      "signlon": 0.66,
+      "house": 2,
+      "aspectTo": "Moon",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Moon",
+        "aspectAge": 80.09,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 80.09
+     },
+     {
+      "age": 81,
+      "date": "2076-06-01",
+      "apLon": 125.66,
+      "sign": "Leo",
+      "signlon": 5.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 82,
+      "date": "2077-06-02",
+      "apLon": 130.66,
+      "sign": "Leo",
+      "signlon": 10.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 83,
+      "date": "2078-06-02",
+      "apLon": 135.66,
+      "sign": "Leo",
+      "signlon": 15.66,
+      "house": 2,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 84,
+      "date": "2079-06-02",
+      "apLon": 140.66,
+      "sign": "Leo",
+      "signlon": 20.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 85,
+      "date": "2080-06-01",
+      "apLon": 145.66,
+      "sign": "Leo",
+      "signlon": 25.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 86,
+      "date": "2081-06-02",
+      "apLon": 150.66,
+      "sign": "Virgo",
+      "signlon": 0.66,
+      "house": 3,
+      "aspectTo": "Mars",
+      "aspect": "合",
+      "cuspCrossing": false,
+      "aspects": [
+       {
+        "aspectTo": "Mars",
+        "aspectAge": 86.63,
+        "aspectType": 0,
+        "side": ""
+       }
+      ],
+      "aspectAge": 86.63
+     },
+     {
+      "age": 87,
+      "date": "2082-06-02",
+      "apLon": 155.66,
+      "sign": "Virgo",
+      "signlon": 5.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 88,
+      "date": "2083-06-02",
+      "apLon": 160.66,
+      "sign": "Virgo",
+      "signlon": 10.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 89,
+      "date": "2084-06-01",
+      "apLon": 165.66,
+      "sign": "Virgo",
+      "signlon": 15.66,
+      "house": 3,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 90,
+      "date": "2085-06-02",
+      "apLon": 170.66,
+      "sign": "Virgo",
+      "signlon": 20.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 91,
+      "date": "2086-06-02",
+      "apLon": 175.66,
+      "sign": "Virgo",
+      "signlon": 25.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 92,
+      "date": "2087-06-02",
+      "apLon": 180.66,
+      "sign": "Libra",
+      "signlon": 0.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 93,
+      "date": "2088-06-01",
+      "apLon": 185.66,
+      "sign": "Libra",
+      "signlon": 5.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 94,
+      "date": "2089-06-01",
+      "apLon": 190.66,
+      "sign": "Libra",
+      "signlon": 10.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 95,
+      "date": "2090-06-02",
+      "apLon": 195.66,
+      "sign": "Libra",
+      "signlon": 15.66,
+      "house": 4,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 96,
+      "date": "2091-06-02",
+      "apLon": 200.66,
+      "sign": "Libra",
+      "signlon": 20.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": true
+     },
+     {
+      "age": 97,
+      "date": "2092-06-01",
+      "apLon": 205.66,
+      "sign": "Libra",
+      "signlon": 25.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 98,
+      "date": "2093-06-01",
+      "apLon": 210.66,
+      "sign": "Scorpio",
+      "signlon": 0.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 99,
+      "date": "2094-06-02",
+      "apLon": 215.66,
+      "sign": "Scorpio",
+      "signlon": 5.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     },
+     {
+      "age": 100,
+      "date": "2095-06-02",
+      "apLon": 220.66,
+      "sign": "Scorpio",
+      "signlon": 10.66,
+      "house": 5,
+      "aspectTo": null,
+      "aspect": null,
+      "cuspCrossing": false
+     }
+    ],
+    "crossings": [
+     {
+      "age": 8.09,
+      "aspectTo": "Moon",
+      "aspect": 0,
+      "side": "",
+      "apLon": 121.12,
+      "date": "2003-07-06"
+     },
+     {
+      "age": 14.63,
+      "aspectTo": "Mars",
+      "aspect": 0,
+      "side": "",
+      "apLon": 153.83,
+      "date": "2010-01-18"
+     },
+     {
+      "age": 33.94,
+      "aspectTo": "Jupiter",
+      "aspect": 0,
+      "side": "",
+      "apLon": 250.33,
+      "date": "2029-05-11"
+     },
+     {
+      "age": 54.64,
+      "aspectTo": "Saturn",
+      "aspect": 0,
+      "side": "",
+      "apLon": 353.83,
+      "date": "2050-01-22"
+     },
+     {
+      "age": 65.98,
+      "aspectTo": "Venus",
+      "aspect": 0,
+      "side": "",
+      "apLon": 50.54,
+      "date": "2061-05-25"
+     },
+     {
+      "age": 70.24,
+      "aspectTo": "Sun",
+      "aspect": 0,
+      "side": "",
+      "apLon": 71.88,
+      "date": "2065-08-28"
+     },
+     {
+      "age": 70.95,
+      "aspectTo": "Mercury",
+      "aspect": 0,
+      "side": "",
+      "apLon": 75.41,
+      "date": "2066-05-15"
+     },
+     {
+      "age": 80.09,
+      "aspectTo": "Moon",
+      "aspect": 0,
+      "side": "",
+      "apLon": 121.12,
+      "date": "2075-07-05"
+     },
+     {
+      "age": 86.63,
+      "aspectTo": "Mars",
+      "aspect": 0,
+      "side": "",
+      "apLon": 153.83,
+      "date": "2082-01-18"
+     }
+    ]
+   }
+  }
+ },
+ "dist": {
+  "default": {
+   "dist": [
+    {
+     "startArc": 0.0,
+     "endArc": 3.32,
+     "startYears": 0.0,
+     "years": 3.3212,
+     "distributor": "Mars",
+     "sign": "Gemini",
+     "startDate": "1995-06-03 05:30:00",
+     "endDate": "1998-09-28 06:25:30",
+     "participants": [
+      "Saturn"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Saturn",
+       "aspect": 90,
+       "side": "S"
+      }
+     ]
+    },
+    {
+     "startArc": 3.32,
+     "endArc": 9.28,
+     "startYears": 3.3212,
+     "years": 5.9594,
+     "distributor": "Saturn",
+     "sign": "Gemini",
+     "startDate": "1998-09-28 06:25:30",
+     "endDate": "2004-09-12 21:35:52",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 9.28,
+     "endArc": 17.35,
+     "startYears": 9.2806,
+     "years": 8.0653,
+     "distributor": "Mars",
+     "sign": "Cancer",
+     "startDate": "2004-09-12 21:35:52",
+     "endDate": "2012-10-06 16:38:50",
+     "participants": [
+      "Mars"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Mars",
+       "aspect": 60,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 17.35,
+     "endArc": 24.26,
+     "startYears": 17.3459,
+     "years": 6.9131,
+     "distributor": "Venus",
+     "sign": "Cancer",
+     "startDate": "2012-10-06 16:38:50",
+     "endDate": "2019-09-05 15:49:56",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 24.26,
+     "endArc": 31.17,
+     "startYears": 24.2591,
+     "years": 6.9131,
+     "distributor": "Mercury",
+     "sign": "Cancer",
+     "startDate": "2019-09-05 15:49:56",
+     "endDate": "2026-08-04 15:01:02",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 31.17,
+     "endArc": 39.24,
+     "startYears": 31.1722,
+     "years": 8.0653,
+     "distributor": "Jupiter",
+     "sign": "Cancer",
+     "startDate": "2026-08-04 15:01:02",
+     "endDate": "2034-08-28 10:03:59",
+     "participants": [
+      "Venus",
+      "Saturn"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Venus",
+       "aspect": 60,
+       "side": "S"
+      },
+      {
+       "planet": "Saturn",
+       "aspect": 120,
+       "side": "S"
+      }
+     ]
+    },
+    {
+     "startArc": 39.24,
+     "endArc": 43.85,
+     "startYears": 39.2375,
+     "years": 4.6088,
+     "distributor": "Saturn",
+     "sign": "Cancer",
+     "startDate": "2034-08-28 10:03:59",
+     "endDate": "2039-04-07 17:31:23",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 43.85,
+     "endArc": 50.98,
+     "startYears": 43.8463,
+     "years": 7.1385,
+     "distributor": "Jupiter",
+     "sign": "Leo",
+     "startDate": "2039-04-07 17:31:23",
+     "endDate": "2046-05-28 00:09:21",
+     "participants": [
+      "Moon"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Moon",
+       "aspect": 0,
+       "side": ""
+      }
+     ]
+    },
+    {
+     "startArc": 50.98,
+     "endArc": 56.93,
+     "startYears": 50.9847,
+     "years": 5.9487,
+     "distributor": "Venus",
+     "sign": "Leo",
+     "startDate": "2046-05-28 00:09:21",
+     "endDate": "2052-05-08 17:40:59",
+     "participants": [
+      "Jupiter"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Jupiter",
+       "aspect": 120,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 56.93,
+     "endArc": 65.26,
+     "startYears": 56.9335,
+     "years": 8.3282,
+     "distributor": "Saturn",
+     "sign": "Leo",
+     "startDate": "2052-05-08 17:40:59",
+     "endDate": "2060-09-05 13:25:16",
+     "participants": [
+      "Sun",
+      "Mercury"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Sun",
+       "aspect": 60,
+       "side": "S"
+      },
+      {
+       "planet": "Mercury",
+       "aspect": 60,
+       "side": "S"
+      }
+     ]
+    },
+    {
+     "startArc": 65.26,
+     "endArc": 72.4,
+     "startYears": 65.2617,
+     "years": 7.1385,
+     "distributor": "Mercury",
+     "sign": "Leo",
+     "startDate": "2060-09-05 13:25:16",
+     "endDate": "2067-10-26 20:03:14",
+     "participants": [
+      "Venus"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Venus",
+       "aspect": 90,
+       "side": "S"
+      }
+     ]
+    },
+    {
+     "startArc": 72.4,
+     "endArc": 79.54,
+     "startYears": 72.4002,
+     "years": 7.1385,
+     "distributor": "Mars",
+     "sign": "Leo",
+     "startDate": "2067-10-26 20:03:14",
+     "endDate": "2074-12-16 02:41:12",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 79.54,
+     "endArc": 87.7,
+     "startYears": 79.5387,
+     "years": 8.1609,
+     "distributor": "Mercury",
+     "sign": "Virgo",
+     "startDate": "2074-12-16 02:41:12",
+     "endDate": "2083-02-12 19:21:02",
+     "participants": [
+      "Mars"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Mars",
+       "aspect": 0,
+       "side": ""
+      }
+     ]
+    },
+    {
+     "startArc": 87.7,
+     "endArc": 99.36,
+     "startYears": 87.6996,
+     "years": 11.6584,
+     "distributor": "Venus",
+     "sign": "Virgo",
+     "startDate": "2083-02-12 19:21:02",
+     "endDate": "2094-10-10 22:35:06",
+     "participants": [
+      "Jupiter",
+      "Sun",
+      "Mercury"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Jupiter",
+       "aspect": 90,
+       "side": "D"
+      },
+      {
+       "planet": "Sun",
+       "aspect": 90,
+       "side": "S"
+      },
+      {
+       "planet": "Mercury",
+       "aspect": 90,
+       "side": "S"
+      }
+     ]
+    },
+    {
+     "startArc": 99.36,
+     "endArc": 104.02,
+     "startYears": 99.3579,
+     "years": 4.6634,
+     "distributor": "Jupiter",
+     "sign": "Virgo",
+     "startDate": "2094-10-10 22:35:06",
+     "endDate": "2099-06-10 04:40:44",
+     "participants": [],
+     "partnerDetail": []
+    }
+   ],
+   "distSettings": {
+    "distReleaser": "Asc",
+    "distMethod": "classical",
+    "distYear": "tropical",
+    "distYears": 100,
+    "releaserLon": 80.6562
+   },
+   "distPartners": [
+    {
+     "planet": "Saturn",
+     "aspect": 90,
+     "side": "S",
+     "lon": 83.8329,
+     "startYears": 3.1552,
+     "years": 10.5357,
+     "startDate": "1998-07-29 15:16:36",
+     "endDate": "2009-02-09 17:06:44"
+    },
+    {
+     "planet": "Mars",
+     "aspect": 60,
+     "side": "D",
+     "lon": 93.8277,
+     "startYears": 13.6909,
+     "years": 19.2527,
+     "startDate": "2009-02-09 17:06:44",
+     "endDate": "2028-05-12 14:34:29"
+    },
+    {
+     "planet": "Venus",
+     "aspect": 60,
+     "side": "S",
+     "lon": 110.5374,
+     "startYears": 32.9436,
+     "years": 3.797,
+     "startDate": "2028-05-12 14:34:29",
+     "endDate": "2032-02-28 10:19:03"
+    },
+    {
+     "planet": "Saturn",
+     "aspect": 120,
+     "side": "S",
+     "lon": 113.8329,
+     "startYears": 36.7406,
+     "years": 8.4345,
+     "startDate": "2032-02-28 10:19:03",
+     "endDate": "2040-08-05 01:26:26"
+    },
+    {
+     "planet": "Moon",
+     "aspect": 0,
+     "side": "",
+     "lon": 121.1169,
+     "startYears": 45.175,
+     "years": 10.9667,
+     "startDate": "2040-08-05 01:26:26",
+     "endDate": "2051-07-24 13:50:25"
+    },
+    {
+     "planet": "Jupiter",
+     "aspect": 120,
+     "side": "D",
+     "lon": 130.3346,
+     "startYears": 56.1418,
+     "years": 1.8379,
+     "startDate": "2051-07-24 13:50:25",
+     "endDate": "2053-05-25 20:06:46"
+    },
+    {
+     "planet": "Sun",
+     "aspect": 60,
+     "side": "S",
+     "lon": 131.8793,
+     "startYears": 57.9796,
+     "years": 4.1977,
+     "startDate": "2053-05-25 20:06:46",
+     "endDate": "2057-08-06 00:43:28"
+    },
+    {
+     "planet": "Mercury",
+     "aspect": 60,
+     "side": "S",
+     "lon": 135.4076,
+     "startYears": 62.1774,
+     "years": 6.1032,
+     "startDate": "2057-08-06 00:43:28",
+     "endDate": "2063-09-13 04:15:38"
+    },
+    {
+     "planet": "Venus",
+     "aspect": 90,
+     "side": "S",
+     "lon": 140.5374,
+     "startYears": 68.2806,
+     "years": 15.7206,
+     "startDate": "2063-09-13 04:15:38",
+     "endDate": "2079-06-03 00:13:26"
+    },
+    {
+     "planet": "Mars",
+     "aspect": 0,
+     "side": "",
+     "lon": 153.8277,
+     "startYears": 84.0012,
+     "years": 7.5859,
+     "startDate": "2079-06-03 00:13:26",
+     "endDate": "2087-01-02 17:03:50"
+    },
+    {
+     "planet": "Jupiter",
+     "aspect": 90,
+     "side": "D",
+     "lon": 160.3346,
+     "startYears": 91.5871,
+     "years": 1.8009,
+     "startDate": "2087-01-02 17:03:50",
+     "endDate": "2088-10-21 11:35:11"
+    },
+    {
+     "planet": "Sun",
+     "aspect": 90,
+     "side": "S",
+     "lon": 161.8793,
+     "startYears": 93.388,
+     "years": 4.1134,
+     "startDate": "2088-10-21 11:35:11",
+     "endDate": "2092-12-01 20:44:16"
+    },
+    {
+     "planet": "Mercury",
+     "aspect": 90,
+     "side": "S",
+     "lon": 165.4076,
+     "startYears": 97.5014,
+     "years": 5.9806,
+     "startDate": "2092-12-01 20:44:16",
+     "endDate": "2098-11-25 05:09:14"
+    }
+   ]
+  },
+  "mc_qisma_julian_60": {
+   "dist": [
+    {
+     "startArc": 0.0,
+     "endArc": 9.1,
+     "startYears": 0.0,
+     "years": 9.1038,
+     "distributor": "Venus",
+     "sign": "Pisces",
+     "startDate": "1995-06-03 05:30:00",
+     "endDate": "2004-07-10 09:29:49",
+     "participants": [
+      "Mars",
+      "Jupiter",
+      "Sun"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Mars",
+       "aspect": 180,
+       "side": ""
+      },
+      {
+       "planet": "Jupiter",
+       "aspect": 90,
+       "side": "S"
+      },
+      {
+       "planet": "Sun",
+       "aspect": 90,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 9.1,
+     "endArc": 13.1,
+     "startYears": 9.1038,
+     "years": 4.0,
+     "distributor": "Jupiter",
+     "sign": "Pisces",
+     "startDate": "2004-07-10 09:29:49",
+     "endDate": "2008-07-10 09:29:49",
+     "participants": [
+      "Mercury"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Mercury",
+       "aspect": 90,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 13.1,
+     "endArc": 16.1,
+     "startYears": 13.1038,
+     "years": 3.0,
+     "distributor": "Mercury",
+     "sign": "Pisces",
+     "startDate": "2008-07-10 09:29:49",
+     "endDate": "2011-07-11 03:29:49",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 16.1,
+     "endArc": 25.1,
+     "startYears": 16.1038,
+     "years": 9.0,
+     "distributor": "Mars",
+     "sign": "Pisces",
+     "startDate": "2011-07-11 03:29:49",
+     "endDate": "2020-07-10 09:29:49",
+     "participants": [
+      "Venus",
+      "Saturn"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Venus",
+       "aspect": 60,
+       "side": "D"
+      },
+      {
+       "planet": "Saturn",
+       "aspect": 0,
+       "side": ""
+      }
+     ]
+    },
+    {
+     "startArc": 25.1,
+     "endArc": 27.1,
+     "startYears": 25.1038,
+     "years": 2.0,
+     "distributor": "Saturn",
+     "sign": "Pisces",
+     "startDate": "2020-07-10 09:29:49",
+     "endDate": "2022-07-10 21:29:49",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 27.1,
+     "endArc": 33.1,
+     "startYears": 27.1038,
+     "years": 6.0,
+     "distributor": "Jupiter",
+     "sign": "Aries",
+     "startDate": "2022-07-10 21:29:49",
+     "endDate": "2028-07-10 09:29:49",
+     "participants": [
+      "Moon"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Moon",
+       "aspect": 120,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 33.1,
+     "endArc": 39.1,
+     "startYears": 33.1038,
+     "years": 6.0,
+     "distributor": "Venus",
+     "sign": "Aries",
+     "startDate": "2028-07-10 09:29:49",
+     "endDate": "2034-07-10 21:29:49",
+     "participants": [
+      "Jupiter",
+      "Sun"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Jupiter",
+       "aspect": 120,
+       "side": "S"
+      },
+      {
+       "planet": "Sun",
+       "aspect": 60,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 39.1,
+     "endArc": 47.1,
+     "startYears": 39.1038,
+     "years": 8.0,
+     "distributor": "Mercury",
+     "sign": "Aries",
+     "startDate": "2034-07-10 21:29:49",
+     "endDate": "2042-07-10 21:29:49",
+     "participants": [
+      "Mercury"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Mercury",
+       "aspect": 60,
+       "side": "D"
+      }
+     ]
+    },
+    {
+     "startArc": 47.1,
+     "endArc": 52.1,
+     "startYears": 47.1038,
+     "years": 5.0,
+     "distributor": "Mars",
+     "sign": "Aries",
+     "startDate": "2042-07-10 21:29:49",
+     "endDate": "2047-07-11 03:29:49",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 52.1,
+     "endArc": 57.1,
+     "startYears": 52.1038,
+     "years": 5.0,
+     "distributor": "Saturn",
+     "sign": "Aries",
+     "startDate": "2047-07-11 03:29:49",
+     "endDate": "2052-07-10 09:29:49",
+     "participants": [],
+     "partnerDetail": []
+    },
+    {
+     "startArc": 57.1,
+     "endArc": 65.1,
+     "startYears": 57.1038,
+     "years": 8.0,
+     "distributor": "Venus",
+     "sign": "Taurus",
+     "startDate": "2052-07-10 09:29:49",
+     "endDate": "2060-07-10 09:29:49",
+     "participants": [
+      "Moon"
+     ],
+     "partnerDetail": [
+      {
+       "planet": "Moon",
+       "aspect": 90,
+       "side": "D"
+      }
+     ]
+    }
+   ],
+   "distSettings": {
+    "distReleaser": "MC",
+    "distMethod": "qisma",
+    "distYear": "julian",
+    "distYears": 60,
+    "releaserLon": 332.8962
+   },
+   "distPartners": [
+    {
+     "planet": "Mars",
+     "aspect": 180,
+     "side": "",
+     "lon": 333.8277,
+     "startYears": 0.9315,
+     "years": 6.5068,
+     "startDate": "1996-05-08 11:20:40",
+     "endDate": "2002-11-10 02:20:06"
+    },
+    {
+     "planet": "Jupiter",
+     "aspect": 90,
+     "side": "S",
+     "lon": 340.3346,
+     "startYears": 7.4384,
+     "years": 1.5447,
+     "startDate": "2002-11-10 02:20:06",
+     "endDate": "2004-05-27 07:32:22"
+    },
+    {
+     "planet": "Sun",
+     "aspect": 90,
+     "side": "D",
+     "lon": 341.8793,
+     "startYears": 8.9831,
+     "years": 3.5283,
+     "startDate": "2004-05-27 07:32:22",
+     "endDate": "2007-12-07 00:16:48"
+    },
+    {
+     "planet": "Mercury",
+     "aspect": 90,
+     "side": "D",
+     "lon": 345.4076,
+     "startYears": 12.5114,
+     "years": 5.1298,
+     "startDate": "2007-12-07 00:16:48",
+     "endDate": "2013-01-22 16:22:06"
+    },
+    {
+     "planet": "Venus",
+     "aspect": 60,
+     "side": "D",
+     "lon": 350.5374,
+     "startYears": 17.6412,
+     "years": 3.2955,
+     "startDate": "2013-01-22 16:22:06",
+     "endDate": "2016-05-10 08:24:33"
+    },
+    {
+     "planet": "Saturn",
+     "aspect": 0,
+     "side": "",
+     "lon": 353.8329,
+     "startYears": 20.9367,
+     "years": 7.284,
+     "startDate": "2016-05-10 08:24:33",
+     "endDate": "2023-08-22 19:56:53"
+    },
+    {
+     "planet": "Moon",
+     "aspect": 120,
+     "side": "D",
+     "lon": 1.1169,
+     "startYears": 28.2207,
+     "years": 9.2177,
+     "startDate": "2023-08-22 19:56:53",
+     "endDate": "2032-11-09 14:20:06"
+    },
+    {
+     "planet": "Jupiter",
+     "aspect": 120,
+     "side": "S",
+     "lon": 10.3346,
+     "startYears": 37.4384,
+     "years": 1.5447,
+     "startDate": "2032-11-09 14:20:06",
+     "endDate": "2034-05-27 19:32:22"
+    },
+    {
+     "planet": "Sun",
+     "aspect": 60,
+     "side": "D",
+     "lon": 11.8793,
+     "startYears": 38.9831,
+     "years": 3.5283,
+     "startDate": "2034-05-27 19:32:22",
+     "endDate": "2037-12-06 12:16:48"
+    },
+    {
+     "planet": "Mercury",
+     "aspect": 60,
+     "side": "D",
+     "lon": 15.4076,
+     "startYears": 42.5114,
+     "years": 15.7093,
+     "startDate": "2037-12-06 12:16:48",
+     "endDate": "2053-08-22 07:56:53"
+    },
+    {
+     "planet": "Moon",
+     "aspect": 90,
+     "side": "D",
+     "lon": 31.1169,
+     "startYears": 58.2207,
+     "years": 2.7109,
+     "startDate": "2053-08-22 07:56:53",
+     "endDate": "2056-05-08 11:20:40"
+    }
+   ]
+  }
+ }
+}

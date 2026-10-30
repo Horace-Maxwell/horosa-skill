@@ -15,6 +15,7 @@
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 import calc, { daYun, judge, buildSnapshotText, heluoSolarTermOfDate } from '../vendor/heluo/heluoLocal.js';
 import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
+import { parseYearFromDateStr } from '../vendor/bazi/dateStrSafe.js';
 
 function pillarGanzhi(pillar) {
   return (pillar && (pillar.ganzi || pillar.ganZhi)) || '';
@@ -43,7 +44,7 @@ export function runHeluo(payload) {
   const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
   // 日界 / 晚子时：上游两路缺省同为全局出厂 1/1 —— 无头 buildFieldObject after23NewDay = record ?? defaultAfter23NewDay()
   // （aiAnalysisContext.js:606）、页面 fieldVal(f,'after23NewDay',defaultAfter23NewDay())（HeLuoMain.js:191-192）。
-  // 此前不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（baziLunarLocal.js:1107），23 点档生人日柱与上游不同。
+  // 此前不传 → v3.11 的 vendored baziLunarLocal 把 undefined 当「24 点换日」（v3.13.0 起缺键回落全局缺省 1；仍显式传）（baziLunarLocal.js:1107），23 点档生人日柱与上游不同。
   const after23NewDay = input.after23NewDay === undefined || input.after23NewDay === null ? 1 : input.after23NewDay;
   const lateZiHourUseNextDay = input.lateZiHourUseNextDay === undefined || input.lateZiHourUseNextDay === null
     ? 1 : input.lateZiHourUseNextDay;
@@ -93,7 +94,9 @@ export function runHeluo(payload) {
   const monthZhi = fourPillars.month.charAt(1);
   const hourZhi = fourPillars.hour.charAt(1);
   // 2026-09-04：第 N 岁流年以干支年为基准（桌面 HeLuoMain/ganzhiYearBase 同修；立春前生者此前错一位）
-  const birthYear = ganzhiYearBase(parseInt(`${date}`.slice(0, 4), 10) || 0, fourPillars.year);
+  // 上游 v3.13.0（CanPingMain.js:172 / HeLuoMain.js:200）parseYearFromDateStr(dateStr)：带符号年（公元前 / 五位年）；
+  // 旧 parseInt(slice(0, 4)) 把 '-0500' 切成 -50、'10000' 切成 1000。
+  const birthYear = ganzhiYearBase(parseYearFromDateStr(date) || 0, fourPillars.year);
   const gender = bazi.gender === 'Female' ? '女' : '男';
 
   // 取法四轴 + 阳令手定（缺省与 vendor calculate() 内建默认逐字相同 → 不给即字节不变）

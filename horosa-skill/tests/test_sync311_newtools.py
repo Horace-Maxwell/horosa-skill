@@ -429,6 +429,19 @@ from test_local_js_tools import make_service, requires_chart, requires_current_r
 # 那些行把关，不靠这 10 s：退回 Moshier 时停滞时刻只挪 1–28 s，但约一半月相时刻、四成月亮入座时刻按秒变。
 # 台账 v0.40.0 / 2026-09-30「停滞方向取根处速度符号」；上游修好方向后由 test_upstream_station_direction_* 提醒恢复比方向。
 _STATION_TABLE_TITLE = "留与顺逆转向："
+# v3.13.0 后端（astropy 时间格式化）：取整进位到 24 时的时刻连日期一并进到次日，不再写「D 24:00:00」——上游自家测试注明
+# 「旧实现会写出 '24:00:00'；新实现进位到次日，只这一种差别」。金标是旧后端回包上跑出的，live 比对时把金标里这种写法按同一规则进位。
+_MIDNIGHT_24 = re.compile(r"(-?\d{4,6})-(\d{2})-(\d{2}) 24:00:00")
+
+
+def _carry_24h(text: str) -> str:
+    from datetime import date, timedelta
+
+    def carry(m: re.Match) -> str:
+        nxt = date(int(m.group(1)), int(m.group(2)), int(m.group(3))) + timedelta(days=1)
+        return f"{nxt:%Y-%m-%d} 00:00:00"
+
+    return _MIDNIGHT_24.sub(carry, text)
 _STATION_DIRECTIONS = ("Direct", "Retrograde")
 _STATION_ROW = "| <station> |"
 _STATION_TIME = re.compile(r"\| (\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})")
@@ -481,7 +494,7 @@ def test_live_chart_service_reproduces_the_upstream_goldens(tmp_path: Path, froz
         _assert_clean(result)
         got, want = result.data["snapshot_text"], sc["golden"][golden_key]
         if tool == "ephemeris":
-            want = _with_true_station_directions(want, sc["station_truth"])  # 声明式偏离：方向 = 真值，与平台无关
+            want = _carry_24h(_with_true_station_directions(want, sc["station_truth"]))  # 方向 = 真值；24 时进位同 v3.13.0 后端
             (got, got_rows), (want, want_rows) = _lift_station_rows(got), _lift_station_rows(want)
             assert want_rows, "金标里应有停滞行"
             _assert_same_stations(got_rows, want_rows)
@@ -614,7 +627,8 @@ needs_upstream = pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="drift se
 
 _UPSTREAM_BUILDERS = {
     "components/astro/AstroEphemeris.js": ("buildEphemerisSnapshotText", "ephemerisLimitsText", "defaultEphemerisWindow", "fmtDateOf"),
-    "components/astro/AstroReturnTimeline.js": ("buildReturnTimelineSnapshotText", "rtDeg"),
+    # 上游 v3.13.0 删了 rtDeg（度数格直接调 fmtDegree，空值同为 '-'）——fmtDegree 已在 AstroExtraCommon 一行里守。
+    "components/astro/AstroReturnTimeline.js": ("buildReturnTimelineSnapshotText",),
     "components/astro/AstroPrenatalSyzygy.js": ("buildPrenatalSyzygySnapshotText", "splitDateTime", "psName"),
     "components/astro/astroProgSnapshot.js": ("buildProgSnapshotText", "methodTab"),
     "components/astro/AstroExtraCommon.js": ("signName", "fmtNum", "fmtDegree"),
@@ -659,9 +673,15 @@ def test_method_notes_variants_and_tables_track_upstream() -> None:
     snap = (_UPSTREAM_SRC / "utils/astroAiSnapshot.js").read_text(encoding="utf-8")
     block = snap[snap.index("export const PREDICTIVE_METHOD_NOTES = {") :]
     block = block[: block.index("\n};")]
-    for key in NEW_TOOLS:
-        m = re.search(r"\n\t" + key + r": \[(.*?)\n\t\],", block, re.S)
-        assert re.findall(r"'((?:[^'\\]|\\.)*)'", m.group(1)) == NOTES[key], key
+    # v0.46（上游 v3.13.0）起覆盖**全部**星运键：此前只钉 4 个新键，distributions / agepoint / yearsystem129 /
+    # balbillus / lunationphase / extrareturns / primarydirect 的上游改写在这里零信号滞留了一个版本。
+    upstream = {m.group(1): re.findall(r"'((?:[^'\\]|\\.)*)'", m.group(2)) for m in re.finditer(r"\n\t(\w+): \[(.*?)\n\t\],", block, re.S)}
+    assert set(upstream) == set(NOTES), (sorted(set(upstream) ^ set(NOTES)))
+    for key, lines in upstream.items():
+        # 唯一声明的本仓扩展：persiandirected 第 3 行说明 skill 独有的 datetime 指定日期向运盘入参（上游无此入参）。
+        ours = NOTES[key][:2] if key == "persiandirected" else NOTES[key]
+        assert ours == lines, key
+    assert NOTES["persiandirected"][2].startswith("指定日期：传 datetime=")
     prog_src = (_UPSTREAM_SRC / "components/astro/astroProgSnapshot.js").read_text(encoding="utf-8")
     for variant in A.PROG_SNAPSHOT_VARIANTS.values():
         for field in ("section", "intro", "posCol"):

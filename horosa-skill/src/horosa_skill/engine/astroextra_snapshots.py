@@ -36,6 +36,8 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from horosa_skill.astro_rulers import POLAR_MC_NOTE, polar_mc_of
+
 # JS `undefined` 哨兵：JSON 里的 null 在 Python 是 None（= JS null），缺键才是 undefined。
 _UNDEFINED: Any = object()
 
@@ -79,6 +81,7 @@ ASTRO_TXT_MSG: dict[str, str] = {
     "Purple Clouds": "紫气",
     "Pars Fortuna": "福点",
     "Vertex": "宿命点",
+    "Antivertex": "反宿命点",
     "Chiron": "凯龙",
     "Syzygy": "月亮朔望点",
     "Intp_Apog": "月亮平均远地点",
@@ -145,6 +148,7 @@ ASTRO_TXT_MSG: dict[str, str] = {
 # 本就回落为 id 本身，故不收；signName 只会拿星座名来查，星座名先命中 AstroTxtMsg）。
 ASTRO_MSG_TEXT: dict[str, str] = {
     "Vertex": "宿命点",
+    "Antivertex": "反宿命点",
     "ruler": "本垣",
     "exalt": "擢升",
     "dayTrip": "日三分",
@@ -727,6 +731,9 @@ def predictive_birth_lines(chart_obj: Any) -> list[str]:
     hsys = HOUSE_SYS.get(_js_str(_get(params, "hsys"))) or _get(chart, "hsys")
     if _js_truthy(hsys):
         lines.append(f"宫制：{_js_str(hsys)}")
+    # v3.13.0 astroAiSnapshot.js buildPredictiveBirthLines：极区天顶标记（houses[].polarMc）→ 说明行。
+    if polar_mc_of(chart if isinstance(chart, dict) else {}):
+        lines.append(POLAR_MC_NOTE)
     is_diurnal = _get(chart, "isDiurnal")
     if is_diurnal is not _UNDEFINED and is_diurnal is not None:
         lines.append(f"盘型：{'日生盘' if _js_truthy(is_diurnal) else '夜生盘'}")
@@ -754,13 +761,34 @@ def _js_date_parse_local(text: str) -> float | None:
         return None
 
 
+_ZONE_RE = re.compile(r"^([+-])(\d{2}):(\d{2})(?::(\d{2}))?$")
+
+
+def _birth_instant_ts_in_zone(birth: Any, zone: Any) -> float | None:
+    """v3.13.0 astroAiSnapshot.js birthInstantMsInZone：出生钟面按本盘时区（±HH:MM[:SS]）解读成真实瞬时；
+    没有合法时区 → 按本机时区解读（原样）。此前一律按本机时区 → 本机与盘不在同一时区时「当前年龄」差出时差。
+    钟面解析沿用 `_js_date_parse_local`（parseLocalDateTimeMs 的常见写法子集）。"""
+    text = _js_str(birth).strip().replace("/", "-").replace(" ", "T", 1)
+    m = _ZONE_RE.match(zone) if isinstance(zone, str) else None
+    if not m:
+        return _js_date_parse_local(text)
+    zone_sec = (-1 if m.group(1) == "-" else 1) * (int(m.group(2)) * 3600 + int(m.group(3)) * 60 + int(m.group(4) or 0))
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+        try:
+            wall = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        return wall.replace(tzinfo=timezone.utc).timestamp() - zone_sec
+    return None
+
+
 def current_moment_lines(chart_obj: Any, extra_lines: list[str] | None, now: datetime) -> list[str]:
-    """astroAiSnapshot.js:2002-2019 buildCurrentMomentLines：导出时刻 + 盘主当前年龄（本地时钟）。"""
+    """astroAiSnapshot.js buildCurrentMomentLines：导出时刻 + 盘主当前年龄（v3.13.0 起出生时刻按本盘时区解读）。"""
     params = chart_obj.get("params") if isinstance(chart_obj, dict) and isinstance(chart_obj.get("params"), dict) else {}
     lines = [f"导出时刻：{now.strftime('%Y-%m-%d %H:%M')}"]
     birth = _get(params, "birth")
     if _js_truthy(birth):
-        birth_ts = _js_date_parse_local(_js_str(birth).strip().replace("/", "-").replace(" ", "T", 1))
+        birth_ts = _birth_instant_ts_in_zone(birth, _get(params, "zone"))
         if birth_ts is not None:
             age = (now.timestamp() - birth_ts) / (365.2425 * 24 * 3600)
             if math.isfinite(age) and -1 < age < 200:
@@ -973,12 +1001,15 @@ SYZYGY_TYPE_CN: dict[str, str] = {"new": "朔（日月合）", "full": "望（�
 
 
 def split_syzygy_datetime(value: Any) -> dict[str, str] | None:
-    """AstroPrenatalSyzygy.js:81-86 splitDateTime：朔望时刻 → 起盘用 {date: 'YYYY/MM/DD', time}。"""
+    """AstroPrenatalSyzygy.js splitDateTime：朔望时刻 → 起盘用 {date: 'YYYY/MM/DD', time}。
+    v3.12.0 起日期经 toSlashDate（只换数字之间的 '-'，公元前前导负号保留——旧 replace(/-/g,'/') 把 '-0500-03-20'
+    写成 '/0500/03/20'，公元前的朔望盘起不出来）。"""
     text = f"{value if value is not None and value is not _UNDEFINED else ''}".strip()
     if not text:
         return None
     parts = text.replace("T", " ", 1).split(" ")
-    return {"date": (parts[0] if parts else "").replace("-", "/"), "time": parts[1] if len(parts) > 1 and parts[1] else "12:00:00"}
+    date = re.sub(r"(\d)-(?=\d)", r"\1/", parts[0] if parts else "")  # dateStrSafe.toSlashDate
+    return {"date": date, "time": parts[1] if len(parts) > 1 and parts[1] else "12:00:00"}
 
 
 def build_prenatal_syzygy_snapshot_text(

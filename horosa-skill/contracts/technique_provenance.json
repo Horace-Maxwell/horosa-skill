@@ -29,12 +29,14 @@
     },
     "agepoint": {
       "compute_class": "python_chart_backend",
-      "engines": [],
+      "engines": [
+        "progextra"
+      ],
       "endpoints": [
         "/predict/agepoint"
       ],
       "export_technique": "agepoint",
-      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+      "notes": "chart 服务 /predict/agepoint 算年龄点与事件；vendored 星阙前端 buildAgePointSnapshotFromResult（horosa-core-js progextra）按回包排版"
     },
     "astrodata": {
       "compute_class": "local_data",
@@ -76,7 +78,7 @@
         "/bazi/birth"
       ],
       "export_technique": "bazi",
-      "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
+      "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon 回退 Java /bazi/*（adjustJieqi 随上游 v3.13.0 恒发 0）；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
     },
     "bazi_direct": {
       "compute_class": "composite",
@@ -88,7 +90,7 @@
         "/bazi/direct"
       ],
       "export_technique": "bazi",
-      "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
+      "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon 回退 Java /bazi/*（adjustJieqi 随上游 v3.13.0 恒发 0）；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
     },
     "bazi_inverse": {
       "compute_class": "java_backend",
@@ -204,12 +206,14 @@
     },
     "distributions": {
       "compute_class": "python_chart_backend",
-      "engines": [],
+      "engines": [
+        "progextra"
+      ],
       "endpoints": [
         "/predict/dist"
       ],
       "export_technique": "distributions",
-      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
+      "notes": "chart 服务 /predict/dist 算界推运与伙伴星；vendored 星阙前端 buildDistributionsSnapshotFromResult（horosa-core-js progextra）按回包排版"
     },
     "draconic": {
       "compute_class": "python_chart_backend",
@@ -501,6 +505,7 @@
         "local_route_buildJinKouData"
       ],
       "endpoints": [
+        "/chart",
         "/jinkou/pan",
         "/liureng/gods"
       ],
@@ -1076,13 +1081,15 @@
       "notes": "不起盘：读本地离线库 / 内置注册表"
     },
     "yearsystem129": {
-      "compute_class": "frontend_read_port",
-      "engines": [],
+      "compute_class": "composite",
+      "engines": [
+        "progextra"
+      ],
       "endpoints": [
         "/chart"
       ],
       "export_technique": "yearsystem129",
-      "notes": "读已算好的 chart 对象再排版的 Python 移植"
+      "notes": "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
     },
     "yizhangjing": {
       "compute_class": "headless_js",

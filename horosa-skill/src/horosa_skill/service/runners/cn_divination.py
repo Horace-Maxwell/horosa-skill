@@ -9,7 +9,7 @@ from horosa_skill.errors import (
     ToolValidationError,
     bilingual,
 )
-from horosa_skill.service._common import _SIXYAO_DIZHI
+from horosa_skill.service._common import _SIXYAO_DIZHI, _leading_year_of
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.options_cn import (
     _day_boundary_switches,
@@ -291,10 +291,9 @@ class CnDivinationRunners:
                 if len(day_gz) >= 2:
                     request["dayGan"] = day_gz[0]
                 request["pillars"] = [p for p in (year_jieqi, month_gz, day_gz, hour_gz) if len(p) >= 2]
-                try:
-                    request["year"] = int(str(payload["date"]).lstrip("-").split("-")[0]) * (payload.get("ad", 1) or 1)
-                except (ValueError, IndexError):
-                    request["year"] = None
+                # 上游 GuiceMain.ctxLive（:219）`leadingYearOf(nl.date || '') || undefined`：取农历回包的带符号日期串首年。
+                # 旧 lstrip('-') × ad 把公元前 '-0500-03-21'（ad 缺省 1）读成公元 500 年。
+                request["year"] = _leading_year_of(nongli.get("date") or "") or None
                 time_lines = [
                     f"起卦时间:{payload.get('date')} {payload.get('time') or ''}".strip(),
                     f"农历:{nongli.get('monthInt')}月{nongli.get('dayInt')}日 四柱[{'·'.join(request.get('pillars') or [])}]",

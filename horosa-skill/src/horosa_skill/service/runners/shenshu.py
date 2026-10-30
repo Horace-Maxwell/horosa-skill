@@ -240,8 +240,10 @@ class ShenshuRunners:
         replay_note = ""
         if mode in {"day", "hour", "minute", "tang"} and not calc["manual"]:
             replay_note = (
-                f"挂载无法复现随机起兆(所选「{_WUZHAO_MODE_LABELS[mode]}」需开启「手动分爻复现」并填分爻数;存档亦无兆数)"
-                "→ 已按干支起例"
+                # 原句逐字取自上游 buildWuZhaoSnapshotForFields（v3.13.0 WuZhaoMain.js 措辞：「把「揲筮模式」设为手动复现」
+                # 「已按干支起盘」；v3.11 是「开启「手动分爻复现」」「已按干支起例」）。
+                f"挂载无法复现随机起兆(所选「{_WUZHAO_MODE_LABELS[mode]}」需把「揲筮模式」设为手动复现并填分爻数;存档亦无兆数)"
+                "→ 已按干支起盘"
             )
             calc["mode"] = "ganzhi"
             _degrade(

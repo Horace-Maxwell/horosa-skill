@@ -35,9 +35,11 @@ from functools import cmp_to_key
 from typing import Any
 
 from horosa_skill.astro_rulers import (
+    POLAR_MC_NOTE,
     build_dispositor_ruler_tail_lines,
     build_house_system_ruler_section_lines,
     derived_whole_sign_label_of,
+    polar_mc_of,
     ruler_of_sign,
 )
 from horosa_skill.engine.astroextra_snapshots import (
@@ -420,7 +422,8 @@ _CLS_CALIBRE_LABELS: dict[str, tuple[str, dict[str, str] | None, Callable[[Any],
     "westLilithType": ("黑月", {"true": "真实远地点"}, None),
     "topocentricMoon": ("月亮视差", {"1": "站心修正"}, None),
     "stationMarking": ("留驻判定", {"exactWindow": "距留点≤1日", "distance": "距留点≤2′", "absSpeed": "日速<1′", "relSpeed": "日速<3%均速"}, None),
-    "hermeticLotsReversal": ("七星点", {"0": "恒同式(批判本校勘)"}, None),
+    # v3.13.0 astroAiSnapshot.js:350 CLS_CALIBRE_LABELS：七星点 → 六星点（上游注：后端只按昼夜反转六个点，福点另由开关定）。
+    "hermeticLotsReversal": ("六星点", {"0": "恒同式(批判本校勘)"}, None),
     "erosConstruction": ("爱欲·必然构成", {"valens": "Valens 式(福点·精神系)"}, None),
     "lotFortuneVariant": ("福点变体", {"moonAboveNight": "月在地平上恒夜式"}, None),
     "lotFatherCombustAlt": ("父点", {"1": "土星伏替代式(Dorotheus 系)"}, None),
@@ -554,6 +557,9 @@ def build_base_info_lines(chart_obj: Any, fields: Any, *, with_time_basis: bool 
             ayan_key = chart.get("siderealAyanamsa") if _js_truthy(chart.get("siderealAyanamsa")) else ""
         zodiacal_txt = _zodiacal_display_text(zodiacal, ayan_key) if _js_truthy(zodiacal) else msg(zodiacal)
         lines.append(f"{zodiacal_txt}，{msg(hsys)}")
+    # v3.13.0 astroAiSnapshot.js buildBaseInfoLines：极区天顶标记（houses[].polarMc）→ 说明行。
+    if polar_mc_of(chart):
+        lines.append(POLAR_MC_NOTE)
     calibre = build_classical_calibre_line(fields)
     if calibre:
         lines.append(calibre)

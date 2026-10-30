@@ -108,6 +108,32 @@ def test_stamp_is_line_ending_independent(tmp_path: Path) -> None:
     assert rv.hand_made_drift(tmp_path, "v/a.js", entry) is None
 
 
+def test_also_derived_from_sources_are_watched_and_restamped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v3.13.0：印占快照除 IndiaChart.js 外还逐字搬 indiaMain/jyotishData.js + dasha.js —— 只看主源时，
+    次源上游再修一处零信号。also_derived_from 的每个源各自比戳；--restamp 一并重记。
+    负向对照：去掉 hand_made_drift 里对 also_derived_from 的遍历 → 第二个断言（次源改动）不再红。"""
+    (tmp_path / "main.js").write_text("export const A = 1;\n", encoding="utf-8")
+    (tmp_path / "extra.js").write_text("export const B = 1;\n", encoding="utf-8")
+    entry = {
+        "mode": "bespoke", "derived_from": "main.js", "derived_sha256": _sha("export const A = 1;\n"),
+        "also_derived_from": {"extra.js": _sha("export const B = 1;\n")},
+    }
+    assert rv.hand_made_drift(tmp_path, "v/snap.js", entry) is None
+    (tmp_path / "extra.js").write_text("export const B = 2;\n", encoding="utf-8")
+    problem = rv.hand_made_drift(tmp_path, "v/snap.js", entry)
+    assert problem and "source extra.js changed upstream" in problem and "main.js" not in problem
+    (tmp_path / "extra.js").unlink()
+    assert "source extra.js is gone upstream" in rv.hand_made_drift(tmp_path, "v/snap.js", entry)
+    (tmp_path / "extra.js").write_text("export const B = 2;\n", encoding="utf-8")
+    files = {"v/snap.js": entry}
+    monkeypatch.setattr(rv, "load_manifest", lambda: files)
+    monkeypatch.setattr(rv, "_write_manifest", lambda _files: None)
+    monkeypatch.setattr(rv, "MANIFEST", rv.REPO_ROOT / "contracts" / "vendor_manifest.json")
+    assert rv.restamp(tmp_path, ["v/snap.js"]) == 0
+    assert entry["also_derived_from"]["extra.js"] == _sha("export const B = 2;\n")
+    assert rv.hand_made_drift(tmp_path, "v/snap.js", entry) is None
+
+
 def test_every_vendored_js_and_json_file_is_in_the_manifest() -> None:
     """JSON 数据同样是上游产物，必须与 .js 一样逐文件登记、逐字节比对。
 

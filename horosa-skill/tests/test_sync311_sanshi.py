@@ -446,24 +446,29 @@ class _SolarGodsClient(CaptureClient):
         return super().call(endpoint, payload)
 
 
-def test_jinkou_time_basis_only_moves_the_ken_path(tmp_path) -> None:
-    """F7：timeBasis=trueSolar → ken 收 liureng.nongli.birth 的真太阳时分量（上游 fetchJinKouPan）；本地路由时上游把
-    该控件置灰 → 本次不生效且进 warnings。旧代码：ken 恒钟表时、不发 timeBasis、本地路由无从谈起 → 红。"""
+def test_jinkou_time_basis_moves_both_the_gods_request_and_the_ken_path(tmp_path) -> None:
+    """F7：timeBasis=trueSolar → ken 收 liureng.nongli.birth 的真太阳时分量（上游 fetchJinKouPan）。
+    v3.12.0 起四柱 / 占时同样随时间基准取（JinKouMain.genGodsParams:1389-1412、无头 regenDivination.js:176-178：
+    /liureng/gods 带 timeAlg = trueSolar ? 0 : 1，缺省 direct = 钟表时），本地路由（流派非缺省）下时间基准也生效 ——
+    上游删了置灰与「未生效」说明。负向对照：runner 去掉 timeAlg（回到 _liureng_remote_payload）→ 三处 timeAlg 断言红。"""
     client = _SolarGodsClient()
     service = _fake_service(tmp_path, client=client)
     base = {**BASE_LR, "time": "10:59:30", "agent_confirmed_settings": True}
     env = service.run_tool("jinkou", {**base, "options": {"timeBasis": "trueSolar"}}, save_result=False)
     assert env.ok, env.error
+    assert _calls(client, "/liureng/gods")[-1]["timeAlg"] == 0
     ken = _calls(client, "/jinkou/pan")[-1]
     assert (ken["hour"], ken["minute"], ken["second"], ken["timeBasis"]) == (11, 0, 35, "trueSolar")
     assert ken["difen"] == "午"  # 自动地分 = 占时支（农历真太阳时柱 戊午）
     service.run_tool("jinkou", base, save_result=False)
+    assert _calls(client, "/liureng/gods")[-1]["timeAlg"] == 1
     ken = _calls(client, "/jinkou/pan")[-1]
     assert (ken["hour"], ken["minute"], ken["timeBasis"]) == (10, 59, "direct")
     before = len(_calls(client, "/jinkou/pan"))
     local = service.run_tool("jinkou", {**base, "options": {"panShi": "yin", "timeBasis": "trueSolar"}}, save_result=False)
     assert local.ok and len(_calls(client, "/jinkou/pan")) == before
-    assert any("timeBasis=trueSolar 本次未生效" in w for w in local.warnings)
+    assert _calls(client, "/liureng/gods")[-1]["timeAlg"] == 0
+    assert not any("未生效" in w for w in local.warnings)
     bad = service.run_tool("jinkou", {**base, "options": {"panShi": "up"}}, save_result=False)
     assert not bad.ok and bad.error.code == "tool.jinkou_invalid_option"
 

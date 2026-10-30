@@ -1,7 +1,8 @@
-// 三式合一外圈「星盘」行的度分拆分子集 —— **逐字抽自上游** components/astro/AstroHelper.js:34-87
+// 三式合一外圈「星盘」行的度分拆分子集 —— **逐字抽自上游** components/astro/AstroHelper.js:18-71（v3.13.0 行号）
 // （splitDegree / convertLatToStr / convertLonToStr 三个纯函数，原序原文）。
-// 为什么是子集：上游 AstroHelper.js（1400+ 行）顶层 import d3 与 utils/helper（DOM / tooltip），且模块加载期即调
-// detectOS()，headless 不可整份 vendor；SanShiUnitedMain.js 纯逻辑段只用 splitDegree（buildOuterData 的宫内度分），
+// 为什么是子集：v3.11.3 的上游 AstroHelper.js（1400+ 行）顶层 import d3 与 utils/helper（DOM / tooltip），且模块加载期即调
+// detectOS()，headless 不可整份 vendor（v3.13.0 已瘦到 281 行、不再引 d3 / detectOS，但仍整份 import 上游 AstroConst/AstroText，
+// 共享 shim 不全，故仍取子集；三函数逐字未变）；SanShiUnitedMain.js 纯逻辑段只用 splitDegree（buildOuterData 的宫内度分），
 // 另两个与它同一条 import 语句，一并照抄以满足具名导入。curated：上游源 sha 由 manifest 的 upstream_sha256 看守。
 export function splitDegree(degree){
 	let res = [];

@@ -292,8 +292,43 @@ BALBILLUS_POLICY = _progression_target_policy(
     do_not_assume=[],
     extra_defaults=[
         {"field": "startPlanet", "value": "Sun", "meaning": "自太阳起（上游缺省）"},
-        {"field": "yearType", "value": "solar", "meaning": "回归年 365.2422 日"},
+        {"field": "yearType", "value": "solar", "meaning": "回归年 365.2422 日（另 sidereal / hellenistic 360 / abumashar / mashaallah / bija）"},
         {"field": "mode", "value": "nearest", "meaning": "最近角距"},
+        {"field": "subRule", "value": "once", "meaning": "子限一轮（cycle 循环到父期末 / fill 末段拉长填满）"},
+    ],
+)
+# v3.13.0：129 年系统 / 年龄推进点 / 界推运各有四项口径（上游 techniqueMountSettings 挂载齿轮同名；缺省即上游缺省）。
+YEARSYSTEM129_POLICY = _progression_target_policy(
+    intent="129 年系统（七星时主 129 年一轮）：起始星 / 排序 / 年制 / 子限分法改各期起讫。",
+    targets=[{"field": "technique settings", "question": "起始星/排序/年制/子限是否沿用星阙默认？", "options": ["沿用默认（太阳·黄道序·回归年·按天数）", "指定参数"]}],
+    do_not_assume=[],
+    extra_defaults=[
+        {"field": "ys129StartPlanet", "value": "Sun", "meaning": "自太阳起（sect = 随昼夜区分取日/月，或七星任一）"},
+        {"field": "ys129Order", "value": "zodiacal", "meaning": "按本命黄经序（chaldean 迦勒底序）"},
+        {"field": "ys129YearType", "value": "solar", "meaning": "回归年（sidereal / hellenistic / abumashar / mashaallah / bija）"},
+        {"field": "ys129SubRule", "value": "days", "meaning": "子限按天数（proportional 按比例 / equal 等分）"},
+    ],
+)
+AGEPOINT_POLICY = _progression_target_policy(
+    intent="年龄推进点（Huber Age Point）：推进法 / 事件范围 / 年制 / 推到几岁改事件年表。",
+    targets=[{"field": "technique settings", "question": "推进法/事件/年制/年限是否沿用星阙默认？", "options": ["沿用默认（Koch 宫·全部事件·回归年·72 岁）", "指定参数"]}],
+    do_not_assume=[],
+    extra_defaults=[
+        {"field": "apMethod", "value": "koch", "meaning": "Koch 宫，每宫 6 年（equal5 自上升每年 5°）"},
+        {"field": "apEvents", "value": "full", "meaning": "全部点 × 五种相位（conj 只报合七星）"},
+        {"field": "apYear", "value": "tropical", "meaning": "回归年（sidereal 恒星年）"},
+        {"field": "apMaxAge", "value": 72, "meaning": "推到 72 岁（100 / 120 / 144）"},
+    ],
+)
+DISTRIBUTIONS_POLICY = _progression_target_policy(
+    intent="界推运（分配法 Distributions）：释放点 / 算法 / 年制 / 年限改界主与伙伴星年表。",
+    targets=[{"field": "technique settings", "question": "释放点/算法/年制/年限是否沿用星阙默认？", "options": ["沿用默认（上升·上升时间·回归年·100 年）", "指定参数"]}],
+    do_not_assume=[],
+    extra_defaults=[
+        {"field": "distReleaser", "value": "Asc", "meaning": "自上升释放（另 18 档：日月五星 / 中天 / 北交 / 宿命点 / 福点 / 精神点 / 产前朔望点 …）"},
+        {"field": "distMethod", "value": "classical", "meaning": "上升时间，星座内均匀（exact 斜升差逐度 / qisma 每度 1 年）"},
+        {"field": "distYear", "value": "tropical", "meaning": "回归年（egyptian 365 日 / julian 365.25 日）"},
+        {"field": "distYears", "value": 100, "meaning": "推 100 年（60 / 80 / 120 / 150）"},
     ],
 )
 TRIPLICITYRULERS_POLICY = _progression_target_policy(
@@ -340,7 +375,9 @@ PROFECTION_POLICY = _predictive_policy_with_defaults([
 SOLARARC_POLICY = _predictive_policy_with_defaults(_NOW_TARGET_DEFAULTS)
 PD_POLICY = _predictive_policy_with_defaults([
     {"field": "pdMethod", "value": "core_alchabitius", "meaning": "上游缺省方位法（共 13 法）"},
-    {"field": "pdTimeKey", "value": "Ptolemy", "meaning": "上游缺省度数换算（共 26 项）"},
+    {"field": "pdTimeKey", "value": "Ptolemy", "meaning": "上游缺省度数换算（共 38 项）"},
+    {"field": "pdtype", "value": 0, "meaning": "上游缺省方向类型 In Zodiaco（另 1 In Mundo / 4 Field Plane）"},
+    {"field": "pdProjection/pdFrame", "value": "按 pdMethod 推（缺省 ptolemy × alcabitius）", "meaning": "弧算法 14 种 × 盘面宫制 12 种"},
 ])
 PDCHART_POLICY = _predictive_policy_with_defaults([
     {"field": "datetime", "value": "主限表首条应期", "meaning": "过滤后首条主限行日期（UTC、dirZone=+00:00），无则出生次日"},

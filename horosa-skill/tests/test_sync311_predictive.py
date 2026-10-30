@@ -84,20 +84,22 @@ def test_method_notes_mirror_upstream_v311_rewrites() -> None:
     assert notes["zodialrelease"][0] == (
         "黄道释放：自所选基点(默认幸运点,可改精神点等)所在星座起,按各星座守护星小年逐座、逐层释放,划分人生篇章(一级期)与子期(二级期)。"
     )
-    assert notes["distributions"][0] == '界推运(分配法)：上升按主限速率行经黄道各界,界主星即该段"分配星";界表用当前全局界系设置。'
+    # distributions / yearsystem129 / balbillus / extrareturns 在上游 v3.13.0 再次改写：逐字对上游的全键守卫在
+    # tests/test_sync311_newtools.py::test_method_notes_variants_and_tables_track_upstream；这里只钉首行的新值。
+    assert notes["distributions"][0].startswith("界推运(分配法)：周日运动把黄道各度依次带上地平,发放点(默认上升)顺黄道走过其后各界")
     assert notes["givenyear"] == [
         "指定年天象盘：按所给年份的时刻与地点起一张实时天象盘,与本命对照。",
         "读法：天象盘行星落本命宫位与两盘相位定该年主题。",
     ]
-    assert notes["yearsystem129"][0] == "129 年系统：以七星小年合计 129 年为总周期,按小年切主限,主限内再七等分为子限。"
-    assert notes["balbillus"][0].startswith("主/子限期法(Balbillus)：罗马期法,主限长度=该星小年 ×(1 − 离擢升度角距/360)")
+    assert notes["yearsystem129"][0].startswith("129 年系统：七星各管其小年(土30木12火15日19金8水20月25,合 129 年);主限长度 = 小年 × 年长")
+    assert notes["balbillus"][0].startswith("主/子限期法(Balbillus)：罗马期法,主限长度 = N′ ×(360 − d)⁄ 360 年")
     assert notes["triplicityrulers"][0].startswith("三分主星推运：当值光体(昼生取太阳、夜生取月亮)所在星座的三分性三主星")
     assert notes["keypoints"] == [
         "数字相位推运(120 关键点)：每颗星取「自释放点起第几个星座」k(1–12),年龄为 k 的倍数时该星被激活;另按各星专用小年(3/8/18/5/7/9/13)的倍数激活一次。",
         "读法：命中即激活年;k 越小复现越密;结合被激活点的本命性质定主题。",
     ]
     assert notes["extrareturns"] == [
-        "多重回归：木星/土星等回归本命位置的整回归时刻表。",
+        "多重回归：土星 / 木星 / 月交回到本命黄经的整回归时刻表(第 n 回 = 走满 n 圈;逆行同一回三过逐过列出;黄道与平 / 真交点随本盘)。",
         "读法：整回归=大周期重启(如土星回归约 29.5 岁);两次回归之间可自行取中点作阶段参照,表内不列。",
     ]
 
@@ -117,14 +119,8 @@ _AGEPOINT_RESPONSE = {  # vendored astropy agepoint.compute 真实形状（1990-
 }
 
 
-def test_agepoint_prints_exact_crossing_ages() -> None:
-    text = S._build_agepoint_snapshot_text(_AGEPOINT_RESPONSE)
-    body = _section(text, "年龄推进点（Age Point / Huber）")
-    assert "关键岁数（合本命，精确穿越岁数）：11.49岁合月；23.53岁合土" in body
-    assert "| 年龄 | 落座 | 宫 | 合本命（穿越岁数） |" in body
-    assert "| 11岁 | 天蝎 21.93° | 2宫 | 月(11.49岁) |" in body
-    # JS `${22.0}` = "22"：整数值的浮点不带 .0（旧实现印 22.0°）。
-    assert "| 17岁 | 射手 22° | 3宫 | — |" in body
+# 年龄推进点 / 界推运正文（上游 v3.13.0 重写）改由 vendored buildXxxSnapshotFromResult 出——值级金标在
+# tests/test_sync313_predictive.py（真 node 引擎 + vendored v3.13.0 实例实抓的后端结果）。
 
 
 def test_agepoint_header_uses_natal_chart_birth_lines(tmp_path) -> None:
@@ -143,15 +139,6 @@ def test_agepoint_header_uses_natal_chart_birth_lines(tmp_path) -> None:
         "盘型：日生盘",
     ]
     assert CHART in [endpoint for endpoint, _ in client.calls]
-
-
-def test_distributions_intro_names_global_bounds_table() -> None:
-    text = S._build_distributions_snapshot_text(
-        {"dist": [{"distributor": "Mars", "sign": "Virgo", "participants": ["Moon"], "startDate": "1997-08-01 21:57:47", "endDate": "2002-03-29 07:41:27"}]}
-    )
-    body = _section(text, "界推运（分配法 / Distributions）")
-    assert body.splitlines()[0] == "上升点经主限运动穿越黄道各界（界表用当前全局界系设置）；分配星=界主星，参与星=该期间内上升点触及的行星。"
-    assert "| 火 | 室女 | 月 | 1997-08-01 21:57:47 | 2002-03-29 07:41:27 |" in body
 
 
 # ── A3 多重回归：逆行三过全列 + 各回时刻 + 本命黄经（AstroExtraReturns.js:36-70，[Q-366/T-345]）────────
@@ -264,9 +251,11 @@ def _methods(kind: str) -> list[dict]:
 
 def test_jaynesprog_mirrors_upstream_builder(tmp_path) -> None:
     client = RecordingClient({"/astroextra/jaynesprog": {"methods": _methods("decl"), "natalDeclinations": [{"id": "Sun", "decl": 22.1}]}})
-    before = datetime.now().strftime("%Y-%m-%d")
+    # v3.12.0：「今日」按本盘时区（BIRTH 是 +08:00 → 东八区今日），不是本机今日（astroProgSnapshot.js today(chartZone)）。
+    cst = timezone(timedelta(hours=8))
+    before = datetime.now(cst).strftime("%Y-%m-%d")
     result = _service(tmp_path, client).run_tool("jaynesprog", dict(BIRTH), save_result=False)
-    after = datetime.now().strftime("%Y-%m-%d")
+    after = datetime.now(cst).strftime("%Y-%m-%d")
     sent = client.payloads("/astroextra/jaynesprog")[-1]
     # F10：缺省推到今天（上游 today()），旧实现推到出生日（零推运）。
     assert sent["targetDate"] in {before, after} and sent["targetDate"] != BIRTH["date"]
@@ -315,7 +304,8 @@ def test_planetaryarc_defaults_to_tomorrow_now_and_puts_table_under_aspects(tmp_
     client = RecordingClient({"/predict/planetaryarc": arc_response})
     result = _service(tmp_path, client).run_tool("planetaryarc", dict(BIRTH), save_result=False)
     sent = client.payloads("/predict/planetaryarc")[-1]
-    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    # v3.12.0 todayStr(zone)：「明天此刻」按本盘时区（BIRTH +08:00）取，不是本机钟面。
+    tomorrow = (datetime.now(timezone(timedelta(hours=8))) + timedelta(days=1)).strftime("%Y-%m-%d")
     # F10：上游 todayStr() = 明天此刻（[Q-174/T-114]）；旧实现缺省成出生日。
     assert sent["datetime"].startswith(tomorrow)
     text = result.data["snapshot_text"]
@@ -347,8 +337,6 @@ def test_planetaryages_defaults_to_now_and_adds_year_bands() -> None:
         .read_text(encoding="utf-8")
     )["planetary_years"]
     assert P.PLANETARY_YEARS == vendored
-    ys = S._build_yearsystem129_snapshot_text(chart)
-    assert "| 月 | 月 | 1998-02-20 |" in ys  # 上游 cn = AstroTxtMsg[id]（单字），旧实现印「月亮」
 
 
 # ── B [小限摘要]（profectionSummary.js:73-156，[Q-105]）─────────────────────────────────────────
@@ -559,7 +547,7 @@ def test_lifespan_section_prints_method_candidates_medical_and_states() -> None:
     ]
 
 
-# ── F20 主限法词表与标签（primaryDirectionSync.js:57-115）───────────────────────────────────────
+# ── F20 主限法词表与标签（primaryDirectionSync.js；v3.13.0 起 38 项度数换算，详测见 test_sync313_pd.py）──────
 
 def test_primary_direction_labels_follow_upstream_vocabulary() -> None:
     assert S._primary_direction_method_text("placidus") == "Placidus（半弧）"
@@ -567,7 +555,9 @@ def test_primary_direction_labels_follow_upstream_vocabulary() -> None:
     assert S._primary_direction_method_text(None) == "Alchabitius"
     assert S._primary_direction_time_key_text("VanDam") == "Van Dam（真弧）"
     assert S._primary_direction_time_key_text("User") == "自定义（每年度数）"
-    assert len(S._PD_METHOD_LABELS) == 13 and len(S._PD_TIME_KEY_LABELS) == 26
+    # v3.13.0（primaryDirectionSync.js:308-374）：SUPPORTED_PD_TIME_KEYS 26 → 38（+12 键：经典档 / 生日黄经日行 /
+    # 垂直弧 / Symbolic Week / Septenary / Sub-Duodenary）；方位法仍 13。
+    assert len(S._PD_METHOD_LABELS) == 13 and len(S._PD_TIME_KEY_LABELS) == 38
 
 
 def test_primary_direction_table_mirrors_upstream_builder(tmp_path) -> None:
@@ -582,6 +572,8 @@ def test_primary_direction_table_mirrors_upstream_builder(tmp_path) -> None:
     assert S._pd_direction_obj_text("LT_Pars Spirit_0", wrap) == "Spirit点"
     # msg() 先 AstroTxtMsg 后 AstroMsg（constants/AstroText.js:278 AstroMsg[STAR_ALGOL]='大陵五'）：恒星迫星落中文星名。
     assert S._pd_direction_obj_text("FS_Algol_0", wrap) == "恒星 大陵五"
+    # v3.13.0 pdStarPointText：恒星右 / 左相位行（此前 FSD_/FSS_ 原样露出）。
+    assert S._pd_direction_obj_text("FSD_Algol_60", wrap) == "恒星 大陵五的60度右相位处"
     assert S._pd_direction_obj_text("N_Regulus_0", wrap) == "狮心轩辕十四"
     assert S._pd_degree_text(-0.124066360236327, "core_alchabitius") == "-0度7分"
     assert S._pd_split_degree_text(36.37) == "36度22分"
@@ -591,11 +583,13 @@ def test_primary_direction_table_mirrors_upstream_builder(tmp_path) -> None:
     ).data["snapshot_text"]
     setting = _section(text, "主限法设置").splitlines()
     assert setting[:4] == ["推运方法：Placidus（半弧）", "度数换算：Van Dam（真弧）", "方向类型：黄道（In Zodiaco）", "向运方向：顺向 Direct"]
-    assert "弧算法（投影）：Placidus（半弧严密）" in setting and "盘面宫制（分宫）：Placidus" in setting
+    # v3.13.0 pdProjectionLabelWithGeometry：PD_GEOMETRY_APPLIES 有 [0,'placidus','*',false] → 带几何口径（缺省改进）。
+    assert "弧算法（投影）：Placidus（半弧严密）（改进）" in setting and "盘面宫制（分宫）：Placidus" in setting
     assert _section(text, "主限法表格").splitlines()[0] == "| Arc | 迫星 | 应星 | 日期(UTC) |"
     assert "表中距今最近行：" in _section(text, "当前时点")
     chart_text = service.run_tool("pdchart", {**BIRTH, "datetime": "2031-04-06 09:33:00", "direction": "converse"}, save_result=False).data["snapshot_text"]
-    assert _section(chart_text, "主限法盘设置").splitlines()[-2:] == ["向运方向：逆向 Converse", "当前Arc：3度0分"]
+    # v3.13.0 AstroPrimaryDirectionChart.js:368-370：向运方向后插「日期年长」行，当前Arc 仍是末行。
+    assert _section(chart_text, "主限法盘设置").splitlines()[-3:] == ["向运方向：逆向 Converse", "日期年长：实际天数", "当前Arc：3度0分"]
 
 
 def test_guidance_states_upstream_defaults() -> None:

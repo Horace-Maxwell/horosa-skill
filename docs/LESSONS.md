@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.46.0-dev (2026-10-30) | 上游 v3.11.3 → v3.13.0：vendor 清单全绿，手抄件十余处静默过期（印占分盘标签表、写死的缺省 / 文案、民用历日期运算、yearsystem129 后端字段已删仍在读）；顺带查出印度 Tajika 缺省缺席、金口诀昼夜粗判 | `audit_upstream_ports.py` + 台账（变了的上游名字 ∩ skill 提到的 → 必须有结论，审到当前 pin）；`also_derived_from` 多源看守；手抄表逐值 / civil 移植差分测试 |
 | v0.45.1 (2026-10-28) | 发版矩阵 windows-11-arm（仿真 x64）pytest 在 2700 s 被杀，~98%、零失败；v0.45.0 时已占 96% 无人察觉；同批 windows-latest 反而更快 | 只给 `--expect-emulated` lane 加 900 s（3600），守卫同时校验仍装得进 job 的 90 分钟；lane 脚本取自派发提交（main），不必挪 tag |
 | v0.45.1-dev (2026-10-28) | MCP SDK 1.x → 2.3 + 澄清闸走 MRTR：`mcp.get_context()` 没了、模型属性改 snake_case（`model_dump()` 量出来的不是线上形状）、`read_resource` 不收 AnyUrl（setup 探针把异常吞成 None）、`streamable_http_client` 只给两个流、调用结果是 `CallToolResult` | 上下文放 ContextVar；量线上形状一律 `by_alias=True`；探针传字符串；闸门三条路（MRTR / 服务端发起 / 结构化错误），真 SDK 客户端两种协议各跑一遍端到端；篡改 requestState 被 SDK 拒（-32602） |
 | v0.45.1-dev (2026-10-27) | 补上 v0.45.0 列为「没做」的三项：内置知识检索仍是子串计分；向量检索；带标签 PDF。pikepdf 新版 macOS 轮子要 macOS 14/15（本仓承诺 11 起）；reportlab 开源版不打标签；FTS5 的 bm25 不再用；向量测试缺 numpy 会整文件跳过 | 内置检索同一套归一 + BM25（精确键仍压过一切）；可选 `[vectors]`（bge-small-zh int8，钉提交号 + sha256，RRF 定序决胜）；PDF 在 reportlab 里自写结构树（无新依赖）→ veraPDF PDF/UA-1 PASS；dev 组加 numpy 让替身测试在 CI 真跑 |
@@ -161,6 +162,52 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.46.0-dev / 2026-10-30 — 上游 v3.11.3 → v3.13.0 全量同步：vendor 清单全绿，手抄件却十余处过期
+
+- **现象**：vendored 树逐文件对过（revendor `--check` 0 待办、npm test 绿），但 skill 侧**手抄**的上游逻辑大面积静默过期：
+  - Python 常量表 `_INDIA_MOUNT_VARGA_OPTIONS`（16 档里 12 档上游改了标签，D9 婚姻→D9 合作）；写死的缺省（taiyizeri 展示盘
+    `after23NewDay` 0，上游已改读全局缺省 1；七政宿度制缺省 2→0）；照抄的 UI 文案（五兆复现说明、金口诀日柱提示）；
+  - 民用历：上游把 `shiftMoment` / `solveReturnBefore` / 主限命中日差 / 各快照日期改到 1582 前儒略历、公元前无 0 年的
+    civil 轴，skill 的 `strptime` + `timedelta` 移植对历史盘全偏；
+  - **后端把算法挪到前端**：上游删了 `astrostudy/yearsystem129.py`，`/chart` 不再回 `predictives.yearsystem129`，skill 的 Python
+    移植照读旧字段 → ok=true、导出干净地返回「本盘无 129 年系统数据」，离线测试全绿（fakes.py 里还留着旧字段）；
+  - 一直存在、这次才查出的缺口：印度律盘从不发 `tajakaYear`（后端「仅给了才算」）→ 缺省盘 Tajika 各段恒缺席；金口诀贵神昼夜
+    缺省按时支粗判（上游取 /chart 真实地平）；方法说明守卫只看 27 键里的 4 键。
+- **根因**：`vendor_manifest.json` 看守的是**文件**；手抄件是第二份真相，没有任何东西把它连回上游。逐函数比对只做在「我们知道
+  移植了」的地方，而过期恰恰发生在没人记得是移植的地方。
+- **修**：逐域重审（主限法 38 时间键 / 14 投影 / 设置项登记表；预测族 yearsystem129 / agepoint / distributions 改为 vendored 上游 JS
+  出文本；西占 Antivertex / 极区 MC 说明 / 合盘宫制说明 / 德派 [赤纬接触][中点坐标]；印度 [未能计算] + 过运日 / 年度盘年份恒发；
+  金口诀 timeAlg 随时间基准；八字 adjustJieqi 恒 0；导出契约 v60）；civil-calendar 移植对 vendored JS 逐值比对。
+- **守卫**：
+  - `scripts/audit_upstream_ports.py` + `contracts/upstream_port_audit.json`：新旧上游 pin 之间代码变了、且被 skill 文件提到的
+    每个上游顶层名字（Babel 去注释归一后比对，`scripts/upstream_decl_diff.mjs`）都要有结论（no_port / port_unchanged / ported /
+    reviewed），台账审到的 pin 必须 == 记录在案的上游 pin（preflight 硬闸 + `tests/test_upstream_port_audit.py`）。负向对照：
+    删一条结论 → `--scan` 报 UNREVIEWED；台账 to ≠ pin → 红。
+  - 手工件多源看守：`vendor_manifest.json` 的 `also_derived_from {上游路径: sha256}`（印占快照另搬 indiaMain/jyotishData.js +
+    dasha.js、宿占另搬 AstroHelper.js、七政搬 components/guolao/main/*）——只看主源时次源上游再修零信号
+    （`tests/test_vendor_manifest_watch.py`，负向对照：去掉对次源的遍历 → 红）。
+  - Python 手抄常量表对上游逐值看守（`tests/test_sync313_ports_guard.py`）；civil 日期移植对 vendored JS 差分测试
+    （`tests/test_sync313_ports.py`）；方法说明守卫扩到全部键。
+- **规则**：① 能 import vendored 函数就别抄（JS 胶水同理）；② 非移植不可时，给它一条「同输入跑 vendored JS 比值」的差分测试，或在
+  `HOROSA_SOURCE_ROOT` 下定位上游原文的源码锚；③ 同步 diff 里删了后端模块 / predictives 字段 → grep skill 里该字段的每个读者；
+  ④ 重钉上游前跑 `audit_upstream_ports.py --scan`，逐条给结论再改 from/to。
+- **历史盘**：上游 v3.12.0 把命盘日期收口到 civilCalendar / civilMoment / dateStrSafe；skill 手抄的 builder 还在用 `strptime` /
+  `datetime + timedelta` / `[:4]` / `replace("-", "/")`。公元前直接 ValueError 被吞成「无数据」（十年大运整表空、波斯向运日期列空、
+  食盘卡缺席、王位留空），1500 年静默差 1 天；`replace("-", "/")` 把负号换成 '/'，`/chart` 恰好容忍（测不出），
+  `/astroextra/prenatal_syzygy` 拒参。另：decennials 缺省时区上游一直是 +08:00，skill 写成 +00:00 多年未察。新增
+  `src/horosa_skill/civil_calendar.py`（上游三件套逐式移植、零仓内依赖，engine / service 都能 import）；上游 builder 在 node 里跑出
+  夹具、`requires_upstream` 测试重跑防漂移（`tests/test_sync313_historical.py`，负向对照 19 条全红）。
+- **公元前日期串三种写法并存**：`-0500-03-21`（formatSignedDate / Python 规范化）、`-500-03-21`（DateTime.format 与后端农历回包）、
+  `/0500/03/21`（朴素 `replace('-','/')`）。后端 `parse_civil_date` 把 '/' 换回 '-'，碰巧恢复了负号，所以这类 bug 在 live `/chart` 结果
+  里看不出，只在回显字串与 ken / 节气年份里露出（+500 / -50）——测试要拿请求形状对上游自家 builder（DateTime / chartAtMoment），
+  不能只看盘结果（`tests/test_sync313_bc_more.py`）。Intl longOffset 丢 LMT 秒（+01:34:52 → +01:34），偏移格式化要截断不是四舍五入。
+- **附带教训**：
+  - 并行 agent 共用 session scratchpad：同名 `negctl.py` 被覆盖后由另一个 agent 误执行，「整文件备份 → 改 → 写回」可能抹掉别人
+    的并发改动——脚本放各自子目录，负向对照只回退自己那一处编辑；
+  - 无类型字段会撒谎：后端 `pdtype in (0,1,4)` 严格比较，字符串 "4" 静默走旧路径而快照写「场平面」→ schema 给具体类型；
+  - `schema_knob_debt` 基线会因新 vendored 模块**提到**字段名而缩（`kentangCaseSave.js` 里的 orbScale），改基线前先确认真消费者；
+  - 一个用例看不出分支：合盘 snapHsys 在整宫族回退下与请求同值，负向对照不红——要按后端两条回退分支各测一次。
 
 ### v0.45.1 / 2026-10-28 — 发版矩阵：windows-11-arm 的 pytest 撞 2700 s 天花板（零失败）
 

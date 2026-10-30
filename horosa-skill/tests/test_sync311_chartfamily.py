@@ -420,7 +420,8 @@ def test_presets_place_new_sections_at_upstream_positions() -> None:
     assert relative[relative.index("B对A反映点") + 1: relative.index("B对A反映点") + 3] == ["比较盘-星盘A", "比较盘-星盘B"]
     assert AI_EXPORT_PRESET_SECTIONS["otherbu"][-2:] == ["骰子盘相位", "天象盘相位"]
     germany = AI_EXPORT_PRESET_SECTIONS["germany"]
-    assert germany[germany.index("中点列表") + 1: germany.index("中点列表") + 3] == ["六宫框落宫", "校时预览"]
+    # v3.13.0 presets.js:873（aiExport v59/v60）：[赤纬接触] 插在六宫框落宫与校时预览之间，[中点坐标]/[公式求解] 紧随校时预览。
+    assert germany[germany.index("中点列表") + 1: germany.index("中点列表") + 5] == ["六宫框落宫", "赤纬接触", "校时预览", "中点坐标"]
     assert AI_EXPORT_PRESET_SECTIONS["jieqi"][:2] == ["节气盘参数", "二十四节气"]
     # 条件段双登记（AGENTS §5.5）
     for key, titles in {
@@ -598,7 +599,8 @@ def test_rectify_preview_per_upstream_jest() -> None:
     assert _germany_rectify_lines(birth, [], _GERMANY_PTS) == []
     points = [*_GERMANY_PTS, {"id": "Jupiter", "lon": 280.0}]
     lines = _germany_rectify_lines(birth, [{"label": "升职", "date": "2000-01-01", "type": "career"}], points)
-    assert lines[0] == "（已录事件推进 MC/Asc 看是否触动本命因子，只预览不改盘；盘基 90°·容许 1°·太阳弧 Naibod；1°MC≈4 分钟出生时间）"
+    # v3.13.0 buildRectifySection：太阳弧缺省标签 Naibod → 均日弧（盘基 dialBaseDegText(90) = '90°'）。
+    assert lines[0] == "（已录事件推进 MC/Asc 看是否触动本命因子，只预览不改盘；盘基 90°·容许 1°·太阳弧 均日弧；1°MC≈4 分钟出生时间）"
     assert lines[1] == "| 事件 | 类型 | 日期 | 弧° | 命中(轴→本命因子·角距) |"
     row = next(line for line in lines if line.startswith("| 升职 |"))
     assert re.match(r"^\| 升职 \| 事业 \| 2000-01-01 \| 9\.8\d \| .*MC→木·0\.1\d°", row), row

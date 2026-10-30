@@ -1,14 +1,16 @@
 // 八字快照 builder —— 自上游 components/cntradition/BaZi.js **逐字**抽出（bespoke，derived_from 由
 // contracts/vendor_manifest.json 的 derived_sha256 看守：上游 BaZi.js 一动即红，复核本文件后 --restamp）。
 // 上游这些纯函数与 React 组件同在一个 1200+ 行文件里（整份 vendor 会把 JSX/antd 带进来），故只抽快照闭包：
-//   · gzText / gzCells —— [四柱与三元] 表格单元（BaZi.js:34-43 / :79-100）
-//   · buildBaziPeriodLines 及其常量/查找函数 —— [多运限·指定时段]（BaZi.js:102-265）
-//   · buildBaziSnapshotText —— 整份八字 AI 快照（BaZi.js:267-610）
-//   · normalizeBaziGender / normalizeBaziResult —— 取数后的结果归一（BaZi.js:658-687）
-//   · alignJavaBaziAges —— Java 回退结果的岁数对齐为虚岁（v3.11.2 BaZi.js:725-753；页面在 fetchBazi*Cached 取数入口调用，skill 在 tools/baziLocal.js 的 java_result 入口调用）
+//   · gzText / gzCells —— [四柱与三元] 表格单元（BaZi.js:51-60 / :98-117）
+//   · buildBaziPeriodLines 及其常量/查找函数 —— [多运限·指定时段]（BaZi.js:120-282）
+//   · buildBaziSnapshotText —— 整份八字 AI 快照（BaZi.js:284-638）
+//   · normalizeBaziGender / normalizeBaziResult —— 取数后的结果归一（BaZi.js:687-716）
+//   · alignJavaBaziAges —— Java 回退结果的岁数对齐为虚岁（BaZi.js:741-765；页面在 fetchBazi*Cached 取数入口调用，skill 在 tools/baziLocal.js 的 java_result 入口调用）
 //   · v3.11.2 复核（上游 BaZi.js f7b3dbbb → 45bfa578）：[起盘信息] 南纬「南半球月令」行、小运 / 板块表岁数经 baziAgeText.js 单源、流年年份 addDisplayYears 跨纪元；其余闭包逐字未变。
+//   · v3.13.0 复核（上游 BaZi.js 45bfa578 → d0257613）：农历行「闰」字改走 utils/lunarText.leapPrefix（上游自修「闰闰X月」，本文件原先的
+//     同义声明式偏离随之撤除、改 import 已 vendored 的 lunarText.js）；[起盘信息]「节气修正」行改按实际口径写（仅回退 Java 且带 1 才写「调整」）。
 // 函数体与模块级常量逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../utils/xxx）。
-// 上游页面主路径（fetchBaziCached，BaZi.js:716-755）= 本地 buildLocalBaziResult 优先、抛错才回退 Java
+// 上游页面主路径（fetchBaziCached，BaZi.js:781-820）= 本地 buildLocalBaziResult 优先、抛错才回退 Java
 // /bazi/birth；两条路都经 normalizeBaziResult → buildBaziSnapshotText。编排见 tools/baziLocal.js。
 import { Solar } from 'lunar-javascript';
 import { buildTimeBasisLine } from '../utils/timeBasisLine.js';
@@ -16,6 +18,7 @@ import { buildFlowDays, buildFlowHours, buildFlowMonthsByYear, getSelfZuo, isSou
 import { filterShenShaByGroups } from './baziShenShaLocal.js';
 import { parseDateParts, parseYearFromDateStr, addDisplayYears, displayYearDiff } from './dateStrSafe.js';
 import { baziAgeText, baziAgeValue } from './baziAgeText.js';
+import { leapPrefix } from '../utils/lunarText.js';
 
 function gzText(zhu){
 	if(!zhu){
@@ -43,7 +46,7 @@ function gzCells(zhu, dayGan, phaseType){
 		cang: hidden.length ? hidden.join('、') : '—',
 		shishen: [stemRel, branchRel].filter(Boolean).join('·') || '—',
 		naying: (zhu && zhu.naying) || '—',
-		// [Q-431/T-394] 纳音长生(各柱纳音五行坐该支的十二长生位;古法盘「纳音长生」行 / 纳音古法信息卡同源字段 nayingPhase)
+		// 纳音长生(各柱纳音五行坐该支的十二长生位;古法盘「纳音长生」行 / 纳音古法信息卡同源字段 nayingPhase)
 		nayingPhase: (zhu && zhu.nayingPhase) || '—',
 		xingYun: getSelfZuo(dayGan, zhi, phaseType) || '—',
 		ziZuo: getSelfZuo(gan, zhi, phaseType) || '—',
@@ -255,10 +258,7 @@ function buildBaziSnapshotText(params, result){
 		if(!nongli){
 			return '';
 		}
-		// ⚠ 声明式偏离（skill）：上游 BaZi.js:317 对 leap 恒加「闰」前缀，而本地引擎 buildNongli（baziLunarLocal.js:1104）的 month 已是
-		// `${lunar.getMonthInChinese()}月`（闰月自带「闰」）→ 上游页面对闰月出生打出「闰闰五月」（1990-07-15 悉尼 / 上海皆可复现）；
-		// Java /bazi/* 的 month 不带前缀，前缀逻辑是为它写的。这里只在 month 尚未带「闰」时才加，其余逐字不变。
-		const leap = nongli.leap && !`${nongli.month || ''}`.startsWith('闰') ? '闰' : '';
+		const leap = leapPrefix(nongli);
 		return `${nongli.year || ''}年${leap}${nongli.month || ''}${nongli.day || ''}`;
 	};
 	const appendIf = (label, value)=>{
@@ -314,14 +314,19 @@ function buildBaziSnapshotText(params, result){
 	appendIf('性别', formatLabel('gender', params.gender));
 	appendIf('时间算法', formatLabel('timeAlg', params.timeAlg));
 	lines.push(buildTimeBasisLine({ timeAlg: params.timeAlg, lateZiHourUseNextDay: params.lateZiHourUseNextDay, after23NewDay: params.after23NewDay }));
-	appendIf('节气修正', formatLabel('adjustJieqi', params.adjustJieqi));
+	// 如实写实际口径:只有回退 Java 且确实带 1 起盘时节气才真被平移;本地引擎不实现该项,一律写「不调整」
+	// (参数里没有这一项的调用方照旧不写这一行)。
+	const adjustJieqiRaw = params.adjustJieqi;
+	const jieqiShifted = !!result && !result.local && Number(adjustJieqiRaw) === 1;
+	appendIf('节气修正', (adjustJieqiRaw === undefined || adjustJieqiRaw === null || adjustJieqiRaw === '')
+		? adjustJieqiRaw : formatLabel('adjustJieqi', jieqiShifted ? 1 : 0));
 	appendIf('命造', baziGender);
 	const nongli = bazi && bazi.nongli ? bazi.nongli : {};
 	const nltxt = getNongliLine(nongli);
 	const clockTm = nongli.clockTime || `${params.date} ${params.time}`;
 	const solarTm = nongli.solarTime || nongli.birth || `${params.date} ${params.time}`;
 	lines.push(`农历：${nltxt || '未知'}`);
-	// [Q-191/T-135] 生肖归属(立春 / 正月初一)此前只在页面卡片上出现,快照没有 —— AI 只能自己猜岁首,
+	// 生肖归属(立春 / 正月初一)此前只在页面卡片上出现,快照没有 —— AI 只能自己猜岁首,
 	// 而两档在正月初一与立春之间出生的人正好差一个生肖。缺档按页面缺省(立春)。
 	const zodiacByLunar = `${params.zodiacBoundary || ''}` === 'lunar';
 	const shengXiao = zodiacByLunar ? nongli.shengXiaoLunar : nongli.shengXiaoLichun;
@@ -340,7 +345,7 @@ function buildBaziSnapshotText(params, result){
 	lines.push('[四柱与三元]');
 	// 每柱行尾补明细括注（藏干/纳音/星运/自坐/空亡，中栏四柱板同源）；行首「干支+干支十神」前缀逐字不动（段内纯增）。
 	const dayGanCell = four.day && four.day.stem ? four.day.stem.cell : '';
-	// [Q-431/T-394] 加「纳音长生」列:按纳音古法论命时缺「纳音坐支长生」判据(此前只写纳音名)。
+	// 加「纳音长生」列:按纳音古法论命时缺「纳音坐支长生」判据(此前只写纳音名)。
 	lines.push('| 柱 | 干支 | 藏干 | 十神 | 纳音 | 纳音长生 | 星运 | 自坐 | 空亡 |');
 	lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
 	[['年柱', four.year], ['月柱', four.month], ['日柱', four.day], ['时柱', four.time]].forEach(([label, zhu])=>{
@@ -352,7 +357,7 @@ function buildBaziSnapshotText(params, result){
 	if(isSouthLatitude(params)){
 		lines.push(`南半球月令：${params && params.southMonth === 'chong' ? '对冲(月支取对冲之支)' : '不对冲(月柱同北半球)'}`);
 	}
-	// [Q-367/T-348] 公元前等本地引擎不可用而回退 Java 的域:Java 只识 xingming,tongxing/shufa 都走子平数法表 → 按实际口径如实标注。
+	// 公元前等本地引擎不可用而回退 Java 的域:Java 只识 xingming,tongxing/shufa 都走子平数法表 → 按实际口径如实标注。
 	const _mgLabel = (params && params.minggongMethod === 'shufa') ? '子平数法' : ((result && result.local) ? '通行版' : '子平数法(本域回退)');
 	lines.push(`命宫：${gzText(four.ming)}（起法：${_mgLabel}）`);
 	lines.push(`身宫：${gzText(four.shen)}`);
@@ -497,10 +502,10 @@ function buildBaziSnapshotText(params, result){
 	if((bazi.mainDirection && bazi.mainDirection.length) || smallDirs.length){
 		lines.push('');
 		lines.push('[大运]');
-		// [挂载自检 F-54] 起运(页面信息面板恒显;精度随「起运精度」档):快照此前只有逐步起运年 → AI 不知几岁几月起运,且精度齿轮无处落地。
+		// 起运(页面信息面板恒显;精度随「起运精度」档):快照此前只有逐步起运年 → AI 不知几岁几月起运,且精度齿轮无处落地。
 		if(bazi.directInfo){ lines.push(`起运：${bazi.directInfo}`); }
 		if(bazi.mainDirection && bazi.mainDirection.length){
-			// [v2 排版批量·表化] 同构逐条行改 GFM 表（紫微宫位总览范式）：段头/值表达式零变更
+			// 同构逐条行改 GFM 表（紫微宫位总览范式）：段头/值表达式零变更
 			// （第N步/item.year/getGz 逐字复用），仅排版骨架换表头+分隔行+数据行；归一器/docx/PDF 表块直通。
 			lines.push('| 步序 | 起运年 | 干支 |');
 			lines.push('| --- | --- | --- |');
@@ -511,7 +516,7 @@ function buildBaziSnapshotText(params, result){
 			});
 		}
 		if(smallDirs.length){
-			// [Q-191/T-135] 表头此前恒写「周岁」,而 d.age 是虚岁(出生=1 岁,与页面小运表同源)——
+			// 表头此前恒写「周岁」,而 d.age 是虚岁(出生=1 岁,与页面小运表同源)——
 			// AI 按周岁读会整体差一岁。改为跟「年龄」档(虚岁默认 / 周岁 = 虚岁 −1),表头与数值同一口径。
 			const realAge = `${params.ageStyle || ''}` === 'real';
 			lines.push('小运（逐年，与流年并列）：');
@@ -532,7 +537,7 @@ function buildBaziSnapshotText(params, result){
 	if(bazi.direction && bazi.direction.length){
 		lines.push('');
 		lines.push('[流年行运概略]');
-		// [v2 排版批量·表化] 每板块「概略+流年」两行并为一表行：值表达式逐字复用
+		// 每板块「概略+流年」两行并为一表行：值表达式逐字复用
 		// （startYear/startAge/dayunGz/yearGzs 组装式不动），旧行标签词（起始年/起始年龄/大运/流年）上移表头。
 		lines.push('| 板块 | 起始年 | 起始年龄 | 大运 | 流年 |');
 		lines.push('| --- | --- | --- | --- | --- |');

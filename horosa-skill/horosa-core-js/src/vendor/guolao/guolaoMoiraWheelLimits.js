@@ -7,9 +7,15 @@
 // getStoredGuolaoLifeMode 是 headless 缺省（上游读 localStorage 偏好，缺省 = 占星上升 asc）。
 // v3.11 wave3b 另抽（GuoLaoMoiraWheel.js:291-306 / 1313-1339 逐字）：cleanText / formatGodName / godsFromRuleHits /
 // longLifeCharFor —— [神煞] 段 buildRulesGodsSection（GuoLaoChartMain.js:1759-1776）以 moira* 别名 import 这两个函数。
+// v3.13.0：birthYearBasis / localTermWallMs / solarTermBoundaryMs 逐字跟进上游「民用历墙钟轴」（utils/civilCalendar
+// civilWallMs / civilPartsFromJd / julday：1582-10-15 以前儒略历、公元前历史纪年；1582 以后与旧 Date.UTC 逐位相同），
+// 并逐字新增第四来源 birthJdFromFields（盘缺 jd 时按出生字段 DateTime 补算；headless fields 非 DateTime → null，同上游）。
+// formatGodName 另以 moiraFormatGodName 导出：上游 main/snapshot.js / main/format.js / GuoLaoMoiraPanel.js 即这样 import
+// （guolaoMoira.js 随之删去 GuoLaoChartMain 旧私有副本）。
 import * as AstroConst from '../../constants/AstroConst.js';
 import { childYearsSpan, longLifeMapForYear } from './guolaoMoiraTables.js';
 import { buildLocalJieqiYearSeed } from '../utils/localNongliAdapter.js';
+import { civilPartsFromJd, civilWallMs, julday as gregJulday } from '../utils/civilCalendar.js';
 
 export const GUOLAO_LIFE_MODE_ASC = 'asc';
 export const GUOLAO_LIFE_MODE_YUMAO = 'yumao';       // 日出安命(实际日出)
@@ -103,7 +109,7 @@ function limitSegments(life, childBase){
 	return [childYearsSpan(life, childBase)].concat(LIMIT_SEQ.slice(1));
 }
 
-// [Q-188/T-125] 年界基准全量:{ frac 出生在年界内已历年分数, yearShift 岁次年号相对公历出生年的偏移 }。
+// 年界基准全量:{ frac 出生在年界内已历年分数, yearShift 岁次年号相对公历出生年的偏移 }。
 // 立春界:立春前生人岁次属上一年(yearShift=-1);冬至界(天正建子):冬至后生人岁次属下一年(+1);公历元旦恒 0。
 // 此前立春/冬至两档要 chart.nongli.jieqi 的 lichun/dongzhi 字段,后端恒 null → 静默回退元旦(死档);
 // 现由本地节气表(lunar-javascript,AD1–9999)精算年界时刻,缺表仍回退元旦。
@@ -114,30 +120,45 @@ function birthYearBasis(chart, fields, mode){
 	if(pd){ const m = `${pd}`.match(/(-?\d+)\D+(\d+)\D+(\d+)/); if(m){ Y = +m[1]; Mo = +m[2]; D = +m[3]; } }
 	if(pt){ const m = `${pt}`.match(/(\d+):(\d+)(?::(\d+))?/); if(m){ h = +m[1]; mi = +m[2]; s = +(m[3] || 0); } }
 	if(!Number.isFinite(Y) && fields && fields.date && fields.date.value && typeof fields.date.value.year === 'function'){
+		// moment 的年月日是外推格里历 + 天文年:落到儒略日上再按民用历拆(1582 以后恒等)
 		const dv = fields.date.value;
-		Y = dv.year(); Mo = dv.month() + 1; D = dv.date();
 		const tv = fields.time && fields.time.value;
-		if(tv && typeof tv.hour === 'function'){ h = tv.hour(); mi = tv.minute(); s = tv.second(); }
+		const th = tv && typeof tv.hour === 'function' ? [tv.hour(), tv.minute(), tv.second()] : [0, 0, 0];
+		const p = civilPartsFromJd(gregJulday(dv.year(), dv.month() + 1, dv.date(), th[0] + th[1] / 60 + th[2] / 3600, true));
+		Y = p.year; Mo = p.month; D = p.day; h = p.hour; mi = p.minute; s = p.second;
 	}
 	// 🔴 第三来源(最可靠·后端排盘产出):chart.date = {jd, date:{jdn}, time:{value}, utcoffset:{value}}。
 	// wheel 收到的 chart 常无 params(root.params 缺→graft 落空)、fields.date.value 也非 moment,
 	// 前两路都取不到出生日 → birthFrac 静默算成 0 → 百六大限整体差 1 岁(寅卯宫界/环最大岁数)。
-	// jd 为 UT 儒略日,+utcoffset 得当地墙钟毫秒(以 UTC 读取即当地历字段),照 Moira work_cal(当地时区)。
+	// jd 为 UT 儒略日,+utcoffset 得当地民用时刻,按民用历(1582-10-15 以前儒略历、历史纪年)拆成年月日时分秒,
+	// 与第一来源的日期串同一口径(照 Moira work_cal:Java GregorianCalendar 在 1582 以前本就按儒略历)。
+	// 第四来源:盘里缺 jd(无头重算拿到的盘不带出生时刻)时,按出生字段(日期 / 时间 / 时区 / 公元前后)补算 ——
+	// 与起盘请求同取 date.value / time.value / zone / ad(fieldsToParams 同源),儒略日走 DateTime.calcJdn
+	// (1582-10-15 起格里历、此前儒略历,与后端民用历法口径同),再按下面同一条 jd → 民用历字段的换法,
+	// 所以带 jd 与缺 jd 的同一张盘结果逐字相同(此前缺 jd → 岁份恒 0,三种年界算成一样)。
+	let jdSrc = null;
 	if(!Number.isFinite(Y) && chart && chart.date && Number.isFinite(Number(chart.date.jd))){
-		const jd = Number(chart.date.jd);
-		const off = chart.date.utcoffset && Number.isFinite(Number(chart.date.utcoffset.value)) ? Number(chart.date.utcoffset.value) : 0;
-		const localMs = (jd - 2440587.5) * 86400000 + off * 3600000;
-		if(Number.isFinite(localMs)){
-			const d = new Date(localMs);
-			Y = d.getUTCFullYear(); Mo = d.getUTCMonth() + 1; D = d.getUTCDate();
-			h = d.getUTCHours(); mi = d.getUTCMinutes(); s = d.getUTCSeconds();
+		jdSrc = {
+			jd: Number(chart.date.jd),
+			off: chart.date.utcoffset && Number.isFinite(Number(chart.date.utcoffset.value)) ? Number(chart.date.utcoffset.value) : 0,
+		};
+	}
+	if(!Number.isFinite(Y) && !jdSrc){ jdSrc = birthJdFromFields(fields); }
+	if(!Number.isFinite(Y) && jdSrc){
+		const jd = jdSrc.jd;
+		const off = jdSrc.off;
+		const localJd = jd + off / 24;
+		if(Number.isFinite(localJd)){
+			const p = civilPartsFromJd(localJd);
+			Y = p.year; Mo = p.month; D = p.day; h = p.hour; mi = p.minute; s = p.second;
 		}
 	}
 	if(!Number.isFinite(Y) || !Number.isFinite(Mo) || !Number.isFinite(D)){ return { frac: 0, yearShift: 0 }; }
 	const MS_YEAR = 365.25 * 24 * 60 * 60 * 1000;
-	const birthMs = Date.UTC(Y, Mo - 1, D, h, mi, s);
-	// 年界起点(默认公历元旦;立春/冬至由 solarTermBoundaryMs 提供,缺则元旦)。
-	let boundaryMs = Date.UTC(Y, 0, 1, 0, 0, 0);
+	// 出生与年界都落在同一条民用历墙钟轴上(civilWallMs:1582 以后 = Date.UTC,此前儒略历,年份按历史纪年)。
+	const birthMs = civilWallMs(Y, Mo, D, h, mi, s);
+	// 年界起点(默认民用历元旦;立春/冬至由 solarTermBoundaryMs 提供,缺则元旦)。
+	let boundaryMs = civilWallMs(Y, 1, 1, 0, 0, 0);
 	let yearShift = 0;
 	if(mode === 'lichun' || mode === 'dongzhi'){
 		const b = solarTermBoundaryMs(chart, Y, birthMs, mode, chartZoneHours(chart, fields));
@@ -148,6 +169,23 @@ function birthYearBasis(chart, fields, mode){
 	// 归一到 [0,1)(立春/冬至基准时出生可能落在年界前)。
 	frac = ((frac % 1) + 1) % 1;
 	return { frac, yearShift };
+}
+
+// 出生字段 → { jd 世界时儒略日, off 时区小时 };字段不是 DateTime(或缺)时返回 null。
+function birthJdFromFields(fields){
+	const dv = fields && fields.date && fields.date.value;
+	if(!dv || typeof dv.calcJdn !== 'function' || typeof dv.clone !== 'function'){ return null; }
+	const t = dv.clone();
+	const tv = fields.time && fields.time.value;
+	if(tv && Number.isFinite(Number(tv.hour))){
+		t.hour = Number(tv.hour); t.minute = Number(tv.minute) || 0; t.second = Number(tv.second) || 0;
+	}
+	if(fields.zone && typeof fields.zone.value === 'string' && fields.zone.value){ t.zone = fields.zone.value; }
+	if(fields.ad && (fields.ad.value === 1 || fields.ad.value === -1)){ t.ad = fields.ad.value; }
+	if(![t.year, t.month, t.date].every((v)=>Number.isFinite(Number(v)))){ return null; }
+	const jd = t.calcJdn();
+	const off = t.getZoneJdn() * 24;
+	return Number.isFinite(jd) && Number.isFinite(off) ? { jd, off } : null;
 }
 
 // 盘时区(小时):params.zone '+08:00' → fields.zone/date.zone → chart.date.utcoffset;缺则 +8(本地节气表基准,零换算)。
@@ -173,7 +211,7 @@ function chartZoneHours(chart, fields){
 	return 8;
 }
 
-// [Q-188/T-125] 本地节气表取某公历年的立春/冬至时刻(表值为 +08:00 墙钟)→ 换到盘时区墙钟毫秒(与 birthMs 同域,UTC 读取)。
+// 本地节气表取某公历年的立春/冬至时刻(表值为 +08:00 墙钟)→ 换到盘时区墙钟毫秒(与 birthMs 同域,UTC 读取)。
 function localTermWallMs(year, term, zoneHours){
 	// 本地表按「农历年」建表:键「冬至」= 该年之前一个冬至(Y−1 年 12 月),故取公历 Y 年 12 月冬至须查 Y+1 年表(实证 2005–2007 三年)。
 	const seedYear = term === '冬至' ? year + 1 : year;
@@ -182,7 +220,8 @@ function localTermWallMs(year, term, zoneHours){
 	const t = seed && seed[term] && seed[term].time ? `${seed[term].time}` : '';
 	const m = t.match(/(-?\d+)-(\d+)-(\d+)\D+(\d+):(\d+)(?::(\d+))?/);
 	if(!m){ return NaN; }
-	const cstMs = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+	// 节气表的时刻串是民用历标签(1582 以前儒略历),按民用历墙钟轴读(与 birthMs 同轴)
+	const cstMs = civilWallMs(+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] || 0));
 	return cstMs + (zoneHours - 8) * 3600000;
 }
 
@@ -197,7 +236,7 @@ function solarTermBoundaryMs(chart, year, birthMs, mode, zoneHours){
 		if(v == null){ return NaN; }
 		if(typeof v === 'number'){ return v; }
 		const m = `${v}`.match(/(-?\d+)\D+(\d+)\D+(\d+)(?:\D+(\d+)\D+(\d+))?/);
-		return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) : NaN;
+		return m ? civilWallMs(+m[1], +m[2], +m[3], +(m[4] || 0), +(m[5] || 0), 0) : NaN;
 	};
 	const zh = Number.isFinite(zoneHours) ? zoneHours : 8;
 	// 本年该节气时刻:chart 显式字段优先,否则本地节气表。
@@ -307,4 +346,5 @@ export {
 	lifeDegree as moiraLifeDegree,
 	godsFromRuleHits as moiraGodsFromRuleHits,
 	longLifeCharFor as moiraLongLifeCharFor,
+	formatGodName as moiraFormatGodName,
 };

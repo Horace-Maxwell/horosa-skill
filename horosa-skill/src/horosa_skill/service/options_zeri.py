@@ -188,16 +188,21 @@ def _electionscan_zone(zone: Any) -> str:
 
 
 def _day_span(start_date: str, end_date: str) -> int | None:
-    from datetime import date as _date
+    """两端日期相隔的民用历日数（后端 election_scan._jd_from 同口径：1582-10-15 以前儒略历、公元前历史纪年）。
+    旧实现 split('-') + datetime.date：公元前 '-0500-03-21' 撕成 ['', '0500', …] → 恒报「无法解析搜索窗」，
+    五位年 / 跨改历缺口按外推格里历数差十天。日期不存在（2 月 30 日、改历缺口 1582-10-05…14）仍 → None。"""
+    from horosa_skill.civil_calendar import (
+        _civil_jdn,
+        _civil_ymd_exists,
+        _parse_date_parts,
+    )
 
-    def parse(text: str) -> _date | None:
-        parts = str(text).replace("/", "-").split("-")
-        if len(parts) < 3:
+    def parse(text: str) -> float | None:
+        s = f"{text}".strip()
+        parts = _parse_date_parts(s) if s and not any(ch.isspace() for ch in s) else None  # 带时刻尾巴照旧拒收
+        if parts is None or not _civil_ymd_exists(*parts):
             return None
-        try:
-            return _date(int(parts[0]), int(parts[1]), int(parts[2]))
-        except (ValueError, TypeError):
-            return None
+        return _civil_jdn(*parts)
 
     a, b = parse(start_date), parse(end_date)
-    return None if a is None or b is None else (b - a).days
+    return None if a is None or b is None else round(b - a)

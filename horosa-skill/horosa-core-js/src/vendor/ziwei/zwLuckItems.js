@@ -4,6 +4,8 @@
 // 可能错年）；buildLiunianItems 补 liunianSihuaGan='ming_gong_gan' 分支；buildLiuyueItems 补
 // liuYueBasis='taisui' 锚；buildXiaoxianItems 改走 ZiWeiHelper.xiaoxianClockwise（此前 inline 读
 // localStorage，headless 恒抛 → 阴阳选项被静默忽略）。
+// v3.13.0 对齐：buildLiuriItems 改走连续日序 julianDayIndex（dayGanziByDate → dayGanziByJdi，不经 JS Date；
+// Date 外推格里历会跳过 1582 以前的儒略闰日，流日日干支在 1582 以前整体错位——真值修复）；其余仅上游注释去标签。
 import { julianDayIndex } from '../utils/julianDayIndex.js';
 import { parseYearFromDateStr } from '../bazi/dateStrSafe.js';
 import { ganzhiYearBase } from '../utils/ganzhiYearBase.js';
@@ -11,7 +13,7 @@ import { Lunar, LunarMonth } from 'lunar-javascript';
 import * as ZWConst from '../bazi/ZWConst.js';
 import * as ZiWeiHelper from './ZiWeiHelper.js';
 import { ZWEngineOptions } from './ziweiOptions.js';
-import { XIAOXIAN_START } from './data/ziweiTables.js';   // [B15b] 小限起宫表单源
+import { XIAOXIAN_START } from './data/ziweiTables.js';   // 小限起宫表单源(曾双源字面量,金标对拍锁)
 
 const DAY_ANCHOR_IDX = 28;
 
@@ -24,7 +26,7 @@ const GANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '�
 const LUNAR_MONTH = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'];
 
 const SHICHEN = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-// [D0] 四化底色并入 ZWConst.ZWColor 单源(本地副本已删;值经逐项核对相同)。
+// 四化底色并入 ZWConst.ZWColor 单源(本地副本已删;值经逐项核对相同)。
 
 const ZI_HOUR_START = { '甲': '甲', '己': '甲', '乙': '丙', '庚': '丙', '丙': '戊', '辛': '戊', '丁': '庚', '壬': '庚', '戊': '壬', '癸': '壬' };
 
@@ -59,7 +61,7 @@ function buildLiunianItems(chart, daxian) {
 			gan: gz.charAt(0), zhi, mingIndex,
 			top: `${year}`, sub: `${gz}`,
 		};
-		// [B10] 流年四化取干两法:ming_gong_gan=以流年命宫宫干起四化(飞星系用法)。
+		// 流年四化取干两法:ming_gong_gan=以流年命宫宫干起四化(飞星系用法)。
 		// 默认档不加字段(item 形状字节稳);消费点统一 `layer.sihuaGan || layer.gan`。
 		// 流曜恒用 layer.gan(流曜按流年干,不随此档);流月干独立五虎遁不受染。
 		if(ZWEngineOptions.liunianSihuaGan === 'ming_gong_gan' && mingIndex >= 0 && chart.houses[mingIndex] && chart.houses[mingIndex].ganzi){
@@ -77,9 +79,9 @@ function buildXiaoxianItems(chart, daxian) {
 	const startIdx = houseIdxByBranch(chart, startZhi);
 	if (startIdx < 0) return [];
 	// P1-B 小限顺逆：'0'=男顺女逆(现状默认，零回归) / '1'=阳男阴女顺、阴男阳女逆(中州)。
-	// [B15] 迁入 ZWEngineOptions 单例(挂载/导出走 builder set/finally 临时覆盖,不再兜转 localStorage);
+	// 迁入 ZWEngineOptions 单例(挂载/导出走 builder set/finally 临时覆盖,不再兜转 localStorage);
 	// LS 键 ziweiXiaoxianYinyang 沿用,由 ZiWeiInput 构造器读入单例。
-	// [B15b] 判定单源化:ZiWeiHelper.xiaoxianClockwise(内核=ziweiCore.xiaoxianClockwiseFor,读同一单例)——
+	// 判定单源化:ZiWeiHelper.xiaoxianClockwise(内核=ziweiCore.xiaoxianClockwiseFor,读同一单例)——
 	// 盘面岁数条/本地引擎与本函数三消费点同口径,金标对拍锁(ziweiXiaoxianSyncWiring)。
 	const clockwise = ZiWeiHelper.xiaoxianClockwise(chart);
 	const birthY = birthYearOf(chart);
@@ -104,7 +106,7 @@ function buildLiuyueItems(chart, year) {
 	const gz = yearGanzi(year);
 	const yearGan = gz.charAt(0);
 	const yearZhi = gz.charAt(1);
-	// [P3c] 流月起法两档:doujun 斗君宫起正月(默认=现状,三合/四化主流) / taisui 太岁宫(流年支所在宫)起正月。
+	// 流月起法两档:doujun 斗君宫起正月(默认=现状,三合/四化主流) / taisui 太岁宫(流年支所在宫)起正月。
 	// 本函数同时喂 UI 面板与快照 builder(ZiWeiMain import),两处口径自动一致。
 	const anchorZhi = ZWEngineOptions.liuYueBasis === 'taisui'
 		? yearZhi
@@ -127,26 +129,22 @@ function buildLiuyueItems(chart, year) {
 function buildLiuriItems(chart, year, liuyue) {
 	if (!chart || !liuyue) return [];
 	let days = 30;
-	let firstSolar = null;
+	let firstJdi = null;   // 本月初一的民用历日序(逐日 +1,不经 JS Date:Date 外推格里历会跳过 1582 以前的儒略闰日)
 	try {
 		const lm = LunarMonth.fromYm(year, liuyue.month);
 		if (lm && typeof lm.getDayCount === 'function') days = lm.getDayCount();
 	} catch (e) { days = 30; }
 	try {
 		const s = Lunar.fromYmd(year, liuyue.month, 1).getSolar();
-		// AD 1-99 绕开 Date 构造器 0-99→1900+ 映射(流日轴日干支曾整体平移 1900 年)
-		firstSolar = new Date(0);
-		firstSolar.setFullYear(s.getYear(), s.getMonth() - 1, s.getDay());
-		firstSolar.setHours(0, 0, 0, 0);
-	} catch (e) { firstSolar = null; }
+		// 日序直接取 lunar-js 给的民用历日期(1582 以前儒略历);不经 Date 构造器(0-99 年会被当成 19xx)
+		firstJdi = julianDayIndex(s.getYear(), s.getMonth(), s.getDay());
+		if (!Number.isFinite(firstJdi)) firstJdi = null;
+	} catch (e) { firstJdi = null; }
 	const out = [];
 	for (let d = 1; d <= days; d++) {
 		let ganzi = '';
-		if (firstSolar) {
-			const dt = new Date(0);
-			dt.setFullYear(firstSolar.getFullYear(), firstSolar.getMonth(), firstSolar.getDate() + (d - 1));
-			dt.setHours(0, 0, 0, 0);
-			ganzi = dayGanziByDate(dt);
+		if (firstJdi !== null) {
+			ganzi = dayGanziByJdi(firstJdi + (d - 1));
 		}
 		const zhi = ganzi ? ganzi.charAt(1) : '';
 		const mingIndex = (liuyue.mingIndex + (d - 1)) % 12;
@@ -212,8 +210,8 @@ function monthGan(yearGan, monthIdx /*0=正月*/) {
 	return GANS[(si + monthIdx) % 10];
 }
 
-function dayGanziByDate(date) {
-	const jdi = julianDayIndex(date.getFullYear(), date.getMonth() + 1, date.getDate());
+// 日干支按连续日序(民用历:1582 以前儒略历;日序由 julianDayIndex 单源给)
+function dayGanziByJdi(jdi) {
 	const idx = (((jdi - DAY_ANCHOR_JDI + DAY_ANCHOR_IDX) % 60) + 60) % 60;
 	return GANS[idx % 10] + DIZI[idx % 12];
 }

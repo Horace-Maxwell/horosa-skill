@@ -8,7 +8,9 @@ from typing import Any
 
 from horosa_skill.engine import astro_snapshot as _astro_snap
 from horosa_skill.service import _clock
+from horosa_skill.civil_calendar import _month_day_label, _year_month_key
 from horosa_skill.service._common import (
+    _chart_at_moment_date_fields,
     _gender_label,
     _gz_text,
     _is_astro_chart_payload,
@@ -169,7 +171,11 @@ def _guolao_slash_date(date_text: Any) -> str:
     """上游 GuoLaoChartMain.fieldsToParams:2337 `fields.date.value.format('YYYY/MM/DD')`——params.date 恒斜杠；skill 归一后是
     YYYY-MM-DD。[起盘信息] 日期行与 JS 段 builder 的 params.date（出生年取 split('/')[0]）都要斜杠形。"""
     text = f"{date_text or ''}"
-    return text.replace("-", "/", 2) if re.match(r"^\d{4}-\d{2}-\d{2}", text) else text
+    # DateTime.format('YYYY/MM/DD') = `${ad * year}/${MM}/${DD}`：公元前带负号、年不补零（'-0500-03-21' → '-500/03/21'；
+    # 旧版只认四位正年，公元前原样留横杠 → 段 builder 的 split('/')[0] 取不到出生年）。
+    if re.match(r"^-?\d{1,6}[-/]\d{1,2}[-/]\d{1,2}$", text.strip()):
+        return _chart_at_moment_date_fields(text.strip())["date"]
+    return text
 
 
 _GUOLAO_LIFE_MODE_NAMES = {"yumao": "日出安命", "cotrans": "赤黄转换", "gumao": "遇卯安命(古法)"}
@@ -665,13 +671,19 @@ def _build_calendar_month_snapshot_text(payload: dict[str, Any], response: dict[
     days = response.get("days") if isinstance(response.get("days"), list) else []
     prev_days = response.get("prevDays") if isinstance(response.get("prevDays"), list) else []
 
+    # 年月 / 月日按日期串解析（dateStrSafe.yearMonthKey / monthDayLabel）——[:7] / [5:10] 按位置切，公元前 / 五位年切错位。
     def month_of(d: dict[str, Any]) -> str:
-        return str(d.get("birth") or "")[:7]
+        return _year_month_key(str(d.get("birth") or ""))
 
     def day_of(d: dict[str, Any]) -> str:
-        return str(d.get("birth") or "")[5:10]
+        return _month_day_label(str(d.get("birth") or ""))
 
-    query_month = str(payload.get("date") or "")[:7] or (month_of(days[0]) if days else "")
+    # 上游 st.date.format('YYYY-MM')（DateTime：`${ad * year}-${MM}`，公元前带负号、年不补零）
+    query_date = f"{payload.get('date') or ''}".strip()
+    query_month = ""
+    if re.match(r"^-?\d{1,6}[-/]\d{1,2}[-/]\d{1,2}", query_date):
+        query_month = _chart_at_moment_date_fields(query_date)["date"].rsplit("/", 1)[0].replace("/", "-")
+    query_month = query_month or query_date[:7] or (month_of(days[0]) if days else "")
     info_lines: list[str] = []
     if query_month:
         info_lines.append(f"查询月份：{query_month}")

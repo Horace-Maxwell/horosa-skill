@@ -3,6 +3,10 @@
 // （bespoke，derived_from + derived_sha256 看守：上游 GuoLaoMoiraPanel.js 一动即红，复核本文件后 --restamp）。
 // 上游该文件其余部分是 React 表格组件（JSX），整份 vendor 不可行。页面渲染与 AI 快照（[起盘信息] 命度/身度/宿主行、
 // [三主与化曜]、[限法实算]）在上游同取此函数 ——「页面显示什么、快照就写什么」。只有下方 import 按 vendor 树改了路径。
+// v3.13.0 复核：闭包逻辑零变化。上游删去本文件私有的 STEM_BRANCHES / norm / stemBranchForYear / formatGodName，
+// 改从 GuoLaoMoiraWheel import（moiraNormDegree / moiraStemBranchForYear / moiraFormatGodName，函数体与旧私有件逐字同）；
+// 这里仍留逐字副本（guolaoMoiraWheelLimits.js 未抽 stemBranchForYear）。birthYearBasis 的民用历改动随
+// guolaoMoiraWheelLimits.js 生效（本文件经 moiraBirthYearBasis 别名调用）。
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
 import { moiraBuildLimitTable as buildLimitTable, moiraBirthYearBasis as birthYearBasis, moiraCurrentLimitIndex as currentLimitIndex } from './guolaoMoiraWheelLimits.js';
@@ -255,7 +259,7 @@ function findObject(chart, id){
 	return objects.find((obj)=>obj.id === id);
 }
 
-// [Q-231/Q-434/Q-435] 右栏「命身与限度」「三主·命宫配干·化曜」「难仇恩用」「飞限·童限·小限·月限·限度」「行运法」
+// 右栏「命身与限度」「三主·命宫配干·化曜」「难仇恩用」「飞限·童限·小限·月限·限度」「行运法」
 // 诸卡的事实层单源:面板渲染与 AI 快照([起盘信息] 命度/身度/宿主行、[三主与化曜]、[限法实算])都从这里取值,
 // 保证「页面显示什么、快照就写什么」。纯函数、零 React。transitValue 缺(无头挂载)时,月限所需的流年月支
 // 由调用方传入本地历法算得的伪 root(见 GuoLaoChartMain.buildGuolaoInfoFactsForSnapshot),缺则月限行省略。

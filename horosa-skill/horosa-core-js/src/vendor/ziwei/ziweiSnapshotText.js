@@ -1,13 +1,17 @@
 // 紫微快照主 builder —— 自上游 components/ziwei/ZiWeiMain.js **逐字**抽出（bespoke，derived_from 由
 // contracts/vendor_manifest.json 的 derived_sha256 看守：上游 ZiWeiMain.js 一动即红，复核本文件后 --restamp）。
 // 与 ziweiSnapshotLayers.js（运限概览/运限/流派叠层，同源同文件）互补，这里是其余部分：
-//   · normalizeGan / pickYearGan / collectHouseStars / formatStarSiHua / getLifeHouse（ZiWeiMain.js:55-169）
-//   · buildZiWeiSnapshotText —— 整份紫微 AI 快照（ZiWeiMain.js:407-614；[起盘信息] 的四化流派/传本设置行、
+//   · normalizeGan / pickYearGan / collectHouseStars / formatStarSiHua / getLifeHouse（ZiWeiMain.js:59-173，v3.13.0）
+//   · buildZiWeiSnapshotText —— 整份紫微 AI 快照（ZiWeiMain.js:429-639，v3.13.0；[起盘信息] 的四化流派/传本设置行、
 //     [宫位总览] GFM 表的星曜四化括注与庙旺档都在这里）
 // 函数体逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../constants/xxx、./ZWLuckPanel 等）。
+// v3.13.0 对齐：四化流派名改走 ZWConst.zwSihuaSchoolLabel 单源（表值逐字同旧字面量，输出不变）；
+// 「农历」行闰字改走 utils/lunarText.leapPrefix（本地历算 month 已带「闰」时不再写成「闰闰六月」——真值修复）；
+// 其余仅上游注释去标签。
 // ⚠ 读可变单例 ZWEngineOptions（传本/流派开关）与 ZWConst.ZWSchool（四化流派）：调用方负责按调用覆盖/还原
 //   （上游 buildZiweiSnapshotForParams 同式，见 tools/ziweiBirth.js）。
 import * as ZiWeiHelper from './ZiWeiHelper.js';
+import { leapPrefix } from '../utils/lunarText.js';
 import * as ZWText from '../constants/ZWText.js';
 import * as ZWConst from '../bazi/ZWConst.js';
 import { isLaiyinPalace } from './ziweiSchools.js';
@@ -86,7 +90,7 @@ function collectHouseStars(house){
 	return { list: out, lightOf };
 }
 
-// [Q-432/T-395①] dayGan:显示开关「日干四化徽」(缺省关)开启后盘面逐星加「日禄/日权…」徽,
+// dayGan:显示开关「日干四化徽」(缺省关)开启后盘面逐星加「日禄/日权…」徽,
 // 而快照星曜括注只有 生年/命宫/自化 三类 → 开了也进不了 AI。开关开启时才传入,缺省态括注逐字不变。
 function formatStarSiHua(starName, yearGan, lifeGan, palaceGan, dayGan){
 	const tags = [];
@@ -147,7 +151,7 @@ function buildZiWeiSnapshotText(params, result){
 	lines.push(`日期：${params.date} ${params.time}`);
 	lines.push(`时区：${params.zone}`);
 	lines.push(`经纬度：${params.lon} ${params.lat}`);
-	// [Q-193/T-139] 「未知」在紫微是按男排(引擎 male = gender !== 0):快照只写「未知」会与下一行「命局：阳男」自相矛盾。
+	// 「未知」在紫微是按男排(引擎 male = gender !== 0):快照只写「未知」会与下一行「命局：阳男」自相矛盾。
 	lines.push(`性别：${`${params.gender}` === '1' ? '男' : (`${params.gender}` === '0' ? '女' : '未知（按男排）')}`);
 	lines.push(`时间算法：${params.timeAlg === 1 ? '直接时间' : '真太阳时'}`);
 	// 换算后时刻(审计补缺:此前只写算法名、无换算结果):双时刻并列与八字快照同款,换算关系一眼可见;
@@ -158,7 +162,7 @@ function buildZiWeiSnapshotText(params, result){
 	}else if(tmNl.birth){
 		lines.push(`${params.timeAlg === 1 ? '直接时间：' : '真太阳时：'}${tmNl.birth}`);
 	}
-	const schoolLabel = { beipai: '通用·飞星', zhongzhou: '中州派', quanshu: '全书系', beixiang: '北派(天相忌)', custom: '自定义' }[ZWConst.ZWSchool.school] || '通用·飞星';
+	const schoolLabel = ZWConst.zwSihuaSchoolLabel(ZWConst.ZWSchool.school);
 	lines.push(`四化流派：${schoolLabel}`);
 	// 传本/排盘开关(非默认才注记,供 AI 知悉本盘用了哪套传本)。
 	const tbNotes = [];
@@ -203,7 +207,7 @@ function buildZiWeiSnapshotText(params, result){
 	if(lifeGan){
 		lines.push(`命宫天干：${lifeGan}`);
 	}
-	// [v2 试点·补硬缺] 左栏「基本信息/四柱」卡内容并入起盘信息(审计:显示了但快照没有)。
+	// 左栏「基本信息/四柱」卡内容并入起盘信息(审计:显示了但快照没有)。
 	// 全部 best-effort 纯增行(数据缺省不产行 → 既有夹具/挂载字节不变);同 buildZiWeiInfoData 取数口径。
 	const infoBz = chart.bazi && chart.bazi.bazi ? chart.bazi.bazi : null;
 	if(infoBz){
@@ -222,9 +226,9 @@ function buildZiWeiSnapshotText(params, result){
 	if(infoJu){ lines.push(`命局：${infoJu}`); }
 	const infoNl = chart.nongli || {};
 	if(infoNl.year){
-		lines.push(`农历：${`${infoNl.year}年 ${infoNl.leap ? '闰' : ''}${infoNl.month || ''}${infoNl.day || ''}${infoNl.time ? ` ${`${infoNl.time}`.charAt(1)}时` : ''}`.trim()}`);
+		lines.push(`农历：${`${infoNl.year}年 ${leapPrefix(infoNl)}${infoNl.month || ''}${infoNl.day || ''}${infoNl.time ? ` ${`${infoNl.time}`.charAt(1)}时` : ''}`.trim()}`);
 	}
-	// [Q-432/T-395③] 正月初一口径年柱 ≠ 立春口径年柱时,中宫会多画一行「初一口径年柱」,而快照两处
+	// 正月初一口径年柱 ≠ 立春口径年柱时,中宫会多画一行「初一口径年柱」,而快照两处
 	// (「农历」行是数字年、「四柱」行是立春口径)都看不出这一年的分歧 —— 与页面同判据补一行。
 	// 该字段只有走本地历算的盘才带(任一传本开关非缺省),缺省后端盘无此字段 → 零增行。
 	const infoYearLunar = infoNl.yearGZByLunar;
@@ -233,12 +237,12 @@ function buildZiWeiSnapshotText(params, result){
 	}
 
 	lines.push('');
-	// [v2 试点·表化] 12 宫同构数据改 GFM 表(宫/干支/大限/星曜四列;值口径与旧键值行逐字同源:
+	// 12 宫同构数据改 GFM 表(宫/干支/大限/星曜四列;值口径与旧键值行逐字同源:
 	// name/ganzi/direction/formatStarSiHua 全复用)。表块经 v1/v2 归一器直通、docx/PDF 渲染真表。
 	lines.push('[宫位总览]');
-	// [Q-432/T-395①] 日干四化徽:开关开启(缺省关)时才取日干,缺省态括注与旧快照逐字节相同。
+	// 日干四化徽:开关开启(缺省关)时才取日干,缺省态括注与旧快照逐字节相同。
 	const daySihuaGan = ZiWeiHelper.zwShowDaySihua && ZiWeiHelper.zwShowDaySihua() ? (ZiWeiHelper.dayGanOf(chart) || '') : '';
-	// [Q-432/T-395②] 流年岁列 / 小限岁列(两开关缺省关)在宫底画岁数条,而 [宫位总览] 一个岁数都没有 →
+	// 流年岁列 / 小限岁列(两开关缺省关)在宫底画岁数条,而 [宫位总览] 一个岁数都没有 →
 	// 开了也进不了 AI。开关开启时才加一列(缺省关 = 表头四列、正文逐字节不变,preflight[121] 表头断言零触)。
 	const showYearAges = !!(ZiWeiHelper.zwShowYearAges && ZiWeiHelper.zwShowYearAges());
 	const showXiaoxianAges = !!(ZiWeiHelper.zwShowXiaoxianAges && ZiWeiHelper.zwShowXiaoxianAges());

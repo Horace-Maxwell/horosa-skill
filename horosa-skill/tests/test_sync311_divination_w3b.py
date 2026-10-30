@@ -19,6 +19,7 @@ from test_sync311_divination_w3 import (
     SH,
     SIX,
     UPSTREAM_UI,
+    read_facade_source,
     RecordingClient,
     _node,
     _ok,
@@ -185,7 +186,7 @@ def test_vendored_buildGuaSnapshotText_is_upstream_source() -> None:
         body = upstream[start: upstream.index("\n}\n", start) + 3]
         assert body in vendored, head
     assert "return { yao, currentGua: guaidx, nongli };" in upstream
-    ctx = (UPSTREAM_UI / "utils" / "aiAnalysisContext.js").read_text(encoding="utf-8")
+    ctx = read_facade_source(UPSTREAM_UI / "utils" / "aiAnalysisContext.js")   # v3.12.0：门面 + aiAnalysisContext/ 目录
     regen = ctx[ctx.index("async function regenerateSixyaoSnapshot(record, gearFlat){"):]
     regen = regen[: regen.index("\n}\n")]
     for needle in ("const fields = buildCaseSnapshotFields(record);", "const gua = buildTimeGua(nongli);",
@@ -249,10 +250,17 @@ def test_shusuan_day_boundary_defaults_to_23_new_day_like_upstream(tmp_path, too
 def test_shusuan_time_alg_default_evidence_still_holds_upstream() -> None:
     """绊线：无头 timeAlg ?? 0 / 日界 ?? 出厂默认、buildChartBaziParams 原样取、全局种子 0、挂载齿轮缺省 0，
     三页面 getModel 读全局 fields（回退 1 不生效的前提）。任一处上游改了就红 —— 提示重审三技法缺省。"""
-    ctx = (UPSTREAM_UI / "utils" / "aiAnalysisContext.js").read_text(encoding="utf-8")
-    assert "timeAlg: { value: (record.timeAlg !== undefined && record.timeAlg !== null) ? record.timeAlg : 0 }," in ctx
+    ctx = read_facade_source(UPSTREAM_UI / "utils" / "aiAnalysisContext.js")   # v3.12.0：门面 + aiAnalysisContext/ 目录
+    # v3.12.0（aiAnalysisContext/recordFields.js:215-218）：缺键改经 missing() = recordMissingOr(record, key, legacy)。
+    # timeAlg 是新盘种子键（newChartSeeds.js timeAlg def 0，无 recordMissingFallback）→ 恒取 0；after23NewDay 非种子键，
+    # 无头 record 无存档标记 → kind 'keep' → 回 legacy defaultAfter23NewDay() —— 两者与旧版字面同值。
+    assert "timeAlg: { value: (record.timeAlg !== undefined && record.timeAlg !== null) ? record.timeAlg : missing(record, 'timeAlg', 0) }," in ctx
     assert ("after23NewDay: { value: (record.after23NewDay !== undefined && record.after23NewDay !== null) "
-            "? record.after23NewDay : defaultAfter23NewDay() },") in ctx
+            "? record.after23NewDay : missing(record, 'after23NewDay', defaultAfter23NewDay) },") in ctx
+    assert "const missing = (record, key, legacy)=>recordMissingOr(record, key, legacy, undefined);" in ctx
+    restore = (UPSTREAM_UI / "utils" / "recordFieldsRestore.js").read_text(encoding="utf-8")
+    assert "\tif(!recordHasCaptureMark(record)){\n\t\treturn { kind: 'keep' };" in restore
+    assert "return typeof legacy === 'function' ? legacy() : legacy;" in restore
     params = ctx[ctx.index("function buildChartBaziParams(record){"):]
     params = params[: params.index("\n}\n")]
     assert "timeAlg: fields.timeAlg.value," in params and "after23NewDay: fields.after23NewDay.value," in params
@@ -311,7 +319,7 @@ process.stdout.write(r.snapshot_text || '');
 def test_zhengchuan_headless_lunar_day_evidence_still_holds_upstream() -> None:
     """绊线：无头 buildChartShusuanBazi 仍读 monthNum/dayNum（钟面），页面仍走 lunarByDayBoundary。上游若让无头也进位，
     本条即红 —— 提示 skill 跟进（届时改取进位值）。"""
-    ctx = (UPSTREAM_UI / "utils" / "aiAnalysisContext.js").read_text(encoding="utf-8")
+    ctx = read_facade_source(UPSTREAM_UI / "utils" / "aiAnalysisContext.js")   # v3.12.0：门面 + aiAnalysisContext/ 目录
     shu = ctx[ctx.index("function buildChartShusuanBazi(record){"):]
     shu = shu[: shu.index("\n}\n")]
     assert "lunarDay: Number((bazi.lunar || bazi.nongli || {}).dayNum || (bazi.lunar || bazi.nongli || {}).day) || 0," in shu

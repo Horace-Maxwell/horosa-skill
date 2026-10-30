@@ -1,3 +1,4 @@
+import { formatDateLikeDateTime } from '../shared/fields.js';
 import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
 import * as LRConst from '../vendor/liureng/LRConst.js';
 import { buildJinKouData, normalizeKinjinkouData } from '../vendor/jinkou/JinKouCalc.js';
@@ -12,7 +13,9 @@ function normalizeTimeBranch(timeValue) {
 
 function buildJinkouParams(payload) {
   return {
-    date: payload.date || '',
+    // 上游 genGodsParams `flds.date.value.format('YYYY-MM-DD')`（JinKouMain.js:1333）：DateTime 的 ad × year 不补零
+    // （公元前 '-500-03-21'）；此前原样回带 Python 归一后的补零串（[起盘信息]「日期」行公元前写成 '-0500-03-21'）。
+    date: payload.date ? formatDateLikeDateTime(payload.date, payload.ad) : '',
     // 上游 genGodsParams 取 format('HH:mm')（JinKouMain.js:1370），快照「日期」行是时:分。
     time: `${payload.time || ''}`.slice(0, 5),
     zone: payload.zone || '',
@@ -80,7 +83,8 @@ export function runJinkou(payload) {
       data = normalizeKinjinkouData(ken, local);
       reason = 'ken';
     } else {
-      data.daySourceNote = `课时跨日界：后端盘按「${panDay}」日、历法按「${lrDay}」日，已统一取「${lrDay}」日推算（改「时间基准」为真太阳时可使两者一致）。`;
+      // v3.12.0 起与上游 JinKouMain.js 同文（旧文「课时跨日界…改「时间基准」…」已随上游改写）。
+      data.daySourceNote = `课时恰在换日处：两种算法的日柱不同（「${panDay}」日 / 「${lrDay}」日），已统一取「${lrDay}」日推算。`;
       reason = 'day_misaligned';
     }
   }

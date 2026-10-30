@@ -4,6 +4,7 @@ import { MUNDANE_RULESETS, rulesetConfig } from '../vendor/mundane/ruleset.js';
 import { buildMundaneAiSnapshotParts } from '../vendor/mundane/mundaneAiSnapshot.js';
 import { allRegions, regionCandidates } from '../vendor/divination/data/regionCharts.js';
 import { SIGN_ORDER } from '../vendor/divination/data/signs.js';
+import { leadingYearOf } from '../vendor/bazi/dateStrSafe.js';
 
 /**
  * 世运右栏卡片段（上游 v3.11 [Q-444/T-407]）：`buildMundaneCardSections(chart, extra, state, facts)`
@@ -94,7 +95,8 @@ function resolveRegion(source) {
     fields: { date: rec.date, time: useTime, zone: rec.zone || '+00:00', lon: rec.lon, lat: rec.lat, gpsLon: rec.gpsLon, gpsLat: rec.gpsLat, pos: rec.cn },
     extra: {
       mundaneType: 'region', regionKey: key, regionCn: rec.cn + (cand ? ` · ${cand.label}` : ''),
-      regionFoundingYear: parseInt(String(rec.date || '').slice(0, 4), 10) || null,
+      // 上游 v3.13.0 MundaneMain.js:735 leadingYearOf(rec.date)（带符号 1–5 位年；slice(0, 4) 会把 '-0753' 切成 -75）。
+      regionFoundingYear: leadingYearOf(rec.date) || null,
     },
   };
 }

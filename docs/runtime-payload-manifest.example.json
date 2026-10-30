@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "version": "0.45.1",
-  "runtime_payload_version": "0.45.1",
+  "version": "0.46.0",
+  "runtime_payload_version": "0.46.0",
   "platform": "win32-x64",
   "runtime_layout_version": 1,
-  "export_registry_version": 15,
+  "export_registry_version": 16,
   "services": {
     "backend_url": "http://127.0.0.1:9999",
     "chart_url": "http://127.0.0.1:8899",
@@ -30,6 +30,6 @@
   },
   "derived_from": {
     "platform": "darwin-arm64",
-    "version": "0.45.1"
+    "version": "0.46.0"
   }
 }

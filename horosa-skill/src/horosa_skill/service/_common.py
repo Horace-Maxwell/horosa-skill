@@ -3,11 +3,35 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
+from horosa_skill.civil_calendar import (  # noqa: F401 — 民用历口径单一出处；旧调用方经本模块取用
+    _swe_julday,
+    _swe_revjul,
+    _civil_jdn,
+    _civil_ymd_of_jdn,
+    _greg_days_in_month,
+    _parse_date_time_parts,
+    _civil_ymd_exists,
+    _civil_wall_ms,
+    _civil_wall_ms_of_moment,
+    _format_signed_date,
+    _civil_date_str_of_jdn,
+    _civil_date_str_of_ms,
+    _greg_ymd_of_jdn,
+    _to_slash_date,
+    _leading_year_of,
+    _zone_offset_minutes_of,
+    _chart_at_moment_date_fields,
+    _ad_of_date,
+    _civil_moment_of_wall_ms,
+    _date_part_of,
+    _civil_shift_moment,
+    _shift_moment,
+)
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.input_normalization import _GENDER_FEMALE_LABELS, _GENDER_MALE_LABELS
 
@@ -151,27 +175,6 @@ def _finite_number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def _js_date_parse(text: Any) -> datetime | None:
-    """浏览器 `Date.parse` 对后端日期串的两种形：纯日期 'YYYY-MM-DD' = UTC 零点；带时刻 = 本地墙钟。
-    返回 naive 本地时间（与 datetime.now() 同一参照系）；解析不了 → None。"""
-    raw = f"{text or ''}".strip().replace("/", "-")
-    if not raw:
-        return None
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
-        try:
-            utc = datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            return None
-        return utc.astimezone().replace(tzinfo=None)
-    raw = raw.replace("T", " ")
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-        try:
-            return datetime.strptime(raw, fmt)
-        except ValueError:
-            continue
-    return None
-
-
 def _require_option(value: Any, allowed: Any, *, field: str, tool: str) -> None:
     """推运族可选项的值域闸：认不出的值报结构化错误（不静默回落缺省——那会算出另一张盘而不自知）。"""
     if value in allowed:
@@ -236,12 +239,6 @@ def _solunar_body_lon(chart_response: dict[str, Any], body: str) -> float | None
             except (TypeError, ValueError):
                 return None
     return None
-
-
-def _shift_moment(moment: str, days: float) -> str:
-    """把 'YYYY-MM-DD HH:MM:SS' 平移若干天（可为负），同上游 shiftMoment。"""
-    base = datetime.strptime(moment, "%Y-%m-%d %H:%M:%S")
-    return (base + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _chart_body_lon_speed(chart_response: Any, body: str) -> tuple[float | None, Any]:

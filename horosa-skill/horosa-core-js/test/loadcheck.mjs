@@ -28,23 +28,27 @@ function walk(dir) {
 	return out;
 }
 
-const files = walk(VENDOR).sort();
+// skill 自己写的 tools/ 与 shared/ 也要加载：它们按名从 vendor 导入，上游删 / 改名一个导出（v3.12.0 删了
+// DunJiaCalc.buildJieqiYearSeed）时 vendor 树自己照样能加载，坏的是 tools/qimen.js ——而 cli.mjs 一启动就经
+// tools/index.js 加载全部工具，于是**所有** JS 技法一起挂。只查 vendor 时这条整个漏掉（selfcheck 不走 tools/index）。
+const SRC = join(HERE, '..', 'src');
+const files = [...walk(VENDOR), ...walk(join(SRC, 'tools')), ...walk(join(SRC, 'shared'))].sort();
 const failures = [];
 
 for (const file of files) {
 	try {
 		await import(pathToFileURL(file).href);
 	} catch (err) {
-		failures.push(`${relative(VENDOR, file)}: ${err && err.message ? err.message : err}`);
+		failures.push(`${relative(SRC, file)}: ${err && err.message ? err.message : err}`);
 	}
 }
 
 if (failures.length) {
-	console.error(`loadcheck: FAIL — ${failures.length}/${files.length} vendored modules do not load:`);
+	console.error(`loadcheck: FAIL — ${failures.length}/${files.length} modules (vendor + tools + shared) do not load:`);
 	for (const line of failures) console.error(`  - ${line}`);
 	console.error('\nA module that cannot load is un-callable in production. Fix the import (usually a');
 	console.error('specifier the re-vendor transform pointed at the wrong subdir) or add a shim.');
 	process.exit(1);
 }
 
-console.log(`loadcheck: ok (${files.length} vendored modules load cleanly)`);
+console.log(`loadcheck: ok (${files.length} modules — vendor + tools + shared — load cleanly)`);

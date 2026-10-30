@@ -5,6 +5,8 @@ import { DEFAULT_TONGSHU_SETTINGS } from '../vendor/calendar/tongshuSchools.js';
 import { tongshuSchoolCheck } from './tongshu.js';
 import { buildRiziSnapshotText } from '../vendor/calendar/riziSnapshot.js';
 import { personBazi, buildPersonalizedDates } from '../vendor/calendar/riziEngine.js';
+import { datePartOf } from '../vendor/bazi/dateStrSafe.js';
+import { defaultAfter23NewDay, defaultLateZiHourUseNextDay } from '../vendor/bazi/dayBoundary.js';
 
 /**
  * 黄历页的三个「子模块」段块，供 `calendar` 聚合键使用。
@@ -84,10 +86,15 @@ export function runCalendarExtras(payload) {
       const persons = people.map((p) => {
         let bazi = null;
         try {
+          // 上游 RiziMain.baziOf（v3.13.0 RiziMain.js:76-92）：日界 / 晚子时随全局（出厂 1/1）显式下发——
+          // （vendored v3.13.0 buildLocalBaziResult 缺键也取全局；显式下发与上游同形，不靠引擎缺省。）
+          // 日期段走 datePartOf（公元前 '-0300-03-10' 不被 slice(0, 10) 截成 '-0300-03-1'）。
           bazi = personBazi({
-            date: `${p.date || ''}`.slice(0, 10),
+            date: datePartOf(`${p.date || ''}`),
             time: `${p.time || '12:00:00'}`.slice(0, 8),
             gender: p.gender,
+            after23NewDay: defaultAfter23NewDay() ? 1 : 0,
+            lateZiHourUseNextDay: defaultLateZiHourUseNextDay() ? 1 : 0,
           });
         } catch (error) {
           bazi = null;

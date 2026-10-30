@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+import time
+from datetime import datetime
 from typing import Any
+
+from horosa_skill.civil_calendar import (
+    _civil_date_str_of_ms,
+    _civil_wall_ms_of_moment,
+    _zone_offset_minutes_of,
+)
 
 
 def _js_round(value: float) -> int:
@@ -80,40 +87,58 @@ def _normalize_planet_id(value: Any) -> str | None:
     return PLANET_ALIASES.get(text.lower(), text)
 
 
-def _parse_zone(zone_text: str | None) -> timezone:
-    text = (zone_text or "+00:00").strip()
-    sign = -1 if text.startswith("-") else 1
-    raw = text[1:] if text[:1] in {"+", "-"} else text
-    if ":" in raw:
-        hour_text, minute_text = raw.split(":", 1)
-    else:
-        hour_text, minute_text = raw, "00"
-    hours = int(hour_text or "0")
-    minutes = int(minute_text or "0")
-    offset = timedelta(hours=hours, minutes=minutes) * sign
-    return timezone(offset)
+# 期界时刻的表示：(墙钟毫秒, 时区分钟)。墙钟毫秒 = 出生地钟面在民用历墙钟轴上的位置（civilCalendar.civilWallMs，
+# 1970-01-01 00:00 = 0）。上游 moment 的「外推格里历同一天 + 固定 utcOffset」与它逐分钟同构：按分钟加减、与此刻比先后都是
+# 线性的；标签一律经 civilDateOfMoment（= 本轴的民用历日期），1582-10-15 以后与 moment.format 逐字相同。
+_MS_PER_MINUTE = 60000
 
 
-def _parse_birth_moment(chart_obj: dict[str, Any]) -> datetime | None:
+def _local_offset_minutes() -> int:
+    """本机此刻时区偏移（分钟）：上游 zonedMomentOfCivilDateTimeStr 时区认不出时退回 momentOfCivilDateTimeStr（本机钟面）。"""
+    offset = datetime.now().astimezone().utcoffset()
+    return int(offset.total_seconds() // 60) if offset is not None else 0
+
+
+def _parse_birth_moment(chart_obj: dict[str, Any]) -> tuple[int, int] | None:
+    """上游 v3.12.0 decennials.parseBirthMoment = civilMoment.zonedBirthMomentOfChart(chartObj, '+08:00')：
+    params.birth（或 date + time）经民用历单源读（公元前负号、五位年、儒略闰日都认，日期不存在 → 无效），
+    落在 params.zone（缺省 +08:00；认不出 → 本机钟面）上。返回 (墙钟毫秒, 时区分钟)；无效 → None。"""
     params = chart_obj.get("params", {}) if isinstance(chart_obj, dict) else {}
-    birth = f"{params.get('birth', '')}".strip()
-    if birth:
-        parts = birth.split()
-        date_text = parts[0] if parts else ""
-        time_text = parts[1] if len(parts) > 1 else "00:00:00"
-    else:
-        date_text = f"{params.get('date', '')}".strip()
-        time_text = f"{params.get('time', '')}".strip() or "00:00:00"
-    date_text = date_text.replace("/", "-")
-    if len(time_text) == 5:
-        time_text = f"{time_text}:00"
-    if not date_text:
+    params = params if isinstance(params, dict) else {}
+    birth = f"{params.get('birth') or ''}".strip()
+    date_text = f"{params.get('date') or ''}".strip()
+    time_text = f"{params.get('time') or ''}".strip()
+    text = birth or f"{date_text} {time_text}".strip()
+    zone = params.get("zone")
+    if zone is None or f"{zone}".strip() == "":
+        zone = "+08:00"
+    wall = _civil_wall_ms_of_moment(text, strict=True)
+    if wall is None:
         return None
-    try:
-        dt = datetime.fromisoformat(f"{date_text}T{time_text}")
-    except ValueError:
-        return None
-    return dt.replace(tzinfo=_parse_zone(params.get("zone")))
+    zone_min = _zone_offset_minutes_of(zone)
+    if zone_min is None:
+        zone_min = _local_offset_minutes()
+    return wall, zone_min
+
+
+def _iso_of(wall_ms: float, zone_min: int) -> str:
+    """出生时刻的 ISO 形（民用历日期 + 钟面 + 偏移；1582-10-15 以后与 datetime.isoformat() 逐字相同）。"""
+    seconds_of_day = int(math.floor(wall_ms / 1000)) % 86400
+    sign = "-" if zone_min < 0 else "+"
+    hh, mm = divmod(abs(zone_min), 60)
+    return (
+        f"{_civil_date_str_of_ms(wall_ms)}T{seconds_of_day // 3600:02d}:{seconds_of_day // 60 % 60:02d}:"
+        f"{seconds_of_day % 60:02d}{sign}{hh:02d}:{mm:02d}"
+    )
+
+
+def _civil_label(wall_ms: float, with_time: bool) -> str:
+    """decennials.civilLabelOf：民用历日期（+ 出生地钟面 HH:mm）。"""
+    date = _civil_date_str_of_ms(wall_ms)
+    if not with_time:
+        return date
+    minutes_of_day = int(math.floor(wall_ms / _MS_PER_MINUTE)) % (24 * 60)
+    return f"{date} {minutes_of_day // 60:02d}:{minutes_of_day % 60:02d}"
 
 
 def _safe_lon(value: Any) -> float | None:
@@ -237,9 +262,8 @@ def _scale_nominal_segments(segments: list[dict[str, Any]], calendar_type: str |
     return scaled
 
 
-def _format_range(start_moment: datetime, end_moment: datetime, with_time: bool) -> str:
-    fmt = "%Y-%m-%d %H:%M" if with_time else "%Y-%m-%d"
-    return f"{start_moment.strftime(fmt)} - {end_moment.strftime(fmt)}"
+def _format_range(start_moment: float, end_moment: float, with_time: bool) -> str:
+    return f"{_civil_label(start_moment, with_time)} - {_civil_label(end_moment, with_time)}"
 
 
 def _format_nominal_offset(total_minutes: int, level: int) -> str:
@@ -283,24 +307,23 @@ def _build_node(
     level: int,
     key: str,
     planet: str,
-    start_moment: datetime,
-    end_moment: datetime,
-    now_moment: datetime,
+    start_moment: float,
+    end_moment: float,
+    now_moment: float,
     sublevel: list[dict[str, Any]],
     start_offset_minutes: int,
     end_offset_minutes: int,
 ) -> dict[str, Any]:
     with_time = level >= 4
     active = start_moment <= now_moment < end_moment
-    fmt = "%Y-%m-%d %H:%M" if with_time else "%Y-%m-%d"
     return {
         "key": key,
         "level": level,
         "planet": planet,
         "date": _format_range(start_moment, end_moment, with_time),
         "nominal": _format_nominal_range(start_offset_minutes, end_offset_minutes, level),
-        "startText": start_moment.strftime(fmt),
-        "endText": end_moment.strftime(fmt),
+        "startText": _civil_label(start_moment, with_time),
+        "endText": _civil_label(end_moment, with_time),
         "active": active,
         "startOffsetMinutes": start_offset_minutes,
         "endOffsetMinutes": end_offset_minutes,
@@ -308,7 +331,7 @@ def _build_node(
     }
 
 
-def _build_level_four(level_three_node: dict[str, Any], base_order: list[str], now_moment: datetime, calendar_type: str | None) -> list[dict[str, Any]]:
+def _build_level_four(level_three_node: dict[str, Any], base_order: list[str], now_moment: float, calendar_type: str | None) -> list[dict[str, Any]]:
     order = _rotate_list(base_order, level_three_node["planet"])
     nominal_segments = _minutes_from_level_four(level_three_node["nominalMinutes"], order)
     actual_segments = _scale_nominal_segments(nominal_segments, calendar_type, 1)
@@ -317,7 +340,7 @@ def _build_level_four(level_three_node: dict[str, Any], base_order: list[str], n
     cursor_offset = level_three_node["startOffsetMinutes"]
     for index, nominal_item in enumerate(nominal_segments):
         actual_item = actual_segments[index]
-        next_moment = cursor + timedelta(minutes=actual_item["value"])
+        next_moment = cursor + actual_item["value"] * _MS_PER_MINUTE
         next_offset = cursor_offset + round(nominal_item["value"])
         list_data.append(
             _build_node(4, f"{level_three_node['key']}_l4_{index}", actual_item["planet"], cursor, next_moment, now_moment, [], cursor_offset, next_offset)
@@ -327,7 +350,7 @@ def _build_level_four(level_three_node: dict[str, Any], base_order: list[str], n
     return list_data
 
 
-def _build_level_three(level_two_node: dict[str, Any], base_order: list[str], day_method: str | None, now_moment: datetime, calendar_type: str | None) -> list[dict[str, Any]]:
+def _build_level_three(level_two_node: dict[str, Any], base_order: list[str], day_method: str | None, now_moment: float, calendar_type: str | None) -> list[dict[str, Any]]:
     order = _rotate_list(base_order, level_two_node["planet"])
     nominal_segments = _minutes_from_level_three(level_two_node["nominalDays"], day_method, level_two_node["planet"], order)
     actual_segments = _scale_nominal_segments(nominal_segments, calendar_type, 1)
@@ -336,7 +359,7 @@ def _build_level_three(level_two_node: dict[str, Any], base_order: list[str], da
     cursor_offset = level_two_node["startOffsetMinutes"]
     for index, nominal_item in enumerate(nominal_segments):
         actual_item = actual_segments[index]
-        next_moment = cursor + timedelta(minutes=actual_item["value"])
+        next_moment = cursor + actual_item["value"] * _MS_PER_MINUTE
         meta = {
             "key": f"{level_two_node['key']}_l3_{index}",
             "planet": actual_item["planet"],
@@ -355,7 +378,7 @@ def _build_level_three(level_two_node: dict[str, Any], base_order: list[str], da
     return list_data
 
 
-def _build_level_two(level_one_node: dict[str, Any], base_order: list[str], day_method: str | None, now_moment: datetime, calendar_type: str | None) -> list[dict[str, Any]]:
+def _build_level_two(level_one_node: dict[str, Any], base_order: list[str], day_method: str | None, now_moment: float, calendar_type: str | None) -> list[dict[str, Any]]:
     order = _rotate_list(base_order, level_one_node["planet"])
     nominal_segments = [{"planet": planet, "value": DECENNIAL_PLANET_BASE_MONTHS[planet] * MINUTES_PER_MONTH} for planet in order]
     actual_segments = _scale_nominal_segments(nominal_segments, calendar_type, 1)
@@ -364,7 +387,7 @@ def _build_level_two(level_one_node: dict[str, Any], base_order: list[str], day_
     cursor_offset = level_one_node["startOffsetMinutes"]
     for index, nominal_item in enumerate(nominal_segments):
         actual_item = actual_segments[index]
-        next_moment = cursor + timedelta(minutes=actual_item["value"])
+        next_moment = cursor + actual_item["value"] * _MS_PER_MINUTE
         meta = {
             "key": f"{level_one_node['key']}_l2_{index}",
             "planet": nominal_item["planet"],
@@ -383,10 +406,10 @@ def _build_level_two(level_one_node: dict[str, Any], base_order: list[str], day_
     return list_data
 
 
-def _resolve_l1_count(birth_moment: datetime | None, now_moment: datetime, calendar_type: str | None) -> int:
+def _resolve_l1_count(birth_moment: float | None, now_moment: float, calendar_type: str | None) -> int:
     if birth_moment is None:
         return 7
-    age_minutes = max(0.0, (now_moment - birth_moment).total_seconds() / 60.0)
+    age_minutes = max(0.0, (now_moment - birth_moment) / _MS_PER_MINUTE)
     l1_minutes = _scale_nominal_minutes(TOTAL_L1_DAYS * MINUTES_PER_DAY, calendar_type)
     if l1_minutes <= 0:
         return 7
@@ -396,10 +419,15 @@ def _resolve_l1_count(birth_moment: datetime | None, now_moment: datetime, calen
     return max(7, math.ceil(age_minutes / l1_minutes) + 2)
 
 
-def build_decennial_timeline(chart_obj: dict[str, Any], settings: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_decennial_timeline(
+    chart_obj: dict[str, Any], settings: dict[str, Any] | None = None, *, now_ms: float | None = None
+) -> dict[str, Any]:
+    """上游 utils/decennials.js buildDecennialTimeline。期界时刻在民用历墙钟轴上推（见 `_parse_birth_moment`）；
+    `now_ms` = 此刻的 UTC 毫秒（缺省本机此刻；测试冻结用），按出生时区换成钟面（上游 moment().utcOffset(出生偏移)）。"""
     settings = settings or {}
     calendar_type = settings.get("calendarType") or DECENNIAL_CALENDAR_TRADITIONAL
-    birth_moment = _parse_birth_moment(chart_obj)
+    parsed_birth = _parse_birth_moment(chart_obj)
+    birth_moment = parsed_birth[0] if parsed_birth else None
     resolved_start_planet = resolve_decennial_start_planet(chart_obj, settings.get("startMode"))
     order_type = settings.get("orderType") or DECENNIAL_ORDER_ZODIACAL
     day_method = settings.get("dayMethod") or DECENNIAL_DAY_METHOD_VALENS
@@ -414,7 +442,8 @@ def build_decennial_timeline(chart_obj: dict[str, Any], settings: dict[str, Any]
             "birthMoment": None,
         }
 
-    now_moment = datetime.now(tz=birth_moment.tzinfo)
+    zone_min = parsed_birth[1]
+    now_moment = (time.time() * 1000 if now_ms is None else float(now_ms)) + zone_min * _MS_PER_MINUTE
     base_order = get_decennial_order(chart_obj, resolved_start_planet, order_type)
     count = _resolve_l1_count(birth_moment, now_moment, calendar_type)
     list_data: list[dict[str, Any]] = []
@@ -424,7 +453,7 @@ def build_decennial_timeline(chart_obj: dict[str, Any], settings: dict[str, Any]
     for index in range(count):
         planet = base_order[index % len(base_order)]
         start_moment = cursor
-        end_moment = start_moment + timedelta(minutes=l1_actual_minutes)
+        end_moment = start_moment + l1_actual_minutes * _MS_PER_MINUTE
         start_offset = l1_nominal_minutes * index
         end_offset = start_offset + l1_nominal_minutes
         meta = {
@@ -446,5 +475,5 @@ def build_decennial_timeline(chart_obj: dict[str, Any], settings: dict[str, Any]
         "orderType": order_type,
         "dayMethod": day_method,
         "calendarType": calendar_type,
-        "birthMoment": birth_moment.isoformat(),
+        "birthMoment": _iso_of(birth_moment, zone_min),
     }

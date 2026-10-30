@@ -86,6 +86,7 @@ _WIN_FILE_ENTRIES = [
     "runtime-payload/runtime/windows/bundle/astrostudyboot.jar",
     "runtime-payload/horosa-core-js/bin/cli.mjs",
     "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
+    "runtime-payload/horosa-core-js/node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运
 ]
 _SWEFILES_DIR = "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/"
 

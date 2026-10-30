@@ -296,7 +296,8 @@ def test_zeri_display_pan_follows_scan_options(tmp_path) -> None:
     assert (seen[-1][1].get("guirengType"), seen[-1][1].get("after23NewDay")) == (2, 1)  # LiurengZeriMain.js:79,306-313
     one_day = {"startDate": "2028-04-01", "endDate": "2028-04-01"}  # 太乙/三式扫描最重，一天窗足够钉展示盘入参
     _run(service, "taiyizeri", _zeri("taiyizeri", options={"tn": 1}, **one_day))
-    assert seen[-1][1].get("options") == {"tn": 1} and seen[-1][1].get("after23NewDay") == 0  # TaiyiZeriMain.js:255-261,324
+    # 日界缺省：v3.11 TaiyiZeriMain.js:324 字面 0 → v3.13.0 :387 defaultAfter23NewDay()（全局出厂 1，与扫描引擎同；见 test_sync313_ports）。
+    assert seen[-1][1].get("options") == {"tn": 1} and seen[-1][1].get("after23NewDay") == 1  # TaiyiZeriMain.js:255-261,387
     _run(service, "sanshizeri", _zeri("sanshizeri", options={"taiyiAccum": 1, "qijuMethod": "zhirun"}, **one_day))
     assert seen[-1][1].get("taiyi_options") == {"tn": 1} and seen[-1][1].get("qimen_options") == {"qijuMethod": "zhirun"}
 

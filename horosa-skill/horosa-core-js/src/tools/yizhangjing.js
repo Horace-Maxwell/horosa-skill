@@ -54,7 +54,7 @@ export function runYizhangjing(payload) {
   const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
   // 日界 / 晚子时：上游 YiZhangJingMain.getModel 读盘面 fields，缺席回退全局出厂默认
   // defaultAfter23NewDay()=1 / defaultLateZiHourUseNextDay()=1（YiZhangJingMain.js:124-128）。
-  // 此前两键都不传 → vendored baziLunarLocal 把 undefined 当「24 点换日」（after23=0），23 点档生人
+  // 此前两键都不传 → v3.11 的 vendored baziLunarLocal 把 undefined 当「24 点换日」（v3.13.0 起缺键回落全局缺省；仍显式传）（after23=0），23 点档生人
   // 日柱与农历日（lunarByDayBoundary 进位）都与桌面不同。晚子时只动时干，一掌经只用时支，上游挂载
   // 已撤下该齿轮（techniqueMountSettings.js:1909），这里仍原样透传以与页面同形。
   const after23NewDay = input.after23NewDay === undefined || input.after23NewDay === null ? 1 : input.after23NewDay;

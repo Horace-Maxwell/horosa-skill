@@ -263,7 +263,7 @@ def build_sample_payloads() -> dict[str, dict]:
             "hsys": 0,
             "tradition": True,
             "zodiacal": 0,
-            # 宿度制（上游 GuoLaoChartStyle.js:10 缺省 2 回归今宿）；旧样例的 True 被后端解释成 1 斗柄定房法。
+            # 宿度制显式 2（回归今宿；上游缺省 v3.13.0 起是 0 荀爽距星，样例保留 2 以覆盖非缺省档）；旧样例的 True 被后端解释成 1 斗柄定房法。
             "doubingSu28": 2,
             "predictive": False,
             "ad": 1,

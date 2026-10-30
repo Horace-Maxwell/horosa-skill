@@ -1124,18 +1124,20 @@ def test_primary_direction_full_house_settings_surface(tmp_path) -> None:
         "pdTimeKey": "Kundig",
     }
     text = service.run_tool("pd", payload, save_result=False).data["snapshot_text"]
-    # 上游 v3.11 [主限法设置] 行口径（AstroDirectMain.js:337-386）。
+    # 上游 [主限法设置] 行口径（v3.13.0 AstroDirectMain.js:349-411；无显式 pdProjection → 仍写「推运方法」）。
     assert "推运方法：Meridian" in text
     assert "方向类型：世俗（In Mundo）" in text
     assert "向运方向：逆向 Converse" in text
     assert "度数换算：Kündig" in text
     assert "映点迫星：是" in text
     assert "界迫星：是" in text
-    assert "弧算法（投影）：Ptolemy（半弧）（世界主限下走核内基线）" in text
+    # v3.13.0 pdTypeBaselineNote：In Mundo × Ptolemy × Meridian 有专属世俗核（PD_MUNDO_DEDICATED_PTOLEMY_FRAMES），
+    # 不再标「（世界主限下走核内基线）」；几何口径只在世俗平行开时影响 Meridian（PD_GEOMETRY_APPLIES）→ 不带（改进）。
+    assert "弧算法（投影）：Ptolemy（半弧）" in text.splitlines()
 
 
 def test_primary_direction_core5_method_labels() -> None:
-    # 上游 v3.11（primaryDirectionSync.js:57-115）：方位法 13 法、度数换算 26 项，标签取 PD_METHOD_LABELS /
+    # 上游 v3.13.0（primaryDirectionSync.js:298-374）：方位法 13 法、度数换算 38 项，标签取 PD_METHOD_LABELS /
     # PD_TIME_KEY_LABELS。旧「核5 + placidus 未核验回退」注记已过期（placidus 等自 v3.6 起真算，后端 perchart.py:892 白名单）。
     from horosa_skill.service import _primary_direction_method_text, _primary_direction_time_key_text
 
@@ -1146,15 +1148,18 @@ def test_primary_direction_core5_method_labels() -> None:
     assert _primary_direction_method_text("equal_hour_circle") == "Equal（时圈）"
     assert _primary_direction_method_text("horosa_legacy") == "Horosa原方法"
     assert _primary_direction_method_text("placidus") == "Placidus（半弧）"
-    # 时间钥匙 26 项全部有标签（上游下拉一致）。
+    # 时间钥匙 38 项全部有标签（上游下拉一致；v3.13.0 新增 12 项在末行）。
     for key in (
         "Ptolemy", "Naibod", "TrueSolarArc", "SymbolicSolarArc", "Cardano", "Umar", "Wollner",
         "Plantiko", "Simmonite", "SynodicYear", "Kepler", "Brahe", "Kundig", "SymbolicDegree",
         "SymbolicYear", "SymbolicMoon", "SymbolicMonth", "Quarterly", "Quinary", "Duodenary",
         "Novenary", "SelfMeasure", "NaibodRA", "AscendantArc", "VanDam", "User",
+        "TrueSolarArcMean", "KeplerClassic", "BraheClassic", "BirthdaySunLon", "VerticalArc", "WollnerClassic",
+        "SynodicYearClassic", "SymbolicMoonClassic", "SymbolicWeek", "Septenary", "NovenaryClassic", "SubDuodenary",
     ):
         label = _primary_direction_time_key_text(key)
-        assert label and label != "无", key
+        # 未登记键回落 Ptolemy 标签（getPdTimeKeyLabel），所以「有标签」要排除回落值才不空转。
+        assert label and label != "无" and (key == "Ptolemy" or label != "Ptolemy"), key
 
 
 def test_germany_uranian_snapshot_has_full_sections(tmp_path) -> None:
@@ -3314,7 +3319,7 @@ def test_technique_card_rides_every_technique_response_and_survives_response_vie
     assert card["schema"] == "horosa.skill.technique_card.v1"
     assert card["tool"] == "tarot"
     assert card["technique"]["key"] == "tarot"
-    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 15
+    assert card["versions"]["skill"] and card["versions"]["export_settings"] == 16
     assert card["refs"]["run_id"] == result.memory_ref.run_id
 
     slim = service.run_tool("tarot", {**payload, "response_view": "titles"}, save_result=False)

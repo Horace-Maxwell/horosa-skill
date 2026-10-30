@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from horosa_skill.engine import astro_snapshot as _astro_snap
 from horosa_skill.engine.astroextra_snapshots import _UNDEFINED as _ASTRO_UNDEF
 from horosa_skill.engine.astroextra_snapshots import _js_number as _astro_snap_js_number
+from horosa_skill.service import _clock
 from horosa_skill.service._common import _render_snapshot_text
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import (
@@ -394,7 +396,7 @@ def _india_ensure_section(lines: list[str], title: str, body: Any) -> None:
 
 
 def _india_replace_calibre_line(base_info: list[str], calibre_line: str | None) -> list[str]:
-    """上游 replaceIndiaCalibreLine（IndiaChart.js:1125-1130）：替换第一条「回归黄道|恒星黄道」起首的行，无则追加。"""
+    """上游 replaceIndiaCalibreLine（IndiaChart.js:1241-1246）：替换第一条「回归黄道|恒星黄道」起首的行，无则追加。"""
     lines = list(base_info)
     if not calibre_line:
         return lines
@@ -407,13 +409,13 @@ def _india_replace_calibre_line(base_info: list[str], calibre_line: str | None) 
 
 
 def _build_india_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    """印度律盘快照 = 上游 buildIndiaSnapshotText（IndiaChart.js:1131-1194）的段组成，逐段同序：
+    """印度律盘快照 = 上游 buildIndiaSnapshotText（IndiaChart.js:1248-1305，v3.13.0）的段组成，逐段同序：
 
     [起盘信息] = 流派 / 大运流派开关 / 当前分盘 / 分盘四行（vendored buildIndiaSchoolHeaderLines）+ 本命 [起盘信息] 各行，
       其中首条黄道行换成印占实际口径行（indiaCalibreLine：恒星黄道·<岁差>，<印占分宫制>）；
     [星盘信息] = 本命 [宫位宫头] + [星与虚点] + [信息] 三段正文拼接（上游不单列宫位宫头/星与虚点）；
     [信息] / [相位] / [行星] / [希腊点] / [可能性] 各一段（ensureSection：空段写「无数据」）；
-    [大运Dasha]（有行才出）→ Jyotish 派生段（buildJyotishSnapshotLines 的键序）；附加分盘接在全文末尾（:1325-1332）。
+    数据段（buildIndiaSnapshotDataSections）：[大运Dasha]（有行才出）→ Jyotish 派生段 → [未能计算]；附加分盘接在全文末尾（:1403-1425）。
     上游 buildIndiaSnapshotText 不挑 [月宿]/[古典]（aiExport.js:596 [MU] 注：印度盘 [古典] 是死复选框），skill 此前照本命盘
     整套出段并另起 [宫位宫头]/[星与虚点]，[星盘信息] 则由导出层拿通用起盘行兜底。各段行取自 engine/astro_snapshot.py
     （上游 buildAstroSnapshotContent 的逐字移植，与西占 chart 家族同一 builder）。
@@ -437,16 +439,21 @@ def _build_india_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     _india_ensure_section(lines, "行星", snap.build_planet_section(response))
     _india_ensure_section(lines, "希腊点", snap.build_lots_section(response))
     _india_ensure_section(lines, "可能性", snap.build_possibility_lines(response))
-    # [大运Dasha]：vendored 上游 buildDashaSnapshotLines（IndiaChart.js:429-494）按所选大运体系出段（含小运全表），由
-    # _attach_jyotish_sections 挂 `_indiaDashaLines`；无数据 = 上游 `if(dashaLines.length)` 同判不产段。
-    dasha_lines = response.get("_indiaDashaLines")
-    if isinstance(dasha_lines, list) and dasha_lines:
-        _india_ensure_section(lines, "大运Dasha", dasha_lines)
-    # Jyotish 派生段（星阙 v3.6.0）：vendored buildJyotishSnapshotLines 逐字产出，段名与顺序由上游 builder 决定。
-    jyotish_sections = response.get("_jyotishSections")
-    if isinstance(jyotish_sections, dict):
-        for title, body in jyotish_sections.items():
-            _india_ensure_section(lines, str(title), body)
+    # 数据段 = vendored 上游 buildIndiaSnapshotDataSections（IndiaChart.js:1315-1331，v3.12.0 起）：[大运Dasha]（有行才出）
+    # → Jyotish 派生段（buildJyotishSnapshotLines 键序）→ [未能计算]（回包 partialErrors 非空才出）。由 _attach_jyotish_sections
+    # 挂 `_indiaDataSections`；旧 runtime 的 JS 引擎不回该键时退回分开的 `_indiaDashaLines` + `_jyotishSections`（同序、无 [未能计算]）。
+    data_sections = response.get("_indiaDataSections")
+    if not isinstance(data_sections, dict):
+        data_sections = {}
+        dasha_lines = response.get("_indiaDashaLines")
+        if isinstance(dasha_lines, list) and dasha_lines:
+            data_sections["大运Dasha"] = dasha_lines
+        jyotish_sections = response.get("_jyotishSections")
+        if isinstance(jyotish_sections, dict):
+            for title, body in jyotish_sections.items():
+                data_sections.setdefault(str(title), body)
+    for title, body in data_sections.items():
+        _india_ensure_section(lines, str(title), body)
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     # [附加分盘]（上游 buildIndiaSnapshotForFields:1325-1332）：`${text}\n\n${ensureSection 附加分盘}`；缺省不选 = 不产段。
     extra_vargas = response.get("_indiaExtraVargas")
@@ -573,17 +580,18 @@ def _headerless_astro_snapshot_text(fields: dict[str, Any], chart_wrap: dict[str
     return _HEADERLESS_SECTION_TITLE.sub(lambda match: f"· {match.group(1)}", text)
 
 
-# 挂载分盘可选集（上游 v3.11.0 constants/AstroConst.js:1508-1514 INDIA_MOUNT_VARGA_OPTIONS，逐字）。
+# 挂载分盘可选集（上游 v3.13.0 constants/AstroConst.js:1402-1409 INDIA_MOUNT_VARGA_OPTIONS，逐字；v3.12.0 改标签
+# 「D9 婚姻→D9 合作」等 —— 此前这份手抄停在 v3.11 一直无信号，现由 tests/test_sync313_ports_guard.py 对上游逐值看守）。
 _INDIA_MOUNT_VARGA_OPTIONS: tuple[tuple[int, str], ...] = (
-    (1, "D1 命盘"), (2, "D2 财富"), (3, "D3 兄弟"), (4, "D4 家宅"), (7, "D7 子女"), (9, "D9 婚姻"),
-    (10, "D10 事业"), (12, "D12 父母"), (16, "D16 车乘"), (20, "D20 修行"), (24, "D24 学业"), (27, "D27 体力"),
-    (30, "D30 灾厄"), (40, "D40 母系"), (45, "D45 父系"), (60, "D60 总业"),
+    (1, "D1 命盘"), (2, "D2 财产"), (3, "D3 兄妹"), (4, "D4 资质"), (7, "D7 子嗣"), (9, "D9 合作"),
+    (10, "D10 事业"), (12, "D12 父辈"), (16, "D16 座驾"), (20, "D20 灵魂"), (24, "D24 教育"), (27, "D27 生命"),
+    (30, "D30 厄运"), (40, "D40 母系"), (45, "D45 父系"), (60, "D60 业力"),
 )
-_INDIA_MOUNT_EXTRA_VARGA_MAX = 4  # AstroConst.js:1524 INDIA_MOUNT_EXTRA_VARGA_MAX
+_INDIA_MOUNT_EXTRA_VARGA_MAX = 4  # AstroConst.js:1418 INDIA_MOUNT_EXTRA_VARGA_MAX
 
 
 def _normalize_india_extra_vargas(value: Any) -> tuple[list[int], list[Any]]:
-    """上游 normalizeIndiaExtraVargas（AstroConst.js:1525-1541）逐条移植：字符串按 `,，空白` 切；parseInt；
+    """上游 normalizeIndiaExtraVargas（AstroConst.js:1419-1435）逐条移植：字符串按 `,，空白` 切；parseInt；
     <=1 / 不在可选集 / 重复 / 超上限 4 的项丢弃。返回 (保留, 丢弃)——上游静默丢，skill 把丢弃项回报进 warnings。"""
     raw: Any = value
     if isinstance(raw, str):
@@ -604,7 +612,7 @@ def _normalize_india_extra_vargas(value: Any) -> tuple[list[int], list[Any]]:
 
 
 def _india_mount_varga_label(chartnum: int) -> str:
-    """上游 indiaMountVargaLabel（AstroConst.js:1516-1522）。"""
+    """上游 indiaMountVargaLabel（AstroConst.js:1410-1415）。"""
     for num, label in _INDIA_MOUNT_VARGA_OPTIONS:
         if num == chartnum:
             return label
@@ -642,6 +650,17 @@ def _india_apply_school_presets(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _india_chart_zone_now(zone: Any) -> datetime:
+    """上游 DateTime.wallClockForChart(zone)（comp/DateTime.js:37-45）：本盘时区（±HH:MM[:SS]）此刻的钟面；
+    时区串认不出 → 本机此刻（上游同）。取「现在」一律经 _clock（测试可冻结）。"""
+    m = re.fullmatch(r"([+-])(\d{2}):(\d{2})(?::(\d{2}))?", f"{zone or ''}")
+    if not m:
+        return _clock.now()
+    sign = -1 if m.group(1) == "-" else 1
+    offset = timedelta(hours=int(m.group(2)), minutes=int(m.group(3)), seconds=int(m.group(4) or 0))
+    return _clock.now(timezone(sign * offset))
+
+
 def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """india_chart 的后端请求体：skill 侧开关 → 后端键（上游 IndiaChart.fieldsToParams 同一翻译）。
 
@@ -673,4 +692,14 @@ def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("varshaLat") in (None, "") or payload.get("varshaLon") in (None, ""):
         remote.pop("varshaLat", None)
         remote.pop("varshaLon", None)
+    # 过运日 / 年度盘年份恒下发（IndiaChart.fieldsToParams:89-94，v3.12.0）：未给 = 本盘时区的今天 / 今年。
+    # 后端 _compute_tajaka（webindiasrv.py:1291「仅 tajakaYear 提供时算」）缺键整段不算 —— skill 此前两键都不发，
+    # 缺省盘的 [Tajika 年主]/[Tajika 年 Yoginī]/[Tajika Patyāyinī 年运]/[Tajika Mudda 年运] 等恒缺席（上游页面
+    # 自 v3.11 起就恒带今年）；过运日缺键时后端取服务器本地今日，与本盘时区跨日时差一天。
+    if remote.get("transitDate") in (None, "") or remote.get("tajakaYear") in (None, ""):
+        today = _india_chart_zone_now(payload.get("zone"))
+        if remote.get("transitDate") in (None, ""):
+            remote["transitDate"] = today.strftime("%Y/%m/%d")
+        if remote.get("tajakaYear") in (None, ""):
+            remote["tajakaYear"] = today.year
     return remote

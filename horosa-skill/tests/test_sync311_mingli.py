@@ -244,10 +244,18 @@ def test_bazi_java_only_knobs_and_bc_dates_route_to_java(tmp_path) -> None:
     assert env.data["compute_sources"] == {"bazi": "java"}
     assert any("八字由 Java /bazi/birth 起盘" in w for w in env.warnings)
     client.calls.clear()
-    direct = service.run_tool("bazi_direct", {"date": "1990-05-15", "time": "10:30:00", **_SH, "gender": 0, "adjustJieqi": True},
+    direct = service.run_tool("bazi_direct", {"date": "1990-05-15", "time": "10:30:00", **_SH, "gender": 0, "byLon": True},
                               save_result=False)
     assert direct.ok and [ep for ep, _ in client.calls if ep == "/bazi/direct"]
-    assert any("adjustJieqi" in w for w in direct.warnings)
+    assert any("byLon" in w for w in direct.warnings)
+    # v3.13.0：adjustJieqi 不再改走 Java（上游恒发 0）—— 本地起盘、请求里也是 0，并说明本次未调整。
+    client.calls.clear()
+    adj = service.run_tool("bazi_direct", {"date": "1990-05-15", "time": "10:30:00", **_SH, "gender": 0, "adjustJieqi": True},
+                           save_result=False)
+    assert adj.ok and not [ep for ep, _ in client.calls if ep == "/bazi/direct"]
+    assert adj.data["compute_sources"] == {"bazi": "lunar-local"}
+    assert any("adjustJieqi" in w and "不调整节气" in w for w in adj.warnings)
+    assert service._bazi_params({"date": "1990-05-15", "time": "10:30:00", "adjustJieqi": True})[0]["adjustJieqi"] == 0
     with pytest.raises(ToolValidationError) as exc:
         service._bazi_params({"date": "1990-05-15", "time": "10:30:00", "timeAlg": 2})
     assert exc.value.code == "tool.bazi_timealg_unsupported"

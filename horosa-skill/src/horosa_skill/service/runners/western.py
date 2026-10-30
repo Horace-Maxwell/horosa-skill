@@ -6,7 +6,7 @@ from typing import Any
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
 from horosa_skill.engine.astroextra_snapshots import fmt_num
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
-from horosa_skill.service._common import _is_astro_chart_payload, _render_snapshot_text
+from horosa_skill.service._common import _is_astro_chart_payload, _render_snapshot_text, _to_slash_date
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import (
     ASTRO_TEXT_MAP,
@@ -140,7 +140,7 @@ class WesternRunners:
             remote.update(ccg)
         if payload.get("relMode") and payload.get("relDate"):
             remote["relMode"] = payload.get("relMode")
-            remote["relDate"] = f"{payload.get('relDate')}".replace("-", "/")
+            remote["relDate"] = _to_slash_date(payload.get("relDate"))  # toSlashDate：公元前前导负号保留
             remote["relTime"] = payload.get("relTime") or "12:00:00"
             for key in ("relZone", "relLat", "relLon"):
                 if payload.get(key) not in (None, ""):
@@ -167,7 +167,7 @@ class WesternRunners:
             event_remote = {
                 "kind": payload.get("eventKind"),
                 "direction": payload.get("eventDirection") or "next",
-                "fromDate": (payload.get("eventFromDate") or payload.get("date") or "").replace("-", "/"),
+                "fromDate": _to_slash_date(payload.get("eventFromDate") or payload.get("date") or ""),
                 "zone": payload.get("zone"),
             }
             event = self._call_remote("/location/acgevent", event_remote)
@@ -180,7 +180,7 @@ class WesternRunners:
         ccg: dict[str, Any] | None = None
         if payload.get("ccgDate"):
             ccg = {
-                "ccgDate": f"{payload.get('ccgDate')}".replace("-", "/"),
+                "ccgDate": _to_slash_date(payload.get("ccgDate")),
                 "ccgTime": payload.get("ccgTime") or "12:00:00",
                 "ccgMix": payload.get("ccgMix") or "mixed",
             }
@@ -460,6 +460,13 @@ class WesternRunners:
                 bilingual(f"巴比伦派系参数取值无效：{'；'.join(parts)}。", f"babylon setting(s) invalid: {'; '.join(parts)}."),
                 code="tool.babylon_invalid_setting",
                 details={"invalid": invalid},
+            )
+        if isinstance(js, dict) and js.get("error") == "no_planet_positions":
+            # 上游 v3.13.0 buildBabylonSnapshotForFields：/chart 没回七曜位置即抛错、不出快照（此前铺出六段空壳）。
+            raise ToolTransportError(
+                bilingual("巴比伦占星：排盘服务没有回七曜位置，未出快照。", "babylon: the chart service returned no planet positions."),
+                code="tool.babylon_chart_unavailable",
+                details={"message": js.get("message")},
             )
         snapshot_text = f"{(js or {}).get('text') or ''}".strip()
         return {

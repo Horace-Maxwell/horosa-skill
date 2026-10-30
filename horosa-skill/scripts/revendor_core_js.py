@@ -711,25 +711,34 @@ def watched_source(entry: dict) -> tuple[str, str] | None:
 
 
 def hand_made_drift(upstream_src: Path, vendor_rel: str, entry: dict) -> str | None:
-    """Problem text when a hand-made entry's upstream source moved since its stamp (or was never stamped)."""
+    """Problem text when a hand-made entry's upstream source moved since its stamp (or was never stamped).
+
+    主源（curated 的 upstream / bespoke 的 derived_from）之外，`also_derived_from: {上游路径: sha256}` 登记手工件
+    还逐字搬了哪些上游文件（v3.13.0：印占快照另搬 indiaMain/jyotishData.js + dasha.js，宿占另搬 AstroHelper.js）——
+    只看主源时，那些文件上游再修一处，这里零信号。每个源各自比戳，问题逐条列出。"""
     watched = watched_source(entry)
     if watched is None:
         return None
     rel, field = watched
-    source = upstream_src / rel
     label = str(entry.get("mode")).upper()
-    if not source.is_file():
-        return f"{vendor_rel}: {label} source {rel} is gone upstream — re-audit the hand-made copy, then reclassify"
-    current = _sha256_file(source)
-    recorded = entry.get(field)
-    if not recorded:
-        return f"{vendor_rel}: {label} entry is unstamped — audit the hand-made copy against {rel}, then `--restamp {vendor_rel}`"
-    if recorded != current:
-        return (
-            f"{vendor_rel}: {label} source {rel} changed upstream since the last audit "
-            f"(sha {recorded[:12]} → {current[:12]}) — re-audit the hand-made copy, then `--restamp {vendor_rel}`"
-        )
-    return None
+    sources = [(rel, entry.get(field))] + sorted((entry.get("also_derived_from") or {}).items())
+    problems = []
+    for src_rel, recorded in sources:
+        source = upstream_src / src_rel
+        if not source.is_file():
+            problems.append(f"{vendor_rel}: {label} source {src_rel} is gone upstream — re-audit the hand-made copy, then reclassify")
+            continue
+        current = _sha256_file(source)
+        if not recorded:
+            problems.append(
+                f"{vendor_rel}: {label} entry is unstamped — audit the hand-made copy against {src_rel}, then `--restamp {vendor_rel}`"
+            )
+        elif recorded != current:
+            problems.append(
+                f"{vendor_rel}: {label} source {src_rel} changed upstream since the last audit "
+                f"(sha {recorded[:12]} → {current[:12]}) — re-audit the hand-made copy, then `--restamp {vendor_rel}`"
+            )
+    return "\n".join(problems) or None
 
 
 _MODES = {
@@ -740,7 +749,8 @@ _MODES = {
     ),
     "bespoke": (
         "skill 自写、上游无同名文件；声明 derived_from（自上游某文件手工抽出）的，"
-        "另断言该源 sha256 == derived_sha256（与 curated 同一复核纪律）"
+        "另断言该源 sha256 == derived_sha256（与 curated 同一复核纪律）；also_derived_from {上游路径: sha256} "
+        "登记另外逐字搬过的上游文件，逐个同样比戳"
     ),
     "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）",
 }
@@ -782,6 +792,12 @@ def restamp(upstream_src: Path, targets: list[str] | None) -> int:
         if not source.is_file():
             raise SystemExit(f"--restamp: upstream source not found: {source}")
         entry[field] = _sha256_file(source)
+        extra = entry.get("also_derived_from") or {}
+        for extra_rel in sorted(extra):
+            extra_source = upstream_src / extra_rel
+            if not extra_source.is_file():
+                raise SystemExit(f"--restamp: {vendor_rel} also_derived_from source not found: {extra_source}")
+            extra[extra_rel] = _sha256_file(extra_source)
     _write_manifest(files)
     print(f"restamped {len(chosen)} hand-made entr{'y' if len(chosen) == 1 else 'ies'} in {MANIFEST.relative_to(REPO_ROOT)}")
     return 0

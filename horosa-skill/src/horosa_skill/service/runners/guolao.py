@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any
 
 from horosa_skill.errors import (
@@ -10,6 +11,7 @@ from horosa_skill.errors import (
     ToolValidationError,
     bilingual,
 )
+from horosa_skill.service import _clock
 from horosa_skill.service._common import _ganzhi_year
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.options_cn import _day_boundary_switches
@@ -20,6 +22,13 @@ from horosa_skill.service.text.chinese import (
     _guolao_warn_missing_life_master,
     _moira_transit_moment,
 )
+
+
+def _guolao_year_from_date(date_text: Any) -> int:
+    """上游 guolao/main/snapshot.js yearFromParams：日期串里第一个 `-?\\d{3,4}`（公元前前导负号保留；旧 [:4] 对
+    '-0500-…' 取成 -50）；取不到 → 今年（上游 new Date().getFullYear()）。"""
+    m = re.search(r"-?\d{3,4}", f"{date_text or ''}")
+    return int(m.group(0)) if m else _clock.now().year
 
 
 class GuolaoRunners:
@@ -36,7 +45,9 @@ class GuolaoRunners:
     # 不在挂载齿轮里，但上游无头复算读的就是同一份全局显示偏好（getStoredGuolaoDisplay），改它 [大限] 起讫年与首限起点即变。
     _GUOLAO_DISPLAY_KEYS: dict[str, tuple[str, tuple[Any, ...], Any]] = {
         "guolaoLifeMasterMode": ("lifeMasterMode", ("gong", "du", "dudegrade"), "gong"),
-        "guolaoMinorLimitType": ("minorLimitType", ("", "minor", "month", "tong", "dongwei"), ""),
+        # 'gudu' = 钉死古度限度法（挂载齿轮 techniqueMountSettings.js:1371-1374 的显式项），上游
+        # guolaoSnapshotDisplayFromFields（main/snapshot.js:1104-1105）映射成 '' —— 与缺省同口径。
+        "guolaoMinorLimitType": ("minorLimitType", ("", "gudu", "minor", "month", "tong", "dongwei"), ""),
         "guolaoTongxianBase": ("tongxianBase", ("tong10", "gu9", "xu11"), "tong10"),
         "guolaoLimitChildBase": ("limitChildBase", (9, 10), 9),
         "guolaoLimitYearBoundary": ("limitYearBoundary", ("gregorian", "lichun", "dongzhi"), "gregorian"),
@@ -64,7 +75,7 @@ class GuolaoRunners:
                     code="tool.guolao_invalid_display_setting",
                     details={"field": key, "value": raw, "allowed": list(allowed)},
                 )
-            display[disp_key] = value
+            display[disp_key] = "" if disp_key == "minorLimitType" and value == "gudu" else value
         return display
 
     # 七政起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；GuoLaoChartStyle.js 各 getStored* 缺省）。
@@ -81,6 +92,8 @@ class GuolaoRunners:
         "guolaoTuibianMethod": ("jiyuan", "jintui", "huiyuan"),
         "guolaoGufaPrecess": ("0", "1"),
         "guolaoEqTropicalAnchor": ("dongzhi", "chunfen"),
+        # v3.13.0 行星时制式（星盘设置全局键；七政 main/params.js:20-27 guolaoPlanetaryHourMethod，缺省 sunrise）。
+        "planetaryHourMethod": ("sunrise", "unequal", "equal24"),
     }
     # 只在某些宿度制下生效的子选项（fieldsToParams GuoLaoChartMain.js:2360-2394 的门控）：别的制下上游不下发。
     _GUOLAO_MODE_GATED: dict[str, tuple[int, ...]] = {
@@ -89,7 +102,9 @@ class GuolaoRunners:
         "guolaoGufaPrecess": (6,),
         "guolaoEqTropicalAnchor": (7, 8),
     }
-    _GUOLAO_DEFAULT_SU28_MODE = 2  # GuoLaoChartStyle.js:10 GUOLAO_DEFAULT_SU28_MODE（回归今宿）
+    # GuoLaoChartStyle.js:19 GUOLAO_DEFAULT_SU28_MODE。上游 v3.13.0 由 2（回归今宿）改为 0（荀爽距星）：
+    # 「与新盘种子 / 后端缺省同值（全站统一）」。七政择日的扫描缺省仍是 2（QizhengZeriMain.js:38，另一个设置，未变）。
+    _GUOLAO_DEFAULT_SU28_MODE = 0
 
     def _guolao_chart_settings(self, payload: dict[str, Any]) -> tuple[int, dict[str, str]]:
         """宿度制 + 起盘口径键（校验后的字符串值）。返回 (su28Mode, {键: 值})；缺省键不在结果里。"""
@@ -107,9 +122,9 @@ class GuolaoRunners:
             if su28 not in range(0, 9):
                 raise ToolValidationError(
                     bilingual(
-                        f"七政四余 doubingSu28（宿度制）取值无效：{raw_mode!r}（可选 0–8：2 回归今宿〔缺省〕/3 回归古制开禧/4 恒星制/"
-                        "6 授时历古法 · 0 荀爽距星/1 斗柄定房法/5 恒星制·现代天赤/7 赤道回归(元明)/8 赤道回归(实时)）。",
-                        f"guolao_chart doubingSu28 (mansion system) is invalid: {raw_mode!r} (allowed 0–8, default 2).",
+                        f"七政四余 doubingSu28（宿度制）取值无效：{raw_mode!r}（可选 0–8：0 荀爽距星〔缺省〕/2 回归今宿/3 回归古制开禧/4 恒星制/"
+                        "6 授时历古法 · 1 斗柄定房法/5 恒星制·现代天赤/7 赤道回归(元明)/8 赤道回归(实时)）。",
+                        f"guolao_chart doubingSu28 (mansion system) is invalid: {raw_mode!r} (allowed 0–8, default 0).",
                     ),
                     code="tool.guolao_invalid_display_setting",
                     details={"field": "doubingSu28", "value": raw_mode, "allowed": list(range(0, 9))},
@@ -161,6 +176,10 @@ class GuolaoRunners:
         # G6 报时星太阳时：仅非缺省（mean/off）才透传（:2369-2372）。
         if settings.get("guolaoTrueSolarTime") in ("mean", "off"):
             remote["trueSolarTime"] = settings["guolaoTrueSolarTime"]
+        # 行星时制式：仅非缺省（不等时 / 廿四时）才透传（v3.13.0 main/params.js:158-162）—— 报时星按该制式取，
+        # 太阳时三档在这两种制式下才真正分开；缺省不发 = 零回归。
+        if settings.get("planetaryHourMethod") in ("unequal", "equal24"):
+            remote["planetaryHourMethod"] = settings["planetaryHourMethod"]
         # G10-13 四余取法：仅真值才透传（:2375-2380）。
         if settings.get("guolaoNodeType") == "true":
             remote["guolaoNodeType"] = "true"
@@ -182,7 +201,8 @@ class GuolaoRunners:
     def _guolao_fields(su28: int, settings: dict[str, str]) -> dict[str, Any]:
         """JS 段 builder 的 fields（上游页面 fields 形：{键: {value}}）：宿度制 + 起盘口径键。"""
         fields: dict[str, Any] = {"doubingSu28": {"value": su28}}
-        for key in ("guolaoLifeMode", "guolaoBodyMode", "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType"):
+        for key in ("guolaoLifeMode", "guolaoBodyMode", "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
+                    "planetaryHourMethod"):
             if key in settings:
                 fields[key] = {"value": settings[key]}
         return fields
@@ -347,7 +367,7 @@ class GuolaoRunners:
     def _run_guolao_chart_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 显示层四键 + 起盘口径先校验（非法值在任何后端往返之前就报错）。
         display = self._guolao_display_settings(payload)
-        # 🔴 宿度制缺省 = 上游 GUOLAO_DEFAULT_SU28_MODE 2（回归今宿）。此前发 doubingSu28=True，后端
+        # 🔴 宿度制缺省 = 上游 GUOLAO_DEFAULT_SU28_MODE（v3.13.0 起 0 荀爽距星）。更早发 doubingSu28=True，后端
         # parseSu28Mode 把 True 解释成 1（斗柄定房法，赤仪）—— 宿位、显示坐标（displayCoord）、格局判据全随之偏。
         su28, guolao_settings = self._guolao_chart_settings(payload)
         remote_payload = self._guolao_remote_payload(payload, su28, guolao_settings)
@@ -427,7 +447,7 @@ class GuolaoRunners:
                 )
                 js3 = self.js_client.run(
                     "guolao_moira",
-                    {"action": "rules_sections", "moiraRules": rules, "transitYearGz": _ganzhi_year(int(str(transit_date)[:4]))},
+                    {"action": "rules_sections", "moiraRules": rules, "transitYearGz": _ganzhi_year(_guolao_year_from_date(transit_date))},
                 )
                 sections = js3.get("sections") if isinstance(js3, dict) else None
                 if isinstance(sections, dict):

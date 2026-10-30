@@ -1,11 +1,11 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "07df9799790e7ef1e05996abfb051e1542b12171",
-  "upstream_git_committed_at": "2026-10-06T21:32:35-04:00",
-  "upstream_app_version": "3.11.3",
-  "aiexport_settings_version": 58,
-  "skill_mirrored_version": 58,
-  "upstream_checked_at_package_version": "0.45.1",
+  "upstream_git_sha": "965af0f4caba8e093399d3e3c0e3d50db2b7bfec",
+  "upstream_git_committed_at": "2026-10-29T20:02:57-04:00",
+  "upstream_app_version": "3.13.0",
+  "aiexport_settings_version": 60,
+  "skill_mirrored_version": 60,
+  "upstream_checked_at_package_version": "0.46.0",
   "upstream_preset_keys": [
     "agepoint",
     "astrochart",
@@ -108,9 +108,9 @@
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 369,
+    "files_compared": 395,
     "files_unmatched": 28,
-    "tree_sha256": "f29cf8a8e6ee18b118c796341331aacce7d5ff9a384ac5770be9bd691f194aff"
+    "tree_sha256": "0ba92f52d0c6a2d681c4e15b033e5343d7e9f130f3e61c96707d023c23c0a2cf"
   },
   "runtime_source": {
     "sentinels_verified": 7

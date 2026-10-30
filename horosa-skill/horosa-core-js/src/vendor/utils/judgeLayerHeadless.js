@@ -26,7 +26,7 @@ const JUDGE_KEYS_FROM_CLASSICAL = [
 	'cazimiOrb', 'combustOrb', 'underBeamsOrb',
 	'vocMode', 'vocIncludeOuter', 'fixedStarOrb', 'fixedStarOrbMode',
 	'viaCombustaVariant', 'partileDef',
-	'antisciaOrb',   // [R5-P1] 两接收端(horarySchools JUDGE_KEYS/electionParams 白名单)早已就位,发送端漏此一行=卜卦映点表/择日映点模块恒 1° 兜底
+	'antisciaOrb',   // 两接收端(horarySchools JUDGE_KEYS/electionParams 白名单)早已就位,发送端漏此一行=卜卦映点表/择日映点模块恒 1° 兜底
 ];
 
 const BACKEND_ALIASES = { fixedStarOrb: 'starOrb', fixedStarOrbMode: 'starOrbMode' };

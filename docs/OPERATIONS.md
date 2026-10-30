@@ -63,6 +63,8 @@ uv run python scripts/verify_export_section_baseline.py --source upstream --requ
 uv run python scripts/gen_knowledge_packs.py && uv run python scripts/gen_bazi_pithy_pack.py
 node scripts/build_hover_knowledge_bundle.mjs && uv run python scripts/build_knowledge_index.py
 uv run python scripts/gen_technique_provenance.py && uv run python scripts/gen_technique_provenance.py --check
+uv run python scripts/audit_upstream_ports.py --scan --from "$PIN" --to <新上游 sha>   # 手抄移植审计：每个 UNREVIEWED 逐条核对，
+#   结论写进 contracts/upstream_port_audit.json（no_port / port_unchanged / ported / reviewed），再把 from/to 改成本次区间
 uv run python scripts/verify_upstream_sync.py --require-upstream --write-state   # 全绿才写 provenance
 uv run python scripts/run_ci_gates.py                                            # 再做下面的 live 验证
 ```

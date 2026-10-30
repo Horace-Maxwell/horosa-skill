@@ -230,12 +230,17 @@ export function runLiureng(payload) {
   // 十二长生五行：上游缺省 = 日干五行（LiuRengMain 起课回包按日干重置，wuxingUserSet 才保留手选）。
   const dayGan = stemOf(chartObj.nongli && chartObj.nongli.dayGanZi);
   const wuxing = resolved.wuxing || LRConst.GanZiWuXing[dayGan] || '';
+  // timeAlg 随起课参数进 builder（上游 v3.13.0 main/snapshot.js:20-26：=1 时 [起盘信息] 出「时间算法：直接时间」
+  // 与 nongli.clockTime「钟表时」两行；页面 genGodsParams / 无头 requestLiurengGods 都带它）。键缺省 = 0 真太阳时。
+  const optTimeAlg = payload.options && typeof payload.options === 'object' ? payload.options.timeAlg : undefined;
+  const rawTimeAlg = optTimeAlg !== undefined && optTimeAlg !== null && optTimeAlg !== '' ? optTimeAlg : payload.timeAlg;
   const params = {
     date: keDate,
     time: keTime,
     zone: payload.guaZone || payload.zone || '',
     lon: payload.guaLon || payload.lon || '',
     lat: payload.guaLat || payload.lat || '',
+    timeAlg: rawTimeAlg === 1 || rawTimeAlg === '1' ? 1 : 0,
   };
   const snapshot_text = buildLiuRengSnapshotText(
     params,

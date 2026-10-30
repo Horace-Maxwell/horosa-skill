@@ -31,15 +31,28 @@ class ZodiacalReleaseInput(PredictiveInput):
 
 
 class AgePointInput(BirthInput):
-    # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house age-point
-    # cycle from the natal chart (no separate target time). Needs predictive on so the predict engine runs.
+    # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole age-point cycle from the natal
+    # chart (no separate target time). Needs predictive on so the predict engine runs.
+    # 上游 v3.13.0 四项口径（utils/agePointOptions.js；挂载齿轮 techniqueMountSettings.js:1496-1505，Java 白名单同名）。
     predictive: bool | None = True
+    apMethod: str | None = Field(default=None, description="推进方式：koch Koch 宫·每宫 6 年（缺省）| equal5 等速·自上升每年 5°")
+    apEvents: str | None = Field(default=None, description="事件：full 全部点 × 五种相位（缺省）| conj 只报合七星")
+    apYear: str | None = Field(default=None, description="年长：tropical 回归年（缺省）| sidereal 恒星年")
+    apMaxAge: int | None = Field(default=None, description="年限（岁）：72（缺省）| 100 | 120 | 144")
 
 
 class DistributionsInput(BirthInput):
-    # 界推运 (Distributions / 分配法): backend /predict/dist computes the full-life term-distribution
-    # timeline (Asc by primary motion through the Egyptian bounds). Natal params only.
+    # 界推运 (Distributions / 分配法): backend /predict/dist computes distributor (bound-lord) + partner periods
+    # as the releaser moves through the bounds (界表随全局界系). Natal params only.
+    # 上游 v3.13.0 四项口径（utils/distributionsOptions.js；挂载齿轮 techniqueMountSettings.js:1484-1493，Java 白名单同名）。
     predictive: bool | None = True
+    distReleaser: str | None = Field(
+        default=None,
+        description="发放点：Asc 上升（缺省）| MC | Desc | IC | Sun…Pluto | North Node | Vertex | Pars Fortuna | Spirit | Syzygy",
+    )
+    distMethod: str | None = Field(default=None, description="时间算法：classical 上升时间（缺省）| exact 斜升差逐度 | qisma 每度 1 年")
+    distYear: str | None = Field(default=None, description="年长：tropical 回归年（缺省）| egyptian 365 日 | julian 365.25 日")
+    distYears: int | None = Field(default=None, description="年限：100（缺省）| 60 | 80 | 120 | 150")
 
 
 _TARGET_DATE_DESC = "目标日期 YYYY-MM-DD（缺省=今天，上游同律）"
@@ -107,11 +120,15 @@ class PlanetaryAgesInput(BirthInput):
 
 class BalbillusInput(BirthInput):
     # Balbillus 129年系统 (v2.5.0): 旺距削减主限 — reads the natal chart, splits life into recursive sub-periods.
-    # 可调项 = 上游挂载齿轮（techniqueMountSettings.js:1260-1266）→ vendored builder opts。
+    # 可调项 = 上游挂载齿轮（techniqueMountSettings.js:1473-1481，v3.13.0 起四项）→ vendored builder opts。
     predictive: bool | None = False
     startPlanet: str | None = Field(default=None, description="起始星：Sun（缺省）/Moon/Mercury/Venus/Mars/Jupiter/Saturn")
-    yearType: str | None = Field(default=None, description="年制：solar 回归年（缺省）| hellenistic 360 日")
+    yearType: str | None = Field(
+        default=None,
+        description="年制：solar 回归年（缺省）| sidereal 恒星年 | hellenistic 360 日 | abumashar | mashaallah | bija",
+    )
     mode: str | None = Field(default=None, description="距离口径：nearest 最近角距（缺省）| forward 顺黄道距")
+    subRule: str | None = Field(default=None, description="子限铺法：once 一轮不填满（缺省）| cycle 循环到父期末 | fill 末段填满")
 
 
 class TriplicityRulersInput(BirthInput):
@@ -146,8 +163,21 @@ class ExtraReturnsInput(BirthInput):
 
 
 class YearSystem129Input(BirthInput):
-    # 129年系统 (v2.5.0): seven planets each rule their 小年 (土30木12火15日19金8水20月25 = 129y), computed server-side.
-    predictive: bool | None = True
+    # 129年系统: seven planets each rule their 小年 (土30木12火15日19金8水20月25 = 129y). 上游 v3.13.0 起由前端
+    # utils/yearSystem129.js 计算（vendored，horosa-core-js progextra）；四项口径 = 挂载齿轮 YEARSYSTEM129_FIELDS
+    # （techniqueMountSettings.js:1509-1518，键带 ys129 前缀 = 页面保存键）。
+    predictive: bool | None = False
+    ys129StartPlanet: str | None = Field(
+        default=None, description="起始星：Sun（缺省）| sect 区分光体（昼日夜月）| Moon/Mercury/Venus/Mars/Jupiter/Saturn",
+    )
+    ys129Order: str | None = Field(default=None, description="次序：zodiacal 本命黄经递增（缺省）| chaldean 迦勒底序")
+    ys129YearType: str | None = Field(
+        default=None,
+        description="年制：solar 回归年（缺省）| sidereal | hellenistic 360 日 | abumashar | mashaallah | bija",
+    )
+    ys129SubRule: str | None = Field(
+        default=None, description="子限：days 日数法（缺省，不填满主限）| proportional 比例法 | equal 七等分",
+    )
 
 
 class PersianDirectedInput(BirthInput):

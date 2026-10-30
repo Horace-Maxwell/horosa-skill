@@ -1,5 +1,5 @@
 // 三式合一纯逻辑段（vendored SanShiUnitedMain.js）所需的 AstroConst 子集 —— **逐值抽自上游** constants/AstroConst.js
-// （:14-23 行星、:66-77 十二星座、:79-81 ASC/MC，原值原序）。
+// （:15-24 行星、:66-77 十二星座、:79-81 ASC/MC，原值原序）。
 // 为什么不用 src/constants/AstroConst.js：那份共享 shim 没有 URANUS / NEPTUNE / PLUTO / MC —— SanShiUnitedMain 的
 // MAIN_STAR_IDS 会收进四个 undefined（外圈「星盘」行静默少天王/海王/冥王/天顶），同一 shim 为键的 AstroText.AstroMsgCN
 // 也因此从未落下这四个键。共享 shim 另有七政/卜卦/天星等消费方，不在本处改动它。curated：上游源 sha 由 manifest 看守。

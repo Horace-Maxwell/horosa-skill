@@ -69,7 +69,7 @@ def test_qimenzeri_seen_with_qimen_plus_three_sections() -> None:
 
     Runs against the VENDORED copy so it gates in GitHub CI, which has no upstream checkout.
     """
-    presets = up.parse_preset_sections(_VENDORED_AIEXPORT.read_text(encoding="utf-8", errors="replace"))
+    presets = up.parse_preset_sections(up.read_aiexport_source(_VENDORED_AIEXPORT))   # v3.12.0：门面 + aiExport/ 目录
     assert "qimenzeri" in presets, "post-literal AI_EXPORT_PRESET_SECTIONS.qimenzeri must be visible to the ratchet"
     assert presets["qimenzeri"] == [*presets["qimen"], "择日搜索配置", "择日条件", "命中时辰"]
 

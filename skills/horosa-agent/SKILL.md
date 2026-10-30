@@ -11,7 +11,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.45.1"
+  version: "0.46.0"
 ---
 
 # Horosa Skill Agent Guide
@@ -62,8 +62,8 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 用户装了 `[vectors]` 并跑过 `knowledge index --vectors` 时检索结果 `engine` 是 `fts5-bm25+vectors`（换了说法也能命中）；别替用户装或下载。用户没点名就别传 `knowledge`。
 存档只记引用（不存正文），报告附录只列用了哪些资料；删除进回收站（`horosa-skill knowledge trash` / `restore` 可恢复）。
 
-七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`moiraTransitDate`（[流年流曜]
-的流年时刻，缺省今天）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
+七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`planetaryHourMethod`（行星时制式 sunrise 缺省 /
+unequal / equal24，报时星随之）、`moiraTransitDate`（[流年流曜] 的流年时刻，缺省今天）；宿度制 `doubingSu28` 缺省 0 荀爽距星（星阙 v3.13.0）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
 河洛 `heluo` 可传 `liunianStep2`（ying/sequential）、`ziShuMode`、`jiGongMode` 等取法旋钮（全表见 guidance）。
 只知道四柱不知道生日：`bazi_inverse {pillars:["甲子","丙寅","戊辰","庚申"], fromYear, count}` 反查候选出生时刻
 （免确认门，候选每 60 年重现，请让用户确认年代）。八字口诀层：`knowledge_read {domain:"bazi_pithy", category:"三字诀", key:"甲"}`
@@ -223,7 +223,7 @@ deterministic local fallback answered; `horosa-skill jev status` shows the state
 | Qizheng Siyi / 七政四余 | `guolao_chart` |
 | Indian chart 印度盘 | `india_chart` |
 | Relationship 合盘 | `relative` (`relative` 0–4 picks the comparison; the export carries 比较盘 A/B) |
-| Midpoint/Uranian 中点盘 | `germany` (`rectifyEvents` = dated life events → [校时预览]; Uranian `school` / `orb` / `strictFactors` / `frames` / `declination` via `options_keys`) |
+| Midpoint/Uranian 中点盘 | `germany` (`rectifyEvents` = dated life events → [校时预览]; `mpCoord` ra/decl → [中点坐标] (赤经 / 赤纬中点，缺省 lon 不出); [赤纬接触] is on by default; Uranian `school` / `orb` / `strictFactors` / `frames` / `declination` via `options_keys`) |
 | Solar/lunar return 返照 | `solarreturn` / `lunarreturn` |
 | Solar arc / given year / profection | `solararc` / `givenyear` / `profection` |
 | Primary directions 主限法 | `pd`, `pdchart` (see `references/predictive.md` for the v12 engine surface) |
@@ -237,10 +237,10 @@ deterministic local fallback answered; `horosa-skill jev status` shows the state
 | 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
 | 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |
-| 八字 | `bazi_birth` / `bazi_direct`（本地 lunar 引擎优先，同星阙八字页；公元前 / byLon / adjustJieqi 回退 Java 并告警；南纬出生带 `southMonth`：`none` 不对冲（星阙缺省）/ `chong` 对冲——闸门会点名问，北纬忽略）/ `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
+| 八字 | `bazi_birth` / `bazi_direct`（本地 lunar 引擎优先，同星阙八字页；公元前 / byLon 回退 Java 并告警；`adjustJieqi` 已随星阙停用（恒不调整节气，给了 true 进 warnings）；南纬出生带 `southMonth`：`none` 不对冲（星阙缺省）/ `chong` 对冲——闸门会点名问，北纬忽略）/ `bazi_inverse`（四柱干支反查候选出生时刻，free of the confirmation gate） |
 | 紫微斗数 | `ziwei_birth` (22 传本 keys + `sihuaSchool`; any non-default 传本 key re-casts on 星阙's local ZiweiCalc; `ziwei_rules` returns the rules library) |
 | 大六壬 / 行年 | `liureng_gods` / `liureng_runyear` |
-| 奇门遁甲 / 太乙 / 金口诀 / 三式合一 | `qimen` / `taiyi` / `jinkou` / `sanshiunited` |
+| 奇门遁甲 / 太乙 / 金口诀 / 三式合一 | `qimen` / `taiyi` / `jinkou`（`options.timeBasis` direct 缺省 = 四柱 / 占时按钟表时，trueSolar 按真太阳时，流派非缺省时同样生效）/ `sanshiunited` |
 | 统摄法 | `tongshefa` |
 | 邵子参评数 / 河洛理数 | `canping` / `heluo` |
 | 六爻 | `sixyao` |
@@ -366,8 +366,8 @@ skill (for a hand-wired MCP config).
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source "$HOME/.local/bin/env"   # the installer only edits your shell profile; this puts uvx on PATH in THIS shell
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.45.1/horosa_skill-0.45.1-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.45.1/horosa_skill-0.45.1-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.46.0/horosa_skill-0.46.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.46.0/horosa_skill-0.46.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Windows (PowerShell)**
@@ -375,8 +375,8 @@ uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.
 ```powershell
 irm https://astral.sh/uv/install.ps1 | iex
 $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # the installer updates PATH for NEW shells only
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.45.1/horosa_skill-0.45.1-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.45.1/horosa_skill-0.45.1-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.46.0/horosa_skill-0.46.0-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.46.0/horosa_skill-0.46.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Source checkout (any OS)**

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from horosa_skill.astro_rulers import derived_whole_sign_label_of
+from horosa_skill.astro_rulers import POLAR_MC_NOTE, derived_whole_sign_label_of, polar_mc_of
 from horosa_skill.astro_sidereal import nakshatra_lord_cn, sidereal_ayanamsa_label
 from horosa_skill.engine import astro_snapshot as _astro_snap
 from horosa_skill.service._common import _msg, _split_degree
@@ -52,6 +52,8 @@ ASTRO_TEXT_MAP: dict[str, str] = {
     "JupiterVenus": "金木中点",
     # 主限法 v12 (星阙 v2.6.6)：宿命点应星行 id N_Vertex_0（仅 In-Zodiaco 核出）。
     "Vertex": "宿命点",
+    # v3.13.0：AstroText.js AstroTxtMsg/AstroMsg[ANTIVERTEX]（主限法世俗盘轴应星 N_Antivertex_0）。
+    "Antivertex": "反宿命点",
     "LifeMasterDeg74": "七政命度点",
     "Asc": "上升",
     "Desc": "下降",
@@ -147,6 +149,8 @@ ASTRO_SHORT_TEXT_MAP: dict[str, str] = {
     "JupiterVenus": "金木中点",
     # 主限法 v12 (星阙 v2.6.6)：宿命点应星行 id N_Vertex_0（仅 In-Zodiaco 核出）。
     "Vertex": "宿命点",
+    # v3.13.0：AstroText.js AstroTxtMsg/AstroMsg[ANTIVERTEX]（主限法世俗盘轴应星 N_Antivertex_0）。
+    "Antivertex": "反宿命点",
     "LifeMasterDeg74": "七政命度点",
 }
 
@@ -438,6 +442,9 @@ def _build_base_info_lines(chart_wrap: dict[str, Any], fields: dict[str, Any], *
     hsys_text = _astro_msg(hsys)
     if zodiacal_text or hsys_text:
         lines.append(f"{zodiacal_text}，{hsys_text}")
+    # v3.13.0 astroAiSnapshot.js buildBaseInfoLines：极区天顶标记（houses[].polarMc）→ 说明行。
+    if polar_mc_of(chart):
+        lines.append(POLAR_MC_NOTE)
     # 恒星黄道 (星阙 v2.6.4)：sidereal 盘附岁差(ayanāṃśa)名，区分 Lahiri/Raman/Fagan 等不同制。
     # chart.zodiacal 是已本地化的字符串("恒星黄道")，故以后端解析后的字段为准（西洋盘=siderealAyanamsa，
     # 印占盘=siderealModeKey + 数值 ayanamsaValue）；旧后端缺字段时，回退「请求为恒星黄道→请求 ayan/缺省 lahiri」。

@@ -1395,17 +1395,18 @@ def test_lunationphase_runs_via_chart_service(tmp_path) -> None:
 
 @requires_chart
 def test_yearsystem129_runs_via_chart_service(tmp_path) -> None:
-    # 129年系统 (v2.5.0): seven-planet succession, computed server-side and carried in predictives.
+    # 129年系统：上游 v3.13.0 起由前端 utils/yearSystem129.js 计算（vendored，progextra）；本命盘仍取 chart 服务。
     service = make_service(tmp_path)
     result = service.run_tool(
         "yearsystem129",
-        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1, "predictive": 1},
+        {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "hsys": 1},
         save_result=False,
     )
     assert result.ok is True, result.error
     snapshot = result.data["snapshot_text"]
     assert "[129年系统表格]" in snapshot
-    assert "129 年一轮" in snapshot
+    assert "合 129 年）。起始星=日、" in snapshot
+    assert "| 日(19.00年,起 1998-02-20) | 日 | 1998-02-20 | 2.44 |" in snapshot
     _assert_clean_export(result)
 
 
@@ -1594,8 +1595,20 @@ def _pd_live_payload(**overrides):
     return payload
 
 
-# 主限法引擎同源版本（星阙 v3.6.0）；重同步上游后随之推进，与 AGENTS.md §8 的防陈旧闸同源。
-PD_SYNC_REV = "pd_method_sync_v15"
+# 主限法引擎同源版本：取 vendored 上游 astrostudy/helper.py 的 PD_SYNC_REV（v3.13.0 = pd_method_sync_v26）——重同步上游即随之推进，
+# 与 AGENTS.md §8 的防陈旧闸同源；vendored 树缺席（CI）时退回下面这个已核过的值。
+def _vendored_pd_sync_rev() -> str:
+    import re
+
+    helper = pathlib.Path(__file__).resolve().parents[2] / "vendor" / "runtime-source" / "Horosa-Web" / "astropy" / "astrostudy" / "helper.py"
+    if helper.is_file():
+        m = re.search(r"^PD_SYNC_REV = '([^']+)'", helper.read_text(encoding="utf-8"), re.M)
+        if m:
+            return m.group(1)
+    return "pd_method_sync_v26"
+
+
+PD_SYNC_REV = _vendored_pd_sync_rev()
 
 
 @requires_chart

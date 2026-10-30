@@ -11,9 +11,11 @@ from horosa_skill.agent_guidance.base import (
 from horosa_skill.agent_guidance.policies import (
     _QIMEN_QIJU_QUESTION,
     _QIMEN_SAFE_DEFAULTS,
+    AGEPOINT_POLICY,
     ASTRO_BIRTH_POLICY,
     ASTRO_CHART_POLICY,
     BALBILLUS_POLICY,
+    DISTRIBUTIONS_POLICY,
     EPHEMERIS_POLICY,
     EXTRARETURNS_POLICY,
     JAYNESPROG_POLICY,
@@ -37,6 +39,7 @@ from horosa_skill.agent_guidance.policies import (
     SOLARRETURN_POLICY,
     TRIPLICITYRULERS_POLICY,
     VEDICPROG_POLICY,
+    YEARSYSTEM129_POLICY,
     ZERI_SNAPSHOT_SAFE_DEFAULTS,
     ZR_POLICY,
     _policy,
@@ -89,7 +92,8 @@ _SANSHI_OPTIONS_KEYS: dict[str, str] = {
         "guirengType 0 六壬法(缺省)；流派五键 schoolYueJiang zhongqi(缺省)/jiaojie、schoolGuiTable shiwu(缺省)/liuren、"
         "schoolGuiPan di(缺省)/tian、panShi yang(缺省)/yin、soilChangSheng shen(缺省)/yin；timeBasis direct(缺省)/trueSolar。"
         "路由同上游：五键全缺省且两源日柱对齐 → ken(kinjinkou) 盘；任一非缺省 → 本地 buildJinKouData"
-        "（compute_sources.jinkou=local_route_buildJinKouData），此时 timeBasis 无效并进 warnings（上游置灰）。"
+        "（compute_sources.jinkou=local_route_buildJinKouData）。timeBasis 两条路由都生效（v3.12.0：/liureng/gods 按它取四柱 / 占时）；"
+        "贵神昼夜按真实地平（未给 isDiurnal 时取 /chart）。"
     ),
     "liureng_gods": _LIURENG_OPTIONS_KEYS,
     "liureng_runyear": _LIURENG_OPTIONS_KEYS + "行年盘：date/time=问测人出生，guaDate/guaTime=起课时刻（课盘按起课时刻起）。",
@@ -457,7 +461,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "precision", "value": "minute", "meaning": "扫描到分钟"},
             {"field": "lotReversal/lotFortuneVariant/hermeticLotsReversal", "value": "1/standard/1",
-             "meaning": "希腊点口径与主排盘同式（上游缺省：福点昼夜反转、标准福点式、七星点反转）；顶层或 options 传入即进扫描与 [选中时刻星盘]"},
+             "meaning": "希腊点口径与主排盘同式（上游缺省：福点昼夜反转、标准福点式、六星点反转）；顶层或 options 传入即进扫描与 [选中时刻星盘]"},
             {"field": "userAyanT0/userAyanDeg", "value": None,
              "meaning": "siderealAyanamsa='user' 档的历元 JD 与该历元岁差度（缺参按 Lahiri）；进扫描与 [选中时刻星盘]"},
             *ZERI_SNAPSHOT_SAFE_DEFAULTS,
@@ -598,7 +602,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "diFen", "value": "auto", "meaning": "星阙默认：自动取占时支"},
             {"field": "options.wuxing", "value": "日干五行", "meaning": "星阙默认：十二长生五行随日干"},
             {"field": "options.流派五键", "value": "全缺省", "meaning": "星阙默认：中气换将/实务贵人表/地盘起贵/阳盘/水土同宫 → ken 盘"},
-            {"field": "options.timeBasis", "value": "direct", "meaning": "星阙默认：直接时间（只在 ken 路径生效）"},
+            {"field": "options.timeBasis", "value": "direct", "meaning": "星阙默认：直接时间（四柱 / 占时按钟表时；ken 与本地路由同口径）"},
         ],
         do_not_assume=["diFen"],
     ),
@@ -657,7 +661,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent=(
             "六爻/易卦。"
             "\n判读口径 liuyaoSettings = 上游六爻挂载齿轮 24 键（扁平形；选 school 即按上游 mergeLiuyaoGearSettings "
-            "套该派细项，其余键再叠上）：school=default 通用·卜筮正宗口径（缺省）/zengshan 增删卜易/yiyin 易隐/"
+            "套该派细项，其余键再叠上；v3.13.0 起任一细项偏离该派预设即回报 school=custom）：school=default 通用·卜筮正宗口径（缺省）/zengshan 增删卜易/yiyin 易隐/"
             "xinpai 邵伟华新派/mangpai 盲派/tianji 断易天机；askType 占测事项(定用神)=self（缺省）、opponent、wealth、"
             "career、marriage_m、marriage_f、illness、parents、children、doctor、sibling、thief、weather_rain、weather_sun、"
             "lost、travel、lawsuit、home、guishen、study、guochao；yongOverride ''(跟占测事项)/父母/兄弟/子孙/妻财/官鬼/世/应；"
@@ -832,8 +836,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "hellen_chart": ASTRO_CHART_POLICY,
     "guolao_chart": ASTRO_BIRTH_POLICY,
     "germany": ASTRO_BIRTH_POLICY,
-    "agepoint": ASTRO_BIRTH_POLICY,
-    "distributions": ASTRO_BIRTH_POLICY,
+    "agepoint": AGEPOINT_POLICY,
+    "distributions": DISTRIBUTIONS_POLICY,
     "jaynesprog": JAYNESPROG_POLICY,
     "vedicprog": VEDICPROG_POLICY,
     "ephemeris": EPHEMERIS_POLICY,
@@ -843,7 +847,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "planetaryarc": PLANETARYARC_POLICY,
     "planetaryages": PLANETARYAGES_POLICY,
     "balbillus": BALBILLUS_POLICY,
-    "yearsystem129": ASTRO_BIRTH_POLICY,
+    "yearsystem129": YEARSYSTEM129_POLICY,
     "persiandirected": PERSIANDIRECTED_POLICY,
     "triplicityrulers": TRIPLICITYRULERS_POLICY,
     "keypoints": KEYPOINTS_POLICY,
@@ -1241,7 +1245,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[{"field": "request", "value": {}, "meaning": "rules have no required input"}],
     ),
     "bazi_birth": _policy(
-        intent="八字命盘（同星阙八字页：本地 lunar.js 引擎起盘，公元前等域外日期与 byLon/adjustJieqi 走 Java；盘法/流派键见 options_keys）。",
+        intent="八字命盘（同星阙八字页：本地 lunar.js 引擎起盘，公元前等域外日期与 byLon 走 Java；盘法/流派键见 options_keys）。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
@@ -1277,10 +1281,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
             {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"]},
-            {"field": "adjustJieqi", "question": "节气校正是否沿用星阙默认？（星阙八字页已隐藏此项：本地引擎未实现；选校正则整盘走 Java）", "options": ["沿用默认", "指定校正"]},
         ],
         safe_defaults=[
-            {"field": "adjustJieqi", "value": False, "meaning": "星阙默认（不调整节气）"},
+            {"field": "adjustJieqi", "value": False, "meaning": "星阙 v3.13.0 起恒不调整节气（八字页 / 无头 / 择日恒发 0；给 true 也按不调整起盘并进 warnings）"},
             {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},
         ],
         do_not_assume=["gender"],
@@ -1384,7 +1387,8 @@ _MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
         "cangVersion/fenyeVersion": "common（缺省）| fenye 分野加权 / fajue 法诀版",
         "phaseType": "0 长生火土同（缺省）| 1 水土同 | 2 阳顺阴逆",
         "timeAlg": "0 真太阳时（缺省）| 1 直接时间 | 3 平太阳时（2 春分定卯时上游未实现，报错）",
-        "byLon/adjustJieqi": "true → 整盘走 Java /bazi/*（本地引擎不实现；五行力量等本地派生段随之不出）",
+        "byLon": "true → 整盘走 Java /bazi/*（本地引擎不实现；五行力量等本地派生段随之不出）",
+        "adjustJieqi": "已停用（上游 v3.13.0 BAZI_ADJUST_JIEQI_SENT 恒 0）：给 true 也按不调整节气起盘，并进 warnings",
         "period": "{liunian:[公历年], liuyue:[1–12], liuri:[公历日], liushi:[0–11]} → [多运限·指定时段]",
         "cnUnifiedZone": _CN_ZONE_KEY,
     },

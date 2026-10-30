@@ -1,5 +1,5 @@
-// 从上游 utils/helper.js 逐字取出的单个纯函数。整份 helper.js 是 984 行的大杂烩，还牵
-// msg/errmsg/gps/request 四个不可 headless 的依赖 —— 为一个位运算把它整棵搬进来不划算。
+// 从上游 utils/helper.js 逐字取出的单个纯函数。整份 helper.js 是 656 行（v3.13.0）的大杂烩，还牵
+// gps/request/zoomDomain 等不可 headless 的依赖 —— 为一个位运算把它整棵搬进来不划算。
 export function littleEndian(bits){
 	let n = 0;
 	for(let i=0; i<bits.length; i++){

@@ -12,6 +12,8 @@
 - `resolve_house_system(chart_obj, fields)`：当前分宫制 {num,label,isAscWholeSign[,fallback]}（wholeSignRulers.js:178）——
   派生盘（后端 houses[].hsysDerived='wholeFromAsc'）标注「整宫(变换后上升)」、极区回退（houses[].hsysFallback）标注
   「<请求宫制>→回退<回退宫制>」、回显文本撞名（hsys 24/8）用盘面自证消歧。
+  v3.13.0：组合盘回落整宫（hsysDerived='compositeWholeFromAsc'）标注「整宫(组合上升)」且宫主表按整宫折叠；
+  `polar_mc_of` / `POLAR_MC_NOTE` = 极区天顶标记（houses[].polarMc）与 [起盘信息] 说明行。
 - `build_dispositor_ruler_tail_lines(chart_obj, msg)`：[主宰星链] 链行之后的「判读口径行 + ◆ 整宫制宫主表」
   （astroAiSnapshot.js:1042-1047）。
 - `build_house_system_ruler_section_lines(chart_obj, fields, msg)`：[分宫制宫神星表] 段正文（astroAiSnapshot.js:1063-1077；
@@ -115,6 +117,12 @@ _HSYS_ASTRO_MSG: dict[str, str] = {
 # wholeSignRulers.js:167 —— 派生盘（调波/龙盘/十三分/十二分）宫位被后端强制为「变换后上升整宫」。
 DERIVED_WHOLE_SIGN_LABEL = "整宫(变换后上升)"
 _DERIVED_HOUSE_MODE = "wholeFromAsc"   # 后端 thirteenthchart.py DERIVED_HOUSE_MODE
+# v3.13.0 wholeSignRulers.js:168-170 —— 组合盘：所选宫制属整宫一类 / 合不出有效宫头时，后端按组合上升起整宫并逐宫打
+# hsysDerived='compositeWholeFromAsc'。
+COMPOSITE_WHOLE_SIGN_LABEL = "整宫(组合上升)"
+_COMPOSITE_HOUSE_MODE = "compositeWholeFromAsc"
+# v3.13.0 wholeSignRulers.js:232-241 —— 极区天顶标记 houses[].polarMc（flatlib swe.upperMeridianAscmc 打 'upperMeridian'）。
+POLAR_MC_NOTE = "极区天顶：本时刻子午线上中天交点在地平以下；各分宫制的 MC 一律按上中天交点取（不换作 IC），宫头仍按所选分宫制。"
 
 
 def js_template_str(value: Any) -> str:
@@ -254,13 +262,41 @@ def _field_value(fields: Any, key: str) -> Any:
     return field
 
 
-def derived_whole_sign_label_of(chart: Any) -> str:
-    """wholeSignRulers.js:168：任一宫带 hsysDerived='wholeFromAsc' → 「整宫(变换后上升)」，否则 ''。"""
+def _derived_mode_of(chart: Any) -> str:
+    """wholeSignRulers.js:171 derivedModeOf：首个带 hsysDerived ∈ {'wholeFromAsc','compositeWholeFromAsc'} 的宫的标记，否则 ''。"""
     houses = chart.get("houses") if isinstance(chart, dict) else None
     for house in houses if isinstance(houses, list) else []:
-        if isinstance(house, dict) and house.get("hsysDerived") == _DERIVED_HOUSE_MODE:
-            return DERIVED_WHOLE_SIGN_LABEL
+        mode = house.get("hsysDerived") if isinstance(house, dict) else None
+        if mode in (_DERIVED_HOUSE_MODE, _COMPOSITE_HOUSE_MODE):
+            return mode
     return ""
+
+
+def derived_whole_sign_label_of(chart: Any) -> str:
+    """wholeSignRulers.js:181：组合盘标记 → 「整宫(组合上升)」；派生盘标记 → 「整宫(变换后上升)」；否则 ''。"""
+    mode = _derived_mode_of(chart)
+    if mode == _COMPOSITE_HOUSE_MODE:
+        return COMPOSITE_WHOLE_SIGN_LABEL
+    return DERIVED_WHOLE_SIGN_LABEL if mode else ""
+
+
+def polar_mc_of(chart: Any) -> str:
+    """wholeSignRulers.js:235 polarMcOf：首个 truthy houses[].polarMc 的 `${}`，否则 ''。"""
+    houses = chart.get("houses") if isinstance(chart, dict) else None
+    for house in houses if isinstance(houses, list) else []:
+        if isinstance(house, dict) and _js_truthy(house.get("polarMc")):
+            return js_template_str(house.get("polarMc"))
+    return ""
+
+
+def _js_truthy(value: Any) -> bool:
+    if value is None or value is False:
+        return False
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value != 0 and not (isinstance(value, float) and math.isnan(value))
+    if isinstance(value, str):
+        return value != ""
+    return True
 
 
 def house_system_fallback_of(chart: Any) -> str:
@@ -331,7 +367,11 @@ def resolve_house_system(chart_obj: Any, fields: Any) -> dict[str, Any]:
     fallback = house_system_fallback_of(chart)
     derived_label = derived_whole_sign_label_of(chart)
     label = derived_label or (f"{base_label}→回退{fallback}" if fallback else base_label)
-    is_asc_whole_sign = num == "0" if num is not None else echo_text in (HSYS_WHOLE_SIGN, "整宫制")
+    # v3.13.0 wholeSignRulers.js:212：组合盘改按组合上升起了整宫 → 宫位就是上升整宫，宫主表按整宫折叠。
+    if _derived_mode_of(chart) == _COMPOSITE_HOUSE_MODE:
+        is_asc_whole_sign = True
+    else:
+        is_asc_whole_sign = num == "0" if num is not None else echo_text in (HSYS_WHOLE_SIGN, "整宫制")
     resolved: dict[str, Any] = {"num": num, "label": label, "isAscWholeSign": is_asc_whole_sign}
     if fallback:
         resolved["fallback"] = fallback

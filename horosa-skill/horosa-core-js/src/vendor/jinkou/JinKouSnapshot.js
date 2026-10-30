@@ -77,7 +77,7 @@ function mapObjToRows(obj){
 export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wuxing, guirengType, gender){
 	const lines = [];
 	const nongli = liureng && liureng.nongli ? liureng.nongli : {};
-	// [Q-427/T-393] 性别「未知」(-1)时计算按男排(行年 / 旬法皆以 gender≠0 取男表),快照却写「女」——
+	// 性别「未知」(-1)时计算按男排(行年 / 旬法皆以 gender≠0 取男表),快照却写「女」——
 	//   同一份快照里「行年:男」与「性别:女」并存。与八字页口径统一:未知写「未知(按男排)」。
 	const xingbie = `${gender}` === '1' ? '男' : (`${gender}` === '0' ? '女' : '未知(按男排)');
 	const guirenType = jinkouData && jinkouData.source === 'kinjinkou' ? 'kinjinkou 贵人歌诀' : (guirengType === 0 ? '六壬法贵人' : (guirengType === 1 ? '遁甲法贵人' : '星占法贵人'));
@@ -155,7 +155,7 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 	lines.push('[金口诀速览]');
 	if(jinkouData && jinkouData.ready){
 		lines.push(`地分：${fmtValue(jinkouData.topInfo.diFen)}`);
-		// [X1·P2-14] 月将/占时与中栏顶行同源入快照(此前 AI 看不到这两个排盘参数)。
+		// 月将/占时与中栏顶行同源入快照(此前 AI 看不到这两个排盘参数)。
 		if(jinkouData.topInfo.yuejiang){ lines.push(`月将：${fmtValue(jinkouData.topInfo.yuejiang)}`); }
 		if(jinkouData.topInfo.zhanshi){ lines.push(`占时：${fmtValue(jinkouData.topInfo.zhanshi)}`); }
 		lines.push(`空亡：${fmtValue(jinkouData.topInfo.xunKong)}`);
@@ -175,7 +175,7 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 	lines.push('[金口诀四位]');
 	if(jinkouData && jinkouData.ready){
 		lines.push(`地分：${fmtValue(jinkouData.topInfo.diFen)}`);
-		// [X1·P2-14] 月将/占时与中栏顶行同源入快照(此前 AI 看不到这两个排盘参数)。
+		// 月将/占时与中栏顶行同源入快照(此前 AI 看不到这两个排盘参数)。
 		if(jinkouData.topInfo.yuejiang){ lines.push(`月将：${fmtValue(jinkouData.topInfo.yuejiang)}`); }
 		if(jinkouData.topInfo.zhanshi){ lines.push(`占时：${fmtValue(jinkouData.topInfo.zhanshi)}`); }
 		lines.push(`空亡：${fmtValue(jinkouData.topInfo.xunKong)}`);
@@ -188,7 +188,7 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 			row.label, fmtValue(row.gan), fmtValue(row.content), fmtValue(row.shenjiang), fmtValue(row.power), fmtValue(row.kong), row.nayin ? fmtValue(row.nayin) : '',
 		]);
 		pushMdRows(lines, ['位', '天干', '内容', '神将', '状态', '空亡', '纳音'], siWeiRows);
-		// [审计修] 四位类象参考行(右栏「四位」tab 渲染有快照无;固定类象表,与渲染同文)。
+		// 四位类象参考行(右栏「四位」tab 渲染有快照无;固定类象表,与渲染同文)。
 		lines.push('四位类象：四人元=尊、客、天、君、祖、外；三贵神=上、主、宰相、臣、父、官禄；二月将=中、己身、妻财、亲戚、内；一地分=下、田宅、子孙、奴仆、鞍马、六畜');
 	}else{
 		lines.push('无');
@@ -288,7 +288,7 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 	if(jinkouData && jinkouData.branchRelations && jinkouData.branchRelations.length){
 		for(let i=0; i<jinkouData.branchRelations.length; i++){
 			const b = jinkouData.branchRelations[i];
-			// [审计修] 补关系说明句 b.desc(右栏渲染有快照无)。
+			// 补关系说明句 b.desc(右栏渲染有快照无)。
 			lines.push(`${b.aLabel}${b.a} ${b.type} ${b.bLabel}${b.b}${b.desc ? `：${b.desc}` : ''}`);
 		}
 	}else{
@@ -488,7 +488,7 @@ export function buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wu
 		lines.push('无');
 	}
 
-	// [YA v42] A 类硬缺:分析 tab「数理 · 太玄数」(renderTaixuan)显示了却不入快照。
+	// A 类硬缺:分析 tab「数理 · 太玄数」(renderTaixuan)显示了却不入快照。
 	// 取数与 UI 同源(jinkouData.taixuan,行文案同 renderTaixuan 的 value 拼法);无数据不产段。
 	const jkTaixuan = jinkouData && jinkouData.taixuan && jinkouData.taixuan.length ? jinkouData.taixuan : [];
 	if(jkTaixuan.length){

@@ -132,14 +132,11 @@ def test_bazi_info_gains_time_basis_and_shengxiao_lines(tmp_path) -> None:
 @requires_node
 def test_bazi_adjust_jieqi_bool_is_labelled_not_printed_raw(tmp_path) -> None:
     """schema 里 adjustJieqi 是 bool：旧版 str(False)='False' 查表落空 →「节气修正：False」原样进快照。
-    adjustJieqi=true 只有 Java 实现（本地引擎不支持）→ 走回退路径，这里用 Java 形 java_result 喂同一 builder。"""
+    v3.13.0 起上游恒发 BAZI_ADJUST_JIEQI_SENT=0（baziLunarLocal.js:1238）：给了 true 也按「不调整节气」起盘、标注。"""
     info = _section(_bazi_local_text(tmp_path, _bazi_payload()), "起盘信息")
     assert "节气修正：不调整节气" in info and "节气修正：False" not in info
-    on = _section(
-        _bazi_local_text(tmp_path, _bazi_payload(adjustJieqi=True), java_result={"bazi": {"nongli": _BAZI_NONGLI_0130, "fourColumns": {}}}),
-        "起盘信息",
-    )
-    assert "节气修正：节气按纬度调整" in on
+    on = _section(_bazi_local_text(tmp_path, _bazi_payload(adjustJieqi=True)), "起盘信息")
+    assert "节气修正：不调整节气" in on and "节气按纬度调整" not in on
 
 
 # ────────────────────────────── 紫微 ──────────────────────────────
@@ -547,7 +544,7 @@ def test_india_remote_payload_translates_tripataki_opt_in() -> None:
 
 def test_india_extra_vargas_section_fetches_each_varga(tmp_path) -> None:
     """[附加分盘]（IndiaChart.js:1265-1333）：逐张另取 /india/chart?chartnum=N，只挑 宫位宫头/星与虚点/行星 三段，
-    段内小标题 `── D9 婚姻 ──`，接在整份快照末尾。旧版没有该入参/该段 → 红。"""
+    段内小标题 `── D9 合作 ──`，接在整份快照末尾。旧版没有该入参/该段 → 红。"""
     settings = _settings(tmp_path)
     client = CaptureClient()
     service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
@@ -563,7 +560,7 @@ def test_india_extra_vargas_section_fetches_each_varga(tmp_path) -> None:
     assert all("indiaExtraVargas" not in p for p in india_calls)
     extra = _section(env.data["snapshot_text"], "附加分盘").splitlines()
     assert extra[0] == "以下为主盘之外另挂的分盘,只列该分盘的宫头与星曜落宫(大运/瑜伽/相位等仍以主盘段为准)。"
-    assert extra[1] == "── D9 婚姻 ──" and len(extra) > 2 and "" not in extra
+    assert extra[1] == "── D9 合作 ──" and len(extra) > 2 and "" not in extra
     assert env.data["snapshot_text"].rstrip().endswith(extra[-1])
     assert any("[1, 42]" in w for w in env.warnings), env.warnings
     export = env.data["export_snapshot"]

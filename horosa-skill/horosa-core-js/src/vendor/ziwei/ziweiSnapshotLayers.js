@@ -23,24 +23,24 @@ import * as ZiWeiHelper from './ZiWeiHelper.js';
 
 const ZW_PERIOD_LEVEL_LABEL = { daxian: '大限', liunian: '流年小限', liuyue: '流月', liuri: '流日', liushi: '流时' };
 
-// 单层运限 → 文本块（四化落宫 + 流曜 + 三方四正星情, 复用 ZiWeiHelper.getLayerSihua/getFlowStars/collectFourPalaceStars,
+// 单层运限 → 文本块（四化落宫 + 流曜 + 三方四正星情, 复用 ZiWeiHelper.getLayerSihua/getFlowStars/collectSanhePalaces,
 // 与盘面交互卡同口径）。
 // 用户增量(v1.9): 末尾追加"三方四正"四宫星曜列表,让 AI 看到该时段真实的三合宫位星情,提高流年判断准度。
 function formatLuckLayerLines(chart, layer, levelLabel, subText){
 	const lines = [];
 	const mingIdx = layer.mingIndex;
 	const oppIdx = ((mingIdx % 12) + 6) % 12;
-	// [v2 试点] 头行加 ◆ 子题标记:呈现层(docx/PDF)映射 Heading3;纯文本仍整行可读(substring 断言不受影响)。
+	// 头行加 ◆ 子题标记:呈现层(docx/PDF)映射 Heading3;纯文本仍整行可读(substring 断言不受影响)。
 	const head = `◆ ${levelLabel}：${layer.ganzi || ''}${subText ? `（${subText}）` : ''}`
 		+ `，命宫【${luckHouseName(chart, mingIdx, true)}】·对宫【${luckHouseName(chart, oppIdx, true)}】`;
 	lines.push(head);
-	// [B10-fix] 与面板同口径:消费期现算(effLayerSihuaGan),快照与 UI 恒同源
+	// 与面板同口径:消费期现算(effLayerSihuaGan),快照与 UI 恒同源
 	const sihua = ZiWeiHelper.getLayerSihua(chart, ZiWeiHelper.effLayerSihuaGan(chart, layer)) || [];
 	if(sihua.length > 0){
 		const parts = sihua.map((h)=>`${h.star}化${h.hua}（${luckHouseName(chart, h.houseIndex, true)}）`);
 		lines.push(`四化：${parts.join('、')}`);
 	}
-	// [D3] 流年神煞上盘开时:流年层追加 12 神落宫行(快照与盘面同源 getFlowJiangSui;默认关=基线字节稳)。
+	// 流年神煞上盘开时:流年层追加 12 神落宫行(快照与盘面同源 getFlowJiangSui;默认关=基线字节稳)。
 	if(ZWEngineOptions.flowShenshaOnChart && layer.zhi && levelLabel === ZW_PERIOD_LEVEL_LABEL.liunian){
 		const fss = ZiWeiHelper.getFlowJiangSui(layer.zhi) || [];
 		if(fss.length){
@@ -144,7 +144,7 @@ function buildZiweiPeriodLines(chart, period){
 		const dx = daxianItems.find((d)=>d.mingIndex === mingIndex);
 		if(dx){
 			const seg = formatLuckLayerLines(chart, dx, ZW_PERIOD_LEVEL_LABEL.daxian, `${dx.start}~${dx.end}岁`);
-			// [Q-432/T-395④] 「沈氏三限」齿轮开着时,页面在所选大限下画出四段中限(各 2.5 年),
+			// 「沈氏三限」齿轮开着时,页面在所选大限下画出四段中限(各 2.5 年),
 			// 而快照此前只在「传本设置」里多一行注记 —— AI 看不到分段。开关开启时把四段真列出来
 			// (宫位沿该大限宫,与 ziweiCore.zhongxianOf 同源;缺省关=零增行)。
 			if(ZWEngineOptions.zhongxian && Array.isArray(seg)){

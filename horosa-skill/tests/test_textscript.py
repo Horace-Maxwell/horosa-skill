@@ -22,7 +22,7 @@ from horosa_skill.textscript import (
     looks_traditional,
     parse_script,
 )
-from horosa_skill.textscript.converter import _load, _Stage, _variants
+from horosa_skill.textscript.converter import _char_rules, _load, _Stage, _variants
 from horosa_skill.textscript.localize import localize, localize_document, unclassified_text_paths
 
 PKG = Path(__file__).resolve().parents[1]
@@ -90,6 +90,8 @@ GOLDEN = {
     "农历年月日": "農曆年月日",
     "查密码表": "查密碼表",
     "占有点": "佔有點",
+    # 天体周日（视）运动 ≠ 星期日（v3.13.0 分配法 / 主限法方法说明；上游只收「周历」会转成「週日運動」）
+    "周日运动与周日视运动，本周日": "周日運動與周日視運動，本週日",
     # 白名单词跨在术数词上（甲 + 克 + 己土、驿马 + 克 + 身）：更长的词把它钉回「剋」
     "甲克己土，驿马克身，克己助人，马克斯，克洛诺斯": "甲剋己土，驛馬剋身，克己助人，馬克斯，克洛諾斯",
     "辛来有克劳病多，刑克难守": "辛來有剋勞病多，刑剋難守",
@@ -136,10 +138,13 @@ def _char_rules_doc() -> dict:
 def test_every_character_rule_is_well_formed_and_takes_effect() -> None:
     rules = _char_rules_doc()["rules"]
     assert {"干", "丑", "斗", "占", "冲", "历", "凶", "钟", "云", "表", "克", "咸"} <= set(rules)
+    compiled = _char_rules()
     for char, rule in rules.items():
         for word, traditional in rule["words"].items():
             assert char in word and len(word) == len(traditional), (char, word)
-            converted = convert(word, TRADITIONAL)
+            # 限定左邻的词（「人欲」只认「天理人欲 / 灭人欲」）放进它认的左邻里测，其余词单独测
+            strict = next((g["onlyLeftStrict"] for g in compiled.guards_of(char, word) if g.get("onlyLeftStrict")), "")
+            converted = convert(strict[:1] + word, TRADITIONAL)[len(strict[:1]):]
             for index, letter in enumerate(word):
                 if letter == char:
                     assert converted[index] == traditional[index], (char, word, converted)
@@ -149,29 +154,230 @@ def test_every_character_rule_is_well_formed_and_takes_effect() -> None:
 
 
 UPSTREAM_ROOT = Path(os.environ.get("HOROSA_SOURCE_ROOT") or PKG.parent.parent / "Horosa-Public")
-UPSTREAM_RULES = UPSTREAM_ROOT / "Horosa-Web" / "astrostudyui" / "src" / "utils" / "scriptConvert" / "hantRules.js"
+UPSTREAM_DIR = UPSTREAM_ROOT / "Horosa-Web" / "astrostudyui" / "src" / "utils" / "scriptConvert"
+UPSTREAM_RULES = UPSTREAM_DIR / "hantRules.js"
+needs_upstream = pytest.mark.skipif(not UPSTREAM_RULES.is_file(), reason="needs the upstream Horosa-Public checkout next to this repo")
 
 
-@pytest.mark.skipif(not UPSTREAM_RULES.is_file(), reason="needs the upstream Horosa-Public checkout next to this repo")
-def test_character_rules_cover_upstream_except_documented_deviations() -> None:
-    """与上游星阙界面简繁同一套字：上游每条规则本仓都有、取值相同，除非写进了 deviations（并给出理由）。"""
+def _upstream_consts() -> dict:
+    """把 hantRules.js 顶层 `const X = <字面量>;` 求值出来（字符串 / 数组 / 对象 / `+` 拼接 / 引用别的 const /
+    `new Set(Array.from(…))`）。函数、正则这类非字面量的 const 跳过。不用正则逐条抠——上游表结构一变（加 ctx / ctxHit），
+    正则会静默漏掉整条规则（v3.12.0 的「克」「只」就这样漏过一次）。"""
     import re
 
     text = UPSTREAM_RULES.read_text(encoding="utf-8")
-    body = text[text.index("const RULES = {"):text.index("};", text.index("const RULES = {")) + 1]
-    upstream = {}
-    for match in re.finditer(r"'(.)': \{ def: (null|'(.)'),( quote: true,)? words: \{(.*?)\} \}", body, re.S):
-        upstream[match.group(1)] = (match.group(3), bool(match.group(4)), dict(re.findall(r"'([^']+)': '([^']+)'", match.group(5))))
-    assert upstream, "could not parse upstream hantRules.js"
+    token = re.compile(r"\s+|//[^\n]*|/\*.*?\*/|'((?:\\.|[^'\\])*)'|([A-Za-z_$][\w$]*)|(.)", re.DOTALL)
+    consts: dict = {}
+
+    def tokens(pos: int):
+        while True:
+            m = token.match(text, pos)
+            if m is None:
+                return
+            pos = m.end()
+            if m.group(1) is not None:
+                yield ("str", m.group(1).replace("\\'", "'"))
+            elif m.group(2):
+                yield ("id", m.group(2))
+            elif m.group(3):
+                yield ("op", m.group(3))
+
+    class Bail(Exception):
+        pass
+
+    def parse(pos: int):
+        stream = tokens(pos)
+        look = [next(stream)]
+
+        def peek():
+            return look[0]
+
+        def take(kind=None, value=None):
+            tok = look[0]
+            if (kind and tok[0] != kind) or (value and tok[1] != value):
+                raise Bail
+            look[0] = next(stream, ("eof", ""))
+            return tok
+
+        def expr():
+            value = term()
+            while peek() == ("op", "+"):
+                take()
+                value = value + term()
+            return value
+
+        def term():
+            kind, value = peek()
+            if kind == "str":
+                take()
+                return value
+            if (kind, value) == ("op", "["):
+                take()
+                items = []
+                while peek() != ("op", "]"):
+                    items.append(expr())
+                    if peek() == ("op", ","):
+                        take()
+                take("op", "]")
+                return items
+            if (kind, value) == ("op", "{"):
+                take()
+                obj = {}
+                while peek() != ("op", "}"):
+                    key = take()[1]
+                    take("op", ":")
+                    obj[key] = expr()
+                    if peek() == ("op", ","):
+                        take()
+                take("op", "}")
+                return obj
+            if (kind, value) == ("id", "new"):
+                take()
+                take("id", "Set")
+                take("op", "(")
+                inner = expr()
+                take("op", ")")
+                return set(inner)
+            if (kind, value) == ("id", "Array"):
+                take()
+                take("op", ".")
+                take("id", "from")
+                take("op", "(")
+                inner = expr()
+                take("op", ")")
+                return list(inner)
+            if kind == "id":
+                take()
+                if value in ("true", "false", "null"):
+                    return {"true": True, "false": False, "null": None}[value]
+                if value not in consts:
+                    raise Bail
+                return consts[value]
+            raise Bail
+
+        value = expr()
+        take("op", ";")
+        return value
+
+    for m in re.finditer(r"^const (\w+) = ", text, re.MULTILINE):
+        try:
+            consts[m.group(1)] = parse(m.end())
+        except (Bail, StopIteration):
+            continue
+    return consts
+
+
+@needs_upstream
+def test_character_rules_cover_upstream_except_documented_deviations() -> None:
+    """与上游星阙界面简繁同一套判据：上游每条规则本仓都有、取值相同（除非写进了 deviations 并给出理由）；
+    左右邻判据、「克」「只」上下文、出生地整串一字不差。上游再改 hantRules.js → 这条红 → 合并或写偏离。"""
+    up = _upstream_consts()
+    assert {"RULES", "WORD_GUARDS", "EDGE_GUARDS", "TAIL_GUARDS", "KE_CONTEXT", "ZHI_CONTEXT", "PLACE_KEEP"} <= set(up), sorted(up)
+    text = UPSTREAM_RULES.read_text(encoding="utf-8")
+    body = text[text.index("const RULES = {"):text.index("\n};", text.index("const RULES = {"))]
+    import re
+
+    assert len(up["RULES"]) == len(re.findall(r"^\t'(.)': \{", body, re.MULTILINE)) > 30, "上游 RULES 没有逐条解析出来"
     doc = _char_rules_doc()
     ours, deviations = doc["rules"], set(doc["deviations"])
-    for char, (default, quote, words) in upstream.items():
+    for char, rule in up["RULES"].items():
         assert char in ours, f"上游新增了「{char}」的规则，本仓还没有"
-        assert ours[char].get("default") == default and bool(ours[char].get("quote")) == quote, char
-        for word, traditional in words.items():
+        mine = ours[char]
+        assert set(rule) <= {"def", "quote", "ctx", "ctxHit", "words"}, f"上游「{char}」多了新字段 {set(rule)}"
+        assert (mine.get("default"), bool(mine.get("quote")), mine.get("ctx"), mine.get("ctxHit")) == (
+            rule["def"], bool(rule.get("quote")), rule.get("ctx"), rule.get("ctxHit")), char
+        for word, traditional in rule["words"].items():
             if word in deviations or char not in word or len(word) != len(traditional):
-                continue  # 上游里不含该字 / 不等长的词条在它自己的索引里也被跳过（惰性条目）
-            assert ours[char]["words"].get(word) == traditional, f"{char}: 上游 {word}→{traditional}，本仓 {ours[char]['words'].get(word)}"
+                continue  # 上游里不含该字 / 不等长的词条在它自己的索引里也被跳过（惰性条目，如「克」下的「摩洛哥」）
+            assert mine["words"].get(word) == traditional, f"{char}: 上游 {word}→{traditional}，本仓 {mine['words'].get(word)}"
+    assert doc["word_guards"] == up["WORD_GUARDS"]
+    assert doc["edge_guards"] == up["EDGE_GUARDS"]
+    assert doc["tail_guards"] == up["TAIL_GUARDS"]
+    ke, zhi = doc["contexts"]["ke"], doc["contexts"]["zhi"]
+    assert {key: set(value) for key, value in ke.items()} == up["KE_CONTEXT"]
+    assert set(zhi) == set(up["ZHI_CONTEXT"])
+    for key, value in up["ZHI_CONTEXT"].items():
+        assert (set(zhi[key]) if isinstance(value, set) else zhi[key]) == value, key
+    assert set(doc["place_label"]["keep"]) == up["PLACE_KEEP"]
+    assert "出生地[:：]" in text and set(doc["place_label"]["prefixes"]) == {"出生地:", "出生地："}
+
+
+@needs_upstream
+def test_upstream_guard_combination_snapshot_converts_the_same() -> None:
+    """上游「否决字 × 白名单词」全组合快照（3 300 余条，逐条人判过）在本仓转换器上逐条相同——判据移植没走样。"""
+    combos = json.loads((UPSTREAM_DIR / "__tests__" / "hantGuardCombos.fixture.json").read_text(encoding="utf-8"))
+    assert len(combos) > 3000
+    bad = {src: (want, convert(src, TRADITIONAL)) for src, want in combos.items() if convert(src, TRADITIONAL) != want}
+    assert bad == {}
+
+
+@needs_upstream
+def test_upstream_real_corpus_converts_the_same() -> None:
+    """上游真实语料夹具（玄学史资料库「只 / 于 / 朴 / 干事 / 台座」的上下文，逐条人判过）：没转对的只许是上游自己登记的那几条。"""
+    rows = json.loads((UPSTREAM_DIR / "__tests__" / "hantRealCorpus.fixture.json").read_text(encoding="utf-8"))["rows"]
+    known_misses = ("落地竟是只背", "原来是只裸身", "出来，一只能走", "出来,一只能走", "两只是真鹤")  # 上游 hantRealCorpus.test.js KNOWN_MISSES
+    assert len(rows) > 1500
+    bad = [src for src, at, want in rows if convert(src, TRADITIONAL)[at] != want and not any(k in src for k in known_misses)]
+    assert bad == []
+
+
+# 上游 v3.12.0 / v3.13.0 新增的判据，每条一例（取自上游 hantConverter.test.js；没有上游 checkout 也跑）
+UPSTREAM_V313_CASES = {
+    # 已有字的新词
+    "日干事业，干事此失彼得": "日干事業，幹事此失彼得",                 # 干事 + 左邻否决
+    "值符天冲，太冲（卯将）": "值符天衝，太衝（卯將）",                # 天冲 / 太冲 作「衝」
+    "腾冲市，历下区，云城区": "騰衝市，歷下區，雲城區",                # 城市库地名
+    "钟会，钟子期，女独有所钟，家有千钟": "鍾會，鍾子期，女獨有所鍾，家有千鍾",
+    "贼云须认鬼生乡": "賊云須認鬼生鄉",
+    "先天后天": "先天後天",
+    "首轮回答，命盘回收站，行星回到本命": "首輪回答，命盤回收站，行星回到本命",
+    "台座光贵": "台座光貴",
+    "鬼爻属金发动，金发白肤": "鬼爻屬金發動，金髮白膚",
+    "微黄卷发": "微黃捲髮",
+    # 克：上下文判定（生克义作「剋」，其余随词典）+ 古文「克 = 能」
+    "庚金克甲木，被克制，需克制情绪，50克，克罗地亚": "庚金剋甲木，被剋制，需克制情緒，50克，克羅地亞",
+    "事乃克济，百谋克遂，克山县，生和克": "事乃克濟，百謀克遂，克山縣，生和剋",
+    # 只：缺省「只」，量词作「隻」
+    "两只手，这只是，只影响，一只只送回，只字不提，船只能靠岸": "兩隻手，這只是，只影響，一隻隻送回，隻字不提，船只能靠岸",
+    # 新字（每字一例）
+    "以禽星斗争喻人事，行人欲至，七情六欲": "以禽星斗爭喻人事，行人欲至，七情六慾",  # 斗 左邻否决 / 欲
+    "月系上月，联系": "月系上月，聯繫",                                  # 系
+    "十二辟卦，开辟": "十二辟卦，開闢",                                  # 辟
+    "姓于，百姓于是，姓朴，朴素": "姓于，百姓於是，姓朴，樸素",          # 于 / 朴
+    "谷城县，巨鹿县，沈北新区，岳池县": "谷城縣，巨鹿縣，瀋北新區，岳池縣",  # 谷 巨 沈 岳
+    "按七曜周历机制": "按七曜週曆機制",                                  # 周
+    "青龙须防走穴，胡须美": "青龍須防走穴，鬍鬚美",                      # 须
+    "盘面宫制取值，盘面绘制": "盤面宮制取值，盤面繪製",                  # 制
+    "按所选铺法划子限": "按所選鋪法劃子限",                              # 划
+    "气薄者刮去表皮，血症，元素借贷": "氣薄者刮去表皮，血症，元素借貸",  # 刮 症 借
+    "立向应位于丙，走六步向导": "立向應位於丙，走六步嚮導",              # 向
+    "左手托向日葵，所托非人": "左手托向日葵，所託非人",                  # 托（本仓 OpenCC 1.4.2 词典本就转对，上游 opencc-js 才错；只防回退）
+    "君子征凶，象征人的交朋": "君子征凶，象徵人的交朋",                  # 征
+    "须加注意，标注意义": "須加注意，標註意義",                          # 注
+    "败中复成，只重折算，统一折叠": "敗中復成，只重折算，統一摺疊",      # 复 折
+    "清·范騋，文高采华，再配余氏女": "清·范騋，文高采華，再配余氏女",    # 范 采 余
+    "页顶部有面包屑，十一吊客，只读档不准入": "頁頂部有麵包屑，十一弔客，只讀檔不准入",  # 面 吊 准
+    "前世行法布施，即鱼游静水之象": "前世行法布施，即魚游靜水之象",      # 布 游
+    "乐里悲，账本里涉及，本里程碑，岁差缺省拉希里": "樂裡悲，賬本裡涉及，本里程碑，歲差缺省拉希里",  # 里
+    # 白名单词跨词边界：左右邻否决
+    "（3 天后满 30 岁，立春后土囚死，常有云雾，星历经度，十分钟会议": "（3 天後滿 30 歲，立春後土囚死，常有雲霧，星曆經度，十分鐘會議",
+    "辛丑事至，远行凶死，末传天后，皇天后土": "辛丑事至，遠行凶死，末傳天后，皇天后土",
+}
+# 整串判据（逗号会把串首规则打断，单列）
+UPSTREAM_V313_WHOLE = {
+    "出生地:特罗布里奇, 英格兰": "出生地:特羅布里奇, 英格蘭",   # 名人库出生地整串：音译用字取原字
+    "出生地:马扎甘, 摩洛哥": "出生地:馬扎甘, 摩洛哥",
+    "里瓦": "裡瓦",                                               # 对照：无标签前缀不作地名判（旧规则也如此，只防误扩）
+    # 白名单词认繁体写法（上游同）：原文本就含繁体时，已转过的词再转一次不变
+    "樹干": "樹幹", "馬克": "馬克", "經云": "經云", "傑克": "傑克",
+    # 上游的「原文已是繁体则不改」本仓不收（algorithm_deviations）：简繁混排的上游原文照常转
+    "忙里偷閒，動里求靜": "忙裡偷閒，動裡求靜",
+}
+
+
+@pytest.mark.parametrize("simplified,traditional", {**UPSTREAM_V313_CASES, **UPSTREAM_V313_WHOLE}.items())
+def test_upstream_v313_rules(simplified: str, traditional: str) -> None:
+    assert convert(simplified, TRADITIONAL) == traditional
 
 
 def test_conversion_is_idempotent_and_leaves_non_chinese_alone() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from horosa_skill.civil_calendar import _leading_year_of
 from horosa_skill.errors import (
     HorosaSkillError,
     ToolTransportError,
@@ -90,7 +91,18 @@ class SanshiRunners:
         return normalized
 
     def _run_qimen_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        year = int(str(payload["date"])[:4])
+        # 上游 DunJiaMain（:1765）`parseInt(flds.date.value.format('YYYY'))` = DateTime 的 ad × year：带符号显示年
+        # （公元前 '-0500-03-21' → -500；五位年原样）。旧 int(date[:4]) 把 '-0500' 切成 -50、'10000' 切成 1000 →
+        # 节气种子年全错。日期不带负号而 ad=-1（公元前的另一种写法）同样读成负年。
+        year = _leading_year_of(payload["date"])
+        if year is None:
+            raise ToolValidationError(
+                bilingual(f"奇门遁甲：读不出日期的年份：{payload['date']!r}。", f"qimen: cannot read the year of date {payload['date']!r}."),
+                code="tool.qimen_invalid_date",
+                details={"date": payload.get("date")},
+            )
+        if year > 0 and _js_parse_int(payload.get("ad")) == -1:
+            year = -year
         options = _qimen_effective_options(payload)
         time_alg = options.get("timeAlg", 0)
         nongli = payload.get("nongli")
@@ -252,15 +264,19 @@ class SanshiRunners:
         }
 
     def _run_jinkou_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        liureng = payload.get("liureng")
-        if not isinstance(liureng, dict):
-            remote = self._call_remote(
-                "/liureng/gods",
-                _liureng_remote_payload("liureng_gods", payload),
-            )
-            liureng = remote.get("liureng", remote)
         options = dict(payload.get("options") or {})
         _jinkou_validate_options(options)
+        liureng = payload.get("liureng")
+        if not isinstance(liureng, dict):
+            # v3.12.0 起四柱 / 占时随「时间基准」取（JinKouMain.genGodsParams:1389-1412、无头 regenDivination.js:176-178：
+            # timeAlg = trueSolar ? 0 : 1，缺省 direct = 按钟表时）。此前不带 timeAlg → 后端恒按真太阳时，而 ken 四位按钟表时，
+            # 一张课两个时辰；本地引擎（流派非缺省）则时间基准整个无效。
+            jinkou_time_alg = 0 if (options.get("timeBasis") or "direct") == "trueSolar" else 1
+            remote = self._call_remote(
+                "/liureng/gods",
+                _liureng_gods_payload("liureng_gods", payload, jinkou_time_alg),
+            )
+            liureng = remote.get("liureng", remote)
         nongli = liureng.get("nongli") if isinstance(liureng, dict) and isinstance(liureng.get("nongli"), dict) else {}
         # 地分缺省 = 自动取占时支（上游 JinKouMain.js:907 diFenAuto:true → resolveJinKouDiFen 首次起课取
         # 占时支）。此前缺省发「子」给 ken（本地脚手架却取占时支），默认盘恒按子地分起。
@@ -276,7 +292,7 @@ class SanshiRunners:
         if not school_overrides:
             ken_parts: dict[str, Any] = _ken_datetime_parts(payload)
             if time_basis == "trueSolar":
-                # 上游 fetchJinKouPan → resolveCalculationDateTime（JinKouCalc.js:2707）：真太阳时 = liureng.nongli.birth。
+                # 上游 fetchJinKouPan → resolveCalculationDateTime（JinKouCalc.js:2630，v3.13.0）：真太阳时 = liureng.nongli.birth。
                 solar = _parse_taiyi_datetime_text(nongli.get("birth"))
                 if solar:
                     ken_parts = {**ken_parts, **solar}
@@ -293,22 +309,34 @@ class SanshiRunners:
                     "jiedelta": nongli.get("jiedelta", ""),
                     "date": payload.get("date"),
                     "time": payload.get("time"),
-                    # 日界 + 晚子时两开关（上游 JinKouCalc.js:2823-2825 fetchJinKouPan 两键齐发，缺省=defaultAfter23NewDay()=1）：
+                    # 日界 + 晚子时两开关（上游 JinKouCalc.js:2747-2748 fetchJinKouPan 两键齐发，缺省=defaultAfter23NewDay()=1）：
                     # 显式给定才发送，缺省不发 → ken 缺省 1/1（webjinkousrv.py:244-245）= 上游出厂缺省，且与六壬前置同口径
                     # （LiuRengGodsInput.after23NewDay 缺省不再硬塞 False）。此前只发晚子时键，显式 after23NewDay=0 到不了 ken。
                     **_day_boundary_switches(payload),
                 },
             )
             self._require_ken_pan(ken_response, engine="kinjinkou", endpoint="/jinkou/pan")
-        elif time_basis != "direct":
-            # 上游本地引擎不读时间基准（占时与日柱恒随 /liureng/gods 真太阳时口径），页面把该控件置灰（JinKouMain.js:1972）。
-            warnings.append(
-                f"金口诀 timeBasis={time_basis} 本次未生效：流派/盘法 {'/'.join(school_overrides)} 非缺省，"
-                "改由本地引擎出课，占时与日柱恒按真太阳时（上游同样置灰该选项）。"
-            )
+        # 贵神昼夜按真实地平（上游无头 regenerateJinkouSnapshot → ensureLiurengChartObjects：/liureng/gods 回包缺 isDiurnal
+        # 时补一份 /chart 取 isDiurnal，取不到才留 null = 按时支粗判；页面 castIsDiurnal 同为地平口径）。此前 skill 只认调用方
+        # 显式 isDiurnal，缺省恒按时支粗判 —— 日出 / 日落前后的课贵人昼夜取反。
+        jinkou_payload = dict(payload)
+        if jinkou_payload.get("isDiurnal") is None:
+            lr_diurnal = liureng.get("isDiurnal") if isinstance(liureng, dict) else None
+            if lr_diurnal is None:
+                try:
+                    chart = self._call_remote("/chart", _liureng_chart_payload(payload))
+                    inner = chart.get("chart") if isinstance(chart.get("chart"), dict) else chart
+                    lr_diurnal = inner.get("isDiurnal")
+                except Exception as exc:  # noqa: BLE001 — 取不到昼夜只回退时支粗判（上游同），须留痕
+                    _degrade(
+                        "jinkou isDiurnal chart fetch failed: %s", exc,
+                        note="金口诀贵神昼夜：取 /chart 昼夜失败，本次按占时支粗判昼夜（上游取不到时同样回退）。",
+                    )
+            if lr_diurnal is not None:
+                jinkou_payload["isDiurnal"] = bool(lr_diurnal)
         js_result = self.js_client.run(
             "jinkou",
-            {**payload, "options": options, "liureng": liureng, "ken_response": ken_response},
+            {**jinkou_payload, "options": options, "liureng": liureng, "ken_response": ken_response},
         )
         _raise_js_option_error("jinkou", js_result)
         js_route = js_result.get("route") if isinstance(js_result, dict) else None

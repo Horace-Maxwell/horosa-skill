@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -30,7 +31,7 @@ from horosa_skill.errors import (
     ToolValidationError,
 )
 from horosa_skill.service import _clock
-from horosa_skill.service._common import _finite_number, _require_option
+from horosa_skill.service._common import _date_part_of, _finite_number, _require_option, _to_slash_date
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import _sign_degree
 from horosa_skill.service.text.predictive import (
@@ -38,20 +39,17 @@ from horosa_skill.service.text.predictive import (
     _PERSIAN_MAX_YEARS_OPTIONS,
     _PERSIAN_RATE,
     _PREDICTIVE_METHOD_NOTES,
-    _agepoint_moment_line,
-    _build_agepoint_snapshot_text,
+    _TIME_LORD_YEAR_TYPES,
     _build_decennials_snapshot_text,
-    _build_distributions_snapshot_text,
     _build_firdaria_snapshot_text,
     _build_jaynesprog_snapshot_text,
     _build_persianchart_section_text,
     _build_persiandirected_snapshot_text,
     _build_planetaryages_snapshot_text,
     _build_planetaryarc_snapshot_text,
-    _build_yearsystem129_snapshot_text,
-    _distributions_moment_line,
     _planetaryarc_default_datetime,
-    _predictive_birth_source,
+    _today_for_chart,
+    _wall_clock_for_chart,
 )
 
 
@@ -74,46 +72,107 @@ class PredictiveRunners:
             return None
         chart = natal.get("chart") if isinstance(natal.get("chart"), dict) else {}
         params = natal.get("params") if isinstance(natal.get("params"), dict) else {}
-        return {"params": params, "chart": {key: chart.get(key) for key in self._NATAL_HEADER_CHART_KEYS if key in chart}}
+        header_chart = {key: chart.get(key) for key in self._NATAL_HEADER_CHART_KEYS if key in chart}
+        # 极区天顶说明行（buildPredictiveBirthLines → polarMcOf(chart)）只读 houses[].polarMc：只带这一个字段。
+        polar = [{"polarMc": h.get("polarMc")} for h in (chart.get("houses") or []) if isinstance(h, dict) and h.get("polarMc")]
+        if polar:
+            header_chart["houses"] = polar
+        return {"params": params, "chart": header_chart}
+
+    # 上游 v3.13.0 年龄推进点 / 界推运各四项口径（utils/agePointOptions.js · utils/distributionsOptions.js，与后端
+    # agepoint.py / distributions.py、Java PredictiveController 白名单同名）。值域与 vendored 两份 options 文件互锚
+    # （tests/test_sync313_predictive.py）。认不出就报错——上游 normalize 会静默回落出厂值，那正是本仓要防的形状。
+    _PREDICT_RESULT_OPTION_DOMAINS: dict[str, dict[str, tuple[Any, ...]]] = {
+        "agepoint": {
+            "apMethod": ("koch", "equal5"),
+            "apEvents": ("full", "conj"),
+            "apYear": ("tropical", "sidereal"),
+            "apMaxAge": (72, 100, 120, 144),
+        },
+        "distributions": {
+            "distReleaser": (
+                "Asc", "MC", "Desc", "IC", "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn",
+                "Uranus", "Neptune", "Pluto", "North Node", "Vertex", "Pars Fortuna", "Spirit", "Syzygy",
+            ),
+            "distMethod": ("classical", "exact", "qisma"),
+            "distYear": ("tropical", "egyptian", "julian"),
+            "distYears": (60, 80, 100, 120, 150),
+        },
+    }
+    # 出厂值（AP_DEFAULTS / DIST_DEFAULTS）：请求体只带与之不同的键（apRequestParams / distRequestParams 同律——缺省请求
+    # 与旧版逐字节相同）。
+    _PREDICT_RESULT_OPTION_DEFAULTS: dict[str, dict[str, Any]] = {
+        "agepoint": {"apMethod": "koch", "apEvents": "full", "apYear": "tropical", "apMaxAge": 72},
+        "distributions": {"distReleaser": "Asc", "distMethod": "classical", "distYear": "tropical", "distYears": 100},
+    }
+
+    def _predict_result_options(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
+        options: dict[str, Any] = {}
+        for field, allowed in self._PREDICT_RESULT_OPTION_DOMAINS[technique].items():
+            value = payload.get(field)
+            if value is None or value == "":
+                continue
+            if isinstance(allowed[0], int):
+                number = _finite_number(value)
+                value = int(number) if number is not None and number == int(number) else value
+            _require_option(value, allowed, field=field, tool=technique)
+            options[field] = value
+        return options
+
+    def _run_predict_result_tool(
+        self, payload: dict[str, Any], technique: str, endpoint: str, fetch: Callable[[dict[str, Any]], dict[str, Any]]
+    ) -> dict[str, Any]:
+        """年龄推进点 / 界推运（上游 v3.13.0）：后端算时间线，vendored 上游 buildXxxSnapshotFromResult 排版。
+
+        与上游无头路径同形（AstroAgePoint.js / AstroDistributions.js buildXxxSnapshotText）：请求体 = 本盘排盘参数 +
+        与出厂值不同的口径键；结果交 builder(chartObj, r, opts)。builder 自带的 [当前时点] 定位行（当前年龄点 / 下一事件 /
+        当前分配星 / 当前伙伴星）经 progextra 回传，[起盘信息]/[当前时点]/[方法说明] 由 Python 公共段出。
+        """
+        options = self._predict_result_options(payload, technique)
+        defaults = self._PREDICT_RESULT_OPTION_DEFAULTS[technique]
+        remote_payload = {key: value for key, value in payload.items() if key not in defaults}
+        remote_payload["predictive"] = payload.get("predictive", 1)
+        remote_payload.update({key: value for key, value in options.items() if value != defaults[key]})
+        response = fetch(remote_payload)
+        natal_header = self._natal_header(technique, payload)
+        chart_obj = natal_header or _ptext.payload_chart_wrap(payload)
+        try:
+            js = self.js_client.run("progextra", self._progextra_payload(technique, chart_obj, options, response))
+            snapshot_text, moment_lines, js_error = self._progextra_unpack(technique, js)
+        except Exception as exc:
+            _degrade("progextra JS engine failed (technique=%s): %s", technique, exc)
+            snapshot_text, moment_lines, js_error = "", [], f"{exc}"
+        if not snapshot_text:
+            # 上游 builder 无数据返回 ''（挂载显示「缺失」）；skill 侧空快照会落 generated_template 假导出——一律报错（§5.9）。
+            raise ToolValidationError(
+                f"{endpoint} 没有返回可排版的{technique}时间线（上游此时显示「缺失」）{f'：{js_error}' if js_error else ''}"
+                f" / {endpoint} returned no {technique} timeline to format",
+                code=f"tool.{technique}_empty",
+                details={"tool": technique, "endpoint": endpoint, "options": options, "js_error": js_error},
+            )
+        result: dict[str, Any] = {"options": options, "raw": response, "snapshot_text": snapshot_text}
+        if technique == "agepoint":
+            agepoint = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
+            result.update({"agepoint": agepoint, "points": agepoint.get("points", [])})
+        else:
+            result.update({"distributions": response.get("dist", []), "partners": response.get("distPartners", [])})
+        if natal_header:
+            result["natalHeader"] = natal_header
+        result["_moment_lines"] = moment_lines
+        result["export_snapshot"] = self._augment_export_payload(technique=technique, snapshot_text=snapshot_text)
+        return result
 
     def _run_agepoint_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the whole Koch-house cycle.
-        remote_payload = {**payload, "predictive": payload.get("predictive", 1)}
-        response = self._call_remote("/predict/agepoint", remote_payload)
-        snapshot_text = _build_agepoint_snapshot_text(response)
-        agepoint = response.get("agepoint") if isinstance(response.get("agepoint"), dict) else {}
-        result = {
-            "agepoint": agepoint,
-            "points": agepoint.get("points", []),
-            "raw": response,
-            "snapshot_text": snapshot_text,
-        }
-        natal_header = self._natal_header("agepoint", payload)
-        if natal_header:
-            result["natalHeader"] = natal_header
-        birth = _predictive_birth_source(result, payload).get("params", {}).get("birth")
-        moment_line = _agepoint_moment_line(response, birth)
-        result["_moment_lines"] = [moment_line] if moment_line else []
-        result["export_snapshot"] = self._augment_export_payload(technique="agepoint", snapshot_text=snapshot_text)
-        return result
+        # 年龄推进点 (Age Point / Huber): backend /predict/agepoint computes the cycle; vendored upstream builder formats.
+        return self._run_predict_result_tool(
+            payload, "agepoint", "/predict/agepoint", lambda body: self._call_remote("/predict/agepoint", body)
+        )
 
     def _run_distributions_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 界推运 (Distributions / 分配法): backend /predict/dist computes the full-life term timeline.
-        remote_payload = {**payload, "predictive": payload.get("predictive", 1)}
-        response = self._call_remote("/predict/dist", remote_payload)
-        snapshot_text = _build_distributions_snapshot_text(response)
-        result = {
-            "distributions": response.get("dist", []),
-            "raw": response,
-            "snapshot_text": snapshot_text,
-        }
-        natal_header = self._natal_header("distributions", payload)
-        if natal_header:
-            result["natalHeader"] = natal_header
-        moment_line = _distributions_moment_line(response)
-        result["_moment_lines"] = [moment_line] if moment_line else []
-        result["export_snapshot"] = self._augment_export_payload(technique="distributions", snapshot_text=snapshot_text)
-        return result
+        # 界推运 (Distributions / 分配法): backend /predict/dist computes distributor + partner periods.
+        return self._run_predict_result_tool(
+            payload, "distributions", "/predict/dist", lambda body: self._call_remote("/predict/dist", body)
+        )
 
     def _progression_target(self, payload: dict[str, Any]) -> dict[str, Any]:
         """目标时刻型推运（vedicprog/jaynesprog）的请求三键，缺省与上游 builder 同律（F10）：
@@ -127,7 +186,8 @@ class PredictiveRunners:
         if minor_variant is not None:
             _require_option(minor_variant, tuple(_ptext.MINOR_VARIANT_LABEL), field="minorVariant", tool="progression")
         return {
-            "targetDate": f"{payload.get('targetDate') or _clock.now().strftime('%Y-%m-%d')}".strip(),
+            # v3.12.0：缺省「今日」按本盘时区（astroProgSnapshot.js:18-21 today(chartZone(chartObj))）。
+            "targetDate": f"{payload.get('targetDate') or _today_for_chart(payload.get('zone'))}".strip(),
             "targetTime": f"{payload.get('targetTime') or '12:00:00'}".strip(),
             "minorVariant": minor_variant or _ptext.DEFAULT_MINOR_VARIANT,
         }
@@ -237,7 +297,8 @@ class PredictiveRunners:
         """
         natal_payload = self._astroextra_natal_payload(payload)
         natal = self._call_remote("/chart", natal_payload)
-        today = _clock.now()
+        # v3.12.0 defaultEphemerisWindow(zone)：「今日」按本盘时区钟面（DateTime.wallClockForChart；无时区 = 本机今日）。
+        today = _wall_clock_for_chart(payload.get("zone"))
         start_date = self._astroextra_date(payload, "startDate", code="tool.ephemeris_invalid_window") or today.strftime("%Y-%m-%d")
         end_date = self._astroextra_date(payload, "endDate", code="tool.ephemeris_invalid_window") or (
             today + timedelta(days=90)
@@ -321,7 +382,8 @@ class PredictiveRunners:
         natal = self._call_remote("/chart", natal_payload)
         start_year = payload.get("startYear")
         if start_year in (None, "", 0):
-            start_year = _clock.now().year
+            # v3.12.0 AstroReturnTimeline.js:18：「今年」按本盘时区钟面（DateTime.wallClockForChart）。
+            start_year = _wall_clock_for_chart(payload.get("zone")).year
         count = payload.get("count")
         if count in (None, "", 0):
             count = 12
@@ -436,7 +498,7 @@ class PredictiveRunners:
             target_date = self._astroextra_date({"datetime": parts[0]}, "datetime", code="tool.prog_invalid_option")
             if not target_time_raw and len(parts) > 1:
                 target_time_raw = parts[1]
-        target_date = target_date or _clock.now().strftime("%Y-%m-%d")
+        target_date = target_date or _today_for_chart(payload.get("zone"))  # v3.12.0：今日按本盘时区
         target_time = "12:00:00"
         if target_time_raw:
             time_match = re.fullmatch(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", target_time_raw)
@@ -498,7 +560,7 @@ class PredictiveRunners:
         _require_option(arc_source, _ARC_SOURCES, field="arcSource", tool="planetaryarc")
         remote_payload = {
             **payload,
-            "datetime": payload.get("datetime") or payload.get("targetDate") or _planetaryarc_default_datetime(),
+            "datetime": payload.get("datetime") or payload.get("targetDate") or _planetaryarc_default_datetime(zone=payload.get("zone")),
             "asporb": payload.get("asporb", 1),
             "arcSource": arc_source,
         }
@@ -545,14 +607,32 @@ class PredictiveRunners:
     _PROGEXTRA_OPTION_DOMAINS: dict[str, dict[str, tuple[str, ...]]] = {
         "balbillus": {
             "startPlanet": ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"),
-            "yearType": ("solar", "hellenistic"),
+            # 上游 v3.13.0：年制扩成 utils/timeLordYears.js TIME_LORD_YEAR_TYPES 六档（与 129 年系统共用一张表）。
+            "yearType": _TIME_LORD_YEAR_TYPES,
             "mode": ("nearest", "forward"),
+            # 上游 v3.13.0 新增子限铺法（balbillus.js BALBILLUS_SUB_RULES；缺省 once）。
+            "subRule": ("once", "cycle", "fill"),
         },
         "triplicityrulers": {
             "system": ("Dorothean", "Ptolemaic", "PtolemaicWaterVariant"),
             "division": ("thirds", "halves"),
         },
         "keypoints": {"mode": ("soul", "body")},
+        # 上游 v3.13.0 utils/yearSystem129.js:33-46（YS129_START_OPTIONS / YS129_ORDERS / YS129_YEAR_TYPES /
+        # YS129_SUB_RULES）。入参键带 ys129 前缀（= 上游页面保存键与挂载齿轮键，techniqueMountSettings.js:1509-1518），
+        # 下发给 builder 时按 _PROGEXTRA_OPTION_KEYS 换成 opts 键（regenChart.js:263-267 同一映射）。
+        "yearsystem129": {
+            "ys129StartPlanet": ("sect", "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"),
+            "ys129Order": ("zodiacal", "chaldean"),
+            "ys129YearType": _TIME_LORD_YEAR_TYPES,
+            "ys129SubRule": ("days", "proportional", "equal"),
+        },
+    }
+    # 入参键 → builder opts 键（未列 = 同名）。
+    _PROGEXTRA_OPTION_KEYS: dict[str, dict[str, str]] = {
+        "yearsystem129": {
+            "ys129StartPlanet": "startPlanet", "ys129Order": "order", "ys129YearType": "yearType", "ys129SubRule": "subRule",
+        },
     }
     # triplicityrulers.lifespan：上游齿轮 number 30–120（缺省 75）。
     _TRIPLICITY_LIFESPAN_RANGE = (30, 120)
@@ -564,7 +644,7 @@ class PredictiveRunners:
             if value is None:
                 continue
             _require_option(value, allowed, field=field, tool=technique)
-            options[field] = value
+            options[self._PROGEXTRA_OPTION_KEYS.get(technique, {}).get(field, field)] = value
         if technique == "triplicityrulers" and payload.get("lifespan") is not None:
             lifespan = _finite_number(payload.get("lifespan"))
             low, high = self._TRIPLICITY_LIFESPAN_RANGE
@@ -578,6 +658,35 @@ class PredictiveRunners:
             options["lifespan"] = lifespan
         return options
 
+    @staticmethod
+    def _progextra_payload(
+        technique: str, chart: dict[str, Any], options: dict[str, Any], result: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """horosa-core-js progextra 的入参。`now_ms` 把服务层的「此刻」（`_clock.now()`，测试可冻结）交给 JS：builder 的
+        定位行（当前主限 / 当前年龄点 / 当前分配星…）按 `Date.now()` 算，progextra 在调用期间把它钉到这个瞬时——
+        与 Python 侧 [当前时点] 同一个「此刻」。"""
+        payload: dict[str, Any] = {
+            "technique": technique, "chart": chart, "options": options,
+            "now_ms": int(_clock.now().astimezone().timestamp() * 1000),
+        }
+        if result is not None:
+            payload["result"] = result
+        return payload
+
+    @staticmethod
+    def _progextra_unpack(technique: str, js: Any) -> tuple[str, list[str], str]:
+        """progextra 回包 → (snapshot_text, [当前时点] 定位行, 失败原因)；builder 失败经 _degrade 进 envelope 警告。"""
+        if not isinstance(js, dict):
+            return "", [], "progextra returned a non-object"
+        # builder 自算的 [当前时点] 定位行（当前主限 / 当前所处阶段 / 当前推运月相…）。
+        moment_lines = [f"{line}" for line in (js.get("moment_lines") or []) if line]
+        js_data = js.get("data") if isinstance(js.get("data"), dict) else {}
+        error = ""
+        if js_data.get("ok") is False:
+            error = f"{js_data.get('reason') or ''} {js_data.get('error') or ''}".strip()
+            _degrade("progextra builder failed (technique=%s): %s", technique, error)
+        return f"{js.get('snapshot_text') or ''}".strip(), moment_lines, error
+
     def _run_progextra_js_tool(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
         # v2.5.0 推运 builders that are too algorithm-heavy to re-port (balbillus 129年旺距削减 / persiandirected /
         # yearsystem129): cast the natal /chart, then run the vendored 星阙 frontend builder via horosa-core-js,
@@ -589,20 +698,10 @@ class PredictiveRunners:
         chart_payload.pop("dirLat", None)
         chart_payload.pop("dirLon", None)
         response = self._call_remote("/chart", chart_payload)
-        snapshot_text = ""
-        moment_lines: list[str] = []
+        snapshot_text, moment_lines = "", []
         try:
-            js = self.js_client.run("progextra", {"technique": technique, "chart": response, "options": options})
-            if isinstance(js, dict):
-                snapshot_text = f"{js.get('snapshot_text') or ''}".strip()
-                # builder 自算的 [当前时点] 定位行（当前主限 / 当前所处阶段 / 当前推运月相…）。
-                moment_lines = [f"{line}" for line in (js.get("moment_lines") or []) if line]
-                js_data = js.get("data") if isinstance(js.get("data"), dict) else {}
-                if js_data.get("ok") is False:
-                    _degrade(
-                        "progextra builder failed (technique=%s): %s %s",
-                        technique, js_data.get("reason"), js_data.get("error") or "",
-                    )
+            js = self.js_client.run("progextra", self._progextra_payload(technique, response, options))
+            snapshot_text, moment_lines, _ = self._progextra_unpack(technique, js)
         except Exception as exc:
             _degrade("progextra JS engine failed (technique=%s): %s", technique, exc)
         return {
@@ -627,15 +726,33 @@ class PredictiveRunners:
     _EXTRARETURNS_COUNT = 5
 
     @staticmethod
-    def _extrareturns_body_line(cn: str, period: str, resp: dict[str, Any], rows: list[dict[str, Any]]) -> str:
-        """逐字镜像上游 AstroExtraReturns.js:43-53 的每体一行。
+    def _extrareturns_node_type_text(natal_params: dict[str, Any] | None, payload: dict[str, Any]) -> str:
+        """上游 AstroExtraReturns.js:44-48 nodeTypeText(chartObj)：本盘 westNodeType / guolaoNodeType 为 'true' → 真交点，
+        否则平交点（缺省）。chartObj.params 取本命 /chart 回显，回显缺键时退回请求载荷（同一组排盘参数）。"""
+        params = natal_params if isinstance(natal_params, dict) else {}
+
+        def pick(key: str) -> Any:
+            return params.get(key) if params.get(key) is not None else payload.get(key)
+
+        return "真交点" if pick("westNodeType") == "true" or pick("guolaoNodeType") == "true" else "平交点"
+
+    @staticmethod
+    def _extrareturns_body_line(cn: str, period: str, resp: dict[str, Any], rows: list[dict[str, Any]], node_txt: str = "") -> str:
+        """逐字镜像上游 AstroExtraReturns.js:72-82（v3.13.0）的每体一行。
 
         [Q-366/T-345] 后端同一回列全部逆行三过（passes，顺→逆→顺）：>1 过时写 `第N回 d1/d2(逆)/d3`，
-        单过仍是一个日期；行尾追加各回时刻 + 本命黄经（toFixed(1)，与 UI 同口径）。
+        单过仍是一个日期；行尾追加各回时刻 + 本命黄经（toFixed(1)，与 UI 同口径）。v3.13.0：后端在星历范围外求不到的回
+        带 `found: false` → 日期格写「范围内未找到」、时刻格写「-」；月交行在体名后标（真交点）/（平交点）。
         """
-        def dates_cell(row: dict[str, Any]) -> str:
+        def passes_of(row: dict[str, Any]) -> list[Any]:
             passes = row.get("passes")
-            if isinstance(passes, list) and len(passes) > 1:
+            return passes if isinstance(passes, list) else []
+
+        def dates_cell(row: dict[str, Any]) -> str:
+            if row.get("found") is False:
+                return f"第{_ptext.js_str(row.get('which'))}回 范围内未找到"
+            passes = passes_of(row)
+            if len(passes) > 1:
                 joined = "/".join(
                     f"{pp.get('date')}{'(逆)' if pp.get('retrograde') else ''}" for pp in passes if isinstance(pp, dict)
                 )
@@ -643,16 +760,22 @@ class PredictiveRunners:
             return f"第{_ptext.js_str(row.get('which'))}回 {row.get('date')}"
 
         dates_txt = "，".join(dates_cell(row) for row in rows)
-        times_txt = "，".join(f"第{_ptext.js_str(row.get('which'))}回 {row.get('time') or '-'}" for row in rows)
+        times_txt = "，".join(
+            f"第{_ptext.js_str(row.get('which'))}回 {'-' if row.get('found') is False else (row.get('time') or '-')}" for row in rows
+        )
         natal_lon = resp.get("natalLon")
         natal_lon_txt = f"；本命黄经 {_ptext.js_to_fixed(natal_lon, 1)}°" if natal_lon is not None else ""
-        return f"{cn}（{period}）：{dates_txt}；时刻：{times_txt}{natal_lon_txt}"
+        node = f"（{node_txt}）" if node_txt else ""
+        return f"{cn}{node}（{period}）：{dates_txt}；时刻：{times_txt}{natal_lon_txt}"
 
     def _run_extrareturns_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         remote_base = {**payload, "predictive": 0}
         for key in ("datetime", "dirZone", "dirLat", "dirLon"):
             remote_base.pop(key, None)
         lines = ["[多重回归]"]
+        # 本命盘先取（[起盘信息] + 月交行的真/平交点标注都读它；上游 chartObj 同一份）。
+        natal_header = self._natal_header("extrareturns", payload)
+        node_txt = self._extrareturns_node_type_text((natal_header or {}).get("params"), payload)
         for body_key, cn, period in self._EXTRARETURNS_BODIES:
             try:
                 resp = self._call_remote(
@@ -666,10 +789,9 @@ class PredictiveRunners:
                 continue
             rows = [r for r in rows if isinstance(r, dict)]
             if rows:
-                lines.append(self._extrareturns_body_line(cn, period, resp, rows))
+                lines.append(self._extrareturns_body_line(cn, period, resp, rows, node_txt if body_key == "Node" else ""))
         snapshot_text = "\n".join(lines) if len(lines) > 1 else ""
         result: dict[str, Any] = {}
-        natal_header = self._natal_header("extrareturns", payload)
         if natal_header:
             result["natalHeader"] = natal_header
         # [日月返照年表]（v0.33.0 批 I-3，/astroextra/returns）：逐年日返/月返精确时刻 + 返照上升。
@@ -712,25 +834,17 @@ class PredictiveRunners:
         return result
 
     def _run_yearsystem129_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 129年系统: data is computed server-side and carried in response.predictives.yearsystem129
-        # only when the chart is cast with predictive truthy.
-        chart_payload = {**payload, "predictive": 1}
-        chart_payload.pop("datetime", None)
-        chart_payload.pop("dirZone", None)
-        response = self._call_remote("/chart", chart_payload)
-        snapshot_text = _build_yearsystem129_snapshot_text(response)
-        return {
-            "chart": response.get("chart"),
-            "raw": response,
-            "snapshot_text": snapshot_text,
-            "export_snapshot": self._augment_export_payload(technique="yearsystem129", snapshot_text=snapshot_text),
-        }
+        # 129 年系统：上游 v3.13.0 删了后端 astrostudy/yearsystem129.py（/chart 不再回 predictives.yearsystem129——
+        # 旧 runner 读这个字段，于是恒出「本盘无数据」）。现由 vendored 上游 utils/yearSystem129.js 在本命盘上推算
+        # （horosa-core-js progextra），起始星 / 次序 / 年制 / 子限铺法四项经 ys129* 入参下发。
+        return self._run_progextra_js_tool(payload, "yearsystem129")
 
     @staticmethod
     def _persian_target_datetime(payload: dict[str, Any]) -> str:
-        """datetime → 'YYYY-MM-DD HH:mm:ss'；只给日期补正午（与上游 predict 面板日期选择同义）。"""
+        """datetime → 'YYYY-MM-DD HH:mm:ss'；只给日期补正午（与上游 predict 面板日期选择同义）。
+        「只有日期」按日期段整串判（公元前 '-0450-03-21' 11 个字符、五位年 12 个——旧 len()==10 判不出、不补正午）。"""
         target = str(payload.get("datetime") or "").strip().replace("/", "-").replace("T", " ")
-        if len(target) == 10:
+        if target and _date_part_of(target) == target:
             target = f"{target} 12:00:00"
         return target
 
@@ -786,7 +900,8 @@ class PredictiveRunners:
         return result
 
     def _persianchart_by_date(self, payload: dict[str, Any]) -> dict[str, Any]:
-        target = self._persian_target_datetime(payload).replace("-", "/")
+        # toSlashDate：只换数字之间的 '-'（旧 replace("-", "/") 连公元前前导负号一起换掉）
+        target = _to_slash_date(self._persian_target_datetime(payload))
         remote = {**payload, "datetime": target, "predictive": 0}
         # 上游 v3.11 [Q-173]：/predict/persianchart 按 dirZone 解释目标时刻（空则本命时区）——dirZone 必须透传，
         # 不能再剥（旧实现剥掉 = 撤销上游「按所选时区」修正）。

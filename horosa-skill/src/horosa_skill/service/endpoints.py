@@ -1,6 +1,7 @@
 """端点路由：哪些端点走 Python chart 服务、神数端点表、Java 日期格式的重试写法（只换写法不换值）。"""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _JAVA_CHART_DATE_ENDPOINTS = {"/chart", "/chart12", "/chart13", "/india/chart"}
@@ -130,20 +131,22 @@ _PYTHON_CHART_ENDPOINTS = {
 }
 
 
+# 日期段 'YYYY-MM-DD' 头（年带符号、4–5 位：公元前 '-0500-03-21'、五位年 '10000-01-01'）。旧实现按固定下标 [4]/[7]
+# 判分隔符：公元前 / 五位年的头认不出、原样发出（上游 toSlashDate 只换数字之间的 '-'，前导负号保留）。
+_DASH_DATE_HEAD_RE = re.compile(r"^(-?\d{4,5})-(\d{2})-(\d{2})")
+_SLASH_DATE_HEAD_RE = re.compile(r"^(-?\d{4,5})/(\d{2})/(\d{2})")
+
+
 def _slash_date_prefix(value: Any) -> Any:
     if not isinstance(value, str):
         return value
-    if len(value) < 10 or value[4] != "-" or value[7] != "-":
-        return value
-    return f"{value[:4]}/{value[5:7]}/{value[8:10]}{value[10:]}"
+    return _DASH_DATE_HEAD_RE.sub(r"\1/\2/\3", value, count=1)
 
 
 def _dash_date_prefix(value: Any) -> Any:
     if not isinstance(value, str):
         return value
-    if len(value) < 10 or value[4] != "/" or value[7] != "/":
-        return value
-    return f"{value[:4]}-{value[5:7]}-{value[8:10]}{value[10:]}"
+    return _SLASH_DATE_HEAD_RE.sub(r"\1-\2-\3", value, count=1)
 
 
 def _java_zone_hour(value: Any) -> Any:

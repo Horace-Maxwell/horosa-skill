@@ -138,9 +138,9 @@ class GuoLaoInput(BirthInput):
         "guolaoAyanamsa", "guolaoTuibianMethod", "guolaoGufaPrecess", "guolaoEqTropicalAnchor",
         "guolaoLimitYearBoundary",
     })
-    # 宿度制（上游 GuoLaoChartStyle.js:10 缺省 2 回归今宿；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
+    # 宿度制（上游 GuoLaoChartStyle.js:19 缺省 0 荀爽距星——v3.13.0 由 2 改；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
     # （宿占用），这里放宽成 int —— 2–8 此前被 pydantic 拒；旧 true/false 照后端 parseSu28Mode 解释为 1/0。
-    doubingSu28: int | bool | None = Field(default=None, description="宿度制 0–8（缺省 2 回归今宿；4 恒星制；全表见 guidance）。")
+    doubingSu28: int | bool | None = Field(default=None, description="宿度制 0–8（缺省 0 荀爽距星；2 回归今宿；4 恒星制；全表见 guidance）。")
     # 七政四余（v0.36.0 C1）：Java /qizheng/moira 规则层入参 + 流年盘时刻。缺省与上游 UI 默认一致。
     guolaoLifeMode: str | None = Field(default=None, description="命度法：asc 上升（缺省）| yumao 日出 | gumao 遇卯 | cotrans 赤黄 | 子–亥自定。")
     guolaoBodyMode: str | None = Field(default=None, description="身宫法：taiyin（太阴落宫，默认）| youjin（逢酉·琴堂）| 指定地支。")
@@ -249,7 +249,7 @@ class GermanyInput(BirthInput):
     # 后端 webgermanysrv.midpoint 读这些键）。此前未声明：CLI 经 extra 透传得到，MCP 扁平面却静默丢弃、流派写错也不报。
     # 照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（预算）；说明见 agent_guidance options_keys。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
-        {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison"}
+        {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison", "mpCoord"}
     )
     school: Literal["classic", "pure", "uranian", "cosmo"] | None = Field(
         default=None, description="汉堡流派：classic 原始汉堡（缺省）| pure 纯净派 | uranian 美国对称 | cosmo 宇宙生物学（不用虚星，缺省容许度 1.5°）。"
@@ -260,6 +260,11 @@ class GermanyInput(BirthInput):
     frames: bool | None = Field(default=None, description="六宫框（[六宫框落宫] 段）：缺省 true。")
     declination: bool | None = Field(default=None, description="赤纬平行/反平行接触：缺省 true。")
     davison: dict[str, Any] | None = Field(default=None, description="戴维森盘第二人 {date,time,zone,lat,lon[,ad]}：产 [戴维森盘] 段。")
+    # v3.13.0 挂载齿轮 GERMANY_FIELDS.mpCoord（techniqueMountSettings.js）→ germanyMidpointRequestParams 只在 ra/decl 时下发
+    # /germany/midpoint（后端 germany/coord_midpoint.py 另算 coordMidpoints）→ 快照 [中点坐标] 段。lon/缺省 = 不成段。
+    mpCoord: Literal["lon", "ra", "decl"] | None = Field(
+        default=None, description="中点坐标：lon 黄经（缺省，不另成段）| ra 赤经 | decl 赤纬（后两者产 [中点坐标] 段）。"
+    )
     # 上游 v3.11 [Q-442/T-405]「校时」页签（只读预览）：待校事件 → 太阳弧（Naibod）推进 MC/Asc 看是否触动本命因子。
     rectifyEvents: list[dict[str, Any]] | None = Field(
         default=None,

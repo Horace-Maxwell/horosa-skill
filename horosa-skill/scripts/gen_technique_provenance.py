@@ -53,6 +53,8 @@ SHARED_RUNNER = {
     # /chart 起本命盘 + vendored 星阙前端 builder（horosa-core-js progextra）推算并出快照。
     # balbillus 有自己的 `_run_balbillus_tool`，但只是一行转发，证据同样在 progextra runner 里。
     **{k: "_run_progextra_js_tool" for k in ("keypoints", "lunationphase", "triplicityrulers", "balbillus")},
+    # v3.13.0：上游删了后端 yearsystem129.py（/chart 不再回 predictives.yearsystem129），改由前端 utils/yearSystem129.js 现算。
+    "yearsystem129": "_run_progextra_js_tool",
     "export_registry": None,
     "export_parse": None,
     "knowledge_registry": None,
@@ -72,23 +74,23 @@ CLASS = {
     # 那是**不诚实**的：它们确实铸盘，只是盘不是搜索算的。
     "composite": {"sanshiunited", "mundane", "extrareturns", "qimenzeri", "tianxing",
                   # progextra 族：chart 服务铸本命盘一条腿 + JS builder 在盘上推算一条腿。
-                  "keypoints", "lunationphase", "triplicityrulers", "balbillus",
+                  "keypoints", "lunationphase", "triplicityrulers", "balbillus", "yearsystem129",
                   "huanglizeri", "bazizeri", "taiyizeri", "ziweizeri", "liurengzeri", "sanshizeri",
                   "qizhengzeri", "indiazeri", "guolao_chart",
-                  # v0.40 mingli：八字 = 本地 lunar.js 引擎优先、域外/byLon/adjustJieqi 回退 Java（上游 BaZi.js:716-755）；
+                  # v0.40 mingli：八字 = 本地 lunar.js 引擎优先、域外/byLon 回退 Java（上游 BaZi.js:716-755）；
                   # 紫微 = Java 起盘 + 传本非缺省时本地 ZiweiCalc 重排（ZiWeiMain.js:786-804）；
                   # 宿占 = 八字公式起盘档走 Java /chart（带农历时支），ASC 档走 chart 服务。三者都是 vendored builder 出快照。
                   "bazi_birth", "bazi_direct", "ziwei_birth", "suzhan"},
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。
-    "frontend_read_port": {"planetaryages", "yearsystem129", "persiandirected"},
+    "frontend_read_port": {"planetaryages", "persiandirected"},
     # 神数族：kentang 引擎挂在 chart 服务上，后端直出 snapshot。
     "chart_service_shenshu": {k for k, runner in SHARED_RUNNER.items() if runner == "_run_shenshu_tool"},
     # 本地数据检索：不算盘，只读本地库/注册表。
     "local_data": {"astrodata", "export_registry", "export_parse", "knowledge_registry", "knowledge_read"},
     # 后端算、JS 只排版：runner 同时有端点与 JS 调用时启发式会误判 headless_js，这里显式点名。
-    "python_chart_backend": {"acg"},
+    "python_chart_backend": {"acg", "agepoint", "distributions"},
 }
 NOTES = {
     "ken_backed": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan",
@@ -104,13 +106,17 @@ NOTES = {
 }
 # 逐工具说明（覆盖族级 NOTES）。
 NOTE_OVERRIDES = {
-    "bazi_birth": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）",
-    "bazi_direct": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon/adjustJieqi 回退 Java /bazi/*；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）",
+    "bazi_birth": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon 回退 Java /bazi/*（adjustJieqi 随上游 v3.13.0 恒发 0）；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）",
+    "bazi_direct": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon 回退 Java /bazi/*（adjustJieqi 随上游 v3.13.0 恒发 0）；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）",
     "suzhan": "人事十二宫八字公式起盘（缺省）走 Java /chart（ChartController 附农历四柱，时支定宫序）；ASC 档或 Java 不可用走 chart 服务；vendored buildSuzhanSnapshotText 出快照（compute_sources.chart = java | chart_service）",
     "ziwei_birth": "Java /ziwei/birth 起盘（流派非通用时附四化表）；22 个传本开关任一非缺省 → 本地 vendored ZiweiCalc 重排盘核心 + 重算格局（同星阙 buildZiweiSnapshotForParams，ZiWeiMain.js:716-822）；vendored buildZiWeiSnapshotText 出快照（compute_sources.chart = java | ZiweiCalc）",
     "acg": "chart 服务 /location/acg*（ACGraph）算行星线、落点与世运事件；vendored JS acgSnapshot 只排 [占星地图] 段",
     **{k: "chart 服务 /chart 铸本命盘；技法本身由 vendored 星阙前端 builder（horosa-core-js progextra）在盘上推算并直出快照"
-       for k in ("keypoints", "lunationphase", "triplicityrulers", "balbillus")},
+       for k in ("keypoints", "lunationphase", "triplicityrulers", "balbillus", "yearsystem129")},
+    # v3.13.0：两技法的快照不再是 Python 手写 builder —— 后端 /predict/* 算，vendored 上游 build*SnapshotFromResult
+    # （horosa-core-js progextra FROM_RESULT_BUILDERS）按回包排版。
+    "agepoint": "chart 服务 /predict/agepoint 算年龄点与事件；vendored 星阙前端 buildAgePointSnapshotFromResult（horosa-core-js progextra）按回包排版",
+    "distributions": "chart 服务 /predict/dist 算界推运与伙伴星；vendored 星阙前端 buildDistributionsSnapshotFromResult（horosa-core-js progextra）按回包排版",
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "guolao_chart": (
         "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "
@@ -126,7 +132,9 @@ EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
     )},
     "indiazeri": {"endpoints": ["/indiaelectionscan/scan"]},
     "qizhengzeri": {"endpoints": ["/qizhengelectionscan/scan"]},
-    "mundane": {"engines": ["mundane_cards"]},  # 世俗盘右栏卡（tools/mundaneCards.js）
+    "mundane": {"engines": ["mundane_cards"]},
+    # agepoint / distributions：runner 经 _run_predict_result_tool 把 /predict/* 回包交给 progextra 的 FROM_RESULT_BUILDERS。
+    **{k: {"engines": ["progextra"]} for k in ("agepoint", "distributions")},  # 世俗盘右栏卡（tools/mundaneCards.js）
     # ken 族里「上游同判据路由到本地引擎」的合法算源（v3.11 sanshi chunk）：qimen 按 isQimenLocalRoute（本地家/飞盘/
     # 混合/报数/七组本地口径）走 calcDunJia、jinkou 按 schoolsAllDefault（五项流派任一非缺省）走 buildJinKouData ——
     # 两者都不打 ken，runner 回 compute_sources = 下列名字。不声明的话依据卡会把合法路由误标「与声明不一致」；

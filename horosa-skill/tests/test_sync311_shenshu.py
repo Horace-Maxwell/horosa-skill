@@ -156,7 +156,8 @@ def test_wuzhao_unreplayable_modes_fall_back_to_ganzhi_with_the_upstream_note(tm
     result = _run(service, "wuzhao", {**BASE, "options": {"mode": "day"}})
     assert result.ok, result.error
     assert client.sent("/wuzhao/pan")[-1]["mode"] == "ganzhi"
-    note = "复现说明：挂载无法复现随机起兆(所选「日干起盘」需开启「手动分爻复现」并填分爻数;存档亦无兆数)→ 已按干支起例"
+    # 原句随上游 v3.13.0 改写（「把「揲筮模式」设为手动复现」「已按干支起盘」；上游源对拍见 test_sync313_ports.py）。
+    note = "复现说明：挂载无法复现随机起兆(所选「日干起盘」需把「揲筮模式」设为手动复现并填分爻数;存档亦无兆数)→ 已按干支起盘"
     assert note in _section(result.data["snapshot_text"], "揲筮"), "复现说明须并入 [揲筮] 段（上游 appendReplayNote）"
     assert any("日干起盘" in warning for warning in result.warnings), "回落不许静默"
     manual = _run(service, "wuzhao", {**BASE, "options": {"mode": "day", "manual": True}})

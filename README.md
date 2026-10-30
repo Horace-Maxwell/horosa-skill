@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-110-1d4ed8?style=for-the-badge" alt="110 tools" />
-  <img src="https://img.shields.io/badge/测试-2184_passed-16a34a?style=for-the-badge" alt="2184 passed" />
+  <img src="https://img.shields.io/badge/测试-2379_passed-16a34a?style=for-the-badge" alt="2379 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -37,7 +37,7 @@
 
 克隆仓库、安装一次离线 runtime，Claude Code / Claude Desktop / Codex / Open WebUI / OpenClaw 等客户端即可通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占 / 灵棋经 / 小六壬 / 飞宫小奇门 / 小成图 / 皇极轨策 / 神数正传，以及全 14 路神数。
 
-算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构，**并附一张确定性的技法依据卡**；每次调用自动落成可检索的本地记录。**与星阙桌面端共用同一套后端、逐值同源**（导出契约 v15 镜像桌面端 aiExport v58，星阙 v3.11.3）。
+算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构，**并附一张确定性的技法依据卡**；每次调用自动落成可检索的本地记录。**与星阙桌面端共用同一套后端、逐值同源**（导出契约 v16 镜像桌面端 aiExport v60，星阙 v3.11.3）。
 
 ```
    🖥️  AI 客户端   Claude Code · Claude Desktop · Codex · Open WebUI · OpenClaw
@@ -80,7 +80,7 @@
 - 🧠 **为 AI 消费而设计的稳定契约。** 每次调用返回统一 envelope，接入导出协议的技法附带 `export_snapshot`（段结构化正文）。同一技法连续调用得到同一套字段，落库后结构不丢。
 - 🛡️ **调用前的硬性澄清闸。** 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户确认前会被结构化拦截，并收到可直接转发给用户的追问文本。
 - 🧾 **每个结论可溯源。** 响应自带技法依据卡（技法 / 流派口径 / 谁算的 / 段落全不全 / 版本链），`horosa_technique_report` 一键出方法报告，会话级自动检出跨技法口径冲突。
-- 📚 **31 域方法论知识库，引必带出处。** 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库（21 类口诀）共 409 条，逐条带上游文件与版本出处；没有出处的解读必须明说是通则推理。
+- 📚 **31 域方法论知识库，引必带出处。** 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库（21 类口诀）共 416 条，逐条带上游文件与版本出处；没有出处的解读必须明说是通则推理。
 - 🧪 **盘面事实忠实性评测。** 确定性校验器把 AI 解读逐句对盘面机读真值，判 supported / invented / contradicted；喂错盘与诱导复述判红；106 条基准用例与工具注册表锁步。
 - 🔀 **一问多技法合参。** `horosa_hecan` 并行起盘 + 合参模板：每条结论必须绑定真实段落，收敛与分歧分开填，**分歧必须披露、不许平均**。
 - 🪙 **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
@@ -110,7 +110,7 @@ uv run horosa-skill serve        # 🚀 启动本地 MCP（默认 http://127.0.0
 `HOROSA_RUNTIME_MIRROR` 对 wheel 与 runtime 一并生效：
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.45.1/horosa_skill-0.45.1-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.46.0/horosa_skill-0.46.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # 📦 装离线 runtime（同上）
 uvx --from "$WHL" horosa-skill doctor                     # 🩺 体检
 uvx --from "$WHL" horosa-skill setup --client cursor       # 🪄 零安装一条命令接入（自动选 `--launcher uvx-wheel`，配置里写 wheel URL）
@@ -125,7 +125,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 > 容器里能跑的是 **MCP 网关**（Python 包 + 知识库 + 记忆），把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
 > 指向宿主机或另一台装了 runtime 的机器即可。仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`
 > （网关镜像：容器内没有离线 runtime，必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
-> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.45.1/horosa_skill-0.45.1-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
+> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.46.0/horosa_skill-0.46.0-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
 
 <details>
 <summary>🔧 <b>安装排障与升级 / 卸载</b></summary>
@@ -154,7 +154,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 ## 🔌 接入 AI 客户端
 
 `setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime → 写配置（自动定位、
-只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.45.1；
+只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.46.0；
 多数客户端读共享的 `~/.agents/skills`；`--no-skill` 跳过、`--skill-dir` 指定）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
 stdio server 并数工具** → 打印下一步。失败时 stderr 给出结构化失败包（`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`），退出码 2；写配置之前失败保证 `config_untouched: true`。只想看配置不落盘用 `client config`：
@@ -439,7 +439,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.45.1",
+  "ok": true, "tool": "qimen", "version": "0.46.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -490,7 +490,7 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 
 ### 2. 31 域方法论知识库 · 引必带出处
 
-`knowledge_registry` / `knowledge_read` 覆盖 31 域 = 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库 21 类（共 409 条：各设置项取值与差别、流派分歧、算法与口径、八字口诀），逐条带「星阙操作手册 · 域 · 条目（源文件 @ 上游版本）」出处。配套策略写进 [SKILL.md](./skills/horosa-agent/SKILL.md)：**引教义必带出处；没有出处的解读必须明说是通则推理**——反 Barnum 效应的第一机制。
+`knowledge_registry` / `knowledge_read` 覆盖 31 域 = 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库 21 类（共 416 条：各设置项取值与差别、流派分歧、算法与口径、八字口诀），逐条带「星阙操作手册 · 域 · 条目（源文件 @ 上游版本）」出处。配套策略写进 [SKILL.md](./skills/horosa-agent/SKILL.md)：**引教义必带出处；没有出处的解读必须明说是通则推理**——反 Barnum 效应的第一机制。
 
 ### 3. 盘面事实忠实性评测
 
@@ -554,23 +554,23 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 110 / 110 `ok=true` |
-| 🧪 工程测试 | **2184 / 2184 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 116 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **2379 / 2379 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 112 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 100 个技法工具触发 `must_ask_user=true` |
 | 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
-| 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v15 镜像桌面端 aiExport v58） |
+| 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 107 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
 | 🧾 技法依据卡 | 每个技法响应附 `data.technique_card`；算源声明与运行实测不符时显式亮警 |
-| 📚 知识库 | 31 域；技法操作手册 236 条逐条带出处（生成器幂等，随上游版本重收割） |
+| 📚 知识库 | 31 域；技法操作手册 243 条逐条带出处（生成器幂等，随上游版本重收割） |
 | 🎯 HorosaBench | 106 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 🗄️ 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | 🔄 GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| 📦 Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.45.1`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
+| 📦 Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.46.0`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 2184 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 2379 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

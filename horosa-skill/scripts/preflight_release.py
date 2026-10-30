@@ -40,6 +40,8 @@ GATES: tuple[tuple[str, list[str]], ...] = (
         "upstream sync (contract version + sentinel sha256 + core-js per-file)",
         ["scripts/verify_upstream_sync.py", "--require-upstream", "--write-state"],
     ),
+    # v0.46.0：手抄上游逻辑审计台账必须审到当前上游 pin（vendor 清单只看守文件，手抄件过期零信号）。
+    ("hand-copied upstream logic audit", ["scripts/audit_upstream_ports.py"]),
     (
         "export-section debt ratchet against upstream",
         ["scripts/verify_export_section_baseline.py", "--source", "upstream", "--require-upstream"],

@@ -3,17 +3,20 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from horosa_skill import predictive_text as _ptext
 from horosa_skill.service import _clock
+from horosa_skill.civil_calendar import _civil_instant_ms_of_str
 from horosa_skill.service._common import (
+    _civil_date_str_of_ms,
+    _civil_wall_ms_of_moment,
     _finite_number,
     _join_lines,
-    _js_date_parse,
     _msg,
     _render_snapshot_text,
+    _require_option,
 )
 from horosa_skill.service.text.astro_core import (
     _append_planet_house_info,
@@ -32,7 +35,7 @@ from horosa_skill.service.text.predictive import (
     _pd_is_bound_row,
 )
 
-# 上游 utils/primaryDirectionSync.js:57-62 SUPPORTED_PD_METHODS（13 法，= 后端 perchart.py:892 白名单）+ :73-87 PD_METHOD_LABELS。
+# 上游 utils/primaryDirectionSync.js:298-303 SUPPORTED_PD_METHODS（13 法，= 后端 perchart.py 白名单）+ :320-334 PD_METHOD_LABELS。
 _PD_METHOD_LABELS: dict[str, str] = {
     "core_alchabitius": "Alchabitius",
     "placidus": "Placidus（半弧）",
@@ -48,71 +51,380 @@ _PD_METHOD_LABELS: dict[str, str] = {
     "in_zodiaco_abs": "Edmund Jones",
     "horosa_legacy": "Horosa原方法",
 }
-# 上游 primaryDirectionSync.js:64-70 SUPPORTED_PD_TIME_KEYS（26 项）+ :88-115 PD_TIME_KEY_LABELS。
+# 上游 primaryDirectionSync.js:308-317 SUPPORTED_PD_TIME_KEYS（v3.13.0：38 项，= 后端 perpredict STATIC_TIME_KEY_SCALES
+# + 每盘常数 + 动态钥匙）。顺序 = 上游下拉顺序（「（经典）」键紧跟各自的改进键）；值域闸与 agent 文档都从这里取。
+_PD_SUPPORTED_TIME_KEYS: tuple[str, ...] = (
+    "Ptolemy", "Naibod", "NaibodRA",
+    "TrueSolarArc", "TrueSolarArcMean", "VanDam", "SymbolicSolarArc",
+    "Simmonite", "BirthdaySunLon", "Kepler", "KeplerClassic", "Brahe", "BraheClassic",
+    "AscendantArc", "VerticalArc",
+    "Cardano", "Umar", "Wollner", "WollnerClassic", "Plantiko", "SynodicYear", "SynodicYearClassic", "Kundig",
+    "SymbolicDegree", "SymbolicYear", "SymbolicMoon", "SymbolicMoonClassic", "SymbolicMonth", "SymbolicWeek",
+    "Quarterly", "Quinary", "Septenary", "Novenary", "NovenaryClassic", "Duodenary", "SubDuodenary", "SelfMeasure",
+    "User",
+)
+# 上游 primaryDirectionSync.js:335-374 PD_TIME_KEY_LABELS（逐字；v3.13.0 起 Simmonite/Kepler/Brahe/AscendantArc 改名注明口径）。
 _PD_TIME_KEY_LABELS: dict[str, str] = {
     "Ptolemy": "Ptolemy",
     "Naibod": "Naibod",
     "TrueSolarArc": "真太阳弧",
+    "TrueSolarArcMean": "真太阳弧（经典 · 平黄赤交角）",
     "SymbolicSolarArc": "太阳弧（黄经）",
     "Kundig": "Kündig",
     "Cardano": "Cardano",
     "Umar": "Umar al-Tabari",
     "Wollner": "Wöllner",
+    "WollnerClassic": "Wöllner（经典 0.9860361°）",
     "Plantiko": "Plantiko",
-    "Simmonite": "Simmonite",
+    "Simmonite": "Simmonite（生日赤经日行）",
+    "BirthdaySunLon": "生日黄经日行",
     "SynodicYear": "Synodic Year",
-    "Kepler": "Kepler",
-    "Brahe": "Brahe",
+    "SynodicYearClassic": "Synodic Year（经典 0.98435°）",
+    "Kepler": "Kepler（真午夜赤经日行）",
+    "KeplerClassic": "Kepler（经典 · 出生后一日）",
+    "Brahe": "Brahe（真午夜赤经日行）",
+    "BraheClassic": "Brahe（经典 · 出生后一日）",
     "SymbolicDegree": "Symbolic Degree",
     "SymbolicYear": "Symbolic Year",
     "SymbolicMoon": "Symbolic Moon",
+    "SymbolicMoonClassic": "Symbolic Moon（经典 13.167°）",
     "SymbolicMonth": "Symbolic Month",
+    "SymbolicWeek": "Symbolic Week（1° = 7 年）",
     "Quarterly": "Quarterly",
     "Quinary": "Quinary",
+    "Septenary": "Septenary",
     "Duodenary": "Duodenary",
+    "SubDuodenary": "Sub-Duodenary",
     "Novenary": "Novenary",
+    "NovenaryClassic": "Novenary（经典 3.3333°）",
     "SelfMeasure": "Self-Measure",
     "NaibodRA": "Naibod-in-RA",
-    "AscendantArc": "Ascendant-arc（界行）",
+    "AscendantArc": "Ascendant-arc（上升弧计时）",
+    "VerticalArc": "Vertical-arc（垂直弧计时）",
     "VanDam": "Van Dam（真弧）",
     "User": "自定义（每年度数）",
 }
 
 
 def _primary_direction_method_text(value: Any) -> str:
-    """上游 primaryDirectionSync.js:170 getPdMethodLabel：已知 → 标签；缺省/未知 → 缺省法标签（后端
-    perchart.py:892 同样把白名单外一律回退 core_alchabitius，标签与实算一致）。F20：旧实现只认「核5」，
+    """上游 primaryDirectionSync.js:537 getPdMethodLabel：已知 → 标签；缺省/未知 → 缺省法标签（后端
+    perchart.py 同样把白名单外一律回退 core_alchabitius，标签与实算一致）。F20：旧实现只认「核5」，
     把 placidus/regiomontanus 等 v3.6 起已真算的方位法写成「未核验，引擎回退 Alcabitius」——对实算结果撒谎。"""
     return _PD_METHOD_LABELS.get(_msg(value)) or _PD_METHOD_LABELS["core_alchabitius"]
 
 
 def _primary_direction_time_key_text(value: Any) -> str:
-    """上游 primaryDirectionSync.js:177 getPdTimeKeyLabel（26 项；缺省/未知 → Ptolemy）。"""
+    """上游 primaryDirectionSync.js:544 getPdTimeKeyLabel（38 项；缺省/未知 → Ptolemy）。"""
     return _PD_TIME_KEY_LABELS.get(_msg(value)) or _PD_TIME_KEY_LABELS["Ptolemy"]
 
 
-# 上游 utils/primaryDirectionSync.js:28-56 解耦两维标签 + :120-135 PD_METHOD_TO_PAIR（旧单维 → (投影, 分宫)）。
+# 上游 primaryDirectionSync.js:13-20 方向类型：0 In Zodiaco（缺省）/ 1 In Mundo / 4 Field Plane（v3.13.0 新增；
+# 2、3 是后端界推运内部值，前端不下发）。
+_PD_DEFAULT_TYPE = 0
+_PD_SUPPORTED_TYPES = (0, 1, 4)
+_PD_TYPE_LABELS = {0: "黄道（In Zodiaco）", 1: "世俗（In Mundo）", 4: "场平面（Field Plane）"}
+
+
+def _pd_js_number(value: Any) -> float:
+    """JS `Number(v)`：undefined/非数字串 → NaN，null/''/false → 0，true → 1。"""
+    if value is None:  # Python 的 None 兼当 undefined / null：本模块各调用点两者结果相同（都判「无 / 缺省」）
+        return math.nan
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = f"{value}".strip()
+    if text == "":
+        return 0.0
+    try:
+        return float(text)
+    except ValueError:
+        return math.nan
+
+
+def _pd_normalize_type(value: Any) -> int:
+    """primaryDirectionSync.js:17 normalizePdType：Number(v) ∈ {0,1,4} 原样，否则缺省 0。"""
+    number = _pd_js_number(value)
+    return int(number) if number in _PD_SUPPORTED_TYPES else _PD_DEFAULT_TYPE
+
+
+# 上游 primaryDirectionSync.js:23-42 SUPPORTED_PD_PROJECTIONS（v3.13.0：14 种，+ morinus / horizontal / koch）+ 标签
+# （placidus_under_pole 改名「（极下法）」）。与后端 perpredict._PD_PROJECTION_REGISTRY 同表。
+_PD_SUPPORTED_PROJECTIONS: tuple[str, ...] = (
+    "ptolemy", "placidus", "regiomontanus", "campanus", "topocentric",
+    "zodiacal", "ra_direct", "in_zodiaco_lon", "in_zodiaco_abs", "horosa_legacy",
+    "placidus_under_pole", "morinus", "horizontal", "koch",
+)
 _PD_PROJECTION_LABELS = {
     "ptolemy": "Ptolemy（半弧）", "placidus": "Placidus（半弧严密）", "regiomontanus": "Regiomontanus",
     "campanus": "Campanus", "topocentric": "Topocentric", "zodiacal": "纯黄道（斜升差）",
     "ra_direct": "赤经直推", "in_zodiaco_lon": "Along Ecliptic", "in_zodiaco_abs": "Edmund Jones",
-    "horosa_legacy": "Horosa原方法", "placidus_under_pole": "Placidus under-pole（旧法近似）",
+    "horosa_legacy": "Horosa原方法",
+    "placidus_under_pole": "Placidus under-pole（极下法）",
+    "morinus": "Morinus（黄极圈）",
+    "horizontal": "Horizontal（地平经圈）",
+    "koch": "Koch（出生地）",
 }
+# 上游 primaryDirectionSync.js:28-31 SUPPORTED_PD_FRAMES（12）+ :289-295 两张标签表。
+_PD_SUPPORTED_FRAMES: tuple[str, ...] = (
+    "alcabitius", "placidus", "regiomontanus", "campanus", "topocentric",
+    "meridian", "porphyry", "equal", "wholesign", "morinus", "koch", "equal_hour_circle",
+)
 _PD_FRAME_LABELS = {
     "alcabitius": "Alcabitius", "placidus": "Placidus", "regiomontanus": "Regiomontanus", "campanus": "Campanus",
     "topocentric": "Topocentric", "meridian": "Meridian", "porphyry": "Porphyry", "equal": "Equal（等宫）",
     "wholesign": "Whole Sign（整宫）", "morinus": "Morinus", "koch": "Koch", "equal_hour_circle": "Equal（时圈）",
 }
 _PD_FRAMEWORK_LABELS = {"aspect": "相位主限", "bounds": "界行·分配星", "release": "释放（hyleg）"}
+# 上游 primaryDirectionSync.js:379-393 PD_METHOD_TO_PAIR（旧单维 → (投影, 分宫)，与后端 perpredict._PD_METHOD_TO_PAIR
+# 逐项同步）。v3.13.0：morinus 有了自己的投影（Morinus 黄极圈），不再借 ptolemy。
 _PD_METHOD_TO_PAIR: dict[str, tuple[str, str | None]] = {
     "core_alchabitius": ("ptolemy", "alcabitius"), "placidus": ("placidus", "placidus"),
     "regiomontanus": ("regiomontanus", "regiomontanus"), "campanus": ("campanus", "campanus"),
     "topocentric": ("topocentric", "topocentric"), "meridian": ("ptolemy", "meridian"),
     "porphyry": ("ptolemy", "porphyry"), "equal_ecliptic": ("ptolemy", "equal"),
-    "equal_hour_circle": ("ptolemy", "equal_hour_circle"), "morinus": ("ptolemy", "morinus"),
+    "equal_hour_circle": ("ptolemy", "equal_hour_circle"), "morinus": ("morinus", "morinus"),
     "in_zodiaco_lon": ("in_zodiaco_lon", None), "in_zodiaco_abs": ("in_zodiaco_abs", None),
     "horosa_legacy": ("horosa_legacy", None),
 }
+
+# 上游 primaryDirectionSync.js:44-65 应星 / 迫星扩展选项 + pdExtensionLabels（AI 自陈行写面板上的名字，未登记值原样）。
+_PD_SIGNIFICATOR_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("Desc", "下降 DSC"), ("IC", "天底 IC"), ("Syzygy", "产前朔望"), ("Spirit", "精神点"),
+    ("Cusps", "中间宫始点"), ("Stars", "恒星（王星+比尼）"), ("Lots", "阿拉伯点（全目录）"),
+)
+_PD_PROMISSOR_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (("cusps", "宫始点"), ("stars", "恒星"), ("lots", "阿拉伯点"))
+
+
+def _pd_extension_labels(values: Any, options: tuple[tuple[str, str], ...]) -> list[str]:
+    labels = dict(options)
+    items = values if isinstance(values, list) else []
+    return [labels[v] if isinstance(v, str) and v in labels else _ptext.js_str(v) for v in items]
+
+
+# 上游 primaryDirectionSync.js:69-95 PD_EXTRA_SETTING_SPECS（主限法设置项登记表：相位侧 / 传统逆向 / 取点四项 /
+# 日期两项 / 几何口径）。单一来源：值域闸、schema 描述、[主限法设置] 自陈行都从这张表生成。与后端
+# perchart.PD_EXTRA_SETTING_KEYS、Java PdWire.SETTING_KEYS 同名同序。options = (值, 面板标签)。
+_PD_EXTRA_SETTING_SPECS: tuple[dict[str, Any], ...] = (
+    {"key": "pdGeometry", "type": "select", "default": "improved", "label": "几何口径", "inProjection": True,
+     "options": (("improved", "改进"), ("classic", "经典"))},
+    {"key": "pdAspectSide", "type": "select", "default": 0, "label": "相位侧",
+     "options": ((0, "两侧都出"), (1, "只出右旋"), (2, "只出左旋"))},
+    {"key": "pdTradConverse", "type": "switch", "default": 1, "label": "传统逆向"},
+    {"key": "pdIgnoreSigLat", "type": "switch", "default": 0, "label": "忽略应星黄纬"},
+    {"key": "pdIgnorePromLat", "type": "switch", "default": 0, "label": "忽略迫星黄纬"},
+    {"key": "pdLunarParallax", "type": "switch", "default": 0, "label": "月亮视差"},
+    {"key": "pdTruePosition", "type": "switch", "default": 0, "label": "真位置"},
+    {"key": "pdSolarArcRegressive", "type": "switch", "default": 0, "label": "逆向弧用出生前太阳"},
+    {"key": "pdYearDays", "type": "select", "default": 0, "label": "日期年长",
+     "options": ((0, "实际天数"), (1, "365 / 366"))},
+    {"key": "pdPromAspectLat", "type": "select", "default": 0, "label": "相位点黄纬",
+     "options": ((0, "在黄道上"), (1, "合冲带黄纬"), (2, "余弦递减"), (3, "线性递减"), (4, "按宫位"))},
+)
+_PD_EXTRA_SETTING_KEYS: tuple[str, ...] = tuple(spec["key"] for spec in _PD_EXTRA_SETTING_SPECS)
+_PD_EXTRA_SPEC_BY_KEY: dict[str, dict[str, Any]] = {spec["key"]: spec for spec in _PD_EXTRA_SETTING_SPECS}
+
+
+def _pd_js_strict_equal(left: Any, right: Any) -> bool:
+    """JS `===`：数字与数字比值（0 === 0.0），bool 只等 bool，字符串只等字符串。"""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return isinstance(left, bool) and isinstance(right, bool) and left == right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return left == right
+    return type(left) is type(right) and left == right
+
+
+def _pd_normalize_extra_value(spec: dict[str, Any], raw: Any) -> Any:
+    """primaryDirectionSync.js:98 normalizePdExtraValue：空 → 缺省；开关认 0/1/'0'/'1'/'true'/'false'/bool，其余回缺省；
+    下拉按值或其字符串形命中，认不出回缺省。"""
+    if raw is None or raw == "":
+        return spec["default"]
+    if spec["type"] == "switch":
+        if raw is False or _pd_js_strict_equal(raw, 0) or raw in ("0", "false"):
+            return 0
+        return 1 if (raw is True or _pd_js_strict_equal(raw, 1) or raw in ("1", "true")) else spec["default"]
+    for value, _label in spec["options"]:
+        if _pd_js_strict_equal(value, raw) or _ptext.js_str(value) == _ptext.js_str(raw):
+            return value
+    return spec["default"]
+
+
+def _pd_pick_extra_settings(*sources: Any) -> dict[str, Any]:
+    """primaryDirectionSync.js:113 pickPdExtraSettings：每键取第一个有值（非 null/undefined）的来源，归一后返回全套。"""
+    out: dict[str, Any] = {}
+    for spec in _PD_EXTRA_SETTING_SPECS:
+        raw = None
+        for src in sources:
+            if isinstance(src, dict) and src.get(spec["key"]) is not None:
+                raw = src[spec["key"]]
+                break
+        out[spec["key"]] = _pd_normalize_extra_value(spec, raw)
+    return out
+
+
+def _pd_extra_setting_value_label(spec: dict[str, Any], value: Any) -> str:
+    """primaryDirectionSync.js:162 pdExtraSettingValueLabel。"""
+    if spec["type"] == "switch":
+        return "是" if value else "否"
+    for option_value, label in spec["options"]:
+        if _pd_js_strict_equal(option_value, value):
+            return label
+    return _ptext.js_str(value)
+
+
+def _pd_extra_setting_lines(values: Any) -> list[str]:
+    """primaryDirectionSync.js:170 pdExtraSettingLines（9 行；几何口径并在「弧算法」行，不另起行）。"""
+    picked = _pd_pick_extra_settings(values)
+    return [
+        f"{spec['label']}：{_pd_extra_setting_value_label(spec, picked[spec['key']])}"
+        for spec in _PD_EXTRA_SETTING_SPECS
+        if not spec.get("inProjection")
+    ]
+
+
+# 上游 primaryDirectionSync.js:179-191 PD_GEOMETRY_APPLIES：几何口径（改进 / 经典）真有差别的
+# [盘类, 弧算法, 盘面宫制或 '*', 是否只在世俗平行开时]（与后端 pd_geometry.APPLIES 同表）。
+_PD_GEOMETRY_APPLIES: tuple[tuple[int, str, str, bool], ...] = (
+    (0, "placidus", "*", False), (0, "regiomontanus", "*", False), (0, "campanus", "*", False),
+    (0, "in_zodiaco_abs", "*", False), (0, "topocentric", "*", False),
+    (0, "horizontal", "*", False), (0, "koch", "*", False), (1, "horizontal", "*", False),
+    (4, "placidus", "*", False), (4, "regiomontanus", "*", False), (4, "campanus", "*", False),
+    (4, "in_zodiaco_abs", "*", False),
+    (4, "ptolemy", "*", False), (4, "morinus", "*", False), (4, "zodiacal", "*", False), (4, "ra_direct", "*", False),
+    (4, "placidus_under_pole", "*", False), (4, "topocentric", "*", False), (4, "horizontal", "*", False), (4, "koch", "*", False),
+    (1, "ptolemy", "alcabitius", False), (1, "ptolemy", "porphyry", False),
+    (1, "placidus", "*", False), (1, "regiomontanus", "*", False), (1, "campanus", "*", False),
+    (1, "ptolemy", "meridian", True), (1, "ptolemy", "equal", True), (1, "ptolemy", "equal_hour_circle", True),
+    (1, "morinus", "*", True),
+)
+
+
+def _pd_geometry_applies(ctx: dict[str, Any]) -> bool:
+    """primaryDirectionSync.js:192 pdGeometryApplies({ pdtype, pdProjection, pdFrame, pdParallel })。"""
+    pd_type = _pd_normalize_type(ctx.get("pdtype"))
+    proj = ctx.get("pdProjection") or "ptolemy"
+    frame = ctx.get("pdFrame") or "alcabitius"
+    parallel = _pd_js_number(ctx.get("pdParallel"))
+    parallel_on = bool(parallel) and not math.isnan(parallel)
+    return any(
+        at == pd_type and ap == proj and (af == "*" or af == frame) and (not need_par or parallel_on)
+        for at, ap, af, need_par in _PD_GEOMETRY_APPLIES
+    )
+
+
+def _pd_projection_label_with_geometry(ctx: dict[str, Any], geometry: Any) -> str:
+    """primaryDirectionSync.js:230 pdProjectionLabelWithGeometry：受几何口径影响的组合带「（改进）/（经典）」。"""
+    proj = ctx.get("pdProjection")
+    label = _PD_PROJECTION_LABELS.get(f"{proj}") or (_ptext.js_str(proj) if proj else "")
+    if not label or not _pd_geometry_applies(ctx):
+        return label
+    geo = _pd_pick_extra_settings({"pdGeometry": geometry})["pdGeometry"]
+    geo_label = dict(_PD_EXTRA_SPEC_BY_KEY["pdGeometry"]["options"])[geo]
+    return f"{label}（{geo_label}）"
+
+
+# 上游 primaryDirectionSync.js:403-406 世俗 / Field Plane 下有专属实现的 (投影, 分宫)；:489 pdTypeBaselineNote。
+_PD_MUNDO_DEDICATED_PROJECTIONS = ("placidus", "regiomontanus", "campanus", "topocentric", "morinus", "horizontal", "koch")
+_PD_MUNDO_DEDICATED_PTOLEMY_FRAMES = ("alcabitius", "meridian", "equal_hour_circle")
+_PD_FIELD_PLANE_DEDICATED_PROJECTIONS = (
+    "ptolemy", "placidus", "regiomontanus", "campanus", "morinus", "in_zodiaco_abs", "in_zodiaco_lon",
+)
+
+
+def _pd_type_baseline_note(pdtype: Any, projection: Any, frame: Any) -> str:
+    """方向类型 × (投影, 分宫) 无专属实现时的注记（诚实回显：几种选择输出逐字节相同时不各写各的名字）。"""
+    pd_type = _pd_normalize_type(pdtype)
+    proj = projection or "ptolemy"
+    fr = frame or "alcabitius"
+    if pd_type == 1:
+        dedicated = proj in _PD_MUNDO_DEDICATED_PROJECTIONS or (proj == "ptolemy" and fr in _PD_MUNDO_DEDICATED_PTOLEMY_FRAMES)
+        return "" if dedicated else "（世界主限下走核内基线）"
+    if pd_type == 4:
+        return "" if proj in _PD_FIELD_PLANE_DEDICATED_PROJECTIONS else "（Field Plane 下走核内基线）"
+    return ""
+
+
+def _pd_display_method(pd_method: Any, pd_projection: Any) -> str:
+    """primaryDirectionSync.js:398 pdDisplayMethod：弧算法选 Horosa原方法 与旧单维 horosa_legacy 同一显示口径
+    （列头「赤经」、不按 core 白名单滤行）；其余按 pdMethod，缺省 core_alchabitius。"""
+    if f"{pd_projection or ''}" == "horosa_legacy":
+        return "horosa_legacy"
+    return f"{pd_method}" if pd_method else "core_alchabitius"
+
+
+# 上游 primaryDirectionSync.js:242-273：恒星作迫星的行编号 FS_<星>_0 合 / FS_<星>_180 冲 / FSD_<星>_θ 右相位 /
+# FSS_<星>_θ 左相位；扩展迫星前缀（宫始点 HC / 恒星 FS·FSD·FSS / 阿拉伯点 LT / 平行 PD·PC·MP·RP）。
+_PD_STAR_ID_HEADS = {"FS": "N", "FSD": "D", "FSS": "S"}
+_PD_EXTENSION_PROMISSOR_HEADS = ("HC", *_PD_STAR_ID_HEADS, "LT", "PD", "PC", "MP", "RP")
+
+
+def _pd_is_extension_promissor_id(value: Any) -> bool:
+    return f"{value or ''}".split("_")[0] in _PD_EXTENSION_PROMISSOR_HEADS
+
+
+def _pd_parse_star_point_id(value: Any) -> dict[str, Any] | None:
+    parts = f"{value or ''}".split("_")
+    head = _PD_STAR_ID_HEADS.get(parts[0])
+    if not head or len(parts) < 3:
+        return None
+    deg = _pd_js_number(parts[-1])
+    return {"head": head, "name": "_".join(parts[1:-1]), "deg": deg if math.isfinite(deg) else 0.0}
+
+
+def _pd_star_point_text(value: Any, name_of: Any) -> str | None:
+    """primaryDirectionSync.js:260 pdStarPointText（与行星「X的60度右相位处」同一句式）。"""
+    point = _pd_parse_star_point_id(value)
+    if point is None:
+        return None
+    name = f"恒星 {(name_of(point['name']) if name_of else '') or point['name']}"
+    deg = _ptext.js_str(point["deg"])
+    if point["head"] == "D":
+        return f"{name}的{deg}度右相位处"
+    if point["head"] == "S":
+        return f"{name}的{deg}度左相位处"
+    return f"{name}的{deg}度相位处" if point["deg"] else name
+
+
+def _pd_validate_options(payload: dict[str, Any], tool: str) -> None:
+    """pd / pdchart 的主限键值域闸（F20 同律：认不出就报错，不让「传了 X 实算另一档」无声发生）。
+
+    词表全取自上面的上游镜像表。为什么每一项都要拦：
+    - pdMethod / pdTimeKey：后端白名单外静默回退 core_alchabitius / Ptolemy；
+    - pdProjection / pdFrame：后端白名单外静默丢弃、改由 pdMethod 推导，而 [主限法设置] 会照抄传入的名字；
+    - pdtype：后端按 `in (0, 1, 4)` 严格比较，2 / 3 是界推运内部值（快照方向类型只认 0 / 1 / 4），字符串 '4' 会落进
+      旧 flatlib 分支（2026-10-30 在 vendored 实例实测：标「场平面」实算的是另一张表）——只收整数 0 / 1 / 4；
+    - 设置项登记表十键：认不出的值上游 normalizePdExtraValue 回缺省，而后端各有各的宽松解析（pdGeometry 大小写不敏感、
+      pdAspectSide 取 int()），两边回落可能不同 → 自陈行与实算分叉。只收上游能命中的值。
+    """
+    if payload.get("pdMethod") is not None:
+        _require_option(payload["pdMethod"], tuple(_PD_METHOD_LABELS), field="pdMethod", tool=tool)
+    if payload.get("pdTimeKey") is not None:
+        _require_option(payload["pdTimeKey"], _PD_SUPPORTED_TIME_KEYS, field="pdTimeKey", tool=tool)
+    if payload.get("pdProjection") is not None:
+        _require_option(payload["pdProjection"], _PD_SUPPORTED_PROJECTIONS, field="pdProjection", tool=tool)
+    if payload.get("pdFrame") is not None:
+        _require_option(payload["pdFrame"], _PD_SUPPORTED_FRAMES, field="pdFrame", tool=tool)
+    pdtype = payload.get("pdtype")
+    if pdtype is not None and (isinstance(pdtype, bool) or not isinstance(pdtype, int) or pdtype not in _PD_SUPPORTED_TYPES):
+        _require_option(pdtype, _PD_SUPPORTED_TYPES, field="pdtype", tool=tool)  # 必然报错：值域闸同一错误信封
+    for spec in _PD_EXTRA_SETTING_SPECS:
+        raw = payload.get(spec["key"])
+        if raw is None:
+            continue
+        if spec["type"] == "switch":
+            recognized = raw in (True, False, "0", "1", "true", "false") or (
+                isinstance(raw, (int, float)) and raw in (0, 1)
+            )
+            allowed: tuple[Any, ...] = (0, 1)
+        else:
+            allowed = tuple(value for value, _label in spec["options"])
+            recognized = any(
+                _pd_js_strict_equal(value, raw) or _ptext.js_str(value) == _ptext.js_str(raw) for value in allowed
+            )
+        if not recognized:
+            _require_option(raw, allowed, field=spec["key"], tool=tool)
+
+
 # 上游 components/direction/AstroDirectMain.js:82-98（主限法表格的核支持体，比主限法盘多一个 Vertex）。
 _PD_TABLE_CORE_BASE_IDS = frozenset({*_PD_CORE_SUPPORTED_BASE_IDS, "Vertex"})
 _PD_TERMS_VARIANT_LABELS = {1: "托勒密界·校勘本", 2: "托勒密界·经典传本", 3: "迦勒底界", 4: "自定义界表"}
@@ -148,6 +460,11 @@ def _pd_direction_obj_text(text: Any, chart_wrap: dict[str, Any]) -> str:
     def body(base: str) -> str:
         return _pd_ext_base_text(base) or _pd_msg_with_house(chart_wrap, base)
 
+    # v3.13.0（AstroDirectMain.js:191-194）：恒星迫星 FS_/FSD_/FSS_ 先走 pdStarPointText（含右 / 左相位句式），
+    # 取代旧的「FS_ → 恒星 X」一支（FSD_/FSS_ 相位行此前原样露出内部 id）。
+    star_text = _pd_star_point_text(raw, lambda base: _pd_msg_with_house(chart_wrap, base))
+    if star_text:
+        return star_text
     head = parts[0]
     third = parts[2] if len(parts) > 2 else ""
     if head == "T":
@@ -171,8 +488,6 @@ def _pd_direction_obj_text(text: Any, chart_wrap: dict[str, Any]) -> str:
     if head in ("MP", "RP"):
         axis = {"0": "MC", "90": "ASC", "180": "IC", "270": "DSC"}.get(third, third)
         return f"{body(parts[1])}的{'世界平行' if head == 'MP' else '急动平行'}·{axis}"
-    if head == "FS":
-        return f"恒星 {_pd_msg_with_house(chart_wrap, parts[1]) or parts[1]}"
     if head == "LT":
         return f"{re.sub(r'^Pars ', '', parts[1])}点"
     if head == "HC":
@@ -241,14 +556,21 @@ def _pd_split_degree_text(value: Any) -> str:
     return f"{neg}{whole}度{minute}分"
 
 
-def _pd_effective_params(response: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    """上游 aiAnalysisContext.js:3066-3100：本命盘回显 params 打底（后端实算口径：pdDirect/pdConverse 缺省 1 等），
-    记录（=调用载荷）的主限键覆盖；解耦两维未显式给时按 pdMethod 兼容映射推（与后端 perpredict 同表）。"""
+def _pd_explicit_params(response: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """本命盘回显 params 打底（后端实算口径：pdDirect/pdConverse 缺省 1、设置项登记表十键的归一值等），调用载荷的
+    主限键覆盖——尚未补推导值（判「是否显式给了弧算法」用）。"""
     natal = _natal_chart_wrap(response)
     params = dict(natal.get("params") or {}) if isinstance(natal.get("params"), dict) else {}
     for key, value in payload.items():
         if key.startswith("pd") or key in ("showPdBounds", "termsVariant", "direction"):
             params[key] = value
+    return params
+
+
+def _pd_effective_params(response: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """上游 aiAnalysisContext/regenChart.js:305-345：_pd_explicit_params，再把解耦两维未显式给的按 pdMethod 兼容映射推
+    （与后端 perpredict._pdResolveProjectionFrame 同表同序：显式优先、缺者由旧单维推），标签与实算同口径。"""
+    params = _pd_explicit_params(response, payload)
     method = f"{params.get('pdMethod') or 'core_alchabitius'}"
     pair = _PD_METHOD_TO_PAIR.get(method, ("ptolemy", "alcabitius"))
     params.setdefault("pdProjection", pair[0])
@@ -288,9 +610,11 @@ def _pd_birth_and_chart_info(chart_wrap: dict[str, Any], params: dict[str, Any])
 
 
 def _pd_is_extension_row(row: list[Any], params: dict[str, Any]) -> bool:
-    """AstroDirectMain.js:309-324 isExtensionDirectionRow（用户勾选的 S/P 扩展行不被核白名单误滤）。"""
+    """AstroDirectMain.js:323-341 isExtensionDirectionRow（用户勾选的 S/P 扩展行不被核白名单误滤）。
+    v3.13.0：迫星前缀走 isPdExtensionPromissorId（含恒星右 / 左相位 FSD_/FSS_；旧正则只认 FS_，恒星相位行被当 core
+    不支持行滤掉）。"""
     prom = f"{row[1] if len(row) > 1 else ''}"
-    if re.match(r"^(HC|FS|LT|PD|PC|MP|RP)_", prom):
+    if _pd_is_extension_promissor_id(prom):
         return True
     sig_keys = params.get("pdSignificators") if isinstance(params.get("pdSignificators"), list) else []
     if not sig_keys:
@@ -315,8 +639,9 @@ def _pd_is_extension_row(row: list[Any], params: dict[str, Any]) -> bool:
 
 
 def _pd_table_rows(rows: Any, params: dict[str, Any]) -> list[list[Any]]:
-    """AstroDirectMain.js:325-333：core_alchabitius 下滤非核体（扩展行放行）；关界限法时滤界行。"""
-    method = f"{params.get('pdMethod') or 'core_alchabitius'}"
+    """AstroDirectMain.js:342-350：core_alchabitius 下滤非核体（扩展行放行）；关界限法时滤界行。
+    方法口径 = pdDisplayMethod（v3.13.0：弧算法选 Horosa原方法 与旧单维 horosa_legacy 同口径，不滤行）。"""
+    method = _pd_display_method(params.get("pdMethod"), params.get("pdProjection"))
     show_bounds = params.get("showPdBounds") not in (0, False)
     out = []
     for row in rows if isinstance(rows, list) else []:
@@ -347,15 +672,17 @@ def _pd_source_rows(response: dict[str, Any]) -> Any:
 
 
 def _pd_nearest_line(rows: list[list[Any]], params: dict[str, Any], chart_wrap: dict[str, Any], now: datetime | None = None) -> str:
-    """AstroDirectMain.js:405-418：表中日期距今最近行（[当前时点] 定位行）。"""
+    """AstroDirectMain.js:423-437：表中日期距今最近行（[当前时点] 定位行）。"""
     moment = now or _clock.now()
-    method = f"{params.get('pdMethod') or 'core_alchabitius'}"
+    now_ms = moment.timestamp() * 1000  # naive = 本机钟面（Date.now()）
+    method = _pd_display_method(params.get("pdMethod"), params.get("pdProjection"))
     best = None
     for row in rows:
-        when = _js_date_parse(row[4] if len(row) > 4 else "")
-        if when is None:
+        # v3.12.0：civilInstantMsOfStr（民用历真实时刻：公元前 / 1582 以前儒略历 / 五位年都认）；认不出即跳过
+        when_ms = _civil_instant_ms_of_str(f"{(row[4] if len(row) > 4 else '') or ''}".strip().replace("/", "-"))
+        if when_ms is None:
             continue
-        distance = abs((when - moment).total_seconds())
+        distance = abs(when_ms - now_ms)
         if best is None or distance < best[0]:
             best = (distance, row)
     if best is None:
@@ -370,15 +697,18 @@ def _pd_nearest_line(rows: list[list[Any]], params: dict[str, Any], chart_wrap: 
 def _build_primarydirect_snapshot_text(
     payload: dict[str, Any], response: dict[str, Any], *, moment_lines: list[str] | None = None, now: datetime | None = None
 ) -> str:
-    """逐字镜像上游 components/direction/AstroDirectMain.js:294-432 buildPrimaryDirectSnapshotText。
+    """逐字镜像上游 components/direction/AstroDirectMain.js:308-450 buildPrimaryDirectSnapshotText（v3.13.0）。
 
     行来自 /predict/pd（= 后端 getPrimaryDirection，与上游 chartObj.predictives.primaryDirection 同源）；[主限法设置]
-    列上游 16 行口径（方向类型/向运方向/映点迫星/界迫星/弧算法/盘面宫制/框架/…）；表 4 列「日期(UTC)」；
-    UI-only 段 [主限天球·当前动画所指] headless 不产。skill 自有 [本命盘星与虚点] 段保留在 [星盘信息] 后。
+    按上游口径：「推运方法」只在没有显式弧算法时出（此时旧单维决定弧）；方向类型三值（含 Field Plane）；弧算法行带
+    几何口径「（改进）/（经典）」与核内基线注记；框架后接设置项登记表 9 行；应星 / 迫星扩展写面板名。表 4 列
+    「日期(UTC)」，方法口径 = pdDisplayMethod。UI-only 段 [主限天球·当前动画所指] headless 不产。skill 自有
+    [本命盘星与虚点] 段保留在 [星盘信息] 后。
     """
+    explicit_projection = _pd_explicit_params(response, payload).get("pdProjection")
     params = _pd_effective_params(response, payload)
     natal_wrap = _natal_chart_wrap(response) or _top_level_chart_wrap(response)
-    method = f"{params.get('pdMethod') or 'core_alchabitius'}"
+    method = _pd_display_method(params.get("pdMethod"), params.get("pdProjection"))
     time_key = f"{params.get('pdTimeKey') or 'Ptolemy'}"
     rows = _pd_table_rows(_pd_source_rows(response), params)
     show_bounds = params.get("showPdBounds") not in (0, False)
@@ -392,21 +722,24 @@ def _build_primarydirect_snapshot_text(
         dir_text = "顺向 Direct"
     pdtype_raw = params.get("pdtype")
     projection = params.get("pdProjection")
-    proj_label = _PD_PROJECTION_LABELS.get(f"{projection}") or projection or "Ptolemy（半弧）"
-    if _finite_number(pdtype_raw) == 1 and projection not in ("placidus", "regiomontanus", "campanus", "topocentric"):
-        proj_label = f"{proj_label}（世界主限下走核内基线）"
     frame = params.get("pdFrame")
     framework = params.get("pdFramework")
-    setting = [
-        f"推运方法：{_primary_direction_method_text(method)}",
+    # 受几何口径影响的方法带「（改进）/（经典）」（几何口径不另起一行）；世俗 / Field Plane 下无专属实现的组合注明走核内基线。
+    proj_label = _pd_projection_label_with_geometry(params, params.get("pdGeometry")) or projection or "Ptolemy（半弧）"
+    proj_label += _pd_type_baseline_note(pdtype_raw, projection, frame)
+    # 旧单维「推运方法」只在没有显式弧算法时决定弧；有显式两维时由「弧算法 / 盘面宫制」两行表达（上游 :363-367）。
+    # skill 的显式 = 调用载荷 / 本命回显里带了 pdProjection（_pd_effective_params 补的推导值不算）。
+    setting = [] if explicit_projection else [f"推运方法：{_primary_direction_method_text(method)}"]
+    setting += [
         f"度数换算：{_primary_direction_time_key_text(time_key)}",
-        f"方向类型：{'世俗（In Mundo）' if pdtype_raw == 1 else '黄道（In Zodiaco）'}",
+        f"方向类型：{_PD_TYPE_LABELS[_pd_normalize_type(pdtype_raw)]}",
         f"向运方向：{dir_text}",
         f"映点迫星：{'是' if params.get('pdAntiscia') else '否'}",
         f"界迫星：{'是' if params.get('pdTerms') else '否'}",
         f"弧算法（投影）：{proj_label}",
         f"盘面宫制（分宫）：{_PD_FRAME_LABELS.get(f'{frame}') or frame or 'Alcabitius'}",
         f"框架：{_PD_FRAMEWORK_LABELS.get(f'{framework}') or framework or '相位主限'}",
+        *_pd_extra_setting_lines(params),
     ]
     if params.get("pdParallel"):
         setting.append(f"平行迫星：{'世界平行' if pdtype_raw == 1 else '赤纬平行（映点法）'}")
@@ -417,10 +750,13 @@ def _build_primarydirect_snapshot_text(
         setting.append(f"界系：{_PD_TERMS_VARIANT_LABELS[int(terms_variant)]}")
     if time_key == "User" and params.get("pdTimeKeyCustom"):
         setting.append(f"自定义钥匙率：{_ptext.js_str(params['pdTimeKeyCustom'])}°/年")
-    for key, label in (("pdSignificators", "应星扩展"), ("pdPromissorTypes", "迫星扩展")):
+    for key, label, options in (
+        ("pdSignificators", "应星扩展", _PD_SIGNIFICATOR_OPTIONS),
+        ("pdPromissorTypes", "迫星扩展", _PD_PROMISSOR_TYPE_OPTIONS),
+    ):
         values = params.get(key)
         if isinstance(values, list) and values:
-            setting.append(f"{label}：{'、'.join(f'{v}' for v in values)}")
+            setting.append(f"{label}：{'、'.join(_pd_extension_labels(values, options))}")
     setting.append(f"显示界限法：{'是' if show_bounds else '否'}")
     degree_label = "赤经" if method == "horosa_legacy" else "Arc"
     table = [f"| {degree_label} | 迫星 | 应星 | 日期(UTC) |", "| --- | --- | --- | --- |"]
@@ -466,11 +802,15 @@ def _pdchart_chart_info_lines(chart_wrap: dict[str, Any], params: dict[str, Any]
 def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
     """上游 AstroPrimaryDirectionChart.js:328-373 buildSnapshotText（= aiAnalysisContext 无头 buildPrimaryDirChartSnapshotText）。
 
-    [主限法盘设置] 5 行（时间选择/推运方法/度数换算/向运方向/当前Arc「X度Y分」，Arc 取推导盘回的 arc [Q-171/T-112]）；
-    skill 自有 [本命盘星与虚点]/[主限法盘星体表格]/[主限法盘相位] 保留（registry 注记）。
+    [主限法盘设置] 7 行（v3.13.0 AstroPrimaryDirectionChart.js:361-370 / aiAnalysisContext/primaryDirection.js:172-184）：
+    时间选择 / 弧算法（主限法表用，带几何口径）/ 盘面宫制（外圈宫头）/ 度数换算 / 向运方向 / 日期年长 / 当前Arc「X度Y分」
+    （Arc 取推导盘回的 arc [Q-171/T-112]）。旧「推运方法」行撤掉：外圈按主限弧在赤经上整体推进，与弧算法无关，宫头只看
+    盘面宫制（上游挂载同改用 pdFrame 不用 pdMethod）。skill 自有 [本命盘星与虚点]/[主限法盘星体表格]/[主限法盘相位] 保留（registry 注记）。
     """
     natal_wrap = _natal_chart_wrap(response)
     params = _pd_effective_params(response, payload)
+    frame = params.get("pdFrame")
+    year_days_spec = _PD_EXTRA_SPEC_BY_KEY["pdYearDays"]
     current_arc = response.get("currentArc") or response.get("arc") or response.get("pdArc")
     pd_wrap = _top_level_chart_wrap(response)
     return _render_snapshot_text(
@@ -483,9 +823,11 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
                 _join_lines(
                     [
                         f"时间选择：{payload.get('datetime') or '无'}",
-                        f"推运方法：{_primary_direction_method_text(params.get('pdMethod'))}",
+                        f"弧算法（主限法表用）：{_pd_projection_label_with_geometry(params, params.get('pdGeometry')) or 'Ptolemy（半弧）'}",
+                        f"盘面宫制（外圈宫头）：{_PD_FRAME_LABELS.get(f'{frame}') or frame or 'Alcabitius'}",
                         f"度数换算：{_primary_direction_time_key_text(params.get('pdTimeKey'))}",
                         f"向运方向：{'逆向 Converse' if params.get('direction') == 'converse' else '顺向 Direct'}",
+                        f"{year_days_spec['label']}：{_pd_extra_setting_value_label(year_days_spec, _pd_pick_extra_settings(params)['pdYearDays'])}",
                         f"当前Arc：{_pd_split_degree_text(current_arc) if current_arc is not None else '无'}",
                     ]
                 ),
@@ -672,34 +1014,38 @@ def _zr_body_lines(base_point: str, items: list[dict[str, Any]], ai_state: dict[
     return lines
 
 
-def _zr_period_bounds(items: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
-    """AstroZR.js:198-218 zrLocateCurrent：期起=date（Date.parse 纯日期 = UTC 零点），期讫=下一期起/末期 date+days。"""
-    now_utc = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+def _zr_period_bounds(items: list[dict[str, Any]], now: datetime | float) -> dict[str, Any] | None:
+    """AstroZR.js zrLocateCurrent（v3.12.0）：期起 = civilWallMsOfStr(date)（民用历墙钟轴：公元前历史纪年、1582 以前儒略历；
+    严格 ISO 纯日期与旧 Date.parse 的 UTC 零点逐值相同），期讫 = 下一期起 / 末期 date + days 天；与 Date.now() 比。
+    `now` 可直接给毫秒（= 上游 nowMs 形参；datetime 只能表示公元 1–9999 年）。"""
+    if isinstance(now, datetime):
+        now_utc = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+        now_ms = now_utc.timestamp() * 1000
+    else:
+        now_ms = float(now)
     for index, item in enumerate(items):
         if not isinstance(item, dict):
             continue
-        start = _zr_parse_day_utc(item.get("date"))
+        start = _zr_period_start_ms(item)
         if start is None:
             continue
         nxt = items[index + 1] if index + 1 < len(items) and isinstance(items[index + 1], dict) else None
-        next_start = _zr_parse_day_utc(nxt.get("date")) if nxt else None
+        next_start = _zr_period_start_ms(nxt) if nxt else None
         days = _finite_number(item.get("days"))
-        end = next_start if next_start is not None else (start + timedelta(days=days) if days is not None else None)
-        if end is not None and start <= now_utc < end:
+        end = next_start if next_start is not None else (start + days * 86400000 if days is not None else None)
+        if end is not None and start <= now_ms < end:
             return {
                 "item": item,
                 "startText": f"{item.get('date')}",
-                "endText": f"{nxt.get('date')}" if next_start is not None and nxt else end.strftime("%Y-%m-%d"),
+                # zrFmtDayUTC = civilDateStrOfMs（墙钟轴 → 民用历日期标签）
+                "endText": f"{nxt.get('date')}" if next_start is not None and nxt else _civil_date_str_of_ms(end),
             }
     return None
 
 
-def _zr_parse_day_utc(text: Any) -> datetime | None:
-    raw = f"{text or ''}".strip().replace("/", "-")
-    try:
-        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
+def _zr_period_start_ms(item: Any) -> int | None:
+    """AstroZR.js zrPeriodStartMs：civilWallMsOfStr(`${item.date}`.trim())；认不出 → None。"""
+    return _civil_wall_ms_of_moment(f"{(item.get('date') if isinstance(item, dict) else None) or ''}".strip())
 
 
 def _zr_current_period_line(items: Any, now: datetime | None = None) -> str:

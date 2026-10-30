@@ -185,12 +185,19 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
   星阙的 najia/六合/升降 UI 细节**故意**不进导出。
 - **Python port**：`engine/decennials.py`（十年大运，星阙 `utils/decennials.js` 的移植）——JS `Math.round`
   是 half-up，Python `round` 是银行家舍入；每个 JS `Math.round` 用 `_js_round`（=`floor(x+0.5)`），L1 计数用
-  `math.ceil`；动周期数学必对星阙 `decennials.test.js` 金标（`tests/test_decennials.py`）。
+  `math.ceil`；动周期数学必对星阙 `decennials.test.js` 金标（`tests/test_decennials.py`）。v0.46.0 起出生时刻按上游
+  `zonedBirthMomentOfChart(…, '+08:00')`（此前误作 +00:00）、时刻走 civil 轴，公元前 / 1582 前儒略历与上游逐值相同。
+- **命盘日期一律经 `horosa_skill/civil_calendar.py`（v0.46.0）**：上游 v3.12.0 把日期收口到 civilCalendar / civilMoment /
+  dateStrSafe（1582-10-15 前儒略历、无 0 年、公元前前导负号、1–6 位年）；Python `datetime` 只认外推格里历 1–9999 年。禁止对命盘
+  日期新写 `strptime` / `fromisoformat` / `datetime + timedelta` / `[:4]` / `replace("-", "/")` / `len()==10`——公元前会被 try 吞成
+  「无数据」，1500 年静默差一天；派生请求的 `ad` 随时刻本身（chartAtMoment）。值对拍用上游源在 node 里跑（`tests/test_sync313_historical.py`）。
 - **frontend-读数型 Python 移植**：planetaryages（读 `chart.objects`+`params.birth`）/ yearsystem129
-  （`/chart` 需 `predictive` 真值才出 `predictives.yearsystem129`）/ persiandirected 等——读已算好的 chart
+  / persiandirected 等——读已算好的 chart（yearsystem129 / agepoint / distributions v0.46.0 起改为 vendored 上游 JS 出文本：上游删了
+  后端 yearsystem129.py，`/chart` 不再回 `predictives.yearsystem129`）
   对象再排版。**镜像上游文字用 `predictive_text`（上游单字名表 AstroTxtMsg + AstroMsg 回落），不用 `_astro_msg`**
   （后者是全名表，v0.40.0 前这几路因此印「太阳/子嗣点」）。persiandirected 应期日期原有的「≤1 天」偏差已消：
-  根因是 moment `add(x,'days')` 把小数天四舍五入到整天，移植成 `timedelta(days=float)`；现按 `js_round` 取整天。
+  根因是 moment `add(x,'days')` 把小数天四舍五入到整天，移植成 `timedelta(days=float)`；现按 `js_round` 取整天；v0.46.0 起
+  日期走 `civilDateAfterDays`（公元前 / 1500 年与上游逐值相同）。
 
 **恒星黄道/岁差标注**：`ASTRO_MSG` 不许硬编码岁差名——西占读 `chart.siderealAyanamsa`、印占读
 `chart.siderealModeKey`+`ayanamsaValue`（**字段名不同**）；`chart.zodiacal` 是本地化字符串（"恒星黄道"），
@@ -207,7 +214,7 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 ### 4.3 知识包与上游同步守卫
 
 **知识包（v0.28.0 起，v0.35.0 收紧）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
-（27 域/236 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
+（27 域/243 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
 出处与正文同源）；store 按 schema `horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。
 **上游每一册 `*HelpDoc.js` 要么进 `HELPDOC_DOMAINS`、要么进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除），
 第三种状态生成器直接 FAIL**——同步新技法时把它的手册一并收进来（v0.35.0 之前六册已上架技法的手册三个版本
@@ -389,8 +396,9 @@ AI 送回来的**标识**（段名、知识库键）经 `canonical_name` 按词�
 干→幹、丑→醜、冲→衝、克→克（应剋）、斗→鬥、凶→兇、占→佔、咸→鹹、历→歷——所以最后一步按**原文逐位定字**
 （`data/horosa_char_rules.json`：每字一个缺省 + 普通义白名单，冲→沖、克→剋、历→曆、钟→鐘，干 / 丑 / 斗 / 占 / 凶 / 咸 / 表保持，
 引书「云」后跟冒号保持）。**不能靠词组表**：最长匹配先吃掉前一个字（「真实干支」切出「实干」→ 真實幹支），补不完。
-这套机制与上游星阙「界面简繁」（`hantRules.js`）相同，规则 ⊇ 上游：2026-10-23 双方互相对齐后（上游 fe0b5d3e），
-110 技法语料上逐字 0 差异，唯一偏离是本仓另收「占有」→ 佔有（写在 JSON 的 `deviations`）。
+这套机制与上游星阙「界面简繁」（`hantRules.js`）相同，规则 ⊇ 上游：v0.46.0 并入上游 v3.13.0 的判据（左右邻 / 词头 / 词尾守卫、
+「克」「只」上下文、出生地标签），偏离逐条写在 JSON 的 `deviations`（「占有」→ 佔有、天体「周日运动」≠ 星期日 → 周日運動 …）
+与 `algorithm_deviations`（只转一次：上游「原文已是繁体则不改」不收——上游原文本就简繁混排）。
 `test_character_rules_cover_upstream_except_documented_deviations` 在有上游 checkout 时核对；上游再改规则 → 这条红 → 合并或写偏离。
 白名单词会跨在术数词上误吃（「甲克己土」里的「克己」、「驿马克身」里的「马克」）：加更长的词把它钉回来，不删白名单。
 OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `data/horosa_s2t.txt`。
@@ -427,6 +435,15 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 `verify_upstream_sync` check 3 即红，逐一与上游现函数对过文本后
 `revendor_core_js.py <src> --restamp <条目>` 才灭（v3.9.4 六亲两格就是在没有这条边时静默滞留了四轮）。
 「caller 旧于 vendored 依赖」是它们的专属漂移形态。
+
+**手抄件不在清单里（v0.46.0 教训）**：vendor 清单只看守 `horosa-core-js/src/vendor` 的**文件**；skill 侧手抄的上游逻辑（Python
+移植、`tools/*.js` 胶水、写死的缺省 / 文案 / 常量表）是第二份真相。重钉上游前必须
+`HOROSA_SOURCE_ROOT=… uv run python scripts/audit_upstream_ports.py --scan --from <旧 pin> --to <新 pin>`：新旧上游之间代码变了、
+且被 skill 提到的每个上游名字都要在 `contracts/upstream_port_audit.json` 有结论（no_port / port_unchanged / ported / reviewed），
+台账审到的 pin == 记录的上游 pin（preflight 硬闸）。手抄表配逐值源码锚（`tests/test_sync313_ports_guard.py`），日期运算移植配
+vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsystem129.py`）时，grep skill 里该字段的每个读者——照读旧字段
+只会 ok=true 地返回「无数据」；优先整份 vendor 上游前端模块而不是重抄。手工件逐字搬了**多份**上游文件的，在条目上加
+`also_derived_from {上游路径: sha256}`，每个源各自比戳（`--restamp` 一并重记）。
 
 **四分决策树**（新技法先归类，再动手）：
 
@@ -485,7 +502,9 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
   （对上游 READ-ONLY）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
   目录枚举的 sync 清单会漏它 → 重同步后**域外（BC/远期）请求静默 500**。守卫 =
-  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 58）。
+  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 60）。
+  上游 v3.12.0 起 `aiExport.js` / `aiAnalysisContext.js` 是**门面 + 同名目录**（版本号与预设段在 `aiExport/presets.js`）：读源码的脚本与测试
+  一律读「本文件 + 该目录」（`scripts/_upstream_preset.read_aiexport_source`，测试里 `read_facade_source`），只读门面会读不到实现。
   raw vendor 起 chart 服务**不再 hard-fail**：`kentang/registry.py` 现用 `_LazyMountedService`
   （默认 `HOROSA_KENTANG_LAZY=1`），缺引擎只在首请求时响亮 500 + 下次重试；18 个 mount 引擎均在
   vendored 集内，无需再手打 graceful-kentang-mount 补丁（打包脚本仍对 staged 拷贝保留该分支以防旧树）。
@@ -846,6 +865,9 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 
 ### 8.1 验证流程
 
+- **并行 agent 的负向对照只回退自己那一处（v0.46.0）**：session scratchpad 是所有子 agent 共用的——同名 `negctl.py` 被覆盖后由另一个
+  agent 误执行，「整文件备份 → 改 → 写回」会抹掉别人这几秒内的并发改动。脚本放各自子目录、起唯一名字；变异用就地字符串替换，
+  跑完只把这一处改回来（并核对 diffstat 与变异前一致）。
 - **tests/ 里起 node 的子进程必须 `encoding="utf-8"`（v0.40.0 首推 windows-smoke 红）**：`text=True` 在 Windows 按控制台代码页解，CJK 金标 JSON 直接 UnicodeDecodeError；`tests/test_subprocess_encoding.py` 的 node 扫描守着（负向对照），本机 macOS 复现不了，只有 Windows job 抓得到。起 node ESM 一律经 `tests/node_esm.py`（模块路径传 Path → `file://` URL；Windows 不认裸盘符路径 `ERR_UNSUPPORTED_ESM_URL_SCHEME`），别处不许再写 `--input-type=module`。
 - **工作流 / 文档里的计数必须有真值文件（v0.40.0 首推 CI 红）**：ci.yml 的 stdio 探针工具数从 `contracts/mcp_list_budget.json` 读（`full_tools` / `compact_tools`），README 客户端表的「全量 N」由 `verify_docs_sync.check_full_surface_counts` 对同一契约锁；`run_ci_gates.py` 不跑「wheel 真起 stdio」两步，推之前核它们的断言值。
 **验证流程**：

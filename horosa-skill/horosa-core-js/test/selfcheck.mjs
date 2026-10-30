@@ -27,6 +27,7 @@ import { runBaziGeju } from '../src/tools/baziGeju.js';
 import { runTiebanFramework } from '../src/tools/tiebanFramework.js';
 import { buildTiebanFramework } from '../src/vendor/tieban/tiebanFrameworkLocal.js';
 import { computeQimenScanPan, buildQimenScanSeeds } from '../src/vendor/divination/zeri/qimenScanEngine.js';
+import { jieqiSeedFromYearResult } from '../src/tools/qimen.js';
 import { buildLocalBaziResult } from '../src/vendor/bazi/baziLunarLocal.js';
 import { runCanping } from '../src/tools/canping.js';
 import { runHeluo } from '../src/tools/heluo.js';
@@ -1395,6 +1396,56 @@ check('perfFlags headless：flagEnabled 恒 true（无 window/localStorage = 上
 });
 
 await Promise.all(pending);
+
+// 上游 v3.12.0 删了 DunJiaCalc.buildJieqiYearSeed，后端 jieqi24 → 种子的转换收进网络模块 preciseCalcBridge（不 vendor）；
+// tools/qimen.js 逐字照它。钉住它与旧写法的三处不同：带符号年的日期键、日干支先认 dayGanzhi、空节气名跳过。
+check('qimen 后端节气种子 = 上游 fetchPreciseJieqiSeed 的转换（公元前日期键 / dayGanzhi 优先）', () => {
+  const seed = jieqiSeedFromYearResult({ jieqi24: [
+    { jieqi: '冬至', time: '-0300-12-21 10:00:00', dayGanzhi: '甲子', bazi: { fourColumns: { day: { ganzi: '乙丑' } } } },
+    { jieqi: '夏至', time: '2026-06-21 10:24:00', bazi: { fourColumns: { day: { ganzi: '丙午' } } } },
+    { jieqi: '' },
+  ] });
+  assert(seed.冬至.dateKey === '-03001221', `公元前日期键 ${seed.冬至.dateKey}`);
+  assert(seed.冬至.dayGanzhi === '甲子', 'dayGanzhi 字段优先于四柱日柱');
+  assert(seed.夏至.dateKey === '20260621' && seed.夏至.dayGanzhi === '丙午', '回落四柱日柱');
+  assert(Object.keys(seed).length === 2, '空节气名跳过');
+  assert(jieqiSeedFromYearResult({}) === null, '无 jieqi24 → null（回落本地种子）');
+});
+
+// 上游 v3.13.0：129 年系统改前端单源 utils/yearSystem129.js（后端 yearsystem129.py 已删）；年龄推进点 / 界推运改
+// buildXxxSnapshotFromResult（后端结果作 payload.result）。三者都是 verbatim vendor（manifest 校验），这里钉「选项改变结果」
+// 与 now_ms 钉住 Date.now 两件 skill 自己的接线。期长手算：日数法子限 日 = 19 × ⌊2.5×19⌋ = 893 日 = 2.44 年（yearSystem129.js:18-21）。
+check('progextra(yearsystem129 / agepoint / distributions) — v3.13.0 builders + options + now_ms', () => {
+  const ys = runProgExtra({ technique: 'yearsystem129', chart }).snapshot_text;
+  assert(ys.startsWith('[129年系统表格]\n七星各管其小年（土 30 / 木 12 / 火 15 / 日 19 / 金 8 / 水 20 / 月 25，合 129 年）。起始星=日、'), ys.slice(0, 80));
+  assert(ys.split('\n').some((l) => /^\| 日\(19\.00年,起 .+\) \| 日 \| .+ \| 2\.44 \|$/.test(l)), 'Sun main period / days sub-rule');
+  const ysEq = runProgExtra({ technique: 'yearsystem129', chart, options: { order: 'chaldean', subRule: 'equal', yearType: 'hellenistic' } }).snapshot_text;
+  assert(ysEq.includes('次序=迦勒底序（土木火日金水月）、年制=埃及 / 希腊化年（360 日）、子限=七等分（主限 ⁄ 7）'), 'ys129 options must reach builder');
+  assert(ysEq.split('\n').some((l) => /^\| 日\(19\.00年,起 .+\) \| 日 \| .+ \| 2\.71 \|$/.test(l)), 'equal sub-rule = 19/7 = 2.71');
+  const natal = { params: { birth: '1995-06-03 05:30:00', zone: '+08:00' }, chart: {} };
+  const ap = { agepoint: { settings: { apMethod: 'equal5', apEvents: 'conj', apYear: 'tropical', apMaxAge: 100 },
+    points: [
+      { age: 0, date: '1995-06-03', sign: 'Gemini', signlon: 20.66, house: 1, aspects: [] },
+      { age: 8, date: '2003-06-03', sign: 'Leo', signlon: 0.66, house: 2, aspects: [{ aspectTo: 'Moon', aspectAge: 8.09, aspectType: 0, side: '' }] },
+    ],
+    crossings: [{ age: 8.09, aspectTo: 'Moon', aspect: 0, side: '', date: '2003-07-06' }] } };
+  const a = runProgExtra({ technique: 'agepoint', chart: natal, result: ap, now_ms: Date.UTC(2001, 0, 1) });
+  assert(a.snapshot_text.includes('推进方式=等速（自上升每年 5°）、事件=只报合七星、年长=回归年（365.2422 日）、年限=100 岁'), 'ap.settings echo');
+  assert(a.snapshot_text.includes('| 8岁 | 2003-06-03 | 狮子 0.66° | 2宫 | 合月(8.09岁) |'), a.snapshot_text);
+  assert(JSON.stringify(a.moment_lines) === JSON.stringify(['当前年龄点：0岁 落双子 20.66°，第1宫', '下一事件：8.09岁合月（2003-07-06）']), JSON.stringify(a.moment_lines));
+  const later = runProgExtra({ technique: 'agepoint', chart: natal, result: ap, now_ms: Date.UTC(2004, 0, 1) });
+  assert(later.moment_lines[0] === '当前年龄点：8岁 落狮子 0.66°，第2宫，合月(8.09岁)', `now_ms must pin Date.now: ${JSON.stringify(later.moment_lines)}`);
+  assert(runProgExtra({ technique: 'agepoint', chart: natal, result: { agepoint: { points: [] } } }).snapshot_text === '', 'no points → ""');
+  const dist = { dist: [{ distributor: 'Mars', sign: 'Gemini', startYears: 0, years: 3.3212, startDate: '1995-06-03 05:30:00', endDate: '1998-09-28 06:25:30', partnerDetail: [{ planet: 'Saturn', aspect: 90, side: 'S' }] }],
+    distSettings: { distReleaser: 'Asc', distMethod: 'classical', distYear: 'tropical', distYears: 100, releaserLon: 80.6562 },
+    distPartners: [{ planet: 'Saturn', aspect: 90, side: 'S', lon: 83.8329, startYears: 3.1552, years: 10.5357, startDate: '1998-07-29 15:16:36', endDate: '2009-02-09 17:06:44' }] };
+  const d = runProgExtra({ technique: 'distributions', chart: natal, result: dist, now_ms: Date.UTC(1999, 0, 1) });
+  assert(d.snapshot_text.includes('年限=100 年（黄经 80.66°）'), 'releaser lon');
+  assert(d.snapshot_text.includes('| 火 | 双子 | 0.00 | 3.32 | 1995-06-03 05:30:00 | 1998-09-28 06:25:30 | 土四分·左 |'), d.snapshot_text);
+  assert(d.snapshot_text.includes('[伙伴星期]\n| 伙伴星 | 相位点 | 起始岁 | 时长(年) | 起 | 止 |'), 'partner section');
+  assert(JSON.stringify(d.moment_lines) === JSON.stringify(['当前伙伴星：土四分·左（1998-07-29 15:16:36 ~ 2009-02-09 17:06:44）']), JSON.stringify(d.moment_lines));
+});
+
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);
   process.exit(1);

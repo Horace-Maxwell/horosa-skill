@@ -19,6 +19,11 @@ _SYNC311_ASTROEXTRA_STUBS = {
     "/astroextra/prenatal_syzygy": _SYNC311_SAMPLE["prenatal_syzygy"],
     "/astroextra/progressions": _SYNC311_SAMPLE["progressions"],
 }
+# 上游 v3.13.0 年龄推进点 / 界推运：/predict/agepoint · /predict/dist 回**真实**响应（vendored v3.13.0 实例实抓，
+# fixtures/sync313_predictive_live.json；含 settings / distSettings / distPartners 新字段）。值级真相归 test_sync313_predictive.py。
+_SYNC313_LIVE = json.loads((Path(__file__).parent / "fixtures" / "sync313_predictive_live.json").read_text(encoding="utf-8"))
+_SYNC311_ASTROEXTRA_STUBS["/predict/agepoint"] = _SYNC313_LIVE["agepoint"]["default"]
+_SYNC311_ASTROEXTRA_STUBS["/predict/dist"] = _SYNC313_LIVE["dist"]["default"]
 
 
 class FakeClient(HorosaApiClient):
@@ -1268,6 +1273,39 @@ class FakeJsClient(HorosaJsEngineClient):
                     "| 起始年龄 | 日期 | 月相 | 关键词 |\n| --- | --- | --- | --- |\n| 0.0 岁(本命) | 1990-04-06 | 朔 · 新月 | 萌发 · 新启 · 直觉行动 |"
                 ),
             }
+            # 上游 v3.13.0：129 年系统改前端引擎；年龄推进点 / 界推运改 vendored buildXxxSnapshotFromResult（payload.result =
+            # 后端结果，空则上游返回 ''）。正文 = 真 builder 在 chart_1998_predictive.json / sync313_predictive_live.json 上的
+            # 逐字输出（截前几行；值级真相由 tests/test_sync313_predictive.py 的真 node 用例守）。
+            result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+            if technique == "agepoint" and not ((result.get("agepoint") or {}).get("points")):
+                return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": ""}
+            if technique == "distributions" and not result.get("dist"):
+                return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": ""}
+            _PROGEXTRA_FAKE.update({
+                "yearsystem129": (
+                    "[129年系统表格]\n七星各管其小年（土 30 / 木 12 / 火 15 / 日 19 / 金 8 / 水 20 / 月 25，合 129 年）。"
+                    "起始星=日、次序=黄道顺序（本命黄经递增）、年制=回归年（365.2422 日）、子限=日数法（子星小年 × ⌊2.5 × 主星小年⌋ 日，不填满主限）。\n\n"
+                    "| 主限 | 子限 | 起始日期 | 时长(年) |\n| --- | --- | --- | --- |\n"
+                    "| 日(19.00年,起 1998-02-20) | 日 | 1998-02-20 | 2.44 |\n|  | 木 | 2000-08-01 | 1.54 |"
+                ),
+                "agepoint": (
+                    "[年龄推进点（Age Point / Huber）]\n年龄点自上升点起逐宫顺行，每宫 6 年、72 年回到上升。"
+                    "推进方式=Koch 宫（每宫 6 年，宫内匀速）、事件=全部点 × 五种相位、年长=回归年（365.2422 日）、年限=72 岁。"
+                    "年龄点经过本命点或其相位点的岁数为人生关键节点。\n\n"
+                    "关键岁数（精确穿越岁数）：0.76岁四分·左土(1996-03-06)；2.91岁六合·右天底(1998-05-01)\n\n"
+                    "| 年龄 | 日期 | 落座 | 宫 | 事件（穿越岁数） |\n| --- | --- | --- | --- | --- |\n"
+                    "| 0岁 | 1995-06-03 | 双子 20.66° | 1宫 | 四分·左土(0.76岁) |"
+                ),
+                "distributions": (
+                    "[界推运（分配法 / Distributions）]\n发放点随周日运动顺黄道依次经过其后各界（界表用当前全局界系设置）。"
+                    "发放点=上升、时间算法=上升时间（星座内均匀，古典）、年长=回归年（365.2422 日）、年限=100 年（黄经 80.66°）。"
+                    "分配星 = 所在界的界主；伙伴星 = 发放点最近经过的行星本体或相位点（左右 60° / 90° / 120° 与 180°），各管到下一点为止。\n\n"
+                    "| 分配星 | 界(座) | 起始岁 | 时长(年) | 起 | 止 | 期内伙伴星 |\n| --- | --- | --- | --- | --- | --- | --- |\n"
+                    "| 火 | 双子 | 0.00 | 3.32 | 1995-06-03 05:30:00 | 1998-09-28 06:25:30 | 土四分·左 |\n\n"
+                    "[伙伴星期]\n| 伙伴星 | 相位点 | 起始岁 | 时长(年) | 起 | 止 |\n| --- | --- | --- | --- | --- | --- |\n"
+                    "| 土 | 四分·左（83.83°） | 3.16 | 10.54 | 1998-07-29 15:16:36 | 2009-02-09 17:06:44 |"
+                ),
+            })
             if technique in _PROGEXTRA_FAKE:
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}

@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from horosa_skill.civil_calendar import _to_slash_date
 from horosa_skill.errors import (
     HorosaSkillError,
     ToolTransportError,
@@ -22,6 +23,17 @@ from horosa_skill.service.options_zeri import (
     _zeri_explain_rows,
     _zeri_snapshot_row_opts,
 )
+
+_HM_TAIL_RE = re.compile(r"\s\d{1,2}:\d{1,2}$")
+
+
+def _explain_at_text(value: Any) -> str:
+    """explainAt → 判读端点的 t（'YYYY/MM/DD HH:mm:ss'）。日期段走 toSlashDate（上游 explainInterval：
+    TianxingElectionMain.js:397 `toSlashDate(String(row.pick || `${row.start}:00`))`）——只换数字之间的 '-'，
+    公元前前导负号保留；旧 replace('-', '/') 把 '-0500-03-21' 换成 '/0500/03/21'（后端 parse_civil_date 碰巧又读回
+    公元前，但回显进 [单时判读] 段的 t 是坏串），旧 len == 16 判「缺秒」对公元前 / 五位年失灵。缺秒补 ':00'。"""
+    text = _to_slash_date(str(value or "").strip())
+    return f"{text}:00" if _HM_TAIL_RE.search(text) else text
 
 
 class ZeriRunners:
@@ -219,9 +231,7 @@ class ZeriRunners:
 
         t 归一照上游 explainInterval（TianxingElectionMain.js:346）：'-'→'/'，缺秒补 ':00'。
         """
-        t_raw = str(payload.get("explainAt") or "").strip().replace("-", "/")
-        if len(t_raw) == 16:  # YYYY/MM/DD HH:mm
-            t_raw = f"{t_raw}:00"
+        t_raw = _explain_at_text(payload.get("explainAt"))
         raw = self._call_remote("/electionscan/explain", {**base, "t": t_raw})
         data = self._require_electionscan_ok(raw, endpoint="/electionscan/explain")
         tree = data.get("tree") if isinstance(data, dict) else None
@@ -593,15 +603,17 @@ class ZeriRunners:
                 out["options"] = cast
             return out
         if tool_name == "taiyizeri":
-            # TaiyiZeriMain.buildFields（:309-327：性别←options.sex、日界缺省 0、晚子时缺省 1，与
-            # computeTaiyiScanPan 同缺省）+ applyWorkbenchCalibre（:255-261：tn 进太乙页 options）。
+            # TaiyiZeriMain.buildFields（v3.13.0 :372-389：性别←options.sex、日界 / 晚子时缺省 = 全局出厂
+            # defaultAfter23NewDay() / defaultLateZiHourUseNextDay() = 1/1，与 computeTaiyiScanPan 同缺省；v3.11 时日界缺省
+            # 是 0，v3.13.0 两侧一起改成全局值——仍写 0 则展示盘「24点算第二天」而扫描按 23 点换日）
+            # + applyWorkbenchCalibre（tn 进太乙页 options）。
             taiyi_options = {"tn": eff("tn", 0)}
             if options.get("sex") is not None:
                 taiyi_options["sex"] = options["sex"]
             if isinstance(options.get("school"), dict):
                 # 流派六轴对象（扫描引擎 applyTaiyiSchool(pan, o.school) 按对象展开；字符串档在扫描侧即无效）。
                 taiyi_options["school"] = options["school"]
-            return {"after23NewDay": eff("after23NewDay", 0), "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1),
+            return {"after23NewDay": eff("after23NewDay", 1), "lateZiHourUseNextDay": eff("lateZiHourUseNextDay", 1),
                     "options": taiyi_options}
         if tool_name == "sanshizeri":
             # SanshiZeriMain.onPickInterval → applyWorkbenchCalibre（:319-335）：工作台 13 键回写三式页 options
@@ -651,7 +663,7 @@ class ZeriRunners:
         explains: list[Any] = []
         for index in range(count):
             row = intervals[index] if isinstance(intervals[index], dict) else {}
-            t = str(row.get("pick") or f"{row.get('start')}:00").replace("-", "/")
+            t = _to_slash_date(str(row.get("pick") or f"{row.get('start')}:00"))
             try:
                 raw = self._call_remote(endpoint, {**base, "t": t})
                 data = self._require_electionscan_ok(raw, endpoint=endpoint)
@@ -1016,9 +1028,7 @@ class ZeriRunners:
         # 所以逐叶 pass 与扫描结果绝对同源。未给 explainAt 不产，零回归。
         explain_payload = None
         if payload.get("explainAt"):
-            t_raw = str(payload.get("explainAt") or "").strip().replace("-", "/")
-            if len(t_raw) == 16:  # YYYY/MM/DD HH:mm
-                t_raw = f"{t_raw}:00"
+            t_raw = _explain_at_text(payload.get("explainAt"))
             raw = self._call_remote(spec["explain"], {**base_request, "t": t_raw})
             data = self._require_electionscan_ok(raw, endpoint=spec["explain"])
             if isinstance(data, dict) and data.get("tree") is not None:

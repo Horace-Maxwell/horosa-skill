@@ -103,7 +103,8 @@ class BaZiBirthInput(FlexibleModel):
         description="南半球月令（只对南纬出生生效，北纬忽略）：none=不对冲（缺省，月柱同北半球）| chong=对冲（月支取对冲之支，月干按年干五虎遁重起，胎元/命宫/大运随之）。",
     )
     timeAlg: int | None = 0
-    # 本地引擎（上游页面主路径）不实现 byLon / adjustJieqi：给了真值即整盘走 Java /bazi/*（唯一实现它们的引擎）并进 warnings。
+    # 本地引擎（上游页面主路径）不实现 byLon：给了真值即整盘走 Java /bazi/*（唯一实现它的引擎）并进 warnings。
+    # adjustJieqi：v3.13.0 起上游恒发 0（BAZI_ADJUST_JIEQI_SENT），给了真值也按不调整起盘并进 warnings（保留字段=旧调用不报错）。
     byLon: bool | None = False
     # 日界（F2）：None=按上游出厂缺省 1（23 点换日；BaZi.js genParams 恒带 fields.after23NewDay=defaultAfter23NewDay()）。
     after23NewDay: bool | None = None

@@ -8,10 +8,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 _COMPACT_COORD_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([NSEWnsew])\s*(\d+(?:\.\d+)?)\s*$")
 _DECIMAL_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
 _ZONE_HM_RE = re.compile(r"^(?P<sign>[+-]?)(?P<hours>\d{1,2})(?::(?P<minutes>\d{1,2}))?$")
-_DATE_RE = re.compile(r"^(?P<year>\d{4})(?P<sep>[-/])(?P<month>\d{1,2})(?P=sep)(?P<day>\d{1,2})$")
+# 年带符号、1–5 位（上游 dateStrSafe.parseDateParts 同域：公元前 '-0500-03-21'、五位年 '10000-01-01'）；
+# 归一成 formatSignedDate 同形（负年前导负号、年不足 4 位补零、5 位原样）。旧式只认四位无号年：公元前 / 五位年原样透传，
+# 月日不补零、IANA 时区也换算不了偏移。
+_DATE_RE = re.compile(r"^(?P<year>-?\d{1,5})(?P<sep>[-/])(?P<month>\d{1,2})(?P=sep)(?P<day>\d{1,2})$")
 _TIME_RE = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{1,2})(?::(?P<second>\d{1,2}))?$")
 _DATETIME_RE = re.compile(
-    r"^(?P<date>\d{4}[-/]\d{1,2}[-/]\d{1,2})(?P<sep>[T\s]+)(?P<time>\d{1,2}:\d{1,2}(?::\d{1,2})?)$"
+    r"^(?P<date>-?\d{1,5}[-/]\d{1,2}[-/]\d{1,2})(?P<sep>[T\s]+)(?P<time>\d{1,2}:\d{1,2}(?::\d{1,2})?)$"
 )
 
 
@@ -80,7 +83,9 @@ def _normalize_date_value(text: str) -> str:
     match = _DATE_RE.match(text)
     if not match:
         return text
-    return f"{int(match.group('year')):04d}-{int(match.group('month')):02d}-{int(match.group('day')):02d}"
+    year = int(match.group("year"))
+    sign = "-" if match.group("year").startswith("-") else ""
+    return f"{sign}{abs(year):04d}-{int(match.group('month')):02d}-{int(match.group('day')):02d}"
 
 
 def _normalize_time_value(text: str) -> str:
@@ -208,7 +213,7 @@ def _normalize_iana_zone_value(text: str, *, payload: dict[str, Any] | None, key
         and payload is not None
         and _cn_unified_enabled(payload)
         and reference is not None
-        and (reference.year, reference.month, reference.day) >= _CN_UNIFIED_SINCE_YMD
+        and reference[:3] >= _CN_UNIFIED_SINCE_YMD
     ):
         unified_from, text = text, target
     try:
@@ -221,13 +226,41 @@ def _normalize_iana_zone_value(text: str, *, payload: dict[str, Any] | None, key
     if unified_from is not None and payload is not None:
         payload.setdefault("geoZone", unified_from)
         payload["zoneAdvisory"] = "cn-unified"
-    offset = reference.replace(tzinfo=zone).utcoffset()
+    wall = _wall_datetime_for_offset(reference)
+    offset = wall.replace(tzinfo=zone).utcoffset() if wall is not None else None
     if offset is None:
         return None
-    return _format_zone_offset(offset.total_seconds() / 3600)
+    return _format_offset_seconds(offset.total_seconds())
 
 
-def _reference_datetime_for_zone(payload: dict[str, Any], key: str) -> datetime | None:
+def _wall_datetime_for_offset(reference: tuple[int, int, int, int, int, int]) -> datetime | None:
+    """参照钟面 → datetime（只拿来问时区偏移）。年份按外推格里历读（上游 offsetForZoneAtDate 经 parseDateTimeMs 同口径）；
+    datetime 只认 1–9999 年：公元前 / 五位年平移整 400 年（外推格里历 400 年 = 146097 天、星期与闰年分布逐日重合，
+    时区规则得同一偏移；公元 1 年以前本就是地方平时 LMT）。2 月 29 日落在格里历平年 → 3 月 1 日（JS Date 同样进位）；
+    其余不存在的日子（2 月 30 日、13 月…）→ None（上游 parseDateTimeParts 同样拒收）。"""
+    year, month, day, hour, minute, second = reference
+    if year < 1:
+        year += 400 * ((1 - year + 399) // 400)
+    elif year > 9999:
+        year -= 400 * ((year - 9999 + 399) // 400)
+    try:
+        return datetime(year, month, day, hour, minute, second)
+    except ValueError:
+        if month == 2 and day == 29 and 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59:
+            return datetime(year, 3, 1, hour, minute, second)
+        return None
+
+
+def _format_offset_seconds(total_seconds: float) -> str:
+    """UTC 偏移秒数 → '±HH:MM'，秒数舍去（上游 offsetForZoneAtDate 读 Intl longOffset 'GMT+01:34:52' 只取时、分）。
+    整分钟的时区与旧 round 口径逐字相同；地方平时（LMT，如雅典 +01:34:52、佛罗伦萨所在 Europe/Rome +00:49:56）
+    旧 round 进成 +01:35 / +00:50，与上游差一分钟。"""
+    sign = "+" if total_seconds >= 0 else "-"
+    hours, minutes = divmod(int(abs(total_seconds)) // 60, 60)
+    return f"{sign}{hours:02d}:{minutes:02d}"
+
+
+def _reference_datetime_for_zone(payload: dict[str, Any], key: str) -> tuple[int, int, int, int, int, int] | None:
     if key == "guaZone":
         reference = _combine_date_time(payload.get("guaDate"), payload.get("guaTime"))
         if reference is not None:
@@ -239,7 +272,8 @@ def _reference_datetime_for_zone(payload: dict[str, Any], key: str) -> datetime 
     return _combine_date_time(payload.get("date"), payload.get("time")) or _parse_datetime_text(payload.get("datetime"))
 
 
-def _combine_date_time(date_value: Any, time_value: Any) -> datetime | None:
+def _combine_date_time(date_value: Any, time_value: Any) -> tuple[int, int, int, int, int, int] | None:
+    """(带符号显示年, 月, 日, 时, 分, 秒)；日期 / 时刻形状认不出、或数值越界（13 月、45 日、99 时）→ None。"""
     if date_value is None or time_value is None:
         return None
     date_text = str(date_value).strip()
@@ -248,23 +282,21 @@ def _combine_date_time(date_value: Any, time_value: Any) -> datetime | None:
     time_match = _TIME_RE.match(time_text)
     if not date_match or not time_match:
         return None
-    try:
-        return datetime(
-            int(date_match.group("year")),
-            int(date_match.group("month")),
-            int(date_match.group("day")),
-            int(time_match.group("hour")),
-            int(time_match.group("minute")),
-            int(time_match.group("second") or "0"),
-        )
-    except ValueError:
-        # The regexes accept digit-shaped but calendar-invalid values (month 13, day 45,
-        # hour 99, ...). Degrade like a regex miss instead of crashing normalization — the
-        # backend will reject the bad date with a structured param error.
-        return None
+    reference = (
+        int(date_match.group("year")),
+        int(date_match.group("month")),
+        int(date_match.group("day")),
+        int(time_match.group("hour")),
+        int(time_match.group("minute")),
+        int(time_match.group("second") or "0"),
+    )
+    # The regexes accept digit-shaped but calendar-invalid values (month 13, day 45,
+    # hour 99, ...). Degrade like a regex miss instead of crashing normalization — the
+    # backend will reject the bad date with a structured param error.
+    return reference if _wall_datetime_for_offset(reference) is not None else None
 
 
-def _parse_datetime_text(value: Any) -> datetime | None:
+def _parse_datetime_text(value: Any) -> tuple[int, int, int, int, int, int] | None:
     if value is None:
         return None
     text = str(value).strip()

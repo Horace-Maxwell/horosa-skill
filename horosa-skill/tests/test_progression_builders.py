@@ -1,7 +1,7 @@
 """Offline golden + invariant tests for the pure-Python v2.5.0 推运 snapshot builders.
 
 These builders were ported by hand from 星阙's frontend (persiandirected = pure 1°/年 arithmetic;
-yearsystem129 = reads server-computed predictives; planetaryages = Ptolemy seven ages). Before this
+planetaryages = Ptolemy seven ages). Before this
 file they were only exercised by `@requires_chart` live tests, so an arithmetic/formatting regression
 would slip through CI when no chart service is up. Here we feed a FIXED `/chart` response fixture
 (`fixtures/chart_1998_predictive.json`, captured once from the live service) and assert both the exact
@@ -57,8 +57,8 @@ def test_persianchart_section_renders_directed_positions_and_hits() -> None:
     assert S._build_persianchart_section_text({}) == "", "缺 chart 必须空段（条件段零回归）"
 
 
-def test_yearsystem129_matches_golden() -> None:
-    assert S._build_yearsystem129_snapshot_text(_chart()) == _golden("yearsystem129")
+# yearsystem129：上游 v3.13.0 删了后端 yearsystem129.py，快照改由 vendored utils/yearSystem129.js 出——金标与不变量
+# 移到 tests/test_sync313_predictive.py（真 node 引擎跑同一份 chart_1998_predictive.json）。
 
 
 def test_planetaryages_matches_golden() -> None:
@@ -93,18 +93,6 @@ def test_persiandirected_invariants() -> None:
     # Sorted by the 2-dp-ROUNDED age (faithful to 星阙's `hits.sort((x,y)=>x.age-y.age)`); dates are NOT
     # strictly monotonic within a rounded-age group (same-rounded-age hits keep insertion order).
     assert ages == sorted(ages), "hits must be sorted ascending by (rounded) age"
-
-
-def test_yearsystem129_invariants() -> None:
-    text = S._build_yearsystem129_snapshot_text(_chart())
-    assert text.startswith("[129年系统表格]")
-    assert "129 年一轮" in text
-    # every data row is | 主限 | 子限 | 日期 | with a non-empty 主限
-    data_rows = [ln for ln in text.splitlines() if ln.startswith("| ") and "主限" not in ln and "---" not in ln]
-    assert data_rows, "expected at least one 主限/子限 row"
-    for row in data_rows:
-        cells = [c.strip() for c in row.strip("|").split("|")]
-        assert cells[0], "主限 column must be non-empty"
 
 
 def test_planetaryages_invariants() -> None:

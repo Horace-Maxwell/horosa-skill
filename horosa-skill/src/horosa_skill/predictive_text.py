@@ -14,6 +14,7 @@ import math
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from horosa_skill.astro_rulers import POLAR_MC_NOTE, polar_mc_of
 from horosa_skill.engine import astroextra_snapshots as _shared
 
 # 上游名称表 / 宫制 / 岁差 / 小推运月长档：与星运新四键同源的那一份（engine/astroextra_snapshots，逐字抽自
@@ -188,6 +189,9 @@ def build_predictive_birth_lines(chart_wrap: dict[str, Any] | None) -> list[str]
     hsys = HOUSE_SYS_LABELS.get(js_str(params.get("hsys"))) or chart.get("hsys")
     if hsys:
         lines.append(f"宫制：{hsys}")
+    # 上游 v3.13.0 astroAiSnapshot.js:1955-1957：极区天顶（任一宫头带 polarMc）→ 宫制行后加一行口径说明。
+    if polar_mc_of(chart):
+        lines.append(POLAR_MC_NOTE)
     if chart.get("isDiurnal") is not None:
         lines.append(f"盘型：{'日生盘' if chart.get('isDiurnal') else '夜生盘'}")
     return lines

@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
 from typing import Any
 
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
 from horosa_skill.service._common import (
+    _chart_at_moment_date_fields,
     _chart_body_lon_speed,
+    _civil_moment_of_wall_ms,
+    _civil_wall_ms_of_moment,
+    _date_part_of,
     _drop_none,
-    _fmt_moment,
     _js_math_round,
+    _to_slash_date,
 )
 from horosa_skill.service._context import _degrade
 
@@ -164,7 +167,8 @@ class HoraryElectionRunners:
             js_payload["crisisBase"] = raw
             return
         date = f"{raw}".strip()
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        # 上游 fetchCrisisBase（ElectionMain.js:160）`/^-?\d{4,5}-\d{2}-\d{2}$/`：公元前 / 五位年照收（旧 `^\d{4}…` 全拒）。
+        if not re.match(r"^-?\d{4,5}-\d{2}-\d{2}$", date):
             raise ToolValidationError(
                 bilingual(f"crisisBase（病始日期）须为 YYYY-MM-DD：{raw!r}", f"crisisBase (illness onset date) must be YYYY-MM-DD: {raw!r}"),
                 code="tool.election_invalid_setting",
@@ -347,7 +351,8 @@ class HoraryElectionRunners:
         # fetchPdHits（:218-240）：本命参数（日期用 /）+ 页面宫制/黄道 + tradition 1；时间钥匙 = 有效口径 eff.pdTimeKey。
         pd_time_key = self._election_effective_pd_time_key(payload, resolved=resolved)
         natal_params = _drop_none({
-            "ad": natal_ad, "date": natal_date.replace("-", "/"), "time": natal_time,
+            # toSlashDate：只换数字之间的 '-'（旧 replace('-', '/') 连公元前前导负号一起换成 '/0500/03/21'）。
+            "ad": natal_ad, "date": _to_slash_date(natal_date), "time": natal_time,
             "zone": natal.get("zone"), "lat": natal.get("lat"), "lon": natal.get("lon"),
             "gpsLat": natal.get("gpsLat"), "gpsLon": natal.get("gpsLon"),
             "hsys": hsys, "zodiacal": zodiacal, "siderealAyanamsa": ayanamsa, "tradition": 1,
@@ -372,12 +377,11 @@ class HoraryElectionRunners:
         return f"{value}" if value else None
 
     def _chart_at_moment(self, moment: str, fields_like: dict[str, Any]) -> dict[str, Any] | None:
-        """上游 divination/mundane/momentPipeline.chartAtMoment（:157）的 Python 端口：任意时刻 + 给定地点独立起盘。"""
-        date_part, _, time_part = moment.partition(" ")
+        """上游 divination/mundane/momentPipeline.chartAtMoment（:157）的 Python 端口：任意时刻 + 给定地点独立起盘。
+        {ad, date, time} = DateTime.parse(串, 'YYYY-MM-DD HH:mm:ss') 再 format（_chart_at_moment_date_fields 同式）：
+        前导 '-' = 公元前（ad=-1，纪元随时刻本身）、缺时刻 = 12:00:00。旧实现 ad 恒 1、日期 replace('-', '/')、缺时刻 00:00:00。"""
         params = {
-            "ad": 1,
-            "date": date_part.replace("-", "/"),
-            "time": time_part or "00:00:00",
+            **_chart_at_moment_date_fields(moment),
             "zone": fields_like.get("zone") or "+08:00",
             "lat": fields_like.get("lat") or "0n00",
             "lon": fields_like.get("lon") or "0e00",
@@ -404,14 +408,15 @@ class HoraryElectionRunners:
         只重起一次盘（上游不再精化）。返回 {momentStr, chart}：chart 是**产出 facts 的那张盘**——上游循环
         未 break 时 t 在最后一次 facts 之后又前推了一步，momentStr 与 facts 来源盘因此可以不同刻，照搬。
         时刻算术为墙钟（无 DST）：等同上游在无夏令时的机器时区（如 Asia/Shanghai）下 moment.js 的行为。
+        v3.13.0：电盘时刻按民用历读（momentOfCivilDateTimeStr，1582 以前儒略历、公元前历史纪年）、回写按民用历标签
+        （fmt = civilDateOfMoment + 钟面）——这里在同一条民用历墙钟轴（_civil_wall_ms_of_moment）上算秒。
         """
         if natal_lon is None:
             return None
         cycle = self._SOLAR_RETURN_DAYS if kind == "sun" else self._LUNAR_RETURN_DAYS
         rate = 360 / cycle
-        try:
-            elec = datetime.strptime(election_moment, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
+        elec = _civil_wall_ms_of_moment(f"{election_moment or ''}".strip(), strict=False)
+        if elec is None:
             return None
         r0 = self._chart_at_moment(election_moment, fields_like)
         if r0 is None:
@@ -420,10 +425,10 @@ class HoraryElectionRunners:
         if lon0 is None:
             return None
         elapsed = ((lon0 - natal_lon) % 360 + 360) % 360
-        t = elec - timedelta(seconds=_js_math_round(elapsed / rate * 86400))
+        t = elec - _js_math_round(elapsed / rate * 86400) * 1000
         facts_chart: dict[str, Any] | None = None
         for _ in range(6):
-            chart = self._chart_at_moment(_fmt_moment(t), fields_like)
+            chart = self._chart_at_moment(_civil_moment_of_wall_ms(t), fields_like)
             if chart is None:
                 return None
             facts_chart = chart
@@ -434,13 +439,13 @@ class HoraryElectionRunners:
             if abs(d) < 0.005:
                 break
             v = abs(speed) if isinstance(speed, (int, float)) and not isinstance(speed, bool) and abs(speed) > 0.05 else rate
-            t = t + timedelta(seconds=_js_math_round(d / v * 86400))
+            t = t + _js_math_round(d / v * 86400) * 1000
         if t > elec:
-            t = t - timedelta(seconds=_js_math_round(cycle * 86400))
-            chart = self._chart_at_moment(_fmt_moment(t), fields_like)
+            t = t - _js_math_round(cycle * 86400) * 1000
+            chart = self._chart_at_moment(_civil_moment_of_wall_ms(t), fields_like)
             if chart is not None:
                 facts_chart = chart
-        return {"momentStr": _fmt_moment(t), "chart": facts_chart} if facts_chart is not None else None
+        return {"momentStr": _civil_moment_of_wall_ms(t), "chart": facts_chart} if facts_chart is not None else None
 
     def _election_pd_hits(self, natal_params: dict[str, Any], election_date: str, pd_time_key: str | None) -> list[dict[str, Any]]:
         """上游 returnCharts.fetchPdHitsNearElection（:98-128）端口：本命带主限法补拉一盘，取
@@ -467,20 +472,20 @@ class HoraryElectionRunners:
             return []
         predictives = rsp.get("predictives") if isinstance(rsp, dict) else None
         rows = predictives.get("primaryDirection") if isinstance(predictives, dict) else None
-        try:
-            elec = datetime.strptime(f"{election_date}"[:10], "%Y-%m-%d").date()
-        except ValueError:
+        # v3.13.0：日期段走 datePartOf、日差按民用历日序（momentOfCivilDateTimeStr(...).diff(elec, 'days')；
+        # 1582 以前儒略历、公元前不被 [:10] 截错位）。
+        elec = _civil_wall_ms_of_moment(_date_part_of(f"{election_date or ''}"), strict=False)
+        if elec is None:
             return []
         out: list[dict[str, Any]] = []
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, list) or len(row) < 5 or not row[4]:
                 continue
-            day = f"{row[4]}"[:10]
-            try:
-                hit = datetime.strptime(day, "%Y-%m-%d").date()
-            except ValueError:
+            day = _date_part_of(f"{row[4]}")
+            hit = _civil_wall_ms_of_moment(day, strict=False)
+            if hit is None:
                 continue
-            delta = (hit - elec).days
+            delta = (hit - elec) // 86400000
             if abs(delta) > self._ELECTION_PD_WINDOW_DAYS:
                 continue
             out.append({"promissor": row[1], "significator": row[2], "method": row[3], "date": day, "deltaDays": delta})

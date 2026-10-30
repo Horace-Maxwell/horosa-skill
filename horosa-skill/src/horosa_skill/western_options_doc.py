@@ -131,7 +131,7 @@ def _static_doc(tool_name: str) -> dict[str, str]:
         }
     if tool_name == "guolao_chart":
         return {
-            "doubingSu28": "宿度制 0–8（缺省 2）：" + " ".join(f"{k}={label}" for k, label in GUOLAO_SU28_MODES)
+            "doubingSu28": "宿度制 0–8（缺省 0）：" + " ".join(f"{k}={label}" for k, label in GUOLAO_SU28_MODES)
             + "；子选项只在对应制下生效：4→guolaoAyanamsa，6→guolaoTuibianMethod/guolaoGufaPrecess，7/8→guolaoEqTropicalAnchor。",
         }
     if tool_name == "india_chart":

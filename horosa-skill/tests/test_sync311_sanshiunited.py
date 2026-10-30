@@ -176,7 +176,8 @@ def test_sanshiunited_snapshot_is_the_upstream_builder_byte_for_byte(tmp_path) -
     """[Item 1] 三式合一快照整份 = vendored 上游 buildSanShiUnitedSnapshotText（SanShiUnitedMain.js:1424）的输出。
     权威：tests/fixtures/golden_sanshiunited_default.txt = 同一 live 盘经**独立装配**的上游 builder 产出
     （scratchpad harness 按上游 genParams/fieldsToParams/fetchQimenPan/fetchTaiyiPan 另发请求、按 performRecalcByNongli
-    另行装配；33927 B / 701 行 / 41 段，sha256 4be47af9…，与 skill 输出逐字节相同）。
+    另行装配；33927 B / 701 行 / 41 段，与 skill 输出逐字节相同；v3.13.0 重同步：上游 TaiYiCore 盘式/古法公式标签改简体
+    「时计太乙」「太乙统宗」，golden 仅这两行随之更新，sha256 a0fa150c…）。
     负向对照：旧代码在 service.py 里用子工具导出段自拼 —— 段头 [起盘信息]（非【】）、[大六壬] 只有
     「一课：地盘=辛，天盘=申，贵神=天空」四课体、段序/正文全不同 → 逐字节比较当场红。"""
     service, _client = _replay_service(tmp_path)
@@ -298,7 +299,7 @@ def test_sanshiunited_ziwei_sihua_is_the_builder_tail_section(tmp_path) -> None:
         "◆ 生年四化（丙）：禄天同·子女；权天机·父母；科文昌·父母；忌廉贞·迁移",
         "◆ 大运四化（3~12　辛卯限）：禄巨门·兄弟；权太阳·兄弟；科文曲·疾厄；忌文昌·父母",
         "◆ 流年四化（2028　戊申）：禄贪狼·夫妻；权太阴·子女；科右弼·命；忌天机·父母",
-        "四化随当前紫微流派（beipai）取表；按起课时间排盘。",
+        "四化随当前紫微流派（通用·飞星）取表；按起课时间排盘。",   # v3.12.0 起经 ZWConst.zwSihuaSchoolLabel 出中文名
     ]
 
 
@@ -343,7 +344,7 @@ def test_sanshizeri_display_follows_the_scan_liureng_keys(tmp_path) -> None:
     text = env.data["snapshot_text"]
     assert "月将：酉" in _block(text, "起盘信息")
     assert _block(text, "大六壬")[0] == "一课：乙戌朱雀"
-    assert "古法公式：太乙金鏡" in _block(text, "太乙")   # taiyiAccum → tn 早已到达（base 即如此，这里一并钉住）
+    assert "古法公式：太乙金镜" in _block(text, "太乙")   # taiyiAccum → tn 早已到达（base 即如此，这里一并钉住）
     assert "[命中时段]" in text
 
 

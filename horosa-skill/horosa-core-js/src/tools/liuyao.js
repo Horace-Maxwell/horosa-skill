@@ -3,7 +3,7 @@
 // 本文件只做入参装配、不自写一行快照：
 //   ① 未手动摇卦（lines 空）→ buildTimeGua(nongli)（GuaZhanMain.js:74-98 以时起卦：年支序 + 农历月数
 //      monthInt + 农历日数 dayInt + 时柱支序，时柱随 timeAlg）；
-//   ② 扁平齿轮 liuyaoSettings → mergeLiuyaoGearSettings（aiAnalysisContext.js:1684-1729），仅在给了键时注入；
+//   ② 扁平齿轮 liuyaoSettings → mergeLiuyaoGearSettings（v3.13.0 aiAnalysisContext/regenCase.js:447-491），仅在给了键时注入；
 //   ③ 进 builder 前先 await 断语库（ensureLiuyaoDoctrineLoaded :1735-1737，[Q-391/T-373]：不载则 [占类断语]
 //      的《断易天机》摘要行整段静默缺失）；
 //   ④ 快照 = buildGuaSnapshotText(buildCaseSnapshotFields(record), st)（GuaZhanMain.js:201-391，
@@ -18,7 +18,7 @@ import { buildTimeGua, buildGuaSnapshotText } from '../vendor/guazhan/GuaZhanMai
 import { loadDoctrine } from '../vendor/gua/data/liuyaoDoctrineCache.js';
 import { getGua64, Gua64 } from '../vendor/gua/GuaConst.js';
 import { littleEndian } from '../vendor/gua/littleEndian.js';
-import { normalizeLiuyaoSettings, applyPreset, LIUYAO_PRESETS } from '../vendor/gua/liuyaoSchools.js';
+import { normalizeLiuyaoSettings, applyPreset, setOption, LIUYAO_PRESETS } from '../vendor/gua/liuyaoSchools.js';
 import { YONGSHEN_CATEGORIES } from '../vendor/gua/liuyaoYongShen.js';
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 
@@ -39,35 +39,42 @@ export const LIUYAO_GEAR_FIELDS = Object.freeze({
 const LY_STRUCTURAL = ['shenshaOn', 'shenshaBase', 'shenshaSet', 'shenshaExOn'];
 const lyBool = (v) => v === true || v === 1 || v === '1';
 
-// 上游 mergeLiuyaoGearSettings（aiAnalysisContext.js:1684-1731）逐行同构。saved = 存档卦的
-// liuyaoSettings；skill 每次现起卦、无存档层，恒传 {}。
+// 上游 mergeLiuyaoGearSettings（v3.13.0 utils/aiAnalysisContext/regenCase.js:447-491）逐行同构。saved = 存档卦的
+// liuyaoSettings；skill 每次现起卦、无存档层，恒传 {}（上游无头路径传 buildTimeGua 的 gua.liuyaoSettings||{}，同为 {}）。
+// v3.13.0 起：① 无一键有值 → 原样回 saved；② 底 = normalizeLiuyaoSettings(saved)；③ 换派时 askType/yongOverride/benming
+// 这三项「本卦事实」不随预设改；未知流派原样落 school；④ 其余键逐项经 vendored setOption 落 —— 偏离所选预设即标
+// school='custom'（自定义）；⑤ 神煞以合并后的值为底。
 export function mergeLiuyaoGearSettings(saved, flat) {
   const f = flat && typeof flat === 'object' ? flat : {};
-  let base = saved && typeof saved === 'object' ? { ...saved } : {};
-  // [Q-206/T-151] 选中的预设与存档流派不同 → 以 applyPreset(该派) 为底，其余齿轮键再叠上。
-  if (f.school && f.school !== base.school && LIUYAO_PRESETS[f.school]) {
-    base = applyPreset(f.school, base);
+  if (!Object.keys(f).some((k) => f[k] !== undefined)) {
+    return saved && typeof saved === 'object' ? { ...saved } : {};
+  }
+  let base = normalizeLiuyaoSettings(saved && typeof saved === 'object' ? saved : null);
+  if (f.school !== undefined && f.school !== base.school) {
+    if (LIUYAO_PRESETS[f.school]) {
+      const caseInputs = {};
+      ['askType', 'yongOverride', 'benming'].forEach((k) => { if (base[k] !== undefined) { caseInputs[k] = base[k]; } });
+      base = { ...applyPreset(f.school, base), ...caseInputs };
+    } else {
+      base = { ...base, school: f.school };
+    }
   }
   Object.keys(LIUYAO_GEAR_FIELDS).forEach((k) => {
-    if (LY_STRUCTURAL.indexOf(k) >= 0 || f[k] === undefined) {
+    if (k === 'school' || LY_STRUCTURAL.indexOf(k) >= 0 || f[k] === undefined) {
       return;
     }
-    base[k] = LIUYAO_GEAR_FIELDS[k] === 'switch' ? lyBool(f[k]) : f[k];
+    const v = LIUYAO_GEAR_FIELDS[k] === 'switch' ? lyBool(f[k]) : f[k];
+    base = setOption(base, k, v);
   });
   if (f.shenshaOn !== undefined || f.shenshaBase !== undefined || f.shenshaSet !== undefined) {
-    const prev = (saved && saved.shensha && typeof saved.shensha === 'object') ? saved.shensha : {};
-    base.shensha = {
-      ...prev,
+    base = setOption(base, 'shensha', {
       ...(f.shenshaOn !== undefined ? { on: lyBool(f.shenshaOn) } : {}),
       ...(f.shenshaBase !== undefined ? { base: f.shenshaBase } : {}),
       ...(f.shenshaSet !== undefined && Array.isArray(f.shenshaSet) ? { set: f.shenshaSet.slice() } : {}),
-    };
+    });
   }
   if (f.shenshaExOn !== undefined) {
-    base.shenshaEx = {
-      ...((saved && saved.shenshaEx && typeof saved.shenshaEx === 'object') ? saved.shenshaEx : { set: null }),
-      on: lyBool(f.shenshaExOn),
-    };
+    base = setOption(base, 'shenshaEx', { on: lyBool(f.shenshaExOn) });
   }
   return base;
 }

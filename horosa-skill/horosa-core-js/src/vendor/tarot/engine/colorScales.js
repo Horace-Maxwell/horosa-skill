@@ -1,5 +1,6 @@
 // 金色黎明四色阶之 King 阶(王阶,Atziluth/火界):22 大牌主色(路径主色)。色名为公有领域体系事实(Liber 777/Regardie),
 // hex 为按色名的渲染近似。键=sid。BOTA/金色黎明 牌可显此色点;其余色阶(Queen/Prince/Princess)为 128 格大表,按需扩。
+import { isTrumpArcana } from './arcana.js'; // 王牌判据单一真值源
 export const KING_SCALE = {
 	the_fool: { name: '亮淡黄', hex: '#F3EDA6' },
 	the_magician: { name: '黄', hex: '#F2DE2B' },
@@ -26,6 +27,6 @@ export const KING_SCALE = {
 };
 
 export function kingScaleColor(card){
-	if(!card || card.arcana !== 'major'){ return null; }
+	if(!card || !isTrumpArcana(card.arcana)){ return null; }
 	return KING_SCALE[card.sid] || null;
 }

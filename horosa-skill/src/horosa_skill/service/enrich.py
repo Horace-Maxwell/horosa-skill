@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from datetime import timedelta
 from typing import Any
 
 from horosa_skill import __version__
@@ -13,6 +12,7 @@ from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.reports.technique_card import build_technique_card
 from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
 from horosa_skill.service._common import (
+    _civil_shift_moment,
     _finite_number,
     _is_astro_chart_payload,
     _require_option,
@@ -36,18 +36,18 @@ from horosa_skill.service.text.chart_family import (
 )
 from horosa_skill.service.text.chinese import _compact_jieqi_seed_row
 from horosa_skill.service.text.pd_zr import (
-    _PD_METHOD_LABELS,
-    _PD_TIME_KEY_LABELS,
     _ZR_AI_MODES,
     _ZR_BASE_POINTS,
+    _pd_display_method,
+    _pd_validate_options,
 )
 from horosa_skill.service.text.predictive import (
     _PD_DISPLAY_ZONE,
     _PERIOD_PREDICTIVE_TOOLS,
     _RETURN_PREDICTIVE_TOOLS,
+    _now_for_chart,
     _pd_display_rows,
-    _persian_birth_date,
-    _upstream_now_wall_clock,
+    _return_picker_seed,
 )
 from horosa_skill.service.text.western import _RELATIVE_TAB_BY_CODE
 
@@ -60,7 +60,8 @@ class EnrichMixin:
         - solarreturn/lunarreturn/givenyear：datetime 缺省 = 「今年生日时刻」（当年 + 出生月日 + 出生时分，
           [挂载自检 F-17]）；dirLat/dirLon 缺省本命经纬（lunarreturn/givenyear 后端**必读** dirLat/dirLon，
           缺了直接 param error）；
-        - profection/solararc：datetime 缺省 = 此刻（`new DateTime()` 钟面，+08:00）；
+        - profection/solararc：datetime 缺省 = 此刻（v3.12.0 起按本盘时区钟面 `DateTime.nowForChart(zone)`；
+          时区不合法才回落 `new DateTime()` 的 +08:00）；
         - 五法 dirZone 缺省本命时区。
         pdchart（aiAnalysisContext.js:2515-2531 pdCurrentDateTime）：缺省 = 主限表首条应期日期（UTC 墙钟 +
         dirZone '+00:00'），无行则出生次日。旧实现一概不补：solarreturn/profection/solararc 无 datetime 时后端回
@@ -69,12 +70,9 @@ class EnrichMixin:
         if tool_name == "zr":
             return self._apply_zr_base_point(payload)
         if tool_name in ("pd", "pdchart"):
-            # F20：词表 = 上游 SUPPORTED_PD_METHODS（13）/ SUPPORTED_PD_TIME_KEYS（26）。后端对白名单外静默回退
-            # core_alchabitius / Ptolemy——认不出就报错，不让「传了 X 实算 Alchabitius」无声发生。
-            if payload.get("pdMethod") is not None:
-                _require_option(payload["pdMethod"], tuple(_PD_METHOD_LABELS), field="pdMethod", tool=tool_name)
-            if payload.get("pdTimeKey") is not None:
-                _require_option(payload["pdTimeKey"], tuple(_PD_TIME_KEY_LABELS), field="pdTimeKey", tool=tool_name)
+            # F20：主限键值域闸——词表 = 上游 v3.13.0 primaryDirectionSync（13 法 / 38 度数换算 / 14 弧算法 / 12 宫制 /
+            # 方向类型 0·1·4 / 设置项登记表十键）。后端对白名单外静默回退——认不出就报错（逐项理由见 pd_zr._pd_validate_options）。
+            _pd_validate_options(payload, tool_name)
             if tool_name == "pd":
                 return payload
         if tool_name not in _PERIOD_PREDICTIVE_TOOLS and tool_name != "pdchart":
@@ -88,11 +86,13 @@ class EnrichMixin:
         effective = dict(payload)
         if tool_name in _PERIOD_PREDICTIVE_TOOLS:
             if not effective.get("datetime"):
-                now = _upstream_now_wall_clock()
-                date_text = f"{payload.get('date') or ''}"
-                if tool_name in _RETURN_PREDICTIVE_TOOLS and len(date_text) >= 10:
-                    time_text = f"{payload.get('time') or '12:00:00'}"
-                    effective["datetime"] = f"{now.strftime('%Y')}{date_text[4:].replace('/', '-')} {time_text[:5]}"
+                # 上游 v3.12.0 regenPredictive.js:27-33：「此刻」按本盘时区（DateTime.nowForChart(np.zone)），
+                # 三返照 / 流年 = returnPickerSeed(np.birth, 此刻)（民用历日期串解析，2/29 平年落 3/1）。
+                now = _now_for_chart(payload.get("zone"))
+                date_text = f"{payload.get('date') or ''}".strip()
+                if tool_name in _RETURN_PREDICTIVE_TOOLS and date_text:
+                    birth = f"{date_text} {payload.get('time') or '12:00:00'}"
+                    effective["datetime"] = _return_picker_seed(birth, now)
                 else:
                     effective["datetime"] = now.strftime("%Y-%m-%d %H:%M")
             if not effective.get("dirZone"):
@@ -163,20 +163,24 @@ class EnrichMixin:
             params = chart.get("params") if isinstance(chart.get("params"), dict) else {}
         except HorosaSkillError as exc:
             _degrade("pdchart default datetime: primary-direction table fetch failed, using birth+1d: %s", exc)
-        pd_method = f"{payload.get('pdMethod') or params.get('pdMethod') or 'core_alchabitius'}"
+        # v3.13.0 defaultPdChartDateTime 按 pdDisplayMethod 过滤（弧算法选 Horosa原方法 → 不按 core 白名单滤行）。
+        pd_method = _pd_display_method(
+            payload.get("pdMethod") or params.get("pdMethod"), payload.get("pdProjection") or params.get("pdProjection")
+        )
         show_bounds = payload.get("showPdBounds") if payload.get("showPdBounds") is not None else params.get("showPdBounds")
         for row in _pd_display_rows(rows, pd_method, show_bounds):
             date_text = f"{row[4] if len(row) > 4 and row[4] else ''}".strip()
             if date_text:
                 return date_text, _PD_DISPLAY_ZONE
-        birth = _persian_birth_date(f"{payload.get('date') or ''} {payload.get('time') or ''}".strip())
-        if birth is None:
+        # 出生次日：上游 buildBirthDateTime → DateTime.addDate(1)（DateTime 按民用历拆日：1582 以前儒略历、公元前历史纪年）。
+        nxt = _civil_shift_moment(f"{payload.get('date') or ''} {payload.get('time') or ''}".strip(), 86400000)
+        if not nxt:
             raise ToolValidationError(
                 "pdchart 缺目标时刻且无法解析出生时刻 / pdchart needs a datetime (birth date/time unparseable).",
                 code="tool.pdchart_invalid_datetime",
                 details={"date": payload.get("date"), "time": payload.get("time")},
             )
-        return (birth + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S"), _PD_DISPLAY_ZONE
+        return nxt, _PD_DISPLAY_ZONE
 
     def _attach_predictive_chart_context(self, tool_name: str, payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
         # planetaryarc 同属「本命 ↔ 时段两盘对照」形态（上游 preset 也列 [本命盘配置]/[时段盘配置]/[相位]），
@@ -344,6 +348,9 @@ class EnrichMixin:
                     enriched["_jyotishSections"] = sections
                 if isinstance(js.get("dashaLines"), list):
                     enriched["_indiaDashaLines"] = js.get("dashaLines")
+                data_sections = js.get("dataSections")
+                if isinstance(data_sections, dict) and data_sections:
+                    enriched["_indiaDataSections"] = data_sections
                 if isinstance(js.get("schoolLines"), list):
                     enriched["_indiaSchoolLines"] = js.get("schoolLines")
                 calibre_line = f"{js.get('calibreLine') or ''}".strip()
@@ -376,7 +383,7 @@ class EnrichMixin:
 
         主盘之外再挂几张分盘（如婚姻 D9 + 子女 D7），每张只出「宫位宫头 + 星与虚点 + 行星」简表（整张分盘快照约
         2.6 万字，N 张全出会把预算吃穿）。归一（值域/去重/上限 4）后剔掉主盘自身（planIndiaExtraVargas），逐张另取
-        /india/chart?chartnum=N（上游 fetchIndiaVargaBriefLines 同路），段内小标题 `── D9 婚姻 ──`。缺省不选 = 不发请求、不加段。
+        /india/chart?chartnum=N（上游 fetchIndiaVargaBriefLines 同路），段内小标题 `── D9 合作 ──`。缺省不选 = 不发请求、不加段。
         """
         if tool_name != "india_chart" or not isinstance(response_data, dict):
             return response_data

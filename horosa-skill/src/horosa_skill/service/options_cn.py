@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime
 from typing import Any
 
+from horosa_skill.civil_calendar import _civil_ymd_exists, _parse_date_parts
 from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.schemas.tools import (
     BaZiBirthInput,
@@ -318,9 +318,13 @@ def _zhengchuan_xinyi_query(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _ken_datetime_parts(payload: dict[str, Any]) -> dict[str, int]:
+    """date/time → ken 的年月日时分秒。年走 parseDateParts（上游 fieldsDateTime.parseFieldsDateTime / DunJiaCalc
+    parseDateTime 单源）：带符号显示年（公元前 '-0500-03-21' → -500）；旧 split('-') 把前导负号连同空段一起滤掉
+    → 公元前读成公元 500 年。认不出的日期退回旧的逐段取数（缺段补 1），不在这里改报错口径。"""
     date_text = str(payload.get("date") or "")
     time_text = str(payload.get("time") or "")
-    date_bits = [int(p) for p in date_text.split("-") if p.strip().lstrip("-").isdigit()]
+    signed = _parse_date_parts(date_text)
+    date_bits = list(signed) if signed else [int(p) for p in date_text.split("-") if p.strip().lstrip("-").isdigit()]
     time_bits = [int(p) for p in time_text.split(":") if p.strip().isdigit()]
     while len(date_bits) < 3:
         date_bits.append(1)
@@ -465,7 +469,8 @@ def _parse_solar_datetime_text(text: Any) -> dict[str, int] | None:
 
 
 def _parse_taiyi_datetime_text(text: Any) -> dict[str, int] | None:
-    """上游 TaiYiCalc.js / JinKouCalc.js parseDateTimeText（行首锚定、分可单位数）：nongli.birth → 年月日时分秒。"""
+    """上游 parseDateTimeText（v3.12.0 起单源 utils/fieldsDateTime.js:61，TaiYiCalc / JinKouCalc 均 import 它；行首锚定、
+    年可带负号 1–6 位、分可单位数）：nongli.birth → 年月日时分秒。"""
     match = re.match(r"^(-?\d{1,6})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", str(text or "").strip())
     if not match:
         return None
@@ -581,19 +586,26 @@ _WANGJI_DIRECTIONS = ("北", "西南", "東", "東南", "南", "中", "西北", 
 _WANGJI_DIRECTION_ALIASES = {"东": "東", "东南": "東南", "东北": "東北"}
 
 
+_SPLIT_TIME_RE = re.compile(r"^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$")
+
+
 def _split_birth_ymdhm(payload: dict[str, Any]) -> dict[str, int]:
     # 神数 engines take split year/month/day/hour/minute (ganzhi-based). Derive from date "YYYY-MM-DD"/
     # "YYYY/MM/DD" (+ optional time "HH:MM[:SS]"). Raises ToolValidationError on an unparseable date
     # rather than silently substituting a default (which would compute a chart for the wrong moment).
-    date_raw = f"{payload.get('date', '')}".strip().replace("/", "-")
+    # 上游 kinAstroFieldsSync / fieldsDateTime.parseFieldsDateTime：年走 parseDateParts（带符号显示年，公元前 -500、
+    # 五位年原样）。旧 strptime 只认 1–9999 年外推格里历：公元前 / 五位年整盘拒收，1582 年前的儒略历闰日（如 1500-02-29）
+    # 也被拒。日期须是民用历上存在的日子（2 月 30 日、改历缺口 1582-10-05…14 仍报错）；时刻缺省或认不出 = 00:00
+    # （与旧 strptime 三格式逐级回落同口径）。
+    date_raw = f"{payload.get('date', '')}".strip()
     time_raw = f"{payload.get('time', '')}".strip()
-    combined = f"{date_raw} {time_raw}".strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-        try:
-            dt = datetime.strptime(combined if "%H" in fmt else date_raw, fmt)
-            return {"year": dt.year, "month": dt.month, "day": dt.day, "hour": dt.hour, "minute": dt.minute}
-        except ValueError:
-            continue
+    parts = _parse_date_parts(date_raw) if date_raw and not any(ch.isspace() for ch in date_raw) else None
+    if parts is not None and _civil_ymd_exists(*parts):
+        time_match = _SPLIT_TIME_RE.match(time_raw)
+        hour, minute, second = (int(g or 0) for g in time_match.groups()) if time_match else (0, 0, 0)
+        if hour > 23 or minute > 59 or second > 59:
+            hour = minute = 0
+        return {"year": parts[0], "month": parts[1], "day": parts[2], "hour": hour, "minute": minute}
     raise ToolValidationError(
         f"无法解析神数起盘日期/时间：date={payload.get('date')!r} time={payload.get('time')!r}。"
         "请提供公历日期（YYYY-MM-DD，可含 HH:MM[:SS] 时间）。",

@@ -1,18 +1,39 @@
 // 宿占快照 builder —— 自上游 components/suzhan/SuZhanMain.js **逐字**抽出（bespoke，derived_from 由
 // contracts/vendor_manifest.json 的 derived_sha256 看守：上游 SuZhanMain.js 一动即红，复核本文件后 --restamp）。
 // 上游这些纯函数与 React 组件同在一个文件里（整份 vendor 会把 antd/JSX 带进来），故只抽快照闭包：
-//   · SIMPLE_TOKEN_MAP / splitDegree / isEncodedToken / msg / chartTypeName / chartShapeName / houseStartModeName /
-//     signFromLon / resolveHouseStartMode / computeAscSignIndex / houseFullLabel（SuZhanMain.js:27-192）
-//   · buildHouseSuLines / foldHouseSuLinesToTable / buildSuzhanSnapshotText（SuZhanMain.js:275-428）
+//   · chartTypeName / chartShapeName / houseStartModeName / signFromLon / resolveHouseStartMode / computeAscSignIndex /
+//     houseFullLabel（SuZhanMain.js:27-112）
+//   · buildHouseSuLines / foldHouseSuLinesToTable / buildSuzhanSnapshotText（SuZhanMain.js:195-352）
+//   · v3.13.0 起上游把 SIMPLE_TOKEN_MAP / splitDegree / isEncodedToken / msg 移进 components/astro/AstroHelper.js
+//     （signDegMin / astroMsgPlainText，函数体逐字同旧）。本仓未整份 vendor AstroHelper.js（现有 sanshi/sanshiAstroHelper.js 是另一份 curated 抽取）→
+//     这四件改自 AstroHelper.js 逐字共抽（行号见下方块注）。
 // 人事十二宫「八字公式起盘」（缺省档）读 chart.nongli.bazi 的时支 —— 只有 Java /chart（ChartController 附农历四柱）
 // 带它；headless 调用方须给 Java /chart 的整份响应（上游页面同源），缺 nongli 时 computeAscSignIndex 回落 ASC 起盘。
-// 函数体逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../constants/xxx 等）。
+// 函数体逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../constants/xxx 等），AstroHelper 两件改为本地共抽。
 import { SU28_MODE_LABEL } from '../guolao/guolaoData.js';
 import * as AstroText from '../../constants/AstroText.js';
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as SZConst from './SZConst.js';
 import * as Su28Helper from '../su28/Su28Helper.js';
 
+// ── components/astro/AstroHelper.js:185-198 逐字（v3.13.0：上游 SuZhanMain.js 私有 splitDegree 移入 AstroHelper 改名 signDegMin，函数体逐字同旧）──
+// 座内度分:黄经(可负,先补 360)→ [座内整度, 整分](均向下取整);非数 → [0, 0]。
+// 与上面的 splitDegree(把度数拆成度 / 分 / 秒)不是一回事。
+function signDegMin(degree){
+	let d = Number(degree);
+	if(Number.isNaN(d)){
+		return [0, 0];
+	}
+	if(d < 0){
+		d += 360;
+	}
+	const deg = Math.floor(d % 30);
+	const min = Math.floor(((d % 30) - deg) * 60);
+	return [deg, min];
+}
+
+// ── AstroHelper.js:214-281 逐字（v3.13.0：上游 SuZhanMain.js 私有 SIMPLE_TOKEN_MAP / isEncodedToken / msg 移入 AstroHelper，msg → astroMsgPlainText，函数体逐字同旧）──
+// 字形字体的单字符码 → 中文名(AstroMsg 取到的是字形码时用,免得字形码混进纯文本)。
 const SIMPLE_TOKEN_MAP = {
 	A: '日',
 	B: '月',
@@ -56,24 +77,12 @@ const SIMPLE_TOKEN_MAP = {
 	8: '人龙星',
 };
 
-function splitDegree(degree){
-	let d = Number(degree);
-	if(Number.isNaN(d)){
-		return [0, 0];
-	}
-	if(d < 0){
-		d += 360;
-	}
-	const deg = Math.floor(d % 30);
-	const min = Math.floor(((d % 30) - deg) * 60);
-	return [deg, min];
-}
-
 function isEncodedToken(text){
 	return /^[A-Za-z0-9${}]$/.test((text || '').trim());
 }
 
-function msg(id){
+// 同 astroMsgText,但 AstroMsg 取到单字符字形码时改出中文名(字形码表里没有就原样输出 id)。
+function astroMsgPlainText(id){
 	if(id === undefined || id === null){
 		return '';
 	}
@@ -92,6 +101,8 @@ function msg(id){
 	}
 	return `${id}`;
 }
+// 上游 SuZhanMain.js:15 `import { signDegMin, astroMsgPlainText as msg } from '../astro/AstroHelper'` 的别名。
+const msg = astroMsgPlainText;
 
 function chartTypeName(type){
 	const map = {};
@@ -202,7 +213,7 @@ function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
 			return AstroConst.isTraditionPlanet(obj.id);
 		});
 		inHouse = inHouse.sort((a, b)=>{
-			// [X1·P2-12] 环形序须对称全序:跨 0°RA 的宫,300°+ 侧在前、30°- 侧在后,两向都要判;
+			// 环形序须对称全序:跨 0°RA 的宫,300°+ 侧在前、30°- 侧在后,两向都要判;
 			// 旧版只判一侧(非对称比较器,Array.sort 行为未定义 → 宫内列序随实现漂移)。
 			if(a.ra > 300 && b.ra < 30){ return -1; }
 			if(b.ra > 300 && a.ra < 30){ return 1; }
@@ -257,7 +268,7 @@ function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
 				}else{
 					radeg = Number(obj.signlon);
 				}
-				const sd = splitDegree(radeg);
+				const sd = signDegMin(radeg);
 				lines.push(`星曜：${msg(obj.id)} ${sd[0]}˚${su}${sd[1]}分`);
 			});
 		});
@@ -322,7 +333,7 @@ export function buildSuzhanSnapshotText(chartObj, fields, planetDisplay){
 		lines.push(`盘型：${chartShapeName(fields.szshape.value)}`);
 	}
 	if(fields && fields.doubingSu28){
-		lines.push(`宿法：${SU28_MODE_LABEL[fields.doubingSu28.value] || (fields.doubingSu28.value === 1 ? '斗柄定房法' : '荀爽距星(19年测)')}`);   // [Q-203] 九档同源取名
+		lines.push(`宿法：${SU28_MODE_LABEL[fields.doubingSu28.value] || (fields.doubingSu28.value === 1 ? '斗柄定房法' : '荀爽距星(19年测)')}`);   // 九档同源取名
 	}
 	if(fields && fields.houseStartMode){
 		lines.push(`人事十二宫起盘：${houseStartModeName(fields.houseStartMode.value)}`);
@@ -335,4 +346,4 @@ export function buildSuzhanSnapshotText(chartObj, fields, planetDisplay){
 	return lines.join('\n');
 }
 
-export { msg, splitDegree, computeAscSignIndex, houseFullLabel, buildHouseSuLines, foldHouseSuLinesToTable };
+export { msg, signDegMin, computeAscSignIndex, houseFullLabel, buildHouseSuLines, foldHouseSuLinesToTable };

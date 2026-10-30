@@ -2,25 +2,34 @@
 // buildLocalMoiraPatterns(chartObj, fields, params, godRows) → [{name,level:'good'|'bad',detail,dsl},...]
 // + buildGodRowsFromChart(chartObj, fields)。纯函数闭包(34 fns + consts)，零 React/this。
 // v3.11 wave3b 同源追加（与格局闭包共用 msg / objectLon / houseFullLabel / computeAscSignIndex / orderGods，
-// 及同一个 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection（:1602-1671）、
-// [神煞] buildRulesGodsSection（:1757-1776）→ buildHouseGodsSection（:1694-1720）回退、[相位] buildGuolaoAspectSection
-// （:2160-2179，含 GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows :1088-1137）与 splitDegree（:290-300），逐字。
+// 及同一个 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、
+// [神煞] buildRulesGodsSection → buildHouseGodsSection 回退、[相位] buildGuolaoAspectSection
+// （含 GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows）与 signDegMin，逐字。
+// 🔴 v3.13.0：上游 GuoLaoChartMain.js 把这些闭包拆进 components/guolao/main/ ——
+//   snapshot.js（格局闭包 / 快照段 / objectLon / orderGods / getZiGods …）、moiraConst.js（MOIRA_* 常量）、
+//   format.js（safeList / safeMap / normDegree）、fieldModes.js（signFromLon / guolaoLifeModeFromFields /
+//   computeAscSignIndex / houseFullLabel）、aspectsNodeMode.js（GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows）；
+//   msg = components/astro/AstroHelper.js astroMsgPlainText、splitDegree 改名 AstroHelper.signDegMin（函数体逐字同旧），
+//   formatGodName 改取 GuoLaoMoiraWheel 的 moiraFormatGodName（cleanText ≡ 旧 replace(/\s+/g,'')）。
+//   main/*.js 顶层 import request / services / DateTime（取数编排与 React 页面状态），整份 vendor 仍不可行，故仍逐字抽取。
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
 import * as SZConst from '../suzhan/SZConst.js';
 import * as Su28Helper from '../su28/Su28Helper.js';
 import {
 	GUOLAO_LIFE_MODE_ASC, GUOLAO_LIFE_MODE_COTRANS, GUOLAO_LIFE_MODE_YUMAO, normalizeGuolaoLifeMode,
-	moiraGodsFromRuleHits, moiraLongLifeCharFor,
+	moiraGodsFromRuleHits, moiraLongLifeCharFor, moiraFormatGodName as formatGodName,
 } from './guolaoMoiraWheelLimits.js';
+import { parseDateParts } from '../bazi/dateStrSafe.js';
 
 // 七政四余 命主取法 / 宿度制（上游 GuoLaoChartStyle.js，localStorage 偏好）。headless 无持久化 →
-// getStored* 回退 星阙 缺省（命主=ASC 命度、宿度制=2 张果今制）。
+// getStored* 回退 星阙 缺省（命主=ASC 命度、宿度制=GUOLAO_DEFAULT_SU28_MODE；v3.13.0 起上游缺省 2→0 荀爽距星，
+// 与新盘种子 / 后端缺省同值）。
 // 🔴 normalizeGuolaoLifeMode 取上游 GuoLaoChartStyle 现行逐字版（guolaoMoiraWheelLimits.js 同一份）：此前这里是只认
 // yumao/cotrans 的旧平移件，gumao（遇卯安命）与地支（自定命宫）被归一成 asc —— computeAscSignIndex/lifeDegree
 // 于是不取命度点 LifeMasterDeg74，与上游 GuoLaoMoiraWheel.lifeDegree 分叉。
 const getStoredGuolaoLifeMode = () => GUOLAO_LIFE_MODE_ASC;
-const getStoredGuolaoSu28Mode = () => 2;
+const getStoredGuolaoSu28Mode = () => 0;
 
 const SIMPLE_TOKEN_MAP = {
 	A: '日',
@@ -261,20 +270,6 @@ function findChartObject(chart, id){
 }
 
 
-function formatGodName(name){
-	let val = `${name || ''}`.replace(/\s+/g, '');
-	if(!val){
-		return '';
-	}
-	val = val.split(/[\/／]/)[0];
-	const aliases = {
-		天乙贵人: '天贵',
-		玉堂贵人: '玉贵',
-	};
-	return aliases[val] || val;
-}
-
-
 function getChart(result){
 	const root = getChartRoot(result);
 	return root.chart || {};
@@ -383,8 +378,9 @@ function localMoiraIsDay(params){
 
 
 function localMoiraIsWinter(params){
-	const raw = `${params && params.date ? params.date : ''}`.replace(/\//g, '-');
-	const month = Number((raw.split('-')[1] || '').replace(/^0+/, ''));
+	// 日期串单源拆(公元前 '-0300-12-10' 不会把年当成月)
+	const p = parseDateParts(params && params.date ? params.date : '');
+	const month = p ? p.month : NaN;
 	return month === 11 || month === 12 || month === 1;
 }
 
@@ -658,10 +654,11 @@ function buildLocalMoiraPatternsForSnapshot(result, fields, params){
 }
 
 
-// ── 以下逐字取自上游 GuoLaoChartMain.js（v3.11 wave3b）──
+// ── 以下逐字取自上游（v3.11 wave3b 抽自 GuoLaoChartMain.js；v3.13.0 起在 main/snapshot.js / main/aspectsNodeMode.js）──
 
-// :290-300
-function splitDegree(degree){
+// 上游 components/astro/AstroHelper.js signDegMin（v3.13.0 前为 GuoLaoChartMain.js 私有 splitDegree，函数体逐字同）
+// 座内度分:黄经(可负,先补 360)→ [座内整度, 整分](均向下取整);非数 → [0, 0]。
+function signDegMin(degree){
 	let d = Number(degree);
 	if(Number.isNaN(d)){
 		return [0, 0];
@@ -674,7 +671,7 @@ function splitDegree(degree){
 	return [deg, min];
 }
 
-// :1088-1137
+// main/aspectsNodeMode.js:9-58
 // 🆕 中文相位名(含度数)用于 AI 挂载快照 + AI 导出 — 避免输出占星字体字形码(R/W/P/M 等)给 LLM 看成乱码。
 // UI 内部渲染走 AstroMsg 字形码 + 占星字体不受影响(各自管线分离)。
 const GUOLAO_ASPECT_LABEL_CN = {
@@ -726,7 +723,7 @@ function buildAspectRows(aspects){
 	return rows;
 }
 
-// :1600-1671
+// main/snapshot.js:674-762
 // GFM 表化(段内排版,值零变化):行=宫×宿(空宫一行 无/无),宫内星列表一 cell 内联「；」相接,
 // 星字串(曜 d˚宿m分)与旧「星曜：」行逐字同。(宫位,宿,星)元组集合证明见 guolaoSnapshotTables.test.js。
 export function buildHouseSuAndGodsSection(result, planetDisplay, fields){
@@ -807,7 +804,7 @@ export function buildHouseSuAndGodsSection(result, planetDisplay, fields){
 				}else{
 					radeg = Number(obj.signlon);
 				}
-				const sd = splitDegree(radeg);
+				const sd = signDegMin(radeg);
 				return `${msg(obj.id)} ${sd[0]}˚${su}${sd[1]}分`;
 			});
 			lines.push(`| ${label} | ${su} | ${stars.join('；') || '无'} |`);
@@ -819,7 +816,7 @@ export function buildHouseSuAndGodsSection(result, planetDisplay, fields){
 	return ['| 宫位 | 二十八宿 | 星曜 |', '| --- | --- | --- |'].concat(lines).join('\n').trim();
 }
 
-// :1694-1720
+// main/snapshot.js:764-791
 function buildHouseGodsSection(result, fields){
 	const chart = result && result.chart ? result.chart : {};
 	const houses = chart && chart.houses ? chart.houses : [];
@@ -849,7 +846,7 @@ function buildHouseGodsSection(result, fields){
 	return lines.join('\n').trim();
 }
 
-// :1757-1776
+// main/snapshot.js:837-853
 // AI 快照·神煞段与盘面同源(rules 引擎 godHits+十二长生;rules 未到回退历法 ziGods)——
 // 「显示什么就导出什么」:盘面/右栏已切 rules 源,快照必须同步,防 AI 拿到另一套神煞。
 function buildRulesGodsSection(moiraRules){
@@ -870,7 +867,7 @@ function buildRulesGodsSection(moiraRules){
 	return out.join('\n');
 }
 
-// :2158-2179
+// main/snapshot.js:1250-1270
 // AI 快照·相位段（右栏「相位」面板已显示但此前未导出）：复用 buildAspectRows，与盘面的相位表同源；异常降级「无」。
 export function buildGuolaoAspectSection(result){
 	try{

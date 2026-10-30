@@ -1,11 +1,17 @@
 """世俗盘 runner（MundaneRunners）：入宫盘求解、地区盘、子盘段、类型卡、食相 / 周期任务。"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from typing import Any
 
 from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.service._common import (
+    _ad_of_date,
+    _chart_at_moment_date_fields,
+    _civil_date_str_of_ms,
+    _civil_shift_moment,
+    _civil_wall_ms_of_moment,
+    _js_math_round,
+    _leading_year_of,
     _render_snapshot_text,
     _shift_moment,
     _solunar_body_lon,
@@ -55,17 +61,17 @@ class MundaneRunners:
         near_seed = spec["approx"] is not None
         chart: dict[str, Any] = {}
         for step in range(4 if body == "sun" else 6):
+            # momentPipeline.chartAtMoment：ad / date / time 都取自时刻本身（DateTime.parse → format），不沿用页面 ad；
+            # 日期只换数字间的分隔符——旧 replace("-", "/") 连公元前的前导负号一起换掉。
             chart = self._call_remote(
                 "/chart",
                 {
-                    "date": moment.split(" ")[0].replace("-", "/"),
-                    "time": moment.split(" ")[1],
+                    **_chart_at_moment_date_fields(moment),
                     "zone": payload.get("zone") or "+08:00",
                     "lat": payload.get("lat") or "31n13",
                     "lon": payload.get("lon") or "121e28",
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    "ad": payload.get("ad", 1),
                     "zodiacal": 1,
                     "siderealAyanamsa": ayanamsa,
                     "hsys": 10,
@@ -126,14 +132,12 @@ class MundaneRunners:
             chart = self._call_remote(
                 "/chart",
                 {
-                    "date": moment.split(" ")[0].replace("-", "/"),
-                    "time": moment.split(" ")[1],
+                    **_chart_at_moment_date_fields(moment),  # chartAtMoment：纪元随时刻（见 _solve_sidereal_ingress）
                     "zone": payload.get("zone") or "+08:00",
                     "lat": payload.get("lat") or "31n13",
                     "lon": payload.get("lon") or "121e28",
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    "ad": payload.get("ad", 1),
                     "zodiacal": 1,
                     "siderealAyanamsa": "lahiri",
                     "hsys": 0,
@@ -149,7 +153,11 @@ class MundaneRunners:
                 diff -= 360.0  # 首步也取最短带符号弧 —— 见 docstring
             if abs(diff) < 0.002:
                 return moment
-            moment = _shift_moment(moment, diff / 0.98565)
+            # 上游 v3.13.0 vedicMundane.js:66-69：民用历墙钟轴挪（1582 以前儒略历），认不出即停（chart:null）。
+            next_moment = _civil_shift_moment(moment, _js_math_round(diff / 0.98565 * 86400000))
+            if not next_moment:
+                return moment
+            moment = next_moment
         return moment
 
     def _build_navanayaka_section(self, year: int, mesha_moment: str, payload: dict[str, Any]) -> str:
@@ -184,18 +192,16 @@ class MundaneRunners:
     def _last_new_moon_before(self, moment: str, payload: dict[str, Any]) -> str | None:
         """梅沙入境前最近一次朔。/astroextra/prenatal_syzygy 的语义即「此前最近一次朔望」。"""
         try:
-            date_part = moment.split(" ")[0]
             rsp = self._call_remote(
                 "/astroextra/prenatal_syzygy",
                 {
-                    "date": date_part.replace("-", "/"),
-                    "time": moment.split(" ")[1] if " " in moment else "12:00:00",
+                    # 纪元 / 日期随梅沙时刻本身（公元前前导负号保留；/astroextra/prenatal_syzygy 不认 '/0500/…'）
+                    **_chart_at_moment_date_fields(moment),
                     "zone": payload.get("zone") or "+08:00",
                     "lat": payload.get("lat") or "31n13",
                     "lon": payload.get("lon") or "121e28",
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    "ad": payload.get("ad", 1),
                 },
             )
             if isinstance(rsp, dict):
@@ -305,7 +311,8 @@ class MundaneRunners:
             "lon": lon or "116e23",
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
-            "ad": payload.get("ad", 1),
+            # castIngress：dt.parse(入宫时刻) → setTime(dt)，纪元随时刻本身（DateTime.parse 前导负号 = 公元前）
+            "ad": _ad_of_date(date_part),
             "hsys": payload.get("hsys", 0),
             "tradition": payload.get("tradition", False),
             "predictive": 0,
@@ -545,7 +552,7 @@ class MundaneRunners:
             "gpsLat": fields.get("gpsLat"),
             "gpsLon": fields.get("gpsLon"),
             "pos": fields.get("pos"),
-            "ad": 1,
+            "ad": _ad_of_date(fields.get("date")),  # applyRegion：ad = dt.ad（建置记录日期的纪元）
             "hsys": payload.get("hsys", 0),
             "tradition": payload.get("tradition", False),
             "predictive": 0,
@@ -637,11 +644,10 @@ class MundaneRunners:
                 # 另一相恒在首相之前 ~14.77 天：探针取首相前一日再回溯。若直接从首相时刻起搜，
                 # 该时刻按秒舍入恰落在真朔/望点之后时，回溯会把同一相当场重捕，另一相就丢了。
                 probe_date, probe_time = s1.get("date"), s1.get("time")
-                try:
-                    probe_dt = datetime.strptime(f"{probe_date} {probe_time}", "%Y-%m-%d %H:%M:%S") - timedelta(days=1)
-                    probe_date, probe_time = probe_dt.strftime("%Y-%m-%d"), probe_dt.strftime("%H:%M:%S")
-                except (TypeError, ValueError):
-                    pass
+                # 民用历墙钟轴上退一日（公元前 / 1582 以前儒略历；旧 strptime 对公元前直接失败 → 探针原地重捕同一相）
+                probe = _civil_shift_moment(f"{probe_date} {probe_time}", -86400000)
+                if probe:
+                    probe_date, probe_time = probe.split(" ")
                 s2 = self._call_remote(
                     "/astroextra/prenatal_syzygy",
                     {"date": probe_date, "time": probe_time, "zone": zone, "lat": lat, "lon": lon},
@@ -661,7 +667,9 @@ class MundaneRunners:
                 f"日黄经 {syz.get('sunLon')}°，月黄经 {syz.get('moonLon')}°",
             ]
             try:
-                sub_chart = self._call_remote("/chart", {**base_chart_payload, "date": syz.get("date"), "time": syz.get("time")})
+                sub_chart = self._call_remote(
+                    "/chart", {**base_chart_payload, "date": syz.get("date"), "time": syz.get("time"), "ad": _ad_of_date(syz.get("date"))}
+                )
                 if collect is not None and isinstance(sub_chart, dict):
                     collect.setdefault("syzygy", {})[syz_type] = {"moment": moment, "chart": sub_chart}
                 digest = _mundane_chart_digest(sub_chart)
@@ -817,16 +825,14 @@ class MundaneRunners:
     @staticmethod
     def _vedic_chart_payload(moment: str, payload: dict[str, Any]) -> dict[str, Any]:
         """梅沙入境盘：上游 castVedicIngress 把页面盘改成 zodiacal 1 · lahiri · hsys 0 · tradition 0（:1290）。"""
-        date_part, _, time_part = moment.partition(" ")
         return {
-            "date": date_part.replace("-", "/"),
-            "time": time_part or "12:00:00",
+            # castVedicIngress：setTime(momentToDateTime(求根时刻)) → 纪元 / 日期随时刻本身
+            **_chart_at_moment_date_fields(moment),
             "zone": payload.get("zone") or "+08:00",
             "lat": payload.get("lat") or "31n13",
             "lon": payload.get("lon") or "121e28",
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
-            "ad": payload.get("ad", 1),
             "zodiacal": 1,
             "siderealAyanamsa": "lahiri",
             "hsys": 0,
@@ -1069,22 +1075,23 @@ class MundaneRunners:
         localTime ≥ 入宫 − 2 日的第一行。scanYear 取该食所在年（上游 scanYear 即扫出这次食的那一年）。
         """
         kind = "lunar" if mundane_type == "lunecl" else "solar"
-        try:
-            ingress_dt = datetime.strptime(ingress_time, "%Y-%m-%d %H:%M:%S")
-        except (TypeError, ValueError):
+        # 民用历墙钟轴（公元前历史纪年、1582 以前儒略历）：旧 strptime 对公元前入宫时刻直接失败 → 食盘卡缺席。
+        ingress_ms = _civil_wall_ms_of_moment(f"{ingress_time or ''}".strip())
+        if ingress_ms is None:
             _degrade("mundane %s card: 入宫时刻格式异常 %s", mundane_type, ingress_time)
             return None
-        floor_dt = ingress_dt - timedelta(days=2)
-        end_dt = floor_dt + timedelta(days=400)  # 两个以上食季：日食 ≥2、月食 ≥1
+        floor_ms = ingress_ms - 2 * 86400000
+        floor_date = _civil_date_str_of_ms(floor_ms)
+        end_date = _civil_date_str_of_ms(floor_ms + 400 * 86400000)  # 两个以上食季：日食 ≥2、月食 ≥1
         try:
             eph = self._call_remote(
                 "/astroextra/ephemeris",
                 {
                     # 请求体照上游 momentPipeline.fetchMundaneEvents（:79）。
-                    "date": floor_dt.strftime("%Y-%m-%d"),
+                    "date": floor_date,
                     "time": "00:00:00",
-                    "startDate": floor_dt.strftime("%Y-%m-%d"),
-                    "endDate": end_dt.strftime("%Y-%m-%d"),
+                    "startDate": floor_date,
+                    "endDate": end_date,
                     "startTime": "00:00:00",
                     "endTime": "23:59:59",
                     "zone": zone,
@@ -1108,11 +1115,10 @@ class MundaneRunners:
             if ev_kind != kind:
                 continue
             local_time = ev.get("datetime") or (f"{ev.get('date')} {ev.get('time')}" if ev.get("date") and ev.get("time") else ev.get("date"))
-            try:
-                ev_dt = datetime.strptime(f"{local_time}", "%Y-%m-%d %H:%M:%S")
-            except (TypeError, ValueError):
+            ev_ms = _civil_wall_ms_of_moment(f"{local_time or ''}".strip())
+            if ev_ms is None:
                 continue
-            if ev_dt >= floor_dt:
+            if ev_ms >= floor_ms:
                 picked = (f"{local_time}", ev)
                 break
         if picked is None:
@@ -1121,7 +1127,7 @@ class MundaneRunners:
         local_time, ev = picked
         date_part, _, time_part = local_time.partition(" ")
         try:
-            chart = self._call_remote("/chart", {**chart_payload, "date": date_part, "time": time_part})
+            chart = self._call_remote("/chart", {**chart_payload, "date": date_part, "time": time_part, "ad": _ad_of_date(date_part)})
         except Exception as exc:  # noqa: BLE001
             _degrade("mundane %s card: eclipse chart failed: %s", mundane_type, exc)
             return None
@@ -1151,7 +1157,8 @@ class MundaneRunners:
                 "selectedMoment": local_time,
                 "eclipseKind": kind,
                 "eclipseTypeText": ev.get("eclipseType"),
-                "scanYear": int(local_time[:4]) if local_time[:4].isdigit() else None,
+                # 上游 scanYear 是年份数（clampYear）；取食时刻的串首带符号年（leadingYearOf；旧 [:4] 对公元前 / 五位年取错）
+                "scanYear": _leading_year_of(local_time),
             },
             "state": state,
         }

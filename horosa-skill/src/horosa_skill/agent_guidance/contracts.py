@@ -117,9 +117,12 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "required_fields": ["date", "time", "zone", "lat", "lon", "pdtype", "pdMethod", "pdTimeKey", "pdaspects"],
         "must_ask": ["本命出生时间地点", "主限方法", "时间钥匙", "相位列表"],
         "target_fields": {
-            "pdtype": "坐标系：0=In Zodiaco（黄道，默认；宿命点 Vertex 应星行仅此坐标系核出），1=In Mundo（世俗/赤经空间）。",
-            "pdMethod": "方位法（上游 13 法）：core_alchabitius（默认）/ horosa_legacy / placidus / regiomontanus / campanus / topocentric / meridian / porphyry / equal_ecliptic / equal_hour_circle / morinus / in_zodiaco_lon / in_zodiaco_abs。",
-            "pdTimeKey": "度数换算（上游 26 项）：Ptolemy（默认）/ Naibod / TrueSolarArc / SymbolicSolarArc / Cardano / Umar / Wollner / Plantiko / Simmonite / SynodicYear / Kepler / Brahe / Kundig / SymbolicDegree / SymbolicYear / SymbolicMoon / SymbolicMonth / Quarterly / Quinary / Duodenary / Novenary / SelfMeasure / NaibodRA / AscendantArc / VanDam / User（配 pdTimeKeyCustom）。",
+            "pdtype": "方向类型（上游 v3.13.0 三值，整数）：0=In Zodiaco（黄道，默认）/ 1=In Mundo（世俗；引擎出四轴应星 上升/天顶/下降/天底 及宿命点/反宿命点，缺省 pdMethod=core_alchabitius 的显示口径只留核内体——要看下降/天底/反宿命点行请换方法或给 pdSignificators）/ 4=Field Plane（场平面）。2/3 是后端界推运内部值，拒收。",
+            "pdMethod": "方位法（上游 13 法，旧单维快捷键 = 弧算法 × 盘面宫制 的命名组合；与 pdProjection/pdFrame 同给时以两维为准）：core_alchabitius（默认）/ horosa_legacy / placidus / regiomontanus / campanus / topocentric / meridian / porphyry / equal_ecliptic / equal_hour_circle / morinus / in_zodiaco_lon / in_zodiaco_abs。",
+            "pdTimeKey": "度数换算（上游 v3.13.0：38 项）：Ptolemy（默认）/ Naibod / NaibodRA / TrueSolarArc / TrueSolarArcMean / VanDam / SymbolicSolarArc / Simmonite / BirthdaySunLon / Kepler / KeplerClassic / Brahe / BraheClassic / AscendantArc / VerticalArc / Cardano / Umar / Wollner / WollnerClassic / Plantiko / SynodicYear / SynodicYearClassic / Kundig / SymbolicDegree / SymbolicYear / SymbolicMoon / SymbolicMoonClassic / SymbolicMonth / SymbolicWeek / Quarterly / Quinary / Septenary / Novenary / NovenaryClassic / Duodenary / SubDuodenary / SelfMeasure / User（配 pdTimeKeyCustom）。*Classic = 传统程序写法（平黄赤交角 / 出生后一日 / 截断常数）。",
+            "pdProjection/pdFrame": "弧算法（14 种：ptolemy 默认/placidus/regiomontanus/campanus/topocentric/zodiacal/ra_direct/in_zodiaco_lon/in_zodiaco_abs/horosa_legacy/placidus_under_pole/morinus/horizontal/koch，决定弧与应期日期）× 盘面宫制（12 种：alcabitius 默认/placidus/regiomontanus/campanus/topocentric/meridian/porphyry/equal/wholesign/morinus/koch/equal_hour_circle，只改宫头）。给了 pdProjection 时 [主限法设置] 不再写「推运方法」行。",
+            "pdGeometry": "几何口径：improved（默认）/ classic；只在部分 方向×弧算法（×宫制×平行）组合有差别，[主限法设置] 的弧算法行带「（改进）/（经典）」。",
+            "主限设置项（相位侧/取点/日期）": "pdAspectSide 0 两侧（默认）/1 只右旋/2 只左旋；pdTradConverse 1 传统逆向（默认）/0 新式；pdIgnoreSigLat、pdIgnorePromLat、pdLunarParallax、pdTruePosition、pdSolarArcRegressive 0/1（默认 0）；pdYearDays 0 实际天数（默认）/1 365·366 定长年；pdPromAspectLat 0 在黄道上（默认）/1 合冲带黄纬/2 余弦递减/3 线性递减/4 按宫位。值逐行写进 [主限法设置]。",
             "pdaspects": "纳入表格的相位角度，例如 [0, 60, 90, 120, 180]。",
             "pdDirect": "顺向开关（1 开/0 关，默认开）。",
             "pdConverse": "逆向开关（1 开/0 关，默认开；与顺向按年龄交错）。",
@@ -143,7 +146,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
         "target_fields": {
             "datetime": "主限法盘目标时间，YYYY-MM-DD HH:mm:ss；缺省=主限表首条应期日期（UTC 墙钟、dirZone=+00:00），无则出生次日（上游同律）。",
             "dirZone": "目标时区（给了 datetime 时生效；缺省本命时区）。",
-            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置（pdMethod/pdTimeKey 词表同 pd 工具：13 方位法、26 度数换算）。逆向用 direction='converse'。",
+            "pdtype/pdMethod/pdTimeKey": "主限法盘算法设置（词表同 pd 工具：13 方位法、38 度数换算、14 弧算法、12 盘面宫制）。外圈按主限弧在赤经上整体推进，宫头只看盘面宫制 pdFrame（缺省由 pdMethod 推）；弧算法只作「主限法表用」自陈。pdYearDays（日期年长）改「选时刻 → 年 → 弧」的换算。逆向用 direction='converse'。",
         },
         "output_contract": ["本命盘星与虚点", "主限法盘星体表格", "主限法盘相位"],
         "example_payload": {

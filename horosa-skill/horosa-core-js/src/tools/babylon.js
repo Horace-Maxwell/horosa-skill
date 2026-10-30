@@ -47,6 +47,11 @@ export function runBabylon(payload) {
     return { text: '' };
   }
   const lons = chartToLons(source.chart && typeof source.chart === 'object' ? source.chart : null);
+  // 上游 v3.13.0 buildBabylonSnapshotForFields：/chart 没回七曜位置 → 抛错、不出快照（此前照样拿空 lons 铺六段，
+  // 七曜按宫 / 位三法 / 数理星历整片空着却像一份正常快照）。headless 回结构化错误，由 Python 报出。
+  if (!Object.keys(lons || {}).length) {
+    return { text: '', error: 'no_planet_positions', message: '巴比伦占星:排盘服务没有回七曜位置(本机计算服务没开或出错),未出快照' };
+  }
   const invalid = [];
   ['era', 'ephemerisSource', 'solstice', 'dodecaVariant'].forEach((k) => {
     if (source[k] !== undefined && source[k] !== null && source[k] !== '' && specValues(k).indexOf(source[k]) < 0) {

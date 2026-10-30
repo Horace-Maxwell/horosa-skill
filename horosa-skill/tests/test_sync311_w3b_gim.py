@@ -438,9 +438,9 @@ def _js_to_fixed(value: Any, digits: int) -> str:
 
 @requires_node
 def test_india_dasha_section_lists_every_antardasha_row(tmp_path) -> None:
-    """[大运Dasha] = 上游 buildDashaSnapshotLines（IndiaChart.js:429-494）+ buildAntardashaTableLines（:395-428，[#80] 小运全展）。
+    """[大运Dasha] = 上游 buildDashaSnapshotLines（IndiaChart.js:464-536，v3.13.0）+ buildAntardashaTableLines（:430-463，[#80] 小运全展）。
     期望整段按上游公式从夹具 jyotish.dasha.vimshottari 独立算出：nameOf = lord.label||lord.key；fmtDate = 前 10 位；
-    n1(x).toFixed(1)；大运行标记 ▶=active、·=birthBalance；小运行标记 ▶=当下（Date.now() 落在 [start,end)）、·=当前大运内；
+    n1(x).toFixed(1)；大运行标记 ▶=active、·=birthBalance；小运行标记 ▶=当下（Date.now() 落在 [start,end)，段界取当地 0 点）、·=当前大运内；
     9 大运×9 小运 = 90 行 < DASHA_ANTAR_ROW_MAX 120 → 无截断行。负向对照：把 vendored builder 里 `out.push(...buildAntardashaTableLines(`
     一行去掉（旧版「只挑当下一支」形态）→ 小运序列整片消失，本用例红。"""
     from datetime import datetime, timezone
@@ -452,11 +452,15 @@ def test_india_dasha_section_lists_every_antardasha_row(tmp_path) -> None:
     fmt_date = lambda d: (re.match(r"^(\d{4}-\d{2}-\d{2})", f"{d or ''}") or [None, f"{d or ''}" or "—"])[1]  # noqa: E731
     n1 = lambda x: float(x) if isinstance(x, (int, float)) and math.isfinite(float(x)) else 0.0  # noqa: E731
     now = datetime.now(timezone.utc)
-    ts = lambda s: datetime.strptime(f"{s}"[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)  # noqa: E731（JS new Date('YYYY-MM-DD') = UTC 零点）
+    # v3.12.0 起上游按民用历当地 0 点取段界（civilInstantMsOfStr(`${d}T00:00:00`)，旧版 new Date('YYYY-MM-DD') 是 UTC 零点）；
+    # 本机 node 与 pytest 同一时区，astimezone() 即同一「当地」。
+    ts = lambda s: datetime.strptime(f"{s}"[:10], "%Y-%m-%d").astimezone()  # noqa: E731
     nak = vim.get("moonNakshatra") or {}
     expected = [
         "系统：Vimshottari（120 年周期）",
-        f"月宿：{nak.get('label') or nak.get('name') or nak.get('key') or '—'}（宿主星 {name_of(vim.get('firstLord'))}）",
+        # v3.12.0（IndiaChart.js:501）：label 与 name 都有时写「name（label宿）」，否则退回 label||name||key。
+        f"月宿：{(nak['name'] + '（' + nak['label'] + '宿）') if nak.get('label') and nak.get('name') else (nak.get('label') or nak.get('name') or nak.get('key') or '—')}"
+        f"（宿主星 {name_of(vim.get('firstLord'))}）",
         f"首运：已历 {_js_to_fixed(n1(vim.get('firstElapsedYears')), 1)} 年、余 {_js_to_fixed(n1(vim.get('firstBalanceYears')), 1)} 年",
     ]
     active = next((m for m in vim["mahadashas"] if m.get("active")), None)

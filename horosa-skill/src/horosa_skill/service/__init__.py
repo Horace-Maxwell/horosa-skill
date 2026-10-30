@@ -101,13 +101,10 @@ from horosa_skill.service.text.pd_zr import (
 )
 from horosa_skill.service.text.predictive import (
     _PREDICTIVE_METHOD_NOTES,
-    _build_agepoint_snapshot_text,
-    _build_distributions_snapshot_text,
     _build_persian_hits,
     _build_persianchart_section_text,
     _build_persiandirected_snapshot_text,
     _build_planetaryages_snapshot_text,
-    _build_yearsystem129_snapshot_text,
     _full_years_between,
 )
 from horosa_skill.service.text.western import (
@@ -186,9 +183,7 @@ __all__ = [
     "_PYTHON_CHART_ENDPOINTS",
     "_SHENSHU_ENDPOINTS",
     "_STRONG_RECEPTION_DEFAULT_TOOLS",
-    "_build_agepoint_snapshot_text",
     "_build_astro_snapshot_text",
-    "_build_distributions_snapshot_text",
     "_build_generated_export_snapshot",
     "_build_guolao_limit_lines",
     "_build_india_snapshot_text",
@@ -201,7 +196,6 @@ __all__ = [
     "_build_persiandirected_snapshot_text",
     "_build_planetaryages_snapshot_text",
     "_build_relative_snapshot_text",
-    "_build_yearsystem129_snapshot_text",
     "_build_ziwei_snapshot_text",
     "_chart_family_snapshot_fields",
     "_chart_server_endpoint",

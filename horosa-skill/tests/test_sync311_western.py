@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import re
 from pathlib import Path
 
 import pytest
@@ -242,6 +244,8 @@ def test_election_global_judge_layer_and_school_house_link(tmp_path: Path) -> No
 CHART_GUOLAO = json.loads(
     (Path(__file__).resolve().parents[1] / "horosa-core-js" / "test" / "fixtures" / "chart_guolao.json").read_text(encoding="utf-8")
 )["chart"]
+_UPSTREAM_SRC = Path(os.environ.get("HOROSA_SOURCE_ROOT") or "/nonexistent") / "Horosa-Web" / "astrostudyui" / "src"
+
 GUOLAO_BIRTH = {"date": "1985-03-21", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
                 "moiraTransitDate": "2026-09-01", "agent_confirmed_settings": True}
 
@@ -250,20 +254,31 @@ def _first_chart(client: RecordingClient) -> dict:
     return client.bodies("/chart")[0]
 
 
-def test_guolao_default_mansion_system_is_upstream_mode_2(tmp_path: Path) -> None:
-    """上游 GuoLaoChartStyle.js:10 GUOLAO_DEFAULT_SU28_MODE = 2（回归今宿）；fieldsToParams（GuoLaoChartMain.js:2339-2357）
-    把它作 doubingSu28 下发。负向对照：旧 runner 发 doubingSu28=True —— perchart.parseSu28Mode 解释成 1（斗柄定房法·赤仪），
-    快照也没有「宿度制：」行。"""
+def test_guolao_default_mansion_system_tracks_upstream_default(tmp_path: Path) -> None:
+    """上游 GuoLaoChartStyle.js:19 GUOLAO_DEFAULT_SU28_MODE —— v3.13.0（965af0f4）由 2（回归今宿）改为 0（荀爽距星，
+    注释「与新盘种子 / 后端缺省同值（全站统一）」）；fieldsToParams 把它作 doubingSu28 下发。上游源常量由
+    test_guolao_default_mansion_system_sentinel 盯（有 checkout 才跑）。负向对照：旧 runner 发 doubingSu28=2（v3.11 缺省），更早发 True（parseSu28Mode → 1 斗柄定房法）；
+    快照「宿度制：」行随之变成「回归今宿」/「斗柄定房法」。"""
+    upstream_default = 0
     client = RecordingClient()
     result = _service(tmp_path, client).run_tool("guolao_chart", GUOLAO_BIRTH, save_result=False)
     sent = _first_chart(client)
-    assert sent["doubingSu28"] == 2 and sent["zodiacal"] == 0 and sent["guolaoZhengSidereal"] == 0
+    assert sent["doubingSu28"] == upstream_default and sent["zodiacal"] == 0 and sent["guolaoZhengSidereal"] == 0
     info = _section(result.data["snapshot_text"], "起盘信息")
-    # 上游 _buildGuolaoSnapshotTextV2Core:2047-2073 六行（缺省口径）。
-    for line in ("七政命度：占星上升", "罗计：北计南罗", "报时星太阳时：真太阳时(经度+均时差)",
-                 "罗计取法：平交点；月孛取法：平远地点", "宿度制：回归今宿；身宫法：太阴落宫(果老)",
+    # 上游 _buildGuolaoSnapshotTextV2Core 六行（缺省口径）；宿度制名取 guolaoData.SU28_MODE_LABEL[0]。
+    for line in ("七政命度：占星上升", "罗计：北计南罗",
+                 "罗计取法：平交点；月孛取法：平远地点", "宿度制：荀爽距星(19年测)；身宫法：太阴落宫(果老)",
                  "命主取法：宫主；行运法：古度限度法"):
         assert f"\n{line}\n" in f"\n{info}\n", line
+    # v3.13.0 main/snapshot.js:1151 在报时星行尾追加「（行星时制式：…）」——只钉前缀。
+    assert "\n报时星太阳时：真太阳时(经度+均时差)（行星时制式：" in f"\n{info}", info
+
+
+@pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
+def test_guolao_default_mansion_system_sentinel() -> None:
+    """上游再改 GUOLAO_DEFAULT_SU28_MODE → 红 → 同步 runners/guolao.py _GUOLAO_DEFAULT_SU28_MODE 与上一条测试。"""
+    style = (_UPSTREAM_SRC / "components/guolao/GuoLaoChartStyle.js").read_text(encoding="utf-8")
+    assert int(re.search(r"export const GUOLAO_DEFAULT_SU28_MODE = (\d+);", style).group(1)) == 0
 
 
 def test_guolao_mode_sub_options_follow_upstream_gates(tmp_path: Path) -> None:

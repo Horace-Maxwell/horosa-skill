@@ -2,6 +2,7 @@ import {
   buildJyotishSnapshotLines,
   buildDashaSnapshotLines,
   buildIndiaSchoolHeaderLines,
+  buildIndiaSnapshotDataSections,
   indiaCalibreLine,
 } from '../vendor/india/jyotishSnapshot.js';
 import {
@@ -25,6 +26,7 @@ import {
  * return : {
  *   sections:   { '段名': ['行', …], … },          // buildJyotishSnapshotLines
  *   dashaLines: ['行', …],                          // [大运Dasha]：buildDashaSnapshotLines(chartObj, dashaSystem, fields)
+ *   dataSections:{ '段名': ['行', …], … },        // 上游 buildIndiaSnapshotDataSections：[大运Dasha] → jyotish 各段 → [未能计算]，快照同序
  *   schoolLines:['行', …],                          // [起盘信息] 起首四行：流派 / 大运流派开关 / 当前分盘 / 分盘
  *   calibreLine:'恒星黄道·…，…',                     // [起盘信息] 口径行：indiaCalibreLine(fields, overrides)（IndiaChart.js:1113-1124）
  *   calibre:    { indiaHsys, indiaAyanamsa },       // 口径行实际用的（上游 normalize* 之后的）值，供 Python 对照后端口径
@@ -72,6 +74,12 @@ export function runIndiaJyotish(payload) {
   const sections = buildJyotishSnapshotLines(chartObj) || {};
   // 上游 buildIndiaSnapshotText:1183-1187：dashaSystem 取页面/齿轮值（normalizeIndiaDashaSystem 兜 vimshottari）。
   const dashaLines = buildDashaSnapshotLines(chartObj, params.dashaSystem, fields) || [];
+  // 上游 buildIndiaSnapshotText（IndiaChart.js:1300）按 buildIndiaSnapshotDataSections 出数据段（v3.12.0 起含 [未能计算]）；
+  // 它从 fields.indiaDashaSystem 取体系，headless 的体系在 params.dashaSystem —— 同一值挂进 fields 再交给它。
+  const dataSections = buildIndiaSnapshotDataSections(chartObj, {
+    ...fields,
+    ...(params.dashaSystem ? { indiaDashaSystem: { value: params.dashaSystem } } : {}),
+  }) || {};
   const schoolLines = buildIndiaSchoolHeaderLines(fields, params.chartnum, null) || [];
   // [起盘信息] 口径行（上游 buildIndiaSnapshotText:1139 replaceIndiaCalibreLine(baseInfo, indiaCalibreLine(fields))）：
   // headless 的分宫制/岁差不在 fields 里而是请求体的实际口径（Python 按后端 webindiasrv 同一取值序给 overrides）；
@@ -82,5 +90,5 @@ export function runIndiaJyotish(payload) {
     indiaHsys: normalizeIndiaHouseSystem(overrides.indiaHsys),
     indiaAyanamsa: normalizeIndiaAyanamsa(overrides.indiaAyanamsa),
   };
-  return { sections, dashaLines, schoolLines, calibreLine, calibre };
+  return { sections, dashaLines, dataSections, schoolLines, calibreLine, calibre };
 }

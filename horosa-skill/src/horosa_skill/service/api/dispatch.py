@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from horosa_skill import __version__
 from horosa_skill.agent_guidance import build_validation_recovery
+from horosa_skill.civil_calendar import _leading_year_of
 from horosa_skill.decisions.layer import decision_records
 from horosa_skill.decisions.redact import build_meta_state
 from horosa_skill.decisions.surfaces.extract import (
@@ -468,7 +469,9 @@ class DispatchAPI:
                 elif tool_name == "jieqi_year":
                     year = request.subject.year if request.subject and request.subject.year is not None else None
                     if year is None and base_birth.get("date"):
-                        year = str(base_birth["date"])[:4]
+                        # 串首带符号年（dateStrSafe.leadingYearOf）：旧 [:4] 把公元前 '-0500-03-21' 切成 '-050'、五位年切成前四位。
+                        lead = _leading_year_of(base_birth["date"])
+                        year = str(lead) if lead is not None else str(base_birth["date"])[:4]
                     jieqi_lat = base_birth.get("lat", request.context.get("lat"))
                     jieqi_lon = base_birth.get("lon", request.context.get("lon"))
                     if not jieqi_lat or not jieqi_lon:

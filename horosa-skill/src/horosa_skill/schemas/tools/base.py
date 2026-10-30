@@ -70,13 +70,16 @@ class BirthInput(FlexibleModel):
     # (lahiri/raman/krishnamurti/fagan_bradley/…，见 astro_sidereal.SIDEREAL_AYANAMSA_LABELS)。
     # 缺省(不传) == Lahiri，向后兼容回归黄道盘不受影响。贯穿全西洋技法盘(命占/合盘/中点/卜卦/三式/节气)。
     siderealAyanamsa: Any | None = None
-    pdtype: Any | None = None
+    # 方向类型（上游 primaryDirectionSync.js:13-20，v3.13.0 起三值）：整数——后端按 `in (0, 1, 4)` 严格比较，字符串 '4'
+    # 会落进旧 flatlib 分支（vendored 实例实测）；声明 int 让 pydantic 把 "4" 归一成 4，2 / 3（界推运内部值）由
+    # service 值域闸拒收（pd_zr._pd_validate_options）。
+    pdtype: int | None = Field(default=None, description="主限方向类型：0 In Zodiaco（缺省）/ 1 In Mundo / 4 Field Plane。")
     pdMethod: Any | None = None
     pdTimeKey: Any | None = None
     pdaspects: list[int | str] | None = None
     # 主限法（星阙 v3.6.0 大改版）：顺/逆向、映点(antiscia)、界(terms) promissor 开关 + 年限上限。
-    # pdMethod 现为**方位法全谱 13 法**（旧「核5」注记已过期两代）；pdTimeKey 含每盘真算
-    # Simmonite/Kepler/Brahe/VanDam + 动态 TrueSolarArc/SymbolicSolarArc + 自定义率；
+    # pdMethod 现为**方位法全谱 13 法**（旧「核5」注记已过期两代）；pdTimeKey（v3.13.0：38 项）含每盘常数
+    # Simmonite/生日黄经日行/Kepler/Brahe（及「经典」档）+ 动态 TrueSolarArc/VanDam/SymbolicSolarArc + 上升弧/垂直弧计时 + 自定义率；
     # pdYears 上限 3000（>360 出多圈复发行）。仅在显式设置时透传（model_dump(exclude_none=True)），
     # 缺省走后端默认（顺逆都开/映点界关/100 年）。白名单在上游 astropy/astrostudy/perchart.py。
     pdDirect: Any | None = None
@@ -87,14 +90,36 @@ class BirthInput(FlexibleModel):
     # v3.6.0 正交解耦：弧算法(投影) × 盘面宫制(分宫) 拆成两个独立轴，不再由 pdMethod 一个键决定。
     # 这些字段此前已能经 FlexibleModel extra 透传到后端并真实生效，但没有 schema 描述 = agent 发现不了，
     # 等于事实上不可用。声明出来即解锁（零 service 改动）。
-    pdProjection: Any | None = Field(default=None, description="弧算法/投影（11 种）：与 pdFrame 正交，决定弧如何投影。")
-    pdFrame: Any | None = Field(default=None, description="盘面宫制/分宫 frame（12 种，含 koch）：与 pdProjection 正交。")
+    # 词表 = 上游 primaryDirectionSync.js SUPPORTED_PD_PROJECTIONS / SUPPORTED_PD_FRAMES（v3.13.0：14 / 12）；值域闸
+    # pd_zr._pd_validate_options（后端白名单外静默丢弃、改由 pdMethod 推导，快照却会照抄传入名）。
+    pdProjection: Any | None = Field(
+        default=None,
+        description="弧算法/投影（14 种：ptolemy 缺省/placidus/regiomontanus/campanus/topocentric/zodiacal/ra_direct/in_zodiaco_lon/in_zodiaco_abs/horosa_legacy/placidus_under_pole/morinus/horizontal/koch）：与 pdFrame 正交，决定弧与应期日期。",
+    )
+    pdFrame: Any | None = Field(
+        default=None,
+        description="盘面宫制/分宫（12 种：alcabitius 缺省/placidus/regiomontanus/campanus/topocentric/meridian/porphyry/equal/wholesign/morinus/koch/equal_hour_circle）：只改宫头不改弧。",
+    )
     pdFramework: Any | None = Field(default=None, description="界行框架：aspect | bounds | release（hyleg/anareta 判读层）。")
     pdSignificators: Any | None = Field(default=None, description="应星扩展：Desc/IC/Syzygy/Spirit/Cusps/Stars/Lots 等。")
     pdPromissorTypes: Any | None = Field(default=None, description="迫星类型扩展：cusps / stars / lots。")
     pdTimeKeyCustom: Any | None = Field(default=None, description="自定义时间钥匙速率（0.001–30 度/年）。")
     pdParallel: Any | None = Field(default=None, description="赤纬平行是否计入（三类被限星之一）。")
     pdRaptParallel: Any | None = Field(default=None, description="周日运动平行（rapt parallel）是否计入。")
+    # ── 主限法设置项登记表（星阙 v3.13.0，上游 primaryDirectionSync.js:69-95 PD_EXTRA_SETTING_SPECS，十键与后端
+    # perchart.PD_EXTRA_SETTING_KEYS、Java PdWire.SETTING_KEYS 同名同序）。后端 /predict/pd、/predict/pdchart、/chart
+    # 按名解析并在 params 回显归一值；skill 侧消费者 = pd_zr（值域闸 + [主限法设置] 自陈行 / [主限法盘设置] 日期年长行）。
+    # 全部 None = 不下发 = 后端缺省（= 上游缺省请求体），零回归。
+    pdGeometry: str | None = Field(default=None, description="几何口径：improved 改进（缺省，严格球面几何）| classic 经典（传统程序写法；只在部分方向×弧算法组合有差别）。")
+    pdAspectSide: int | None = Field(default=None, description="相位侧：0 两侧都出（缺省）| 1 只出右旋 | 2 只出左旋。")
+    pdTradConverse: int | bool | None = Field(default=None, description="传统逆向：1 开（缺省，应星被周日运动带到迫星相位点）| 0 新式逆向。")
+    pdIgnoreSigLat: int | bool | None = Field(default=None, description="忽略应星黄纬：0 否（缺省）| 1 是。")
+    pdIgnorePromLat: int | bool | None = Field(default=None, description="忽略迫星黄纬：0 否（缺省）| 1 是。")
+    pdLunarParallax: int | bool | None = Field(default=None, description="月亮视差（月亮作迫星取站心位置）：0 否（缺省）| 1 是。")
+    pdTruePosition: int | bool | None = Field(default=None, description="真位置（不计光行时、光行差）：0 否（缺省）| 1 是。")
+    pdSolarArcRegressive: int | bool | None = Field(default=None, description="逆向弧用出生前太阳（只对真太阳弧/Van Dam）：0 否（缺省）| 1 是。")
+    pdYearDays: int | None = Field(default=None, description="日期年长：0 实际天数（缺省）| 1 365/366 定长年（只改日期，弧不变）。")
+    pdPromAspectLat: int | None = Field(default=None, description="相位点黄纬（只对黄道制）：0 在黄道上（缺省）| 1 合冲带黄纬 | 2 余弦递减 | 3 线性递减 | 4 按宫位。")
     # 古典参数全局化（星阙 v3.6.0）：以下 16 键由后端 webmodernsrv 统一透传给古典判读层，
     # 影响 [古典] / [古典格局] 段的逐值结果（容许度、空亡口径、界表流派、交点性质…）。
     # 与主限法同理：本仓早已能经 extra 透传，声明只为可发现性。
@@ -125,7 +150,7 @@ class BirthInput(FlexibleModel):
     topocentricMoon: Any | None = Field(default=None, description="月亮站心视差修正（影响月亮黄经 ≤1°，福点随动；缺省关）。")
     lotReversal: Any | None = Field(default=None, description="福点按昼夜反转（缺省开；关则恒昼式）。")
     lotsDocReverse: Any | None = Field(default=None, description="婚·子·友·疾四点用文档序公式（缺省关）。")
-    hermeticLotsReversal: Any | None = Field(default=None, description="七星点按昼夜反转（批判本校勘；缺省开，关则恒同式）。")
+    hermeticLotsReversal: Any | None = Field(default=None, description="六星点按昼夜反转（福点另设；批判本校勘；缺省开，关则恒同式）。")
     erosConstruction: str | None = Field(default=None, description="爱欲点构成：paulus=金星·水星系（缺省）| valens=福点·精神系。")
     lotFortuneVariant: str | None = Field(default=None, description="福点公式变体：standard=标准昼夜式（缺省）| moonAboveNight=月在地平上恒夜式。")
     lotFatherCombustAlt: Any | None = Field(default=None, description="父点土星伏时替代式（Dorotheus 系；缺省关）。")

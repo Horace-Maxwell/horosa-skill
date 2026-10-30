@@ -242,7 +242,7 @@ export const SignsProp = {
     },
 };
 
-// 宫制表 —— 逐值抽自上游 `constants/AstroConst.js:1045-1071`（v0.26.0 天星择日入册时补）。
+// 宫制表 —— 逐值抽自上游 `constants/AstroConst.js:939-965`（v3.13.0 行号；v3.11.3 时为 :1045-1071，值未变）（v0.26.0 天星择日入册时补）。
 // tianxingSnapshot 的 [征象搜索配置] 段按 cfg.hsys 查这张表出中文/拉丁宫制名；缺它该行恒空。
 // 顺序即 value，勿重排：上游用下标当 value 语义，重排会让宫制串位。
 export const HOUSE_SYSTEM_OPTIONS = [

@@ -1,6 +1,6 @@
 // 世俗盘 AI 快照的「头行 / 判词 / 分析段 / 右栏卡」四件 —— 自上游 components/mundane/MundaneMain.js **逐字**抽出
 // （bespoke，derived_from + derived_sha256 看守：上游 MundaneMain.js 一动即红，复核本文件后 --restamp）：
-//   · buildMundaneAiSnapshotParts —— 上游类方法 `buildAiSnapshot(chart, fields, extra)`（MundaneMain.js:2849-2997）的正文，
+//   · buildMundaneAiSnapshotParts —— 上游类方法 `buildAiSnapshot(chart, fields, extra)`（MundaneMain.js:2853-3000）的正文，
 //     headLines（盘型标题 / 规则集 / 盘型头行）+ judge（[世俗宫义]）+ extraSecs（[定局·年主/盘主] / [入境骨架] / [地理分野] /
 //     [年之九主] / [世运问判] / [角化] / [地区盘推运]）+ cardSecs（buildMundaneCardSections）。
 // 与上游的全部差异（声明式，重抽时必须保留）：
@@ -8,7 +8,7 @@
 //      secData / navanayaka…；headless 由 Python 按需给，缺键语义与上游「页面未算过」相同）；共 15 处；
 //   ② 尾部 `const head / const body = buildAstroSnapshotContent(chart, fields) / return [...].join` 三行换成
 //      `return { headLines, judge, extraSecs, cardSecs }`：盘面正文由 skill 侧 Python 的本命段 builder 出（与上游同一
-//      buildAstroSnapshotContent 的段），拼接序 head / judge / extraSecs / cardSecs / body 由调用方（service.py）照上游 :2996 复现；
+//      buildAstroSnapshotContent 的段），拼接序 head / judge / extraSecs / cardSecs / body 由调用方（service.py）照上游 :2999 复现；
 //   ③ 正文缩进保留上游类方法体的两级 tab（逐字节对照方便）。
 // import 按 vendor 树改路径；AstroExtraCommon 不 vendor：chartRequestKey 恒 'headless'（同 MundaneMain.js 的 stub，[盘型格局]/
 // 返照·次限的 `st.xxKey === chartRequestKey(chart)` 判定用），fmtDegree 只在 state.srData（页面按需拉取的返照）存在时才调到——
@@ -30,13 +30,13 @@ import {
 const chartRequestKey = () => 'headless';
 const fmtDegree = () => { throw new Error('fmtDegree（AstroExtraCommon）未 vendor：headless 不供给 state.srData，此路不可达 / fmtDegree is not vendored (headless never supplies state.srData)'); };
 
-// MundaneMain.js:2849 `buildAiSnapshot(chart, fields, extra){` —— 正文逐字（见头注 ①②③）。
+// MundaneMain.js:2853 `buildAiSnapshot(chart, fields, extra){` —— 正文逐字（见头注 ①②③）。
 export function buildMundaneAiSnapshotParts(chart, extra, state){
 		const ex = extra || {};
 		const type = ex.mundaneType || 'ingress';
 		const TITLE = { ingress: '世俗入宫', newmoon: '新月图', fullmoon: '满月图', solecl: '日食图', lunecl: '月食图', region: '地区盘', cycles: '行星周期', solunar: '恒星派入境', vedicmundane: '吠陀世运', mundanehorary: '世运卜卦' };
 		const headLines = [`[${TITLE[type] || '世俗入宫'}]`, `规则集：${rulesetConfig(ex.mundaneRuleset).label}`];
-		// [Q-150/T-60] 两个页面级覆盖此前不进快照:页面改了、AI 拿到的仍是流派缺省值。
+		// 两个页面级覆盖此前不进快照:页面改了、AI 拿到的仍是流派缺省值。
 		// 只在显式覆盖(非 auto)且本盘型真消费时补行 —— 缺省态快照逐字节不变。
 		if(type === 'ingress'){
 			headLines.push(`入宫节气：${ex.ingressTerm || '-'}`, `年份：${ex.ingressYear || '-'}`);
@@ -54,7 +54,7 @@ export function buildMundaneAiSnapshotParts(chart, extra, state){
 		else if(type === 'region'){ headLines.push(`地区：${ex.regionCn || '-'}`); }
 		else if(type === 'solunar'){
 			const st = describeSolunar(ex.solunarType || 'capsolar', ex.solunarWeights || 'scheme_a');
-			if(st){ // [V6-W2] 体系行=盘种固定设计(solunar 恒 Fagan/Bradley+Campanus,非可调参数)=事实标注;
+			if(st){ // 体系行=盘种固定设计(solunar 恒 Fagan/Bradley+Campanus,非可调参数)=事实标注;
 			// 若未来做成可调参数,必须改从实际计算参数取值(禁字面量)。
 			headLines.push(`盘种：${st.cn}`, `有效期：${st.span} · 权重 ${st.weight}`, '体系：恒星黄道 Fagan/Bradley · Campanus 量角化'); }
 		}
@@ -74,14 +74,14 @@ export function buildMundaneAiSnapshotParts(chart, extra, state){
 			if(rows && rows.length){ judge = '[世俗宫义]\n' + formatMundaneHouseTable(rows); }
 			const v = describeMundaneVictor(facts, ex.mundaneRuleset);
 			if(v){
-				// [Q-444] 年主卡逐星得分与偶然项明细(此前只有年主一行)。
+				// 年主卡逐星得分与偶然项明细(此前只有年主一行)。
 				const scoreLines = (v.scores || []).filter((x) => x.score > 0).map((x) => `- ${x.cn} ${x.score}${x.accidentalItems && x.accidentalItems.length ? `（${x.accidentalItems.map((it) => `${it.cn} ${it.v > 0 ? '+' + it.v : it.v}`).join('，')}）` : ''}`);
 				extraSecs.push(`[定局·年主/盘主]\n年主星：${v.victorCn}（累分 ${v.maxScore}）${v.victorMundane ? ' · ' + v.victorMundane.powerRole : ''}；取点 ${v.points.join(' / ')}${scoreLines.length ? '\n' + scoreLines.join('\n') : ''}`);
 			}
 			if(type === 'ingress'){
 				const sk = describeIngressSkeleton(facts);
 				if(sk){
-					// [Q-444] 骨架卡补:上升气质/十宫内星/产前朔望/临四轴/外行星。
+					// 骨架卡补:上升气质/十宫内星/产前朔望/临四轴/外行星。
 					let syz = null; try{ syz = describeMundaneSyzygy(facts); }catch(e){ syz = null; }
 					const more = [];
 					if(sk.ascTemper){ more.push(`上升气质 ${sk.ascTemper.temper}`); }
@@ -95,7 +95,7 @@ export function buildMundaneAiSnapshotParts(chart, extra, state){
 			if(type === 'ingress' || type === 'region'){
 				const ch = describeChorography(facts, rulesetConfig(ex.mundaneRuleset).chorographyDataset);
 				if(ch && ch.axes.length){
-					// [Q-444] 分野卡补:托勒密四象限三方主管。
+					// 分野卡补:托勒密四象限三方主管。
 					const quads = (ch.quadrants || []).map((q) => `${q.cn}（${q.signs.map((sg) => (SIGNS[sg] || {}).cn || sg).join('/')}）主星 ${PLANET_CN[q.rulers.day]}/${PLANET_CN[q.rulers.night]} · ${q.region}`).join('；');
 					extraSecs.push('[地理分野]\n数据集：' + ch.datasetMeta.label + '\n' + formatMundaneChorographyTable(ch.axes) + (quads ? '\n托勒密四象限：' + quads : '') + '\n（多源综合·传统占星学术参考,非现实地缘断言）');
 				}
@@ -143,7 +143,7 @@ export function buildMundaneAiSnapshotParts(chart, extra, state){
 					const lines = ['[地区盘推运]', `盘龄 ${age} 年（建置 ${founding} → 目标 ${target}）`];
 					if(prof){
 						lines.push(`小限：年小限 ${prof.profectedSignCn} · 激活第 ${prof.activatedHouse} 宫(${prof.houseTheme}) · 年主 ${prof.lordCn}`);
-						// [Q-444] 逐月小限 / 法达序列 / 返照 / 次限(后两者页面按需拉取,算过才成行)。
+						// 逐月小限 / 法达序列 / 返照 / 次限(后两者页面按需拉取,算过才成行)。
 						if(prof.months && prof.months.length){ lines.push(`逐月小限：${prof.months.map((mm) => `${mm.month}月 ${(SIGNS[mm.sign] || {}).cn || mm.sign}`).join('、')}`); }
 					}
 					if(fird){
@@ -172,7 +172,7 @@ export function buildMundaneAiSnapshotParts(chart, extra, state){
 				}
 			}
 		}catch(e){ /* noop */ }
-		// [Q-444/T-407] 其余右栏卡(概览/判读/恒星/推运/各盘型专卡)折入既有盘型段:与 render*Card 同源纯函数,按需拉取物取自 state。
+		// 其余右栏卡(概览/判读/恒星/推运/各盘型专卡)折入既有盘型段:与 render*Card 同源纯函数,按需拉取物取自 state。
 		let cardSecs = [];
 		try{ cardSecs = buildMundaneCardSections(chart, ex, state, null); }catch(e){ cardSecs = []; }
 		return { headLines, judge, extraSecs, cardSecs };

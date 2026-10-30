@@ -5,6 +5,7 @@ from typing import Any
 
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
 from horosa_skill.service._common import (
+    _civil_wall_ms_of_moment,
     _GANZHI_BRANCHES,
     _GANZHI_STEMS,
     _render_snapshot_text,
@@ -39,9 +40,9 @@ class MingliRunners:
             f"出生：{payload.get('date')} {payload.get('time')}（{payload.get('zone')}）",
             f"地点：{payload.get('pos') or ''}　经度 {payload.get('lon')} 纬度 {payload.get('lat')}".rstrip(),
         ]
-        birth_key = f"{payload.get('date')} {payload.get('time')}".replace("/", "-")
-        if len(birth_key) == 16:
-            birth_key = f"{birth_key}:00"
+        # 括界按民用历墙钟毫秒比（_civil_wall_ms_of_moment，非严格）：旧做法是字符串比较，公元前出生（'-0500-03-21'）
+        # 对后端回的 '-500-03-11 …' 恒「小于」→ 括界行整条缺席；年不足 4 位（'999-…' vs '0999-…'）同病。
+        birth_ms = _civil_wall_ms_of_moment(f"{payload.get('date')} {payload.get('time')}".strip(), strict=False)
         row_lines: list[str] = []
         prev_row: dict[str, Any] | None = None
         bracket: tuple[dict[str, Any], dict[str, Any]] | None = None
@@ -49,9 +50,11 @@ class MingliRunners:
             if not isinstance(row, dict):
                 continue
             row_lines.append(f"{row.get('jieqi')}（{'节' if row.get('jie') else '气'}）　{row.get('time')}")
-            # 括界判定：纯字符串时刻比较（后端时刻同时区），非任何技法推算。
-            if prev_row is not None and bracket is None:
-                if f"{prev_row.get('time')}" <= birth_key < f"{row.get('time')}":
+            # 括界判定：民用历墙钟时刻比较（后端时刻同时区），非任何技法推算。
+            if prev_row is not None and bracket is None and birth_ms is not None:
+                lo = _civil_wall_ms_of_moment(f"{prev_row.get('time')}", strict=False)
+                hi = _civil_wall_ms_of_moment(f"{row.get('time')}", strict=False)
+                if lo is not None and hi is not None and lo <= birth_ms < hi:
                     bracket = (prev_row, row)
             prev_row = row
         if bracket:
@@ -154,7 +157,9 @@ class MingliRunners:
             # 日界/晚子时：缺省 = 上游出厂缺省 1/1（dayBoundary.js:39-45 / :91-93）；本地引擎缺键 = 不进位，必须显式补。
             "after23NewDay": 1 if payload.get("after23NewDay") is None else bit(payload.get("after23NewDay")),
             "lateZiHourUseNextDay": 1 if payload.get("lateZiHourUseNextDay") is None else bit(payload.get("lateZiHourUseNextDay")),
-            "adjustJieqi": 1 if payload.get("adjustJieqi") in (1, True, "1", "true") else 0,
+            # v3.13.0 BAZI_ADJUST_JIEQI_SENT（baziLunarLocal.js:1236-1238 / BaZi.js:1066-1069）：恒发 0 —— 本地引擎不实现、
+            # 控件已隐藏，旧记录带来的 1 也不再下发（否则回退 Java 的域会真把节气平移 (|lat|−35)×2 天，同一记录两域口径不一）。
+            "adjustJieqi": 0,
             "minggongMethod": self._bazi_option(payload, "minggongMethod"),
             "fenyeVersion": self._bazi_option(payload, "fenyeVersion"),
             "cangVersion": self._bazi_option(payload, "cangVersion"),
@@ -175,9 +180,15 @@ class MingliRunners:
     def _run_bazi_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         params, snapshot = self._bazi_params(payload)
         endpoint = "/bazi/direct" if tool_name == "bazi_direct" else "/bazi/birth"
-        # byLon / adjustJieqi：本地引擎不实现（上游 CnTraditionInput.js:564 已把节气微调控件隐藏「选了不生效」），
-        # 给了真值只有 Java 算得出 → 整盘走 Java 并如实告知（命宫起法随之标「子平数法(本域回退)」）。
-        java_only = [key for key in ("byLon", "adjustJieqi") if payload.get(key) in (1, True, "1", "true")]
+        # byLon：本地引擎不实现，给了真值只有 Java 算得出 → 整盘走 Java 并如实告知（命宫起法随之标「子平数法(本域回退)」）。
+        # adjustJieqi：v3.13.0 起上游恒发 0（见 _bazi_params），不再因它改走 Java；调用方显式要了 → 说清本次未调整。
+        if payload.get("adjustJieqi") in (1, True, "1", "true"):
+            _degrade(
+                "bazi adjustJieqi requested but upstream always sends 0",
+                note="八字 adjustJieqi（节气按纬度调整）：星阙 v3.13.0 起八字页、AI 无头重算与八字择日恒不调整节气"
+                "（本地引擎未实现该算法、控件已隐藏），本盘按「不调整节气」起。",
+            )
+        java_only = [key for key in ("byLon",) if payload.get(key) in (1, True, "1", "true")]
         js: dict[str, Any] = {}
         reason = ""
         if not java_only:

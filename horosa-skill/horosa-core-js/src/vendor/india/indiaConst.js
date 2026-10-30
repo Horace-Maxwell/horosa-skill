@@ -1,11 +1,13 @@
 // 印占流派 / 大运体系常量 —— **逐块抽自上游** `constants/AstroConst.js`（curated：上游全文件 1900+ 行、import 了
 // headless 不存在的色板/主题模块，整文件 vendor 不可行）。manifest 的 upstream_sha256 看守源文件、extracts 断言
 // 每个名字仍是上游顶层 export：源一动即红，逐块对过再 --restamp。消费方：india/jyotishSnapshot.js 的
-// [起盘信息] 流派行（buildIndiaSnapshotText:1154-1178）与 [大运Dasha]（buildDashaSnapshotLines:429-494），
-// 以及 v3.11 wave3b 的 [起盘信息] 口径行 indiaCalibreLine（IndiaChart.js:1111-1124：岁差表 / 分宫制表 / zodiacalDisplayText）。
+// [起盘信息] 流派行（IndiaChart.js buildIndiaSnapshotText:1271-1291）与 [大运Dasha]（buildDashaSnapshotLines:464-536，
+// 含 v3.13.0 共抽的 indiaMain/dasha.js charaAntarYears 读 normalizeIndiaDashaVariants），
+// 以及 v3.11 wave3b 的 [起盘信息] 口径行 indiaCalibreLine（IndiaChart.js:1228-1240：岁差表 / 分宫制表 / zodiacalDisplayText）。
+// v3.13.0：上游删了 INDIA_DASHA_VARIANT_DEFAULTS（死码清理，deadCodeRemoved.test.js 登记；无改名、无替代），本文件随之删除。
 // 块与块之间的上游代码（年长档 / 色板等）不在此文件；块内逐字（含注释）。
 
-// ── AstroConst.js:1459-1470 ──
+// ── AstroConst.js:1353-1363 ──
 
 // 印度占星五大流派(预设包·软联动):切派写默认岁差/宫制/相位范式 + 可见右栏 tab 子集,
 // 但用户仍可单独覆盖(软联动);默认 parashari = 现状零行为差异。tab key 见 13 TabPane(1-13)。
@@ -19,7 +21,7 @@ export const INDIA_SCHOOL_OPTIONS = [
     { value: 'western_sidereal', label: 'Western Sidereal 西方恒星(对照)' },
 ];
 
-// ── AstroConst.js:1648-1680 ──
+// ── AstroConst.js:1547-1578 ──
 
 // 每派默认:ayanamsa / hsys(分宫数) / aspectParadigm(中栏相位范式) / tabs(可见右栏 tab key 集)。
 export const INDIA_SCHOOL_DEFAULTS = {
@@ -54,8 +56,8 @@ export function normalizeIndiaSchool(value){
     return INDIA_SCHOOL_OPTIONS.find((item)=>item.value === value) ? value : INDIA_SCHOOL_DEFAULT;
 }
 
-// ── AstroConst.js:1682-1793 ──
-// ── 印占·大运流派开关(22 枚举键;引擎 dasha_variants.VARIANT_SPECS 同源镜像;[Q-135/T-43 (g)] 旧注写 21,实为 22)──
+// ── AstroConst.js:1580-1694 ──（v3.13.0：上游删了 INDIA_DASHA_VARIANT_DEFAULTS（死码清理，无替代名；本仓无消费方）、增 avastha 组与 deeptadiKhala 键）
+// ── 印占·流派开关(23 枚举键;引擎 dasha_variants.VARIANT_SPECS 同源镜像)──
 // 🔴 默认值=现状行为字节零回归;文献另荐口径以「(文献…)」标注,绝不作缺省。标签中性化零作者名。
 export const INDIA_DASHA_VARIANT_GROUPS = [
     { key: 'nakshatra', label: '星宿大运' },
@@ -63,6 +65,7 @@ export const INDIA_DASHA_VARIANT_GROUPS = [
     { key: 'kalachakra', label: 'Kālachakra' },
     { key: 'graha', label: '行星运' },
     { key: 'ayus', label: '寿命与年盘' },
+    { key: 'avastha', label: '行星状态' },
 ];
 export const INDIA_DASHA_VARIANT_SPECS = [
     { key: 'vedhaBlockers', label: '过运 Vedha 遮蔽者', group: 'graha', default: 'all',
@@ -92,10 +95,10 @@ export const INDIA_DASHA_VARIANT_SPECS = [
       tip: 'Chakra(每座 10 年)的起座规则;黄昏窗权威未详按昼夜二分' },
     { key: 'varnadaPeriodRule', label: 'Varṇada 期长', group: 'jaimini', default: 'count_to_lord',
       options: [{ value: 'count_to_lord', label: '数到座主(默认)' }, { value: 'equal_nine', label: '等长(文献分歧)' }],
-      tip: '等长派:每座恒 9 年(首轮总 108,二轮 12−9=3);数到座主派:数至宫主为期(与 Nārāyaṇa 同核)。两派文献分歧,各自真算' },   // [Q-135/T-43 (a)] 旧文案「选中亦按数到座主」已过期,引擎早已真算等长
+      tip: '等长派:每座恒 9 年(首轮总 108,二轮 12−9=3);数到座主派:数至宫主为期(与 Nārāyaṇa 同核)。两派文献分歧,各自真算' },   // 旧文案「选中亦按数到座主」已过期,引擎早已真算等长
     { key: 'kalachakraCycle', label: '周期换接法', group: 'kalachakra', default: 'carry',
       options: [{ value: 'carry', label: '进位(默认)' }, { value: 'repeat', label: '循环' },
-                { value: 'same_nak_carry', label: '同宿进位' }, { value: 'reset', label: '归零（现与「循环」同果）' }],   // [Q-136/T-44] 两档同分支
+                { value: 'same_nak_carry', label: '同宿进位' }, { value: 'reset', label: '归零（现与「循环」同果）' }],   // 两档同分支
       tip: 'paramāyus 用尽后如何续轮;进位绝不跨 savya/apasavya 组;差异仅首轮后显现' },
     { key: 'kalachakraApplicability', label: '适用条件', group: 'kalachakra', default: 'universal',
       options: [{ value: 'universal', label: '普适(默认)' }, { value: 'navamsa_stronger', label: '月 navāṁśa 强才主用' }],
@@ -107,7 +110,7 @@ export const INDIA_DASHA_VARIANT_SPECS = [
       options: [{ value: 'auto', label: '自动(最强定法,默认)' }, { value: 'pindayu', label: 'Piṇḍāyu' },
                 { value: 'nisargayu', label: 'Nisargāyu' }, { value: 'amsayu', label: 'Aṁśāyu' }],
       tip: '{上升,日,月}最强者定法:日强→Piṇḍāyu/月强→Nisargāyu/上升强→Aṁśāyu;可手动指定' },
-    // [Q-139 裁决 2026-09-18] 缺省改「同 Piṇḍāyu 施减」(Jātaka Pārijāta 5.6 / 5.12–13:Nisargāyu 与 Piṇḍāyu 同法);「全期不减」与盘无关,改非缺省
+    // 缺省改「同 Piṇḍāyu 施减」(Jātaka Pārijāta 5.6 / 5.12–13:Nisargāyu 与 Piṇḍāyu 同法);「全期不减」与盘无关,改非缺省
     { key: 'nisargayuHarana', label: 'Nisargāyu 减算', group: 'ayus', default: 'pindayu_like',
       options: [{ value: 'pindayu_like', label: '同 Piṇḍāyu 施减(默认)' }, { value: 'none', label: '全期不减(与盘无关,仅参考)' }],
       tip: '施与 Piṇḍāyu 相同的弧缩放与减算(默认);「全期不减」只按自然寿表原样合计,与行星位置无关' },
@@ -117,7 +120,7 @@ export const INDIA_DASHA_VARIANT_SPECS = [
       tip: '庙旺/逆×3·自座/vargottama×2 的组合口径(重算总值)' },
     { key: 'krurodayaDenominator', label: 'Krurodaya 减式', group: 'ayus', default: 'zodiac21600',
       options: [{ value: 'zodiac21600', label: '式 A:命宫座内角分/21600(默认)' }, { value: 'nav108', label: '式 B:全周 navāṁśa 序/108(文献推荐)' }],
-      // [Q-129/T-37·IN-11 ①] 两档不是同一量的两种分母:式 A 分子=命宫座内角分(0–1800),最多减总和的 1/12;式 B 分子=自白羊起的 navāṁśa 序(1–108),可减至近全额;量级差 1–23 倍
+      // 两档不是同一量的两种分母:式 A 分子=命宫座内角分(0–1800),最多减总和的 1/12;式 B 分子=自白羊起的 navāṁśa 序(1–108),可减至近全额;量级差 1–23 倍
       tip: '凶星升上升时对总和一次减的算式。两档不是同一量的两种分母:式 A=命宫座内角分(0–1800)/21600,最多减 1/12;式 B=自白羊起的 navāṁśa 序(1–108)/108,可减至近全额。改档即改判读总值' },
     { key: 'ayuClassBoundaries', label: '寿命档边界', group: 'ayus', default: 'bphs_32_64_120',
       options: [{ value: 'bphs_32_64_120', label: '32/64/120(默认)' }, { value: 'popular_32_70', label: '32/70' }],
@@ -135,11 +138,13 @@ export const INDIA_DASHA_VARIANT_SPECS = [
     { key: 'patyayiniLagnaPoint', label: 'Patyāyinī 上升取点', group: 'ayus', default: 'degree',
       options: [{ value: 'degree', label: '座内度数(默认)' }, { value: 'cusp', label: '宫首(文献默认)' }],
       tip: '上升的 krisamsa 取实际座内度或宫首 0°' },
+    { key: 'deeptadiKhala', label: 'Dīptādi 凶恶 / 困弱归属', group: 'avastha', default: 'malefic_sign',
+      options: [{ value: 'malefic_sign', label: '落恶曜之座为凶恶(默认)' }, { value: 'debilitation', label: '落陷为凶恶(BPHS 通行)' }],
+      tip: 'Dīptādi 情态两种通行口径:默认 = 落恶曜所主之座为 Khala(凶恶)、落陷与中性座为 Dīna(困弱);BPHS 通行 = 落陷为 Khala、中性座为 Dīna,「落恶曜之座」不另成态' },
     { key: 'haddaScheme', label: 'Hadda 界法', group: 'ayus', default: 'egyptian',
       options: [{ value: 'egyptian', label: '埃及界(默认)' }, { value: 'equal6', label: '等 6° 五分' }],
       tip: '界主分法:埃及不等界(日月永不为界主)或等 6° 五分' },
 ];
-export const INDIA_DASHA_VARIANT_DEFAULTS = INDIA_DASHA_VARIANT_SPECS.reduce((m, it)=>{ m[it.key] = it.default; return m; }, {});
 export function normalizeIndiaDashaVariants(raw){
     // dict/JSON 双收;只留「合法键+合法值+非默认」;解析失败/空 → {}(=全默认零 churn)。
     let data = raw;
@@ -168,7 +173,7 @@ export function serializeIndiaDashaVariants(map){
     return JSON.stringify(stable);
 }
 
-// ── AstroConst.js:1795-1824 ──
+// ── AstroConst.js:1696-1725 ──
 export function getIndiaSchoolDefaults(school){
     return INDIA_SCHOOL_DEFAULTS[normalizeIndiaSchool(school)] || INDIA_SCHOOL_DEFAULTS[INDIA_SCHOOL_DEFAULT];
 }
@@ -204,7 +209,7 @@ export function normalizeIndiaDashaSystem(value){
 
 export const SIDEREAL = 'Sidereal'
 
-// ── AstroConst.js:1078-1137 ──（v3.11 wave3b：印占 [起盘信息] 口径行 indiaCalibreLine 的岁差表与归一）
+// ── AstroConst.js:972-1031 ──（v3.11 wave3b：印占 [起盘信息] 口径行 indiaCalibreLine 的岁差表与归一）
 
 export const INDIA_AYANAMSA_DEFAULT = 'lahiri';
 export const INDIA_AYANAMSA_OPTIONS = [
@@ -267,7 +272,7 @@ export function normalizeIndiaAyanamsa(value){
     return found ? found.value : INDIA_AYANAMSA_DEFAULT;
 }
 
-// ── AstroConst.js:1139-1173 ──（同上：印占分宫制表与归一）
+// ── AstroConst.js:1033-1067 ──（同上：印占分宫制表与归一）
 
 export const INDIA_HOUSE_SYSTEM_DEFAULT = 0;
 export const INDIA_HOUSE_SYSTEM_OPTIONS = [
@@ -305,11 +310,11 @@ export function normalizeIndiaHouseSystem(value){
     return found ? found.value : INDIA_HOUSE_SYSTEM_DEFAULT;
 }
 
-// ── AstroConst.js:1219-1232 ──（同上：岁差短标签 + 黄道显示文案）
+// ── AstroConst.js:1113-1126 ──（同上：岁差短标签 + 黄道显示文案）
 // 由 ayanāṃśa key 取短标签(复用黄道下拉同款 INDIA_AYANAMSA_OPTIONS label)。无 key/未知返回原值。
 export function ayanamsaLabel(key){
     if(!key){ return ''; }
-    if(key === 'user'){ return '自定义（历元槽位）'; }   // [R5-P3] AI 快照/显示层词条(否则出「恒星黄道·user」原始键)
+    if(key === 'user'){ return '自定义（历元槽位）'; }   // AI 快照/显示层词条(否则出「恒星黄道·user」原始键)
     const hit = INDIA_AYANAMSA_OPTIONS.find((o)=>o.value === key);
     return hit ? hit.label : key;
 }
