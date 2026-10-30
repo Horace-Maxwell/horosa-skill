@@ -662,6 +662,17 @@
         "horosa-skill/tests/test_agent_surface_audit.py",
         "horosa-skill/tests/test_skill_shell_contract.py"
       ]
+    },
+    {
+      "id": "mcp-python-sdk.sse-event-limit",
+      "subject": "mcp-python-sdk",
+      "fact": "mcp 2.3.0 streamable-HTTP client caps one Server-Sent Event at DEFAULT_MAX_SSE_EVENT_SIZE = 1024 * 1024 bytes (src/mcp/client/streamable_http.py:61; `max_sse_event_size=` overrides); a larger tool result fails the whole call with 'SSE stream failed: Server-sent event exceeded the 1048576 byte limit'. A tool result travels as one event, and its JSON text block is ~2.9x the compact data size, so the skill keeps each result under MCP_RESULT_WIRE_BUDGET (900 000 B).",
+      "source_url": "https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/streamable_http.py",
+      "verified_on": "2026-10-30",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
+        "horosa-skill/tests/test_mcp_result_budget.py"
+      ]
     }
   ]
 }

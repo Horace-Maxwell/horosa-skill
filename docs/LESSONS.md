@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.46.1-dev (2026-10-30) | 八字结果走 streamable HTTP 整条失败：官方 SDK 客户端 SSE 单事件上限 1 MiB，原始盘序列化后 2.48 MB（v0.45.1 起即如此） | MCP 层线上体积预算 900 KB：超出时只略去 data 里最大的原始子树，AI 读的部分不动；进程内真客户端量线上字节的测试 |
 | v0.46.0 (2026-10-30) | main CI windows-smoke 两红：整盘 JSON 进 node argv（WinError 206）、`time.tzset`（POSIX 专有）；本机全绿 | `esm_argv` 全平台拦 > 24 000 字符；tzset 必须带 `hasattr` 条件（AST 守卫，负向对照收紧过） |
 | v0.46.0-dev (2026-10-30) | 上游 v3.11.3 → v3.13.0：vendor 清单全绿，手抄件十余处静默过期（印占分盘标签表、写死的缺省 / 文案、民用历日期运算、yearsystem129 后端字段已删仍在读）；顺带查出印度 Tajika 缺省缺席、金口诀昼夜粗判 | `audit_upstream_ports.py` + 台账（变了的上游名字 ∩ skill 提到的 → 必须有结论，审到当前 pin）；`also_derived_from` 多源看守；手抄表逐值 / civil 移植差分测试 |
 | v0.45.1 (2026-10-28) | 发版矩阵 windows-11-arm（仿真 x64）pytest 在 2700 s 被杀，~98%、零失败；v0.45.0 时已占 96% 无人察觉；同批 windows-latest 反而更快 | 只给 `--expect-emulated` lane 加 900 s（3600），守卫同时校验仍装得进 job 的 90 分钟；lane 脚本取自派发提交（main），不必挪 tag |
@@ -163,6 +164,20 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.46.1-dev / 2026-10-30 — 发布后 surface_audit：八字结果走 streamable HTTP 整条失败（SSE 单事件 > 1 MiB）
+
+- **现象**：v0.46.0 公开后对 vendored 实例跑 `surface_audit.py`，HTTP 阶段 `horosa_cn_bazi_birth` 报
+  「SSE stream failed: Server-sent event exceeded the 1048576 byte limit」。stdio / 进程内面全绿。
+- **根因**：官方 MCP SDK（mcp 2.x）客户端对 streamable HTTP 的单条 SSE 事件设 1 MiB 上限；八字原始盘
+  `data.bazi.smallDirection` + `direction`（整生流年 / 大运明细）约 0.8 MB，转成 text 内容块后 2.25 MB、线上 2.48 MB。v0.45.1 起
+  （SDK 2.3）即如此——八字信封大小新旧两版逐字节相同，不是这轮同步引入的；之前的 HTTP 验收没有调到大结果的工具。
+- **修**：`HorosaMCPServer.call_tool` 转换后量线上字节，超 `MCP_RESULT_WIRE_BUDGET`（900 000 B）时从 `data` 里最大的原始子树
+  （二级优先）起逐个换成说明占位，直到放得下；快照 / 导出段 / 技法依据卡等给 AI 读的部分不动，warnings 写明略去了哪些，
+  占位里给出 `horosa-skill memory show <run_id>`（本机存档为全量）。预算内的结果逐字节不变。八字线上 2.48 MB → 约 106 KB。
+- **守卫**：`tests/test_mcp_result_budget.py`（进程内真 MCP 客户端：八字线上 ≤ 预算 < 1 MiB、AI 读的部分逐字相同、小结果不变；
+  负向对照：去掉预算分支 → 2 480 848 B，红）；surface_audit HTTP 阶段 4/4。
+- **规则**：传输层也有上限——加大结果的工具或字段时，用进程内 MCP 客户端量线上字节，不只看 service 信封。
 
 ### v0.46.0 / 2026-10-30 — main CI：windows-smoke 两红（argv 过长、time.tzset），本机全绿
 
