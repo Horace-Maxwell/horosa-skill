@@ -7,7 +7,6 @@ import { DIZHI, ZHI_WUXING, LIUCHONG } from './LiuYaoConst.js';
 const zi = (i) => DIZHI[((i % 12) + 12) % 12];
 const idx = (z) => DIZHI.indexOf(z);
 const SEASON = { 寅: '春', 卯: '春', 辰: '春', 巳: '夏', 午: '夏', 未: '夏', 申: '秋', 酉: '秋', 戌: '秋', 亥: '冬', 子: '冬', 丑: '冬' };
-const SANHE_GROUP = { 申: 'A', 子: 'A', 辰: 'A', 寅: 'B', 午: 'B', 戌: 'B', 巳: 'C', 酉: 'C', 丑: 'C', 亥: 'D', 卯: 'D', 未: 'D' };
 const ganGroup = (g) => ('甲乙'.indexOf(g) >= 0 ? 0 : '丙丁'.indexOf(g) >= 0 ? 1 : '戊己'.indexOf(g) >= 0 ? 2 : '庚辛'.indexOf(g) >= 0 ? 3 : '壬癸'.indexOf(g) >= 0 ? 4 : -1);
 
 // 孤辰寡宿(按年支三会方起):孤辰=会方末支下一位、寡宿=会方首支前一位。占婚忌,主孤独鳏寡。
@@ -65,33 +64,6 @@ export const SHENSHA_EX = [
 	{ name: '刀砧杀', group: 'xiong', duan: '六畜忌;金为刀、木为砧', calc: (c) => bySeason({ 春: ['亥', '子'], 夏: ['寅', '卯'], 秋: ['巳', '午'], 冬: ['申', '酉'] })(SEASON[c.monthZhi]) },
 	{ name: '日下大杀', group: 'xiong', duan: '临财妻灾、临兄分张、临父子哭泣', calc: (c) => { const g = ganGroup(c.dayGan); return g < 0 ? [] : [['亥', '未', '戌', '寅', '巳'][g]]; } },
 	{ name: '亡神杀(月系)', group: 'xiong', variant: '国朝章:正月从亥顺行', duan: '主失亡', calc: (c) => (c.monthNum ? seq('亥', 1)(c.monthNum) : []) },
-];
-
-// 四利三元(年支顺轮十二神):单列(一次产 12 名→支)
-export const SILI_SANYUAN = ['太岁', '太阳', '丧门', '太阴', '官苻', '死苻', '岁破', '龙德', '白虎', '福德', '吊客', '病苻'];
-export function siLiSanYuan(yearZhi){
-	if(!yearZhi){ return null; }
-	const s = idx(yearZhi);
-	const out = {};
-	SILI_SANYUAN.forEach((nm, i) => { out[nm] = zi(s + i); });
-	return out;
-}
-
-// 进神/退神(干支定名,天玄赋身命章):甲子甲午己卯己酉为进神;壬戌壬辰丁丑丁未为退神(以爻纳干支论)
-export const JINSHEN_GZ = ['甲子', '甲午', '己卯', '己酉'];
-export const TUISHEN_GZ = ['壬戌', '壬辰', '丁丑', '丁未'];
-export function jinTuiGZOf(gan, zhiC){
-	const gz = (gan || '') + (zhiC || '');
-	if(JINSHEN_GZ.indexOf(gz) >= 0){ return '进神(干支)'; }
-	if(TUISHEN_GZ.indexOf(gz) >= 0){ return '退神(干支)'; }
-	return '';
-}
-
-// 分组元数据(UI 勾选用)
-export const SHENSHA_EX_GROUPS = [
-	{ key: 'ji', label: '断易天机·吉神' },
-	{ key: 'xiong', label: '断易天机·凶神' },
-	{ key: 'yueling', label: '月令神煞大表' }, // 抽取数据注入
 ];
 
 // 抽取数据注入口:tianjiShenSha.js 的 YUELING_TABLE 形如

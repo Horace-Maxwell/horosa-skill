@@ -56,7 +56,7 @@ function timeLordNotes(natalFacts, elecFacts, add, opts){
 	if(yearLord) add('info', `小限（Profection）:${age} 岁行第 ${ph} 宫,年主星 ${cnOf(yearLord)}。`);
 	judge('年主星', yearLord);
 	// Firdaria 大运(子运于下方 R2 段展开)
-	const fd = firdariaAt(age, !!natalFacts.meta.isDiurnal, (opts || {}).firdariaNightOrder);   // [Q-276④] 大运与子运同一夜序
+	const fd = firdariaAt(age, !!natalFacts.meta.isDiurnal, (opts || {}).firdariaNightOrder);   // 大运与子运同一夜序
 	if(fd){
 		add('info', `法达（Firdaria）大运:${cnOf(fd.lord)}（${fd.from}–${fd.to} 岁;子运不展开）。`);
 		if(fd.lord !== 'north_node' && fd.lord !== 'south_node') judge('大运主', fd.lord);

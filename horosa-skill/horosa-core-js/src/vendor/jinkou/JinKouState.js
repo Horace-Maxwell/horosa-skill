@@ -1,6 +1,6 @@
 import * as LRConst from '../liureng/LRConst.js';
 
-function normalizeZiFromText(text){
+export function normalizeZiFromText(text){
 	const txt = `${text || ''}`;
 	for(let i=0; i<txt.length; i++){
 		const one = txt.substr(i, 1);

@@ -3,6 +3,8 @@
 // 变体(anchor='sheratan'):部分 Picatrix 抄本与现代作者将第 1 宿锚定实星 Sheratan——
 // 原典无固定偏移数值,故按其字面操作规则实现:宿 1 起点 = Sheratan 当年岁差实位
 // (偏移量随岁差内生,不写死任何常数;默认仍 Agrippa 均分,零回归)。
+import { segmentIndex } from '../../utils/segmentIndex.js';
+
 export const MANSION_SPAN = 360 / 28; // 12.857142…
 
 // Sheratan(β Arietis)1995 回归黄经(J2000 金牛3°58′ 回推 5 年岁差),供实星锚变体取当年实位。
@@ -89,7 +91,7 @@ export function mansionOf(lon, anchor, year){
 		const offset = ((SHERATAN_LON_1995 + (y - 1995) * 50.27 / 3600) % 360 + 360) % 360;
 		L = ((L - offset) % 360 + 360) % 360;
 	}
-	const idx = Math.min(27, Math.floor(L / MANSION_SPAN));
+	const idx = segmentIndex(L, MANSION_SPAN, 28);   // 段界单源(恰在宿界上归后一宿)
 	return LUNAR_MANSIONS[idx];
 }
 

@@ -30,7 +30,7 @@ export function buildYanqinYanfaSnapshot(payload) {
 	const r = resolveWoBi(s);
 	const ent = { shi: cast.hourQin, fan: cast.fanQin, dao: cast.daoJiang ? cast.daoJiang.zhuJiang : null };
 	const me = ent[r.me]; const they = ent[r.they];
-	// [挂载自检 F-40③] 我彼胜负按当前流派的禽星五行口径(std 七政 / wangfu 汪绂重配)判——与页面
+	// 我彼胜负按当前流派的禽星五行口径(std 七政 / wangfu 汪绂重配)判——与页面
 	// YanQinBranchPanel 同传 s.qinWuxing;此前无头恒按七政,汪绂派页面与快照胜负可分叉。
 	const ke = (me && they) ? KE_TEXT[qinKeByWuxing(wuxingOfMansion(me, s.qinWuxing), wuxingOfMansion(they, s.qinWuxing))] : '—';
 	const bird = toutaiDu(lunarMonth, hourBranch);

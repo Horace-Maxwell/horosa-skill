@@ -22,7 +22,6 @@ export const DAO = {
 };
 // 品级：上品(吉)/中品(平)/下品(凶)
 export const GRADE_UP = ['天貴', '天權', '天福', '天壽'];
-export const GRADE_MID = ['天文', '天驛', '天刃', '天藝'];
 export const GRADE_DOWN = ['天破', '天奸', '天孤', '天厄'];
 
 // 掌上手位（左手指节，男女皆用左手，别在顺逆）
@@ -522,24 +521,25 @@ export function ziSubPeriod(hh, mm) {
 
 // ── A2/A7/A8 显示层映射（盘算一律用 A 系内部键，仅换显示名 → 零算法回归）──
 // 星名系统：'A'(主流,默认) / 'B'(异名·断语互通) / 'C'(仅异名显示)。
+// 显示名:星名键是繁体(与断语数据键一致),界面一律显示别名表里的写法(A = 主流名的简体写法;繁体档由界面显示层转回繁体)。
 export function starLabel(star, naming) {
-	if ((naming === 'B' || naming === 'C')) {
-		const idx = STARS.indexOf(star);
-		if (idx >= 0) {
-			const zhi = BRANCHES[idx];
-			const alias = (DATA.starAlias || {})[zhi];
-			if (alias && alias[naming] && alias[naming] !== '—' && alias[naming] !== star) return alias[naming];
-		}
+	const key = naming === 'B' || naming === 'C' ? naming : 'A';
+	const idx = STARS.indexOf(star);
+	if (idx >= 0) {
+		const zhi = BRANCHES[idx];
+		const alias = (DATA.starAlias || {})[zhi];
+		if (alias && alias[key] && alias[key] !== '—') return alias[key];
 	}
 	return star;
 }
 // 六道术语：'gui'(鬼道/修羅道,默认) / 'edao'(饿鬼道/阿修羅道)。
+// 显示名同样用简体写法(键「修羅道」与断语数据一致)
 export function daoLabel(dao, term) {
 	if (term === 'edao') {
 		if (dao === '鬼道') return '饿鬼道';
-		if (dao === '修羅道') return '阿修羅道';
+		if (dao === '修羅道') return '阿修罗道';
 	}
-	return dao;
+	return dao === '修羅道' ? '修罗道' : dao;
 }
 
 export default { calcYizhangjing };

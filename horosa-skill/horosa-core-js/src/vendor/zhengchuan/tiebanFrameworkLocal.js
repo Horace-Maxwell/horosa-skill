@@ -20,18 +20,18 @@ const XIANTIAN_NUM = { 乾: 1, 兑: 2, 離: 3, 震: 4, 巽: 5, 坎: 6, 艮: 7, �
 // 后天八卦数=洛书数(§4.3):坎1坤2震3巽4(中5)乾6兑7艮8离9
 const HOUTIAN_NUM = { 坎: 1, 坤: 2, 震: 3, 巽: 4, 乾: 6, 兑: 7, 艮: 8, 離: 9 };
 // 卦自然象(拼 64 卦全名用)
-const TRI_IMAGE = { 乾: '天', 兑: '澤', 離: '火', 震: '雷', 巽: '風', 坎: '水', 艮: '山', 坤: '地' };
+const TRI_IMAGE = { 乾: '天', 兑: '泽', 離: '火', 震: '雷', 巽: '风', 坎: '水', 艮: '山', 坤: '地' };
 
 // ── 64 卦全名表(上卦|下卦 → 全名)。公有《易经》标准命名。 ──
 const GUA64 = {
-	'乾|乾': '乾為天', '乾|兑': '天澤履', '乾|離': '天火同人', '乾|震': '天雷無妄', '乾|巽': '天風姤', '乾|坎': '天水訟', '乾|艮': '天山遯', '乾|坤': '天地否',
-	'兑|乾': '澤天夬', '兑|兑': '兑為澤', '兑|離': '澤火革', '兑|震': '澤雷隨', '兑|巽': '澤風大過', '兑|坎': '澤水困', '兑|艮': '澤山咸', '兑|坤': '澤地萃',
-	'離|乾': '火天大有', '離|兑': '火澤睽', '離|離': '離為火', '離|震': '火雷噬嗑', '離|巽': '火風鼎', '離|坎': '火水未濟', '離|艮': '火山旅', '離|坤': '火地晉',
-	'震|乾': '雷天大壯', '震|兑': '雷澤歸妹', '震|離': '雷火豐', '震|震': '震為雷', '震|巽': '雷風恆', '震|坎': '雷水解', '震|艮': '雷山小過', '震|坤': '雷地豫',
-	'巽|乾': '風天小畜', '巽|兑': '風澤中孚', '巽|離': '風火家人', '巽|震': '風雷益', '巽|巽': '巽為風', '巽|坎': '風水渙', '巽|艮': '風山漸', '巽|坤': '風地觀',
-	'坎|乾': '水天需', '坎|兑': '水澤節', '坎|離': '水火既濟', '坎|震': '水雷屯', '坎|巽': '水風井', '坎|坎': '坎為水', '坎|艮': '水山蹇', '坎|坤': '水地比',
-	'艮|乾': '山天大畜', '艮|兑': '山澤損', '艮|離': '山火賁', '艮|震': '山雷頤', '艮|巽': '山風蠱', '艮|坎': '山水蒙', '艮|艮': '艮為山', '艮|坤': '山地剝',
-	'坤|乾': '地天泰', '坤|兑': '地澤臨', '坤|離': '地火明夷', '坤|震': '地雷復', '坤|巽': '地風升', '坤|坎': '地水師', '坤|艮': '地山謙', '坤|坤': '坤為地',
+	'乾|乾': '乾为天', '乾|兑': '天泽履', '乾|離': '天火同人', '乾|震': '天雷无妄', '乾|巽': '天风姤', '乾|坎': '天水讼', '乾|艮': '天山遯', '乾|坤': '天地否',
+	'兑|乾': '泽天夬', '兑|兑': '兑为泽', '兑|離': '泽火革', '兑|震': '泽雷随', '兑|巽': '泽风大过', '兑|坎': '泽水困', '兑|艮': '泽山咸', '兑|坤': '泽地萃',
+	'離|乾': '火天大有', '離|兑': '火泽睽', '離|離': '离为火', '離|震': '火雷噬嗑', '離|巽': '火风鼎', '離|坎': '火水未济', '離|艮': '火山旅', '離|坤': '火地晋',
+	'震|乾': '雷天大壮', '震|兑': '雷泽归妹', '震|離': '雷火丰', '震|震': '震为雷', '震|巽': '雷风恒', '震|坎': '雷水解', '震|艮': '雷山小过', '震|坤': '雷地豫',
+	'巽|乾': '风天小畜', '巽|兑': '风泽中孚', '巽|離': '风火家人', '巽|震': '风雷益', '巽|巽': '巽为风', '巽|坎': '风水涣', '巽|艮': '风山渐', '巽|坤': '风地观',
+	'坎|乾': '水天需', '坎|兑': '水泽节', '坎|離': '水火既济', '坎|震': '水雷屯', '坎|巽': '水风井', '坎|坎': '坎为水', '坎|艮': '水山蹇', '坎|坤': '水地比',
+	'艮|乾': '山天大畜', '艮|兑': '山泽损', '艮|離': '山火贲', '艮|震': '山雷颐', '艮|巽': '山风蛊', '艮|坎': '山水蒙', '艮|艮': '艮为山', '艮|坤': '山地剥',
+	'坤|乾': '地天泰', '坤|兑': '地泽临', '坤|離': '地火明夷', '坤|震': '地雷复', '坤|巽': '地风升', '坤|坎': '地水师', '坤|艮': '地山谦', '坤|坤': '坤为地',
 };
 
 // 干支(简繁兼容)
@@ -47,26 +47,26 @@ const EIGHT_KE_GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛'];
 
 // ── §4.2/§4.8 地支生成数(考刻六亲用):子1丑10寅3卯8辰5巳7午2未10申9酉4戌5亥6 ──
 const ZHI_SHENGCHENG = { 子: 1, 丑: 10, 寅: 3, 卯: 8, 辰: 5, 巳: 7, 午: 2, 未: 10, 申: 9, 酉: 4, 戌: 5, 亥: 6 };
-const SHENGXIAO = { 子: '鼠', 丑: '牛', 寅: '虎', 卯: '兔', 辰: '龍', 巳: '蛇', 午: '馬', 未: '羊', 申: '猴', 酉: '雞', 戌: '狗', 亥: '豬' };
+const SHENGXIAO = { 子: '鼠', 丑: '牛', 寅: '虎', 卯: '兔', 辰: '龙', 巳: '蛇', 午: '马', 未: '羊', 申: '猴', 酉: '鸡', 戌: '狗', 亥: '猪' };
 
 // ── §5.4.2 四柱配六亲:年→父母 月→兄弟 日→夫妻 时→子女;天干(乾)主父·地支(坤)主母 ──
 const PILLAR_LIUQIN = [
 	{ pillar: 'year', label: '年柱', liuqin: '父母', note: '生肖·存殁·出身' },
 	{ pillar: 'month', label: '月柱', liuqin: '兄弟', note: '人数·排行·雁行' },
-	{ pillar: 'day', label: '日柱', liuqin: '夫妻', note: '配偶生肖·婚況' },
-	{ pillar: 'hour', label: '時柱', liuqin: '子女', note: '数量·贤否' },
+	{ pillar: 'day', label: '日柱', liuqin: '夫妻', note: '配偶生肖·婚况' },
+	{ pillar: 'hour', label: '时柱', liuqin: '子女', note: '数量·贤否' },
 ];
 
 // ── §5.6 批断顺序:太极→父母→兄弟→夫妻→子女→本身→大运→流年 ──
 const PIDUAN_ORDER = [
-	{ key: 'taiji', name: '太極(總論)', pillar: '基本命數', duan: '一生大格局' },
+	{ key: 'taiji', name: '太极(总论)', pillar: '基本命数', duan: '一生大格局' },
 	{ key: 'fumu', name: '父母', pillar: '年柱', duan: '父母生肖·存殁·出身' },
 	{ key: 'xiongdi', name: '兄弟', pillar: '月柱', duan: '兄弟数·排行·雁行' },
 	{ key: 'fuqi', name: '夫妻', pillar: '日柱', duan: '配偶生肖·婚姻' },
-	{ key: 'zinv', name: '子女', pillar: '時柱', duan: '子女数·贤否' },
+	{ key: 'zinv', name: '子女', pillar: '时柱', duan: '子女数·贤否' },
 	{ key: 'benshen', name: '本身', pillar: '—', duan: '体貌·性格·才能' },
-	{ key: 'dayun', name: '大運(行限)', pillar: '大運取數訣', duan: '每 10 年一運' },
-	{ key: 'liunian', name: '流年', pillar: '流年取數訣', duan: '逐年吉凶' },
+	{ key: 'dayun', name: '大运(行限)', pillar: '大运取数诀', duan: '每 10 年一运' },
+	{ key: 'liunian', name: '流年', pillar: '流年取数诀', duan: '逐年吉凶' },
 ];
 
 // ── §11.4 刻制 ──
@@ -87,7 +87,7 @@ const SUBSYSTEMS = [
 	{ key: 'dadingshu', name: '大定数(129600)', source: '邵雍《皇极经世》元会运世', struct: '1元=12会=360运=4320世=129600年(1世30年/1运360年/1会10800年)', use: '把人事套入宇宙大周期的标尺' },
 	{ key: 'shiganbianyao', name: '十干变曜', source: '《果老星宗》十干化曜', struct: '十天干各化某星曜(星学版十神)', use: '求六亲数时把天干转星曜属性参与取数;完整对照见《果老星宗》' },
 	{ key: 'ziwei', name: '紫微八宫正数', source: '《紫微斗数全书》', struct: '定命宫→定五行局(纳音)→起紫微→顺逆安十四主星', use: '借紫微命盘若干宫「正数」参与运算(八宫正数映射各家存疑)' },
-	{ key: 'najia', name: '京房纳甲', source: '京房八宫', struct: '乾纳甲壬·坤纳乙癸·震庚·巽辛·坎戊·離己·艮丙·兑丁;阳卦地支顺·阴卦逆', use: '六亲爻取数时借用' },
+	{ key: 'najia', name: '京房纳甲', source: '京房八宫', struct: '乾纳甲壬·坤纳乙癸·震庚·巽辛·坎戊·离己·艮丙·兑丁;阳卦地支顺·阴卦逆', use: '六亲爻取数时借用' },
 	{ key: 'qizheng', name: '七政四余', source: '《果老星宗》', struct: '七政=日月+金木水火土;四余=罗睺计都紫炁月孛', use: '偶借年命星曜参与取数(非主线)' },
 	{ key: 'ershiba', name: '二十八宿', source: '四象七宿', struct: '东青龙 角亢氐房心尾箕/北玄武 斗牛女虚危室壁/西白虎 奎娄胃昴毕觜参/南朱雀 井鬼柳星张翼轸', use: '明制百刻定局时的星宿分野' },
 ];
@@ -112,6 +112,21 @@ function bianYao(lines, positions) { const l = lines.slice(); positions.forEach(
 // 上下卦对调
 function swapTrigrams(lines) { return [...lines.slice(3, 6), ...lines.slice(0, 3)]; }
 
+// 考刻刻位上限随刻制(十二刻·斗宫 12,其余按清八刻 8;超出按初刻):页面下拉与挂载齿轮同一份
+export function tiebanKeCount(keSystem) { return (KE_SYSTEMS[keSystem] && KE_SYSTEMS[keSystem].keCount) || 8; }
+const KE_NUM_CN = ['初', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+export function tiebanKeOptions(keSystem) {
+	return KE_NUM_CN.slice(0, tiebanKeCount(keSystem)).map((n, i) => ({ value: i + 1, label: `${n}刻` }));
+}
+// 刻位超出该刻制上限(如十二刻下选了十刻再切回八刻)按初刻算;页面下拉、挂载齿轮回显与引擎同一判据
+export function clampTiebanKe(ke, keSystem) {
+	return ke && ke >= 1 && ke <= tiebanKeCount(keSystem) ? ke : 1;
+}
+// 十二刻·斗宫的九—十二刻在八刻天干表与九十六局里都没有位置:单列一行写明所考之刻(否则这四档的输出彼此无别)
+export function tiebanKeBeyondEight(fw) {
+	if (!fw || !(fw.ke > 8)) return '';
+	return `${KE_NUM_CN[fw.ke - 1]}刻（${fw.keSystemInfo.label}补刻；八刻天干与九十六局只列到八刻）`;
+}
 export function taixuanPeishu(ganOrZhi) { return TAIXUAN_GAN[ganOrZhi] !== undefined ? TAIXUAN_GAN[ganOrZhi] : (TAIXUAN_ZHI[ganOrZhi] !== undefined ? TAIXUAN_ZHI[ganOrZhi] : null); }
 
 // §4.7 刻位(1-8)→天干;fenWithinHour=时辰内分钟(0-120),keSystem 只影响每刻分长(精确条文仍走八刻)
@@ -250,9 +265,8 @@ export function buildTiebanFramework(fourPillars, opts = {}) {
 	const isMale = !(opts.gender === 0 || opts.gender === '0' || opts.gender === '女' || opts.gender === 'Female');
 	const isYangManYinNv = (isYang && isMale) || (!isYang && !isMale);
 	const hourZhi = `${fourPillars.hour}`.charAt(1);
-	// [Q-265/T-250·SO-17] 刻位上限随刻制:十二刻·斗宫收 1–12(此前恒 1–8,挂载 tiebanKe 9–12 被静默当初刻);清八刻仍 1–8
-	const keMax = (KE_SYSTEMS[keSystem] && KE_SYSTEMS[keSystem].keCount) || 8;
-	const ke = opts.ke && opts.ke >= 1 && opts.ke <= keMax ? opts.ke : 1;
+	// 刻位上限随刻制:十二刻·斗宫收 1–12(此前恒 1–8,挂载 tiebanKe 9–12 被静默当初刻);清八刻仍 1–8
+	const ke = clampTiebanKe(opts.ke, keSystem);
 
 	const baseGua = baseGuaFromPillars(fourPillars);
 	const fwNum = frameworkNumber(fourPillars);
@@ -292,6 +306,7 @@ export function buildTiebanFrameworkSnapshot(fw) {
 	lines.push('起卦诀:考时定刻用乾坤,乾为父兮母为坤。二十四条明日月,八刻天干又一村。');
 	fw.liuQin.forEach((q) => lines.push(`${q.label}→${q.liuqin}(${q.note}):${q.ganzhi} ${q.shengxiao ? '属' + q.shengxiao : ''} 太玄干${q.taixuanGan}/支${q.taixuanZhi}`));
 	lines.push(`八刻天干:${fw.eightKe.map((k) => `${['初', '二', '三', '四', '五', '六', '七', '八'][k.ke - 1]}刻${k.gan}${k.active ? '(考刻)' : ''}`).join(' ')}`);
+	if (tiebanKeBeyondEight(fw)) lines.push(`考刻:${tiebanKeBeyondEight(fw)}`);
 	if (fw.ju) lines.push(`九十六局:${fw.ju.label} · ${fw.keSystemInfo.juStruct}`);
 	lines.push('');
 	lines.push('[框架·八卦滚]');
@@ -312,6 +327,4 @@ export const TIEBAN_SCHOOLS = SCHOOLS;
 export const TIEBAN_KE_SYSTEMS = KE_SYSTEMS;
 export const TIEBAN_TAIXUAN = { gan: TAIXUAN_GAN, zhi: TAIXUAN_ZHI };
 export const TIEBAN_EIGHT_KE = EIGHT_KE_GAN;
-export const TIEBAN_SUBSYSTEMS = SUBSYSTEMS;
-export const TIEBAN_PIDUAN = PIDUAN_ORDER;
 export { GUA64, guaOfLines, huTiGua, cuoGua, swapTrigrams, bianYao, linesOfGua };

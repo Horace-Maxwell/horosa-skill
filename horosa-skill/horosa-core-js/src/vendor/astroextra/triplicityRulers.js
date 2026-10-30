@@ -1,4 +1,5 @@
 import moment from 'moment';
+import { birthMomentOfChart, civilDateAfterDays } from '../utils/civilMoment.js';
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
 import { TRIPLICITY } from '../divination/data/hellenisticData.js';
@@ -89,7 +90,7 @@ export function resolveTripletForSign(sign, system, isDiurnal){
 		return dorotheanOrdered; // 多罗特（默认）：三主，已按昼夜换序。
 	}
 	const elem = SIGN_ELEMENT[sign];
-	const tab = (TRIPLICITY && TRIPLICITY.Ptolemaic) ? TRIPLICITY.Ptolemaic[elem] : null;
+	const tab = TRIPLICITY.Ptolemaic ? TRIPLICITY.Ptolemaic[elem] : null;
 	if(!tab){ return dorotheanOrdered; }
 	if(elem === 'Water'){
 		const variant = tab.text_variant;
@@ -128,12 +129,9 @@ export const TRIPLICITY_HOUSE_SIGS = {
 
 function norm360(v){ let n = Number(v) % 360; if(n < 0){ n += 360; } return n; }
 
+// 出生时刻单源(全年份域:公元前 / 公元 1–99 年 / 五位年不误读;见 utils/civilMoment)
 function parseBirth(chartObj){
-	const p = (chartObj && chartObj.params) ? chartObj.params : {};
-	const birth = `${p.birth || ''}`.trim();
-	if(!birth){ return null; }
-	const m = moment(birth.replace(/\//g, '-'), ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-MM-DD']);
-	return m.isValid() ? m : null;
+	return birthMomentOfChart(chartObj);
 }
 
 function findObj(chartObj, id){
@@ -199,7 +197,7 @@ function resolveOpts(opts, chartObj){
 	const o = { ...TRIPLICITY_DEFAULT_OPTS, ...(opts || {}) };
 	if(!TRIPLICITY_DIVISIONS[o.division]){ o.division = 'thirds'; }
 	if(!TRIPLICITY_SYSTEMS[opts && opts.system]){
-		// [Q-187/T-111] 未指定(或非法)体系时随本盘排盘三分集(chartObj.params.triplicity,与页面 AstroTriplicityRulers 初值同序),
+		// 未指定(或非法)体系时随本盘排盘三分集(chartObj.params.triplicity,与页面 AstroTriplicityRulers 初值同序),
 		// 再回内建默认 —— 挂载(record.system 缺席)与页面同盘同口径。(判 opts 原值:展开默认后 o.system 恒合法,判不到「未指定」)
 		const ct = chartObj && chartObj.params ? chartObj.params.triplicity : null;
 		o.system = TRIPLICITY_SYSTEMS[ct] ? ct : TRIPLICITY_SYSTEM_DEFAULT;
@@ -220,7 +218,7 @@ export function buildTriplicityPeriods(chartObj, opts){
 	if(!sp || !Array.isArray(sp.Trip)){ return { isDiurnal, sectLight, sign, signCn: sign ? SIGN_CN[sign] : '', periods: [], lifespan: o.lifespan, division: o.division, system: o.system }; }
 	const L = o.lifespan;
 	const birth = parseBirth(chartObj);
-	const dateAt = (age) => (birth ? moment(birth).add(Math.round(age * 365.2422), 'days').format('YYYY-MM-DD') : '');
+	const dateAt = (age) => (birth ? civilDateAfterDays(birth, age * 365.2422) : '');   // 民用历日期标签(1582 以前儒略历)
 	const periods = buildRawPeriods(sign, isDiurnal, o.system, o.division, L);
 	periods.forEach((p) => {
 		p.fromDate = dateAt(p.fromAge);

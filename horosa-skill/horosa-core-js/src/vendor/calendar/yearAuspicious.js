@@ -3,7 +3,7 @@
 // 复用：日课 buildHuangliDay（含 lunar 通书宜忌 + 内部建除/黄黑道/28宿）；事项分类 EVENT_CATEGORIES。
 // 设计要点：以 lunar「宜」为权威闸门（lunar 宜忌本身已神煞择净），命中事项宜方入榜；
 // 建除吉位/黄道/吉神/值宿吉 为排名加分，关键大凶（四废/五墓/致死/阴阳击冲）为硬红线覆盖宜。
-// [Q-423/T-387] 此处原写「受死」,而库内实名「致死」—— 文件头与 HARD_EXCLUDE 就此对齐,勿再回潮。
+// 此处原写「受死」,而库内实名「致死」—— 文件头与 HARD_EXCLUDE 就此对齐,勿再回潮。
 import { buildHuangliDay } from './huangliDay.js';
 import { EVENT_CATEGORIES, EVENT_KEY_TO_CATEGORY, KEY_JI_SHEN } from './tongshuData.js';
 import { Solar } from 'lunar-javascript';
@@ -17,12 +17,9 @@ const SOFT_XIONG = ['往亡', '月厌', '大耗', '天贼', '天火', '归忌', 
 // 建除吉位加分（破日不硬排除：破屋/破土宜破日，由 lunar 宜把关）。
 const GOOD_JIANCHU = { 定: 2, 成: 2, 开: 2, 危: 1, 执: 1 };
 
-// 内存缓存：跨调用复用整年 day 对象（一年一填，切年份自然新键）。
-const dayCache = new Map();
+// 日课复用 buildHuangliDay 自带的有界 memo(超上限即清),不再另起一层无界缓存(此前按日累积、从不清理,每扫一年多 365 条)。
 function cachedDay(y, m, d) {
-	const key = `${y}-${m}-${d}`;
-	if (!dayCache.has(key)) { dayCache.set(key, buildHuangliDay(y, m, d)); }
-	return dayCache.get(key);
+	return buildHuangliDay(y, m, d);
 }
 
 // 单日对某事项类别评分；非该事项宜日 / 逢硬红线 → 返回 null（不入榜）。

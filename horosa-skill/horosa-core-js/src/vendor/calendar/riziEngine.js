@@ -6,6 +6,7 @@ import { ZHI_CHONG, ZHI_SANHE_JU, NAYIN_60 } from '../fengshui/fengshuiData.js';
 import { buildYearAuspicious } from './yearAuspicious.js';
 import { EVENT_KEY_TO_CATEGORY } from './tongshuData.js';
 import { buildHuangliDay } from './huangliDay.js';
+import { parseDateParts } from '../bazi/dateStrSafe.js';
 
 const ZHI_SHENGXIAO = { 子: '鼠', 丑: '牛', 寅: '虎', 卯: '兔', 辰: '龙', 巳: '蛇', 午: '马', 未: '羊', 申: '猴', 酉: '鸡', 戌: '狗', 亥: '猪' };
 const GAN_WX = { 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' };
@@ -18,11 +19,24 @@ const ZHI_XING = { 寅: '巳', 巳: '申', 申: '寅', 丑: '戌', 戌: '未', �
 const WX_SHENG = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };
 const WX_KE = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' };
 
+// 用神取法(params.school)→ 多派对照里对应的那一派;传统综合 / 盲派 / 纳音古法不单列喜忌,取扶抑派(与默认同)
+const YONGSHEN_SCHOOL_NAME = { fuyi: '扶抑派', geju: '格局派', tiaohou: '调候派', bingyao: '病药派', tongguan: '通关派' };
+function pickYongshen(gy, school) {
+	const g = gy || {};
+	const want = YONGSHEN_SCHOOL_NAME[school];
+	const hit = want && Array.isArray(g.schools) ? g.schools.find((s) => s && s.school === want) : null;
+	if (hit) { return { ys: hit, school: hit.school, fallback: false }; }
+	const base = g.yongshen || {};
+	return { ys: base, school: base.school || '扶抑派', fallback: !!school && !YONGSHEN_SCHOOL_NAME[school] ? true : !!want };
+}
+
 // 从生辰参数抽取择日所需八字要素（复用本地八字引擎，取年命/日主/用神喜忌）。
+// 喜忌按 params.school 所选的那一派(没选 = 扶抑派,与此前相同);返回所用派别供标注。
 export function personBazi(params) {
 	const r = buildLocalBaziResult(params);
 	const fc = r.bazi.fourColumns;
-	const ys = (r.bazi.gejuYongShen || {}).yongshen || {};
+	const picked = pickYongshen(r.bazi.gejuYongShen, params && params.school);
+	const ys = picked.ys || {};
 	const yearGZ = fc.year.ganZhi;
 	const yearZhi = fc.year.branch.cell;
 	const dayGan = fc.day.stem.cell;
@@ -30,10 +44,13 @@ export function personBazi(params) {
 	return {
 		yearGZ, yearZhi, shengxiao: ZHI_SHENGXIAO[yearZhi],
 		dayGZ: fc.day.ganZhi, dayGan, dayZhi, dayGanWx: GAN_WX[dayGan],
-		hourGZ: fc.time && fc.time.ganZhi ? fc.time.ganZhi : '',   // [Q-272] 时柱外露(供断言/展示;此前 time 传错形时柱恒子时无从察觉)
+		hourGZ: fc.time && fc.time.ganZhi ? fc.time.ganZhi : '',   // 时柱外露(供断言/展示;此前 time 传错形时柱恒子时无从察觉)
+		monthGZ: fc.month && fc.month.ganZhi ? fc.month.ganZhi : '',   // 月柱外露(两人四柱逐柱对照用;择日评分不读)
 		xi: Array.isArray(ys.xi) ? ys.xi : [],
 		ji: Array.isArray(ys.ji) ? ys.ji : [],
 		verdict: ys.verdict || '',
+		ysSchool: picked.school,
+		ysFallback: picked.fallback,
 		nayinYear: (NAYIN_60[yearGZ] || {}).name || '',
 		nayinYearWx: (NAYIN_60[yearGZ] || {}).wuxing || '',
 	};
@@ -118,7 +135,7 @@ export function buildPersonalizedDates({ event = 'marriage', persons = [], year,
 
 	const out = [];
 	baseList.forEach((b)=>{
-		const [y, m, d] = b.ymd.split('-').map((n)=> parseInt(n, 10));
+		const { year: y, month: m, day: d } = parseDateParts(b.ymd) || {};   // 日期串单源拆(年带符号)
 		const day = buildHuangliDay(y, m, d);
 		let total = b.score;
 		let blocked = false;

@@ -4,7 +4,7 @@ import { SIGNS } from '../data/signs.js';
 import { DIR_BY_ELEMENT } from '../data/directions.js';
 import { MEAN_DAILY_MOTION } from '../data/planets.js';
 
-// [H2 应期修复] 九格表补全:传统口径为**单调递进**(角=最快带,续=中带,果=最慢带;
+// 九格表补全:传统口径为**单调递进**(角=最快带,续=中带,果=最慢带;
 // 座内 动<变<固)。旧表五格塌成「几乎无望」且当单位拼进数字产出「约 3.2 几乎无望」畸形串。
 // 果×固保留「极久(难期)」附注语义——由 hopeless 标记驱动文案分叉,不再作可拼数的单位。
 const UNIT_TABLE = {
@@ -42,7 +42,7 @@ export function timingFrom(facts, sigKey, orbDeg, opts){
 		else if(both('angular')){ unit = '月'; byHouseOverride = true; }
 	}
 	const qty = (orbDeg !== null && orbDeg !== undefined) ? Math.round(orbDeg * 10) / 10 : null;
-	// [复审C4] byHouse 真覆盖单位时抑制 hopeless 附注——否则「约 2.0 天…应期极久难期」自相矛盾。
+	// byHouse 真覆盖单位时抑制 hopeless 附注——否则「约 2.0 天…应期极久难期」自相矛盾。
 	const hopeless = !byHouseOverride && !!((HOPELESS_CELL[p.angularity] || {})[mod]);
 	const out = {
 		unit, quantity: qty, hopeless,
@@ -71,7 +71,7 @@ export function timingFrom(facts, sigKey, orbDeg, opts){
 		out.modifiers = mods;
 		out.adjustedQuantity = Math.round(adj * 10) / 10;
 	}
-	// [H2] 副应期:征象星/月亮换座(距 30° 的度数按当前速度折算天数)——传统「换座=事态换阶段」。
+	// 副应期:征象星/月亮换座(距 30° 的度数按当前速度折算天数)——传统「换座=事态换阶段」。
 	if(qty !== null && p.signlon !== undefined && p.speed){
 		const remain = 30 - p.signlon;
 		const spd = Math.abs(p.speed);
@@ -79,7 +79,7 @@ export function timingFrom(facts, sigKey, orbDeg, opts){
 			out.signChange = { deg: Math.round(remain * 10) / 10, days: Math.round((remain / spd) * 10) / 10 };
 		}
 	}
-	// [H2] 留驻修正(timingStationAware 门控,default 关=零回归):后端 stationState('S'留/'D'回顺)
+	// 留驻修正(timingStationAware 门控,default 关=零回归):后端 stationState('S'留/'D'回顺)
 	// 在场时,留驻星主导的应期附「临留驻,事有停滞/转折」注记。
 	if(opts.timingStationAware && p.stationState){
 		out.stationNote = p.stationState === 'S' ? '入相星临留驻(将转向)→ 事有停滞,应期常另起算' : '入相星刚回顺 → 停滞方过,事渐启动';

@@ -93,7 +93,7 @@ export const QIGUA_FA_INPUTS = {
 };
 export function qiguaFaInputs(fa) { return QIGUA_FA_INPUTS[fa] || []; }
 
-// [Q-204/T-165①·BG-25] 起卦法属逐问题输入(报数/物数/字占…),不属流派口径:不参与 sameAsPreset(选报数起卦
+// 起卦法属逐问题输入(报数/物数/字占…),不属流派口径:不参与 sameAsPreset(选报数起卦
 //   不再把流派打成「自定义」),applyPreset(presetKey, current) 切派保留当前起卦法(此前打回年月日时)。
 export const GUICE_NON_SCHOOL_KEYS = ['qiguaFa'];
 

@@ -1,13 +1,16 @@
 
+
+import { leapPrefix } from '../utils/lunarText.js';
 import {
 	parseSnapshotSections,
 	SANSHI_TAIYI_SECTION_TITLES,
 	SANSHI_QIMEN_EXTRA_SECTIONS,
 	SANSHI_LIURENG_DUANGUA_SECTIONS,
 } from './sanshiSnapshotSections.js';
-// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的 getViewportHeight；headless 无视口。
+// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的视口高度；headless 无视口。
 // 定义同名函数让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。
-function getLayoutViewportHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }
+// 上游 v3.12.0 起改名 getLayoutViewportHeight → getPageLayoutHeight。
+function getPageLayoutHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }
 
 
 
@@ -19,16 +22,19 @@ import { splitDegree, convertLatToStr, convertLonToStr } from './sanshiAstroHelp
 
 
 
+
+
+
 import * as LRConst from '../liureng/LRConst.js';
 import ChuangChart from '../liureng/ChuangChart.js';
-import { sanChuanRelationSnapshotLines } from '../liureng/LRSanChuanRelationMini.js';   // [Q-450/T-413] 三传递生递克/徽记单源(三式同步)
+import { sanChuanRelationSnapshotLines } from '../liureng/LRSanChuanRelationMini.js';   // 三传递生递克/徽记单源(三式同步)
 import {
 	PAIPAN_OPTIONS,
 	ZHISHI_OPTIONS,
 	YUEJIA_QIJU_OPTIONS,
 	QIJU_METHOD_OPTIONS,
 	qijuMethodOptionsFor,
-	qijuMethodSelectValue,   // [Q-161/T-79] 起局下拉单一真值源(与独立奇门页同源)
+	qijuMethodSelectValue,   // 起局下拉单一真值源(与独立奇门页同源)
 	KONG_MODE_OPTIONS,
 	MA_MODE_OPTIONS,
 	YIXING_OPTIONS,
@@ -52,6 +58,11 @@ import {
 	KEJIA_FENDUN_OPTIONS,
 	JINHAN_MENPAI_OPTIONS,
 	YEARJIA_JU_OPTIONS,
+	qijuMethodUsesJieqiFa,
+	migrateLegacyQimenSchool,
+	FEI_MEN_ZHONG_CAN_LABELS,
+	MIX_LAYER_LABELS,
+	mixLayerDefaultLabel,
 } from '../dunjia/DunJiaCalc.js';
 
 import { buildSanShiZiweiSihuaSnapshotLines } from './SanShiZiWeiSihua.js';
@@ -64,12 +75,13 @@ import { buildSanShiZiweiSihuaSnapshotLines } from './SanShiZiWeiSihua.js';
 
 
 
+import { normalizeZone } from '../utils/zoneText.js';
 import {
 	TAIYI_STYLE_OPTIONS,
 	TAIYI_ACCUM_OPTIONS,
 	buildTaiyiSnapshotLines,
 } from '../taiyi/core/TaiYiCore.js';
-import { buildTaiyiSnapshotText, TIME_BASIS_OPTIONS as TAIYI_TIME_BASIS_OPTIONS } from '../taiyi/TaiYiCalc.js';   // [Q-107 A] 时间基准选项与独立太乙页同源
+import { buildTaiyiSnapshotText, TIME_BASIS_OPTIONS as TAIYI_TIME_BASIS_OPTIONS } from '../taiyi/TaiYiCalc.js';   // 时间基准选项与独立太乙页同源
 
 
 
@@ -80,7 +92,7 @@ import { appendPlanetHouseInfo, } from '../utils/planetHouseInfo.js';
 
 
 
-// [Q-385/T-366] 年神排序 / 土旺衰两档此前在合一页只经 pickSanshiLiurengCastOpts 进 AI 快照,
+// 年神排序 / 土旺衰两档此前在合一页只经 pickSanshiLiurengCastOpts 进 AI 快照,
 // 页面无任何落点(帮助却称「与独立页同名同义」「改年神在右栏的排列起点」)。补右栏落点,与独立页同源同函数。
 
 
@@ -93,6 +105,8 @@ import {
 	buildOverviewReferenceText,
 	buildLiuRengSnapshotText,
 	getYueJiangByMethod,
+	liurengSeHaiOptsOf,
+	liurengFenZhouYeDiurnal,
 	XIAO_JU_REFERENCE_TAB_KEYS,
 	buildQiZhengItems,
 	QIZHENG_PLANET_COLOR,
@@ -112,6 +126,13 @@ import {
 
 
 
+
+import { clamp, safe, resolveCalcGeo, buildDisplaySolarParams, getNongliKey } from '../dunjia/qimenPageShared.js';
+
+
+
+
+export { clamp, safe };
 
 const BRANCH_ORDER = '子丑寅卯辰巳午未申酉戌亥'.split('');
 const STEM_ORDER = '甲乙丙丁戊己庚辛壬癸'.split('');
@@ -147,12 +168,8 @@ function normalizeKenQimenOptions(options){
 	const next = {
 		...(options || {}),
 	};
-	// 旧数据迁移(对齐独立 DunJiaMain):阴盘曾为「盘式」(school='阴盘'),现为「起局法」(qijuMethod='shuzi',报数定局)。
-	if(next.school === '阴盘'){
-		next.school = '转盘';
-		next.qijuMethod = 'shuzi';
-	}
-	return next;
+	// 旧数据迁移(对齐独立 DunJiaMain,单源 migrateLegacyQimenSchool):阴盘曾为「盘式」(school='阴盘'),现为「起局法」(qijuMethod='shuzi',报数定局)。
+	return migrateLegacyQimenSchool(next);
 }
 const SANSHI_PALACE_EXPORT_ORDER = [
 	{ title: '正北坎宫', palaceNum: 8, branches: ['子'] },
@@ -164,17 +181,6 @@ const SANSHI_PALACE_EXPORT_ORDER = [
 	{ title: '正西兑宫', palaceNum: 6, branches: ['酉'] },
 	{ title: '西北乾宫', palaceNum: 9, branches: ['戌', '亥'] },
 ];
-const PALACE_GRID = {
-	1: { row: 2, col: 2 },
-	2: { row: 2, col: 3 },
-	3: { row: 2, col: 4 },
-	4: { row: 3, col: 2 },
-	5: { row: 3, col: 3 },
-	6: { row: 3, col: 4 },
-	7: { row: 4, col: 2 },
-	8: { row: 4, col: 3 },
-	9: { row: 4, col: 4 },
-};
 
 export const QIMEN_OPTIONS = {
 	sex: 1,
@@ -196,10 +202,10 @@ export const QIMEN_OPTIONS = {
 	school: '转盘',
 	shuziReportNumber: '',
 	zhirunLeapDays: 9,
-	chartCategory: 'shi',   // [H-A] 盘类(事局/命局):此前三式完全缺失,挂载齿轮却经 reTagSanshi 暴露=调了不消费
-	faRelatedPeople: '',    // [H-A] 相关人员(法奇门必护天干消费):此前三式缺失
-	godsPreset: 'baihu_xuanwu',   // [H-B] 八神预设
-	anGanMode: 'off',             // [H-B] 暗干五法
+	chartCategory: 'shi',   // 盘类(事局/命局):此前三式完全缺失,挂载齿轮却经 reTagSanshi 暴露=调了不消费
+	faRelatedPeople: '',    // 相关人员(法奇门必护天干消费):此前三式缺失
+	godsPreset: 'baihu_xuanwu',   // 八神预设
+	anGanMode: 'off',             // 暗干五法
 	showAnZhi: false,
 	jiGongMode: 'kun',
 	feiXingShun: false,
@@ -278,7 +284,7 @@ export const LIURENG_RING_LAYOUT = {
 	寅: { left: '25.9%', top: '70.4%', kind: 'corner' }, // 西南角-上三角
 };
 
-// needJieqiYearSeed 已收编到 DunJiaCalc(独立页/三式/择日单源;[Q-155] 此前三式只认「时家+置闰」→ 日家/金函/飞混茅山无闰/刻家不取种子局错)。
+// needJieqiYearSeed 已收编到 DunJiaCalc(独立页/三式/择日单源;此前三式只认「时家+置闰」→ 日家/金函/飞混茅山无闰/刻家不取种子局错)。
 
 export const QIMEN_RING_POSITIONS = {
 	1: { left: '16.7%', top: '16.7%' },
@@ -390,7 +396,9 @@ export const SANSHI_PAGE_SETTINGS = definePageSettings('horosa.sanshi.settings.v
 	paiPanType: { def: 3, oneOf: optVals(PAIPAN_OPTIONS) },
 	zhiShiType: { def: 0, oneOf: optVals(ZHISHI_OPTIONS) },
 	yueJiaQiJuType: { def: 0, oneOf: optVals(YUEJIA_QIJU_OPTIONS) },
-	qijuMethod: { def: 'zhirun', oneOf: optVals(QIJU_METHOD_OPTIONS) },   // 候选随排盘体例增减(时家 / 刻家 5 档,其余 2 档),全集固定
+	// 候选随排盘体例增减(时家 / 刻家 5 档,其余 2 档),全集固定。阴盘(报数定局)离不开每一课的报数,不进候选(与奇门页同):
+	// 选了照常用,只是不记 —— 否则重开后标签写阴盘、报数是空的,实际按拆补起局
+	qijuMethod: { def: 'zhirun', oneOf: optVals(QIJU_METHOD_OPTIONS).filter((v)=>v !== 'shuzi') },
 	school: { def: '转盘', oneOf: optVals(SCHOOL_OPTIONS) },
 	kongMode: { def: 'day', oneOf: optVals(KONG_MODE_OPTIONS) },
 	yimaMode: { def: 'day', oneOf: optVals(MA_MODE_OPTIONS) },
@@ -435,14 +443,14 @@ export const SANSHI_PAGE_SETTINGS = definePageSettings('horosa.sanshi.settings.v
 	yinyangSystem: { def: 'danmu', oneOf: optVals(LR_YINYANG_SYSTEM_OPTIONS) },
 	tuWangShuai: { def: 'siji', oneOf: optVals(LR_TUWANG_OPTIONS) },
 	// 外圈两项不在 options 里,是组件自己的 state(控件直接绑 this.state.X)
-	outerCoord: { def: 'ecliptic', oneOf: ['ecliptic', 'equatorial'] },
-	showWeakSolid: { def: true },
+	outerCoord: { label: '外圈', def: 'ecliptic', oneOf: ['ecliptic', 'equatorial'] },
+	showWeakSolid: { label: '虚实', def: true },
 });
 
 // 🔴 改值即强制重算的「计算型」option key 全集(三式合一各子盘的盘面计算输入)。
 // 这些 key 都已被 recalcSignature(performRecalcByNongli)消费(经 getQimenOptions / getKintaiyiPan / 六壬 castOverride),
 // 但 refreshAll 的轻量 lastKey 不含它们 → 必须在 onOptionChange 显式 refreshAll(force) 才会真重算重画。
-// after23NewDay/lateZiHourUseNextDay 已在上方单独处理(还要 prefetch),故不入本集;mode(命局/事局)只管保存去向(命盘/事盘),不改盘,亦不入。[Q-164/T-90·SS-22⑥]
+// after23NewDay/lateZiHourUseNextDay 已在上方单独处理(还要 prefetch),故不入本集;mode(命局/事局)只管保存去向(命盘/事盘),不改盘,亦不入。
 const SANSHI_RECALC_OPTION_KEYS = new Set([
 	// 奇门(经 getQimenOptions + fetchQimenPan/calcDunJia)
 	'paiPanType', 'zhiShiType', 'yueJiaQiJuType', 'qijuMethod', 'kongMode', 'yimaMode', 'shiftPalace',
@@ -455,7 +463,7 @@ const SANSHI_RECALC_OPTION_KEYS = new Set([
 	'jinhanMenPai',
 	'yearJiaJu',
 	// 太乙(经 getKintaiyiPan + applyTaiyiSchool)
-	'taiyiStyle', 'taiyiAccum', 'taiyiSchool', 'gameTheory', 'taiyiTimeBasis',   // [Q-107 A] 太乙时间基准(与独立太乙页同源选项)
+	'taiyiStyle', 'taiyiAccum', 'taiyiSchool', 'gameTheory', 'taiyiTimeBasis',   // 太乙时间基准(与独立太乙页同源选项)
 	// 大六壬(经 guirengType + buildSanshiLiuRengCastOverride)
 	'guireng', 'yueJiangMethod', 'fenZhouYe', 'seHaiMethod', 'seHaiBoundary', 'shiRuKe',
 	'yearShenShaSort', 'yinyangSystem', 'tuWangShuai',
@@ -470,7 +478,14 @@ const DAY_SWITCH_OPTIONS = [
 
 const SANSHI_BOARD_MIN = 380;
 const SANSHI_BOARD_MAX = 820;
+// 盘面可读底线(CSS px):放大档 × 高度不够时,盘宁可让中栏纵向滚,也不压到这个边长以下(只要栏宽放得下)。
+// 380 的视觉底线在 1.8 档只剩 211 CSS px,格内字号不随盘缩 → 宫格字叠成一团;常规档盘远大于它,零变化。
+export const SANSHI_BOARD_READABLE_MIN = 360;
 const SANSHI_FAST_BUDGET_MS = 2200;
+// 参照盘(/chart 底盘)是别的起课时刻的时,最多等这一刻的参照盘这么久;等不到就不用参照盘落这一课(月将 / 外圈留空)
+export const SANSHI_CAST_CHART_WAIT_MS = 1500;
+// performRecalcByNongli 的「这一课先不落、等这一刻的参照盘」返回值(调用方据此不收加载态)
+export const SANSHI_RECALC_HELD = 'held';
 const SANSHI_RECALC_DEFER_MS = 28;
 const SANSHI_SNAPSHOT_DEFER_MS = 120;
 const AI_EXPORT_PLANET_INFO = {
@@ -478,25 +493,18 @@ const AI_EXPORT_PLANET_INFO = {
 	showRuler: 1,
 };
 
-export function clamp(val, min, max){
-	return Math.max(min, Math.min(max, val));
-}
-
 function getViewportHeight(){
 	// 🔴 innerHeight/documentElement.clientHeight 恒报物理域;壳缩放≠1 时当布局高用会
 	// 把整页配矮(底部死带)。走 getLayoutViewportHeight —— 它**直接量** fixed 铺满元素,
 	// 不做任何缩放换算,故与引擎的 zoom 语义无关(2026-08-27 根修,见 zoomDomain)。
 	if(typeof window !== 'undefined' && Number.isFinite(window.innerHeight) && window.innerHeight > 0){
-		return getLayoutViewportHeight();
+		// 页面排版视口:地板到工作区包络高 560(工作区按下限排、外层可滚;不地板则盘按矮视口排、与工作区脱节)
+		return getPageLayoutHeight();
 	}
 	if(typeof document !== 'undefined' && document.documentElement){
 		return document.documentElement.clientHeight || 900;
 	}
 	return 900;
-}
-
-export function safe(v, d = ''){
-	return v === undefined || v === null ? d : v;
 }
 
 function normalizeTimeAlg(value){
@@ -507,68 +515,8 @@ function getTimeAlgLabel(value){
 	return normalizeTimeAlg(value) === 1 ? '直接时间' : '真太阳时';
 }
 
-function parseZoneOffsetHour(zone){
-	const text = `${safe(zone, '')}`.trim();
-	if(!text){
-		return null;
-	}
-	const mStd = text.match(/^([+-])(\d{1,2})(?::?(\d{2}))?$/);
-	if(mStd){
-		const sign = mStd[1] === '-' ? -1 : 1;
-		const hh = parseInt(mStd[2], 10);
-		const mm = parseInt(mStd[3] || '0', 10);
-		if(!Number.isNaN(hh) && !Number.isNaN(mm)){
-			return sign * (hh + mm / 60);
-		}
-	}
-	const mUtc = text.match(/^(?:UTC|GMT)\s*([+-])(\d{1,2})(?::?(\d{2}))?$/i);
-	if(mUtc){
-		const sign = mUtc[1] === '-' ? -1 : 1;
-		const hh = parseInt(mUtc[2], 10);
-		const mm = parseInt(mUtc[3] || '0', 10);
-		if(!Number.isNaN(hh) && !Number.isNaN(mm)){
-			return sign * (hh + mm / 60);
-		}
-	}
-	const mCn = text.match(/^([东西])\s*(\d{1,2})(?:[:：]?(\d{1,2}))?\s*区?$/);
-	if(mCn){
-		const sign = mCn[1] === '西' ? -1 : 1;
-		const hh = parseInt(mCn[2], 10);
-		const mm = parseInt(mCn[3] || '0', 10);
-		if(!Number.isNaN(hh) && !Number.isNaN(mm)){
-			return sign * (hh + mm / 60);
-		}
-	}
-	const numeric = Number(text);
-	if(Number.isFinite(numeric)){
-		return numeric;
-	}
-	return null;
-}
-
-function formatZoneOffset(zoneHour){
-	if(zoneHour === undefined || zoneHour === null || Number.isNaN(zoneHour)){
-		return '+08:00';
-	}
-	const sign = zoneHour < 0 ? '-' : '+';
-	const abs = Math.abs(zoneHour);
-	let hh = Math.floor(abs);
-	let mm = Math.round((abs - hh) * 60);
-	if(mm >= 60){
-		hh += 1;
-		mm -= 60;
-	}
-	return `${sign}${`${hh}`.padStart(2, '0')}:${`${mm}`.padStart(2, '0')}`;
-}
-
-function normalizeZoneOffset(zone, fallback = '+08:00'){
-	const parsed = parseZoneOffsetHour(zone);
-	if(parsed === null || Number.isNaN(parsed)){
-		const fbParsed = parseZoneOffsetHour(fallback);
-		return formatZoneOffset(fbParsed === null || Number.isNaN(fbParsed) ? 8 : fbParsed);
-	}
-	return formatZoneOffset(parsed);
-}
+// 时区串规范化单源 utils/zoneText.normalizeZone(与精确历法桥同一份)
+const normalizeZoneOffset = normalizeZone;
 
 function normalizeAdValue(ad, fallback = 1){
 	const text = `${safe(ad, '')}`.trim().toUpperCase();
@@ -585,62 +533,15 @@ function normalizeAdValue(ad, fallback = 1){
 	return fallback === -1 ? -1 : 1;
 }
 
-function resolveCalcGeo(fields, options){
-	const lon = safe(fields && fields.lon && fields.lon.value, '');
-	const lat = safe(fields && fields.lat && fields.lat.value, '');
-	const gpsLon = safe(fields && fields.gpsLon && fields.gpsLon.value, '');
-	const gpsLat = safe(fields && fields.gpsLat && fields.gpsLat.value, '');
-	// timeAlg 仅用于“计算基准”切换，不应改写显示真太阳时所依赖的地理位置。
-	return { lon, lat, gpsLon, gpsLat };
-}
-
-function buildDisplaySolarParams(params){
-	if(!params){
-		return null;
-	}
-	return {
-		...params,
-		timeAlg: 0,
-	};
-}
-
 function timeoutResolve(ms, value = null){
 	return new Promise((resolve)=>{
 		setTimeout(()=>resolve(value), ms);
 	});
 }
 
-const TIANJIANG_SHORT_MAP = {
-	贵人: '贵',
-	螣蛇: '蛇',
-	腾蛇: '蛇',
-	朱雀: '朱',
-	六合: '合',
-	勾陈: '勾',
-	青龙: '龙',
-	天空: '空',
-	白虎: '虎',
-	太常: '常',
-	玄武: '玄',
-	太阴: '阴',
-	天后: '后',
-};
-
+// 天将缩写:与六壬页同一张表(liureng/LRConst.TIANJIANG_SHORT,三式合一同步铁律);三式盘空位显示「—」
 export function shortTianJiang(name){
-	const text = `${safe(name, '')}`.trim();
-	if(!text){
-		return '—';
-	}
-	if(TIANJIANG_SHORT_MAP[text]){
-		return TIANJIANG_SHORT_MAP[text];
-	}
-	if(text.length === 1){
-		return text;
-	}
-	if(text.startsWith('天') || text.startsWith('太')){
-		return text.substring(text.length - 1);
-	}
-	return text.substring(0, 1);
+	return LRConst.shortTianJiang(name) || '—';
 }
 
 export function splitGanZhi(gz){
@@ -727,7 +628,7 @@ export function fmtLunar(nongli){
 	if(!nongli){
 		return '';
 	}
-	return `农历${safe(nongli.month)}${safe(nongli.day)}`;
+	return `农历${leapPrefix(nongli)}${safe(nongli.month)}${safe(nongli.day)}`;   // 闰:单源 leapPrefix(只在月名缺「闰」时补)
 }
 
 function msg(key){
@@ -780,20 +681,6 @@ function getFieldSyncKey(fields){
 	].join('|');
 }
 
-function getNongliKey(nongli){
-	if(!nongli){
-		return '';
-	}
-	return [
-		safe(nongli.yearGanZi),
-		safe(nongli.monthGanZi),
-		safe(nongli.dayGanZi),
-		safe(nongli.time),
-		safe(nongli.jieqi),
-		safe(nongli.runyear),
-	].join('|');
-}
-
 function getQimenOptionsKey(options){
 	if(!options){
 		return '';
@@ -820,7 +707,7 @@ function getQimenOptionsKey(options){
 		safe(options.school),
 		safe(options.shuziReportNumber),
 		safe(options.zhirunLeapDays),
-		// [H-H] 🔴 同独立页:缓存键维度完备,新引擎键全入(漏=三式改档死开关)。哨兵测试守。
+		// 🔴 同独立页:缓存键维度完备,新引擎键全入(漏=三式改档死开关)。哨兵测试守。
 		safe(options.godsPreset),
 		safe(options.jiGongMode),
 		safe(options.anGanMode),
@@ -911,23 +798,14 @@ export function getOuterChartKey(chartWrap){
 	].join('|');
 }
 
+// 与六壬页同一实现(三式同步:六壬页修了分昼夜口径,三式合一与两个择日扫描自动跟上)
 function computeSanshiFenZhouYe(fenZhouYe, chartObj){
-	if(fenZhouYe !== 'maoyou' && fenZhouYe !== 'yinshen'){
-		return undefined;
-	}
-	if(!chartObj || !chartObj.nongli || !chartObj.nongli.time){
-		return undefined;
-	}
-	const timezi = chartObj.nongli.time.substr(1);
-	const dayBranches = fenZhouYe === 'maoyou'
-		? ['卯', '辰', '巳', '午', '未', '申']
-		: ['寅', '卯', '辰', '巳', '午', '未'];
-	return dayBranches.indexOf(timezi) >= 0;
+	return liurengFenZhouYeDiurnal(fenZhouYe, chartObj);
 }
 
 // 汇总 大六壬流派(换将/分昼夜/涉害取舍/昼夜阳阴归属)→ castOverride;全默认返回 null(零回归)。
 // 与独立 lrzhan/buildLiuRengCastOverride 同款语义(三式合一只支持「正时正将」起课法,不含 25 起课变体)。
-// [挂载自检 三式 P0] 三式合一 → 六壬断卦层的 castOpts 形态(与 buildLiuRengSnapshotText 第 8 参同键;三式锁正时正将)。
+// 三式合一 → 六壬断卦层的 castOpts 形态(与 buildLiuRengSnapshotText 第 8 参同键;三式锁正时正将)。
 export function pickSanshiLiurengCastOpts(opts, nongli){
 	const o = opts && typeof opts === 'object' ? opts : {};
 	const solarYear = Number(o.solarYear) || (nongli && Number(nongli.solarYear)) || undefined;
@@ -946,6 +824,8 @@ export function pickSanshiLiurengCastOpts(opts, nongli){
 	};
 }
 
+export const SANSHI_TRUE_SOLAR_FALLBACK_NOTE = '(历法服务暂不可用,本次农历按真太阳时)';
+
 export function buildSanshiLiuRengCastOverride(chartObj, opts){
 	opts = opts || {};
 	if(!chartObj || !chartObj.nongli){
@@ -954,11 +834,7 @@ export function buildSanshiLiuRengCastOverride(chartObj, opts){
 	const yueJiangMethod = opts.yueJiangMethod || 'zhongqi';
 	const fenZhouYe = opts.fenZhouYe || 'chenhun';
 	const isDiurnal = computeSanshiFenZhouYe(fenZhouYe, chartObj);
-	const seHaiOpts = {
-		method: opts.seHaiMethod || 'app',
-		boundary: opts.seHaiBoundary || 'app',
-		shiRuKe: !!opts.shiRuKe,
-	};
+	const seHaiOpts = liurengSeHaiOptsOf(opts);
 	const seHaiDefault = seHaiOpts.method === 'app' && seHaiOpts.boundary === 'app' && !seHaiOpts.shiRuKe;
 	const yinyangSystem = opts.yinyangSystem === 'yinyang' ? 'yinyang' : 'danmu';
 	const yearShenShaSort = opts.yearShenShaSort || 'sanyuan'; // 年神排序(默认四利三元序);三式合一原 override 漏传→六壬子盘 AI 快照年神恒默认
@@ -985,7 +861,8 @@ export function buildLiuRengLayout(chartObj, guirengType, castOverride){
 	const downZi = LRConst.ZiList.slice(0);
 	const upZi = LRConst.ZiList.slice(0);
 	const yueIndexs = [];
-	const timezi = chartObj.nongli.time.substr(1);
+	// 临位(地盘临位)与六壬页同口径:可被 castOverride.timeZhi 覆盖;缺省=正时。
+	const timezi = (castOverride && castOverride.timeZhi) || chartObj.nongli.time.substr(1);
 	const yueIdx = LRConst.ZiList.indexOf(yue);
 	const tmIdx = LRConst.ZiList.indexOf(timezi);
 	if(yueIdx < 0 || tmIdx < 0){
@@ -1005,13 +882,18 @@ export function buildLiuRengLayout(chartObj, guirengType, castOverride){
 		castOverride ? castOverride.isDiurnal : undefined,
 		castOverride ? castOverride.yinyangSystem : undefined
 	);
-	let houseidx = 0;
+	// 贵人未命中即判失败(与六壬页 buildLiuRengLayout 同口径):不再静默落子位、让十二天将整环偏移;
+	// 宁可不出盘也不出错盘,调用方按 null 走不出盘分支。
+	let houseidx = -1;
 	for(let i=0; i<12; i++){
 		const zi = LRConst.ZiList[yueIndexs[i]];
 		if(zi === guizi){
 			houseidx = i;
 			break;
 		}
+	}
+	if(houseidx < 0){
+		return null;
 	}
 	const housezi = LRConst.ZiList[houseidx];
 	if(LRConst.SummerZiList.indexOf(housezi) >= 0){
@@ -1067,7 +949,7 @@ export function buildKeData(layout, chartObj){
 	const ke4 = [idx4 >= 0 ? layout.houseTianJiang[idx4] : '', ke4zi, ke3zi];
 
 	result.raw = [ke1, ke2, ke3, ke4];
-	// [Q-153] 标签与 raw 同序(ke1=一课 日干上神 … ke4=四课);此前 四→一 反标(无消费方,顺手对齐防再被引用)。
+	// 标签与 raw 同序(ke1=一课 日干上神 … ke4=四课);此前 四→一 反标(无消费方,顺手对齐防再被引用)。
 	result.lines = [
 		`一课 ${ke1[2]}${ke1[1]}${ke1[0]}`,
 		`二课 ${ke2[2]}${ke2[1]}${ke2[0]}`,
@@ -1417,7 +1299,7 @@ export function buildSanShiUnitedSnapshotText(data){
 		lrCastOverride,
 		lrCastOpts,
 		liurengRunYear,
-		// [YA v42] 紫微四化 tab 上报的 {chart,daxianIdx,liunianIdx};缺省(旧调用/tab 未开)不产段。
+		// 紫微四化 tab 上报的 {chart,daxianIdx,liunianIdx};缺省(旧调用/tab 未开)不产段。
 		ziweiSihua,
 	} = data || {};
 	if(!dunjia || !keData || !sanChuan || !lrLayout){
@@ -1425,7 +1307,8 @@ export function buildSanShiUnitedSnapshotText(data){
 	}
 	const lines = [];
 	const timeAlg = normalizeTimeAlg(options && options.timeAlg);
-	const timeAlgLabel = getTimeAlgLabel(timeAlg);
+	// 历法服务与本地都给不出、退回主盘农历(恒按真太阳时)时如实标注(与太乙「本次按直接时间立局」同做法)
+	const timeAlgLabel = `${getTimeAlgLabel(timeAlg)}${nongli && nongli.__trueSolarFallback ? SANSHI_TRUE_SOLAR_FALLBACK_NOTE : ''}`;
 	const direct = fmtDirect(fields);
 	const solar = fmtSolar(fields, dunjia, nongli, displaySolarTime);
 	const directText = `${safe(direct.date, '—')} ${safe(direct.hm, '—')}`.trim();
@@ -1460,12 +1343,12 @@ export function buildSanShiUnitedSnapshotText(data){
 		`本旬：${_xun.benXun}`,
 		`旬空：${_xun.riKong}`,
 		`时空：${_xun.shiKong}`,
-		// [Q-319/T-316] yiMa.text 本身已带「日马:」/「时马:」前缀(驿马取法可选日马/时马),此处再加一层
+		// yiMa.text 本身已带「日马:」/「时马:」前缀(驿马取法可选日马/时马),此处再加一层
 		// → 快照与导出出现「日马:日马:申(坤二宫)」,选时马时更成「日马:时马:…」自相矛盾。直接用其自带前缀。
 		`${dunjia.yiMa && dunjia.yiMa.text ? dunjia.yiMa.text : '日马：无'}`,
 		`阴阳遁：${safe(dunjia.yinYangDun, '—')}`,
 		`月将：${yuejiang}`,
-		// [Q-160/T-78] 封局 / 四柱空亡随开关入快照(缺省关=不产行,字节不变)
+		// 封局 / 四柱空亡随开关入快照(缺省关=不产行,字节不变)
 		...(dunjia.fengJu ? ['奇门封局：已封局'] : []),
 		...(dunjia.allKong ? [`四柱空亡：年空${safe(dunjia.allKong.年空, '—')}、月空${safe(dunjia.allKong.月空, '—')}、日空${safe(dunjia.allKong.日空, '—')}、时空${safe(dunjia.allKong.时空, '—')}`] : []),
 	]);
@@ -1495,8 +1378,8 @@ export function buildSanShiUnitedSnapshotText(data){
 		const god = safe(sanChuan && sanChuan.tianJiang && sanChuan.tianJiang[idx], '');
 		return god ? `${gz}（${god}）` : gz;
 	};
-	// [Q-153/T-70] raw[0]=一课(日干上神)…raw[3]=四课,与盘面 SanshiUnitedBoard、独立六壬页、帮助文同序(此前 3→0 颠倒)。
-	// [Q-450/T-413] 三传递生递克 + 逐传空/禄/马徽记(与独立六壬页、右栏小图同一纯函数;三式同步铁律)。
+	// raw[0]=一课(日干上神)…raw[3]=四课,与盘面 SanshiUnitedBoard、独立六壬页、帮助文同序(此前 3→0 颠倒)。
+	// 三传递生递克 + 逐传空/禄/马徽记(与独立六壬页、右栏小图同一纯函数;三式同步铁律)。
 	const _ssCtx = (liurengRefBundle && liurengRefBundle.context) || null;
 	const _ssRelLines = (_ssCtx && Array.isArray(_ssCtx.sanChuanBranches) && _ssCtx.sanChuanBranches.length >= 3)
 		? sanChuanRelationSnapshotLines({
@@ -1571,7 +1454,7 @@ export function buildSanShiUnitedSnapshotText(data){
 		}
 		if(liurengFull){
 			const liurengSectionMap = parseSnapshotSections(liurengFull);
-			// [Q-451/T-414] 段单补「七政」:独立六壬快照有 [七政] 段、三式合一也有「七政」页签,此前挑段单漏它 → 该段被丢
+			// 段单补「七政」:独立六壬快照有 [七政] 段、三式合一也有「七政」页签,此前挑段单漏它 → 该段被丢
 			appendPickedSections(lines, liurengSectionMap, SANSHI_LIURENG_DUANGUA_SECTIONS, '');
 		}
 	}
@@ -1582,7 +1465,7 @@ export function buildSanShiUnitedSnapshotText(data){
 		});
 	}
 	const lrBranchMap = buildLiuRengBranchMap(lrLayout);
-	// [Q-451/T-414] 与盘面同源:外圈虚实点按 buildSanshiWeakSolid(四柱地支定实 / 四柱旬空推虚)
+	// 与盘面同源:外圈虚实点按 buildSanshiWeakSolid(四柱地支定实 / 四柱旬空推虚)
 	const weakSolidMap = (()=>{ try{ return buildSanshiWeakSolid(dunjia); }catch(e){ return null; } })();
 	const starsByBranch = outerData && outerData.starsByBranchFull ? outerData.starsByBranchFull
 		: (outerData && outerData.starsByBranch ? outerData.starsByBranch : {});
@@ -1596,7 +1479,7 @@ export function buildSanShiUnitedSnapshotText(data){
 			const lr = lrBranchMap[branch] || {};
 			const stars = Array.isArray(starsByBranch[branch]) ? starsByBranch[branch] : [];
 			body.push(`「${branch}-${safe(BRANCH_ZODIAC_MAP[branch], '未知星座')}」`);
-			// [Q-451/T-414] 盘面外圈画了「人事宫位号」与「虚实红绿点」(四柱地支定实 / 旬空推虚),快照此前两样都没有 →
+			// 盘面外圈画了「人事宫位号」与「虚实红绿点」(四柱地支定实 / 旬空推虚),快照此前两样都没有 →
 			//   AI 看不到盘上最显眼的两层标注。此处逐支补齐(无数据不产行,缺省字节零变化)。
 			const houseNos = outerData && outerData.housesByBranch && Array.isArray(outerData.housesByBranch[branch]) ? outerData.housesByBranch[branch] : [];
 			if(houseNos.length){ body.push(`人事宫位：第 ${houseNos.join('、')} 宫`); }
@@ -1652,7 +1535,7 @@ export function buildSanShiUnitedSnapshotText(data){
 	// (避免与六壬「概览」等碰撞)——独立遁甲页有、三式合一此前缺这 ~9 段。
 	const qimenSectionMap = parseSnapshotSections(buildDunJiaSnapshotText(dunjia));
 	appendPickedSections(lines, qimenSectionMap, SANSHI_QIMEN_EXTRA_SECTIONS, '奇门');
-	// [YA v42] A 类硬缺:紫微四化叠加 tab(SanShiZiWeiSihua 独立计算)显示了却不入快照。
+	// A 类硬缺:紫微四化叠加 tab(SanShiZiWeiSihua 独立计算)显示了却不入快照。
 	// 复用该组件导出的同源纯函数取数(单一真值源,与 tab 同一套 getLayerSihua/ZWLuckPanel 计算);
 	// 无盘/无四化不产段(零回归——旧调用不带 ziweiSihua 时输出与此前逐字节一致)。
 	if(ziweiSihua && ziweiSihua.chart){

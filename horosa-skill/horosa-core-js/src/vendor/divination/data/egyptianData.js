@@ -77,12 +77,6 @@ export const EGYPT_DECANS = [
 export const TAROT_SUIT_CN = { wands: '权杖', cups: '圣杯', swords: '宝剑', coins: '星币' };
 export const TAROT_SUIT_ELEMENT = { wands: '火', cups: '水', swords: '风', coins: '土' };
 
-// 由黄经取旬(回归锚定),返回该旬完整记录
-export function decanByLon(lon){
-	const idx = greekDecan(lon) - 1;
-	return EGYPT_DECANS[idx] || null;
-}
-
 /* ============================================================
  * W1:旬主星制(两派) + 旬序锚定(两式)
  * ------------------------------------------------------------

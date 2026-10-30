@@ -6,7 +6,6 @@ import EXT from './hellenisticDataExt.json' with { type: 'json' };
 import * as __req0 from '../../utils/customCalibreStores.js';
 
 export const HELLENISTIC = DATA;
-export const HELLENISTIC_EXT = EXT;
 
 // ── G17 行星年(小/中/大/极大,)。least 和=129;日月中年=39.5。──
 export const PLANETARY_YEARS = DATA.planetary_years || {};
@@ -17,28 +16,16 @@ export const TRIPLICITY = DATA.triplicity || {};
 // ── G5 Thema Mundi 世界盘:上升15°巨蟹,七政各居庙15°。──
 export const THEMA_MUNDI = EXT.thema_mundi || {};
 
-// ── G8 ZR 注记:峰期 major[1,10]/moderate[7]/minor[4]。──
-export const ZR_NOTES = DATA.zr_notes || {};
-
 // ── G7 七气候带 Klimata:带/城/纬度/最长昼/Valens 上升时度级数。──
 export const KLIMATA = EXT.klimata || {};
-
-// ── G16 单度主星:迦勒底连续序 / 三分序(system2)。──
-export const MONOMOIRIA = EXT.monomoiria || {};
 
 // ── G15 迦勒底界( 附F):宽度 [8,7,6,5,4]、按 sect 土水互换。──
 export const CHALDEAN_BOUNDS = EXT.chaldean_bounds || {};
 
-// ── 庙旺弱陷 / 界 / 外观 / joys / sect / lots / places(供各判读项)。──
+// ── 庙 / 旺 / lots(供各判读项)。──
 export const DOMICILE = DATA.domicile || {};
 export const EXALTATION = DATA.exaltation || {};
-export const BOUNDS_EGYPTIAN = DATA.bounds_egyptian || {};
-export const BOUNDS_PTOLEMAIC = DATA.bounds_ptolemaic || {};
-export const FACES_CHALDEAN = DATA.faces_chaldean || {};
-export const JOYS = DATA.joys || {};
-export const SECT = DATA.sect || {};
 export const LOTS = DATA.lots || {};
-export const PLACES = DATA.places || {};
 
 // 行星英文名 → 中文单字(七政四余口径)。
 export const PLANET_CN = {
@@ -96,11 +83,11 @@ let _geminiVariantCache = null;
 export function termsTableForVariant(variant, isDiurnal, baseTables, egyptianFallback, opts){
 	const v = Number(variant) || 0;
 	if(v === 3){ return isDiurnal ? CHALDEAN_TERMS_DAY : CHALDEAN_TERMS_NIGHT; }
-	// [F5] 4=自定义界表:显示层与后端同表(否则界环/行星表按埃及画、尊贵按自定义算,同屏矛盾);
+	// 4=自定义界表:显示层与后端同表(否则界环/行星表按埃及画、尊贵按自定义算,同屏矛盾);
 	// 无合法表回落埃及=与后端降级同语义。
 	if(v === 4){
 		try{
-			// [R2-3] 随盘/回显表体优先(opts=chartObj.params,后端算的就是这份表);无则回落本机编辑器仓。
+			// 随盘/回显表体优先(opts=chartObj.params,后端算的就是这份表);无则回落本机编辑器仓。
 			const custom = __req0.customTermsDisplayTables(
 				isDiurnal, opts && opts.customTermsDay, opts && opts.customTermsNight);
 			if(custom && custom.upper){ return custom.upper; }
@@ -131,12 +118,4 @@ export function parseSignDegree(str){
 	const si = SIGN_EN.indexOf(m[2]);
 	if(si < 0){ return null; }
 	return { signIndex: si, deg, lon: (si * 30 + deg) % 360 };
-}
-
-// 行星年取档:band ∈ least/mean/greater/greatest。
-export function planetYears(planetEn, band){
-	const row = PLANETARY_YEARS[planetEn];
-	if(!row){ return null; }
-	const b = ['least', 'mean', 'greater', 'greatest'].indexOf(band) >= 0 ? band : 'least';
-	return row[b];
 }

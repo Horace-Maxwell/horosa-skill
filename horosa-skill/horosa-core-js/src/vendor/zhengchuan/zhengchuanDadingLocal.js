@@ -149,7 +149,7 @@ export function dadingDeathHour(birthHourGz, deathDayGan) {
 
 export default { dadingCe, dadingDeathYear, dadingPairChain, dadingDeathMonth, dadingDeathHour };
 
-// [挂载自检 F-47] 所推流年 → 虚岁/大运/小运/岁君派生(自 ZhengChuanMain 迁入,页面与 AI 无头共用同一份推法):
+// 所推流年 → 虚岁/大运/小运/岁君派生(自 ZhengChuanMain 迁入,页面与 AI 无头共用同一份推法):
 /**
  * 按所推之【流年】，自八字既有之推运表派生大定所需的四样:虚岁 / 小运 / 岁君 / 大运。
  *

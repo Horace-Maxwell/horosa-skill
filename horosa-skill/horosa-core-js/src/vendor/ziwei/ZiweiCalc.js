@@ -20,7 +20,6 @@ import { placeShangShi, placeKuiYue } from './ziweiSchools.js';
 const HUA = ['禄', '权', '科', '忌'];
 // 星组 type → chart 字段（对齐 Java ZiWeiStarType / ZiWeiHouse）。
 const TYPE_FIELD = { 0: 'starsMain', 1: 'starsAssist', 2: 'starsEvil', 3: 'starsOthersGood', 4: 'starsOthersBad', 5: 'starsSmall' };
-const MAIN14 = ['紫微', '天机', '太阳', '武曲', '天同', '廉贞', '天府', '太阴', '贪狼', '巨门', '天相', '天梁', '七杀', '破军'];
 
 // 单星装饰:生年四化标记(随当前流派 getActiveSiHuaGan)+ 庙旺亮度(STAR_LIGHT[正星名][宫支])。
 function decorateStar(name, houseIdx, yearGan){
@@ -78,7 +77,7 @@ export function assembleNatalChart(ctx){
 	// (2) 命身宫 + 五行局 + 长生 + 宫名 + 大限
 	// 闰月归月(古法§1.5):默认 mid_split(十五分界,16+归下月)=现 Java 口径;next=整月归下月;prev=整月归上月。
 	// 命身/五行局所用月(§1.5)。
-	// [Q-291 裁决 2026-09-18] 月系星(生月系 + 斗君)随所选归月规则与命身同移(《全书》「闰月作下月」/《宣微》十五分界,
+	// 月系星(生月系 + 斗君)随所选归月规则与命身同移(《全书》「闰月作下月」/《宣微》十五分界,
 	// 与内核 resolveLeapMonth 同口径:palaceMonth===starMonth);仅「命身下月·月系上月」(split_star_month)月系留本月。
 	// 此前月系星恒用 monthInt → 「整月归下月」等各档对月系星恒同、闰月十六日后生者布星与命身分叉(T-277)。
 	// 非闰月 month===monthInt,逐字不变;闰月且归本月(prev / 十五分界前半)亦不变。
@@ -105,9 +104,9 @@ export function assembleNatalChart(ctx){
 	const ju = juInfo.ju;
 	// 大限跨度:默认10年;钦天派 daxianSpan='ju' → 局数年(水二2…火六6)。
 	const span = ctx.daxianSpan === 'ju' ? ju : (ctx.daxianSpan || 10);
-	// [P3b] 长生起法档:huo_tu=火土同宫(土五起寅);默认 shui_tu=水土同宫(现状零回归)
+	// 长生起法档:huo_tu=火土同宫(土五起寅);默认 shui_tu=水土同宫(现状零回归)
 	const csStart = zi((ctx.changshengStart === 'huo_tu' ? CHANGSHENG_START_HUO_TU : CHANGSHENG_START)[ju]);
-	// [B11] 长生顺逆档:always_forward=全顺行 —— 🔴 铁律:仅喂 phase 环,大限 direction 与
+	// 长生顺逆档:always_forward=全顺行 —— 🔴 铁律:仅喂 phase 环,大限 direction 与
 	// 博士十二神仍用 fwd(阳男阴女律),此档绝不连坐运限方向。
 	const csFwd = ctx.changshengDirection === 'always_forward' ? true : fwd;
 	for(let i = 0; i < 12; i++){
@@ -146,14 +145,14 @@ export function assembleNatalChart(ctx){
 			for(let b2 = 0; b2 < 2; b2++){
 				const ii = zi(zv.charAt(b2));
 				const isFu = isYangZhi(ii) !== yearPolarYang;
-				// [B12] 单星法:只安正空支(「一般只论正空,副空不论」),副支整颗不出
+				// 单星法:只安正空支(「一般只论正空,副空不论」),副支整颗不出
 				if(isFu && ctx.kongwangStyle === 'single'){ continue; }
 				const k2 = (ii % 12 + 12) % 12;
 				houses[k2][TYPE_FIELD[type]].push(star((isFu ? '副' : '') + name, k2));
 				starIdx[name] = k2;
 			}
 		}else if(zv){
-			// [P3a] 魁钺歌诀两版:geng_ma_hu(庚辛逢马虎)时庚干魁午/钺寅,余干与默认表全同(内核 delta)
+			// 魁钺歌诀两版:geng_ma_hu(庚辛逢马虎)时庚干魁午/钺寅,余干与默认表全同(内核 delta)
 			const kv = (name === '天魁' || name === '天钺') ? placeKuiYue(name, yearGan, ctx.kuiYue) : null;
 			placeRec(zi(kv || zv), name, type);
 		}
@@ -185,7 +184,7 @@ export function assembleNatalChart(ctx){
 
 	// (7) 生月系（左辅右弼/天马/天刑天姚/解神天巫天月/阴煞）。天马依据可切：默认现状(月马)/年支(三合马)。
 	const tianmaBasis = tianmaBasisEarly;   // 与 (6) 同源,防两处各读 ctx 而分叉
-	const monthCn = monthCnOf((ctx.leapMonth || 'mid_split') === 'split_star_month' ? monthInt : month);   // [Q-291] 月系随归月规则
+	const monthCn = monthCnOf((ctx.leapMonth || 'mid_split') === 'split_star_month' ? monthInt : month);   // 月系随归月规则
 	Object.keys(STARS_MONTH).forEach((name)=>{
 		if(name === '天马' && tianmaBasis === 'year'){ return; }   // 年支起马：跳过月马，下面另置
 		const def = STARS_MONTH[name];
@@ -217,7 +216,7 @@ export function assembleNatalChart(ctx){
 	if(starIdx['文昌'] != null){ place(starIdx['文昌'] + dayInt - 2, '恩光', 3); }
 	if(starIdx['文曲'] != null){ place(starIdx['文曲'] + dayInt - 2, '天贵', 3); }
 
-	// (11) 旬空（年柱→空二支，副按极性；[B12] 单星法只安正空支）
+	// (11) 旬空（年柱→空二支，副按极性；单星法只安正空支）
 	xunEmptyBranches(yearGan, yearZiIdx).forEach((zk)=>{
 		const i = zi(zk);
 		const isFu = isYangZhi(i) !== yearPolarYang;
@@ -257,7 +256,7 @@ export function assembleNatalChart(ctx){
 		});
 	}
 
-	// (16) 小限 age 1..100。[B15b] 口径单源=ziweiCore.xiaoxianClockwiseFor(ctx.xiaoxianMode 经 FORWARD 表进来):
+	// (16) 小限 age 1..100。口径单源=ziweiCore.xiaoxianClockwiseFor(ctx.xiaoxianMode 经 FORWARD 表进来):
 	// 默认'0'=男顺女逆,与 Java setupSmallDirection 字节一致(零回归);'1'=阳男阴女顺(中州)。
 	const xxStart = XIAOXIAN_START[yearZi];
 	if(xxStart){
@@ -303,7 +302,7 @@ export function assembleNatalChart(ctx){
 //   天盘=标准命盘;地盘=身宫作命宫(身宫干支定五行局→重排十四正曜);人盘=福德宫作命宫(福德宫干支定局→重排)。
 //   仅「命宫宫垣 + 十四正曜 + 十二宫名 + 五行局/命主」变,其余各星曜(辅杂煞小/长生/大限/身宫)宫位一律不变。
 //   特例:命宫==身宫→天=地;身宫==福德宫→地=人(此时返回原盘)。
-// [P2a] 命主取法后处理(Java 盘专用):ming_branch 时把 chart.lifeMaster 改按命宫支取。
+// 命主取法后处理(Java 盘专用):ming_branch 时把 chart.lifeMaster 改按命宫支取。
 // 🔴 只许在 ziweiNeedsLocalEngine()===false 的 Java 盘路径调用 —— 本地引擎盘已按 ctx.lifeMasterBy
 //    以**天盘命宫**算好且 deriveSanPan 保留基盘命主;若在 deriveSanPan 之后按当前 lifeHouseIndex
 //    重算,会拿观察盘移过的命宫=错(命主不随三盘移是不变量,金标钉守)。幂等:同选项重复调用同值。
@@ -396,7 +395,7 @@ export function calcZiwei(birth, options = {}){
 	return buildChartFromBazi(r, birth, options);
 }
 
-// [Z4·择日] 轻量入口:农历核走 buildLocalNongliLite(无百年大运推演;calcZiwei 全量核 91ms/盘
+// 轻量入口:农历核走 buildLocalNongliLite(无百年大运推演;calcZiwei 全量核 91ms/盘
 // 实测,重头在 buildLocalBaziResult 的 yun/daYunList——本命盘 13 步安星本身纯查表 <1ms)。
 // 组装体与 calcZiwei 同一 buildChartFromBazi(判定同源单源,主安星逻辑修正两口自动跟);
 // 差异仅农历供数层,产出 chart 无 r.yun 大运依赖(assembleNatalChart 不读)。
@@ -428,9 +427,11 @@ function buildChartFromBazi(r, birth, options){
 	// ziweiMonthNum/ziweiDayNum/ziweiLeap 由 baziLunarLocal 按日柱口径派生,默认==monthNum/dayNum/leap(零回归)。
 	// ziweiLunarBasis='calendar':安命/安紫微改用【日历口径】农历日(23:30 不进日)——Java 同源
 	// (ZiWeiChart 的 nongli.day 即日历日,八字四柱仍进日,属「柱进盘不进」混合口径);对拍 Java 兼容档用。
-	// [Q-194/T-120] 缺省「跟随全局」= 缺省 Java 盘口径「柱进盘不进」(日柱随全局日界进位,安命/安紫微取日历农历日);
+	// 缺省「跟随全局」= 缺省 Java 盘口径「柱进盘不进」(日柱随全局日界进位,安命/安紫微取日历农历日);
 	// 此前 global 档按日柱进位取次日 → 23 点生辰拨任一无关引擎键紫微整体移宫,且与「子初换日(强制)」(柱与安星皆进)同盘。
-	const calBasis = options.ziweiLunarBasis === 'calendar' || !options.lateZi || options.lateZi === 'global';
+	// 显式选「随日柱进位」(ziweiLunarBasis='ziwei',择日工作台)时,跟随全局也按日柱进位取农历日;未显式给出的照旧取日历日。
+	const calBasis = options.ziweiLunarBasis === 'calendar'
+		|| ((!options.lateZi || options.lateZi === 'global') && options.ziweiLunarBasis !== 'ziwei');
 	const zwMonth = (!calBasis && nl.ziweiMonthNum != null) ? nl.ziweiMonthNum : nl.monthNum;
 	const zwDay = (!calBasis && nl.ziweiDayNum != null) ? nl.ziweiDayNum : nl.dayNum;
 	const zwLeap = (!calBasis && nl.ziweiLeap != null) ? nl.ziweiLeap : nl.leap;
@@ -445,7 +446,7 @@ function buildChartFromBazi(r, birth, options){
 	});
 	chart.nongli = nl;
 	chart.fourColumns = fc;
-	// [Z4] 安星实际锚(择日 plateKey 消费):calendar/ziwei 两基准下安星真正用的月/闰/日——
+	// 安星实际锚(择日 plateKey 消费):calendar/ziwei 两基准下安星真正用的月/闰/日——
 	// plateKey 若绕过此锚直读 nl.ziweiDayNum,在 calendar 基准+晚子时进位窗(23 点段)与
 	// 判定面(日历日)不同构 → 23 点段被折进次日行(行内同盘探针实抓)。
 	chart.anchorMD = { m: zwMonth, leap: !!zwLeap, d: zwDay, yg: yg };

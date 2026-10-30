@@ -77,7 +77,7 @@ function reduceDi(d) {
 //  'legacy'(旧代码)——上下元按性别、中元按阳男阴女(自相不一致)。三元界按民国年(甲子起60年一元)。
 // 【存疑·不实现】古籍标此为全流程最未确定处:头号实证例(中元·阳女)实际寄落「震」,与三元表(寄坤)冲突,
 //   且底本未给可复原的通用规则。→ 两档并存、依所据底本择;不新增第三档、不硬编特例。
-// [Q-267/T-248 ①] 判元改用与 jiNian 同一 180 年循环(1864 甲子起,每元 60 年):此前按民国年固定阈值(≤12 上元 / ≤72 中元)不循环,
+// 判元改用与 jiNian 同一 180 年循环(1864 甲子起,每元 60 年):此前按民国年固定阈值(≤12 上元 / ≤72 中元)不循环,
 // 1804–1863、2044 年后判元与纪年互相矛盾(1850 纪年下元/寄宫上中元;2050 纪年上元/寄宫下元)。1864–2043 内结果逐字同旧。
 function sanYuanOf(birthYear) {
 	const cyc = (((birthYear || 0) - 1864) % 180 + 180) % 180;   // 0..179
@@ -129,8 +129,6 @@ function yuanTangPure(gua, hourZhi, isMale) {
 
 // 翻元堂爻 → 后天卦（三至尊卦 坎为水/水雷屯/水山蹇 另有君位不易，见 transformHoutian）
 function flipLine(lines, pos) { const l = lines.slice(); l[pos - 1] = l[pos - 1] ? 0 : 1; return l; }
-
-export function nodeFromYao(lines, pos) { return flipLine(lines, pos); }
 
 // ── 起命 ──
 // opts【分歧参数,默认=现状零回归,唯 jiGongMode 默认古籍表(§3.4)会动到「取卦数=5」的盘】:
@@ -451,9 +449,6 @@ function trigramOf(b) { return Object.keys(TRIGRAM_BITS).find((t) => TRIGRAM_BIT
 function sanCai(lines) { return [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5]].map((ix) => trigramOf(ix.map((i) => lines[i]))); }
 function shortName(name) { return name[1] === '為' ? name[0] : name.slice(2); }
 
-// 某卦(六爻)含哪些目标三才卦：传 trigram 集，返回命中的。供逐段大限/流年卦气分析用。
-export function guaSanCaiSet(lines) { return new Set(sanCai(lines)); }
-
 // chart = calculate() 的返回；monthZhi 八字月支(回退用)；hgOverride={hg,fh} 准确节气化工(优先)。
 // 返回各卦气判断 + 葉/不葉 + 元堂爻位。
 export function judge(chart, fourPillars, monthZhi, hgOverride) {
@@ -495,25 +490,6 @@ export function judge(chart, fourPillars, monthZhi, hgOverride) {
 		heLi: chart.yangLing === yYang,                                        // 合理：阳月坐阳爻(顺气)
 	};
 	return { yuan, fanYuan, huagong, fanhua, deSheng: deShi, deTime, deTi, xie, erShu, yuanTang: yuanTangInfo };
-}
-
-// 某一时段卦(lines)所含的元气/化工等（命卦层 jg 给定各卦身份）→ 逐段表格用。
-export function periodEnergies(lines, jg) {
-	const s = new Set(sanCai(lines));
-	const inSet = (g) => !!g && s.has(g);
-	const list = (arr) => (arr || []).filter(inSet);
-	const tags = [];
-	if (inSet(jg.yuan.tian.gua)) tags.push('天元');
-	if (inSet(jg.yuan.di.gua)) tags.push('地元');
-	list(jg.huagong.guas).length && tags.push('化工');
-	if (inSet(jg.fanYuan.tian.gua)) tags.push('反天元');
-	if (inSet(jg.fanYuan.di.gua)) tags.push('反地元');
-	list(jg.fanhua.guas).length && tags.push('反化');
-	return {
-		tianYuan: inSet(jg.yuan.tian.gua), diYuan: inSet(jg.yuan.di.gua),
-		fanTian: inSet(jg.fanYuan.tian.gua), fanDi: inSet(jg.fanYuan.di.gua),
-		huagong: list(jg.huagong.guas), fanhua: list(jg.fanhua.guas), tags,
-	};
 }
 
 // ── Phase 1 起卦盘补全 ──
@@ -726,7 +702,7 @@ export function wangShuai(guaName2, season) {
 // huangdiOffset 默认 2697（公历=黄帝纪元−2697）；三元九运用玄空口径(1864 甲子起,180 年循环,每运20年)。
 export function jiNian(birthYear, opts = {}) {
 	if (!(birthYear > 0)) return null;
-	const offset = Number.isFinite(Number(opts.huangdiOffset)) && opts.huangdiOffset !== '' && opts.huangdiOffset !== null && opts.huangdiOffset !== undefined ? Number(opts.huangdiOffset) : 2697;   // [Q-265/SO-18] 0 可达
+	const offset = Number.isFinite(Number(opts.huangdiOffset)) && opts.huangdiOffset !== '' && opts.huangdiOffset !== null && opts.huangdiOffset !== undefined ? Number(opts.huangdiOffset) : 2697;   // 0 可达
 	const cyc = (((birthYear - 1864) % 180) + 180) % 180;   // 0..179
 	const yuan = ['上元', '中元', '下元'][Math.floor(cyc / 60)];
 	const yunNo = Math.floor(cyc / 20) + 1;                  // 1..9
@@ -789,7 +765,7 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 		lines.push(`得势${jg.deSheng ? '有' : '无'}　得时${jg.deTime ? '有' : '无'}　得体 ${jg.deTi.gua}${jg.deTi.present ? '(有)' : '(无)'}`);
 		lines.push(`二数：天${jg.erShu.tian}(${jg.erShu.tianState}) 地${jg.erShu.di}(${jg.erShu.diState})`);
 		lines.push(`元堂：${jg.yuanTang.dangWei ? '当位' : '不当位'}　${jg.yuanTang.youYing ? '有应' : '无应'}　${jg.yuanTang.heLi ? '顺气' : '逆气'}`);
-		// [Q-436/T-399] 右栏「卦气」卡的反天元/反地元/反化工 与「得失·二数·元堂」卡的順逆/眾宗 此前不进快照(页面有、AI 没有)。
+		// 右栏「卦气」卡的反天元/反地元/反化工 与「得失·二数·元堂」卡的順逆/眾宗 此前不进快照(页面有、AI 没有)。
 		if (jg.fanYuan && jg.fanhua) {
 			lines.push(`反天元 ${jg.fanYuan.tian.gua}${jg.fanYuan.tian.present ? '(有)' : '(无)'}　反地元 ${jg.fanYuan.di.gua}${jg.fanYuan.di.present ? '(有)' : '(无)'}　反化工 ${(jg.fanhua.guas || []).join('/') || '—'}${jg.fanhua.present && jg.fanhua.present.length ? `(有:${jg.fanhua.present.join('')})` : '(无)'}`);
 		}
@@ -797,7 +773,7 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 		const sft = season ? seasonFit(chart.tian, chart.di, season) : null;
 		lines.push(`顺逆：${sf.label}${sft ? `／${sft.season}宜·天${sft.tian}地${sft.di}` : ''}　众宗：${zhongZong(chart.xian.lines, chart.xian.yuan) || '—'}`);
 	}
-	// [Q-436/T-399] [起卦详情]:中栏「起卦详情」卡里此前不进快照的十项(紀年/元氣化工/十吉/卦氣旺衰 已在 [命运篇]/[断验],不重复)。
+	// [起卦详情]:中栏「起卦详情」卡里此前不进快照的十项(紀年/元氣化工/十吉/卦氣旺衰 已在 [命运篇]/[断验],不重复)。
 	// 需 extra.detail={fourPillars, monthZhi, st?, nayin?, birthYear?, extras?}(页面传 getModel 的同名值;无头传 bazi 包),缺则整段省略。
 	const det = extra.detail;
 	if (jg && det && det.fourPillars && det.monthZhi) {
@@ -825,7 +801,7 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 	if (dy && dy.all) {
 		lines.push('');
 		lines.push('[大限·岁运]');
-		// [v2 排版批量·表化] 同构逐条行改 GFM 表(紫微宫位总览范式):段头/值表达式零变更
+		// 同构逐条行改 GFM 表(紫微宫位总览范式):段头/值表达式零变更
 		// (ageStart-ageEnd岁/gua/yaoName/阳9|阴6 逐字复用),仅排版骨架换表头+分隔行+数据行。
 		lines.push('| 岁段 | 卦 | 爻 | 爻性 |');
 		lines.push('| --- | --- | --- | --- |');
@@ -838,7 +814,7 @@ export function buildSnapshotText(chart, jg, dy, extra = {}) {
 		if (ynRows.length) {
 			lines.push('');
 			lines.push('[流年·岁运]');
-			// [v2 排版批量·表化] 全生涯流年卦改 GFM 表:值表达式逐字复用(age岁/yzz/gua/yaoName),
+			// 全生涯流年卦改 GFM 表:值表达式逐字复用(age岁/yzz/gua/yaoName),
 			// 仅排版骨架变化;诗文类段([先天卦·元堂爻辞] 等)不表化保持原样。
 			lines.push('| 岁 | 年·干支 | 卦 | 爻 |');
 			lines.push('| --- | --- | --- | --- |');

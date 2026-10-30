@@ -57,7 +57,10 @@ def _expected_aiexport_version(root: Path) -> int:
 def _check_aiexport_version(root: Path) -> dict:
     """Assert the vendored aiExport.js version == the skill's MIRRORED_UPSTREAM_AIEXPORT_VERSION."""
     target = root / _AIEXPORT_REL
-    text = target.read_text(encoding="utf-8", errors="replace")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _upstream_preset import read_aiexport_source  # 门面 + aiExport/ 目录（上游 v3.12.0 拆分）
+
+    text = read_aiexport_source(target)
     match = _AIEXPORT_VERSION_RE.search(text)
     if not match:
         raise SystemExit(f"Could not read AI_EXPORT_SETTINGS_VERSION from {target}")

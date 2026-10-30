@@ -37,7 +37,7 @@ export const BABYLON_SCHEMES = {
 };
 export const SCHEME_ORDER = ['swissA10', 'systemA', 'systemB'];
 
-// [Q-346/T-327] 「派系」这个下拉在哪些页真有区别 —— **由三档配置自证**,不手维护名单:
+// 「派系」这个下拉在哪些页真有区别 —— **由三档配置自证**,不手维护名单:
 // 三档只在取值真不同的键上有分歧(实测只有 ephemerisSource 与 solstice;dodecaVariant / cubitDeg / era 三档全同),
 // 再看这些键的 appliesTo 覆盖到哪些页。覆盖不到的页,切派系什么都不会变 —— 界面上要说出来,别让人以为切了有用。
 export const SCHEME_VARYING_KEYS = (()=>{
@@ -52,7 +52,7 @@ export function schemeAffectsTab(tab){
 	return BABYLON_PARAM_SPEC.some((p)=>SCHEME_VARYING_KEYS.indexOf(p.key) >= 0 && (p.appliesTo || []).indexOf(tab) >= 0);
 }
 
-// [Q-150/T-58] 派系在本页「哪几条」真起作用 / 另外那几条在哪页起作用 —— 同样由 spec 自证。
+// 派系在本页「哪几条」真起作用 / 另外那几条在哪页起作用 —— 同样由 spec 自证。
 // 个人星盘页只吃「分至规范」,位置源只作用于「数理星历」;此前页面不说,快照却写着「派系:System A」,
 // 读的人会以为七曜位置也换了算法。
 export function schemeVaryingKeysForTab(tab){
@@ -103,17 +103,17 @@ export function selectOptions(){
 
 // 派系设置项(渲染于模块设置面板;solstice 联动 scheme 但可显式覆盖)
 export const BABYLON_PARAM_SPEC = [
-	// [Q-346/T-327] 微黄道页是纯前端的 144 微段映射,既不发后端请求也不读位置源 —— 声明进去只会让
+	// 微黄道页是纯前端的 144 微段映射,既不发后端请求也不读位置源 —— 声明进去只会让
 	// 「切派系」在这一页看着像有用(派系三档的差异全在 ephemerisSource / solstice 上)。
-	// [Q-150/T-58] 位置源真正被消费的只有「数理星历」页(BabylonEphemeris);个人星盘页的七曜位置恒取
+	// 位置源真正被消费的只有「数理星历」页(BabylonEphemeris);个人星盘页的七曜位置恒取
 	// /chart 的现代实位,System A/B 在那页只改说明文案 —— 声明进 horoscope 会让 schemeAffectsTab 说假话。
 	{ key: 'ephemerisSource', label: '位置源', type: 'select', appliesTo: ['ephemeris'],
 		options: [
-			{ value: 'swiss', label: '现代实位(锚点)·递推按 A' },   // [Q-299/T-288 ④] 与 A 档同表递推,只锚点取实位
+			{ value: 'swiss', label: '现代实位(锚点)·递推按 A' },   // 与 A 档同表递推,只锚点取实位
 			{ value: 'systemA', label: '阶梯复原(A)' },
 			{ value: 'systemB', label: '锯齿复原(B·仅木星)' },
 		], default: 'swiss' },
-	// [Q-346/T-327] 微黄道页只读 dodecaVariant,从不读 solstice —— 声明进去就是这一页上的死下拉。
+	// 微黄道页只读 dodecaVariant,从不读 solstice —— 声明进去就是这一页上的死下拉。
 	{ key: 'solstice', label: '分至规范', type: 'select', appliesTo: ['horoscope', 'ephemeris'],
 		options: [
 			{ value: 'A10', label: '春分白羊 10°(A 规范)' },

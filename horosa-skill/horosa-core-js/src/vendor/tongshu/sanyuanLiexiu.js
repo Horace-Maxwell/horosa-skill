@@ -3,6 +3,7 @@
 // 源仅明载天帝加临（芒种+4日 & 大雪+3日）；余 15 曜精确加临须星历，此处仅列断语库、不臆造节气日。
 import { Solar } from 'lunar-javascript';
 import { SANYUAN_STARS } from './sanyuanData.js';
+import { civilJdnOfYmd } from '../utils/civilCalendar.js';
 
 // 当年 24 节气公历日期（按年缓存）。
 const jieqiCache = {};
@@ -10,10 +11,9 @@ function jieqiTableOf(y) {
 	if (!jieqiCache[y]) { jieqiCache[y] = Solar.fromYmd(y, 6, 1).getLunar().getJieQiTable(); }
 	return jieqiCache[y];
 }
+// 两日相隔天数:民用历日序数相减(civilCalendar 单源;1582 以前儒略历,跨改历不多算 10 天)。
 function dayDiff(y1, m1, d1, y2, m2, d2) {
-	const a = new Date(y1, m1 - 1, d1).getTime();
-	const b = new Date(y2, m2 - 1, d2).getTime();
-	return Math.round((a - b) / 86400000);
+	return civilJdnOfYmd(y1, m1, d1) - civilJdnOfYmd(y2, m2, d2);
 }
 
 // 判某日各吉曜是否加临（约略版；tol=容差日，默认 ±1）。

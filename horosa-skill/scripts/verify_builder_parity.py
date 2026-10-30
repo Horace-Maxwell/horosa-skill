@@ -92,6 +92,7 @@ REQUIRED_ON_BOTH = (
         "vendor/kinastro/astro/",
         "shaozi/data/shaozi_tiaowen_6144.json",
         "node_modules/lunar-javascript/package.json",
+        "node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运精确算法
         "vendor/kin_year_domain.py",
         "geomancy/data/ifa_odu.json",
         "astrostudy/qizheng_election_scan.py",

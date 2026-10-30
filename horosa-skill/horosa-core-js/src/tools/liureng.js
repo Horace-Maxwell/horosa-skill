@@ -19,9 +19,10 @@ import {
   buildKeData,
   buildSanChuanData,
   buildLiuRengSnapshotText,
-  liurengBenmingXingnian,
-  getSolarYearFromField,
 } from '../vendor/liureng/LiuRengMain.js';
+// 上游 v3.12.0 把 LiuRengMain 的纯逻辑拆进 main/*.js；这两个没在 LiuRengMain 重导出，直接从子模块取。
+import { liurengBenmingXingnian } from '../vendor/liureng/main/panData.js';
+import { getSolarYearFromField } from '../vendor/liureng/main/birthRunYear.js';
 import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
 
 // 贵人体系显示名：与上游 buildLiuRengSnapshotText 的 [起盘信息]「贵人体系」行同序同字

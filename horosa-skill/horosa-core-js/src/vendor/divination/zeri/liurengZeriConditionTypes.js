@@ -1,9 +1,9 @@
-// [Z5·六壬择日] 条件注册表(时辰粒度)。判定单源:排盘=LiuRengMain 加性导出的同一函数族
+// 条件注册表(时辰粒度)。判定单源:排盘=LiuRengMain 加性导出的同一函数族
 // (buildLiuRengLayout/buildKeData/buildSanChuanData→ChuangChart 涉害 byte-perfect 核),
 // 神煞=liurengLocal fillLrGods(表与 Java gods.json 机械同源,liurengGodsParity 看守),
 // 天将环=LRConst.TianJiang 同源 import。spec 契约与 QIMEN/HUANGLI/BAZI/TAIYI/ZIWEI
 // 逐字段同构;ctx=makeLiurengZeriEvalCtx(pan) 惰性。一键一行 Tab 缩进(preflight 键集契约)。
-// [十一轮] keyDeps 合同:每类必须显式声明所吃的「可掩 plateKey 位」——值域
+// keyDeps 合同:每类必须显式声明所吃的「可掩 plateKey 位」——值域
 // ['diurnal','yearZhi','monthZhi','candY'] 子集(day/timeZhi/yue 三基础位全类恒吃,不声明)。
 // 面→位映射依据(2026-08-31 逐类 evaluate 消费键机械 dump 定谳,勿凭类名猜):
 //   sanChuan.tianJiang / layout.gods / ctx.jiangAt / pan.diurnal / refs 的 sanChuanGods·guizi → diurnal
@@ -11,8 +11,8 @@
 //   lrGods.gods/godsZi/godsGan、ke/sanChuan.name·cuang·liuQin、fourColumns、xun、yue → 基础位,不声明
 // 声明漏/滥由类级判别测试机械抓(liurengZeriEngine.test.js「keyDeps 判别网」);缺 keyDeps 键=完备闸红。
 import { TianJiang, ZiList } from '../../liureng/LRConst.js';
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
-// [W2 全谱轮] 小局/大格判定单源=主页右栏同函数(prebuilt 直供跳重算;涉日月宿位的局无星历不判)。
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
+// 小局/大格判定单源=主页右栏同函数(prebuilt 直供跳重算;涉日月宿位的局无星历不判)。
 import { buildLiuRengReferenceContext, matchXiaoJuReferences, matchDaGeReferences, XIAO_JU_META, DA_GE_META } from '../../liureng/LiuRengMain.js';
 import { changShengOf } from '../../bazi/baziLunarLocal.js';
 import { GanJiZi } from '../../liureng/LRConst.js';
@@ -74,7 +74,7 @@ export function makeLiurengZeriEvalCtx(pan){
 			const i = ZHI12.indexOf(dizhi);
 			return i >= 0 && pan.layout ? pan.layout.houseTianJiang[i] : '';
 		},
-		// [W2] 参考面(小局65/大格10)惰性一次:主页 buildLiuRengReferenceContext 同函数,
+		// 参考面(小局65/大格10)惰性一次:主页 buildLiuRengReferenceContext 同函数,
 		// prebuilt 直供扫描已起的 layout/ke/sanChuan(跳重算);liureng 形按主页 requestGods
 		// 消费面装配(fourColumns/xun/gods);无星历 objects——涉日月宿位的局静默不判。
 		refs(){
@@ -426,7 +426,7 @@ export const LIURENG_CONDITION_TYPES = {
 		label: '太岁十二神值支',
 		defaults: { who: '岁驾', values: ['子'] },
 		fields: [
-			{ key: 'who', kind: 'select', label: '神', options: opt(['岁驾', '天空', '丧门', '贯索', '官符', '死符', '岁破', '暴败', '白虎', '天德', '吊客', '病符', '剑锋', '地雌', '钩神', '五鬼', '小耗', '阑干', '天厄', '天雄', '绞杀', '天狗', '蓦越', '伏尸', '孝服', '飞符', '月德', '大耗', '卷舌']), hint: '三环全谱(gods1/2/3;判定本就并三环读值,原选项仅列一环=纯遗漏)' },	// [W2] 二三环 17 名补齐
+			{ key: 'who', kind: 'select', label: '神', options: opt(['岁驾', '天空', '丧门', '贯索', '官符', '死符', '岁破', '暴败', '白虎', '天德', '吊客', '病符', '剑锋', '地雌', '钩神', '五鬼', '小耗', '阑干', '天厄', '天雄', '绞杀', '天狗', '蓦越', '伏尸', '孝服', '飞符', '月德', '大耗', '卷舌']), hint: '三环全谱(gods1/2/3;判定本就并三环读值,原选项仅列一环=纯遗漏)' },	// 二三环 17 名补齐
 			{ key: 'values', kind: 'multiselect', label: '值支', options: opt(ZHI12) },
 		],
 		validate: needValues,
@@ -555,7 +555,7 @@ export const LIURENG_CONDITION_TYPES = {
 		validate: needValues,
 		summary(p){ return `${p.mode === 'without' ? '避' : ''}小局:${(p.values || []).map((v)=>(XIAO_JU_META[v] ? XIAO_JU_META[v].name : v)).join('/')}`; },
 		evaluate(pan, p, ctx){
-			// [Q-469/T-431] 主页小局面对 刑德/物气/新故/迍福/始终/旺孕/德孕 七局「未命中也追加」一条 source='参考常驻' 的条目(常驻参考页签);
+			// 主页小局面对 刑德/物气/新故/迍福/始终/旺孕/德孕 七局「未命中也追加」一条 source='参考常驻' 的条目(常驻参考页签);
 			// 择日只认带真实局式依据的条目,否则这 7 局「命中任一」恒真、「全不命中」恒假。
 			const hits = ctx.refs().xiaoJu.filter((r)=>r && r.source !== '参考常驻').map((r)=>r.key);
 			const sel = new Set(p.values || []);
@@ -598,7 +598,7 @@ export const LIURENG_CONDITION_TYPES = {
 			const i = Math.max(0, Math.min(3, Number(p.pos || '1') - 1));
 			const k = raw[i] || [];
 			const up = stripKong(k[1]);
-			// 一课的「下」是日干:[Q-273/T-253] 克贼按日干**本五行**判(主六壬页课传判定 LRConst.isRestrain 与同表「贼克数」同口径),
+			// 一课的「下」是日干:克贼按日干**本五行**判(主六壬页课传判定 LRConst.isRestrain 与同表「贼克数」同口径),
 			// 寄宫(GanJiZi)只用于位置标注;此前先换寄宫支再论五行(乙→辰土、丁→未土、戊→巳火、辛→戌土、癸→丑土)→ 五干日一课两处相反。
 			const rawDown = stripKong(k[2]);
 			const uw = ZHI_WX[up];
@@ -644,68 +644,9 @@ export const LIURENG_CONDITION_TYPES = {
 };
 
 // ── 树工厂/摘要/编译(与其它择日技法同构) ──
-export function newLiurengLeaf(type, joiner){
-	const spec = LIURENG_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newLiurengGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function liurengLeafSummary(leaf){
-	const spec = leaf ? LIURENG_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = LIURENG_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileLiurengTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(LIURENG_CONDITION_TYPES);
+export const newLiurengLeaf = TREE_API.newLeaf;
+export const newLiurengGroup = TREE_API.newGroup;
+export const liurengLeafSummary = TREE_API.leafSummary;
+export const compileLiurengTree = TREE_API.compileTree;

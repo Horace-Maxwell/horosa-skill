@@ -14,7 +14,7 @@ import { buildPairReading } from './pairReading.js';
 import { REVERSAL_MODES } from './reversalModes.js';
 
 // 解析有效设置:用户值优先,缺省回落 deck 默认。
-// [QA-7] 枚举键一律走白名单判定:非法值(拼错的档名、数字、对象)回落默认档。
+// 枚举键一律走白名单判定:非法值(拼错的档名、数字、对象)回落默认档。
 // 三处曾用 `s.x || 默认` 短路 —— 任何非空值都会原样穿透,传入对象即被 `${}` 串成
 // 「变体 [object Object]」写进设置行与快照。白名单化后,非法值不再污染显示与导出。
 const inEnum = (v, list, dft) => (list.indexOf(v) >= 0 ? v : dft);
@@ -60,7 +60,7 @@ export function buildReading(deckId, spreadType, seed, settings){
 	let cards = getDeckCards(deck.id);
 	const subsetMajors = SPREADS[type] && SPREADS[type].subset === 'majors';
 	if(subsetMajors){
-		// [QA-9] 认 *_trump(各牌组王牌 id 皆自 0 起连续,shuffle 的 id 排列前提仍成立);
+		// 认 *_trump(各牌组王牌 id 皆自 0 起连续,shuffle 的 id 排列前提仍成立);
 		// 现行 caps 未对这两副开放子集阵,此改为判据一致,免日后放开时池空。
 		cards = cards.filter((c) => isTrumpArcana(c.arcana));
 	}else if(eff.includeBlank && deck.caps && deck.caps.blank){

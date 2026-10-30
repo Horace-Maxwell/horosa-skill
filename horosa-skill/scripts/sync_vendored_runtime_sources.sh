@@ -73,6 +73,10 @@ rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/scripts/repairEmbedded
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/dist-file" "${VENDOR_ROOT}/Horosa-Web/astrostudyui/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/scripts/warmHorosaRuntime.js" "${VENDOR_ROOT}/Horosa-Web/astrostudyui/scripts/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/src/utils/aiExport.js" "${VENDOR_ROOT}/Horosa-Web/astrostudyui/src/utils/"
+# 上游 v3.12.0 起 aiExport.js 只是门面，版本号 / 预设段 / 抽取逻辑都在同名目录里：两样都要拷，守卫读「门面 + 目录」全集。
+if [ -d "${SOURCE_ROOT}/Horosa-Web/astrostudyui/src/utils/aiExport" ]; then
+  rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astrostudyui/src/utils/aiExport" "${VENDOR_ROOT}/Horosa-Web/astrostudyui/src/utils/"
+fi
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/astropy" "${VENDOR_ROOT}/Horosa-Web/"
 rsync -a "${RSYNC_FILTERS[@]}" "${SOURCE_ROOT}/Horosa-Web/flatlib-ctrad2" "${VENDOR_ROOT}/Horosa-Web/"
 mkdir -p "${VENDOR_ROOT}/Horosa-Web/vendor"

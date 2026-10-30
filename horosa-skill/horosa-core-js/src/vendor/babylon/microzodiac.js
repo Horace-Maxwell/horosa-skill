@@ -5,7 +5,7 @@
 //   B(楔文/古典默认):dodecatemorion = 该点本身 + 12×D = 宫起点 + 13×D
 // 永远是宫内度 D(0–30)被乘,绝非绝对黄经、绝非宫号。
 
-import { norm360, lonToSignDeg, signDegToLon } from './units.js';
+import { norm360, lonToSignDeg } from './units.js';
 
 // 简单 dodecatemoria:输入绝对黄经 L,返回 { lon(变体结果), microSign(命名微段宫号1-12), microIndex(1-12) }
 export function dodeca12(L, variant){
@@ -38,7 +38,6 @@ export function kalendertextD(Lsun){ return norm360(13 * Lsun); }
 export function kalendertextK(Lmoon){ return norm360(277 * Lmoon); }
 
 // (月 M, 日 d) ↔ (宫, 度) 的图式恒等(1°/日;月 M ≡ 宫 M)
-export function schematicDateToLon(M, d){ return signDegToLon(M, d); }
 export function lonToSchematicDate(L){
 	const { sign, deg } = lonToSignDeg(L);
 	return { M: sign, d: deg };

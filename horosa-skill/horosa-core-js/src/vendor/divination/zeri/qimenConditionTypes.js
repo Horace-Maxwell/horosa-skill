@@ -9,13 +9,13 @@
 // 与主盘格局判定同源同名(机械同源哨兵见 __tests__/qimenConditionTypes.test.js)。
 // 🔴 宫位口径:cells 的 palaceNum 是 3×3 grid 位序(1巽2离3坤4震5中6兑7艮8坎9乾),非洛书号;
 //   本表 palaces 字段的 value 一律用 grid 位序,label 拼「卦名+洛书号+方位」供用户按洛书认宫。
-// [十一轮] keyDeps 合同(六壬同协议):每类显式声明所吃「可掩 plateKey 位」——值域
+// keyDeps 合同(六壬同协议):每类显式声明所吃「可掩 plateKey 位」——值域
 //   ['yearGz','monthGz','dayGz','timeGz','diurnal'] 子集;数组或 (params)=>数组(kong_all/
 //   pillar_ganzhi 按参数维精掩)。cells/juText/值符使派生面=基础位不声明。面→位依据(逐面实核):
 //   xunShou·fuTou=日柱 / allKong=各柱 / anGan·anZhi=时柱干+时旬 / wangShuai=月支五行 /
 //   shenSha=四柱+isDiurnal(buildQimenShenSha 入参)/ ju_info 的 sanYuan 从 juText 解析=基础位。
 //   缺 keyDeps 键=树掩码回退全位(qimenKeyMaskOf 保守兜底)+完备闸红。
-import { GROUP_TYPES } from './conditionTypes.js';
+import { makeConditionTreeApi } from './conditionTypes.js';
 import {
 	BAGONG_PALACE_NAME,
 	QIMEN_JI_PATTERN_NAMES,
@@ -24,13 +24,13 @@ import {
 	getMenGongRelation,
 } from '../../dunjia/DunJiaBaGongRules.js';
 import { LUOSHU_NUM } from '../../dunjia/DunJiaFaDoc.js';
-// [W3 全谱轮] 旺衰五路=主页「看旺衰」同函数(DunJiaCalc.buildQimenWangShuai);
+// 旺衰五路=主页「看旺衰」同函数(DunJiaCalc.buildQimenWangShuai);
 // 伏反吟局=法奇门同函数(全盘级,≠宫级伏吟格)。
 import { buildQimenWangShuai } from '../../dunjia/DunJiaCalc.js';
 import { computePanType } from '../../dunjia/DunJiaFaCalc.js';
 
 const opt = (arr)=>arr.map((v)=>({ value: v, label: v }));
-// [Q-271/ZC-26] 旬首 → 遁仪(六甲遁六仪)
+// 旬首 → 遁仪(六甲遁六仪)
 const XUN_SHOU_YI = { 甲子: '戊', 甲戌: '己', 甲申: '庚', 甲午: '辛', 甲辰: '壬', 甲寅: '癸' };
 const PALACE_DIR = { 1: '东南', 2: '正南', 3: '西南', 4: '正东', 5: '中宫', 6: '正西', 7: '东北', 8: '正北', 9: '西北' };
 // 洛书 1..9 序 → grid 位序(坎1→8、坤2→3、震3→4、巽4→1、中5→5、乾6→9、兑7→6、艮8→7、离9→2)。
@@ -60,7 +60,7 @@ const STAR_OPTIONS = [
 	{ value: '辅', label: '天辅' }, { value: '英', label: '天英' }, { value: '芮', label: '天芮(转盘显天内)' },
 	{ value: '柱', label: '天柱' }, { value: '心', label: '天心' }, { value: '禽', label: '天禽(转盘寄芮显天内)' },
 ];
-// 神值=单字。[Q-470/T-432] 旧注「转盘已把 勾→虎/雀→玄 归一,勾/雀/常 仅飞盘·混合可命中」只在
+// 神值=单字。旧注「转盘已把 勾→虎/雀→玄 归一,勾/雀/常 仅飞盘·混合可命中」只在
 // 「八神取神=两遁恒白虎玄武(缺省)」下成立:本页扫描参数含八神取神,选「两遁恒勾陈朱雀」时转盘恒出勾/雀
 // 而虎/玄反不中,选「按遁取神」则阳遁出勾/雀。故勾/雀改标「取神而定」;太常仍只有飞盘/混合才有。
 const GOD_OPTIONS = [
@@ -73,7 +73,7 @@ const FLAG_OPTIONS = [
 	{ value: 'kongWang', label: '空亡' }, { value: 'yima', label: '驿马' }, { value: 'gengHu', label: '庚/白虎' },
 	{ value: 'jiXing', label: '六仪击刑' }, { value: 'ruMu', label: '奇仪入墓' }, { value: 'menPo', label: '门迫' },
 ];
-const FLAG_CN = { kongWang: '空亡', yima: '驿马', jiXing: '击刑', ruMu: '入墓', menPo: '门迫', gengHu: '庚/虎' };	// [W3] overview.sixHarm 已算的第六害
+const FLAG_CN = { kongWang: '空亡', yima: '驿马', jiXing: '击刑', ruMu: '入墓', menPo: '门迫', gengHu: '庚/虎' };	// overview.sixHarm 已算的第六害
 const RELATION_OPTIONS = [
 	{ value: 'sheng', label: '门生宫' }, { value: 'beisheng', label: '宫生门' },
 	{ value: 'po', label: '门克宫(门迫)' }, { value: 'shouzhi', label: '宫克门(受制)' }, { value: 'bihe', label: '门宫比和' },
@@ -181,7 +181,7 @@ export function makeQimenEvalCtx(pan){
 			}
 			return overview;
 		},
-		// [W3 全谱轮] 旺衰五路(星/门/天干/地干/宫)一次惰性:主页「看旺衰」同函数。
+		// 旺衰五路(星/门/天干/地干/宫)一次惰性:主页「看旺衰」同函数。
 		wangShuai(){
 			if(wangShuai === undefined){
 				try{ wangShuai = buildQimenWangShuai(pan) || null; }catch(e){ wangShuai = null; }
@@ -311,7 +311,7 @@ export const QIMEN_CONDITION_TYPES = {
 		defaults: { values: ['符'], palaces: [], matchMode: 'any' },
 		fields: [
 			{ key: 'values', kind: 'multiselect', label: '神', options: GOD_OPTIONS },
-			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫;转盘的虎/玄↔勾/雀 随「八神取神」档互换(缺省=两遁恒白虎玄武)' },   // [Q-470/T-432]
+			{ key: 'palaces', kind: 'multiselect', label: '宫位', options: QIMEN_PALACE_OPTIONS, hint: '空=任意宫;转盘的虎/玄↔勾/雀 随「八神取神」档互换(缺省=两遁恒白虎玄武)' },
 			MATCH_MODE_FIELD,
 		],
 		validate: needValues,
@@ -341,7 +341,7 @@ export const QIMEN_CONDITION_TYPES = {
 				if(cell.hasJiXing){ out.push('jiXing'); }
 				if(cell.hasRuMu){ out.push('ruMu'); }
 				if(cell.hasMenPo){ out.push('menPo'); }
-				if((cell.tianGan === '庚') || `${cell.god || ''}`.indexOf('虎') >= 0){ out.push('gengHu'); }	// [W3] 同 overview gengHu 判据(god 为简称「虎」/全名双形)
+				if((cell.tianGan === '庚') || `${cell.god || ''}`.indexOf('虎') >= 0){ out.push('gengHu'); }	// 同 overview gengHu 判据(god 为简称「虎」/全名双形)
 				return out;
 			};
 			return evalCellValueCondition(pan, p, flagsOf, (v)=>FLAG_CN[v] || v);
@@ -506,11 +506,11 @@ export const QIMEN_CONDITION_TYPES = {
 			if(!ws){ return { pass: false, actual: '旺衰:—' }; }
 			const KEY = { star: 'starWangShuai', door: 'doorWangShuai', tianGan: 'tianGanWangShuai', diGan: 'diGanWangShuai', gong: 'gongWangShuai' };
 			const k = KEY[p.road || 'door'];
-			// [Q-274/T-256] 宫位选项值为数字、此前按字符串 includes 比 → 限定宫位恒不命中;两侧统一字符串化。
+			// 宫位选项值为数字、此前按字符串 includes 比 → 限定宫位恒不命中;两侧统一字符串化。
 			const wantPalaces = (p.palaces || []).map((x)=>`${x}`);
 			const scope = wantPalaces.length ? ws.palaces.filter((c)=>wantPalaces.includes(`${c.palaceNum}`)) : ws.palaces;
 			const hits = scope.filter((c)=>(p.states || []).includes(c[k]));
-			// [Q-466/T-428] 「全部在场」=所选旺衰值每个都至少出现在范围内一宫(与本表其它类共享字段语义同),此前按「每宫都命中」判 → 转盘中宫无门时门路「全部」恒假。
+			// 「全部在场」=所选旺衰值每个都至少出现在范围内一宫(与本表其它类共享字段语义同),此前按「每宫都命中」判 → 转盘中宫无门时门路「全部」恒假。
 			const allVals = (p.states || []).filter((v)=>scope.some((c)=>c[k] === v));
 			const pass = p.matchMode === 'all' ? ((p.states || []).length > 0 && allVals.length === (p.states || []).length) : hits.length > 0;
 			return { pass, actual: `月令${ws.monthElem}·${scope.map((c)=>`${c.palaceName}${c[k] || '—'}`).join(' ')}` };
@@ -583,7 +583,7 @@ export const QIMEN_CONDITION_TYPES = {
 		defaults: { dim: 'xunShou', values: ['甲子'] },
 		fields: [
 			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'xunShou', label: '旬首' }, { value: 'fuTou', label: '符头' }] },
-			// [Q-271/ZC-26] 旬首恒六甲、符头为「甲X / 己X」干支,文本从不含六仪 → 戊/庚/辛/壬/癸 此前恒假。
+			// 旬首恒六甲、符头为「甲X / 己X」干支,文本从不含六仪 → 戊/庚/辛/壬/癸 此前恒假。
 			// 六仪档改按「旬首遁仪」判(甲子戊 / 甲戌己 / 甲申庚 / 甲午辛 / 甲辰壬 / 甲寅癸);符头面加「甲」(与「己」按首字含判)。
 			{ key: 'values', kind: 'multiselect', label: '取值(任一;含判)', options: opt(['甲子', '甲戌', '甲申', '甲午', '甲辰', '甲寅', '甲', '戊', '己', '庚', '辛', '壬', '癸']), hint: '旬首=六甲,六仪按旬首遁仪判(甲子戊…甲寅癸);符头=甲X/己X 干支,选「甲」「己」按首字含判' },
 		],
@@ -619,69 +619,9 @@ export const QIMEN_CONDITION_TYPES = {
 
 // ── UI 条件树(链式 joiner,与天星工作台同语义) ──
 // 组节点无 op;兄弟第 2 个起各带 joiner(all/any/xor)表「本行与上方结果的连接门」。
-export function newQimenLeaf(type, joiner){
-	const spec = QIMEN_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newQimenGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function qimenLeafSummary(leaf){
-	const spec = leaf ? QIMEN_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = QIMEN_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-// 行链 → 求值树:第 2 行起按各自 joiner 左折叠;连续同门扁平为多元组(与天星 compileTree 同构)。
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileQimenTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(QIMEN_CONDITION_TYPES);
+export const newQimenLeaf = TREE_API.newLeaf;
+export const newQimenGroup = TREE_API.newGroup;
+export const qimenLeafSummary = TREE_API.leafSummary;
+export const compileQimenTree = TREE_API.compileTree;

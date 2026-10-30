@@ -1,5 +1,5 @@
 // [奇门择日] 找局扫描引擎(纯前端,零 HTTP)。
-// [Z0] 改为 hourlyScanEngine 通用外壳的**第一个实例**:外壳承载全部技法无关面(采样/递归
+// 改为 hourlyScanEngine 通用外壳的**第一个实例**:外壳承载全部技法无关面(采样/递归
 // 转变分解/行折叠/pick 内缩/CHUNK/Abort/上限防呆),本文件只留奇门四注入点+既有导出面
 // (导出名与行为逐字节不变,由 qimenZeriStress 46 例+qimenScanEngine 10 例整套回归钉死)。
 // 供数链与 dunjiaBackendParity.test.js 同范式:buildLocalNongliLite(轻量 nongli,跳过三推运
@@ -9,6 +9,7 @@
 //   (2015-12-22 冬至 12:48 案例),采样+递归分解对这些天然正确(T2② 金标钉死)。
 // 🔴 不做「按四柱 memo 求值」:同四柱不保证同盘(至界分钟级翻局),每样本直算
 //   (lite+calc 约 2-4ms,月窗≈2s;上限窗见 QIMEN_MAX_SPAN_DAYS_TOTAL)。
+import { defaultAfter23NewDay, defaultLateZiHourUseNextDay } from '../../bazi/dayBoundary.js';
 import { calcDunJia } from '../../dunjia/DunJiaCalc.js';
 import { buildLocalNongliLite } from '../../bazi/baziLunarLocal.js';
 import { buildLocalJieqiYearSeed } from '../../utils/localNongliAdapter.js';
@@ -25,7 +26,7 @@ export const qimenZoneOffsetMinutes = zoneOffsetMinutes;
 // 盘面身份键:局 + 值符值使 + 九宫全要素(含特殊标记)= 基础位(全类恒吃)。同 plateKey ⇒
 // 条件求值面完全同盘;行折叠按它切分 —— 时家逐时辰自然分行,日/月/年家在盘不变的连续
 // 命中时辰自动并为一行。
-// [十一轮实核] 旧注释「ganzhi 已在 plateKey」是错的(key 从未含四柱)——四柱派生面
+// 旧注释「ganzhi 已在 plateKey」是错的(key 从未含四柱)——四柱派生面
 // (xunShou/fuTou=日柱、allKong=各柱、anGan/anZhi=时柱干+时旬、wangShuai=月支五行、
 // shenSha=四柱+昼夜)在日/月/年家盘「同 key 跨多时辰」时独立翻转=假合并实锤。修法=
 // 依赖感知掩位(六壬同协议):树声明吃哪些柱位才把该柱入 key——默认树(不涉这些类)
@@ -111,8 +112,8 @@ export function computeQimenScanPan(geoParams, options, jieqiYearSeeds, dateStr,
 		time: timeStr,
 		gender: geoParams && geoParams.gender !== undefined ? geoParams.gender : 1,
 		timeAlg: options && options.timeAlg !== undefined ? options.timeAlg : 0,
-		after23NewDay: options && options.after23NewDay !== undefined ? options.after23NewDay : 1,
-		lateZiHourUseNextDay: options && options.lateZiHourUseNextDay !== undefined ? options.lateZiHourUseNextDay : 1,
+		after23NewDay: options && options.after23NewDay !== undefined ? options.after23NewDay : defaultAfter23NewDay(),
+		lateZiHourUseNextDay: options && options.lateZiHourUseNextDay !== undefined ? options.lateZiHourUseNextDay : defaultLateZiHourUseNextDay(),
 	};
 	const lite = buildLocalNongliLite(params);
 	const nongli = { ...lite.bazi.nongli, bazi: lite.bazi };
@@ -121,7 +122,7 @@ export function computeQimenScanPan(geoParams, options, jieqiYearSeeds, dateStr,
 		time: { value: { format: ()=>timeStr } },
 		zone: { value: params.zone },
 	};
-	// [W3] showAllKong 恒开:kong_all 条件的四柱空亡供数(主页默认关只是显示层减负;
+	// showAllKong 恒开:kong_all 条件的四柱空亡供数(主页默认关只是显示层减负;
 	// 扫描判定面需要,纯附加键零回归——ganzhi 已在 plateKey,allKong 是其确定派生)。
 	return calcDunJia(fields, nongli, { ...options, showAllKong: true }, { jieqiYearSeeds });
 }
@@ -164,5 +165,5 @@ export function explainQimenAt({ geoParams, options, tree, t, jieqiYearSeeds }){
 	return engine.explainAt({ geoParams, options, tree, t, scanCtx: jieqiYearSeeds || null });
 }
 
-// [Z6] 三式合一拼接 plateKey 消费(同源别名;三家同名 plateKeyOf 避免 import 冲突)。
+// 三式合一拼接 plateKey 消费(同源别名;三家同名 plateKeyOf 避免 import 冲突)。
 export { plateKeyOf as qimenPlateKeyOf };

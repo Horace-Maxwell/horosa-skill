@@ -88,11 +88,11 @@ export const PTOLEMAIC_TRIPLICITY = {
 function termsTableFor(variant, opts){
 	if(variant === 'ptolemaic') return PTOLEMAIC_TERMS;
 	if(variant === 'tetrabiblos') return TETRABIBLOS_TERMS;
-	// [F5] custom=自定义界表(昼表;判读引擎无昼夜上下文,取昼表与后端主口径一致);无合法表回落埃及。
-	// [R2-3] opts.customTermsDay=随盘/回显表体优先,与计算同表。
+	// custom=自定义界表(昼表;判读引擎无昼夜上下文,取昼表与后端主口径一致);无合法表回落埃及。
+	// opts.customTermsDay=随盘/回显表体优先,与计算同表。
 	if(variant === 'custom'){
 		try{
-			// [R4-P2] 昼夜从 opts 读(缺省 true=昼表,与既往行为同);夜盘配独立夜表时与后端同表。
+			// 昼夜从 opts 读(缺省 true=昼表,与既往行为同);夜盘配独立夜表时与后端同表。
 			const t = __req0.customTermsDisplayTables(
 				!(opts && opts.isDiurnal === false), opts && opts.customTermsDay, opts && opts.customTermsNight);
 			if(t && t.lower){ return t.lower; }

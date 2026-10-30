@@ -34,9 +34,8 @@ export const CHANGSHENG_STAGES = ['长生', '沐浴', '冠带', '临官', '帝�
 export const CHANGSHENG_START = { 金: '巳', 木: '亥', 水: '申', 火: '寅', 土: '申' };       // 主流:水土同宫(申)
 export const CHANGSHENG_START_ALT = { 金: '巳', 木: '亥', 水: '申', 火: '寅', 土: '寅' };   // 异说:火土同宫(寅)
 
-// 卦五行 / 卦→后天九宫(显示用)
+// 卦五行(显示用)
 export const GUA_WUXING = { 乾: '金', 兑: '金', 离: '火', 震: '木', 巽: '木', 坎: '水', 艮: '土', 坤: '土' };
-export const GUA_HOUTIAN = { 坎: 1, 坤: 2, 震: 3, 巽: 4, 乾: 6, 兑: 7, 艮: 8, 离: 9 };
 
 // 京房八宫·卦序类型 + 世/应爻位(1-6,自下而上)。moving=相对本宫首卦的变爻集(用于 XOR 掩码匹配)。
 export const PALACE_TYPES = [

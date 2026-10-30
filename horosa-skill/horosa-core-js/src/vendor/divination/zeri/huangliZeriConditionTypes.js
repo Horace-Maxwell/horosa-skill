@@ -1,4 +1,4 @@
-// [Z1·黄历择日] 条件注册表(日粒度)。判定单源=components/calendar/huangliDay.buildHuangliDay
+// 条件注册表(日粒度)。判定单源=components/calendar/huangliDay.buildHuangliDay
 // (老黄历卡片/吉日榜/日子馆/AI 快照同一函数)——主黄历算法修正,择日自动跟(制度层1)。
 // 值域枚举同源 import(lunar-javascript LunarUtil + TONGSHU_TERMS),零手抄:词表/神名变更自动跟随。
 // spec 契约与 QIMEN_CONDITION_TYPES 逐字段同构:{category,label,defaults,fields[],validate,
@@ -6,20 +6,21 @@
 // 一键一行 Tab 缩进(preflight 键集契约)。
 import { LunarUtil } from 'lunar-javascript';
 import { TONGSHU_TERMS, YONGSHI_YIJI_SYN, yongshiVerdict } from '../../calendar/tongshuData.js';
-// [W6 全谱轮] 通书五流派判定=通书页同函数(直调,主表修正择日自动跟);玄空 mingYear 缺省=天地判。
+// 通书五流派判定=通书页同函数(直调,主表修正择日自动跟);玄空 mingYear 缺省=天地判。
 import donggongDay from '../../tongshu/donggong.js';
 import { wutuForDate } from '../../tongshu/wutu.js';
 import { qimenDieShuDay } from '../../tongshu/qimenDieShu.js';
 import { sanyuanLiexiuDay } from '../../tongshu/sanyuanLiexiu.js';
 import { xuankongDay } from '../../tongshu/xuankong.js';
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
+import { parseDateParts } from '../../bazi/dateStrSafe.js';
 
 export { GROUP_TYPES, JOINER_CN };
 
 // ── 同源值域 ──
 const uniq = (arr)=>[...new Set(arr.filter(Boolean))];
 // 用事词表:TONGSHU_TERMS 分类展开(婚姻/营建/…);lunar 宜忌词与其高度重合,另留自由输入。
-// [Q-480/T-442] 同一用事名可跨两类出现(如「启钻」既在营建又在丧葬):按 value 去重并把类名合并进 label,
+// 同一用事名可跨两类出现(如「启钻」既在营建又在丧葬):按 value 去重并把类名合并进 label,
 // 否则下拉里会并存两个同 value 的选项(antd 按 value 作 key → 选一项两项同亮),四类条件全中招。
 export const HUANGLI_TERM_OPTIONS = (()=>{
 	const order = [];
@@ -56,7 +57,7 @@ const listHit = (list, values, mode)=>{
 	const hit = vals.filter((v)=>set.has(v));
 	return { pass: mode === 'all' ? hit.length === vals.length && vals.length > 0 : hit.length > 0, hit };
 };
-// [Q-271/ZC-18] 用事词命中经同义展开(与通书「用事裁决」yongshiVerdict 同一张 YONGSHI_YIJI_SYN):通书用事词表里
+// 用事词命中经同义展开(与通书「用事裁决」yongshiVerdict 同一张 YONGSHI_YIJI_SYN):通书用事词表里
 // 开山 / 平整 / 立向 / 立契 / 造舟船 / 设醮 / 剃头 / 迁徙 在日宜忌表以异名出现(动土·起基 / 平治道涂 / 竖柱·上梁 / 立券 /
 // 造船 / 斋醮 / 理发 / 移徙),此前按字面命中 → 宜含恒假、忌不含恒真。酝酿在日宜忌表无同义条目(仍按字面)。
 const expandTerm = (v)=>uniq([v].concat(YONGSHI_YIJI_SYN[v] || []));
@@ -171,7 +172,7 @@ export const HUANGLI_CONDITION_TYPES = {
 	xiongsha_not: {
 		category: '神煞',
 		label: '凶煞回避',
-		// [Q-271/ZC-19] 库内实名「致死」(lunar 神煞词表无「受死」;yearAuspicious 已同名对齐):缺省与选项同改,否则该项恒不命中。
+		// 库内实名「致死」(lunar 神煞词表无「受死」;yearAuspicious 已同名对齐):缺省与选项同改,否则该项恒不命中。
 		defaults: { values: ['月破', '致死', '四废'], mode: 'without' },
 		fields: [
 			{ key: 'values', kind: 'multiselect', label: '凶煞', options: opt(uniq(['月破', '大耗', '致死', '四废', '五墓', '灾煞', '天火', '月煞', '月虚', '月刑', '月害', '劫煞', '天罡', '死神', '往亡', '归忌', '血支', '血忌', '五离', '八专', '触水龙', '天贼', '五虚', '土符', '大时', '大败', '咸池', '小耗', '四击', '四耗', '四忌', '四穷', '九坎', '九焦', '重日', '复日'])), hint: '当日凶煞列表' },
@@ -294,7 +295,7 @@ export const HUANGLI_CONDITION_TYPES = {
 		defaults: { mode: 'is', values: [] },
 		fields: [
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'is', label: '当日交节' }, { value: 'not', label: '非交节日' }] },
-			// [Q-271/ZC-25] 非交节日判法只看「无交节」,限定节气不参与 → 仅当日交节时显示
+			// 非交节日判法只看「无交节」,限定节气不参与 → 仅当日交节时显示
 			{ key: 'values', kind: 'multiselect', label: '限定节气', options: opt(JIEQI_24), hint: '空=任意节气', showIf: (p)=>p.mode !== 'not' },
 		],
 		summary(p){ return p.mode === 'not' ? '非节气日' : `节气日${(p.values || []).length ? `:${p.values.join('/')}` : ''}`; },
@@ -325,7 +326,7 @@ export const HUANGLI_CONDITION_TYPES = {
 		defaults: { zhis: [], minCount: 1 },
 		fields: [
 			{ key: 'zhis', kind: 'multiselect', label: '限定时支', options: opt(ZHI12), hint: '空=任意时辰;选支=该时辰须为黄道吉时' },
-			// [Q-271/ZC-25] 每日 13 条时辰(子时早晚各一)中黄道吉时恒 6 或 7 条:上限 7(8–13 恒假);子时双计已注明。
+			// 每日 13 条时辰(子时早晚各一)中黄道吉时恒 6 或 7 条:上限 7(8–13 恒假);子时双计已注明。
 			{ key: 'minCount', kind: 'number', label: '吉时数≥', min: 1, max: 7, hint: '当日黄道吉时总数下限(每日恒 6 或 7 条,早晚子时各计一条;限定时支时=命中支数下限)' },
 		],
 		summary(p){ return (p.zhis && p.zhis.length) ? `吉时含:${p.zhis.join('/')}` : `吉时≥${p.minCount || 1}`; },
@@ -350,7 +351,7 @@ export const HUANGLI_CONDITION_TYPES = {
 		label: '时辰宜忌(逐时)',
 		defaults: { mode: 'yi', terms: ['祭祀'], hours: [] },
 		fields: [
-			// [Q-479/T-441 2026-09-18] 两面都是「出现即命中(判真)」:此前括注「命中即判否面」按同表词法(判否=判假)会读成反义;
+			// 两面都是「出现即命中(判真)」:此前括注「命中即判否面」按同表词法(判否=判假)会读成反义;
 			//   要表达「无时辰犯忌」请对本条件取反,与日级「忌中含(避开日)」同一写法。
 			{ key: 'mode', kind: 'select', label: '判面', options: [{ value: 'yi', label: '时宜含(某时辰宜中含该事项即命中)' }, { value: 'ji', label: '时忌含(某时辰忌中含该事项即命中;要「无忌」请取反)' }] },
 			{ key: 'terms', kind: 'multiselect', label: '事项(任一)', options: HUANGLI_TERM_OPTIONS, hint: 'times[].yi/ji 逐时辰宜忌(黄历页时辰卡同源);限定时辰空=任一时辰;两面均为「出现即命中」' },
@@ -385,7 +386,7 @@ export const HUANGLI_CONDITION_TYPES = {
 			const zhiOf = (t)=>`${t.ganzhi || ''}`.slice(-1);
 			const scope = (p.hours && p.hours.length) ? times.filter((t)=>p.hours.includes(zhiOf(t))) : times;
 			const dim = p.dim || 'tianshen';
-			// [Q-269/T-257] 时冲判面:选项是生肖,数据 times[].chong 是地支(dump 实抓「子」)→ 生肖映射到地支后再含判;
+			// 时冲判面:选项是生肖,数据 times[].chong 是地支(dump 实抓「子」)→ 生肖映射到地支后再含判;
 			// 值本身已是地支/含地支的旧存档照旧;sha 值无「煞」前缀(dump 实抓「西」)——统一含判+煞前缀剥离。
 			const SX2ZHI = { 鼠: '子', 牛: '丑', 虎: '寅', 兔: '卯', 龙: '辰', 蛇: '巳', 马: '午', 羊: '未', 猴: '申', 鸡: '酉', 狗: '戌', 猪: '亥' };
 			const hit = scope.filter((t)=>{
@@ -410,9 +411,9 @@ export const HUANGLI_CONDITION_TYPES = {
 		validate: (p)=>(!p.want || !p.want.length) ? '至少选择一项' : '',
 		summary(p){ return `${p.school === 'wutu' ? '乌兔' : '董公'}:${(p.want || []).map((w)=>({ good: '吉', bad: '凶', neutral: '平' })[w] || w).join('/')}`; },
 		evaluate(day, p){
-			const ymd = `${(day.solar && day.solar.ymd) || ''}`.split('-').map(Number);
-			if(ymd.length < 3 || !ymd[0]){ return { pass: false, actual: '通书:—' }; }
-			const args = { y: ymd[0], m: ymd[1], d: ymd[2] };
+			const ymd = parseDateParts((day.solar && day.solar.ymd) || '');   // 日期串单源拆(年带符号)
+			if(!ymd){ return { pass: false, actual: '通书:—' }; }
+			const args = { y: ymd.year, m: ymd.month, d: ymd.day };
 			try{
 				if(p.school === 'wutu'){
 					const r = wutuForDate(args);
@@ -432,15 +433,15 @@ export const HUANGLI_CONDITION_TYPES = {
 		defaults: { school: 'donggong', names: ['煞贡'] },
 		fields: [
 			{ key: 'school', kind: 'select', label: '流派', options: [{ value: 'donggong', label: '董公三吉星' }, { value: 'sanyuan', label: '三垣列宿加临' }] },
-			// [Q-271/ZC-25] 三垣派只有「任意」有意义(煞贡/直星/人专是董公三吉星名,三垣下恒假);留空=全判(与 validate 同口径)。
+			// 三垣派只有「任意」有意义(煞贡/直星/人专是董公三吉星名,三垣下恒假);留空=全判(与 validate 同口径)。
 			{ key: 'names', kind: 'multiselect', label: '星名(任一;三垣派选「任意」或留空=有列宿加临即命中)', options: opt(['煞贡', '直星', '人专', '任意']), hint: '董公=煞贡/直星/人专(或「任意」);三垣=当日有列宿加临即命中,只认「任意」或留空' },
 		],
 		validate: (p)=>((p.school !== 'sanyuan' && (!p.names || !p.names.length)) ? '至少选择一项' : ''),
 		summary(p){ return `${p.school === 'sanyuan' ? '三垣列宿' : '董公吉星'}:${(p.names || []).join('/')}`; },
 		evaluate(day, p){
-			const ymd = `${(day.solar && day.solar.ymd) || ''}`.split('-').map(Number);
-			if(ymd.length < 3 || !ymd[0]){ return { pass: false, actual: '通书:—' }; }
-			const args = { y: ymd[0], m: ymd[1], d: ymd[2] };
+			const ymd = parseDateParts((day.solar && day.solar.ymd) || '');   // 日期串单源拆(年带符号)
+			if(!ymd){ return { pass: false, actual: '通书:—' }; }
+			const args = { y: ymd.year, m: ymd.month, d: ymd.day };
 			try{
 				if(p.school === 'sanyuan'){
 					const r = sanyuanLiexiuDay(args);
@@ -459,9 +460,9 @@ export const HUANGLI_CONDITION_TYPES = {
 	tongshu_hours: {
 		category: '通书',
 		label: '通书吉时在(叠数/玄空)',
-		defaults: { school: 'xuankong' },   // [Q-474/T-436] 缺省换成真能判别的玄空档
+		defaults: { school: 'xuankong' },   // 缺省换成真能判别的玄空档
 		fields: [
-			// [Q-474/T-436] 叠数吉时只由日干、日支、时支决定,六十甲子每一天都有 6/8/10 个吉时 →
+			// 叠数吉时只由日干、日支、时支决定,六十甲子每一天都有 6/8/10 个吉时 →
 			// 「有吉时」逐日恒真,不是条件。档留着(旧方案不破),但置灰不许再选,并在档名里说清;
 			// 玄空档有 541/4383 天为空,能判别,保持可选。
 			{ key: 'school', kind: 'select', label: '流派', options: [
@@ -472,9 +473,9 @@ export const HUANGLI_CONDITION_TYPES = {
 		validate: ()=>'',
 		summary(p){ return `${p.school === 'xuankong' ? '玄空' : '叠数'}有吉时`; },
 		evaluate(day, p){
-			const ymd = `${(day.solar && day.solar.ymd) || ''}`.split('-').map(Number);
-			if(ymd.length < 3 || !ymd[0]){ return { pass: false, actual: '通书:—' }; }
-			const args = { y: ymd[0], m: ymd[1], d: ymd[2] };
+			const ymd = parseDateParts((day.solar && day.solar.ymd) || '');   // 日期串单源拆(年带符号)
+			if(!ymd){ return { pass: false, actual: '通书:—' }; }
+			const args = { y: ymd.year, m: ymd.month, d: ymd.day };
 			try{
 				const r = p.school === 'xuankong' ? xuankongDay(args, undefined) : qimenDieShuDay(args);
 				const best = r.bestHours || [];
@@ -523,7 +524,7 @@ export const HUANGLI_CONDITION_TYPES = {
 	xiu_detail: {
 		category: '神煞',
 		label: '值宿细面(四象/七政/禽)',
-		// [Q-271/ZC-19] 四象实值/选项皆「东青龙」等三字形,缺省曾写「东方青龙」→ 含判双向皆不成立、新加即恒假。
+		// 四象实值/选项皆「东青龙」等三字形,缺省曾写「东方青龙」→ 含判双向皆不成立、新加即恒假。
 		defaults: { dim: 'xiang', values: ['东青龙'] },
 		fields: [
 			{ key: 'dim', kind: 'select', label: '判面', options: [{ value: 'xiang', label: '四象方' }, { value: 'zheng', label: '七政值日' }, { value: 'animal', label: '值禽' }] },
@@ -561,69 +562,9 @@ export const HUANGLI_CONDITION_TYPES = {
 };
 
 // ── 树工厂/摘要/编译(与奇门同构;compile 产物喂 evaluateHuangliTree) ──
-export function newHuangliLeaf(type, joiner){
-	const spec = HUANGLI_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newHuangliGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function huangliLeafSummary(leaf){
-	const spec = leaf ? HUANGLI_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = HUANGLI_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-// 行链 → 求值树:第 2 行起按各自 joiner 左折叠;连续同门扁平为多元组(与天星/奇门 compile 同构)。
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileHuangliTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(HUANGLI_CONDITION_TYPES);
+export const newHuangliLeaf = TREE_API.newLeaf;
+export const newHuangliGroup = TREE_API.newGroup;
+export const huangliLeafSummary = TREE_API.leafSummary;
+export const compileHuangliTree = TREE_API.compileTree;

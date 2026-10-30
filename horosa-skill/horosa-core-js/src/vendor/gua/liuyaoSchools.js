@@ -45,7 +45,7 @@ export const DEFAULT_LIUYAO_SETTINGS = {
 };
 
 export const LIUYAO_PRESETS = {
-	// [Q-110/T-17 2026-09-18 用户裁决 A=①] 「卜筮正宗」预设覆盖集与缺省逐项相同(60/60 样本 0 差异)→ 通用即卜筮正宗口径,
+	// 「卜筮正宗」预设覆盖集与缺省逐项相同(60/60 样本 0 差异)→ 通用即卜筮正宗口径,
 	// 标签写明;bushi 档保留键(旧记录 / 快照 school=bushi 仍解析、结果与通用逐字同)但不再单列在选择器里(hidden)。
 	default: { label: '通用（卜筮正宗口径）', overrides: {} },
 	zengshan: { label: '增删卜易(野鹤)', overrides: { guashen: false, fushen: 'missing', shensha: { on: false }, changshengUse: 'four' }, note: '重用神旺衰、删繁就简、弃卦身、几弃神煞;长生只取生旺墓绝' },
@@ -67,9 +67,10 @@ function deepMergeShenshaEx(base, ov){
 	return { on: ov.on != null ? ov.on : base.on, set: ov.set === undefined ? (base.set ? base.set.slice() : null) : (ov.set ? ov.set.slice() : null) };
 }
 
-// [Q-204/T-147·BG-07] 不属「流派口径」的键:输入键(逐问题输入:占测事项/用神手选/本命年支)与显示、起卦体验键。
+// 不属「流派口径」的键:输入键(逐问题输入:占测事项/用神手选/本命年支)与显示、起卦体验键。
 //   ① sameAsPreset 不比对它们 —— 增删卜易下选「求财」或拨书写方向,流派不再被打成「自定义」;
-//   ② applyPreset(presetKey, current) 切派时保留其当前值(此前以出厂缺省为底一并重置)。
+//   ② applyPreset(presetKey, current) 切派时保留其当前值(此前以出厂缺省为底一并重置);
+//      例外:预设自己点名写了的键以预设为准(邵伟华新派「占测事项归自身」)。
 //   缺省流派 + 未改这些键时输出逐字节不变。
 export const LIUYAO_NON_SCHOOL_KEYS = [
 	'askType', 'yongOverride', 'benming',
@@ -85,10 +86,42 @@ export function applyPreset(presetKey, current){
 	merged.shenshaEx = deepMergeShenshaEx(DEFAULT_LIUYAO_SETTINGS.shenshaEx, ov.shenshaEx);
 	if(current && typeof current === 'object'){
 		LIUYAO_NON_SCHOOL_KEYS.forEach((k)=>{
-			if(current[k] !== undefined){ merged[k] = current[k]; }
+			if(current[k] !== undefined && ov[k] === undefined){ merged[k] = current[k]; }
 		});
 	}
 	return merged;
+}
+
+// 「恢复默认设置」:全部键回出厂默认(含占测事项、用神手选、本命年支与显示 / 起卦习惯),流派回「通用」。
+//   出厂神煞表复制一份,不与 DEFAULT_LIUYAO_SETTINGS 共享数组引用。
+export function factoryLiuyaoSettings(){
+	return normalizeLiuyaoSettings(null);
+}
+
+// 多选「改一项」的增量:用户点击那一刻看到的一组(prevArr)→ 点完的一组(nextArr),加了谁、去了谁。
+// 盘面那一组可能是载入事盘带来的,与本机记住的那一组不同 —— 落盘时只把这一下叠到记住的那一组上,不把盘面整组写进去。
+export function selectionDelta(prevArr, nextArr){
+	const prev = Array.isArray(prevArr) ? prevArr : [];
+	const next = Array.isArray(nextArr) ? nextArr : [];
+	const prevSet = new Set(prev);
+	const nextSet = new Set(next);
+	return {
+		add: next.filter((x)=>!prevSet.has(x)),
+		remove: prev.filter((x)=>!nextSet.has(x)),
+	};
+}
+
+// 把增量叠到一组上:base ∪ add − remove。顺序按 universe(选项表顺序,与多选框 onChange 的顺序同一口径;
+// 不在表里的旧名排在后面、保持原序),否则「去掉再勾回」会因顺序不同被当成改了流派。
+export function applySelectionDelta(baseArr, delta, universe){
+	const base = Array.isArray(baseArr) ? baseArr : [];
+	const d = delta || {};
+	const removeSet = new Set(Array.isArray(d.remove) ? d.remove : []);
+	const out = base.filter((x)=>!removeSet.has(x));
+	(Array.isArray(d.add) ? d.add : []).forEach((x)=>{ if(out.indexOf(x) < 0 && !removeSet.has(x)){ out.push(x); } });
+	if(!Array.isArray(universe) || !universe.length){ return out; }
+	const rank = (x)=>{ const i = universe.indexOf(x); return i < 0 ? universe.length : i; };
+	return out.map((x, i)=>({ x, i })).sort((a, b)=>(rank(a.x) - rank(b.x)) || (a.i - b.i)).map((o)=>o.x);
 }
 
 export function setOption(settings, key, value){

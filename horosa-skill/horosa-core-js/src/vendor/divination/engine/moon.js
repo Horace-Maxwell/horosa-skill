@@ -9,7 +9,7 @@ const CLASSICAL7 = ['sun', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
 // 中世纪「月不空」豁免座：金牛/巨蟹/射手/双鱼。
 const VOC_EXEMPT = ['taurus', 'cancer', 'sagittarius', 'pisces'];
 
-// [Q-299/T-288 ②] 燃烧之路变体人话边界(与 radicality.viaCombustaRange 同四档;卜卦流派表 horarySchools 同文案)。
+// 燃烧之路变体人话边界(与 radicality.viaCombustaRange 同四档;卜卦流派表 horarySchools 同文案)。
 export function viaCombustaLabel(variant){
 	if(variant === 'scorpioFull') return '天秤15°–天蝎30°';
 	if(variant === 'bothFull') return '天秤0°–天蝎30°';
@@ -28,14 +28,14 @@ export function isViaCombusta(moonLon){
 //     'classic'(默认=「无入相/正合主相位即空」1647 法,别名 'backend'。
 //               2026-07 勘误:旧注「按星座界」系误录;后端 isVOC 亦已同步支持六口径(chartdynamics),
 //               显示链吃全局 vocMode、判读链吃本 opts——两链语义一致,数学对齐。
-//               [Q-146] 本档不再直读后端 isVOC 旗,改前端按同一定义自算,否则流派绑定值会被全局值顶掉)
+//               本档不再直读后端 isVOC 旗,改前端按同一定义自算,否则流派绑定值会被全局值顶掉)
 //     'kenodromia'(希腊化 30° 法:未来无对目标星准确入相则空)
 //     'exempt4'(中世纪:豁免四座不作空亡)
 //     'by_orb'(容许度法:距下一主相位精确点 ≤12°30′ 即不空,不拘星座界)
 //     'by_sign_perfect'(现代:须在本座内实际完成主相位才不空)
 //     'by_sign_orb'(16c 变体:本座内逼近到容许度内即不空,不需完成)
 //   vocIncludeOuter —— true 时目标星含三王星(默认 false;仅作用于前端解算的四模式)
-// [Q-146/T-53] classic(1647「无入相/正合主相位即空」)分支原直读后端 isVOC,而 /chart 请求带的是
+// classic(1647「无入相/正合主相位即空」)分支原直读后端 isVOC,而 /chart 请求带的是
 // 【全局】空亡口径 → 流派绑定 classic(或择日左栏显式选 1647)时,判读实际吃的是全局口径。
 // 改为与其余五口径同源:同一张后端相位表(normalAsp)前端自算——不拘星座界、对表内全部星体
 // 无入相/正合托勒密相位即空。目标集口径:normalAsp 在「虚点接纳相位」关闭(缺省)时只含十星,
@@ -45,18 +45,18 @@ export function isViaCombusta(moonLon){
 // 记忆化:择日扫描/压测会对成百上千个时刻各建一份 facts 并反复问月空 —— 旧实现读一面布尔旗是 O(1),
 // 自算要遍历相位表。以「该盘月亮的相位表条目对象」为键缓存(值只由它决定;换盘即换对象),
 // 不缓存无表回落旗的那条路径(测试会就地改 isVOC 再问一次)。
-const CLASSIC_VOC_MEMO = typeof WeakMap === 'function' ? new WeakMap() : null;
+const CLASSIC_VOC_MEMO = new WeakMap();
 export function classicVocOf(facts){
 	const m = facts && facts.planets ? facts.planets.moon : null;
 	const na = facts && facts.result && facts.result.aspects && facts.result.aspects.normalAsp;
 	if(!m) return false;
 	const entry = na ? na[chartIdOfKey('moon')] : null;
 	if(!entry) return !!m.isVOC;
-	if(CLASSIC_VOC_MEMO && typeof entry === 'object' && CLASSIC_VOC_MEMO.has(entry)){
+	if(typeof entry === 'object' && CLASSIC_VOC_MEMO.has(entry)){
 		return CLASSIC_VOC_MEMO.get(entry);
 	}
 	const voc = !applyingAspects(facts, 'moon').some((a) => PTOLEMAIC_ANG.indexOf(a.angle) >= 0);
-	if(CLASSIC_VOC_MEMO && typeof entry === 'object'){ CLASSIC_VOC_MEMO.set(entry, voc); }
+	if(typeof entry === 'object'){ CLASSIC_VOC_MEMO.set(entry, voc); }
 	return voc;
 }
 
@@ -109,7 +109,7 @@ export function moonReport(facts, opts){
 
 	if(voc){
 		f.push({ key: 'voc', polarity: 'negative', weight: 3, text_zh: '月亮空相（VOC）：离开本座前不再成准确相位，事多无果 / 问题可能不真' + (vocNote === 'kenodromia' ? '（希腊化口径：未来无对七曜准确入相）' : '') });
-		// [WP-F] 四座减凶注记(vocMitigateSigns):非 exempt4 口径下月落豁免四座 → 出中性注记
+		// 四座减凶注记(vocMitigateSigns):非 exempt4 口径下月落豁免四座 → 出中性注记
 		// (判空布尔不变,只提示传统认为凶性减轻)。exempt4 口径已直接豁免,不重复出注。
 		if(opts.vocMitigateSigns && vocMode !== 'exempt4' && VOC_EXEMPT.indexOf(m.sign) >= 0){
 			f.push({ key: 'voc_mitigated_sign', polarity: 'neutral', weight: 1, text_zh: '月虽空相，但落金牛/巨蟹/射手/双鱼（传统豁免座）→ 凶性减轻，可酌情从宽（注记，不改判定）' });
@@ -121,7 +121,7 @@ export function moonReport(facts, opts){
 	}
 	const vcr = viaCombustaRange(opts.viaCombustaVariant);
 	if(norm360(m.lon) >= vcr[0] && norm360(m.lon) <= vcr[1]){
-		// [Q-299/T-288 ②] 注记边界随变体(此前恒写「天秤15°–天蝎15°」,窄口径/全宫变体下与判定不符)。
+		// 注记边界随变体(此前恒写「天秤15°–天蝎15°」,窄口径/全宫变体下与判定不符)。
 		f.push({ key: 'via_combusta', polarity: 'negative', weight: 2, text_zh: `月亮在燃烧之路（${viaCombustaLabel(opts.viaCombustaVariant)}）：最糟阻碍之一；尤忌婚姻/女性事务/买卖/出国（保密类除外）` });
 	}
 	if(mp.nearNew){

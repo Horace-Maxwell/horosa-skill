@@ -123,6 +123,21 @@ def parse_preset_sections(text: str) -> dict[str, list[str]]:
     return presets
 
 
+def read_aiexport_source(path: Path) -> str:
+    """aiExport 的全部源码文本：门面 `aiExport.js` + 同名目录 `aiExport/` 下的全部 `.js`。
+
+    上游 v3.12.0 把 aiExport.js 拆成门面 + 12 个子模块（版本号、预设段在 aiExport/presets.js），门面里写明
+    「读源码的检查一律读本文件 + 该目录全集」。只读门面会读不到版本号与预设段（旧仓库没有目录时等价于只读单文件）。
+    presets.js 排在最前：段表常量与成员赋值都在那里，其余子模块按文件名排序拼在后面。
+    """
+    parts = [path.read_text(encoding="utf-8", errors="replace")]
+    folder = path.with_suffix("")
+    if folder.is_dir():
+        files = sorted(folder.glob("*.js"), key=lambda f: (f.name != "presets.js", f.name))
+        parts += [f.read_text(encoding="utf-8", errors="replace") for f in files]
+    return "\n".join(parts)
+
+
 def load_upstream_aiexport(path: Path) -> tuple[int, dict[str, list[str]]]:
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = read_aiexport_source(path)
     return read_settings_version(text), parse_preset_sections(text)

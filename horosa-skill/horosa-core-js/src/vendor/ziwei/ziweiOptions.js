@@ -1,4 +1,4 @@
-import { registerZwEngineOptionsForBrightness } from './data/ziweiTables.js';   // [Q-433/T-396] 亮度源单例登记(报告 GT 预装饰)
+import { registerZwEngineOptionsForBrightness } from './data/ziweiTables.js';   // 亮度源单例登记(报告 GT 预装饰)
 // 紫微「传本/流派」排盘开关（可变单例，镜像 ZWConst.ZWSchool 模式；默认＝现状零回归）。
 // 任一项非默认 → ZiWeiMain.requestZiWei 走本地 ZiweiCalc 引擎(Java 不支持这些开关);全默认 → 仍走 Java(字节零回归)。
 export const ZWEngineOptions = {
@@ -9,7 +9,7 @@ export const ZWEngineOptions = {
 	shangShi: 'fixed',     // fixed=天伤交友/天使疾厄(默认) / yinyang=中州派阴阳互换(仅阴男阳女对调,古法§6)
 	leapMonth: 'mid_split',// 闰月归月:mid_split 十五分界(默认=现状) / next 整月归下月 / prev 整月归上月(§1.5)
 	lateZi: 'global',      // 晚子时:global 跟随全局设置(默认) / zi_chu 强制子初换日 / midnight_split 夜子折中 / zi_zheng 子正换日(§1.3)
-	yearBoundary: 'lunar_1_1',// 定年界线:lunar_1_1 正月初一(默认=缺省 Java 盘同源,紫微正统;[Q-194] 起) / lichun 立春(八字口径)(§1.6)
+	yearBoundary: 'lunar_1_1',// 定年界线:lunar_1_1 正月初一(默认=缺省 Java 盘同源,紫微正统;起) / lichun 立春(八字口径)(§1.6)
 	huoling: 'sanhe',      // 火铃:sanhe 三合通行(默认=现状,年支+生时顺数) / nanpai 南派(忽略生时·固定子)(§1.6)
 	kongNaming: 'modern',  // 空劫命名:modern 地空地劫(默认) / book 时系逆行星作天空(古本《全书》,互斥去年支独立天空)(§5)
 	brightnessSource: 'zi_jian', // 亮度源:zi_jian 自建(默认=现状,=中州五档) / quanshu《全书》煞星改订 / quanshu_full《全书》七档全表(§4.5/A.7)
@@ -18,7 +18,7 @@ export const ZWEngineOptions = {
 	liuYueBasis: 'doujun',       // 流月起法:doujun 斗君宫起正月(默认=现状,三合/四化主流) / taisui 太岁宫起正月。运限推演层,不进 needsLocalEngine
 	kuiYue: 'jia_wu_geng',       // 魁钺歌诀:jia_wu_geng 甲戊庚牛羊(默认=现表,庚→丑未) / geng_ma_hu 庚辛逢马虎(庚→午寅)。真移星,进 needsLocalEngine
 	kongwangStyle: 'double',     // 截空旬空:double 正副双星(默认=现状) / single 只安正空支(正名无副)。改安星,进 needsLocalEngine
-	xiaoxianMode: '0',     // [B15] 小限顺逆:'0'=男顺女逆(默认) / '1'=阳男阴女顺(中州)。[B15b] 进 FORWARD(本地引擎 smallDirection 同口径);不进 needsLocalEngine(渲染层 xiaoxianAgesOf 单源现算,绝不为它翻引擎)
+	xiaoxianMode: '0',     // 小限顺逆:'0'=男顺女逆(默认) / '1'=阳男阴女顺(中州)。进 FORWARD(本地引擎 smallDirection 同口径);不进 needsLocalEngine(渲染层 xiaoxianAgesOf 单源现算,绝不为它翻引擎)
 	changshengDirection: 'yinyang', // 长生十二神顺逆:yinyang 阳男阴女顺/阴男阳女逆(默认=现状) / always_forward 全顺行。仅动 phase 环,进 needsLocalEngine
 	changshengStart: 'shui_tu',  // 长生十二神起法:shui_tu 水土同宫(默认=现状,土五起申) / huo_tu 火土同宫(土五起寅)。phase 烙盘,进 needsLocalEngine
 	// ── 显示层 overlay 开关(纯后处理,不改安星,故【不】进 ziweiNeedsLocalEngine;默认全关=零回归) ──
@@ -28,7 +28,7 @@ export const ZWEngineOptions = {
 	qishuWei: false,       // 河洛气数位:官禄宫干四化回照+一六共宗(河洛派)(§9.10)
 	borrowPalace: false,   // 中州借宫:空宫借对宫十四正曜(中州派)(§9.2.4)
 	taiSuiRuGua: false,    // 紫云太岁入卦:关系人生肖落同支宫(紫云派)(§9.3)
-	flowShenshaOnChart: false,   // [D3] 流年神煞上盘:选中流年时宫内将前/岁前十二神换流年版(绘制期替换,零触数据)。默认关
+	flowShenshaOnChart: false,   // 流年神煞上盘:选中流年时宫内将前/岁前十二神换流年版(绘制期替换,零触数据)。默认关
 	flowHuoLing: false,    // 流年火铃:运限流曜追加两颗(流年支代年支+生时,本命火铃内核同式)。默认关=快照/基线字节稳
 	flowLuanXi: false,     // 流鸾流喜:运限流曜追加两颗(支系,与本命红鸾天喜同公式)。默认关=快照/基线字节稳(P3d)
 	taiSuiRelatives: [],   // 紫云关系人列表 [{branch,role,sex}](随盘存)
@@ -41,7 +41,7 @@ export const ZWEngineOptions = {
 //    ziweiLunarBasis(对拍兼容档)、sanPan(deriveSanPan 后处理)。
 export const ZW_ENGINE_FORWARD_KEYS = ['daxianSpan', 'tianmaBasis', 'starSet', 'shangShi', 'leapMonth',
 	'huoling', 'kongNaming', 'lifeMasterBy', 'changshengStart', 'changshengDirection', 'kuiYue', 'kongwangStyle',
-	'xiaoxianMode'];   // [B15b] 本地引擎 (16) 段消费(smallDirection 口径);不触发 needsLocalEngine
+	'xiaoxianMode'];   // 本地引擎 (16) 段消费(smallDirection 口径);不触发 needsLocalEngine
 export function collectEngineOpts(src){
 	const out = {};
 	ZW_ENGINE_FORWARD_KEYS.forEach((k)=>{ out[k] = src[k]; });
@@ -101,7 +101,7 @@ export const LEAP_MONTH_OPTIONS = [
 	{ value: 'prev', label: '整月归上月' },
 	{ value: 'split_days', label: '前后半分割(按实际天数取中点)' },
 	{ value: 'solar_term', label: '按节气分界(过节归下月)' },
-	{ value: 'split_star_month', label: '命身下月·月系上月(存疑:仅见匿名转述)' },   // [Q-291] 典籍与主流实现皆命身与月系同移;此档保留为存疑变体
+	{ value: 'split_star_month', label: '命身下月·月系上月(存疑:仅见匿名转述)' },   // 典籍与主流实现皆命身与月系同移;此档保留为存疑变体
 ];
 export const LATE_ZI_OPTIONS = [
 	{ value: 'global', label: '跟随全局设置(默认)' },
@@ -112,7 +112,7 @@ export const LATE_ZI_OPTIONS = [
 ];
 // 定年界线:紫微斗数是五术里的例外——**正月初一换年是紫微正统**,立春换年是八字口径。
 // 生辰落在春节↔立春之间者两口径不同年,会连带改掉十二宫干(五虎遁)/生年四化/年干支系诸星/
-// 小限起宫/身主/旬空/大限顺逆。[Q-194/T-119] 缺省 Java 盘本就按正月初一换年(ZiWeiChart 取 nongli.year),此前左栏
+// 小限起宫/身主/旬空/大限顺逆。缺省 Java 盘本就按正月初一换年(ZiWeiChart 取 nongli.year),此前左栏
 // 却标「立春(默认)」且本地引擎缺省 lichun → 拨任一无关引擎键即整盘翻年;现缺省=正月初一,与缺省盘同源,立春为可选档。
 export const YEAR_BOUNDARY_OPTIONS = [
 	{ value: 'lunar_1_1', label: '正月初一换年(默认·紫微正统)' },
@@ -163,5 +163,51 @@ export const BRIGHTNESS_SOURCE_OPTIONS = [
 	{ value: 'custom', label: '自定义(逐格编辑,32星×12支)' },
 ];
 
-// [Q-433/T-396] 把亮度源单例登记给 ziweiTables.decorateZiweiChartBrightness(报告 GT 预装饰读当前源)。
+// 紫微择日工作台的扫描参数(标签与各档名同紫微页;默认 = Java 兼容口径 = 主页默认态所见)。
+// 工作台下拉与择日快照的「扫描口径」行同读这一份,标签与档名不各写一套。
+export const ZIWEI_ZERI_SCAN_FIELDS = [
+	{ key: 'gender', label: '性别', dv: 1, options: [{ value: 1, label: '男' }, { value: 0, label: '女' }] },
+	{ key: 'timeAlg', label: '时间算法', dv: 1, options: [{ value: 1, label: '直接时间' }, { value: 0, label: '真太阳时' }] },
+	{ key: 'yearBoundary', label: '定年界线', dv: 'lunar_1_1', options: YEAR_BOUNDARY_OPTIONS },
+	{ key: 'ziweiLunarBasis', label: '安星农历', dv: 'calendar', options: [{ value: 'calendar', label: '日历日' }, { value: 'ziwei', label: '随日柱进位' }] },
+	// 晚子时缺省「跟随全局」(= 主页缺省);双盘是本命人工比对,扫描恒单方案,不列
+	{ key: 'lateZi', label: '晚子时', dv: 'global', options: LATE_ZI_OPTIONS.filter((o)=>o.value !== 'dual') },
+	{ key: 'leapMonth', label: '闰月归月', dv: 'mid_split', options: LEAP_MONTH_OPTIONS },
+	{ key: 'tianmaBasis', label: '天马依据', dv: 'month', options: TIANMA_BASIS_OPTIONS },
+	{ key: 'huoling', label: '火铃起宫', dv: 'sanhe', options: HUOLING_OPTIONS },
+	{ key: 'kuiYue', label: '魁钺歌诀', dv: 'jia_wu_geng', options: KUIYUE_OPTIONS },
+	{ key: 'kongwangStyle', label: '空亡星式', dv: 'double', options: KONGWANG_STYLE_OPTIONS },
+	{ key: 'changshengStart', label: '长生十二神', dv: 'shui_tu', options: CHANGSHENG_START_OPTIONS },
+	{ key: 'changshengDirection', label: '长生顺逆', dv: 'yinyang', options: CHANGSHENG_DIRECTION_OPTIONS },
+	{ key: 'shangShi', label: '天伤天使', dv: 'fixed', options: SHANGSHI_OPTIONS },
+	{ key: 'kongNaming', label: '空劫命名', dv: 'modern', options: KONG_NAMING_OPTIONS },
+	{ key: 'starSet', label: '星集', dv: 'full', options: STAR_SET_OPTIONS },
+	{ key: 'lifeMasterBy', label: '命主取法', dv: 'year_branch', options: LIFE_MASTER_BY_OPTIONS },
+];
+
+// 紫微择日:工作台只调性别 / 时间算法;其余排盘口径取自内嵌紫微页(扫描读页面,与点开的盘同一口径;
+// 见 zeriPageCalibre.ZIWEI_PAGE_SCAN_KEYS)。两份都从上表派生(标签与档名不各写一套)。
+export const ZIWEI_ZERI_WORKBENCH_FIELDS = ZIWEI_ZERI_SCAN_FIELDS.filter((f)=>f.key === 'gender' || f.key === 'timeAlg');
+export const ZIWEI_ZERI_PAGE_FIELDS = ZIWEI_ZERI_SCAN_FIELDS.filter((f)=>f.key !== 'gender' && f.key !== 'timeAlg');
+// 扫描所用的紫微排盘口径里与缺省不同的几项(工作台只读显示与 AI 择日回包同读这一份):[{ key, label, value }]
+const ZERI_EXTRA_CALIBRE_FIELDS = [
+	{ key: 'sanPan', label: '三盘', dv: 'tian', options: SANPAN_OPTIONS },
+	{ key: 'daxianSpan', label: '大限跨度', dv: 10, options: DAXIAN_SPAN_OPTIONS },
+];
+export function ziweiZeriCalibreItems(options){
+	const o = options || {};
+	return [...ZIWEI_ZERI_PAGE_FIELDS.filter((f)=>f.key !== 'ziweiLunarBasis'), ...ZERI_EXTRA_CALIBRE_FIELDS].map((f)=>{
+		const v = o[f.key] !== undefined && o[f.key] !== null ? o[f.key] : f.dv;
+		if(`${v}` === `${f.dv}`){ return null; }
+		const list = f.key === 'lateZi' ? LATE_ZI_OPTIONS : (f.options || []);
+		const hit = list.find((x)=>`${x.value}` === `${v}`);
+		return { key: f.key, label: f.label, value: hit ? hit.label : `${v}` };
+	}).filter(Boolean);
+}
+export function ziweiZeriCalibreText(options){
+	const items = ziweiZeriCalibreItems(options);
+	return items.length ? `紫微设置:${items.map((x)=>`${x.label}${x.value}`).join(' · ')}` : '紫微设置全缺省(正月初一换年 · 日历日安星 · 生年支命主)';
+}
+
+// 把亮度源单例登记给 ziweiTables.decorateZiweiChartBrightness(报告 GT 预装饰读当前源)。
 registerZwEngineOptionsForBrightness(ZWEngineOptions);

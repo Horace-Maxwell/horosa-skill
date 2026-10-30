@@ -72,7 +72,7 @@ export const STAR_LIGHT_SOURCES = {
 	// 考据源实有行仅此,绝不臆造补行。null 格=该星结构上不可落之宫(与基表 34 空格同惯例)。
 	quanshu_full: starLightQuanshuFullJson,
 };
-// ===== [B14] 自定义亮度表('custom' 档) =====
+// ===== 自定义亮度表('custom' 档) =====
 // 取值层级=随盘注入单例 > 本机 LS 全量快照('ziweiBrightnessCustom') > 基表。
 // 挂载/导出侧临时注入走单例(builder set→finally 清,绝不写 LS);本机编辑器保存写 LS 后必须
 // resetBrightnessCustomCache() 失效缓存,否则渲染仍读旧表。绝不进 needsLocalEngine(纯显示层)。
@@ -131,9 +131,9 @@ export function starLightOf(star, zhi, source){
 	const b = STAR_LIGHT[star];
 	return b ? b[zhi] : undefined;
 }
-// [Q-433/T-396] 按当前亮度源预装饰整张紫微 chart(深拷贝):每宫各星组的 starlight 经 starLightOf 覆盖(源表命中用其值、
+// 按当前亮度源预装饰整张紫微 chart(深拷贝):每宫各星组的 starlight 经 starLightOf 覆盖(源表命中用其值、
 // 缺格回落原值),与快照 builder(ZiWeiMain 亮度传导)/渲染层(ZWCommHouse.effStarLight)同口径。缺省源 zi_jian 或非法输入 → 原对象
-// 原样返回(零回归)。供深度报告 GT 提取边界(ReportPane → reportPipeline)使用:此前 GT 按裸 starlight 取档,非缺省源下与快照两路不同形。
+// 原样返回(零回归)。供另取整盘真值的调用方在取值边界上预装饰:此前按裸 starlight 取档,非缺省源下与快照两路不同形。
 const ZW_STAR_GROUP_KEYS = ['starsMain', 'starsAssist', 'starsEvil', 'starsOthersGood', 'starsOthersBad', 'starsSmall', 'stars'];
 export function decorateZiweiChartBrightness(chart, source){
 	if(!chart || !Array.isArray(chart.houses)){ return chart; }

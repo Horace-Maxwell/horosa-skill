@@ -18,7 +18,7 @@ function hasReception(facts, a, b){
 	return receives(facts, a, b) || receives(facts, b, a) || mutualReceptionBetween(facts, a, b);
 }
 
-// [H2] 接纳质量分层(1647 口径:庙/旺=主尊贵接纳才可靠化解硬相位;界/面=次尊贵仅减损)。
+// 接纳质量分层(1647 口径:庙/旺=主尊贵接纳才可靠化解硬相位;界/面=次尊贵仅减损)。
 // receives 返回的 rulerShip/token 与 mutualPairsOf 的 level 双源归一。
 const STRONG_TOKENS = ['ruler', 'exalt', 'domicile'];
 // ⚠ 键名对拍(H0 教训的复读):receives() 项的真键名=supplierRulership(reception.js 归一层),
@@ -48,7 +48,7 @@ function receptionMitigatesHard(q, opts){
 	return q.any;
 }
 
-// [H2] 完成法第三星候选集:传统口径下交点/福点/四轴/点位**永不**传光收光(bug 恒清非门控);
+// 完成法第三星候选集:传统口径下交点/福点/四轴/点位**永不**传光收光(bug 恒清非门控);
 // 三王星按 perfectionCandidates 档('withOuter'=现状零回归/'classical7'——古典五档绑七政)。
 const CLASSICAL7 = ['moon', 'mercury', 'venus', 'sun', 'mars', 'jupiter', 'saturn'];
 const OUTERS = ['uranus', 'neptune', 'pluto'];
@@ -75,7 +75,7 @@ function detectInterference(facts, sigA, sigB, mover, target, dAB, opts){
 	if(typeof dAB !== 'number') return null;
 	const mode = (opts && opts.interferenceTiming) || 'degree';
 	const dABm = mode === 'speed' ? arriveMetric(facts, { orb: dAB }, mover, target, mode) : dAB;
-	const cands = perfectionCands(facts, sigA, sigB, opts);   // [H2] 交点/福点/点位永不作阻断第三星
+	const cands = perfectionCands(facts, sigA, sigB, opts);   // 交点/福点/点位永不作阻断第三星
 	// 阻碍 prohibition：第三星 T 抢先入相 target（比 mover 更快成相）→ 第三方/意外插入截断。
 	for(let i = 0; i < cands.length; i++){
 		const T = cands[i];
@@ -137,7 +137,7 @@ export function sequenceFuturePerfect(facts, a, b){
 }
 
 // 完成度三分（3 大征象：上升星/月亮/事件守护星，免受 凶/逆/燃/陷 的数量）
-// opts.exemptCombust(可选):燃烧豁免的征象星键([Q-296/T-281] 合日即所求时不因燃烧判不安全);缺省=现状。
+// opts.exemptCombust(可选):燃烧豁免的征象星键(合日即所求时不因燃烧判不安全);缺省=现状。
 export function completionThirds(facts, sigKeys, opts){
 	const safe = [];
 	const unsafe = [];
@@ -173,7 +173,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 
 	// —— 完成法 ——
 	// 1) 入相位 Application（先查阻碍/挫败：光线在成相前被截 → 阻断完成）
-	// [H2] 非托勒密角(45°/135° 等)不构成完成法——后端相位表含半刑族,旧码未滤,
+	// 非托勒密角(45°/135° 等)不构成完成法——后端相位表含半刑族,旧码未滤,
 	// 45° 入相曾被判「直接完成(hard)」。
 	let asp = aspectBetween(facts, sigA, sigB);
 	if(asp && PTOL.indexOf(asp.angle) < 0){ asp = null; }
@@ -190,7 +190,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	}
 	if(asp && asp.applying && !result.destroyed){
 		const mover = (asp.from === sigA) ? sigA : sigB;
-		// [H2] 接纳分层:receptionForHardAspects 档决定「哪一级接纳能化解硬相位」
+		// 接纳分层:receptionForHardAspects 档决定「哪一级接纳能化解硬相位」
 		// ('any'=任意接纳即化解=现状零回归;'strong'=仅庙旺;'strong_or_double_minor' 含双次尊贵)。
 		const recQ = receptionQuality(facts, sigA, sigB);
 		const rec = recQ.any ? recQ : null;
@@ -232,7 +232,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 			else { result.byWhom = 'other_initiates'; detail.push('对方入相位问卜者 → 由对方主动/自愿促成。'); }
 			// 折返 refranation：入相方逆行 → 临成又退，恐反复/告吹。
 			if(pm && pm.retro){ result.refranationRisk = true; detail.push(`注意：入相方 ${cn(mover)} 逆行 → 恐折返（refranation），临成又退、事有反复。`); }
-			// [H4b 门控] 留驻精化:顺行但临留驻('S'=将转向)的入相方,精确前可能转逆=同类撤回风险。
+			// 留驻精化:顺行但临留驻('S'=将转向)的入相方,精确前可能转逆=同类撤回风险。
 			else if(opts.backendConditionNotes && pm && pm.stationState === 'S'){
 				result.refranationRisk = true;
 				detail.push(`注意：入相方 ${cn(mover)} 临留驻（将转向）→ 有折返之虞（精确前转逆），事有停滞反复。`);
@@ -253,7 +253,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 				result.perfects = true; result.method = 'application'; result.sequence = true;
 				result.ease = EASY.indexOf(seq.angle) >= 0 ? 'easy' : 'hard';
 				if(seq.angle === 180 && !rec && opts.oppositionVerdict === 'yes_but'){ result.regret = true; }
-				// [复审C6] 无条件覆写:残留的陈旧出相位会让应期拿「出相 orb」折算,与序列将精确的相位无关。
+				// 无条件覆写:残留的陈旧出相位会让应期拿「出相 orb」折算,与序列将精确的相位无关。
 				// from 恒取 sigA 是既有近似(sequenceFuturePerfect 不区分追者;应期基准星可用
 				// timingVariant='applied'/'byHouse' 档另取)——非本轮引入,标注留案。
 				result.aspect = { angle: seq.angle, orb: seq.orbNow, from: sigA, to: sigB, sequence: true };
@@ -262,7 +262,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 		}
 	}
 
-	// 1c) [H2] 互容独立成事法（receptionPerfection 门控,default false=现状零回归;1647 口径:
+	// 1c) 互容独立成事法（receptionPerfection 门控,default false=现状零回归;1647 口径:
 	//     庙/旺级互容本身即成事路径,无需相位;weak 级互容不成事(留作证词)。
 	if(!result.perfects && !result.destroyed && opts.receptionPerfection){
 		const q = receptionQuality(facts, sigA, sigB);
@@ -274,10 +274,10 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 
 	// 2) 光线传递 Translation（较轻星先出相一方、再入相另一方）—— 明确指出谁在哪两者之间传递
 	if(!result.perfects && !result.destroyed){
-		const cands = perfectionCands(facts, sigA, sigB, opts);   // [H2] 交点/福点永不传光;三王按档
+		const cands = perfectionCands(facts, sigA, sigB, opts);   // 交点/福点永不传光;三王按档
 		for(let i = 0; i < cands.length; i++){
 			const T = cands[i];
-			// [H2] 传递四判全部限托勒密角(45° 半刑不传光);入相腿用 find 取 orb → timingLeg(应期用 T→target 腿)
+			// 传递四判全部限托勒密角(45° 半刑不传光);入相腿用 find 取 orb → timingLeg(应期用 T→target 腿)
 			const sepA = separatingAspects(facts, T).some((x) => x.other === sigA && PTOL.indexOf(x.angle) >= 0);
 			const appB = applyingAspects(facts, T).find((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
 			const sepB = separatingAspects(facts, T).some((x) => x.other === sigB && PTOL.indexOf(x.angle) >= 0);
@@ -301,7 +301,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	//    严格派条件（opts.collectionRequireReception 门控）：汇集星须同时被双方容纳
 	//    （CA p.111「they both receive him in some of their essential dignities」——C 落 A 与 B 的尊贵中）。
 	if(!result.perfects && !result.destroyed){
-		const cands = perfectionCands(facts, sigA, sigB, opts);   // [H2] speedIdx=99 冒充法官的交点/福点根除
+		const cands = perfectionCands(facts, sigA, sigB, opts);   // speedIdx=99 冒充法官的交点/福点根除
 		for(let i = 0; i < cands.length; i++){
 			const C = cands[i];
 			const aToC = applyingAspects(facts, sigA).find((x) => x.other === C && PTOL.indexOf(x.angle) >= 0);
@@ -327,7 +327,7 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	// 4) 落位 Position（征象星互落对方/事项宫位）
 	if(!result.perfects && !result.destroyed){
 		const qh = opts.quesitedHouse;
-		// [H2] 删 pB.house===qh 误判支:事项主落自己本宫=有力(尊贵证词),不是落位成事——
+		// 删 pB.house===qh 误判支:事项主落自己本宫=有力(尊贵证词),不是落位成事——
 		// 传统落位法=征象星**互入对方**宫位(问方星入事项宫/事项星入一宫)。
 		if(qh && (pA.house === qh || pB.house === 1)){
 			result.perfects = true; result.method = 'position';
@@ -352,17 +352,17 @@ export function analyzePerfection(facts, sigA, sigB, opts){
 	if(pA.combustion === 'combust' || pB.combustion === 'combust'){
 		if(conjIsAnswer){
 			detail.push('征象星虽入燃烧范围，但「与太阳合相」正是所问之答案 → 燃烧豁免，不作破坏、不计燃烧扣分。');
-			// [Q-296/T-281] 豁免落成可消费事实:被豁免的征象星键(horaryEngine 据此把该星燃烧证词转中性、完成度三分同免;
+			// 豁免落成可消费事实:被豁免的征象星键(horaryEngine 据此把该星燃烧证词转中性、完成度三分同免;
 			// 此前豁免只换本行文案——完成时燃烧本就只加注记,开/关裁决恒同=死开关)。
 			result.combustExempt = [sigA, sigB].filter((k) => (k === sigA ? pA : pB).combustion === 'combust');
 		}
 		else if(result.perfects){ detail.push(`注意：${pA.combustion === 'combust' ? cn(sigA) : cn(sigB)} 燃烧，完成受严重削弱。`); }
 		else { result.destroyed = true; result.destruction = 'combustion'; detail.push('征象星燃烧 → 最严重破坏。'); }
 	}
-	// [H2] 破坏后救援扫描:传统口径「刑冲被截不排除中介成事」——destroyed 时仍查
+	// 破坏后救援扫描:传统口径「刑冲被截不排除中介成事」——destroyed 时仍查
 	// 传递/汇集/strong 互容,命中记 result.rescue;rescueAfterDestruction 档(default false=现状)
 	// 决定是否改判为完成(改判时 overrodeDestruction 记录供 UI/快照可释)。
-	// [复审C5] 只有「光线被截/无接纳刑冲」族可由中介救(传统口径「刑冲被截不排除中介成事」);
+	// 只有「光线被截/无接纳刑冲」族可由中介救(传统口径「刑冲被截不排除中介成事」);
 	// 燃烧/撤回/出相位不在此列——化解燃烧的是与太阳互容(radicality #8 救济),不是两主互容。
 	const RESCUABLE = ['prohibition', 'frustration', 'abscission', 'no_reception_hard'];
 	if(result.destroyed && !result.perfects && RESCUABLE.indexOf(result.destruction) >= 0){

@@ -25,3 +25,12 @@ export function safeJsonParseFromStorage() {
 export function safeJsonStringifyToStorage() {
   return false;
 }
+
+// 上游 v3.12.0 新增的两个（埃及流派、区域盘与全局设置 / 简繁偏好存取在用）：headless 不落盘，
+// 写为 no-op；readUserDataJson 恒回调用方给的缺省值（= 上游「存储里没有这一键」的分支）。
+export function safeStorageSetOn() {
+  return false;
+}
+export function readUserDataJson(_key, fallback) {
+  return fallback;
+}

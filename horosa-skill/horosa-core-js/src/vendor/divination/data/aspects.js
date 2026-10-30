@@ -12,28 +12,11 @@ export const ASPECTS = {
 
 export const ASPECT_ANGLES = [0, 60, 90, 120, 180];
 
-// 映点（antiscion）：力量 ≈ 六合/三合（构建清单 §1.4「Position」段）。
-export const ANTISCION = { cn: '映点', en: 'antiscion', strength: 'sextile/trine' };
-
 // 单星容许度（moiety，度）。两星相位容许度 = 双方平均（construct §1.4）。
 export const PLANET_ORB = {
 	sun: 15, moon: 12, mercury: 7, venus: 7, mars: 8, jupiter: 9, saturn: 9,
 	uranus: 5, neptune: 5, pluto: 5, north_node: 3, south_node: 3, fortune: 3,
 };
-
-// 择日容许度（择日清单 §2.4，可配置）；角点相位仅取 ≤3°。
-export const ELECTION_ORBS = {
-	luminary: { conj_opp: 8, trine_sextile: 6, square: 6 },
-	angle: 3,
-	planet: { conj_opp: 7, trine_sextile: 5, square: 5 },
-	moonDecisive: 1.5, // 月亮「决定性」门槛
-	fixedStar: 1,      // 恒星会合 ≤1°(最多1.5)
-	midpoint: 3,
-	timing: 1,         // 应期 1°=1 时间单位
-};
-
-// 相位优先级（强→弱）：0 > 180 > 90 > 120 > 60（择日 §2.4）
-export const ASPECT_PRIORITY = [0, 180, 90, 120, 60];
 
 export function aspectByAngle(angle){
 	const a = Math.round(angle);

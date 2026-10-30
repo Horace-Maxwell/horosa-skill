@@ -12,6 +12,8 @@ import { Gua8, Gua64, getGua64 } from '../gua/GuaConst.js';
 
 
 
+
+
 const BAGUA_SYMBOL = {
 	乾: '☰',
 	兑: '☱',
@@ -763,7 +765,7 @@ function buildSixYaoMainSection(title, leftLines, rightLines, mainElem){
 	return lines;
 }
 
-// [Q-449/T-412] 「爻位」页签的逐爻取纳判语与「取舍总览」两块此前完全不进快照:页面逐爻写
+// 「爻位」页签的逐爻取纳判语与「取舍总览」两块此前完全不进快照:页面逐爻写
 // 「N爻(角色)为阳/阴(纳/拒)。我看重/蔑视【对象】」(左卦思想、右卦实践),末附取舍两栏。
 // 与 UI 严格同源(同 LEFT/RIGHT_YAO_META + linePolarity/lineAdmit/lineVerb),并按裁决作**默认关候选段**
 // (段名已登记 AI_EXPORT_PRESET_SECTIONS.tongshefa 与 DEFAULT_OFF;未自定义用户缺省不纳入=字节零回归)。
@@ -821,7 +823,7 @@ function buildTongSheFaSnapshot(model){
 	parts.push(...buildHexSnapshotSection('潜藏', model.mutualLeft, model.mutualRight));
 	parts.push('');
 	parts.push(...buildHexSnapshotSection('亲和', model.oppositeLeft, model.oppositeRight));
-	// [YA v42] A 类硬缺(全场最薄):纳甲筮法 tab 的整个计算分析层(世应/左右五行/五友/大局升降爻变)
+	// A 类硬缺(全场最薄):纳甲筮法 tab 的整个计算分析层(世应/左右五行/五友/大局升降爻变)
 	// UI 已显示(renderNaJiaTab 系列卡片)却此前不入快照。段名已登记 AI_EXPORT_PRESET_SECTIONS.tongshefa;
 	// 取数与 UI 严格同源(同 model 派生、同 relationByElem/groupFiveFriendItems/fmtRise 等函数);空数据不产段。
 	[
@@ -918,7 +920,7 @@ function patternExplanation(context, type){
 	return '';
 }
 
-// [X1·P1-1] 三十二观(右栏默认首 tab 的核心观文层)入快照 —— 与 renderObserveTab 严格同源
+// 三十二观(右栏默认首 tab 的核心观文层)入快照 —— 与 renderObserveTab 严格同源
 // (同 POSITION_KEYS/META、同 OBSERVE_32 取文);此前 AI 只见卦名不见本法核心解读。
 function buildObserve32Section(model){
 	const out = [];

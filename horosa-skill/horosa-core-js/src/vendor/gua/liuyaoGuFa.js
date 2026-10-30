@@ -237,23 +237,3 @@ const MONTH_TO_BAJIE = { 寅: '立春', 卯: '春分', 辰: '春分', 巳: '立�
 const MONTH_TO_ZHONGQI = { 子: '冬至', 丑: '大寒', 寅: '雨水', 卯: '春分', 辰: '谷雨', 巳: '小满', 午: '夏至', 未: '大暑', 申: '处暑', 酉: '秋分', 戌: '霜降', 亥: '小雪' };
 export function baJieByMonth(monthZhi){ return MONTH_TO_BAJIE[monthZhi] || null; }
 export function zhongQiByMonth(monthZhi){ return MONTH_TO_ZHONGQI[monthZhi] || null; }
-
-// ── 八宫化入墓死亡表 + 棺椁四卦(占病用) ──
-const HUA_MU_DEATH = { 乾艮: '父', 坤巽: '母', 震坤: '长男', 巽坤: '长女', 坎巽: '中男', 离乾: '中女', 艮巽: '少男', 兑艮: '少女' };
-export function huaRuMuOf(benGua, bianGua){
-	if(!benGua || !bianGua || !benGua.house || !bianGua.house){ return null; }
-	const key = benGua.house.name + bianGua.house.name;
-	const who = HUA_MU_DEATH[key];
-	return who ? { from: benGua.house.name, to: bianGua.house.name, who, duan: `${benGua.house.name}化入${bianGua.house.name},应${who}之忧` } : null;
-}
-export function guanGuoOf(guaNames){ // 传入盘面涉及的卦名(本/之/互),含 震=棺 巽=椁 坤=墓 艮=坟;四者全见大凶
-	const set = new Set();
-	(guaNames || []).forEach((nm) => {
-		if(!nm){ return; }
-		if(nm.indexOf('震') >= 0 || nm.indexOf('雷') >= 0){ set.add('棺(震)'); }
-		if(nm.indexOf('巽') >= 0 || nm.indexOf('风') >= 0){ set.add('椁(巽)'); }
-		if(nm.indexOf('坤') >= 0 || nm.indexOf('地') >= 0){ set.add('墓(坤)'); }
-		if(nm.indexOf('艮') >= 0 || nm.indexOf('山') >= 0){ set.add('坟(艮)'); }
-	});
-	return { hits: Array.from(set), all: set.size >= 4 };
-}

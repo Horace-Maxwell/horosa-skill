@@ -1,4 +1,4 @@
-// [Z2·八字择日] 条件注册表(时辰粒度)。判定单源:四柱=buildLocalNongliLite(八字主盘同引擎)、
+// 条件注册表(时辰粒度)。判定单源:四柱=buildLocalNongliLite(八字主盘同引擎)、
 // 神煞=calcFourPillarShenSha(八字页神煞面同函数)——主八字算法/神煞表修正,择日自动跟(制度层1)。
 // spec 契约与 QIMEN/HUANGLI 逐字段同构:{category,label,defaults,fields[],validate,summary,
 // evaluate(pan,params,ctx)→{pass,actual}};ctx=makeBaziZeriEvalCtx(pan,natal)(神煞惰性)。
@@ -6,13 +6,14 @@
 // actual 提示(工作台侧置灰另有防线)。一键一行 Tab 缩进(preflight 键集契约)。
 import { calcFourPillarShenSha } from '../../bazi/baziShenShaLocal.js';
 import { changShengOf, xunKongOf } from '../../bazi/baziLunarLocal.js';
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
+import { lunarMonthLabel } from '../../utils/lunarText.js';
 
 export { GROUP_TYPES, JOINER_CN };
 
 const GAN10 = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const ZHI12 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-// [Q-475/T-437] 六十甲子:`tai_ming_shen` 的取值本就支持整柱(求值 `v.length >= 2 → gz === v`),
+// 六十甲子:`tai_ming_shen` 的取值本就支持整柱(求值 `v.length >= 2 → gz === v`),
 // 但选项表里只有单字干支与五行 → 缺省 ['甲子'] 在下拉里选不到,载入含缺省叶的方案还会被值域审计
 // 误报「含已失效选项:甲子(该行将恒不命中)」(其实能判)。把整柱补进选项,审计与能力对齐。
 const JIAZI60 = Array.from({ length: 60 }, (_, i)=>`${GAN10[i % 10]}${ZHI12[i % 12]}`);
@@ -29,18 +30,18 @@ const GAN_WUHE = { 甲: '己', 己: '甲', 乙: '庚', 庚: '乙', 丙: '辛', �
 const CS_NAMES = ['长生', '沐浴', '冠带', '临官', '帝旺', '衰', '病', '死', '墓', '绝', '胎', '养'];
 const YANG_GAN = ['甲', '丙', '戊', '庚', '壬'];
 // 常见神煞名(select 枚举;判定恒走 calcFourPillarShenSha 同源函数,此表只是 UI 选项)。
-// [W4 全谱轮] 名单=SHENSHA_GROUP_TAGS 49 名全谱按 ji/xiong 分组(原 35 名手抄清单缺月令/流年系
+// 名单=SHENSHA_GROUP_TAGS 49 名全谱按 ji/xiong 分组(原 35 名手抄清单缺月令/流年系
 // 且含五个死键:「三奇贵人」计算侧产名恒为「三奇」;天赦/飞刃/魁罡/空亡不在产名面(32 盘并集
 // dump 实证表外产名=0)——选了永不命中,W4 全部斩杀/正名)。
 const SHENSHA_GOOD = ['天乙贵人', '太极贵人', '文昌贵人', '国印贵人', '福星贵人', '天德贵人', '月德贵人', '天德合', '月德合', '德秀贵人', '天医', '地医', '天马', '天喜', '红鸾', '金舆', '三奇', '学堂', '词馆', '禄神', '暗禄', '驿马', '将星', '华盖'];
 const SHENSHA_BAD = ['羊刃', '红艳', '流霞', '沐浴', '八专', '劫煞', '灾煞', '亡神', '桃花', '孤辰', '寡宿', '病符', '小耗', '大耗', '太岁', '丧门', '吊客', '破碎', '血支', '月厌', '月破', '阴差阳错', '十恶大败', '九丑', '四废'];
 
-// [十四轮] keyDeps 位辅助:柱名→key 位;pillars 参数化类共用(空=全四柱)。
+// keyDeps 位辅助:柱名→key 位;pillars 参数化类共用(空=全四柱)。
 const _pil = (k)=>({ year: 'yearGz', month: 'monthGz', day: 'dayGz', time: 'timeGz' })[k] || 'timeGz';
 const _pils = (arr)=>{ const out = []; (arr && arr.length ? arr : ['year', 'month', 'day', 'time']).forEach((k)=>{ const b = _pil(k); if(out.indexOf(b) < 0){ out.push(b); } }); return out; };
 
 const opt = (arr)=>arr.map((v)=>({ value: v, label: v }));
-// [W4] 刑/穿/破/三会常表(千年口径,与主页 ZiHeCong 同律):
+// 刑/穿/破/三会常表(千年口径,与主页 ZiHeCong 同律):
 // 刑=寅巳/巳申/申寅(无恩)、丑戌/戌未/未丑(恃势)、子卯(无礼)、辰午酉亥自刑。
 const ZHI_XING_PAIRS = [['寅', '巳'], ['巳', '申'], ['申', '寅'], ['丑', '戌'], ['戌', '未'], ['未', '丑'], ['子', '卯'], ['辰', '辰'], ['午', '午'], ['酉', '酉'], ['亥', '亥']];
 const ZHI_CHUAN = { 子: '未', 未: '子', 丑: '午', 午: '丑', 寅: '巳', 巳: '寅', 卯: '辰', 辰: '卯', 申: '亥', 亥: '申', 酉: '戌', 戌: '酉' };
@@ -136,7 +137,7 @@ export const BAZI_CONDITION_TYPES = {
 		fields: [
 			{ key: 'a', kind: 'select', label: '柱A', options: opt2(PILLARS) },
 			{ key: 'b', kind: 'select', label: '柱B', options: opt2(PILLARS) },
-			{ key: 'rel', kind: 'select', label: '关系', options: [{ value: 'liuhe', label: '六合' }, { value: 'chong', label: '相冲' }, { value: 'sanhe', label: '三合(半合)' }, { value: 'same', label: '相同(伏吟)' }, { value: 'xing', label: '相刑' }, { value: 'chuan', label: '相穿(害)' }, { value: 'po', label: '相破' }, { value: 'sanhui', label: '三会(半会)' }] },	// [W4] 刑穿破会四档(千年常表,与主页 ZiHeCong 同口径)
+			{ key: 'rel', kind: 'select', label: '关系', options: [{ value: 'liuhe', label: '六合' }, { value: 'chong', label: '相冲' }, { value: 'sanhe', label: '三合(半合)' }, { value: 'same', label: '相同(伏吟)' }, { value: 'xing', label: '相刑' }, { value: 'chuan', label: '相穿(害)' }, { value: 'po', label: '相破' }, { value: 'sanhui', label: '三会(半会)' }] },	// 刑穿破会四档(千年常表,与主页 ZiHeCong 同口径)
 		],
 		validate(p){ return p.a === p.b ? '两柱须不同' : ''; },
 		summary(p){ return `${cnPillar(p.a)}${cnPillar(p.b)}支${({ liuhe: '六合', chong: '相冲', sanhe: '三合', same: '伏吟', xing: '相刑', chuan: '相穿', po: '相破', sanhui: '三会' })[p.rel] || p.rel}`; },
@@ -229,7 +230,7 @@ export const BAZI_CONDITION_TYPES = {
 	},
 	nayin_wuxing: {
 		category: '纳音长生',
-		// [Q-420/T-384] 本类字段是单选 pillar(非 pillars):此前读 p.pillars 恒 undefined → 回落四柱全位,plateKey 含时柱,
+		// 本类字段是单选 pillar(非 pillars):此前读 p.pillars 恒 undefined → 回落四柱全位,plateKey 含时柱,
 		// 同一命中日每换时辰切一行(≈12 行/日),徽章显「日X时Y」,行数到 1000 即截断。
 		keyDeps: (p)=>_pils([(p && p.pillar) || 'day']),
 		label: '柱纳音五行',
@@ -271,7 +272,7 @@ export const BAZI_CONDITION_TYPES = {
 		label: '旬空',
 		defaults: { pillar: 'time', mode: 'not' },
 		fields: [
-			// [Q-472/T-434] 「日支」档撤掉:本类以日柱起旬,日柱自身之支必在本旬内 →「日支+落旬空」恒假、
+			// 「日支」档撤掉:本类以日柱起旬,日柱自身之支必在本旬内 →「日支+落旬空」恒假、
 			// 「日支+不落空」恒真,两档都不是判据。要判日柱所在旬的空亡支,用下面的「逐柱旬空」。
 			{ key: 'pillar', kind: 'select', label: '柱', options: [{ value: 'time', label: '时支' }] },
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'not', label: '不落空(实)' }, { value: 'is', label: '落旬空' }] },
@@ -453,7 +454,7 @@ export const BAZI_CONDITION_TYPES = {
 				return { k, set, hit: (p.gods || []).some((g)=>set.includes(FULL2SHORT[g] || g)) };
 			});
 			const hits = per.filter((x)=>x.hit);
-			// [Q-466/T-428] 「全部命中」=共享字段语义「所选值每个都要出现」(在限定柱范围内各至少一柱命中),此前按「每柱都命中」判 → 不限柱时日柱十神为「日元」恒假。
+			// 「全部命中」=共享字段语义「所选值每个都要出现」(在限定柱范围内各至少一柱命中),此前按「每柱都命中」判 → 不限柱时日柱十神为「日元」恒假。
 			const allVals = (p.gods || []).filter((g)=>per.some((x)=>x.set.includes(FULL2SHORT[g] || g)));
 			const pass = p.matchMode === 'all' ? ((p.gods || []).length > 0 && allVals.length === (p.gods || []).length) : hits.length > 0;
 			return { pass, actual: per.map((x)=>`${({ year: '年', month: '月', day: '日', time: '时' })[x.k]}${x.set.join(',') || '—'}`).join(' ') };
@@ -502,7 +503,7 @@ export const BAZI_CONDITION_TYPES = {
 				return { k, ny, hit: (p.values || []).some((v)=>ny.indexOf(v) >= 0) };
 			});
 			const hits = per.filter((x)=>x.hit);
-			// [Q-466/T-428] 「全部命中」=所选纳音每个都至少出现在一柱(共享字段语义),此前按「每柱都命中」判。
+			// 「全部命中」=所选纳音每个都至少出现在一柱(共享字段语义),此前按「每柱都命中」判。
 			const allVals = (p.values || []).filter((v)=>per.some((x)=>x.ny.indexOf(v) >= 0));
 			const pass = p.matchMode === 'all' ? ((p.values || []).length > 0 && allVals.length === (p.values || []).length) : hits.length > 0;
 			return { pass, actual: per.map((x)=>`${({ year: '年', month: '月', day: '日', time: '时' })[x.k]}${x.ny || '—'}`).join(' ') };
@@ -532,7 +533,7 @@ export const BAZI_CONDITION_TYPES = {
 				return { k, ph, hit: !!ph && (p.phases || []).includes(ph) };
 			});
 			const hits = per.filter((x)=>x.hit);
-			// [Q-466/T-428] 「全部命中」=所选星运每个都至少出现在一柱(共享字段语义),此前按「每柱都命中」判。
+			// 「全部命中」=所选星运每个都至少出现在一柱(共享字段语义),此前按「每柱都命中」判。
 			const allVals = (p.phases || []).filter((v)=>per.some((x)=>x.ph === v));
 			const pass = p.matchMode === 'all' ? ((p.phases || []).length > 0 && allVals.length === (p.phases || []).length) : hits.length > 0;
 			return { pass, actual: per.map((x)=>`${({ year: '年', month: '月', day: '日', time: '时' })[x.k]}${x.ph || '—'}`).join(' ') };
@@ -542,9 +543,9 @@ export const BAZI_CONDITION_TYPES = {
 		category: '纳音长生',
 		keyDeps: (p)=>_pils(p && p.pillars),
 		label: '逐柱旬空(各柱自起旬)',
-		defaults: { pillars: ['day'], zhis: ['子'] },   // [Q-472/T-434] 缺省不再是恒真组合
+		defaults: { pillars: ['day'], zhis: ['子'] },   // 缺省不再是恒真组合
 		fields: [
-			// [Q-472/T-434] 标签勘误:判的是「该柱所在旬的两个空亡支里,有没有你要的那个支」,
+			// 标签勘误:判的是「该柱所在旬的两个空亡支里,有没有你要的那个支」,
 			// 不是「该柱本身落空亡」(任一柱都不会落在自己那一旬的空亡里)。
 			{ key: 'pillars', kind: 'multiselect', label: '柱(看其所在旬的空亡支)', options: [{ value: 'year', label: '年柱' }, { value: 'month', label: '月柱' }, { value: 'day', label: '日柱' }, { value: 'time', label: '时柱' }] },
 			// 限定支留空时「任一柱都有两个空亡支」→ 恒真,不是条件。改为必选。
@@ -605,16 +606,16 @@ export const BAZI_CONDITION_TYPES = {
 			if(p.dim === 'leap'){
 				const isLeap = !!n.leap;
 				const want = (p.values || []).some((v)=>(v === 'leap_yes' ? isLeap : (v === 'leap_no' ? !isLeap : false)));
-				return { pass: want, actual: `${n.month || '?'}月${isLeap ? '(闰)' : ''}` };
+				return { pass: want, actual: `${lunarMonthLabel(n)}${isLeap ? '' : '(非闰)'}` };
 			}
 			const v = p.dim === 'month' ? n.monthNum : n.dayNum;
-			return { pass: (p.values || []).map(Number).includes(Number(v)), actual: `农历${n.month || '?'}月${n.day || '?'}(${n.monthNum || '?'}/${n.dayNum || '?'})` };
+			return { pass: (p.values || []).map(Number).includes(Number(v)), actual: `农历${lunarMonthLabel(n)}${n.day || '?'}(${n.monthNum || '?'}/${n.dayNum || '?'})` };
 		},
 	},
 	jie_delta: {
 		category: '历法',
 		keyDeps: ['dayGz', 'monthGz'],
-		// [Q-473/T-435] 标签与值域勘误:供数 jiedelta 取的是「上一个节气(二十四节气全算,含中气)」,
+		// 标签与值域勘误:供数 jiedelta 取的是「上一个节气(二十四节气全算,含中气)」,
 		// 且 Math.max(1, 差+1) → 值域 1–17 天。旧标只写「节后」易读成月首的节,上限 40 有 18–40 恒不可达,
 		// 下限 0 与 1 等义。
 		label: '节气后第 N 天(含中气,1 起)',
@@ -655,68 +656,9 @@ function evalShensha(pan, p, ctx){
 
 
 // ── 树工厂/摘要/编译(与奇门/黄历同构;compile 产物喂 evaluateBaziTree) ──
-export function newBaziLeaf(type, joiner){
-	const spec = BAZI_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newBaziGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function baziLeafSummary(leaf){
-	const spec = leaf ? BAZI_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = BAZI_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileBaziTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(BAZI_CONDITION_TYPES);
+export const newBaziLeaf = TREE_API.newLeaf;
+export const newBaziGroup = TREE_API.newGroup;
+export const baziLeafSummary = TREE_API.leafSummary;
+export const compileBaziTree = TREE_API.compileTree;

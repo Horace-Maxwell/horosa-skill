@@ -1,4 +1,4 @@
-// [Z3·太乙择日] 逐时辰扫描引擎(纯前端零 HTTP)——hourlyScanEngine 外壳第三实例。
+// 逐时辰扫描引擎(纯前端零 HTTP)——hourlyScanEngine 外壳第三实例。
 // 供数链:buildLocalNongliLite + liteToTaiyiNongli 适配(lite 的 nongli 键形与生产
 // fetchPreciseNongli 不同构:year=中文年非干支、无 monthGanZi/dayGanZi——parity 首跑实抓
 // 计神合神恒空+阴阳遁误判,适配后五锚判定面对齐) + calcTaiyi(太乙页同一本地引擎,
@@ -7,12 +7,14 @@
 //   tn(古法公式)/晚子时档全参数可调(与太乙页同枚举;tenching/rotation 两死键已随 Q-101 剔除)。
 // plateKey=白名单(Z0 裁定:applyNongliDisplay 挂 clockTime/realSunTime 逐分钟回显字段,
 // hash 整 pan=逐分钟成行爆炸)——只取 16 宫布局+局+三算+诸神落宫。
+import { defaultAfter23NewDay, defaultLateZiHourUseNextDay } from '../../bazi/dayBoundary.js';
 import { buildLocalNongliLite } from '../../bazi/baziLunarLocal.js';
 import { calcTaiyi } from '../../taiyi/TaiYiCalc.js';
 import { buildPalaceMarks } from '../../taiyi/core/TaiYiCore.js';
 import { applyTaiyiSchool } from '../../taiyi/core/taiyiSchool.js';
 import { TAIYI_CONDITION_TYPES, makeTaiyiZeriEvalCtx } from './taiyiZeriConditionTypes.js';
 import { makeHourlyScanEngine } from './hourlyScanEngine.js';
+import { TAIYI_ZERI_LOCKED } from './zeriPageCalibre.js';
 
 export const TAIYI_MAX_TOTAL_HITS = 1000;
 export const TAIYI_MAX_SPAN_DAYS_TOTAL = 1830;
@@ -48,9 +50,9 @@ export function computeTaiyiScanPan(geoParams, options, dateStr, timeStr){
 		date: dateStr,
 		time: timeStr,
 		gender: 1,
-		timeAlg: 1,	// 太乙时基:direct=钟表时(trueSolar 档见下 timeBasis 说明)。[十三轮跨链核]后端 kentang 太乙同为钟表口径——taiyiLocalParity 六锚「判定面逐键==后端」恒绿即制度证据(口径若分叉,任意锚时刻必红);两链无 EoT 面,无骑线窗。
-		after23NewDay: o.after23NewDay !== undefined ? o.after23NewDay : 0,
-		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : 1,
+		timeAlg: 1,	// 太乙时基:direct=钟表时(trueSolar 档见下 timeBasis 说明)。后端 kentang 太乙同为钟表口径——taiyiLocalParity 六锚「判定面逐键==后端」恒绿即制度证据(口径若分叉,任意锚时刻必红);两链无 EoT 面,无骑线窗。
+		after23NewDay: o.after23NewDay !== undefined ? o.after23NewDay : defaultAfter23NewDay(),
+		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : defaultLateZiHourUseNextDay(),
 	});
 	const nongli = liteToTaiyiNongli(lite);
 	if(!nongli){
@@ -62,13 +64,13 @@ export function computeTaiyiScanPan(geoParams, options, dateStr, timeStr){
 		zone: { value: (geoParams && geoParams.zone) || '+08:00' },
 	};
 	const pan = calcTaiyi(fields, nongli, {
-		style: 3,	// 恒时计(定谳)
+		style: TAIYI_ZERI_LOCKED.style.value,	// 恒时计(定谳;择日内嵌页该控件锁定)
 		tn: o.tn !== undefined ? o.tn : 0,
 		sex: '男',
-		timeBasis: 'direct',	// 扫描恒钟表时(真太阳时档=后端星历,本地无;pick 起盘后页面按其设置显示)
-		after23NewDay: o.after23NewDay !== undefined ? o.after23NewDay : 0,
-		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : 1,
-		gameTheory: 0,
+		timeBasis: TAIYI_ZERI_LOCKED.timeBasis.value,	// 扫描恒钟表时(真太阳时档=后端星历,本地无;择日内嵌页该控件锁定)
+		after23NewDay: o.after23NewDay !== undefined ? o.after23NewDay : defaultAfter23NewDay(),
+		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : defaultLateZiHourUseNextDay(),
+		gameTheory: TAIYI_ZERI_LOCKED.gameTheory.value,
 	});
 	if(!pan){
 		return null;
@@ -93,7 +95,7 @@ export function computeTaiyiScanPan(geoParams, options, dateStr, timeStr){
 			const i = GONG16_RING.indexOf(out.taiyiPalace);
 			if(i >= 0){
 				const flipped = GONG16_RING[(i + 8) % 16];
-				// [Q-467/T-429 2026-09-18 复核定谳] 只翻 taiyiPalace、**不动 taiyiNum**:后端(用户 pick 后所见)阴遁本就是
+				// 只翻 taiyiPalace、**不动 taiyiNum**:后端(用户 pick 后所见)阴遁本就是
 				// 「数 8 ↔ 午 / 数 2 ↔ 子」(taiyiLocalParity 三阴遁锚实采),数是后端口径的数;条件面「同太乙 / 囚象」只拿数与
 				// 主 / 客将数相比,「落宫 / 门户 / 文昌始击关系 / 宫内布神」只看翻后宫与重建的布神表——全仓无「数→宫」二次换算,
 				// 不存在「两个太乙位置」。曾按本地正宫表把数反查成 2 → 与后端数分叉(主将 8 同太乙被误判),parity 锚咬住,已撤。
@@ -176,5 +178,5 @@ export function explainTaiyiAt({ geoParams, options, tree, t }){
 	return engine.explainAt({ geoParams, options, tree, t });
 }
 
-// [Z6] 三式合一拼接 plateKey 消费(同源别名;三家同名 plateKeyOf 避免 import 冲突)。
+// 三式合一拼接 plateKey 消费(同源别名;三家同名 plateKeyOf 避免 import 冲突)。
 export { plateKeyOf as taiyiPlateKeyOf };

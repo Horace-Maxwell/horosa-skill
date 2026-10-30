@@ -1,6 +1,6 @@
-// [Z1·黄历择日] AI 快照附加段 builder。三段头🔒与 aiExport `AI_EXPORT_PRESET_SECTIONS.huanglizeri`
+// AI 快照附加段 builder。三段头🔒与 aiExport `AI_EXPORT_PRESET_SECTIONS.huanglizeri`
 // 的追加段逐字成对(preflight 对偶锁);基底=选中日黄历日课快照(HuangLiMain 同链),此处只拼择日态。
-import { HUANGLI_CONDITION_TYPES, huangliLeafSummary } from './huangliZeriConditionTypes.js';
+import { huangliLeafSummary } from './huangliZeriConditionTypes.js';
 import { JOINER_CN } from './conditionTypes.js';
 import { appendZeriHitRows } from './zeriExplainText.js';
 
@@ -35,7 +35,7 @@ export function buildHuangliZeriSnapshotExtra({ cfg, tree, results, truncated, e
 	lines.push('[命中日段]');
 	const rows = Array.isArray(results) ? results : [];
 	if(rows.length){
-		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 清单上限全局可配(设置弹窗,缺省 60)+ 前 N 行附判读树(设定 vs 实际)——共用 appendZeriHitRows,
+		// 清单上限全局可配(设置弹窗,缺省 60)+ 前 N 行附判读树(设定 vs 实际)——共用 appendZeriHitRows,
 		// 行格式 / 尾句 / 截断句字节不变;explainAt 由宿主传入(同步引擎直算 / 异步预取缓存),缺则只列清单。
 		appendZeriHitRows(lines, rows, {
 			formatRow: (r, i)=>`${i + 1}. ${r.start}${r.days > 1 ? ` ~ ${r.end}` : ''}(${r.days}天)${r.badge ? ` ${r.badge}` : ''}`,
@@ -47,9 +47,4 @@ export function buildHuangliZeriSnapshotExtra({ cfg, tree, results, truncated, e
 		lines.push('(尚未择吉或无命中)');
 	}
 	return lines.join('\n');
-}
-
-// 供金标:条件类键集(注册表单源)。
-export function huangliZeriConditionKeys(){
-	return Object.keys(HUANGLI_CONDITION_TYPES);
 }

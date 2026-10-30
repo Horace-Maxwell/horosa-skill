@@ -18,7 +18,7 @@ export const MUNDANE_QUADRANTS = [
 ];
 
 // §12.2 星座→代表性国家/地区 · 代表性城市(⚠️多源综合,逐字照录古籍,含「(现代)」等时代标注)。
-// [G2 数据集真分叉] countries 拆两层:ptolemaic=古典-中世纪已见地域;modern=带「(现代)」
+// countries 拆两层:ptolemaic=古典-中世纪已见地域;modern=带「(现代)」
 // 标注/新世界(美洲·澳洲·新西兰)等 19–20 世纪增补(拆层依据仅时代标注本身,不新增地名)。
 // cities 古籍注明整体系后世增补 → 单层保存,由 describeChorography 按数据集档位门控显示。
 export const SIGN_CHOROGRAPHY = {
@@ -66,7 +66,7 @@ export function describeChorography(facts, datasetKey) {
 		{ axis: 'IC', cn: '天底(国土)', sign: mcSign ? opp(mcSign) : null },
 	].filter((a) => a.sign && SIGN_CHOROGRAPHY[a.sign]);
 	const dsKey = (datasetKey && CHOROGRAPHY_DATASETS[datasetKey]) ? datasetKey : 'modern';
-	// [G2] 按数据集档位合成显示层(消费方接口不变,仍收 {countries:[],cities:[]} 平面数组):
+	// 按数据集档位合成显示层(消费方接口不变,仍收 {countries:[],cities:[]} 平面数组):
 	// classical / classical_medieval → 仅古典-中世纪地域层,城市(整体系后世增补)不列;
 	// modern → 两层合并 + 城市全列。citiesOmitted 供 UI 出「城市条目系后世增补」注。
 	const wantModern = dsKey === 'modern';

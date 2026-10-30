@@ -1,4 +1,4 @@
-// [Z4·紫微择日] 条件注册表(时辰粒度)。判定单源:盘=calcZiweiFromLite(与主紫微页
+// 条件注册表(时辰粒度)。判定单源:盘=calcZiweiFromLite(与主紫微页
 // calcZiwei 同一 buildChartFromBazi 组装体,主安星逻辑修正择日自动跟;golden 56 例+
 // ziweiLocalParity 24 例 Java 网格看守)。星名值域同源 ziweiTables 表 keys(辅杂煞小)+
 // 十四正曜/六吉六煞千年常量。spec 契约与 QIMEN/HUANGLI/BAZI/TAIYI 逐字段同构;
@@ -7,8 +7,8 @@ import {
 	STARS_YEAR_GAN, STARS_YEAR_ZI, STARS_MONTH, STARS_TIME_ZI,
 	LIFE_MASTER, BODY_MASTER,
 } from '../../ziwei/data/ziweiTables.js';
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
-// [W5 全谱轮] 格局=主页格局 tab 同函数(detectPatterns/ziweige 51 格);宫干四化=ZWConst 活表。
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
+// 格局=主页格局 tab 同函数(detectPatterns/ziweige 51 格);宫干四化=ZWConst 活表。
 import { detectPatterns } from '../../ziwei/ziweiPatterns.js';
 import GE_PATTERNS from '../../ziwei/data/tables/ziweige.json' with { type: 'json' };
 import { getActiveSiHuaGan } from '../../bazi/ZWConst.js';
@@ -16,7 +16,7 @@ import { getActiveSiHuaGan } from '../../bazi/ZWConst.js';
 export { GROUP_TYPES, JOINER_CN };
 
 export const ZHI12 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-// 十四正曜/六吉/六煞:千年常量(与 ZiweiCalc MAIN14 同表;它未导出,此处为 UI 值域层)。
+// 十四正曜/六吉/六煞:千年常量(与 ZiweiCalc 的十四正曜同序,此处为 UI 值域层)。
 export const ZW_MAIN14 = ['紫微', '天机', '太阳', '武曲', '天同', '廉贞', '天府', '太阴', '贪狼', '巨门', '天相', '天梁', '七杀', '破军'];
 export const ZW_LIUJI = ['左辅', '右弼', '文昌', '文曲', '天魁', '天钺'];
 export const ZW_LIUSHA = ['擎羊', '陀罗', '火星', '铃星', '地空', '地劫'];
@@ -63,7 +63,7 @@ export function makeZiweiZeriEvalCtx(chart, natal){
 	return {
 		natal: natal || null,
 		stars(){ if(!starMap){ build(); } return starMap; },
-		// [W5] 格局惰性一次(主页格局 tab 同函数;异常兜空)
+		// 格局惰性一次(主页格局 tab 同函数;异常兜空)
 		geju(){
 			if(geju === undefined){
 				try{ geju = detectPatterns(chart) || []; }catch(e){ geju = []; }
@@ -86,7 +86,7 @@ const gongNameAt = (chart, idx)=>{
 	return (h && h.name) || '?';
 };
 
-// [十四轮] keyDeps 合同(全家统一「树不涉之面不劈行」):值域=安星六位
+// keyDeps 合同(全家统一「树不涉之面不劈行」):值域=安星六位
 // ['yearGan','yearZi','anchorM','anchorLeap','anchorD','timeZi']。紫微安星链几乎全类吃
 // 全元组(命宫=f(月,时)、紫微落宫=f(局,日)、星布局=f(全部)),故绝大多数类=显式全位;
 // 收益类=年干四化族(sihua_star/bm_ji_bu_chong 只吃 yearGan → 该树行=整年粒度)。
@@ -292,7 +292,7 @@ export const ZIWEI_CONDITION_TYPES = {
 		label: '星曜亮度',
 		defaults: { star: '紫微', values: ['庙', '旺'] },
 		fields: [
-			{ key: 'star', kind: 'select', label: '星', options: opt([...ZW_MAIN14, '左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存', '天马', '擎羊', '陀罗', '火星', '铃星', '地空', '地劫']), hint: '[Q-468] 工作台「空劫名=全书天空」时盘上为「天空」,此处「地空」在该档无值;「星集=精简18星」时六吉六煞禄马空劫不上盘' },	// [W5] 扩六吉六煞禄马空劫(亮度基表有值面)
+			{ key: 'star', kind: 'select', label: '星', options: opt([...ZW_MAIN14, '左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存', '天马', '擎羊', '陀罗', '火星', '铃星', '地空', '地劫']), hint: '工作台「空劫名=全书天空」时盘上为「天空」,此处「地空」在该档无值;「星集=精简18星」时六吉六煞禄马空劫不上盘' },	// 扩六吉六煞禄马空劫(亮度基表有值面)
 			{ key: 'values', kind: 'multiselect', label: '亮度(庙旺地平闲陷)', options: opt(BRIGHT_LEVELS), hint: '基础亮度(中州基表口径,主页默认盘同源;《全书》亮度源为显示层覆盖,不入扫描)' },
 		],
 		validate: needValues,
@@ -353,7 +353,7 @@ export const ZIWEI_CONDITION_TYPES = {
 		defaults: { gong: '命宫', stars: ['左辅', '右弼'], mode: 'all' },
 		fields: [
 			{ key: 'gong', kind: 'select', label: '本宫', options: opt(ZW_HOUSE_NAMES) },
-			{ key: 'stars', kind: 'multiselect', label: '星集', options: opt(ZW_ALL_STARS), hint: '[Q-468] 随工作台参数:「星集=精简18星」时只有十四正曜+四化四星上盘(其余 41 个星名恒不命中);「空劫名=全书天空」时盘上为「天空」而非「地空」' },
+			{ key: 'stars', kind: 'multiselect', label: '星集', options: opt(ZW_ALL_STARS), hint: '随工作台参数:「星集=精简18星」时只有十四正曜+四化四星上盘(其余 41 个星名恒不命中);「空劫名=全书天空」时盘上为「天空」而非「地空」' },
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'all', label: '会齐全部' }, { value: 'any', label: '会任一' }, { value: 'none', label: '全不会(避)' }] },
 		],
 		validate: (p)=>((!p.stars || !p.stars.length) ? '至少选择一星' : ''),
@@ -395,14 +395,14 @@ export const ZIWEI_CONDITION_TYPES = {
 		defaults: { gong: '命宫', max: 1 },
 		fields: [
 			{ key: 'gong', kind: 'select', label: '本宫', options: opt(ZW_HOUSE_NAMES) },
-			{ key: 'max', kind: 'number', label: '≤颗', min: 0, max: 6, hint: '[Q-468] 六煞=羊陀火铃+空(地空/全书天空随工作台「空劫名」自动对应)+劫;「星集=精简18星」时煞星不上盘,恒 0 颗' },
+			{ key: 'max', kind: 'number', label: '≤颗', min: 0, max: 6, hint: '六煞=羊陀火铃+空(地空/全书天空随工作台「空劫名」自动对应)+劫;「星集=精简18星」时煞星不上盘,恒 0 颗' },
 		],
 		summary(p){ return `${p.gong}三方六煞≤${p.max}`; },
 		evaluate(pan, p, ctx){
 			const base = ctx.gongIdx(p.gong);
 			if(base < 0){ return { pass: false, actual: `${p.gong}未定位` }; }
 			const zone = new Set(ctx.sanfang(base));
-			// [Q-468/T-430] 工作台「空劫名=全书天空」时盘上时系空星叫「天空」(无「地空」):六煞第五颗随盘自动切换(与 kong_jie_ming 同法),
+			// 工作台「空劫名=全书天空」时盘上时系空星叫「天空」(无「地空」):六煞第五颗随盘自动切换(与 kong_jie_ming 同法),
 			// 此前写死 ZW_LIUSHA(含地空)→ 该档只能数到五颗,「≤颗」系判偏松。
 			const liusha = starIdxList(ctx, '地空').length ? ZW_LIUSHA : ZW_LIUSHA.map((st)=>(st === '地空' ? '天空' : st));
 			const hit = liusha.filter((st)=>starIdxList(ctx, st).some((i)=>zone.has(i)));
@@ -627,68 +627,9 @@ export const ZIWEI_CONDITION_TYPES = {
 };
 
 // ── 树工厂/摘要/编译(与奇门/黄历/八字/太乙同构) ──
-export function newZiweiLeaf(type, joiner){
-	const spec = ZIWEI_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newZiweiGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function ziweiLeafSummary(leaf){
-	const spec = leaf ? ZIWEI_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = ZIWEI_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileZiweiTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(ZIWEI_CONDITION_TYPES);
+export const newZiweiLeaf = TREE_API.newLeaf;
+export const newZiweiGroup = TREE_API.newGroup;
+export const ziweiLeafSummary = TREE_API.leafSummary;
+export const compileZiweiTree = TREE_API.compileTree;

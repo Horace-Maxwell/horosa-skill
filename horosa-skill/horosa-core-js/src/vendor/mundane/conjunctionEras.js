@@ -3,7 +3,6 @@
 // 输入=已有 greatconj/planetcycles 结果行,纯前端派生,零新后端。
 // 显示层零章节号、历史人名不入代码键(传承线以中性词呈现)。
 
-export const ELEMENT_ORDER = ['fire', 'earth', 'air', 'water'];
 export const ELEMENT_CN = { fire: '火', earth: '土', air: '风', water: '水' };
 
 // 三层周期表(名义值系古典口径,天文实测并列——两者并列呈现是古籍明确要求)。

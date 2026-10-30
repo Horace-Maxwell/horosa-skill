@@ -82,9 +82,6 @@ export const qiGuaByShengYin = ({ shengShu, hourZhi }) => qiGuaByShuAndHour(shen
 // ── 法5 字占（十一档）─────────────────────────────────
 // 通则：字数停匀则平分上下；不匀则少一字为上卦（天轻清）、多一字为下卦（地重浊）。
 export const PING_ZE = { 平: 1, 上: 2, 去: 3, 入: 4 };
-/** 一字之左右画：彳、丿之属为左（阳画→上卦）；一、乙、丶之属为右（阴画→下卦） */
-export const YIZI_LEFT = '彳丿亻丨';
-export const YIZI_RIGHT = '一乙丶乀';
 
 export function ziZhanSplit(n) {
 	if (n === 1) return { up: 0, lo: 0, special: 'yizi' };

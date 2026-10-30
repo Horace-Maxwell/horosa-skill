@@ -63,7 +63,7 @@ export function zhengTui(pan, g0) {
 }
 
 /** 正推链逐字文本:如「乾宫震卦→震宫坎卦→坎宫坤卦而止」;伏位则如「艮宫艮卦,天地盘相同,伏位不动」。
- *  🔴 [P3 压测实爆] 亦须认得 pangTui 产物({pangGong,gua},无 steps 无 fuWei):
+ *  🔴 亦须认得 pangTui 产物({pangGong,gua},无 steps 无 fuWei):
  *  用宫恰为伏位时,UI 推导 tab 与 AI 快照层都把 td.pang 喂进本函数 —— 旧版 r.steps.map
  *  直接 TypeError = 该类卦局「推导页白屏 + AI 导出必炸」(3072 组合链压测抓出)。 */
 export function zhengTuiText(r) {

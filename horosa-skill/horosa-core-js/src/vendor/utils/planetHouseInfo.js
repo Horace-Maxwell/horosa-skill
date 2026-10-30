@@ -121,11 +121,6 @@ export function appendPlanetHouseInfoById(label, chartWrap, objId, enabled){
 	return appendPlanetHouseInfo(label, obj, enabled);
 }
 
-export function isPlanetHouseInfoEnabled(enabled){
-	const mode = normalizeEnabled(enabled);
-	return mode.showHouse || mode.showRuler;
-}
-
 export function splitPlanetHouseInfoText(text){
 	const raw = `${text || ''}`;
 	const matched = raw.match(/^(.*?)(?:\s*\(([^()]*)\))$/);

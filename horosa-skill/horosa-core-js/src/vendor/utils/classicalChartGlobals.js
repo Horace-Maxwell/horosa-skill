@@ -16,7 +16,7 @@ import { loadCustomTerms } from './customCalibreStores.js';
 export const CLASSICAL_GLOBALS_STORAGE_KEY = 'horosa.chart.classicalGlobals.v1';
 export const CLASSICAL_GLOBALS_EVENT = 'horosa:classical-globals-changed';
 
-// [WP-1] 默认表/类型表由 classicalParamSpec 单源派生(此前七方手工登记漂移:viaCombustaVariant
+// 默认表/类型表由 classicalParamSpec 单源派生(此前七方手工登记漂移:viaCombustaVariant
 // 漏播种、三开关漏 UI 皆实锤)。语义不变:默认值 = 现内建默认(fieldsToParams 条件透传的「不下发」侧)。
 // 逐键注释(取值域/后端消费点)移居 spec 表本体;契约测试锁本表≡spec≡播种≡齿轮≡Java 白名单五方全等。
 export const CLASSICAL_GLOBAL_DEFAULTS = specDefaults();
@@ -31,16 +31,17 @@ const MIGRATED_FROM_JUDGE = ['cazimiOrb', 'combustOrb', 'underBeamsOrb', 'vocMod
 const LEGACY_JUDGE_STORAGE_KEY = 'horosa.chart.divinationJudgeGlobals.v1';
 
 let cache = null;   // 模块级缓存;写侧失效。localStorage 只读一次,热路径零 IO。
-// [SURF-R5c] 读侧自愈:全量备份「恢复」直写 localStorage 不经 setClassicalChartGlobal,
+// 读侧自愈:全量备份「恢复」直写 localStorage 不经 setClassicalChartGlobal,
 // 热 cache 恒返回旧值;更重的次生病=恢复后改任一档,set 以旧 cache 为基整包回写,把刚恢复
 // 的其它键永久覆盖(重启不救)。照 customCalibreStores rawStr 比对范式:get 时原串不同即重建
 // +广播;1s 节流防构参热路径(逐键 classicalGlobalValue)IO 放大——恢复场景秒级足够。
 let cacheRawStr = null;
 let lastRawCheckAt = 0;
-function rawSelfHealCheck(){
+// force:写入前调用,不受节流 —— 写以存储现值为底(外部刚直写 / 别的窗口刚写的,1 秒内再改一项不再被缓存整包盖掉)
+function rawSelfHealCheck(force){
 	if(!cache){ return; }
 	const now = Date.now();
-	if(now - lastRawCheckAt < 1000){ return; }
+	if(!force && now - lastRawCheckAt < 1000){ return; }
 	lastRawCheckAt = now;
 	let rawStr = null;
 	try{ rawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(CLASSICAL_GLOBALS_STORAGE_KEY) : null; }catch(e){ return; }
@@ -118,6 +119,7 @@ export function classicalGlobalValue(key){
 // 写一键并广播（ChartDisplaySelector 专用写入口）。
 export function setClassicalChartGlobal(key, value){
 	if(ALL_KEYS.indexOf(key) < 0){ return; }
+	rawSelfHealCheck(true);   // 以存储现值为底(不以可能过期的缓存为底整包回写)
 	const next = normalize({ ...getClassicalChartGlobals(), [key]: value });
 	cache = next;
 	safeJsonStringifyToStorage(CLASSICAL_GLOBALS_STORAGE_KEY, next);
@@ -139,7 +141,7 @@ function _neqNum(a, b){
 	return !Number.isFinite(n) ? false : Math.abs(n - b) > 1e-9;
 }
 
-// [WP-1] spec 驱动版:逐键手写段收编为 CLASSICAL_PARAM_SPEC 循环——新键在 spec 登记
+// spec 驱动版:逐键手写段收编为 CLASSICAL_PARAM_SPEC 循环——新键在 spec 登记
 // (send:'nonDefault')即自动进本单源,不再逐键手补。判据语义与手写版逐字节等价
 // (mountRequestDiff/chartGlobalsStores/natalClassicalParams 三组契约全绿自证):
 // - float 键:与默认差 >1e-9 才发(数值净化 Number);
@@ -154,8 +156,8 @@ export function classicalBackendOverrides(getVal){
 	CLASSICAL_PARAM_SPEC.forEach((s) => {
 		if(s.send !== 'nonDefault'){ return; }
 		let raw;
-		try{ raw = getVal(s.key); }catch(e){ return; }   // [R4-P3] 单键取值炸不拖垮整包(forEach 回调里 return=跳过本键)
-		// [SURF-R2b] 改名键双名回退:后端回显/params 派生链按 backendKey 存(starOrb/starOrbMode),
+		try{ raw = getVal(s.key); }catch(e){ return; }   // 单键取值炸不拖垮整包(forEach 回调里 return=跳过本键)
+		// 改名键双名回退:后端回显/params 派生链按 backendKey 存(starOrb/starOrbMode),
 		// 只按前端名取=fixedStarOrb 两键在「回显形 plain 再派生」(FromPlain(chartObj.params)/
 		// chartRequestKey/natalClassicalParams)恒 undefined——字符串键名双轨族第五处。前端名优先,
 		// 对既有正确调用零语义变化。
@@ -180,13 +182,13 @@ export function classicalBackendOverrides(getVal){
 		if(s.options && !s.options.some((o) => o.value === val)){ return; }   // 值域外脏值不发
 		out[s.backendKey || s.key] = val;
 	});
-	// 伴发规则:vocIncludeOuter 仅随非默认 vocMode(后端 classic/lilly 口径忽略它);[Q-254/T-226 ③] exempt4 亦按 1647 基判,不发。
+	// 伴发规则:vocIncludeOuter 仅随非默认 vocMode(后端 classic/lilly 口径忽略它);exempt4 亦按 1647 基判,不发。
 	if(out.vocIncludeOuter !== undefined && (out.vocMode === undefined || out.vocMode === 'exempt4')){ delete out.vocIncludeOuter; }
-	// [WP-7] 自定义界表附表体:termsVariant=4 时随请求带 customTermsDay/Night(后端强校验+回落埃及);
+	// 自定义界表附表体:termsVariant=4 时随请求带 customTermsDay/Night(后端强校验+回落埃及);
 	// 本地无合法表 → 降级不发 4(等效埃及,防「选了自定义却无表」的静默怪盘)。
 	if(out.termsVariant === 4){
 		try{
-			// [F14] 随盘表体优先(record 载入场景 getVal 能取到 customTermsDay)——换机/清仓后
+			// 随盘表体优先(record 载入场景 getVal 能取到 customTermsDay)——换机/清仓后
 			// 旧盘不再静默变埃及;无随盘表才回落本机编辑器仓;两处都无 → 降级不发 4。
 			const recDay = getVal('customTermsDay');
 			const recNight = getVal('customTermsNight');
@@ -217,7 +219,7 @@ export function classicalBackendOverridesFromPlain(plain){
 	return classicalBackendOverrides((k) => (plain ? plain[k] : undefined));
 }
 
-// [SURF-T1] 推运组件 hook 增量 merge({...state.params, ...fresh})的粘滞剔除:
+// 推运组件 hook 增量 merge({...state.params, ...fresh})的粘滞剔除:
 // send:nonDefault 键改回默认后 fresh 不再携带,但旧 state 里的非默认值会被 merge 永久保留
 // → 请求持续发已废档(返照法拨回「精确回归」后仍按希腊式取盘,真机 fiber 三证)。
 // 修法=以 fresh 为「当前应发全集」,spec 键(backendKey 与 key 双名)fresh 缺席则从 merge 结果删除。
@@ -233,7 +235,7 @@ export function pruneStaleClassicalParams(merged, fresh){
 			}
 		});
 	});
-	// [SURF-R3p] 伴生附表键不在 spec:termsVariant 拨离自定义(4)后 fresh 无此二键,
+	// 伴生附表键不在 spec:termsVariant 拨离自定义(4)后 fresh 无此二键,
 	// 12 座死表会随每次推运请求(后端 tv≠4 门控不消费=不错盘,但请求膨胀+缓存键碎片)。
 	['customTermsDay', 'customTermsNight'].forEach((name) => {
 		if(f[name] === undefined && merged[name] !== undefined){ delete merged[name]; }
@@ -248,7 +250,7 @@ export function __resetClassicalGlobalsCacheForTest(){
 	lastRawCheckAt = 0;
 }
 
-// [F11] 快照敏感 never 键:不进请求体(纯前端消费)但改变 AI 快照内容(显赫段/相位正列)——
+// 快照敏感 never 键:不进请求体(纯前端消费)但改变 AI 快照内容(显赫段/相位正列)——
 // 改动必须失效旧快照,否则 AI 挂旧口径文本。签名层专用(两侧同构拼进 classicalOv JSON),
 // 与请求体 overrides 严格分离(never 键恒不下发)。
 const SNAPSHOT_SENSITIVE_NEVER_KEYS = ['busyPlaces', 'dynamicalDivisions', 'domicileMasterMethod', 'rayWeighting', 'partileDef'];
@@ -256,7 +258,7 @@ export function classicalSnapshotNeverSig(getVal){
 	const out = {};
 	SNAPSHOT_SENSITIVE_NEVER_KEYS.forEach((k) => {
 		let v;
-		try{ v = getVal(k); }catch(e){ return; }   // [R4-P3] 同上
+		try{ v = getVal(k); }catch(e){ return; }   // 同上
 		const d = CLASSICAL_GLOBAL_DEFAULTS[k];
 		if(v !== undefined && v !== null && `${v}` !== `${d}`){
 			out[`~${k}`] = `${v}`;   // ~ 前缀:与请求体键名空间隔离,自证不可能混进 body
@@ -265,7 +267,7 @@ export function classicalSnapshotNeverSig(getVal){
 	return out;
 }
 
-// [Q-340/T-321] /astroextra/analysis(格局页 / AI 挂载 / 导出三处)的恒星轨参数:随盘优先(请求 params 里的
+// /astroextra/analysis(格局页 / AI 挂载 / 导出三处)的恒星轨参数:随盘优先(请求 params 里的
 // chart 级键 starOrb/starOrbMode,来自 chartObj.params 回显或 record 覆盖),缺则全局仓;档位一并下发,
 // Python fixed_star_hits 据 fixedStarOrbMode='byMagnitude' 逐星取星等表轨。
 export function fixedStarOrbParamsFor(params){

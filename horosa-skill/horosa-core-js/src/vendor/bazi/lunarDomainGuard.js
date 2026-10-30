@@ -16,14 +16,3 @@ export function isLunarJsYearReliable(year){
 export function lunarDomainNotice(year){
 	return `公元 ${LUNAR_JS_MIN_YEAR}~${LUNAR_JS_MAX_YEAR} 年之外(输入 ${year} 年)的农历/干支需走星历实算路径,本地速算不适用`;
 }
-
-// 守卫包装:域外返回 null 并 console.warn(开发期可见),域内执行计算。
-export function guardLunarYear(year, computeFn){
-	if(!isLunarJsYearReliable(year)){
-		if(typeof console !== 'undefined' && console.warn){
-			console.warn('[lunarDomainGuard]', lunarDomainNotice(year));
-		}
-		return null;
-	}
-	return computeFn();
-}

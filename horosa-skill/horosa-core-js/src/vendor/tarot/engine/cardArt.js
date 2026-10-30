@@ -1,5 +1,5 @@
 // 真实牌面美术(可选)。仅用公有领域牌面。
-// 简约符号美术为默认;用户可切「真实牌面」。<img> onError 优雅回退符号(离线/失败/无图不崩)。
+// 真实牌面为默认;用户可切「简约符号」。<img> onError 优雅回退符号(离线/失败/无图不崩)。
 // 已接入(均公有领域),全部本地打包(public/tarot-art/),桌面离线可用:
 //   · RWS(Pamela Colman Smith,1909)— 全 78 张(按 rwsCode 命名)。
 //   · 马赛 TdM(Nicolas Conver,1760)— 22 大牌(按 sid)。
@@ -8,7 +8,7 @@
 // 上述 22 大牌制牌组的「78 张」变体只接大牌,花色小牌无成套 PD 单卡扫描 → 回退符号。
 // 托特(1944)/BOTA/现代金色黎明牌仍在版权保护期,不接入真实牌面。
 
-import { isTrumpArcana } from './arcana.js'; // [QA-9] 王牌判据单一真值源
+import { isTrumpArcana } from './arcana.js'; // 王牌判据单一真值源
 const SUIT_CODE = { wands: 'wa', cups: 'cu', swords: 'sw', pentacles: 'pe' };
 const COURT_CODE = { page: 'pa', knight: 'kn', queen: 'qu', king: 'ki' };
 

@@ -1,4 +1,4 @@
-import { safeLocalStorageSet } from '../../gua/safeStorage.js';
+import { safeLocalStorageSet, readUserDataJson } from '../../gua/safeStorage.js';
 // divination/data/regionCharts.js
 // 「地区盘」预置数据 + 用户自定义存取。只放中性历史建置时刻作示例；以用户自定义为主。
 // 不预置任何政治敏感现代实体；坐标用 App 既有「度分」串式（如 '0w07' / '51n30'）+ 数值 gps。
@@ -65,25 +65,18 @@ export const MUNDANE_CAPITALS = [
 
 const USER_KEY = 'horosa.mundane.region.user.v1';
 
-// 读用户自定义地区盘（对象 map，键为用户输入或自动键）。失败返回 {}。
+// 读用户自定义地区盘（对象 map，键为用户输入或自动键）。没有 / 坏数据返回 {}（坏数据先留档，读端单源 readUserDataJson）。
 export function loadUserRegions(){
-	try{
-		if(typeof localStorage === 'undefined'){ return {}; }
-		const raw = localStorage.getItem(USER_KEY);
-		if(!raw){ return {}; }
-		const obj = JSON.parse(raw);
-		return (obj && typeof obj === 'object') ? obj : {};
-	}catch(e){ return {}; }
+	return { ...readUserDataJson(USER_KEY, {}) };
 }
 
-// 写入一条用户自定义地区盘。返回新的用户 map。
+// 写入一条用户自定义地区盘。返回存储里实际的用户 map（写不进 = 原样，不含这一条）。
 export function saveUserRegion(key, rec){
 	try{
 		if(typeof localStorage === 'undefined' || !key || !rec){ return loadUserRegions(); }
 		const cur = loadUserRegions();
 		cur[key] = rec;
-		safeLocalStorageSet(USER_KEY, JSON.stringify(cur));
-		return cur;
+		return safeLocalStorageSet(USER_KEY, JSON.stringify(cur)) ? cur : loadUserRegions();
 	}catch(e){ return loadUserRegions(); }
 }
 
@@ -92,8 +85,7 @@ export function removeUserRegion(key){
 		if(typeof localStorage === 'undefined' || !key){ return loadUserRegions(); }
 		const cur = loadUserRegions();
 		delete cur[key];
-		safeLocalStorageSet(USER_KEY, JSON.stringify(cur));
-		return cur;
+		return safeLocalStorageSet(USER_KEY, JSON.stringify(cur)) ? cur : loadUserRegions();
 	}catch(e){ return loadUserRegions(); }
 }
 

@@ -1,7 +1,6 @@
 // 世运卜卦(古籍卜问篇)。机制同卜卦(可判性/入相完成/光线传递/互容),但问主=公众/国家,
 // 宫义按世运读。三类问:战争/天气/物价。纯前端从 facts 派生(dignityScore/combustion/
 // retro/house/ruler/mutuals 均后端现成),不重跑卜卦引擎。
-const SIGN_KEYS = ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'];
 const DOMICILE = { aries: 'mars', taurus: 'venus', gemini: 'mercury', cancer: 'moon', leo: 'sun', virgo: 'mercury', libra: 'venus', scorpio: 'mars', sagittarius: 'jupiter', capricorn: 'saturn', aquarius: 'saturn', pisces: 'jupiter' };
 const PLANET_CN = { sun: '日', moon: '月', mercury: '水', venus: '金', mars: '火', jupiter: '木', saturn: '土' };
 

@@ -1,4 +1,5 @@
 // 扫描结果区间工具(纯函数)。区间记录 = {start, end, startJd, endJd, durationMin}(半开 [s,e))。
+import { parseDateParts, formatSignedDate, toSlashDate, civilJdnOfYmd, addDisplayYears } from '../../bazi/dateStrSafe.js';
 
 /** 多段扫描结果拼接:按 startJd 排序,相邻/重叠(段界共点)合并——月界 23:59/00:00 无缝。 */
 export function stitchIntervals(lists){
@@ -24,27 +25,29 @@ export function stitchIntervals(lists){
 
 /** 自然月切段:[start, end] → [{startDate,startTime,endDate,endTime}](半开衔接,末段收在 end)。 */
 export function splitByMonth(startDate, startTime, endDate, endTime){
+	// 年月日按民用日期串解析(公元前前导负号、1–5 位年都对);逐月推进按显示年(无公元 0 年),先后按儒略日序数比
 	const parse = (d)=>{
-		const p = String(d).replace(/-/g, '/').split('/');
-		return { y: parseInt(p[0], 10), m: parseInt(p[1], 10), d: parseInt(p[2], 10) };
+		const p = parseDateParts(d);
+		return p ? { y: p.year, m: p.month, d: p.day } : { y: NaN, m: NaN, d: NaN };
 	};
+	const fmt = (y, m, d)=>toSlashDate(formatSignedDate(y, m, d));
 	const s = parse(startDate);
 	const e = parse(endDate);
 	const segs = [];
-	let curDate = `${s.y}/${String(s.m).padStart(2, '0')}/${String(s.d).padStart(2, '0')}`;
+	let curDate = fmt(s.y, s.m, s.d);
 	let curTime = startTime || '00:00:00';
 	let y = s.y;
 	let m = s.m;
+	const endNum = civilJdnOfYmd(e.y, e.m, e.d);
 	for(let guard = 0; guard < 800; guard++){
 		m += 1;
-		if(m > 12){ m = 1; y += 1; }
-		const boundaryNum = y * 10000 + m * 100 + 1;
-		const endNum = e.y * 10000 + e.m * 100 + e.d;
-		if(boundaryNum > endNum || (boundaryNum === endNum && (endTime || '23:59:59') <= '00:00:00')){
-			segs.push({ startDate: curDate, startTime: curTime, endDate: `${e.y}/${String(e.m).padStart(2, '0')}/${String(e.d).padStart(2, '0')}`, endTime: endTime || '23:59:59' });
+		if(m > 12){ m = 1; y = addDisplayYears(y, 1); }
+		const boundaryNum = civilJdnOfYmd(y, m, 1);
+		if(!(boundaryNum <= endNum) || (boundaryNum === endNum && (endTime || '23:59:59') <= '00:00:00')){
+			segs.push({ startDate: curDate, startTime: curTime, endDate: fmt(e.y, e.m, e.d), endTime: endTime || '23:59:59' });
 			break;
 		}
-		const boundary = `${y}/${String(m).padStart(2, '0')}/01`;
+		const boundary = fmt(y, m, 1);
 		segs.push({ startDate: curDate, startTime: curTime, endDate: boundary, endTime: '00:00:00' });
 		curDate = boundary;
 		curTime = '00:00:00';

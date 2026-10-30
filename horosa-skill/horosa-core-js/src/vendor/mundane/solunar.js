@@ -4,6 +4,7 @@
 // 角化在 Campanus 宫框上按宫内比例插值成 mundo 度(宫头=卯酉圈等分,忠实量角化口径)。
 
 
+import { civilShiftDateTimeStr } from '../bazi/dateStrSafe.js';
 
 const norm360 = (x) => (((x % 360) + 360) % 360);
 const fwd = (from, to) => norm360(to - from);                  // 前向弧
@@ -130,10 +131,9 @@ function lonOf(chart, body){
 }
 
 function shiftMoment(momentStr, days){
-	const ms = new Date(String(momentStr).replace(/-/g, '/')).getTime() + days * 86400000;
-	const d = new Date(ms);
-	const pad = (n) => (n < 10 ? '0' + n : '' + n);
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+	// 在墙钟轴上挪(时区 / 夏令时无关;1582 以前儒略历),不经本地 Date 拆标签;认不出原样返回
+	const out = civilShiftDateTimeStr(String(momentStr), Math.round(days * 86400000));
+	return out || String(momentStr);
 }
 
 // 求 year 年(或 seedMoment 起)body 入恒星 target 的精确时刻;返回 {moment, chart} 或 null。

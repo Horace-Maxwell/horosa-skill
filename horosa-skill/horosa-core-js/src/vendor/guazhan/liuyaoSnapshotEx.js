@@ -45,9 +45,9 @@ export function duanJueLines(a){
 	if(!a){ return out; }
 	const e = a.env || {};
 	out.push(`三层环境：太岁${e.taiSui || '—'}(岁破${e.suiPo || '—'})　月建${e.yueJian || '—'}(月破${e.yuePo || '—'})　日建${e.riZhi || '—'}(日破${e.riPo || '—'})`);
-	// [X1] 开局信息与显示同源补齐:日辰纳音(断诀页开局卡显示,此前 AI 不见)。
+	// 开局信息与显示同源补齐:日辰纳音(断诀页开局卡显示,此前 AI 不见)。
 	if(a.nayinDay){ out.push(`日辰纳音：${a.nayinDay.name}(${a.nayinDay.wuxing})`); }
-	// [X1] 装卦「余气强」(settings.yuqi 开时逐爻标注,断诀/装卦表显示):
+	// 装卦「余气强」(settings.yuqi 开时逐爻标注,断诀/装卦表显示):
 	if(Array.isArray(a.yaos)){
 		const yq = a.yaos.filter((y)=>y && y.yuqiStrong).map((y)=>`第${y.pos}爻${y.zhi}`);
 		if(yq.length){ out.push(`余气强：${yq.join('、')}(月建余气助之)`); }
@@ -84,7 +84,7 @@ export function duanJueLines(a){
 	const dj = a.duanJue;
 	if(dj){
 		if(dj.anDong && dj.anDong.length){ out.push(`暗动：${dj.anDong.map((p)=>`第${p}爻`).join('、')}`); }
-		// [X1] 通例命中与断诀页同源补齐(此前显示有而 AI 不见):日破冲散/承刚/泄气/金锁八要素。
+		// 通例命中与断诀页同源补齐(此前显示有而 AI 不见):日破冲散/承刚/泄气/金锁八要素。
 		if(dj.chongSan && dj.chongSan.length){ out.push(`日破冲散：${dj.chongSan.map((p)=>`第${p}爻`).join('、')}`); }
 		if(dj.chengGang && dj.chengGang.length){ out.push(`承刚：${dj.chengGang.map((p)=>`第${p}爻`).join('、')}(阴居阳下)`); }
 		(dj.xieQi || []).forEach((x)=>out.push(`泄气：第${x.pos}爻${x.duan}`));
@@ -113,7 +113,7 @@ export function zhanleiLines(a, guaName){
 	const out = ['[占类断语]'];
 	const lore = guaName ? guaLoreOf(guaName) : null;
 	if(lore){ out.push(`历史占例：${lore.who}${lore.event},${lore.result}`); }
-	// [Q-205/T-152] 古法进阶引擎产七项、断诀页也画七卡,快照此前只取「十六变」一行 —— 开了齿轮
+	// 古法进阶引擎产七项、断诀页也画七卡,快照此前只取「十六变」一行 —— 开了齿轮
 	// 等于只多一行,其余六项 AI 完全看不到。按页面同口径逐项摘要(缺项不产行;齿轮关=整段零增)。
 	if(a && a.gufa){
 		const gf = a.gufa;

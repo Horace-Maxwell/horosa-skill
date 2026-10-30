@@ -1,4 +1,4 @@
-// [Z5·六壬择日] 六壬神煞表(LiuReng.fillGods 消费的 16 神)+太岁三环——
+// 六壬神煞表(LiuReng.fillGods 消费的 16 神)+太岁三环——
 // 🔴 生成物:由 astrostudysrv gods.json/taisui.json 机械抽取(scripts 生成头);
 // 手改无效——liurengGodsParity.test 直读 Java 资源逐键逐值 diff,Java 表改此处必红
 // (机械同源,制度层1:主表修正→择日强制跟)。消费:liurengLocal.fillLrGods。

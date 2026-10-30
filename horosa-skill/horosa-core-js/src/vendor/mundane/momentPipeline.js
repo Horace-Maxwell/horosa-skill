@@ -48,7 +48,7 @@ export function ingressDurationMonths(ascSignKey){
 // 入境主管(§8.3):按规则集 + 白羊入境盘四轴(ASC)座模式判定主管时长与须补起的季盘。
 // quarterly(Ptolemaic/Medieval):四轴基本→只首季(3月,须夏至/秋分/冬至)、变动→半年(6月,须秋分天秤)、固定→整年。
 // aries_annual(现代默认):白羊全年。capricorn_year(摩羯优先派):冬至为年首、全年。
-// [Q-150/T-60] 主管说明恒以「白羊盘」立论(摩羯优先档为冬至盘),但左栏可选夏至/秋分/冬至节气起盘 ——
+// 主管说明恒以「白羊盘」立论(摩羯优先档为冬至盘),但左栏可选夏至/秋分/冬至节气起盘 ——
 // 此前照样把「白羊盘主管整年」套在当前盘上,读的人会以为手里这张夏至盘管一年。
 // termName = 当前入宫节气(左栏 extra.ingressTerm);不传 = 年首盘,说明逐字不变(零回归)。
 const INGRESS_YEAR_HEAD_TERM = { quarterly: '春分', aries_annual: '春分', capricorn_year: '冬至' };

@@ -477,7 +477,7 @@ export function buildKlimataSnapshotLines(chartObj, fields){
 	return lines;
 }
 
-// ─────────────── [WP-4] 主宰光体 predominator + 庙/界主两派(Valens 式三判据) ───────────────
+// ─────────────── 主宰光体 predominator + 庙/界主两派(Valens 式三判据) ───────────────
 // 判据:①落有利宫(chrematistikoi,busyPlaces 集合可配,默认 1/4/5/7/10/11) ②区分得体(sect light +1)
 // ③近轴角(距 ASC/MC/DESC/IC 黄经 <10° +1)。dynamicalDivisions=1 时逐判据乘象限动力权
 // (角宫 ×1.0 / 续宫 ×0.75 / 果宫 ×0.5)。两光加总取高者;平分取 sect light。
@@ -527,7 +527,7 @@ export function computePredominator(chartObj, opts){
 	const domicileMaster = (SIGNS[signKeyOf(winner)] || SIGNS[winner.sign] || {}).domicile || null;
 	let boundMaster = null;
 	try{
-		// [F6][R4-P2] 统一走 almuten.termRulerForVariant 单源:迦勒底昼夜/自定义表体/双子校勘全档齐
+		// 统一走 almuten.termRulerForVariant 单源:迦勒底昼夜/自定义表体/双子校勘全档齐
 		// (termRulerAt 直调无 chaldean 分支,tv=3 恒埃及=同屏与行星表两结论)。
 		boundMaster = termRulerForVariant(lonOf(winner), {
 			termsVariant: o.termsVariant !== undefined ? Number(o.termsVariant) : 0,
@@ -547,7 +547,7 @@ export function computePredominator(chartObj, opts){
 	};
 }
 
-// ─────────────── [WP-8] 七射线分布(灵学体系推算;默认 off 不算不显) ───────────────
+// ─────────────── 七射线分布(灵学体系推算;默认 off 不算不显) ───────────────
 // Bailey 体系公开映射:星座→射线 / 行星→射线;权重档 equal(每命中 1)/weighted(发光体×3/内行星×2/外行星×1)。
 const RAY_OF_SIGN = { Aries: [1], Taurus: [4], Gemini: [2], Cancer: [3, 7], Leo: [1, 5], Virgo: [2, 6],
 	Libra: [3], Scorpio: [4], Sagittarius: [4, 5, 6], Capricorn: [1, 3, 7], Aquarius: [5], Pisces: [2, 6] };
@@ -584,13 +584,13 @@ export function buildEminenceSnapshotLines(chartObj, predOpts){
 	});
 	lines.push(`总分 ${data.total} / 10 → ${data.level}（≥8 显赫 / 6-7 显著 / 3-5 平凡 / <3 暗晦）。`);
 	if(data.note){ lines.push(data.note); }
-	// [WP-4] 主宰光体行(段内增行不加段头):判定三判据+两派主星并列自陈。
+	// 主宰光体行(段内增行不加段头):判定三判据+两派主星并列自陈。
 	const pred = computePredominator(chartObj, predOpts);
 	if(pred.ok){
 		const fx = (pred.winner === AstroConst.SUN ? pred.sunFactors : pred.moonFactors).join('·') || '判据全空(按区分光体)';
 		lines.push(`主宰光体(predominator):${pred.winner === AstroConst.SUN ? '太阳' : '月亮'}(日 ${pred.sunScore} 分 / 月 ${pred.moonScore} 分;${fx}${pred.dynamical ? ';动力学分区加权' : ''})。庙主=${planetCn(pred.domicileMaster) || '—'}${pred.boundMaster ? `,界主=${planetCn(pred.boundMaster)}` : ''};当前判法=${pred.method === 'bound' ? '界主派' : '庙主派'} → 主宰主星 ${planetCn(pred.master) || '—'}。`);
 	}
-	// [WP-8] 七射线分布(灵学推算;默认 off 零增行)+祝融星行(响应有 vulcan 字段才显)。
+	// 七射线分布(灵学推算;默认 off 零增行)+祝融星行(响应有 vulcan 字段才显)。
 	const rw = predOpts && predOpts.rayWeighting;
 	if(rw === 'equal' || rw === 'weighted'){
 		const rays = computeSevenRays(chartObj, rw);

@@ -1,4 +1,4 @@
-// [QA-9] 「王牌」判据的单一真值源 —— 零依赖叶子模块。
+// 「王牌」判据的单一真值源 —— 零依赖叶子模块。
 //
 // 为什么单独成文件:牌组把大牌另名以标其体系(minchiate_trump / visconti_trump),于是「这张是不是王牌」
 // 这一判断遍布 schema 层(cardSchema)、判读层(verdict)、牌义层(marseilleMeanings)、读法层(pairReading)。

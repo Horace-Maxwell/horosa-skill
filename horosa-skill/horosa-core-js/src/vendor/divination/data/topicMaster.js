@@ -101,8 +101,4 @@ export const TOPIC_MASTER = {
 	},
 };
 
-export const TOPIC_LIST = Object.keys(TOPIC_MASTER);
-
-export function topicInfo(id){ return TOPIC_MASTER[id] || null; }
-
 export default TOPIC_MASTER;

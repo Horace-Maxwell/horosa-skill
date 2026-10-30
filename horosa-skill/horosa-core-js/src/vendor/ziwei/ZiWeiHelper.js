@@ -47,7 +47,7 @@ export function zwShowStarLight(){
 	return v === null ? true : v === '1'; // 默认开（=现状零回归；三合盘星名下庙旺标注）
 }
 
-// ===== [D1] 盘面显示开关族A(纯显示层:localStorage+bump 广播;默认值=现状零回归) =====
+// ===== 盘面显示开关族A(纯显示层:localStorage+bump 广播;默认值=现状零回归) =====
 function lsFlag(key, dflt){
 	let v = null;
 	try{ v = localStorage.getItem(key); }catch(e){ /* SSR/隐私模式回落默认 */ }
@@ -60,20 +60,20 @@ export function zwShowShaHuagai(){ return lsFlag('ziweiShowShaHuagai', true); } 
 export function zwShowShaSande(){ return lsFlag('ziweiShowShaSande', true); }      // 天德/月德,默认开
 export function zwShowShaTaizuo(){ return lsFlag('ziweiShowShaTaizuo', true); }    // 三台/八座/恩光/天贵,默认开
 export function zwZihuaAlways(){ return lsFlag('ziweiZihuaAlways', false); }       // 自化常显,默认关
-// [D2] 宫格增量信息族(默认全关=现状)
+// 宫格增量信息族(默认全关=现状)
 export function zwShowMingSihua(){ return lsFlag('ziweiShowMingSihua', false); }       // 命宫干四化徽
 export function zwShowDaySihua(){ return lsFlag('ziweiShowDaySihua', false); }         // 日干四化徽
 export function zwShowYearAges(){ return lsFlag('ziweiShowYearAges', false); }         // 流年岁数条
 export function zwShowXiaoxianAges(){ return lsFlag('ziweiShowXiaoxianAges', false); } // 小限岁数条
-export function zwShowXiaoxianLayer(){ return lsFlag('ziweiShowXiaoxianLayer', false); } // [D3] 小限叠宫层(盘上「限X」标签),默认关
-export function zwShowSfszLine(){ return lsFlag('ziweiShowSfszLine', true); }      // [D4] 对宫指示线(点宫后中宫画被点宫↔对宫虚线),默认开(静态盘零变化)
-export function zwCenterContent(){                                                  // [D4] 中宫内容:clean(默认现状)/bazi(四柱+主星要素)/full(全量)
+export function zwShowXiaoxianLayer(){ return lsFlag('ziweiShowXiaoxianLayer', false); } // 小限叠宫层(盘上「限X」标签),默认关
+export function zwShowSfszLine(){ return lsFlag('ziweiShowSfszLine', true); }      // 对宫指示线(点宫后中宫画被点宫↔对宫虚线),默认开(静态盘零变化)
+export function zwCenterContent(){                                                  // 中宫内容:clean(默认现状)/bazi(四柱+主星要素)/full(全量)
 	let v = null;
 	try{ v = localStorage.getItem('ziweiCenterContent'); }catch(e){ /* noop */ }
 	return v === 'bazi' || v === 'full' ? v : 'clean';
 }
 
-// [D2] 命宫干:命宫宫干首字(两盘 houses 结构同源;缺盘/缺宫返 null 不画=best-effort)。
+// 命宫干:命宫宫干首字(两盘 houses 结构同源;缺盘/缺宫返 null 不画=best-effort)。
 export function mingGanOf(chartObj){
 	try{
 		const i = chartObj && chartObj.lifeHouseIndex;
@@ -81,23 +81,17 @@ export function mingGanOf(chartObj){
 		return gz ? `${gz}`.charAt(0) : null;
 	}catch(e){ return null; }
 }
-// [D2] 日干:本地盘 fourColumns 口径优先(晚子时进位正确),Java 盘 bazi 两路回落;全缺不画。
+// 日干:本地盘 fourColumns 口径优先(晚子时进位正确),Java 盘 bazi 两路回落;全缺不画。
 export function dayGanOf(chartObj){
 	if(!chartObj){ return null; }
-	try{
-		const fc = chartObj.fourColumns && chartObj.fourColumns.day && (chartObj.fourColumns.day.ganzi || chartObj.fourColumns.day.ganZhi);
-		if(fc){ return `${fc}`.charAt(0); }
-	}catch(e){ /* fallthrough */ }
-	try{
-		if(chartObj.bazi && chartObj.bazi.dayGanZi){ return `${chartObj.bazi.dayGanZi}`.charAt(0); }
-	}catch(e){ /* fallthrough */ }
-	try{
-		const gz = chartObj.bazi && chartObj.bazi.bazi && chartObj.bazi.bazi.day && chartObj.bazi.bazi.day.ganzi;
-		if(gz){ return `${gz}`.charAt(0); }
-	}catch(e){ /* fallthrough */ }
+	const fc = chartObj.fourColumns && chartObj.fourColumns.day && (chartObj.fourColumns.day.ganzi || chartObj.fourColumns.day.ganZhi);
+	if(fc){ return `${fc}`.charAt(0); }
+	if(chartObj.bazi && chartObj.bazi.dayGanZi){ return `${chartObj.bazi.dayGanZi}`.charAt(0); }
+	const gz = chartObj.bazi && chartObj.bazi.bazi && chartObj.bazi.bazi.day && chartObj.bazi.bazi.day.ganzi;
+	if(gz){ return `${gz}`.charAt(0); }
 	return null;
 }
-// [D2] 流年岁列:宫支相对生年支的首轮虚岁,而后每 12 年一轮。count 默认 8(~百岁内)。
+// 流年岁列:宫支相对生年支的首轮虚岁,而后每 12 年一轮。count 默认 8(~百岁内)。
 export function yearAgesOf(houseZhi, yearZi, count = 8){
 	const hi = getHouseZiIndex(houseZhi);
 	const yi = getHouseZiIndex(yearZi);
@@ -107,7 +101,7 @@ export function yearAgesOf(houseZhi, yearZi, count = 8){
 	for(let k = 0; k < count; k++){ out.push(first + k * 12); }
 	return out;
 }
-// [B15b] 小限顺逆(chart 版包装,单一真值源=ziweiCore 纯函数):读 ZWEngineOptions.xiaoxianMode
+// 小限顺逆(chart 版包装,单一真值源=ziweiCore 纯函数):读 ZWEngineOptions.xiaoxianMode
 // (挂载/导出期由 builder SWITCH_KEYS 临时覆盖,消费期现算天然跟随)。惰性 require 照 kuiYue 先例防加载序。
 // 性别:Java 顶层 gender 三形态优先,裸本地引擎盘(assembleNatalChart 原始形状,仅 male bool)回退;
 // 年干阴阳:yearGan 判定优先(两种盘原生都有;chart.yearPolar 仅 Java 顶层字段,裸本地盘缺)。
@@ -122,13 +116,13 @@ function chartYearYang(chart){
 	return !!(chart && chart.yearPolar === 'Positive');
 }
 function xiaoxianModeNow(){
-	try{ return `${__req0.ZWEngineOptions.xiaoxianMode || '0'}`; }catch(e){ return '0'; }
+	return `${__req0.ZWEngineOptions.xiaoxianMode || '0'}`;
 }
 export function xiaoxianClockwise(chart){
 	if(!chart){ return true; }
 	return xiaoxianClockwiseFor(xiaoxianModeNow(), chartMale(chart), chartYearYang(chart));
 }
-// [B15b] 某宫小限岁列(渲染期现算,随「小限顺逆」档跟随)。现算条件不足(缺盘/缺年支/缺宫支)返 null,
+// 某宫小限岁列(渲染期现算,随「小限顺逆」档跟随)。现算条件不足(缺盘/缺年支/缺宫支)返 null,
 // 由消费端回退排盘期 smallDirection(排盘数据恒默认口径,仅作保底)。
 export function xiaoxianAgesOf(chart, houseZhi, maxAge = 100){
 	if(!chart || !chart.yearZi || !houseZhi){ return null; }
@@ -137,7 +131,7 @@ export function xiaoxianAgesOf(chart, houseZhi, maxAge = 100){
 	const ages = xiaoxianAgesForHouse(xiaoxianModeNow(), chartMale(chart), chartYearYang(chart), startZhi, houseZhi, maxAge);
 	return ages.length ? ages : null;
 }
-// [D2] 岁数条排版:数列→空格串,超出截断加省略号(纯函数,金标锁)。
+// 岁数条排版:数列→空格串,超出截断加省略号(纯函数,金标锁)。
 export function formatAgeStrip(ages, maxCount = 8){
 	const arr = Array.isArray(ages) ? ages : [];
 	if(!arr.length){ return ''; }
@@ -145,7 +139,7 @@ export function formatAgeStrip(ages, maxCount = 8){
 	return shown.join(' ') + (arr.length > maxCount ? '…' : '');
 }
 
-// [D1] 六煞黑字:集合={擎羊陀罗火铃空劫};'天空'为空劫古名档(kongNaming=book)的地空显示名兜底。
+// 六煞黑字:集合={擎羊陀罗火铃空劫};'天空'为空劫古名档(kongNaming=book)的地空显示名兜底。
 // 仅煞曜组消费本函数——杂曜组的年支系天空走 Others 色不经此,天刑/天姚/咸池等保持煞曜红。
 export const SIX_EVIL_NAMES = ['擎羊', '陀罗', '火星', '铃星', '地空', '地劫', '天空'];
 export function colorForEvilStar(name){
@@ -155,7 +149,7 @@ export function colorForEvilStar(name){
 	return ZWConst.ZWColor.StarEvilStroke;
 }
 
-// [D1] 神煞三组显示过滤(纯显示层,列宽计算前调用;绝不动 chart 数据层)。
+// 神煞三组显示过滤(纯显示层,列宽计算前调用;绝不动 chart 数据层)。
 // 三开关默认全开→返回原引用=零开销零变化。同名双份(如年支系/月系重复)不去重,各自受同一开关辖。
 const SHENSHA_G_HUAGAI = ['华盖', '劫煞', '咸池'];
 const SHENSHA_G_SANDE = ['天德', '月德'];
@@ -185,9 +179,7 @@ export const ZIWEI_DISPLAY_EVENT = 'horosa:ziwei-display-changed';
 
 export function bumpZwDisplayRev(key, value){
 	if(typeof window === 'undefined' || typeof window.dispatchEvent !== 'function'){ return; }
-	try{
-		window.dispatchEvent(new CustomEvent(ZIWEI_DISPLAY_EVENT, { detail: { key: key, value: value } }));
-	}catch(e){ /* 老内核无 CustomEvent 构造器:退化为不广播,行为同改动前 */ }
+	window.dispatchEvent(new CustomEvent(ZIWEI_DISPLAY_EVENT, { detail: { key: key, value: value } }));
 }
 
 // P1-A：切流派后必须失效四化缓存并按新表重建（getSiHua 用 size===0 懒初始化，不显式清不会重算）。
@@ -256,7 +248,7 @@ export function getDouJun(zidou, yearzi){
 }
 
 // ===== 运限流曜（前端本地计算，与后端 ZiWeiLuck 同源；避免每次点击都打后端） =====
-// 🔴 [A5] 位置表单一真值:全部改读 data 表(禄存/魁钺=ziweiyeargan、昌曲=ziweiliuchangqu、
+// 🔴 位置表单一真值:全部改读 data 表(禄存/魁钺=ziweiyeargan、昌曲=ziweiliuchangqu、
 //    马=ziweiyearzi 年马行)——旧六份硬编副本已逐字节核对与表相等后消除;禁字面量表回潮。
 //    流魁流钺过 placeKuiYue 随本命魁钺歌诀档同移(否则庚辛年切档后本命移了流魁没移=口径分叉)。
 const flowGanPos = (star, gan) => {
@@ -267,13 +259,13 @@ const flowMaPos = (zhi) => {
 	const def = TB.STARS_YEAR_ZI['年马'];
 	return def && def.pos ? def.pos[zhi] : undefined;
 };
-// [P3d] 流鸾/流喜:支系,公式与本命红鸾天喜同源(ziweiyearzi.json:红鸾=卯起子逆→支序(3−n+12)%12;天喜=对宫)。
+// 流鸾/流喜:支系,公式与本命红鸾天喜同源(ziweiyearzi.json:红鸾=卯起子逆→支序(3−n+12)%12;天喜=对宫)。
 const FlowLuanPos = (zhi)=>{ const n = DiZi.indexOf(zhi); return n < 0 ? null : DiZi[((3 - n) % 12 + 12) % 12]; };
 
 // 返回某天干/地支的全套流曜 [{name, zhi}]。
-// [P3d] flowLuanXi 开关(默认关):加流鸾/流喜两颗 —— 默认关的理由:getFlowStars 同时喂快照
+// flowLuanXi 开关(默认关):加流鸾/流喜两颗 —— 默认关的理由:getFlowStars 同时喂快照
 // [运限] 流曜行,恒开会动 ziweiV2Baseline withPeriod 事实多重集(基线字节稳);开=显式选择。
-// [B13] 盘上时辰支 best-effort:本地盘 chart.timeZi → Java 盘 bazi.bazi.time 支 → null(缺则流火铃不出)
+// 盘上时辰支 best-effort:本地盘 chart.timeZi → Java 盘 bazi.bazi.time 支 → null(缺则流火铃不出)
 export function hourZhiOf(chartObj){
 	if(!chartObj){ return null; }
 	if(chartObj.timeZi){ return chartObj.timeZi; }
@@ -306,7 +298,7 @@ export function getFlowStars(gan, zhi, hourZhi){
 	if(qu) out.push({ name: '流曲', zhi: qu });
 	const ma = zhi ? flowMaPos(zhi) : undefined;
 	if(ma) out.push({ name: '流马', zhi: ma });
-	// [B13] 流年火铃:开关默认关;起法=本命火铃内核 placeHuoLing(流年支代年支+生时,nanpai 档语义自动继承)。
+	// 流年火铃:开关默认关;起法=本命火铃内核 placeHuoLing(流年支代年支+生时,nanpai 档语义自动继承)。
 	// hourZhi 缺省不出两星=旧调用零回归。
 	if(zhi && hourZhi && zwFlowHuoLingEnabled()){
 		try{
@@ -324,17 +316,12 @@ export function getFlowStars(gan, zhi, hourZhi){
 	}
 	return out;
 }
-// [P3d] 开关读取(经 ZWEngineOptions 单例;require 防循环 import——ziweiOptions 零依赖纯常量,实际无环,双保险)
+// 开关读取(经 ZWEngineOptions 单例;惰性 require 照 kuiYue 先例。ziweiOptions 只依赖 data/ziweiTables(纯表),与本文件无环)
 function zwFlowLuanXiEnabled(){
-	try{ return !!__req0.ZWEngineOptions.flowLuanXi; }catch(e){ return false; }
+	return !!__req0.ZWEngineOptions.flowLuanXi;
 }
 function zwFlowHuoLingEnabled(){
-	try{ return !!__req0.ZWEngineOptions.flowHuoLing; }catch(e){ return false; }
-}
-
-// 干支地支 → 本命宫 index（houses[i] 地支 = DiZi[i]）
-export function ziToHouseIndex(zhi){
-	return getHouseZiIndex(zhi);
+	return !!__req0.ZWEngineOptions.flowHuoLing;
 }
 
 // P1-C 流年「将前十二神 / 岁前十二神」（按流年支起，纯地支表；仅流年层用）。
@@ -368,13 +355,12 @@ export function getFlowJiangSui(zhi){
 	return out;
 }
 
-// [D3] 流年神煞上盘(BUG-H 方案:绘制期替换,零触 chart 数据层)。
+// 流年神煞上盘(BUG-H 方案:绘制期替换,零触 chart 数据层)。
 // smalls 序恒 [博士系,将前系,岁前系] 三条(Java/本地引擎同序;P0-1 排法依据)——
 // 开关开+有流年支时:博士保留,将前/岁前两条换成流年版(「流」前缀,getFlowJiangSui 落于本宫支者),
 // 并携 natal 字段(被替换的本命神煞名)供 tooltip 对照。任何形状不符(≠3条)诚实降级返原引用。
 export function resolveSmallStarsForDisplay(smalls, houseZhi, flowZhi){
-	let on = false;
-	try{ on = !!__req0.ZWEngineOptions.flowShenshaOnChart; }catch(e){ on = false; }
+	const on = !!__req0.ZWEngineOptions.flowShenshaOnChart;
 	if(!on || !flowZhi || !houseZhi || !Array.isArray(smalls) || smalls.length !== 3){
 		return smalls;
 	}
@@ -391,21 +377,18 @@ export function resolveSmallStarsForDisplay(smalls, houseZhi, flowZhi){
 	];
 }
 
-// [B10-fix] 运限层四化取干(消费期现算单源):流年层且档=ming_gong_gan → 流年命宫宫干;
+// 运限层四化取干(消费期现算单源):流年层且档=ming_gong_gan → 流年命宫宫干;
 // 其余层恒 layer.gan。此前把 sihuaGan 烙死在选择时的 item 快照上——切档后已选流年不追新、
 // 切回默认还残留宫干(双向死开关体验)。三消费点(面板卡/快照行/盘面滑窗源头)统一走本函数。
 export function effLayerSihuaGan(chartObj, layer){
 	if(!layer){ return null; }
 	const isLiunian = layer.level === 'liunian' || layer.key === 'liunian';
 	if(isLiunian){
-		let mode = 'year_gan';
-		try{ mode = __req0.ZWEngineOptions.liunianSihuaGan || 'year_gan'; }catch(e){ /* 默认档 */ }
+		const mode = __req0.ZWEngineOptions.liunianSihuaGan || 'year_gan';
 		if(mode === 'ming_gong_gan'){
-			try{
-				const i = layer.mingIndex;
-				const gz = chartObj && chartObj.houses && chartObj.houses[i] && chartObj.houses[i].ganzi;
-				if(gz){ return `${gz}`.charAt(0); }
-			}catch(e){ /* 回落 */ }
+			const i = layer.mingIndex;
+			const gz = chartObj && chartObj.houses && chartObj.houses[i] && chartObj.houses[i].ganzi;
+			if(gz){ return `${gz}`.charAt(0); }
 		}
 		return layer.gan;   // year_gan 档:显式忽略残留的 item.sihuaGan(切回默认必须立刻还原)
 	}
@@ -498,14 +481,6 @@ export function collectSanhePalaces(chart, mingIdx){
 	];
 }
 
-// 旧 API 保留兼容(若有外部调用), 但弃用 - 新代码用 collectSanhePalaces
-export function collectFourPalaceStars(chart, mingIdx){
-	return collectSanhePalaces(chart, mingIdx);
-}
-export function getTripleIndices(mingIdx){
-	return getSanheIndices(mingIdx);
-}
-
 // ===== 运限渲染纯函数（需求3/5；与大限「运X」同口径，可测） =====
 // 某宫(houseIndex)在某运限层(命宫=layerMingIndex)下的角色字：与 ZWChart 大限 dirname 同算法
 // (delta=层命宫-本宫; 角色=ZWHouses[(delta%12+12)%12])，取宫名首字（命/兄/夫/子/财/疾/迁/友/官/田/福/父）。
@@ -549,7 +524,7 @@ export function luckLabelLayers(sel, includeXiaoxian = false){
 		return out;
 	}
 	if(sel.liunian) out.push({ key: 'liunian', prefix: ZWConst.ZWPeriodPrefix.liunian, mingIndex: sel.liunian.mingIndex });
-	// [D3] 小限叠宫层:仅 UI 显式开启才插(默认参 false=快照/挂载/既有调用零回归);金框语义不动(仍流年命宫)。
+	// 小限叠宫层:仅 UI 显式开启才插(默认参 false=快照/挂载/既有调用零回归);金框语义不动(仍流年命宫)。
 	if(includeXiaoxian && sel.xiaoxian) out.push({ key: 'xiaoxian', prefix: ZWConst.ZWPeriodPrefix.xiaoxian, mingIndex: sel.xiaoxian.mingIndex });
 	if(sel.liuyue) out.push({ key: 'liuyue', prefix: ZWConst.ZWPeriodPrefix.liuyue, mingIndex: sel.liuyue.mingIndex });
 	if(sel.liuri) out.push({ key: 'liuri', prefix: ZWConst.ZWPeriodPrefix.liuri, mingIndex: sel.liuri.mingIndex });

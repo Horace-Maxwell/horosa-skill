@@ -9,13 +9,13 @@ import { receptionsOf } from '../engine/reception.js';
 import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
 import { FIXED_STARS, starLonAt, starOrbFor } from '../data/fixedStars.js';
-import { angularDist, norm360 } from '../engine/utils.js';
+import { angularDist, norm360, chartYearFromFacts } from '../engine/utils.js';
 import { PLANETARY_HOURS, DAY_RULERS } from '../data/planetaryHours.js';
 import { mansionOf, MANSION_ELECTION_SETS, TOPIC_MANSION_MAP } from '../data/lunarMansions.js';
 import { paransAt } from '../engine/paransLocal.js';
 import { radicality, viaCombustaRange } from '../engine/radicality.js';
-import { termRulerAt, faceAt, triplicityRulers } from '../data/dignities.js';
-import { termRulerForVariant, almutenFiguris } from '../engine/almuten.js';
+
+import { almutenFiguris } from '../engine/almuten.js';
 import { filterAspects } from './orbPolicy.js';
 import { bonificationReport } from './dignityReport.js';
 
@@ -36,13 +36,6 @@ function vocOptsOf(facts){
 		vocMitigateSigns: !!eff.vocMitigateSigns, viaCombustaVariant: eff.viaCombustaVariant,
 	};
 }
-// 判读层界主（随 eff.termsVariant;0=埃及=既有默认）。
-function termRulerEff(facts, lon){
-	const eff = effOf(facts);
-	const v = eff ? eff.termsVariant : 0;
-	if(!v) return termRulerAt(lon);
-	return termRulerForVariant(lon, { termsVariant: v, isDiurnal: !!(facts.meta && facts.meta.isDiurnal) });
-}
 function clamp(x){ return Math.max(0, Math.min(100, Math.round(x))); }
 function verdictOf(s){ return s >= 70 ? 'good' : (s >= 52 ? 'neutral' : (s >= 38 ? 'caution' : 'bad')); }
 function scoreFromFindings(findings, baseSeed){
@@ -57,15 +50,6 @@ const MALEFICS = ['mars', 'saturn'];
 function mkFinding(polarity, message, weight){ return { polarity, message, text_zh: message, weight: weight || 1 }; }
 
 function normLon(x){ return ((Number(x) % 360) + 360) % 360; }
-// 取本盘公历年（用于恒星岁差修正）：优先读 /chart 回传的 params.birth/date；缺则用中性年（岁差差异 <1° 可忽略）。
-function getChartYear(facts){
-	try{
-		const p = facts && facts.result && facts.result.params;
-		const ds = p && (p.birth || p.date);
-		if(ds){ const m = String(ds).match(/(-?\d{3,4})/); if(m){ return Number(m[1]); } }
-	}catch(e){ /* noop */ }
-	return 2000;
-}
 // 两点的短弧中点（落入两点夹角较小一侧）。
 function shortMidpoint(a, b){
 	const m1 = normLon((Number(a) + Number(b)) / 2);
@@ -274,7 +258,7 @@ function receptionModule(facts, topic){
 
 function fixedStarsModule(facts, topic){
 	const findings = [];
-	const year = getChartYear(facts);
+	const year = chartYearFromFacts(facts);
 	const points = { 命度: facts.meta.ascLon, 天顶: facts.meta.mcLon, 太阳: facts.planets.sun && facts.planets.sun.lon, 月亮: facts.planets.moon && facts.planets.moon.lon };
 	// 命主星
 	const l1 = lord1Of(facts);
@@ -492,7 +476,7 @@ function mansionModule(facts, topic){
 	}
 	const eff = effOf(facts);
 	const anchor = (eff && eff.mansionAnchor) || 'equal_aries0';
-	const m = mansionOf(moon.lon, anchor, getChartYear(facts));
+	const m = mansionOf(moon.lon, anchor, chartYearFromFacts(facts));
 	findings.push(mkFinding('neutral', `月在第 ${m.n} 宿 ${m.name}（${m.alt}）：${m.nature}。用途：${m.use}`, 1));
 	const map = TOPIC_MANSION_MAP[topic && topic.topic_id];
 	if(map){
@@ -561,7 +545,7 @@ function paransModule(facts, topic){
 		findings.push(mkFinding('neutral', '缺地理纬度，无法计算恒星交映', 1));
 		return { key: 'parans', title: '恒星交映（parans）', verdict: 'neutral', score: 60, findings, detail_md: '' };
 	}
-	const year = getChartYear(facts);
+	const year = chartYearFromFacts(facts);
 	const stars = FIXED_STARS.slice(0, 10).map((st) => ({
 		name_cn: st.name_cn, lon: starLonAt(st.lon_1995, year), dec: st.declination,
 		avoid: !!(st.election && st.election.avoid), meaning: st.meaning,
@@ -655,12 +639,6 @@ function bonificationModule(facts){
 	return { key: 'bonification', title: '吉化 / 凶化（凌制·围合·背离）', verdict: verdictOf(score), score, findings, detail_md: '吉化=3°内入相合吉星/优位四分三分凌制/吉围合/执矛/日心;凶化=凶星同度/优位凌制/围攻/背离其定位星。凌制取整宫口径,黄道在先者为主。' };
 }
 
-// 黄经 → 星座 key(供 almuten 用)
-function signKeyOfLon(lon){
-	const idx = Math.floor(normLon(lon) / 30);
-	return ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'][idx];
-}
-
 // ===== R2 阿拉伯点模块:福/精神状态 + 用事关联分科点(facts.lots 由 electionEngine 组装) =====
 const LOT_CONTACT_ORB = 3;   // 点为虚点,取紧合/冲/刑接触判受照(±3°)
 function lotContacts(facts, lon){
@@ -726,7 +704,7 @@ export function runModules(facts, topic, school){
 		moonMechanicsModule(facts),
 		planetaryHourModule(facts, topic),
 		mansionModule(facts, topic),
-		...((facts && facts.opts && facts.opts.antiscia === false) ? [] : [antisciaModule(facts)]),   // [R5-P2] 全局「映点参与判读」门(缺省 true=零回归)
+		...((facts && facts.opts && facts.opts.antiscia === false) ? [] : [antisciaModule(facts)]),   // 全局「映点参与判读」门(缺省 true=零回归)
 		paransModule(facts, topic),
 		radicalityModule(facts),
 		almutenModule(facts),

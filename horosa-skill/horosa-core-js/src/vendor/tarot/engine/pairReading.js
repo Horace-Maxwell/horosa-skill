@@ -1,7 +1,7 @@
 // 对读引擎(马赛两两解读 TP2):十进对 · 和21互补对 · 配偶对 · 相邻度关系(进化/冲突/退行) · 视线互动。
 // 纯函数,消费 reading.draws;数据依赖 degreeOf(度值)与 cardNotes.gaze(有则出提示,无则静默)。
 import { degreeOf, marseilleNumber } from '../decks/marseilleMeanings.js';
-import { isTrumpArcana } from './arcana.js'; // [QA-9] 王牌判据单一真值源(零依赖叶子)
+import { isTrumpArcana } from './arcana.js'; // 王牌判据单一真值源(零依赖叶子)
 import { noteOf } from '../decks/cardNotes.js';
 import { CORE78 } from '../decks/core78.js';
 
@@ -14,7 +14,7 @@ const majorByNum = (n) => byTdmNum[n] || null;
 
 // 十进对:1..10 ↔ 11..20 同度两八度;0(愚人)↔21(世界) 为首尾特殊对。
 export function decadePartner(card){
-	// [QA-9] 认 *_trump:否则该两副的大牌对流恒空(段出得来、每行都是「—」)
+	// 认 *_trump:否则该两副的大牌对流恒空(段出得来、每行都是「—」)
 	if(!card || !isTrumpArcana(card.arcana)){ return null; }
 	const n = marseilleNumber(card);
 	if(n === 0){ return { partner: majorByNum(21), kind: 'endless', note: '无限的起点与无限的终点互为一对' }; }
@@ -26,7 +26,7 @@ export function decadePartner(card){
 
 // 和21互补对:n ↔ 21−n(每张大牌的「隐藏补牌」;愚人-世界与十进特殊对重合)。
 export function sum21Partner(card){
-	if(!card || !isTrumpArcana(card.arcana)){ return null; } // [QA-9] 同上
+	if(!card || !isTrumpArcana(card.arcana)){ return null; } // 同上
 	const partner = majorByNum(21 - marseilleNumber(card));
 	if(!partner){ return null; }
 	return { partner, note: '两数相加为廿一——互为隐藏的补牌,一显则另一潜' };
@@ -87,7 +87,7 @@ export function buildPairReading(draws){
 	const list = (draws || []).filter((d) => d && d.card);
 	if(!list.length){ return null; }
 	const inSpread = new Set(list.map((d) => d.card.sid));
-	// [QA-9] 认 *_trump:此前写死 'major',维斯康蒂(马赛系,对读正是其看家读法)大牌对读恒空
+	// 认 *_trump:此前写死 'major',维斯康蒂(马赛系,对读正是其看家读法)大牌对读恒空
 	const majors = list.filter((d) => isTrumpArcana(d.card.arcana));
 	const majorLines = majors.map((d) => {
 		const c = d.card;

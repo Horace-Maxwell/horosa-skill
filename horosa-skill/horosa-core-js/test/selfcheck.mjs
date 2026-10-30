@@ -142,7 +142,8 @@ check('progextra options reach the vendored builders (balbillus/keypoints/tripli
   assert(!dflt.includes('太阳'), 'balbillus must print upstream single-char planet names');
   const moon = runProgExtra({ technique: 'balbillus', chart, options: { startPlanet: 'Moon', yearType: 'hellenistic', mode: 'forward' } }).snapshot_text;
   assert(moon.includes('七星按本命黄经序从 月 起铺开'), 'startPlanet=Moon must start from 月');
-  assert(moon.includes('年制=Egyptian/Hellenistic（360 日）、距离口径=顺黄道距（forward）'), 'yearType/mode must reach builder');
+  // 上游 v3.13.0：Balbillus 年制与 129 年系统共用 utils/timeLordYears 年长表，标签改为「埃及 / 希腊化年（360 日）」。
+  assert(moon.includes('年制=埃及 / 希腊化年（360 日）、距离口径=顺黄道距（forward）'), 'yearType/mode must reach builder');
   assert(moon.split('\n').some((l) => l.startsWith('| 月(')), 'first main period must be 月');
   const body = runProgExtra({ technique: 'keypoints', chart, options: { mode: 'body' } }).snapshot_text;
   assert(body.includes('释放点=命（上升起）'), 'keypoints mode=body must release from Asc');
@@ -654,8 +655,10 @@ check('baziGeju 分野口径真的进五行力量 + 缺柱不再无声', async (
   };
   const common = await distOf(undefined);
   const fenye = await distOf('fenye');
-  assert(common === '分布：木2.6%　火22.3%　土23.6%　金18%　水33.5%', `通行档实得 ${common}`);
-  assert(fenye === '分布：木2.7%　火23.6%　土23.6%　金14.5%　水35.5%', `分野档实得 ${fenye}`);
+  // 上游 v3.12.0（dayBoundaryResolve 日界单一解析）：未显式给 after23NewDay 时按全局缺省「23 点算第二天」，
+  // 23:30 出生日柱进位为 戊申（此前未给即当 0，日柱停在 丁未——与显式给缺省值 1 的结果不一致，是上游修掉的缺陷）。
+  assert(common === '分布：木0%　火8.6%　土26.2%　金26.6%　水38.6%', `通行档实得 ${common}`);
+  assert(fenye === '分布：木0%　火9.1%　土26.4%　金23.6%　水40.9%', `分野档实得 ${fenye}`);
   assert(common !== fenye, '分野档必须改变加权，相同即说明 siLingGan 没接上');
   // 说明行须与实算口径一致（两段自相矛盾正是修复前的症状）。
   const fenyeText = (await runBaziGeju({ fourColumns: fc, birth, cangVersion: 'fenye' })).snapshot_text;

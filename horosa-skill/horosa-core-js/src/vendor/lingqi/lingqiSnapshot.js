@@ -42,6 +42,10 @@ export const LINGQI_ZHU_META = [
 	{ key: 'liu', label: '刘曰', source: '刘基注', era: '明' },
 ];
 
+// 注家芯片简称(页面左栏勾选与 AI 挂载齿轮同一份文字:取出处首尾两字,如「颜注」);悬停全名 = 朝代 · 出处
+export function lingqiZhuChipLabel(zm){ return zm && zm.source ? `${zm.source.slice(0, 1)}${zm.source.slice(-1)}` : ''; }
+export function lingqiZhuChipTitle(zm){ return zm ? `${zm.era} · ${zm.source}` : ''; }
+
 export const DEFAULT_LINGQI_ZHU_VISIBLE = { yan: true, he: true, chen: true, liu: true, ke: true, shi: true };
 
 // counts([上,中,下] 各 0-4)→ 中文棋数句;纯阴镘特述。

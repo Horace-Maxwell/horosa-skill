@@ -3,7 +3,7 @@
 // 日返=太阳精确还本命黄经(~365.25 日);月返=月还本命度(27.3 恒星月,勿与 29.5 朔望混)。
 // 主限命中=只读复用既有主限引擎:按本命参数带 predictive+主限法补拉一张命盘,
 // 取 Result 顶层 predictives.primaryDirection 过滤择日日期前后命中;绝不触碰引擎与默认路径。
-import moment from 'moment';
+import { momentOfCivilDateTimeStr, civilDateOfMoment } from '../../utils/civilMoment.js';
 
 
 
@@ -11,13 +11,15 @@ import { PLANETS } from '../data/planets.js';
 import { SIGNS } from '../data/signs.js';
 import { SOLAR_RETURN_DAYS, LUNAR_RETURN_DAYS } from '../engine/timeLords.js';
 
+
 const cn = (k) => (PLANETS[k] || {}).cn || k;
 const RATE = { sun: 360 / SOLAR_RETURN_DAYS, moon: 360 / LUNAR_RETURN_DAYS };   // °/日(平均)
 
 function shortDelta(target, cur){
 	return ((target - cur + 540) % 360) - 180;   // ∈(−180,180]
 }
-function fmt(m){ return m.format('YYYY-MM-DD HH:mm:ss'); }
+// moment → 民用历时刻串(日期段经 civilDateOfMoment:1582 以前儒略历、公元前历史纪年;现代逐字不变)
+function fmt(m){ return `${civilDateOfMoment(m)} ${m.format('HH:mm:ss')}`; }
 
 // 牛顿迭代求「电盘时刻之前最近一次」回归精确时刻。返回 {momentStr, facts} 或 null。
 // 回归盘要点(展示层):光体状态 + 角宫吉凶 + 上升座。

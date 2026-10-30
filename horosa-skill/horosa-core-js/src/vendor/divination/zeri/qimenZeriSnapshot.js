@@ -5,8 +5,9 @@ import { JOINER_CN } from './conditionTypes.js';
 import { appendZeriHitRows, zeriRowDurationMin } from './zeriExplainText.js';
 import { qimenLeafSummary } from './qimenConditionTypes.js';
 import {
-	PAIPAN_OPTIONS, QIJU_METHOD_OPTIONS, SCHOOL_OPTIONS,
+	PAIPAN_OPTIONS, SCHOOL_OPTIONS,
 	KONG_MODE_OPTIONS, MA_MODE_OPTIONS, TIME_ALG_OPTIONS, DAY_SWITCH_OPTIONS, ZHIRUN_LEAP_OPTIONS,
+	qijuMethodUsesJieqiFa, qijuMethodOptionsFor, qijuMethodSelectValue,
 } from '../../dunjia/DunJiaCalc.js';
 
 function labelOf(options, value){
@@ -42,14 +43,16 @@ export function buildQimenZeriSnapshotExtra({ cfg, geo, options, tree, results, 
 	if(options){
 		const segs = [
 			labelOf(PAIPAN_OPTIONS, options.paiPanType),
-			labelOf(QIJU_METHOD_OPTIONS, options.qijuMethod),
+			// 起局法文字随排盘体例(非时家刻家只有「本家默认 / 阴盘」,与工作台 / 奇门页同一判据)
+			(()=>{ const pt = options.paiPanType === undefined || options.paiPanType === null || options.paiPanType === '' ? 3 : options.paiPanType; return labelOf(qijuMethodOptionsFor(pt), qijuMethodSelectValue(pt, options.qijuMethod)); })(),
 			labelOf(SCHOOL_OPTIONS, options.school),
 			`空亡${labelOf(KONG_MODE_OPTIONS, options.kongMode)}`,
 			`驿马${labelOf(MA_MODE_OPTIONS, options.yimaMode)}`,
 			labelOf(TIME_ALG_OPTIONS, options.timeAlg),
 			labelOf(DAY_SWITCH_OPTIONS, options.after23NewDay),
 		];
-		if(options.qijuMethod === 'zhirun'){
+		// 置闰阈值只在「置闰」起局法 × 时家 / 刻家时起作用(其余家别引擎不用它,写进快照会误导)
+		if(options.qijuMethod === 'zhirun' && qijuMethodUsesJieqiFa(options.paiPanType === undefined || options.paiPanType === null || options.paiPanType === '' ? 3 : options.paiPanType)){
 			segs.push(labelOf(ZHIRUN_LEAP_OPTIONS, options.zhirunLeapDays));
 		}
 		if(options.qijuMethod === 'shuzi' && options.shuziReportNumber){
@@ -74,7 +77,7 @@ export function buildQimenZeriSnapshotExtra({ cfg, geo, options, tree, results, 
 	}else if(!rows.length){
 		lines.push('时间段内无满足条件的时辰。');
 	}else{
-		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 命中行补时长(分,由 start/end 相减);清单上限全局可配(缺省 60);前 N 行附判读树。
+		// 命中行补时长(分,由 start/end 相减);清单上限全局可配(缺省 60);前 N 行附判读树。
 		appendZeriHitRows(lines, rows, {
 			formatRow: (row, i)=>{ const dm = zeriRowDurationMin(row); return `${i + 1}. ${row.start} ~ ${row.end}${dm !== null ? `(${dm}分)` : ''}　${row.juText || ''}`; },
 			tail: (total, cap)=>`(其余 ${total - cap} 条略)`,

@@ -2,7 +2,7 @@
 // 37 用事专属规则包（择日清单 §6 + R2 六新分科）：把 topicMaster 的 must_have / must_avoid 代码逐项检验，
 // 命中=加分(正)，未满足/触犯=扣分(负)，并出可读文案。在通用 13 模块之上叠加。
 import { aspectBetween, aspectsOf, applyingAspects, separatingAspects } from '../engine/aspectsEngine.js';
-import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(六口径)
+import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(六口径)
 import { SIGNS, SIGN_ORDER } from '../data/signs.js';
 import { PLANETS, motionRateOf } from '../data/planets.js';
 import { FERTILE_SET, BARREN_SET } from '../data/signFertility.js';
@@ -25,7 +25,7 @@ function aspBetweenEff(facts, a, b){
 function goodAspect(facts, a, b){ if(!a || !b) return false; const x = aspBetweenEff(facts, a, b); return !!(x && [0, 60, 120].indexOf(x.angle) >= 0); }
 function aspectAngle(facts, a, b){ const x = aspBetweenEff(facts, a, b); return x ? x.angle : null; }
 function dignified(facts, k, min){ const x = p(facts, k); return !!(x && x.dignityScore >= (min === undefined ? 2 : min)); }
-// 空亡随流派口径解算([Q-146/T-53] classic 档亦走单源自算,不再直读按全局口径算的后端 isVOC 旗)。
+// 空亡随流派口径解算(classic 档亦走单源自算,不再直读按全局口径算的后端 isVOC 旗)。
 function moonVocEff(facts){
 	const eff = facts.eff || null;
 	return !!resolveMoonVoc(facts, eff ? { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter } : {}).voc;
@@ -104,7 +104,7 @@ const HAVE_CHECK = {
 	sun_moon_good_aspect: (f) => ({ pass: goodAspect(f, 'sun', 'moon'), label: '日月吉相（个性融洽）' }),
 	venus_moon_good_aspect: (f) => ({ pass: goodAspect(f, 'venus', 'moon'), label: '金月吉相（感情融洽）' }),
 	l1_l7_good_aspect: (f) => ({ pass: goodAspect(f, lord(f, 1), lord(f, 7)), label: '命主-7宫主吉相（关系长久）' }),
-	// [R2 修] move_in 引用多年而检查缺席(静默跳过)——补上:命主与四宫主吉相=人宅相安。
+	// move_in 引用多年而检查缺席(静默跳过)——补上:命主与四宫主吉相=人宅相安。
 	l1_l4_good_aspect: (f) => ({ pass: goodAspect(f, lord(f, 1), lord(f, 4)), label: '命主-4宫主吉相（人宅相安）' }),
 	venus_in_1_or_7: (f) => ({ pass: inHouse(f, 'venus', [1, 7]), label: '金星入 1/7 宫（爱情和谐）' }),
 	venus_jupiter_aspect: (f) => ({ pass: goodAspect(f, 'venus', 'jupiter'), label: '金木吉相' }),

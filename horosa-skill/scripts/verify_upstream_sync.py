@@ -65,7 +65,7 @@ for _stream in (sys.stdout, sys.stderr):
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _upstream_preset import parse_preset_sections, read_settings_version  # noqa: E402
+from _upstream_preset import parse_preset_sections, read_aiexport_source, read_settings_version  # noqa: E402
 from revendor_core_js import load_manifest, manifest_drift  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -409,7 +409,7 @@ def main() -> None:
         raise SystemExit(f"upstream-sync: FAIL — upstream aiExport.js not found at {upstream_aiexport}")
 
     provenance = load_provenance()
-    aiexport_text = upstream_aiexport.read_text(encoding="utf-8", errors="replace")
+    aiexport_text = read_aiexport_source(upstream_aiexport)  # 门面 + aiExport/ 目录（上游 v3.12.0 拆分）
 
     # 0. upstream worktree cleanliness. Everything below compares against the **files on disk**, so a
     #    maintainer's uncommitted edits read as "upstream drifted" — and worse, a re-vendor would pull

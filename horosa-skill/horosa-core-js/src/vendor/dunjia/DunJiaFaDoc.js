@@ -46,16 +46,6 @@ export const MU_KU = { 甲: '未', 乙: '戌', 丙: '戌', 丁: '丑', 戊: '戌
 // 门迫解神表（拆走门迫对象，解以六合/三合）。键＝门，值＝六合解神支。
 export const MEN_PO_JIE = { 休: '丑', 生: '亥', 伤: '戌', 杜: '申', 景: '未', 死: '巳', 惊: '辰', 开: '寅' };
 
-// 意象 → 天干（布阵保护「意象」一类）。
-export const YI_XIANG_GAN = [
-	{ key: 'wealth', label: '财富（钱财资源）', gan: '戊' },
-	{ key: 'violence', label: '暴力（家暴施暴）', gan: '庚' },
-	{ key: 'power', label: '权威（管理职权）', gan: '甲' },
-	{ key: 'breakthrough', label: '突破（瓶颈技术突破）', gan: '辛' },
-	{ key: 'show', label: '表现（面子化科）', gan: '丙' },
-	{ key: 'lust', label: '情欲（感情男女）', gan: '癸' },
-];
-
 // 解局三法文案。
 export const SAN_FA_TEXT = [
 	{ name: '灭象', scope: '一方位', desc: '在现实对应方位撤掉对应形象，灭掉局中之象。最基础、最稳妥，先用。' },

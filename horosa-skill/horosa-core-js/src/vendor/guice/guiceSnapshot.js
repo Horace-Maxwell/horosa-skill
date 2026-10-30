@@ -23,7 +23,7 @@ export function buildGuiceSnapshotText(pan, opts) {
 		['变卦', pan.bianName || '—'],
 		['体用', duan && duan.tiYong ? `体 ${duan.tiYong.tiGua}／用 ${duan.tiYong.yongGua} —— ${duan.tiYong.key}：${duan.tiYong.duan}` : '—'],
 		['演数', `${settings.yanshuFa === 'gui' ? '轨数' : '策数'} ${yan.value}`],
-		['流派', guiceSchoolLabel(settings.school)],	// [Q-204/T-165②] 出显示名(曾直出 default/meihua/custom 键名)
+		['流派', guiceSchoolLabel(settings.school)],	// 出显示名(曾直出 default/meihua/custom 键名)
 	])));
 
 	if (gua.steps && gua.steps.length) {

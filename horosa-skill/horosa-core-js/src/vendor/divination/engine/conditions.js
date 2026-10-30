@@ -20,7 +20,7 @@ function speedNote(p){
 
 // 被夹（surround.attacks 含该星 chartId）
 export function isBesieged(key, facts){
-	// [H1c 死链根修] 旧读法期待 surround.attacks 为数组——后端真形状是按行星分桶的 dict,
+	// 旧读法期待 surround.attacks 为数组——后端真形状是按行星分桶的 dict,
 	// 本函数恒 false → 判前考量#11/#16、单星 −2、1647 满分表围攻分四处全哑。
 	// ⚠️ 语义陷阱:attacks 按型分桶,仅 MarsSaturn 桶是凶围(围攻);VenusJupiter=围荣(吉)、
 	// SunMoon=围耀(贵)——「非空即被围」会把吉围判凶=反向错判。凶围恒走 marsSaturnAttacksOf。
@@ -76,7 +76,7 @@ export function planetCondition(key, facts, opts){
 	const sp = speedNote(p);
 	if(sp) f.push(sp);
 
-	// [H4b 门控] backendConditionNotes(default false=现状零回归;renaissance/medieval 绑 true):
+	// backendConditionNotes(default false=现状零回归;renaissance/medieval 绑 true):
 	// 后端金矿字段入证词——留驻/度性/特殊度注记+围荣围耀正面证词(H4a 只映射,此处消费)。
 	if(opts && opts.backendConditionNotes){
 		if(p.stationState === 'S'){

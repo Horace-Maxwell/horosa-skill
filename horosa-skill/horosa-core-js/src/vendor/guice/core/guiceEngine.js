@@ -10,11 +10,10 @@ import { Gua8 } from '../../gua/GuaConst.js';
 import {
 	XIANTIAN_NUM, HOUTIAN_NUM, CE_YANG, CE_YIN, GUI_YANG, GUI_YIN,
 	WUXING_SHENGCHENG, JIUCHOU_BY_DIGIT, JIUCHOU_BORROWED, JIEWEI_XIANGJIE,
-	YUAN_HUI_YUN_SHI, GANG_GAN,
+	GANG_GAN,
 } from './guiceConst.js';
 
 const GUA_BY_NAME = Gua8.reduce((m, g) => { m[g.name] = g; return m; }, {});
-export const YANSHU_MODES = { ce: '策数', gui: '轨数' };
 
 /** 演数之档：策数用先天正数与 36/24；轨数用后天正数与 128/112 */
 function modeOf(mode) {
@@ -127,16 +126,6 @@ export function borrowEmptyDigits(parts) {
 			: { value: 0, empty: true, borrowed: null };   // 所借之位亦空 → 仍空，不再递归
 	});
 	return out;
-}
-
-/** 元会运世：1元=12会=360运=4320世=129600年 */
-export function yuanHuiYunShiOf(n) {
-	const v = Math.abs(Math.trunc(Number(n) || 0));
-	return {
-		yuan: Math.floor(v / YUAN_HUI_YUN_SHI.nian),
-		hui: Math.floor(v / (YUAN_HUI_YUN_SHI.nian / YUAN_HUI_YUN_SHI.hui)) % YUAN_HUI_YUN_SHI.hui,
-		nian: v,
-	};
 }
 
 /** 六十四卦三百八十四爻全表（由公式派生，非硬编）。懒生成 + 模块级缓存 —— 非起卦路径。 */

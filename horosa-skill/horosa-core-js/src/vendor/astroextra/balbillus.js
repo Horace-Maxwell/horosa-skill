@@ -1,4 +1,5 @@
 import moment from 'moment';
+import { birthMomentOfChart, civilDateOfMoment } from '../utils/civilMoment.js';
 import * as AstroConst from './progConst.js';
 import * as AstroText from './progConst.js';
 // [YB] 三段补厚共享 helper(起盘信息/当前时点/方法说明;astroAiSnapshot 不回引本文件,无环)。
@@ -20,16 +21,17 @@ const birthHeaderLines = (c) => (typeof astroAiSnapshot.buildPredictiveBirthHead
 const currentMomentLines = (c, x) => (typeof astroAiSnapshot.buildCurrentMomentLines === 'function' ? astroAiSnapshot.buildCurrentMomentLines(c, x) : []);
 const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 'function' ? astroAiSnapshot.buildMethodNoteLines(k) : []);
 
-// Balbillus 法（129 年系统 · 旺距削减变体）。还原自经典占星 Balbillus / 129-year Time-Lord 体系：
-//  ① 七星各有「Balbillus 小年」(Σ=129)；
-//  ② 主限长度 = N × (1 − d/360)，d = 本命星黄经离其「擢升度」的角距（每差 1 星座扣 N 月、每差 1 度扣 N 日，等价式）；
-//  ③ 主限序 = 七星按本命黄经升序、从起始星旋转铺开；
-//  ④ 每主限期再以该期主星为起点、按 129 权重递归切分子限（可至 5 层）；
-//  ⑤ 始终用 Hellenistic 年（默认 360 日 / 30 日月），可切 solar(365.2422 日)。
-//  距离口径 d 有 nearest（最近角距）/ forward（自擢升度顺黄道到本命星）两解 → 做成参数。
-//  独立引擎，不碰 decennials.js / yearsystem129.js。
-
-export const BALBILLUS_TOTAL = 129;
+// Balbillus 法（时主,旺距削减）:
+//  ① 主限长度(年) = N′ × (360 − d) ⁄ 360。d = 本命星所在「序数度」(⌊黄经⌋ + 1)离其擢升度的最近整度角距;
+//     N′ = 水 20 / 金 8 / 木 12 / 土 30、日 18 / 月 24 / 火 14(三星取小年减一)。360 日历下即 N′ × (360 − d) 日,
+//     换成所选年长再按比例放大。
+//  ② 主限序 = 七星按本命黄经升序、从起始星旋转铺开。
+//  ③ 子限:以父期主星为起点按同一次序,每颗子星 = 它上一层时长 ÷ 12(第二层 = 一级时长 ÷ 12,第三层 ÷ 144 …);
+//     一轮七颗合计不到父期 —— 「一轮」照此不填满,「循环」重复这一轮直到父期末,「填满」把一轮的末段拉长到父期末。
+//  ④ 年长随选项(回归年 / 恒星年 / 360 日 / Abu Ma'shar / Masha'allah / Bija 修正)。
+//  距离口径 d 另有 forward(自擢升度顺黄道到本命星)一解,做成参数。
+//  独立引擎,不碰 decennials.js / yearSystem129.js。
+import { TIME_LORD_YEAR_TYPES } from '../utils/timeLordYears.js';
 
 // 七星 Balbillus 小年（年）。Σ = 129。
 export const BALBILLUS_YEARS = {
@@ -58,12 +60,25 @@ const PLANETS = [
 	AstroConst.MARS, AstroConst.VENUS, AstroConst.MERCURY,
 ];
 
-// 年制：Balbillus 用回归年 365.24219879 日。
-// 「Egyptian/Hellenistic(360)」选项只是标签、不影响周期数学；故默认 solar，
-// 真 360 日年保留给想要古典 Hellenistic 的用户。
-export const BALBILLUS_YEAR_TYPES = {
-	solar: { days: 365.24219879, label: 'Solar 回归年（365.2422 日）' },
-	hellenistic: { days: 360, label: 'Egyptian/Hellenistic（360 日）' },
+// 年制:与 129 年系统共用一张年长表(utils/timeLordYears)。
+export const BALBILLUS_YEAR_TYPES = TIME_LORD_YEAR_TYPES;
+
+// 主限基数 N′:日 / 月 / 火取小年减一,其余同小年。
+export const BALBILLUS_PERIOD_BASE = {
+	[AstroConst.SUN]: 18,
+	[AstroConst.MOON]: 24,
+	[AstroConst.SATURN]: 30,
+	[AstroConst.JUPITER]: 12,
+	[AstroConst.MARS]: 14,
+	[AstroConst.VENUS]: 8,
+	[AstroConst.MERCURY]: 20,
+};
+
+// 子限铺法
+export const BALBILLUS_SUB_RULES = {
+	once: '一轮（各子限 = 该星上一层时长 ÷ 12,不填满父期）',
+	cycle: '循环（一轮接一轮直到父期末）',
+	fill: '填满（一轮,末段拉长到父期末）',
 };
 
 // 距离口径：nearest 最近角距；forward 自擢升度顺黄道到本命星。
@@ -76,18 +91,16 @@ export const BALBILLUS_DEFAULT_OPTS = {
 	startPlanet: AstroConst.SUN,
 	mode: 'nearest',
 	yearType: 'solar',
+	subRule: 'once',
 	maxDepth: 5,
 	maxAge: 120,
 };
 
 function norm360(v){ let n = Number(v) % 360; if(n < 0){ n += 360; } return n; }
 
+// 出生时刻单源(全年份域:公元前 / 公元 1–99 年 / 五位年不误读;见 utils/civilMoment)
 function parseBirthMoment(chartObj){
-	const p = (chartObj && chartObj.params) ? chartObj.params : {};
-	const birth = `${p.birth || ''}`.trim();
-	if(!birth){ return null; }
-	const m = moment(birth.replace(/\//g, '-'), ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-MM-DD']);
-	return m.isValid() ? m : null;
+	return birthMomentOfChart(chartObj);
 }
 
 function natalLon(chartObj, id){
@@ -107,30 +120,24 @@ function rotate(list, start){
 	return list.slice(i).concat(list.slice(0, i));
 }
 
-// d = 本命星黄经离其擢升度的角距。nearest=最近角距；forward=自擢升度顺黄道到本命星。
+// 序数度:黄经 [k, k+1) 记第 k+1 度(擢升度本身即整度数)。
+export function ordinalDegree(lon){
+	return Math.floor(norm360(lon)) + 1;
+}
+
+// d = 本命星序数度离其擢升度的整度角距。nearest = 最近角距;forward = 自擢升度顺黄道到本命星。
 export function balbillusDistance(lon, exalt, mode){
-	const raw = norm360(lon - exalt);
+	const raw = norm360(ordinalDegree(lon) - exalt);
 	if(mode === 'forward'){ return raw; }
 	return Math.min(raw, 360 - raw);
 }
 
-// 削减拟合：日/月/火这 3 星用的不是黄经距，但等价于「黄经最近角距的线性变换」d = a×ecl + b——
-// 即便在擢升处也有基础削减 b。其余四星 a=1/b=0（纯黄经最近角距）。仅 nearest 口径生效。
-const BALBILLUS_REDUCTION_FIT = {
-	[AstroConst.SUN]: { a: 0.9431, b: 19.47 },
-	[AstroConst.MOON]: { a: 0.9592, b: 14.76 },
-	[AstroConst.MARS]: { a: 0.9268, b: 24.39 },
-};
-
-// 主限长度（年）= N × (1 − d/360)。
+// 主限长度(年)= N′ × (360 − d) ⁄ 360。
 export function balbillusPeriodYears(planet, lon, mode){
-	const N = BALBILLUS_YEARS[planet];
-	if(lon === null || lon === undefined || BALBILLUS_EXALT[planet] === undefined){ return N; }
-	let d = balbillusDistance(lon, BALBILLUS_EXALT[planet], mode);
-	const fit = BALBILLUS_REDUCTION_FIT[planet];
-	if(fit && mode === 'nearest'){ d = fit.a * d + fit.b; }
-	d = Math.max(0, Math.min(360, d));
-	return N * (1 - d / 360);
+	const base = BALBILLUS_PERIOD_BASE[planet];
+	if(lon === null || lon === undefined || BALBILLUS_EXALT[planet] === undefined){ return base; }
+	const d = balbillusDistance(lon, BALBILLUS_EXALT[planet], mode);
+	return base * (360 - d) / 360;
 }
 
 // 七星按本命黄经升序、旋转到起始星 → 主限/子限统一行进序。
@@ -145,6 +152,7 @@ function resolveOpts(opts){
 	const o = { ...BALBILLUS_DEFAULT_OPTS, ...(opts || {}) };
 	if(!BALBILLUS_YEAR_TYPES[o.yearType]){ o.yearType = 'solar'; }
 	if(!BALBILLUS_MODES[o.mode]){ o.mode = 'nearest'; }
+	if(!BALBILLUS_SUB_RULES[o.subRule]){ o.subRule = 'once'; }
 	if(BALBILLUS_YEARS[o.startPlanet] === undefined){ o.startPlanet = AstroConst.SUN; }
 	if(!(o.maxDepth >= 1)){ o.maxDepth = 5; }
 	if(!(o.maxAge > 0)){ o.maxAge = 120; }
@@ -163,7 +171,7 @@ export function buildBalbillusContext(chartObj, opts){
 
 function dateOf(ctx, days){
 	if(ctx.birthMs === null || ctx.birthMs === undefined){ return ''; }
-	return moment(ctx.birthMs).add(days, 'days').format('YYYY-MM-DD');
+	return civilDateOfMoment(moment(ctx.birthMs).add(days, 'days'));   // 民用历日期标签(1582 以前儒略历)
 }
 
 function makeNode(ctx, planet, level, startDays, durDays){
@@ -205,27 +213,23 @@ export function buildBalbillusRoots(ctx){
 	return roots;
 }
 
-// 子限结构：时间单位逐级降级——每子段时长 = 削减年数(子星) × 当前层时间单位
-// (L2=月)，自父星起按行进序铺开；**末段填满父期剩余**（最后一颗星被拉长到父期末），
-// 自然长度溢出父期则截断。**不是**原先的「129 权重切父期」。
+// 子限:以父期主星为起点按行进序,每颗子星 = 它上一层时长 ÷ 12(第 k 层 = 一级时长 ÷ 12^(k−1));
+// 一轮合计不到父期 —— once 照此不填满,cycle 一轮接一轮到父期末(末段截断),fill 把一轮的末段拉长到父期末。
 export function buildBalbillusChildren(ctx, node){
 	if(!node || node.level >= ctx.opts.maxDepth){ return []; }
 	const seq = rotate(ctx.order, node.planet);
 	const unit = timeUnitDays(ctx, node.level + 1);
 	const parentEnd = node.startDays + node.durDays;
+	const rule = ctx.opts.subRule;
 	const children = [];
 	let t = node.startDays;
-	for(let i = 0; i < seq.length; i++){
-		const p = seq[i];
-		const isLast = i === seq.length - 1;
-		let dur;
-		if(isLast){
-			dur = Math.max(0, parentEnd - t);
-		}else{
-			dur = balbillusPeriodYears(p, ctx.longitudes[p], ctx.opts.mode) * unit;
-			if(t + dur > parentEnd){ dur = parentEnd - t; }
-		}
-		if(dur <= 0){ break; }
+	for(let i = 0; i < seq.length * (rule === 'cycle' ? 64 : 1); i++){
+		const p = seq[i % seq.length];
+		const isLastOfRound = (i % seq.length) === seq.length - 1;
+		let dur = balbillusPeriodYears(p, ctx.longitudes[p], ctx.opts.mode) * unit;
+		if(rule === 'fill' && isLastOfRound){ dur = parentEnd - t; }
+		if(t + dur > parentEnd){ dur = parentEnd - t; }
+		if(dur <= 1e-9){ break; }
 		children.push(makeNode(ctx, p, node.level + 1, t, dur));
 		t += dur;
 	}
@@ -248,7 +252,7 @@ export function buildBalbillusSnapshotText(chartObj, opts){
 	// [YB] 头部盘主生辰([起盘信息];无数据 helper 自返 [],不产空段头)。
 	lines.push(...birthHeaderLines(chartObj));
 	lines.push('[Balbillus]');
-	lines.push(`Balbillus 法（129 年系统 · 旺距削减）：主限长度 = 小年 × (1 − 离擢升度角距/360)，七星按本命黄经序从 ${planetTxt(o.startPlanet)} 起铺开，再按 129 权重递归切子限。年制=${BALBILLUS_YEAR_TYPES[o.yearType].label}、距离口径=${BALBILLUS_MODES[o.mode]}。`);
+	lines.push(`Balbillus 法（旺距削减）：主限长度 = N′ ×（360 − 离擢升度的整度角距）⁄ 360 年（N′：水 20 / 金 8 / 木 12 / 土 30 / 日 18 / 月 24 / 火 14），七星按本命黄经序从 ${planetTxt(o.startPlanet)} 起铺开；子限每颗 = 该星上一层时长 ÷ 12。年制=${BALBILLUS_YEAR_TYPES[o.yearType].label}、距离口径=${BALBILLUS_MODES[o.mode]}、子限=${BALBILLUS_SUB_RULES[o.subRule]}。`);
 	lines.push('');
 	lines.push('| 主限 | 子限 | 起始日期 | 时长(年) |');
 	lines.push('| --- | --- | --- | --- |');

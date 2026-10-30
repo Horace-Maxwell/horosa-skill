@@ -58,7 +58,7 @@ export const LOTS = {
 	},
 	victory: {
 		id: 'victory', cn: '胜利点', use: '成事·胜诉(木星系)', house: 10, reverseBySect: true,
-		// [Q-301/T-289 2026-09-18 原典核对] Paulus ch.23:「count from the Lot of Spirit to the degree of Zeus for those born in the day」
+		// Paulus ch.23:「count from the Lot of Spirit to the degree of Zeus for those born in the day」
 		// → 昼 = ASC + 木星 − 精神;此前昼夜颠倒(与后端 flatlib arabicparts 同批改正)
 		day: ['asc', 'jupiter', 'spirit'],
 		night: ['asc', 'spirit', 'jupiter'],
@@ -155,7 +155,7 @@ export const LOTS = {
 		day: ['asc', 'mars', 'moon'],
 		night: ['asc', 'mars', 'moon'],
 	},
-	// [Q-295/T-278] Valens 式与后端 perchart(erosConstruction='valens')同式:昼 爱欲=ASC+精神−福、必然=ASC+福−精神(夜对调);
+	// Valens 式与后端 perchart(erosConstruction='valens')同式:昼 爱欲=ASC+精神−福、必然=ASC+福−精神(夜对调);
 	// 此前前端两点互换 → 择日爱欲点=星盘必然点。
 	erosValens: {
 		id: 'erosValens', cn: '爱欲点(福-精神对式)', use: '欲望·恋慕(以福-精神对构造)', house: 5, reverseBySect: true,
@@ -230,13 +230,6 @@ export function computeLot(formula, lons){
 export function lotDispositor(lotLon){
 	const sign = signOfLon(lotLon);
 	return (SIGNS[sign] || {}).domicile || null;
-}
-
-// 取某点（按昼夜选公式）
-export function lotPosition(lotId, lons, isDiurnal){
-	const def = LOTS[lotId];
-	if(!def) return null;
-	return computeLot(isDiurnal ? def.day : def.night, lons);
 }
 
 export default LOTS;

@@ -43,7 +43,7 @@ function pickYearGan(chart){
 	return '';
 }
 
-// [YA v42] AI 快照取数(供三式合一 buildSanShiUnitedSnapshotText 复用):与本 tab 完全同一套计算
+// AI 快照取数(供三式合一 buildSanShiUnitedSnapshotText 复用):与本 tab 完全同一套计算
 // (pickYearGan/getLayerSihua/buildDaxianItems/buildLiunianItems/houseName),给定盘与当前大运/流年
 // 选中下标,产出 生年/大运/流年 四化文本行;无盘或无四化返 [](调用方不产段,零回归)。纯函数,组件行为不变。
 export function buildSanShiZiweiSihuaSnapshotLines(chart, daxianIdx, liunianIdx){
@@ -87,7 +87,7 @@ export function buildSanShiZiweiSihuaSnapshotLines(chart, daxianIdx, liunianIdx)
 		}
 	}
 	if(lines.length){
-		lines.push(`四化随当前紫微流派（${ZWConst.ZWSchool ? ZWConst.ZWSchool.school : 'beipai'}）取表；按起课时间排盘。`);
+		lines.push(`四化随当前紫微流派（${ZWConst.zwSihuaSchoolLabel(ZWConst.ZWSchool ? ZWConst.ZWSchool.school : 'beipai')}）取表；按起课时间排盘。`);
 	}
 	return lines;
 }

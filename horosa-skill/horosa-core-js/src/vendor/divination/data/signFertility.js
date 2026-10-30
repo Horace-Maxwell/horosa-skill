@@ -8,16 +8,7 @@ export const SIGN_FERTILITY_4 = {
 	aries: 'barren', gemini: 'barren', leo: 'barren', virgo: 'barren', sagittarius: 'barren', aquarius: 'barren',
 };
 
-export const FERTILITY_CN = {
-	most_fertile: '最肥沃', fertile: '肥沃', semi_fertile: '半育', barren: '不育/干',
-};
-
 export const FERTILE_SET = ['cancer', 'scorpio', 'pisces', 'taurus'];          // 播种可用
-export const MOST_FERTILE_SET = ['cancer', 'scorpio', 'pisces'];               // 首推
 export const BARREN_SET = ['aries', 'gemini', 'leo', 'virgo', 'sagittarius', 'aquarius'];
-
-export function fertilityOf(sign){
-	return SIGN_FERTILITY_4[sign] || null;
-}
 
 export default SIGN_FERTILITY_4;

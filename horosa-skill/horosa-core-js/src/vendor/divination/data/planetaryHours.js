@@ -14,6 +14,4 @@ export const PLANETARY_HOURS = {
 // 值日星（择日清单 §10.3 辅助）：周一月·周二火·周三水·周四木·周五金·周六土·周日日
 export const DAY_RULERS = ['sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn']; // 周日..周六
 
-export function hourThemes(planetId){ return PLANETARY_HOURS[planetId] || null; }
-
 export default PLANETARY_HOURS;

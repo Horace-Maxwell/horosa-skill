@@ -338,7 +338,3 @@ export function buildQimenXiangTipObj(type, rawText){
 		blocks: entry.blocks || [],
 	};
 }
-
-export function getQimenDocRawText(){
-	return QIMEN_DOC.rawText || '';
-}

@@ -1,6 +1,7 @@
 import { Solar } from 'lunar-javascript';
 import { isLunarJsYearReliable } from '../bazi/lunarDomainGuard.js';
 import { bjShiftMinutes, shiftSolarMinutes } from './beijingTimeShift.js';
+import { datePartOf, dateKeyOfStr } from '../bazi/dateStrSafe.js';
 
 const GAN = '甲乙丙丁戊己庚辛壬癸'.split('');
 const ZHI = '子丑寅卯辰巳午未申酉戌亥'.split('');
@@ -9,51 +10,12 @@ for(let i=0; i<60; i++){
 	JIAZI.push(`${GAN[i % 10]}${ZHI[i % 12]}`);
 }
 
-const MONTH_MAP = {
-	正月: 1,
-	二月: 2,
-	三月: 3,
-	四月: 4,
-	五月: 5,
-	六月: 6,
-	七月: 7,
-	八月: 8,
-	九月: 9,
-	十月: 10,
-	冬月: 11,
-	腊月: 12,
-};
-
-const DAY_MAP = {
-	初一: 1, 初二: 2, 初三: 3, 初四: 4, 初五: 5,
-	初六: 6, 初七: 7, 初八: 8, 初九: 9, 初十: 10,
-	十一: 11, 十二: 12, 十三: 13, 十四: 14, 十五: 15,
-	十六: 16, 十七: 17, 十八: 18, 十九: 19, 二十: 20,
-	廿一: 21, 廿二: 22, 廿三: 23, 廿四: 24, 廿五: 25,
-	廿六: 26, 廿七: 27, 廿八: 28, 廿九: 29, 三十: 30,
-};
-
 const JIEQI_STD = [
 	'小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
 	'清明', '谷雨', '立夏', '小满', '芒种', '夏至',
 	'小暑', '大暑', '立秋', '处暑', '白露', '秋分',
 	'寒露', '霜降', '立冬', '小雪', '大雪', '冬至',
 ];
-
-function safe(v, d = ''){
-	return v === undefined || v === null ? d : v;
-}
-
-function cloneJson(obj){
-	if(!obj || typeof obj !== 'object'){
-		return obj;
-	}
-	try{
-		return JSON.parse(JSON.stringify(obj));
-	}catch(e){
-		return { ...obj };
-	}
-}
 
 export function getOnlyDateNum(year, month, day){
 	let a = Math.floor((14 - month) / 12);
@@ -76,94 +38,6 @@ export function getDayGanZhi(year, month, day){
 		idx += 60;
 	}
 	return JIAZI[idx];
-}
-
-function parseChineseMonthInt(txt){
-	return MONTH_MAP[safe(txt)] || null;
-}
-
-function parseChineseDayInt(txt){
-	return DAY_MAP[safe(txt)] || null;
-}
-
-function getTimeGanZhiFromDay(dayGanZi, hour){
-	const dayGan = `${safe(dayGanZi)}`.substring(0, 1);
-	const hourBranch = (function getHourBranch(){
-		if(hour === 23 || hour === 0){
-			return '子';
-		}
-		const idx = Math.floor((hour + 1) / 2) % 12;
-		return ZHI[idx];
-	})();
-	const startGan = (function getStartGan(){
-		if('甲己'.includes(dayGan)) return '甲';
-		if('乙庚'.includes(dayGan)) return '丙';
-		if('丙辛'.includes(dayGan)) return '戊';
-		if('丁壬'.includes(dayGan)) return '庚';
-		return '壬';
-	})();
-	const ganIdx = GAN.indexOf(startGan);
-	const zhiIdx = ZHI.indexOf(hourBranch);
-	return `${GAN[(ganIdx + zhiIdx) % 10]}${hourBranch}`;
-}
-
-function buildBirthFallback(fields){
-	if(!fields || !fields.date || !fields.time || !fields.date.value || !fields.time.value){
-		return '';
-	}
-	try{
-		return `${fields.date.value.format('YYYY-MM-DD')} ${fields.time.value.format('HH:mm:ss')}`;
-	}catch(e){
-		return '';
-	}
-}
-
-function normalizeNongli(raw, fields){
-	if(!raw || typeof raw !== 'object'){
-		return null;
-	}
-	const out = cloneJson(raw) || {};
-	if(!out.year){
-		out.year = out.yearGanZi || out.yearJieqi || '';
-	}
-	if(!out.yearGanZi){
-		out.yearGanZi = out.yearJieqi || out.year || '';
-	}
-	if(!out.yearJieqi){
-		out.yearJieqi = out.yearGanZi || out.year || '';
-	}
-	if(!out.monthInt){
-		out.monthInt = parseChineseMonthInt(out.month);
-	}
-	if(!out.dayInt){
-		out.dayInt = parseChineseDayInt(out.day);
-	}
-	if(!out.time){
-		out.time = out.timeGanZi || '';
-	}
-	if(!out.birth){
-		out.birth = buildBirthFallback(fields);
-	}
-	if(!out.jiedelta && out.jieqi){
-		out.jiedelta = `${out.jieqi}后第0天`;
-	}
-	if(!out.dayGanZi && fields && fields.date && fields.time && fields.date.value && fields.time.value){
-		const y = parseInt(fields.date.value.format('YYYY'), 10);
-		const m = parseInt(fields.date.value.format('MM'), 10);
-		const d = parseInt(fields.date.value.format('DD'), 10);
-		out.dayGanZi = getDayGanZhi(y, m, d);
-	}
-	if(!out.time && out.dayGanZi && fields && fields.time && fields.time.value){
-		const hh = parseInt(fields.time.value.format('HH'), 10);
-		out.time = getTimeGanZhiFromDay(out.dayGanZi, hh);
-	}
-	return out;
-}
-
-export function extractNongliFromChartWrap(chartWrap, fields){
-	const chart = chartWrap && chartWrap.chart ? chartWrap.chart : chartWrap;
-	const nongli = chart && chart.nongli ? chart.nongli : null;
-	return normalizeNongli(nongli, fields);
 }
 
 export function buildLocalJieqiYearSeed(year, zone){
@@ -193,11 +67,11 @@ export function buildLocalJieqiYearSeed(year, zone){
 		}
 		const solar = toLocal ? shiftSolarMinutes(bjSolar, toLocal) : bjSolar;
 		const time = solar.toYmdHms();
-		const date = solar.toYmd ? solar.toYmd() : time.substring(0, 10);
+		const date = solar.toYmd ? solar.toYmd() : datePartOf(time);
 		seed[term] = {
 			term,
 			time,
-			dateKey: date.replace(/-/g, ''),
+			dateKey: dateKeyOfStr(date),
 			dayGanzhi: getDayGanZhi(solar.getYear(), solar.getMonth(), solar.getDay()),
 		};
 	}

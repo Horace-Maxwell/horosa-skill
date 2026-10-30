@@ -99,7 +99,7 @@ export function theosophicalGroups(draws, deckCards){
 
 // 「大牌族」判定:RWS 系 'major',Minchiate/Visconti 历史牌组沿用 CORE78 大牌但改了 arcana 名(*_trump)。
 // 精华牌/生命牌需按各自大牌体系归约,故放宽到含 '_trump' 后缀的大牌(number 仍沿 RWS 0..21)。
-// [QA-5] 判据本体已上收至 cardSchema(显示层与判读层从此同一口径);此处仅转出,既有 import 不受影响。
+// 判据本体已上收至 cardSchema(显示层与判读层从此同一口径);此处仅转出,既有 import 不受影响。
 export { isTrumpArcana };
 
 export function majorByNumber(deckCards, n){
@@ -152,7 +152,7 @@ export function synthesize(draws, suitElementSwap){
 	draws.forEach((d) => {
 		const c = d.card;
 		if(d.isReversed){ rev += 1; }
-		if(isTrumpArcana(c.arcana)){ majors += 1; }   // [X1] *_trump 历史大牌同归大牌族,勿当小牌污染花色/重复数字
+		if(isTrumpArcana(c.arcana)){ majors += 1; }   // *_trump 历史大牌同归大牌族,勿当小牌污染花色/重复数字
 		else{
 			if(suitCount[c.suit] !== undefined){ suitCount[c.suit] += 1; }
 			if(c.court){ courts += 1; }

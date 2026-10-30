@@ -1,9 +1,9 @@
-// [Z8·印度择日] 条件注册表(远端判定形:判定在 astropy india_election_scan,pytest 金标
+// 条件注册表(远端判定形:判定在 astropy india_election_scan,pytest 金标
 // 看守;工作台构树发 /indiaelectionscan)。Muhurta 为纲(定案14):Panchanga 五肢+Lagna+
 // 曜落座+日凶段+本命组(Tara/Chandra Bala);Dasha 归本命分析面(coverage exempt 明示)。
 // 🔴 类型键与后端 CONDITION_TYPES 逐键成对(indiaZeriEngine 金标 py 直读对拍);
 // 27 宿名与 IndiaChartMain.NAKSHATRAS 同序同名(值=1..27 序号,后端同语义)。
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
 
 export { GROUP_TYPES, JOINER_CN };
 
@@ -213,68 +213,9 @@ export const INDIA_CONDITION_TYPES = {
 };
 
 // ── 树工厂/摘要/编译(与其它择日技法同构) ──
-export function newIndiaLeaf(type, joiner){
-	const spec = INDIA_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newIndiaGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function indiaLeafSummary(leaf){
-	const spec = leaf ? INDIA_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = INDIA_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileIndiaTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(INDIA_CONDITION_TYPES);
+export const newIndiaLeaf = TREE_API.newLeaf;
+export const newIndiaGroup = TREE_API.newGroup;
+export const indiaLeafSummary = TREE_API.leafSummary;
+export const compileIndiaTree = TREE_API.compileTree;

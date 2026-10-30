@@ -39,8 +39,6 @@ const TRI_BITS = { 乾: [1, 1, 1], 兌: [1, 1, 0], 離: [1, 0, 1], 震: [1, 0, 0
 const BITS_TRI = {};
 Object.keys(TRI_BITS).forEach((t) => { BITS_TRI[TRI_BITS[t].join('')] = t; });
 
-export const SHAOZI_META = TABLES._meta || {};
-
 function triOf(bits3) { return BITS_TRI[bits3.join('')] || null; }
 
 /** 重卦六爻纳甲：下卦取该八卦之内卦纳甲、上卦取其外卦纳甲。 */
@@ -302,7 +300,8 @@ let versesPromise = null;
 export function loadShaoziVerses() {
 	if (!versesPromise) {
 		versesPromise = import('./data/zhengchuanShaoziVerses.json', { with: { type: 'json' } })
-			.then((m) => m.default || m);
+			.then((m) => m.default || m)
+			.catch((e) => { versesPromise = null; throw e; });   // 失败不缓存:下次调用重新载入
 	}
 	return versesPromise;
 }

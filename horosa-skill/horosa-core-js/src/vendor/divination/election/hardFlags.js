@@ -2,18 +2,12 @@
 // 红线/警告系统（择日清单 §4）。布尔检查，命中进 hard_flags[]，按 severity 影响评分/分级。
 // 带 * 的规则参照当前 topic.must_avoid 决定触发/升降级。
 import { aspectsOf } from '../engine/aspectsEngine.js';
-import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(六口径)
-import { viaCombustaRange } from '../engine/radicality.js';
+import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(六口径)
+import { viaCombustaRange, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
 import { PLANETS } from '../data/planets.js';
-import { SIGNS } from '../data/signs.js';
 import { angularDist, norm360 } from '../engine/utils.js';
 import { isEgyptianDay } from '../data/egyptianDays.js';
 import { filterAspects } from './orbPolicy.js';
-
-function lord1Of(facts){
-	const s = facts.meta.ascSign;
-	return s && SIGNS[s] ? SIGNS[s].domicile : null;
-}
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
 
@@ -23,7 +17,7 @@ export function evalHardFlags(facts, topic, school){
 	const flags = [];
 	const mustAvoid = (topic && topic.must_avoid) || [];
 	const inAvoid = (id) => mustAvoid.indexOf(id) >= 0;
-	// [Q-295/T-282] 用星集=七曜为纲(facts.eff.bodySet==='classical7')时三王星红线同样降为注记(此前只看流派 modernPlanets,
+	// 用星集=七曜为纲(facts.eff.bodySet==='classical7')时三王星红线同样降为注记(此前只看流派 modernPlanets,
 	// 现代主流档 + 页面选七曜时天王/海王红线仍全额扣分,与选项标签「三王星仅注记」不符)。
 	const sevenOnly = !!(facts && facts.eff && facts.eff.bodySet === 'classical7');
 	const modernAnnotate = !!(school && school.modernPlanets === 'annotate') || sevenOnly;
@@ -41,7 +35,7 @@ export function evalHardFlags(facts, topic, school){
 	const eff = facts.eff || null;
 	const moon = facts.planets.moon;
 	if(moon){
-		// [Q-146/T-53] 缺省(无 eff)分支原直读后端 isVOC——那面旗按【全局】空亡口径算,
+		// 缺省(无 eff)分支原直读后端 isVOC——那面旗按【全局】空亡口径算,
 		// 与 eff 分支不同源;改走单源 resolveMoonVoc(不传 vocMode 即 classic,前端按 1647 自算)。
 		const vocResolved = resolveMoonVoc(facts, eff ? { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter } : {}).voc;
 		if(vocResolved) add('moon_void_of_course', 'critical', '月亮空亡：此刻起的行动通常无效应', 'moon');

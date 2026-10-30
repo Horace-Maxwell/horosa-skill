@@ -1,10 +1,10 @@
 // P5 扑克卡牌占卜(52 张,塔罗的民间表亲)。源:英系/Hedgewitch 民俗(公有领域)。
 // 花色:♥情感 ♣事业/运 ♦金钱/消息 ♠挑战;红牌偏吉、黑牌偏挑战;Joker 可选百搭。牌义原创中文转录(古籍§8.1 择一锁定)。
 const SUITS = [
-	{ key: 'hearts', cn: '红桃', sym: '♥', polarity: 1, color: '#d6455a' },
-	{ key: 'clubs', cn: '梅花', sym: '♣', polarity: -1, color: '#6fae74' },
-	{ key: 'diamonds', cn: '方块', sym: '♦', polarity: 1, color: '#e0a64b' },
-	{ key: 'spades', cn: '黑桃', sym: '♠', polarity: -1, color: '#9a8fd6' },
+	{ key: 'hearts', cn: '红桃', sym: '♥', polarity: 1, color: 'var(--horosa-jx-xiong)' },
+	{ key: 'clubs', cn: '梅花', sym: '♣', polarity: -1, color: 'var(--horosa-jx-ji)' },
+	{ key: 'diamonds', cn: '方块', sym: '♦', polarity: 1, color: 'var(--horosa-hue-orange)' },
+	{ key: 'spades', cn: '黑桃', sym: '♠', polarity: -1, color: 'var(--horosa-hue-purple)' },
 ];
 const RANK_CN = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K' };
 const RANK_EN = { 1: 'Ace', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six', 7: 'Seven', 8: 'Eight', 9: 'Nine', 10: 'Ten', 11: 'Jack', 12: 'Queen', 13: 'King' };

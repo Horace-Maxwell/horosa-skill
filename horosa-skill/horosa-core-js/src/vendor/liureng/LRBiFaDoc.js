@@ -134,7 +134,7 @@ function ganMu(ctx){ return MU_BY_WX[ctx.dayGanWuXing] || ''; }
 function zhiMu(ctx){ return MU_BY_WX[ctx.dayZhiWuXing] || ''; }
 function ganLu(ctx){ return LU[zi(ctx.dayGan)] || ''; }
 // 日干在某支的十二长生名（ZhangSheng.ganzi 键＝「干_支」）。
-function ganPhase(ctx, b){ try{ return (ZhangSheng && ZhangSheng.ganzi) ? (ZhangSheng.ganzi[`${zi(ctx.dayGan)}_${zi(b)}`] || '') : ''; }catch(e){ return ''; } }
+function ganPhase(ctx, b){ return ZhangSheng.ganzi[`${zi(ctx.dayGan)}_${zi(b)}`] || ''; }
 // 天盘 top 加于 地盘 bottom（用真排盘 layout，方向无歧义）。
 function branchOver(ctx, top, bottom){ const L = ctx.layout; if(!L || !Array.isArray(L.downZi) || !Array.isArray(L.upZi)){ return false; } const i = L.downZi.indexOf(zi(bottom)); return i >= 0 && zi(L.upZi[i]) === zi(top); }
 function isFuYin(ctx){ const L = ctx.layout; return !!(L && Array.isArray(L.upZi) && Array.isArray(L.downZi) && L.upZi.length === 12 && L.upZi.every((b, i)=>zi(b) === zi(L.downZi[i]))); }
@@ -155,7 +155,7 @@ function inCourse(ctx, b){ return (ctx.courseBranches || []).indexOf(zi(b)) >= 0
 // 读 dayGodMap 子表（year/month/gan/zi/base）里某神煞所临支（值取末两位的支字）。
 function shenshaBranch(ctx, mapName, key){ const m = ctx.dayGodMap && ctx.dayGodMap[mapName]; if(!m){ return ''; } if(m[key] !== undefined){ return zi(`${m[key]}`.slice(-2)); } const ks = Object.keys(m); for(let i=0; i<ks.length; i++){ if(ks[i].indexOf(key) >= 0){ return zi(`${m[ks[i]]}`.slice(-2)); } } return ''; }
 // 日支天干在某支的十二长生名（用于支上神之旺/绝/死/沐浴）。
-function zhiPhase(ctx, b){ try{ const zg = zi(ctx.dayZhiGan); return (zg && ZhangSheng && ZhangSheng.ganzi) ? (ZhangSheng.ganzi[`${zg}_${zi(b)}`] || '') : ''; }catch(e){ return ''; } }
+function zhiPhase(ctx, b){ const zg = zi(ctx.dayZhiGan); return zg ? (ZhangSheng.ganzi[`${zg}_${zi(b)}`] || '') : ''; }
 function muOf(b){ return MU_BY_WX[wxOf(b)] || ''; }
 
 // 仅登记「高置信度、纯机械可判」的法（凭旬空/三传四课地支生克/遁干/天将所乘之支/禄墓/课式 即可确定）。
@@ -240,7 +240,7 @@ export const BIFA_MATCHERS = {
 	71: (ctx)=>{ const bf = prevZhi(ctx.yearBranch); if(!bf) return null; return (ctx.ke3Up === bf && ke(bf, ctx.dayZhi)) ? { evidence: [`病符${bf}临日支宅上又克支（全家患）`] } : null; },
 	72: (ctx)=>{ const yi = Z.indexOf(zi(ctx.yearBranch)); if(yi < 0) return null; const sang = Z[(yi + 2) % 12]; const diao = Z[(yi + 10) % 12]; const pair = [zi(ctx.ke1Up), zi(ctx.ke3Up)]; return (pair.indexOf(sang) >= 0 && pair.indexOf(diao) >= 0) ? { evidence: [`干支上神全逢丧门${sang}、吊客${diao}（丧吊全逢，挂缟衣）`] } : null; },
 	73: (ctx)=>{ const s = ctx.sanChuanBranches || []; if(s.length < 3) return null; const prog = idxDelta(s[0], s[1]) === 1 && idxDelta(s[1], s[2]) === 1; if(!(prog && s.every((b)=>inKong(ctx, b)))) return null; const back = prevZhi(ctx.firstBranch); return (gen(ctx.dayGan, back) || ke(back, ctx.dayGan)) ? { evidence: ['三传进连茹俱空(不可进)、退逢脱/鬼(不可退)（前后逼迫，宜守）'] } : null; },
-	78: (ctx)=>{ const zg = zi(ctx.dayZhiGan); const get = (a, b)=>(ZhangSheng && ZhangSheng.ganzi) ? (ZhangSheng.ganzi[`${a}_${zi(b)}`] || '') : ''; if(get(zg, ctx.ke1Up) === '帝旺' && ganPhase(ctx, ctx.ke3Up) === '帝旺') return { evidence: ['干上为日支旺神、支上为日干旺神（互旺，坐谋宜）'] }; if(ganPhase(ctx, ctx.ke1Up) === '帝旺' && get(zg, ctx.ke3Up) === '帝旺' && !inKong(ctx, ctx.ke1Up) && !inKong(ctx, ctx.ke3Up)) return { evidence: ['干支上神皆乘旺神（皆旺，宜坐待）'] }; return null; },
+	78: (ctx)=>{ const zg = zi(ctx.dayZhiGan); const get = (a, b)=>ZhangSheng.ganzi[`${a}_${zi(b)}`] || ''; if(get(zg, ctx.ke1Up) === '帝旺' && ganPhase(ctx, ctx.ke3Up) === '帝旺') return { evidence: ['干上为日支旺神、支上为日干旺神（互旺，坐谋宜）'] }; if(ganPhase(ctx, ctx.ke1Up) === '帝旺' && get(zg, ctx.ke3Up) === '帝旺' && !inKong(ctx, ctx.ke1Up) && !inKong(ctx, ctx.ke3Up)) return { evidence: ['干支上神皆乘旺神（皆旺，宜坐待）'] }; return null; },
 	79: (ctx)=>{ return (ganPhase(ctx, ctx.ke1Up) === '绝' && zhiPhase(ctx, ctx.ke3Up) === '绝') ? { evidence: ['干上为日干绝、支上为日支绝（干支值绝，宜结绝凶事）'] } : null; },
 	80: (ctx)=>{ return (ganPhase(ctx, ctx.ke1Up) === '死' && zhiPhase(ctx, ctx.ke3Up) === '死') ? { evidence: ['干上、支上皆临死气（人宅皆死，各衰羸）'] } : null; },
 	81: (ctx)=>{ const f = ctx.firstBranch, m = ctx.midBranch, l = ctx.lastBranch; if(!f) return null; const midMuF = m && zi(m) === muOf(f); const lastMuM = l && zi(l) === muOf(m); if(!midMuF && !lastMuM) return null; const lq = liuqinOf(ctx, f); const good = (lq === '妻财' || lq === '父母' || f === ganLu(ctx) || ganPhase(ctx, f) === '长生'); const isGhost = ke(f, ctx.dayGan); const tone = good ? '吉神入墓为憎(不利)' : (isGhost ? '凶神入墓为爱(反吉)' : '传墓入墓'); return { evidence: [`三传后墓前(${f}入墓)：${tone}`] }; },

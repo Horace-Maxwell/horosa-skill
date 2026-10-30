@@ -3,6 +3,7 @@
 //   'after23'（默认）「23点算第二天」= 23点起日柱进位次日(壬寅)
 //   'after24'           「24点算第二天」= 23点仍守今、24点才换日柱(辛丑)
 // 时柱跨日永远按"次日日干"起子时(=庚子,与 lunar.js Exact 一致)。
+import { readGlobalSetupField } from '../utils/globalSetupStore.js';
 export const DAY_BOUNDARY_AFTER23 = 'after23';
 export const DAY_BOUNDARY_AFTER24 = 'after24';
 
@@ -17,24 +18,13 @@ export function dayBoundaryToAfter23NewDay(boundary){
 	return normalizeDayBoundary(boundary) === DAY_BOUNDARY_AFTER24 ? 0 : 1;
 }
 
-// 全局默认的 after23NewDay 值（供各技法在「未显式设置」时回退使用）。
-export function globalDefaultAfter23NewDay(app){
-	return dayBoundaryToAfter23NewDay(app && app.dayBoundary);
-}
-
-// 直接从持久化的全局偏好读取日界点（不依赖 React/dva，可在模块常量、astro model、纯工具里调用）。
-// key 'globalSetup' 同 constants.GlobalSetupKey。
+// 读全局偏好的日界点（不依赖 React/dva，可在模块常量、astro model、纯工具里调用）。
+// 经全局设置单源的内存镜像(globalSetupStore.readGlobalSetupField):跨窗口跟随、全量恢复冻结期间与界面一致。
 export function readGlobalDayBoundary(){
 	try{
-		if(typeof localStorage !== 'undefined'){
-			const raw = localStorage.getItem('globalSetup');
-			if(raw){
-				const obj = JSON.parse(raw);
-				return normalizeDayBoundary(obj && obj.dayBoundary);
-			}
-		}
+		return normalizeDayBoundary(readGlobalSetupField('dayBoundary'));
 	}catch(e){
-		// 读取/解析失败时回退默认（23点后次日）。
+		// 读取失败时回退默认（23点后次日）。
 	}
 	return DAY_BOUNDARY_AFTER23;
 }
@@ -69,19 +59,9 @@ export function lateZiHourModeToBit(mode){
 	return normalizeLateZiHourMode(mode) === LATE_ZI_HOUR_TODAY ? 0 : 1;
 }
 
-export function globalDefaultLateZiHourUseNextDay(app){
-	return lateZiHourModeToBit(app && app.lateZiHourMode);
-}
-
 export function readGlobalLateZiHourMode(){
 	try{
-		if(typeof localStorage !== 'undefined'){
-			const raw = localStorage.getItem('globalSetup');
-			if(raw){
-				const obj = JSON.parse(raw);
-				return normalizeLateZiHourMode(obj && obj.lateZiHourMode);
-			}
-		}
+		return normalizeLateZiHourMode(readGlobalSetupField('lateZiHourMode'));
 	}catch(e){
 		// fallback: nextDay
 	}
@@ -93,7 +73,46 @@ export function defaultLateZiHourUseNextDay(){
 }
 
 // ============================================================================
-// [Q-358·续 2026-09-18] 日界口径的农历月 / 日 / 闰(单一入口)。
+// 日界 / 晚子时改了之后的同步通道(单源):各技法页与 astro 共享口径靠这两条窗口事件跟着换并重算。
+// 凡「本窗口的日界 / 晚子时变了」—— 页头设置菜单、AI 设置工具(含撤销回灌)、别的窗口改了全局设置后的跟随 —— 一律经这里派发,
+// 不各自手写 CustomEvent(此前跟随入口漏了派发:菜单显示新值,共享口径与当前盘停在旧值)。
+// 只派发本窗口事件、不写存储,所以跟随别的窗口时不会反过来再触发别的窗口。
+export const DAY_BOUNDARY_CHANGED_EVENT = 'horosa:day-boundary-changed';
+export const LATE_ZI_HOUR_MODE_CHANGED_EVENT = 'horosa:late-zi-hour-mode-changed';
+function dispatchWindowEvent(name, detail){
+	try{
+		if(typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function'){
+			window.dispatchEvent(new CustomEvent(name, { detail }));
+		}
+	}catch(e){
+		// 广播失败不影响设置本身
+	}
+}
+export function announceDayBoundaryChange(value){
+	const dayBoundary = normalizeDayBoundary(value);
+	dispatchWindowEvent(DAY_BOUNDARY_CHANGED_EVENT, { dayBoundary, after23NewDay: dayBoundaryToAfter23NewDay(dayBoundary) });
+}
+export function announceLateZiHourChange(value){
+	const lateZiHourMode = normalizeLateZiHourMode(value);
+	dispatchWindowEvent(LATE_ZI_HOUR_MODE_CHANGED_EVENT, { lateZiHourMode, lateZiHourUseNextDay: lateZiHourModeToBit(lateZiHourMode) });
+}
+
+// 全局设置字段 → 变了之后要走的副作用通道。其余全局字段都是「状态驱动」(组件按 props / 镜像重读),没有单独通道;
+// 新增全局字段若另有通道(窗口事件 / 重算),必须登记在这里 —— 写入口与跟随入口共用 announceGlobalSetupChanges。
+export const GLOBAL_SETUP_CHANNELS = Object.freeze({
+	dayBoundary: announceDayBoundaryChange,
+	lateZiHourMode: announceLateZiHourChange,
+});
+// values:这次变了的全局字段(只看自有键;未登记通道的字段忽略)
+export function announceGlobalSetupChanges(values){
+	if(!values || typeof values !== 'object'){ return; }
+	Object.keys(GLOBAL_SETUP_CHANNELS).forEach((k)=>{
+		if(Object.prototype.hasOwnProperty.call(values, k) && values[k] !== undefined){ GLOBAL_SETUP_CHANNELS[k](values[k]); }
+	});
+}
+
+// ============================================================================
+// 日界口径的农历月 / 日 / 闰(单一入口)。
 // after23NewDay=1(23 点算第二天)且本命落 23 点子时段时,日柱已进位次日,baziLunarLocal.buildNongli
 // 同步给出进位后的农历(ziweiMonthNum / ziweiDayNum / ziweiLeap,紫微首用);而 monthNum / dayNum
 // 恒为钟面历日的农历。凡按「农历月 / 日」起数的技法(一掌经四宫、参评起运、正传铁板月命数等)

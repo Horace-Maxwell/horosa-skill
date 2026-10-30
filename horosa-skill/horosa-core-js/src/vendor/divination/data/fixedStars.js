@@ -75,7 +75,7 @@ export function starOrbFor(star, opts){
 	opts = opts || {};
 	const mode = opts.fixedStarOrbMode || 'school';
 	if(mode === 'byMagnitude'){
-		// [Q-297/T-283 2026-09-18 用户裁决:单源] 与后端 flatlib FixedStar._ORBS(帮助所述同表)逐字同:
+		// 与后端 flatlib FixedStar._ORBS(帮助所述同表)逐字同:
 		//   星等 <2 → 7.5° / <3 → 5.5° / <4 → 3.5° / <5 → 1.5° / 其余 0.5°,无王者封顶。此前前端另一张表(≤1.49/≤2.49/≤3.49 →
 		//   7.5/5.5/3°40′,余 1.5°,王者封顶 5°)→ 本命恒星合相与卜卦 / 择日判读口径不一(轩辕十四后端 7.5° / 前端 5°)。
 		return magnitudeOrbBackendTable(star);

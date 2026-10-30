@@ -6,7 +6,6 @@ export const BABYLON_NORMAL_STARS = raw.normalStars;
 export const BABYLON_ZIQPU = raw.ziqpu;
 export const BABYLON_ZIQPU_MULAPIN = raw.ziqpuMulapin;
 export const BABYLON_PLANETS = raw.planets;
-export const GOD_NUMBERS = raw.godNumbers;
 export const BABYLON_EXALTATIONS = raw.exaltations;
 export const BABYLON_TRIPLICITIES = raw.triplicities;
 export const BABYLON_TERMS_ARIES = raw.termsAries;
@@ -19,16 +18,13 @@ export const SYSTEM_A = raw.systemA;
 export const SYSTEM_B = raw.systemB;
 export const DATE_CONSTANTS = raw.dateConstants;
 export const PERIOD_RELATIONS = raw.periods;
-export const SUBDIVISION = raw.subdivision;
 export const LUNAR = raw.lunar;
 export const LUNAR_SIX = raw.lunarSix;
 export const SAROS = raw.saros;
 export const RISING_TIMES = raw.risingTimes;
-export const HOROSCOPE_META = raw.horoscope;
 export const HEMEROLOGY = raw.hemerology;
 export const KALENDERTEXT_GOLDEN = raw.kalendertextGolden;
 export const MICROZODIAC_EXTRA = raw.microzodiacExtra;
-export const BABYLON_CONSTANTS = raw.constants;
 export const NOTES = {
 	melothesia: raw.melothesiaCaveat,
 	normalStars: raw.normalStarsNote,

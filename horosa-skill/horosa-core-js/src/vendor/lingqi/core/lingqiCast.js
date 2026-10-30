@@ -84,7 +84,8 @@ export function computeTimeSeed(fields) {
 
 // 种子来源归一(塔罗 resolveSeed 同款三态;time_seed 档取占时种子)。
 export function resolveLingqiSeed(seedMode, manualSeed, fields) {
-	if (seedMode === 'manual') { return `${manualSeed === undefined || manualSeed === null ? 0 : manualSeed}`; }
+	// 手动种子原样用;空 / 纯空白回落 0(文本框清空后与旧数字框清空同一局)。
+	if (seedMode === 'manual') { return `${manualSeed === undefined || manualSeed === null || `${manualSeed}`.trim() === '' ? 0 : manualSeed}`; }
 	if (seedMode === 'time_seed') { return `t-${computeTimeSeed(fields)}`; }
 	const r = (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues)
 		? window.crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random() * 4294967296);

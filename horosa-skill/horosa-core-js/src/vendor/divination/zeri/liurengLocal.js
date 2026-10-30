@@ -1,4 +1,4 @@
-// [Z5·六壬择日] 本地供数层:chartObj-lite 合成(替代后端 /liureng 响应的排盘消费面)。
+// 本地供数层:chartObj-lite 合成(替代后端 /liureng 响应的排盘消费面)。
 // 判定单源:排盘=LiuRengMain 加性导出的 buildLiuRengLayout/buildKeData/buildSanChuanData
 // (与主六壬页同一函数,涉害 byte-perfect 三传在 ChuangChart);此处只产它们的输入:
 // ①四柱 nongli(buildLocalNongliLite 同源) ②月将(两档:中气=太阳过宫,与主页日躔星历
@@ -8,7 +8,9 @@
 //   生成物,liurengGodsParity 直读 Java 资源机械同源)。
 import { buildLocalNongliLite } from '../../bazi/baziLunarLocal.js';
 import { zoneOffsetMinutes } from './hourlyScanEngine.js';
-import { defaultAfter23NewDay } from '../../bazi/dayBoundary.js';
+import { parseDateParts } from '../../bazi/dateStrSafe.js';
+import { civilJdnOfYmd, gregYmdOfJdn, gregJdnOfYmd } from '../../utils/civilCalendar.js';
+import { defaultAfter23NewDay, defaultLateZiHourUseNextDay } from '../../bazi/dayBoundary.js';
 import { LR_GODS_RULES, LR_TAISUI_GODS } from './liurengGodsData.js';
 
 export const LR_ZHI12 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
@@ -98,10 +100,13 @@ export function isDiurnalLocal(dateStr, timeStr, gpsLat, gpsLon, zoneHours){
 		const hh = Number(`${timeStr}`.slice(0, 2));
 		return hh >= 5 && hh < 19;
 	}
-	const [y, m, d] = `${dateStr}`.split('-').map(Number);
+	const dp = parseDateParts(dateStr);
 	const [hh, mm] = `${timeStr}`.split(':').map(Number);
-	// 当日太阳赤纬(简化 Cooper 公式,±0.5° 内)+均时差(分)
-	const n0 = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86400000) + 1;
+	// 当日太阳赤纬(简化 Cooper 公式,±0.5° 内)+均时差(分)。公式按回归年内的日序拟合,日序要取「格里历年内第几天」:
+	// 民用日期(1582 以前儒略历、公元前历史纪年)先换成真实日序数,再按外推格里历数年内日序,季节才对得上。
+	const jdn = dp ? civilJdnOfYmd(dp.year, dp.month, dp.day) : NaN;
+	const g = gregYmdOfJdn(jdn);
+	const n0 = jdn - gregJdnOfYmd(g.astroYear, 1, 1) + 1;
 	const gamma = 2 * Math.PI / 365 * (n0 - 1 + (hh - 12) / 24);
 	const decl = 0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma)
 		- 0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma)
@@ -131,11 +136,13 @@ export function buildLrChartLite(geoParams, options, dateStr, timeStr){
 		date: dateStr,
 		time: timeStr,
 		gender: 1,
-		// 🔴 恒真太阳(0):主六壬页 gods 请求不带 timeAlg=后端恒真太阳口径(真机实抓),
-		// 扫描对齐主页所见;此档不入工作台参数区(拨了主页不跟=假自由度,死开关律)
-		timeAlg: 0,
+		// 🔴 缺省恒真太阳(0):主六壬页 gods 请求不带 timeAlg=后端恒真太阳口径(真机确认),
+		// 六壬择日扫描对齐主页所见;此档不入六壬择日工作台参数区(拨了主页不跟=假自由度,死开关律),其 options 不带 timeAlg。
+		// 三式择日例外:三式合一页的六壬层用奇门的时柱,随本页「时间算法」走 —— 经 sanshiOptionSplit 把工作台的 timeAlg
+		// 交给六壬家(1=直接时间),点结果行起出的三式盘六壬层与扫描判的是同一时柱
+		timeAlg: o.timeAlg === 1 || o.timeAlg === '1' ? 1 : 0,
 		after23NewDay: o.after23NewDay !== undefined ? o.after23NewDay : defaultAfter23NewDay(),	// 🔴 默认=全局日界**现值**(主六壬页同源;曾写死 0/1 两轮各错半边,复审 F8 定谳动态读)
-		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : 1,
+		lateZiHourUseNextDay: o.lateZiHourUseNextDay !== undefined ? o.lateZiHourUseNextDay : defaultLateZiHourUseNextDay(),
 	});
 	if(!lite || !lite.bazi){ return null; }
 	const fc = lite.bazi.fourColumns || {};

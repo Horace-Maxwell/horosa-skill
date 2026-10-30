@@ -54,7 +54,7 @@ export function essentialMatrix(facts, eff){
 		if(row.face) score += DIGNITY_SCORE.face;
 		if(row.detriment) score += DIGNITY_SCORE.detriment;
 		if(row.fall) score += DIGNITY_SCORE.fall;
-		// [WP-4] 外来减分可调:默认 −5(1647 计分零回归)/0(不减,另派口径)——读全局仓单键。
+		// 外来减分可调:默认 −5(1647 计分零回归)/0(不减,另派口径)——读全局仓单键。
 		if(row.peregrine && !row.detriment && !row.fall){
 			let pg = -5;
 			try{

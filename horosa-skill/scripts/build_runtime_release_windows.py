@@ -357,6 +357,8 @@ def build() -> Path:
         check=True,
     )
     require_path(CORE_JS_ROOT / "node_modules" / "lunar-javascript" / "package.json")
+    # 上游 v3.13.0：月相推运精确算法（vendored astroextra/lunationPhase.js）依赖 astronomy-engine。
+    require_path(CORE_JS_ROOT / "node_modules" / "astronomy-engine" / "package.json")
     rsync_copy(CORE_JS_ROOT, PAYLOAD_ROOT / "")
 
     write_manifest(version)

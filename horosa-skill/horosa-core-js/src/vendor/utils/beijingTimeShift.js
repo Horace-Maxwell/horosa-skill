@@ -4,6 +4,8 @@ import { Solar } from 'lunar-javascript';
 // 凡要拿当地时刻 / 日期去比节气的地方,先用这里的工具在北京时间与当地钟表之间折算。东八区平移量为 0 → 逐字节不变。
 
 // 时区串(+08:00 / -05:00 / +0530 / 数字小时)→ 小时;缺时区按东八区。
+// 与 zoneOffset.zoneOffsetMinutesOf(时区串单一来源)口径不同、有意保留:这里缺省东八区、前缀匹配(带尾巴的串也取前段)、
+// 数字原样不取整到分钟 —— 节气 / 农历折算多年来按此口径,改它会让现代盘逐位变化。规范写法两者结果相同(zoneOffsetParity 测试锁)。
 export function parseZoneHours(zone){
 	if(zone === undefined || zone === null || zone === ''){
 		return 8;

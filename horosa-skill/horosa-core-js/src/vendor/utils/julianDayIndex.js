@@ -19,9 +19,4 @@ export function julianDayIndex(year, month, day){
 	return day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - 32083;
 }
 
-// 便捷:从 JS Date 取(带符号)年月日算日序。⚠️ JS Date 对 BC 用负年、月 0-based,此处 +1 归一。
-export function julianDayIndexOfDate(date){
-	return julianDayIndex(date.getFullYear(), date.getMonth() + 1, date.getDate());
-}
-
 export default julianDayIndex;

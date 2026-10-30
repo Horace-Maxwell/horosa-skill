@@ -60,7 +60,6 @@ export function computeYuexian(mingZhi, age, lunarMonth){
 // 基数分歧(古籍 ch.4 作者三页论辩,坊间排盘软件即出 9 岁/10 岁两版;PDF 主张「虚十上本生度起行、早不过十一晚不过二十」):
 //   tong10=通行十年(默认·现状零回归) / gu9=古九岁 / xu11=虚十一(PDF 早不过11晚不过20,加界钳)。基准之争(命宫躔度 vs 太阳中气)留作后续,此处先把「基数」分歧做成可选。
 const TONGXIAN_PALACES = ['命宫', '财帛', '疾厄', '妻妾', '福德'];
-export const TONGXIAN_BASE_DEFAULT = 'tong10';
 export function computeTongxian(sunLon, baseVariant){
 	const lon = Number(sunLon);
 	const backDeg = Number.isFinite(lon) ? (((lon % 15) + 15) % 15) : 0;   // 距上一中气(15°)度数≈天数

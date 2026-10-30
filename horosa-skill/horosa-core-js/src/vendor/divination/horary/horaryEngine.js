@@ -17,14 +17,14 @@ import { PLANETS } from '../data/planets.js';
 import { SIGNS, signOfLon } from '../data/signs.js';
 import { FIXED_STARS, starLonAt, starOrbFor } from '../data/fixedStars.js';
 import { lotDispositor, LOTS_SETS, computeLotsSet } from '../data/lots.js';
-import { angularDist, norm360 } from '../engine/utils.js';
+import { angularDist, norm360, chartYearFromFacts } from '../engine/utils.js';
 import { besiegementOf, backendStarsOf } from '../engine/resultShapes.js';
 import { buildVerdictScored } from './verdictScoring.js';
 import { immediateAspOf } from '../engine/resultShapes.js';
 import { keyOfChartId } from '../engine/utils.js';
 import { signedDelta } from '../engine/utils.js';
 import { receptionsOf } from '../engine/reception.js';
-import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(随流派口径)
+import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(随流派口径)
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
 function signCn(s){ return (SIGNS[s] || {}).cn || s; }
@@ -63,20 +63,10 @@ function buildLots(facts, opts){
 	return out;
 }
 
-// 取本盘公历年（恒星岁差修正）：读 /chart 回传 params.birth/date；缺则用中性年。
-function chartYear(facts){
-	try{
-		const p = facts && facts.result && facts.result.params;
-		const ds = p && (p.birth || p.date);
-		if(ds){ const m = String(ds).match(/(-?\d{3,4})/); if(m){ return Number(m[1]); } }
-	}catch(e){ /* noop */ }
-	return 2000;
-}
-
 // D2 恒星会合：征象星/命度/天顶 会合精选恒星（容许度按流派取，默认 1°）。
 function buildFixedStars(facts, sigs, opts){
 	// 轨档：'school'(默认,平轨=既有行为字节不变) / 'byMagnitude'(Robson 按星等;王者封顶 5°)。
-	const year = chartYear(facts);
+	const year = chartYearFromFacts(facts);
 	const out = [];
 	const points = {};
 	if(facts.meta.ascLon != null){ points['命度'] = facts.meta.ascLon; }
@@ -101,7 +91,7 @@ function buildFixedStars(facts, sigs, opts){
 // D5 行星时佐证：时主星与命主/事项星一致 → 时辰与盘相合（根本性佐证）。
 // opts.hourAgreementVariant:'either'(两口径任一,缺省)|'lilly'(行星统辖版:只认时主=命主星)|
 // 'bonatti'(落座元素版)。不传=既有行为字节不变。
-// [H3 单源化] 学理判定唯一实现=radicality.hourAgreementTest;本函数降级为其上的
+// 学理判定唯一实现=radicality.hourAgreementTest;本函数降级为其上的
 // 「徵象星匹配」视图(时主=命主/事项星的直接注记)。旧版 bonatti 分支自算且参照物取
 // **上升座**元素,与权威实现的**命主星落座**元素(文献口径)不同,边缘盘两处结论相反
 // ——bonatti 支改转发权威实现(medieval 档输出小幅重锚);either/lilly 支不涉学理自算,字节不变。
@@ -127,7 +117,7 @@ export const ASPECT_CN = { 0: '合相', 60: '六合', 90: '四分(刑)', 120: '�
 const ASPECT_NATURE = { 0: 'neutral', 60: 'positive', 120: 'positive', 90: 'negative', 180: 'negative' };
 const ALL_KEYS = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
 const OUTER_KEYS = ['uranus', 'neptune', 'pluto'];
-// [WP-F] includeOuter 真接线:全相位表/月亮叙事的星集门(默认 false=七政,现状零回归;
+// includeOuter 真接线:全相位表/月亮叙事的星集门(默认 false=七政,现状零回归;
 // 现代档 includeOuter:true → 三王星入表)。注:perfection 的干扰/传递/汇集候选历史即全星集,不动。
 function judgeKeysFor(includeOuter){
 	return includeOuter ? ALL_KEYS.concat(OUTER_KEYS) : ALL_KEYS;
@@ -162,7 +152,7 @@ function buildMoonStory(facts, includeOuter){
 		separating: separatingAspects(facts, 'moon').filter(inSet).sort((a, b) => a.orb - b.orb),
 		applying: applyingAspects(facts, 'moon').filter(inSet).sort((a, b) => a.orb - b.orb),
 	};
-	// [H4a 金矿] 后端权威源附加行:aspects.immediateAsp 是后端按 orb 排好序的每星紧密相位表
+	// 后端权威源附加行:aspects.immediateAsp 是后端按 orb 排好序的每星紧密相位表
 	// (末相位/下一相位的权威判据;前端 normalAsp 自滤自排是近似)。纯增字段不替换上两列——
 	// UI/快照把它作「实测」对照行,两源分歧时以此为准。
 	out.immediate = immediateAspOf(facts.result, 'Moon')
@@ -171,7 +161,7 @@ function buildMoonStory(facts, includeOuter){
 	return out;
 }
 
-// [H4a] 月亮出本座前的最后一个精确相位=「事之终局」(Query VI 口径的另一半;此前只有
+// 月亮出本座前的最后一个精确相位=「事之终局」(Query VI 口径的另一半;此前只有
 // 4 宫主一半)。线性外推:月亮以当前速度在本座剩余弧内,与各星最后走到精确的托勒密相位。
 function moonFinalAspect(facts, includeOuter){
 	const m = facts.planets.moon;
@@ -234,7 +224,7 @@ function buildQueries(facts, ctx){
 	q.goodEvil = { verdict: qc && qc.score > 0 ? 'good' : (qc && qc.score < 0 ? 'bad' : 'neutral'), text: qc ? `事项守护星 ${cn(quesitedKey)} 状态分 ${qc.score}` : '事项守护星未定。' };
 	// Query III 消息真假（月空按流派解算值，见 moonReport）
 	const m = facts.planets.moon;
-	const rVoc = ctx.moon ? !!ctx.moon.voc : resolveMoonVoc(facts, ctx.opts || {}).voc;   // [Q-146] 兜底也随流派口径,不直读按全局算的后端旗
+	const rVoc = ctx.moon ? !!ctx.moon.voc : resolveMoonVoc(facts, ctx.opts || {}).voc;   // 兜底也随流派口径,不直读按全局算的后端旗
 	const moonAngular = m && m.angularity === 'angular';
 	q.reportTrue = { verdict: (moonAngular && !rVoc) ? 'true' : (m && (rVoc || m.combustion === 'combust') ? 'false' : 'uncertain'), text: m ? (rVoc ? '月空相 → 消息恐假/为时过早。' : (moonAngular ? '月在角宫且非空相 → 偏真。' : '月非角宫，参考其他。')) : '' };
 	// Query IV 何处/方向
@@ -242,7 +232,7 @@ function buildQueries(facts, ctx){
 	// Query V 何时（应期指针;与「时空」Tab 同源）
 	q.when = ctx.timing ? { verdict: 'info', text: ctx.timing.text } : { verdict: 'uncertain', text: '无准确入相位可折算应期。' };
 	// Query VI 结局如何（事情之终局:4宫主状态 + 月亮末相位口径）
-	// [H4a] 「月亮出本座前最后相位」从「并参」空话变真计算(moonFinal 线性外推);无解=本座内再无精确相位。
+	// 「月亮出本座前最后相位」从「并参」空话变真计算(moonFinal 线性外推);无解=本座内再无精确相位。
 	const l4 = facts.houses[4] && facts.houses[4].ruler;
 	const c4 = l4 && conds && conds[l4] ? conds[l4] : null;
 	const mf = ctx.moonFinal;
@@ -260,9 +250,9 @@ function buildQueries(facts, ctx){
 function methodCn(m){ return ({ application: '入相位', translation: '光线传递', collection: '光线汇集', position: '落位', antiscion: '映点', reception: '互容' })[m] || m || ''; }
 function destrCn(d){ return ({ no_reception_hard: '无接纳的刑/冲', combustion: '燃烧', separation: '出相位(事已过)', prohibition: '阻碍', frustration: '挫败', refranation: '撤回(临成自退)', abscission: '光线切断' })[d] || d || '受阻'; }
 
-// [H7] buildVerdict 已搬家至 verdictScoring.js(legacy 路径逐字节保留+v2 证词池双轨)。
+// buildVerdict 已搬家至 verdictScoring.js(legacy 路径逐字节保留+v2 证词池双轨)。
 
-// [H3] runHorary memo:同 result 引用+同 category+同 opts(按值) → 复用上次产出。
+// runHorary memo:同 result 引用+同 category+同 opts(按值) → 复用上次产出。
 // 页面 render/中栏 overlay/AI 快照曾各自全链重跑 2-3 次;runHorary 纯函数,重复纯浪费。
 // WeakMap 按 result 引用分槽:页面+overlay 共享同一 result 引用=命中;AI 自 fetch 的新对象
 // 各得其槽(免单槽 thrash);盘释放时槽随 GC 走。副键=category+全量 opts 排序序列化——
@@ -302,7 +292,7 @@ function computeHorary(result, category, opts){
 	const querentKey = sigs.querentKey;
 	let quesitedKey = sigs.quesitedKey;
 	if(!quesitedKey){
-		// [H4a bug 修] 兜底事项主=月亮下一入相星:旧码取后端表原序首项——normalAsp 的
+		// 兜底事项主=月亮下一入相星:旧码取后端表原序首项——normalAsp 的
 		// Applicative 数组不保证 orb 升序,「下一个」可能拿到较远的星。补 orb 升序。
 		const app = applyingAspects(facts, 'moon')
 			.filter((a) => ['sun', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'].indexOf(a.other) >= 0)
@@ -310,16 +300,16 @@ function computeHorary(result, category, opts){
 		quesitedKey = app.length ? app[0].other : null;
 	}
 	const moon = moonReport(facts, opts);
-	// [H5] almutenOpts 前移:同主一星法E(almuten 拆分)须在完成法之前改写事项象征星。
+	// almutenOpts 前移:同主一星法E(almuten 拆分)须在完成法之前改写事项象征星。
 	const almutenOpts = {
 		isDiurnal: facts.meta.isDiurnal,
 		termsVariant: opts.termsVariant !== undefined ? opts.termsVariant : 'ptolemaic',
 		tripSystem: opts.tripSystem, geminiEmended: !!opts.geminiEmended, weights: opts.almutenWeights,
-		// [Q-296/T-280 ①] Dorotheus 三主档共主同计(与择日 almutenModule 同口径;此前不传 → 共主永不计分,
+		// Dorotheus 三主档共主同计(与择日 almutenModule 同口径;此前不传 → 共主永不计分,
 		// 与标签「三主(含共主)」及判读页 / 快照「三主制(含参与主)」不符)。
 		tripIncludeParticipating: opts.tripSystem === 'dorothean',
 	};
-	// [H5] 同主一星真执行:法E=以事项宫头 almuten 拆出另一象征星(此前仅注记「见 almuten 行」半死);
+	// 同主一星真执行:法E=以事项宫头 almuten 拆出另一象征星(此前仅注记「见 almuten 行」半死);
 	// 法C=真查共用星被谁容纳(此前仅口播判据不查)。缺省(未选法)零触发=现状。
 	if(sigs.sharedRuler && sigs.sharedRuler.method === 'E'
 		&& sigs.quesitedHouse && facts.houses[sigs.quesitedHouse] && facts.houses[sigs.quesitedHouse].lon != null){
@@ -341,8 +331,8 @@ function computeHorary(result, category, opts){
 	}
 	const rad = radicality(facts, { ...opts, category: category || 'general', moonVoc: moon.voc, sigs: { querentKey, quesitedKey, quesitedHouse: sigs.quesitedHouse } });
 	let perf = (querentKey && quesitedKey) ? analyzePerfection(facts, querentKey, quesitedKey, { quesitedHouse: sigs.quesitedHouse, ...opts }) : null;
-	// [H5] 月亮升格前移(apply 档要在应期之前改写完成法主径;'note' 缺省=纯注记零回归)。
-	// [复审P1] 升格判据「命主与事项主无相位」与完成法同口径:非托勒密角(45° 等)不算有相位。
+	// 月亮升格前移(apply 档要在应期之前改写完成法主径;'note' 缺省=纯注记零回归)。
+	// 升格判据「命主与事项主无相位」与完成法同口径:非托勒密角(45° 等)不算有相位。
 	let l1qAspect = (querentKey && quesitedKey) ? aspectBetween(facts, querentKey, quesitedKey) : null;
 	if(l1qAspect && PTOLEMAIC.indexOf(l1qAspect.angle) < 0){ l1qAspect = null; }
 	const moonPromotion = moonPromotionCheck(facts, querentKey, quesitedKey, l1qAspect !== null);
@@ -359,7 +349,7 @@ function computeHorary(result, category, opts){
 		};
 		perfQuerent = 'moon';
 	}
-	// [Q-296/T-281] 燃烧豁免真执行:perf.combustExempt(合日即所求)的征象星在完成度三分里不因燃烧判不安全,
+	// 燃烧豁免真执行:perf.combustExempt(合日即所求)的征象星在完成度三分里不因燃烧判不安全,
 	// 其「燃烧」证词转中性注记(不计扣分、状态分同步重算);此前开/关只换完成法一行文案,裁决恒同。
 	const exemptCombust = (perf && Array.isArray(perf.combustExempt)) ? perf.combustExempt : [];
 	const thirds = completionThirds(facts, [querentKey, 'moon', quesitedKey], exemptCombust.length ? { exemptCombust } : undefined);
@@ -373,7 +363,7 @@ function computeHorary(result, category, opts){
 			: f);
 		c.score = c.findings.reduce((s, x) => s + (x.polarity === 'positive' ? x.weight : (x.polarity === 'negative' ? -x.weight : 0)), 0);
 	});
-	// [H2 应期修复] 按完成法取真实「成事腿」:入相位完成用两征象星腿(现状);传递完成用
+	// 按完成法取真实「成事腿」:入相位完成用两征象星腿(现状);传递完成用
 	// T→target 腿、汇集用双腿较大 orb(perfection.timingLeg)——旧码这两类完成应期恒缺,
 	// 或(残留出相位时)误拿出相 orb 折算。落位/映点/互容完成无入相腿=不折算(Query V 如实说)。
 	let timing = null;
@@ -396,7 +386,7 @@ function computeHorary(result, category, opts){
 	}
 	const moonFinal = moonFinalAspect(facts, !!opts.includeOuter);
 	const queries = buildQueries(facts, { quesitedKey, perf, moon, conds, timing, moonFinal, opts });
-	// [H7] v2 证词池的扩展源(恒星/时主/almuten/围攻)前移到裁决前;legacy 档不读它们=字节不变。
+	// v2 证词池的扩展源(恒星/时主/almuten/围攻)前移到裁决前;legacy 档不读它们=字节不变。
 	const fixedStarsV = buildFixedStars(facts, { querentKey, quesitedKey }, opts);
 	const hourAgreementV = buildHourAgreement(facts, { querentKey, quesitedKey }, opts);
 	const besiegementV = besiegementOf(result);
@@ -425,7 +415,7 @@ function computeHorary(result, category, opts){
 		// 此处重组曾把它丢弃 → HoraryJudgment 的同主一星卡片恒不显示(2026-08 死开关审计抓出)。
 		significators: {
 			querentKey, quesitedKey, natural: sigs.natural, moon: 'moon', quesitedHouse: sigs.quesitedHouse, quesitedLabel: sigs.quesitedLabel, sharedRuler: sigs.sharedRuler || null,
-			// [H5] 转宫人称档/宫内 co-significator/自然征象升格——纯增透传(UI 表+H7 天平消费)。
+			// 转宫人称档/宫内 co-significator/自然征象升格——纯增透传(UI 表+H7 天平消费)。
 			turned: sigs.turned || null, coSignificators: sigs.coSignificators || null,
 			naturalPromoted: !!sigs.naturalPromoted, naturalPromotionReason: sigs.naturalPromotionReason || null,
 		},
@@ -438,7 +428,7 @@ function computeHorary(result, category, opts){
 		lots: buildLots(facts, opts),
 		tripSystem: opts.tripSystem || 'ptolemaic',
 		topic: buildTopicDeepening(facts, category || 'general', opts),
-		// [H4a 金矿纯增] 后端围攻十六式详断/后端恒星命中表/月亮终局——读契约层,消费在快照与 UI 卡。
+		// 后端围攻十六式详断/后端恒星命中表/月亮终局——读契约层,消费在快照与 UI 卡。
 		besiegement: besiegementV,
 		backendStars: backendStarsOf(result),
 		moonFinal,

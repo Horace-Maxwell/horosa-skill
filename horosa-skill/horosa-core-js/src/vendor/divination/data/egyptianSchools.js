@@ -20,7 +20,7 @@ import {
 	talismanByDecan, norm360,
 } from './egyptianData.js';
 import { EGYPT_GOD_EDITIONS, EGYPT_GOD_EDITION_DEFAULT, egyptianGodSign, EGYPT_GOD_BY_KEY } from './egyptianGods.js';
-import { safeLocalStorageGet, safeLocalStorageSet } from '../../gua/safeStorage.js';
+import { safeLocalStorageGet, safeLocalStorageSet, safeStorageSetOn } from '../../gua/safeStorage.js';
 
 /* ============================================================
  * 轴定义(供设置条渲染;label/note 即界面文案的单一来源)
@@ -279,11 +279,8 @@ export function readEgyptSchool(storage){
 }
 
 export function writeEgyptSchool(storage, school){
-	try{
-		if(storage && storage.setItem){
-			storage.setItem(EGYPT_SCHOOL_STORAGE_KEY, JSON.stringify(normalizeEgyptSchool(school)));
-		}
-	}catch(e){ /* 配额/隐私模式:静默 */ }
+	// 经存储单源:注入的是本机 localStorage 时同样走配额阶梯;配额 / 隐私模式仍写不进则静默
+	try{ safeStorageSetOn(storage, EGYPT_SCHOOL_STORAGE_KEY, JSON.stringify(normalizeEgyptSchool(school))); }catch(e){ /* 静默 */ }
 	return normalizeEgyptSchool(school);
 }
 

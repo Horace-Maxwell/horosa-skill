@@ -64,17 +64,3 @@ export function getSu28FillColorCircle(su){
 	let sig = su.sign
 	return AstroConst.AstroColor.SignFill[sig];
 }
-
-let suToSignMap = new Map();
-
-export function getSu28Sign(su28){
-	if(suToSignMap.size === 0){
-		for(let i=0; i<Su28.length; i++){
-			let su = Su28[i];
-			let sign = suToSign[i];
-			suToSignMap.set(su, sign);
-		}
-	}
-	return suToSignMap.get(su28);
-}
-

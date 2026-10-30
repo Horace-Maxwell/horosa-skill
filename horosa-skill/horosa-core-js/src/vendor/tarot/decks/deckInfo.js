@@ -100,4 +100,3 @@ export const DECK_INFO = {
 		differences: '约74张不全;原牌无编号无名;涉三种历史大牌顺序(A/B/C地区序:Ferrara-Bologna/Milan/Florence),尤其德性牌与世界/审判位次不同;复原须选定存世本与地区trump序。',
 	},
 };
-export function deckInfo(deckId){ return DECK_INFO[deckId] || null; }

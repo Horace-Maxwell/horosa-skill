@@ -1,3 +1,4 @@
+import { leapPrefix } from '../utils/lunarText.js';
 import {
 	TAIYI_STYLE_OPTIONS,
 	TAIYI_ACCUM_OPTIONS,
@@ -7,12 +8,9 @@ import {
 	getTaiyiAccumLabel,
 } from './core/TaiYiCore.js';
 
-
-
-
 import buildLocalBaziResult from '../bazi/baziLunarLocal.js';
 
-import { parseDateParts } from '../bazi/dateStrSafe.js';
+import { parseFieldsDateTime, parseDateTimeText } from '../utils/fieldsDateTime.js';
 
 export const STYLE_OPTIONS = [
 	...TAIYI_STYLE_OPTIONS.slice(),
@@ -28,19 +26,9 @@ export const METHOD_SOURCE_OPTIONS = [
 	{ value: 3, source: '《太乙局》' },
 ];
 
-export const TENCHING_OPTIONS = [
-	{ value: 0, label: '無' },
-	{ value: 1, label: '有' },
-];
-
 export const SEX_OPTIONS = [
 	{ value: '男', label: '男' },
 	{ value: '女', label: '女' },
-];
-
-export const ROTATION_OPTIONS = [
-	{ value: '固定', label: '固定' },
-	{ value: '轉動', label: '轉動' },
 ];
 
 export const TIME_BASIS_OPTIONS = [
@@ -91,19 +79,19 @@ function buildOptions(opt, pan, nongli){
 		methodLabel,
 		methodSource,
 		accumLabel: methodLabel,
-		// [Q-101/T-01] tenching / rotation 两键已剔除:后端全仓零读取、前端零消费者的纯标签死键
+		// tenching / rotation 两键已剔除:后端全仓零读取、前端零消费者的纯标签死键
 		// (硬造默认值随请求发出;标签 tenchingLabel / rotationLabel 亦无人读)。
 		sexLabel: options.sex || (pan && pan.sex) || '男',
-		// [Q-163/T-84·SS-16] 真太阳时档在历法服务超时(nongli 为空)时 resolveCalculationDateTime 已按直接时间立局,
+		// 真太阳时档在历法服务超时(nongli 为空)时 resolveCalculationDateTime 已按直接时间立局,
 		//   标签曾恒写「真太阳时」→ 概览/快照如实标注本次按直接时间(计算路径不变,只改文案)。
 		timeBasisLabel: options.timeBasis === 'trueSolar'
 			? (nongli && nongli.birth ? '真太阳时' : '真太阳时（历法服务未回，本次按直接时间立局）')
 			: '直接时间',
 		daySwitchLabel: options.after23NewDay === 1 ? '23点算第二天' : '24点算第二天',
-		// [挂载自检 F-57] 后端因随包运行时缺 scipy 未算博弈时回传 gameTheoryUnavailable → 如实标注「本次未算」(不撒谎);
+		// 后端因随包运行时缺 scipy 未算博弈时回传 gameTheoryUnavailable → 如实标注「本次未算」(不撒谎);
 		// 依赖齐全或关闭时逐字不变。
 		gameTheoryLabel: options.gameTheory === 1
-			? (pan && pan.gameTheoryUnavailable ? `开启（运行时缺 ${pan.gameTheoryUnavailable}，本次未算）` : '开启')
+			? (pan && pan.gameTheoryUnavailable ? `开启（本机计算组件不全，本次未算博弈）` : '开启')
 			: '关闭',
 	};
 }
@@ -117,7 +105,7 @@ function formatNongliText(nongli){
 		return '';
 	}
 	const year = safeText(nongli.year);
-	const leap = nongli.leap ? '闰' : '';
+	const leap = leapPrefix(nongli);
 	const month = safeText(nongli.month);
 	const day = safeText(nongli.day);
 	return `${year ? `${year}年` : ''}${leap}${month}${day}`.trim();
@@ -171,13 +159,18 @@ function applyNongliDisplay(pan, nongli, baziLocal){
 	}
 	const baziNongli = baziLocal && baziLocal.bazi ? baziLocal.bazi.nongli : null;
 	const four = baziLocal && baziLocal.bazi && baziLocal.bazi.fourColumns ? baziLocal.bazi.fourColumns : null;
+	// 农历行与节后天数随时间基准(与四柱同一本地结果;本地按所选基准换算):此前取 /nongli/time 那份(恒按真太阳时),
+	// 选直接时间(缺省)时日界附近农历写成前一天、日柱却是当天。本地给不出(域外年份)才用历法服务那份。
+	const localLunar = baziNongli && safeText(baziNongli.month) && safeText(baziNongli.day)
+		? `${safeText(baziNongli.yearGZByLunar) ? `${safeText(baziNongli.yearGZByLunar)}年` : ''}${leapPrefix(baziNongli)}${safeText(baziNongli.month)}${safeText(baziNongli.day)}`.trim()
+		: '';
 	return {
 		...pan,
-		lunarText: (nongli && formatNongliText(nongli)) || pan.lunarText,
+		lunarText: localLunar || (nongli && formatNongliText(nongli)) || pan.lunarText,
 		// 真太阳时 与 直接时间 都稳定显示(与所选时间基准无关);随基准变的只是四柱/计算基准 —— 和八字一致
 		realSunTime: (baziNongli && safeText(baziNongli.solarTime)) || (nongli && safeText(nongli.birth)) || pan.realSunTime,
 		clockTime: (baziNongli && safeText(baziNongli.clockTime)) || pan.clockTime,
-		jiedelta: (nongli && safeText(nongli.jiedelta)) || pan.jiedelta,
+		jiedelta: (baziNongli && safeText(baziNongli.jiedelta)) || (nongli && safeText(nongli.jiedelta)) || pan.jiedelta,
 		ganzhi: {
 			year: pillarFromFourColumns(four, 'year') || pickPillar(nongli, 'year', 'yearGanZi') || (pan.ganzhi && pan.ganzhi.year) || '',
 			month: pillarFromFourColumns(four, 'month') || pickPillar(nongli, 'month', 'monthGanZi') || (pan.ganzhi && pan.ganzhi.month) || '',
@@ -206,49 +199,6 @@ export function calcTaiyi(fields, nongli, options){
 		options: buildOptions(opt, pan, nongli),
 		palaces: normalizePalaces(pan.palace16),
 	}, nongli, baziLocal);
-}
-
-function parseFieldsDateTime(fields){
-	if(!fields || !fields.date || !fields.time){
-		return null;
-	}
-	const dateStr = fields.date.value.format('YYYY-MM-DD');
-	const timeStr = fields.time.value.format('HH:mm:ss');
-	// BC 安全解析:'-7040-07-19' 裸 split('-') 会撕成 [NaN,7040,7,19](年 NaN 静默传播)
-	const _dp = parseDateParts(dateStr);
-	const d = _dp ? [_dp.year, _dp.month, _dp.day] : [];
-	const t = timeStr.split(':').map((item)=>parseInt(item, 10));
-	if(d.length < 3 || t.length < 2){
-		return null;
-	}
-	return {
-		year: d[0],
-		month: d[1],
-		day: d[2],
-		hour: t[0],
-		minute: t[1],
-		second: t[2] || 0,
-		date: dateStr,
-		time: timeStr,
-	};
-}
-
-function parseDateTimeText(text){
-	const raw = safeText(text).trim();
-	const match = raw.match(/^(-?\d{1,6})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
-	if(!match){
-		return null;
-	}
-	return {
-		year: parseInt(match[1], 10),
-		month: parseInt(match[2], 10),
-		day: parseInt(match[3], 10),
-		hour: parseInt(match[4], 10),
-		minute: parseInt(match[5], 10),
-		second: parseInt(match[6] || '0', 10),
-		date: `${match[1].padStart(4, '0')}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`,
-		time: `${match[4].padStart(2, '0')}:${match[5].padStart(2, '0')}:${(match[6] || '0').padStart(2, '0')}`,
-	};
 }
 
 function resolveCalculationDateTime(fields, nongli, options){
@@ -349,10 +299,6 @@ export function getStyleLabel(value){
 		return '太乙命法';
 	}
 	return getTaiyiStyleLabel(value);
-}
-
-export function getAccumLabel(value){
-	return getTaiyiAccumLabel(value);
 }
 
 export function getMethodLabel(value){

@@ -120,7 +120,6 @@ export const SIHUA_OVERRIDES = {
 };
 export function sihuaTable(school){ return Object.assign({}, SIHUA_BASE, SIHUA_OVERRIDES[school] || {}); }
 export function sihuaOf(yearStem, school){ const t = sihuaTable(school)[yearStem]; return { 禄: t[0], 权: t[1], 科: t[2], 忌: t[3] }; }
-export function flySihua(palaceStem, school){ return sihuaOf(palaceStem, school); }
 // 🔴 来因宫判据单源:宫干==生年干,且宫支不取子丑 —— 五虎遁十干恰布寅至亥,子丑必借寅卯
 //    之干,借干宫不作来因。盘面 ZWHouse.drawLaiYing 一直如此;快照/报告曾不排子丑,辛壬年
 //    生人会被列出两个来因宫(画的与 AI 读的不是同一批宫,复查实锤)。四消费点全走此谓词。

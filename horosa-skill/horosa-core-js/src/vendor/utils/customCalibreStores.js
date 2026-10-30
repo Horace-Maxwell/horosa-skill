@@ -1,4 +1,4 @@
-// utils/customCalibreStores.js — [WP-7] 自定义界表 + 自定义恒星黄道槽位的持久化仓。
+// utils/customCalibreStores.js — 自定义界表 + 自定义恒星黄道槽位的持久化仓。
 // 两键均已登记 storageKeyRegistry(settings/backup);safeStorage 读写,损坏自愈回默认。
 import { safeJsonParseFromStorage, safeJsonStringifyToStorage } from '../gua/safeStorage.js';
 
@@ -38,7 +38,7 @@ export function validateTermsTable(rows){
 		&& Math.abs(rowSum(row) - 30) < 1e-9);
 }
 
-let _loadCache = null;   // { rawStr, value } —— [R2-8] 同串返回同引用,下游 memo(引用比较)才可能命中
+let _loadCache = null;   // { rawStr, value } —— 同串返回同引用,下游 memo(引用比较)才可能命中
 export function loadCustomTerms(){
 	let rawStr = null;
 	try{ rawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(CUSTOM_TERMS_STORAGE_KEY) : null; }catch(e){ rawStr = null; }
@@ -65,7 +65,7 @@ export const AYAN_MAX_SLOTS = 10;
 export function loadCustomAyanamsa(){
 	const raw = safeJsonParseFromStorage(CUSTOM_AYAN_STORAGE_KEY);
 	if(!raw || typeof raw !== 'object' || !Array.isArray(raw.slots)){ return { slots: [], current: null }; }
-	// [N2] Number(null)=0 会把「清空的 deg」洗成合法 0° 静默排盘——空值保 null 存续(编辑中的槽
+	// Number(null)=0 会把「清空的 deg」洗成合法 0° 静默排盘——空值保 null 存续(编辑中的槽
 	// 不消失),消费闸(currentAyanSlot)按 isFinite(Number(null))=false 拦截。
 	const numOrNull = (v) => (v === null || v === undefined || `${v}` === '' ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
 	const slots = raw.slots.slice(0, AYAN_MAX_SLOTS).filter((s) => s && typeof s === 'object')
@@ -86,7 +86,7 @@ export function currentAyanSlot(){
 	const st = loadCustomAyanamsa();
 	if(st.current === null || !st.slots[st.current]){ return null; }
 	const slot = st.slots[st.current];
-	// [R2-17][N2] 历元两参必须为正有限数——注意 Number(null)=0 连 isFinite 闸都骗得过,
+	// 历元两参必须为正有限数——注意 Number(null)=0 连 isFinite 闸都骗得过,
 	// 必须先直判 null(load 层已把空值归一为 null);t0=0 是 JD 0=公元前 4713 年,必是清空事故。
 	if(slot.t0 === null || slot.deg === null || !Number.isFinite(slot.t0) || slot.t0 <= 0 || !Number.isFinite(slot.deg)){ return null; }
 	return slot;
@@ -96,13 +96,13 @@ export function currentAyanSlot(){
 // 排盘用 SE 精确模型,本值仅供槽位管理器参考显示)。
 export function approxAyanAt(slot, jd){
 	if(!slot){ return null; }
-	// [R4-P3] t0/deg 为 null(编辑中清空)时不产垃圾度数(jd-null=jd-0 会算出 ≈93° 的假值)。
+	// t0/deg 为 null(编辑中清空)时不产垃圾度数(jd-null=jd-0 会算出 ≈93° 的假值)。
 	if(!Number.isFinite(slot.t0) || !Number.isFinite(slot.deg)){ return null; }
 	const years = (jd - slot.t0) / 365.25;
 	return slot.deg + (50.290966 / 3600.0) * years;
 }
 
-// [WP-7] 'user' 档随行历元参数:fields/记录有值优先,缺则读当前槽;都缺={}(后端回落 Lahiri 不炸)。
+// 'user' 档随行历元参数:fields/记录有值优先,缺则读当前槽;都缺={}(后端回落 Lahiri 不炸)。
 export function userAyanParamsFrom(getVal){
 	const t0 = Number(getVal('userAyanT0'));
 	const deg = Number(getVal('userAyanDeg'));
@@ -113,7 +113,7 @@ export function userAyanParamsFrom(getVal){
 	return slot ? { userAyanT0: slot.t0, userAyanDeg: slot.deg } : {};
 }
 
-// ── [F5] 前端消费面转换器:自定义表 → 两套既有表结构(界环/行星表用大写;判读引擎用小写) ──
+// ── 前端消费面转换器:自定义表 → 两套既有表结构(界环/行星表用大写;判读引擎用小写) ──
 const SIGNS_UPPER = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
 const cap = (s)=> s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 let _dispCache = null;   // { src, upper, lower }
@@ -138,7 +138,7 @@ function buildDisplayTables(table){
 	return { upper, lower };
 }
 // 当前自定义界表按昼/夜取显示表;无合法表返回 null(调用方回落埃及,与后端降级同语义)。
-// [R2-3] bodyDay/bodyNight:随盘/回显表体优先(chartObj.params.customTermsDay,后端算的就是它)——
+// bodyDay/bodyNight:随盘/回显表体优先(chartObj.params.customTermsDay,后端算的就是它)——
 // 显示层必须与计算同表,只读本机仓会在「外机载入随盘表记录」场景同屏矛盾复发。
 export function customTermsDisplayTables(isDiurnal, bodyDay, bodyNight){
 	let table = null;

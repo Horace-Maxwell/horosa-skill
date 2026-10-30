@@ -1,15 +1,17 @@
-// [Z5·六壬择日] 逐时辰扫描引擎(纯前端零 HTTP)——hourlyScanEngine 外壳第六实例。
+// 逐时辰扫描引擎(纯前端零 HTTP)——hourlyScanEngine 外壳第六实例。
 // 供数链:buildLrChartLite(liurengLocal:四柱 lite+月将两档+日出方程昼夜+神煞机械同源表)
 // +主六壬页同一排盘函数族(buildLiuRengLayout/buildKeData/buildSanChuanData——涉害
 // byte-perfect 三传核 ChuangChart 在内;主排盘修正,择日自动跟,零第二实现)。
 // 🔴 与主页供数的三个差异窗(帮助分册明示):①月将换将时刻(lunar-js 中气 vs 后端星历,
 // 分钟级) ②昼夜界(几何日出方程 vs 星历地平判,折射 2-3 分钟窗) ③四柱=bazi golden 满防。
-// 起课法:扫描恒正时正将(第一客);贵人流派 guirengType/昼夜法/阴阳系全参数可调。
+// 起课法:扫描恒正时正将(第一客,择日内嵌页锁定该控件);贵人流派 guirengType/阴阳系由工作台调;
+// 分昼夜 / 涉害取舍 / 涉害起讫 / 始入课取内嵌页当前值(zeriPageCalibre.LIURENG_PAGE_SCAN_KEYS),与页面起课同一组函数。
 // plateKey=判定输入元组(日柱|时支|月将|昼夜|贵人流派有效参),同元组⇒同盘。
-import { buildLiuRengLayout, buildKeData, buildSanChuanData } from '../../liureng/LiuRengMain.js';
+import { buildLiuRengLayout, buildKeData, buildSanChuanData, liurengSeHaiOptsOf, liurengFenZhouYeDiurnal } from '../../liureng/LiuRengMain.js';
 import { buildLrChartLite } from './liurengLocal.js';
 import { LIURENG_CONDITION_TYPES, makeLiurengZeriEvalCtx } from './liurengZeriConditionTypes.js';
 import { makeHourlyScanEngine } from './hourlyScanEngine.js';
+import { leadingYearOf } from '../../bazi/dateStrSafe.js';
 
 export const LIURENG_MAX_TOTAL_HITS = 1000;
 export const LIURENG_MAX_SPAN_DAYS_TOTAL = 1830;
@@ -20,11 +22,14 @@ export function computeLiurengScanPan(geoParams, options, dateStr, timeStr){
 	const base = buildLrChartLite(geoParams, o, dateStr, timeStr);
 	if(!base){ return null; }
 	const guirengType = o.guirengType !== undefined ? Number(o.guirengType) : 0;
+	// 分昼夜:晨昏(缺省)= 日出方程判的昼夜;卯酉 / 寅申 = 按时支定(与六壬页同一实现)
+	const fz = liurengFenZhouYeDiurnal(o.fenZhouYe, base.chartLite);
+	const diurnal = fz === undefined ? base.diurnal : fz;
 	const castOverride = {
 		yue: base.yue,
-		isDiurnal: base.diurnal,
+		isDiurnal: diurnal,
 		yinyangSystem: o.yinyangSystem || undefined,
-		seHaiOpts: o.seHaiOpts || null,
+		seHaiOpts: liurengSeHaiOptsOf(o),
 	};
 	const layout = buildLiuRengLayout(base.chartLite, guirengType, castOverride);
 	if(!layout){ return null; }
@@ -38,8 +43,8 @@ export function computeLiurengScanPan(geoParams, options, dateStr, timeStr){
 		xun: base.xun,
 		fourColumns: base.fourColumns,
 		yue: base.yue,
-		diurnal: base.diurnal,
-		// [W2 全谱轮] 小局/大格判定面装配材料:chartLite(nongli 载体;无星历 objects——
+		diurnal,
+		// 小局/大格判定面装配材料:chartLite(nongli 载体;无星历 objects——
 		// 涉日月宿位的少数局在扫描侧无供数不判,注册表 hint 明示)+castOverride+guirengType。
 		chartLite: base.chartLite,
 		castOverride,
@@ -78,7 +83,7 @@ export function evaluateLiurengTree(node, pan, ctx, explain){
 }
 
 // plateKey=起课输入元组:日柱+时支+月将(基础三位,全类恒吃)+可掩四位(昼夜/年支/月支/
-// 候选公历年)。[十一轮] 依赖感知掩码:mask 存在时可掩位只保留树声明位——树不涉贵人则
+// 候选公历年)。依赖感知掩码:mask 存在时可掩位只保留树声明位——树不涉贵人则
 // key 略 diurnal 位,日出日落不再假劈行(用户实报 1.6h/24分 非整行根修);涉则保留,
 // 按昼夜盘分行=语义正确。mask 缺省(null)=全位(三式旧调用/压测 kit/兜底零回归)。
 // 🔴 年支/月支必须可入 key:taisui_god_at 吃年支环、天德/月德/月破吃月支——立春/各节
@@ -132,7 +137,7 @@ const engine = makeHourlyScanEngine({
 		const pan = computeLiurengScanPan(geoParams, o, dateStr, timeStr);
 		if(pan && scanCtx && scanCtx.natal){ pan._natal = scanCtx.natal; }
 		// 候选公历年:行年支按候选年现算的输入(ctx.xingnian();系统年冻结=跨年错位实抓)
-		if(pan){ pan._candY = Number(`${dateStr}`.slice(0, 4)); }
+		if(pan){ pan._candY = leadingYearOf(dateStr); }
 		return pan;
 	},
 	plateKeyOf,
@@ -150,5 +155,5 @@ export function explainLiurengAt({ geoParams, options, tree, t }){
 	return engine.explainAt({ geoParams, options, tree, t });
 }
 
-// [Z6] 三式合一拼接 plateKey 消费(同源别名;三家同名 plateKeyOf 避免 import 冲突)。
+// 三式合一拼接 plateKey 消费(同源别名;三家同名 plateKeyOf 避免 import 冲突)。
 export { plateKeyOf as liurengPlateKeyOf };

@@ -1,19 +1,23 @@
 import { computeTaiyiShuli } from './taiyiShuli.js';
+import { leapPrefix } from '../../utils/lunarText.js';
 import { computeGeju } from './taiyiGeju.js';
 import { computeVictory, computeFenye, computeShenSuan, computeTaisuiAlias, activeDoorJixiong, computeEhui, computeSanyuan, computeLimitYun, computeShiJing, computeWuziyuan, computeHeShen } from './taiyiDuanfa.js';
 import { computeTaiyiNayin } from './taiyiNayin.js';
+import { parseDateParts, addDisplayYears } from '../../bazi/dateStrSafe.js';
+import { civilWallMs } from '../../utils/civilCalendar.js';
 
+// 下拉显示用简体;value(数字档)不动,存档 / 请求 / 缓存键一律按 value。
 export const TAIYI_STYLE_OPTIONS = [
-	{ value: 3, label: '時計太乙' },
-	{ value: 0, label: '年計太乙' },
-	{ value: 1, label: '月計太乙' },
-	{ value: 2, label: '日計太乙' },
-	{ value: 4, label: '分計太乙' },
+	{ value: 3, label: '时计太乙' },
+	{ value: 0, label: '年计太乙' },
+	{ value: 1, label: '月计太乙' },
+	{ value: 2, label: '日计太乙' },
+	{ value: 4, label: '分计太乙' },
 ];
 
 export const TAIYI_ACCUM_OPTIONS = [
-	{ value: 0, label: '太乙統宗' },
-	{ value: 1, label: '太乙金鏡' },
+	{ value: 0, label: '太乙统宗' },
+	{ value: 1, label: '太乙金镜' },
 	{ value: 2, label: '太乙淘金歌' },
 	{ value: 3, label: '太乙局' },
 ];
@@ -95,15 +99,16 @@ function parseDateTime(fields){
 	}
 	const dateStr = fields.date.value.format('YYYY-MM-DD');
 	const timeStr = fields.time.value.format('HH:mm:ss');
-	const d = dateStr.split('-');
+	// 日期串的年带符号、1–5 位(公元前 '-300-03-10'):经单源拆,不按「-」裸拆(裸拆会把公元前拆成年 0、月 300)
+	const d = parseDateParts(dateStr);
 	const t = timeStr.split(':');
-	if(d.length < 3 || t.length < 2){
+	if(!d || t.length < 2){
 		return null;
 	}
 	return {
-		year: normalizeNum(d[0], 0),
-		month: normalizeNum(d[1], 1),
-		day: normalizeNum(d[2], 1),
+		year: d.year,
+		month: d.month,
+		day: d.day,
 		hour: normalizeNum(t[0], 0),
 		minute: normalizeNum(t[1], 0),
 		second: normalizeNum(t[2], 0),
@@ -130,15 +135,17 @@ function guessLunarYear(dateParts, nongli){
 	}
 	let year = dateParts.year;
 	if(nongli && typeof nongli.monthInt === 'number' && dateParts.month <= 2 && nongli.monthInt >= 11){
-		year -= 1;
+		year = addDisplayYears(year, -1);   // 显示年减一(公元 1 年的上一年是公元前 1 年,没有 0 年)
 	}
 	return year;
 }
 
+// 积日:民用历墙钟轴(civilCalendar 单源)上两刻相减。1582-10-15 以前按儒略历、公元前按历史纪年、0–99 年不当 19xx;
+// 1582-10-15 以后与 Date.UTC 逐位相同。
 function dayDiffUTC(dateParts, baseYear, baseMonth, baseDay){
-	const dateUTC = Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, dateParts.hour, dateParts.minute, 0);
-	const baseUTC = Date.UTC(baseYear, baseMonth - 1, baseDay, 0, 0, 0);
-	return Math.floor((dateUTC - baseUTC) / (24 * 3600 * 1000));
+	const dateWall = civilWallMs(dateParts.year, dateParts.month, dateParts.day, dateParts.hour, dateParts.minute, 0);
+	const baseWall = civilWallMs(baseYear, baseMonth, baseDay, 0, 0, 0);
+	return Math.floor((dateWall - baseWall) / (24 * 3600 * 1000));
 }
 
 function buildGanZhi(nongli){
@@ -567,13 +574,13 @@ export function calcTaiyiPanFromKintaiyi(fields, nongli, options){
 		dateStr: dateParts.dateStr,
 		timeStr: dateParts.timeStr,
 		realSunTime: nongli ? (nongli.birth || '') : '',
-		lunarText: nongli ? `${nongli.year || ''}年${nongli.leap ? '闰' : ''}${nongli.month || ''}${nongli.day || ''}` : '',
+		lunarText: nongli ? `${nongli.year || ''}年${leapPrefix(nongli)}${nongli.month || ''}${nongli.day || ''}` : '',
 		jiedelta: nongli ? (nongli.jiedelta || '') : '',
 		jieqi: currentJie,
 		ganzhi: gz,
 		accNum,
 		jiyuan: calcJiyuan(styleForPan, accNum),
-		// [Q-269/T-258] 三元(纪元推)是年计概念:时计/日计/月计盘 jiyuan 为空 → 择日「三元」判面恒不命中;按同盘年计积年另给一份纪元供其取用。
+		// 三元(纪元推)是年计概念:时计/日计/月计盘 jiyuan 为空 → 择日「三元」判面恒不命中;按同盘年计积年另给一份纪元供其取用。
 		jiyuanByYear: styleForPan === 0 ? calcJiyuan(0, accNum) : calcJiyuan(0, getAccNum(0, tnForPan, dateParts, nongli || {})),
 		kook,
 		taishui,

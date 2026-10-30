@@ -4,6 +4,10 @@
 // 显示层零章节号;九主出处按古籍纠错注明(后世历书传统,非某一原典);
 // Kūrma 分野沿用中性数据政策(学术参考·非现实地缘断言)。
 
+import { datePartOf, civilShiftDateTimeStr, civilDateStrOfMs, civilWallMsOfStr, civilJdnOfDateStr } from '../bazi/dateStrSafe.js';
+import { civilPartsFromWallMs } from '../utils/civilCalendar.js';
+import { segmentIndex } from '../utils/segmentIndex.js';
+
 // 单模归一:x∈[0,360) 时 % 恒等零浮点损失;双模 ((x%360)+360)%360 会在宿界精确点
 // (如 13°20′=NAK_WIDTH 整倍数)丢 1ulp → floor 除法宿序错位(与后端落宫双模坑同款)。
 const norm360 = (x) => { const r = x % 360; return r < 0 ? r + 360 : r; };
@@ -12,7 +16,6 @@ const fwd = (from, to) => norm360(to - from);
 // ── 星期主(vāra,固定)──
 export const VARA_LORDS = ['sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn'];   // 日..六
 export const PLANET_CN_V = { sun: '日', moon: '月', mars: '火', mercury: '水', jupiter: '木', venus: '金', saturn: '土', rahu: '罗睺', ketu: '计都' };
-const BENEFIC = ['jupiter', 'venus', 'mercury'];
 
 // ── L2 年之九主(各职=该事件所在星期之主;事件=恒星入境/入宿/阴历年首)──
 // 出处纠错(古籍明确):九主不出自某一原典,属后世历书传统 → UI 须注明(中性表述)。
@@ -47,9 +50,10 @@ const APPROX_DAY = { ingress_0: '04-14', ingress_60: '06-15', ingress_90: '07-16
 
 // 星期主:当地日历日 → vāra 之主。
 export function varaLordOf(momentStr){
-	const d = new Date(String(momentStr).replace(/-/g, '/'));
-	if(isNaN(d.getTime())){ return null; }
-	return VARA_LORDS[d.getDay()];
+	// 星期按民用历日序数算(1582 以前儒略历;JS Date 按外推格里历会把改历前的星期整体错开)
+	const jdn = civilJdnOfDateStr(datePartOf(String(momentStr)));
+	if(!Number.isFinite(jdn)){ return null; }
+	return VARA_LORDS[(((jdn + 1) % 7) + 7) % 7];
 }
 
 // L2 主计算:9 事件求根 → 各职行星 + 兼职冲突 + 口诀判读。
@@ -70,30 +74,31 @@ const NAK_WIDTH = 13 + 20 / 60;   // 13°20′ = 800′
 // 起运:恒星月亮黄经 → 宿主与余额;yearLen 360|365.2425(分歧→选项)。
 export function vimshottariFromMoon(sidMoonLon, startDateStr, yearLen){
 	const lon = norm360(sidMoonLon);
-	const nakIdx = Math.floor(lon / NAK_WIDTH);            // 0..26
+	const nakIdx = segmentIndex(lon, NAK_WIDTH, 27);       // 0..26(段界单源)
 	const lordIdx = nakIdx % 9;
-	const inMin = (lon - nakIdx * NAK_WIDTH) * 60;         // 入宿分(0..800)
+	const inMin = Math.max(0, (lon - nakIdx * NAK_WIDTH) * 60);   // 入宿分(0..800;段界吸附后不为负)
 	const balanceRatio = (800 - inMin) / 800;
 	const seq = [];
 	const dayMs = 86400000 * (yearLen === 360 ? 360 / 365.2425 : 1);   // 以公历日推进,360 制按比例缩
-	let cursor = new Date(String(startDateStr).replace(/-/g, '/')).getTime();
+	// 墙钟轴推进,年份按民用历取(历史纪年;公元前不差一年)
+	const yearOfWall = (ms)=>{ const q = civilPartsFromWallMs(ms); return q ? q.year : NaN; };
+	let cursor = civilWallMsOfStr(String(startDateStr).trim());
 	for(let i = 0; i < 9; i++){
 		const p = VIMSHOTTARI_SEQ[(lordIdx + i) % 9];
 		const spanYears = i === 0 ? p.years * balanceRatio : p.years;
-		const from = new Date(cursor);
+		const fromMs = cursor;
 		cursor += spanYears * 365.2425 * dayMs;
-		const to = new Date(cursor);
 		// 子期:按 (子主年/120)×大期年,自本主起循环。
 		const subs = [];
-		let subCursor = from.getTime();
+		let subCursor = fromMs;
 		for(let j = 0; j < 9; j++){
 			const sp = VIMSHOTTARI_SEQ[(lordIdx + i + j) % 9];
 			const subYears = (sp.years / 120) * spanYears;
-			const sFrom = new Date(subCursor);
+			const sFromMs = subCursor;
 			subCursor += subYears * 365.2425 * dayMs;
-			subs.push({ key: sp.key, cn: PLANET_CN_V[sp.key], fromYear: sFrom.getFullYear(), toYear: new Date(subCursor).getFullYear() });
+			subs.push({ key: sp.key, cn: PLANET_CN_V[sp.key], fromYear: yearOfWall(sFromMs), toYear: yearOfWall(subCursor) });
 		}
-		seq.push({ key: p.key, cn: PLANET_CN_V[p.key], years: p.years, spanYears, fromYear: from.getFullYear(), toYear: to.getFullYear(), meaning: VIMSHOTTARI_MUNDANE_MEANINGS[p.key], subs });
+		seq.push({ key: p.key, cn: PLANET_CN_V[p.key], years: p.years, spanYears, fromYear: yearOfWall(fromMs), toYear: yearOfWall(cursor), meaning: VIMSHOTTARI_MUNDANE_MEANINGS[p.key], subs });
 	}
 	return { nakIdx, lordKey: VIMSHOTTARI_SEQ[lordIdx].key, balanceRatio, periods: seq };
 }
@@ -101,9 +106,9 @@ export function vimshottariFromMoon(sidMoonLon, startDateStr, yearLen){
 // ── L4 KP 副主(243=27×9;arc=(主年/120)×800′;半开区间;卜卦号 249 仅查表非除数)──
 export function kpSubLordAt(sidLon){
 	const lon = norm360(sidLon);
-	const nakIdx = Math.floor(lon / NAK_WIDTH);
+	const nakIdx = segmentIndex(lon, NAK_WIDTH, 27);   // 段界单源
 	const starLord = VIMSHOTTARI_SEQ[nakIdx % 9];
-	const offMin = (lon - nakIdx * NAK_WIDTH) * 60;   // 宿内分
+	const offMin = Math.max(0, (lon - nakIdx * NAK_WIDTH) * 60);   // 宿内分(段界吸附后不为负)
 	let acc = 0;
 	for(let i = 0; i < 9; i++){
 		const p = VIMSHOTTARI_SEQ[(nakIdx % 9 + i) % 9];
@@ -132,11 +137,9 @@ export const NAK_KEYPOINTS = {
 export const GARBHA_CONST = { gestationDays: 195, note: '云之孕:自月入水云受孕之宿起观(约 11–12 月,日在射手);孕期固定 195 日,月回受孕宿之日降雨——白半孕→黑半产,正午孕→午夜产,间隔皆 195 日。' };
 export const GARBHA_OMENS = { good: '孕兆吉:柔风、日月白晕、浓黑云、虹、雷电;吉星会照 → 丰沛好雨。', bad: '凶星与日/月同度 → 冰雹烈雷。' };
 export function garbhaDeliveryDate(conceptionDateStr){
-	const ms = new Date(String(conceptionDateStr).replace(/-/g, '/')).getTime();
+	const ms = civilWallMsOfStr(String(conceptionDateStr).trim());   // 民用历墙钟轴(时区无关)
 	if(isNaN(ms)){ return null; }
-	const d = new Date(ms + GARBHA_CONST.gestationDays * 86400000);
-	const pad = (n) => (n < 10 ? '0' + n : '' + n);
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+	return civilDateStrOfMs(ms + GARBHA_CONST.gestationDays * 86400000);
 }
 
 // 七潮盘:自昴宿区(第 3 宿)起、28 宿(含第 28 宿)蛇行入 7 列。

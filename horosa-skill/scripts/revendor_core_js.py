@@ -54,6 +54,9 @@ _DROP_IMPORT_PATTERNS = (
 )
 _RELATIVE_IMPORT = re.compile(r"(from\s+['\"])(\.[^'\"]*?)(['\"])")
 _DYNAMIC_RELATIVE_IMPORT = re.compile(r"(import\(\s*(?:/\*.*?\*/\s*)?['\"])(\.[^'\"]*?)(['\"])", re.S)
+# 裸副作用导入 `import '../../utils/pageSettingsStore';`（只为执行模块顶层登记，不取名字）：没有 `from`，上面那条抓不到
+# ——上游 v3.12.0 的 LiuRengMain 用它注册页面设置；漏了就既不补 `.js` 也不重指，loadcheck 报 Cannot find module。
+_BARE_RELATIVE_IMPORT = re.compile(r"(^[ \t]*import\s+['\"])(\.[^'\"]*?)(['\"])", re.M)
 
 
 def _strip_fetch_helpers(text: str) -> tuple[str, list[str]]:
@@ -177,6 +180,45 @@ _INLINE_REQUIRE = re.compile(
 )
 
 
+_INLINE_PACKAGE_REQUIRE = re.compile(
+    r"^[ \t]*const\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*['\"]([^'\".][^'\"]*)['\"]\s*\);?[ \t]*\n",
+    re.M,
+)
+
+
+def _core_js_dependencies() -> set[str]:
+    try:
+        package = json.loads((VENDOR_ROOT.parents[1] / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return set((package.get("dependencies") or {}).keys())
+
+
+def _rewrite_package_requires(text: str, dependencies: set[str] | None = None) -> tuple[str, list[str]]:
+    """函数体内的 `const moment = require('moment');`（整包默认导出）→ 顶层一条 `import moment from 'moment';`。
+
+    上游 v3.12.0 的 utils/civilMoment.js 在三个函数里各惰性 require 一次 moment；ESM 下 `require` 未定义，Balbillus /
+    三分主星 / 月相推运一跑就 `require is not defined`。只改**本包 package.json 声明了的依赖**（moment、lunar-javascript…）：
+    没声明的第三方包照旧留给人工判断——静默改成 import 会在加载时才报缺包。
+    """
+    deps = _core_js_dependencies() if dependencies is None else dependencies
+    notes: list[str] = []
+    hoisted: dict[str, str] = {}
+    def drop(match: re.Match[str]) -> str:
+        name, package = match.group(1), match.group(2)
+        if package not in deps:
+            return match.group(0)
+        if hoisted.setdefault(name, package) != package:
+            return match.group(0)  # 同名绑定指向不同包：不猜
+        return ""
+    text = _INLINE_PACKAGE_REQUIRE.sub(drop, text)
+    for name, package in hoisted.items():
+        if not re.search(rf"^import\s+{re.escape(name)}\s+from\s+['\"]{re.escape(package)}['\"]", text, re.M):
+            text = f"import {name} from '{package}';\n" + text
+        notes.append(f"package require→import {name} from '{package}'")
+    return text, notes
+
+
 def _rewrite_inline_requires(text: str) -> tuple[str, list[str]]:
     """把函数体内的惰性 `const {X} = require('…')` 改写成顶层静态 import。
 
@@ -298,6 +340,8 @@ def transform(text: str) -> tuple[str, list[str]]:
     notes: list[str] = []
     text, require_notes = _rewrite_inline_requires(text)
     notes.extend(require_notes)
+    text, package_notes = _rewrite_package_requires(text)
+    notes.extend(package_notes)
     dropped_symbols: list[str] = []
     for pattern in _DROP_IMPORT_PATTERNS:
         # 先收走该 import 带进来的具名符号：它们是后端层的东西，任何仍在引用它们的导出 async
@@ -335,6 +379,9 @@ def transform(text: str) -> tuple[str, list[str]]:
     text, dyn_rel = _DYNAMIC_RELATIVE_IMPORT.subn(add_suffix, text)
     if dyn_rel:
         notes.append(f"suffixed {dyn_rel} dynamic relative import(s)")
+    text, bare_rel = _BARE_RELATIVE_IMPORT.subn(add_suffix, text)
+    if bare_rel:
+        notes.append(f"suffixed {bare_rel} bare side-effect import(s)")
 
     # 原生 Node ESM 要求 JSON import 显式带 `with { type: 'json' }`；bundler 不需要，所以上游没有。
     # 漏了它模块直接加载失败（"needs an import attribute of type: json"）——AGENTS §5 的老坑，机械化掉。
@@ -431,7 +478,7 @@ def _relocate_imports(text: str, target: Path) -> tuple[str, list[str]]:
         notes.append(f"⚠ UNRESOLVED import {rel} ({len(candidates)} candidates) — vendor it or add a shim")
         return match.group(0)
 
-    return _RELATIVE_IMPORT.sub(fix, text), notes
+    return _BARE_RELATIVE_IMPORT.sub(fix, _RELATIVE_IMPORT.sub(fix, text)), notes
 
 
 # --------------------------------------------------------------------------------------------
@@ -537,7 +584,14 @@ def _tail_exports_defined_in_head(head: str, tail: str) -> list[str]:
     vendored caller's named import fails to link (`does not provide an export named …`) — which is exactly how
     SanShiUnitedMain.js (it imports four of them) first failed to load. Keep the entries whose local name is a
     top-level declaration of the head; tail-only names would be a ReferenceError, so they stay dropped.
+
+    An **imported** binding of the head counts too (`export { X }` re-exports an imported binding): upstream v3.12.0
+    split LiuRengMain's helpers into `main/*.js`, so its tail list re-exports names the head only imports
+    (`QIZHENG_PLANET_COLOR` from `./main/ganzhiHelpers`) — SanShiUnitedMain still imports them from LiuRengMain.
     """
+    imported: set[str] = set()
+    for statement in re.finditer(r"^import\s[^;]*?from\s+['\"][^'\"]+['\"]\s*;?", head, re.M | re.S):
+        imported |= _imported_locals(statement.group(0))
     kept: list[str] = []
     for block in re.findall(r"^export\s*\{([^}]*)\}\s*;?", tail, re.M):
         for part in block.split(","):
@@ -550,7 +604,7 @@ def _tail_exports_defined_in_head(head: str, tail: str) -> list[str]:
                 head,
                 re.M,
             )
-            if declared and entry not in kept:
+            if (declared or local in imported) and entry not in kept:
                 kept.append(entry)
     return kept
 

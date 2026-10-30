@@ -44,7 +44,7 @@ export function lookupXiang(item, sound, gender) {
 	if (!t) return null;
 	const cell = (t.sounds || {})[sound];
 	if (!cell) return null;
-	// [Q-284/T-276] 性别归一与八字本地引擎同口径:0=女,其余(1 / -1「未知·按男排」)=男;此前 `=== 1` 判男 → 未知档当女命。
+	// 性别归一与八字本地引擎同口径:0=女,其余(1 / -1「未知·按男排」)=男;此前 `=== 1` 判男 → 未知档当女命。
 	const male = Number(gender) !== 0;
 	const nums = cell.map((x) => (typeof x === 'number' ? { num: x, mark: null } : x));
 	const marked = nums.filter((x) => x.mark);
@@ -95,11 +95,6 @@ export function lookupQiRiYue({ guaqi, yushu }) {
 export function qiRiYueTable() {
 	const t = TABLES.qiRiYue || {};
 	return (t['卦氣'] || []).map((q, i) => ({ guaqi: q, yushu: (t['餘數'] || [])[i], gong: (t['宮位'] || [])[i] }));
-}
-
-/** 铁算心法各时辰序列（演卦须秘咒定上卦，秘咒古籍未载 → 只供查阅，不作推算） */
-export function xinFaTable() {
-	return ZHI.map((z) => ({ zhi: z, seq: [] }));
 }
 
 export function calcXinyi(input) {

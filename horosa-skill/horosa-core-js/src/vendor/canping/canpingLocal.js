@@ -97,11 +97,6 @@ function verses(element, info, kind) {
 //   baziStyle     —— 八字大运法：阳男阴女顺／阴男阳女逆，自月建下一位起，十年一运
 //                    （《河洛理数》注解所载「采用推八字取大运之法」；起运岁沿用所选起运推算）
 export const CANPING_DAYUN_RULES = ['mingGongQiyun', 'mingGongOne', 'baziStyle'];
-export const CANPING_DAYUN_RULE_LABELS = {
-	mingGongQiyun: '命宫顺行 · 生日推起运（默认）',
-	mingGongOne: '命宫顺行 · 恒一岁起',
-	baziStyle: '八字大运法（阳男阴女顺／阴男阳女逆）',
-};
 const YANG_GANS = ['甲', '丙', '戊', '庚', '壬'];
 
 /**
@@ -129,7 +124,7 @@ export function dayunSequence(dayPalaceBranch, hourBranch, qiyunAge = 1, count =
 	const rule = CANPING_DAYUN_RULES.indexOf(opts.rule) >= 0 ? opts.rule : 'mingGongQiyun';
 	const seq = [];
 	if (rule === 'baziStyle') {
-		// [Win-D69] 八字大运法与八字模块同源:此前本档只抄了排序(阳男阴女顺逆+月建下一位),
+		// 八字大运法与八字模块同源:此前本档只抄了排序(阳男阴女顺逆+月建下一位),
 		// 起运岁却仍用《参评诀》口径(单双月数日÷3)——与八字模块的**节气起运法**必然对不上
 		// (用户实测 v3.8.1:起运岁数/年份双双错位;锚例 1990-03-15 男:参评诀 7 岁 vs 节气法 8 岁)。
 		// 根治=调用方注入 opts.baziYun(取自 buildLocalBaziResult().bazi.direction,即 lunar-js
@@ -173,7 +168,7 @@ export function calculate({ yearGz, monthBranch, dayBranch, hourBranch, gender =
 	const benmingVerses = verses(element, benming, kindMain);
 
 	// 起运岁：mingGongOne 档恒 1（旧行为）；其余档按生日推算，农历缺失时自动退回 1。
-	// [Win-D69] baziStyle+注入 baziYun:起运岁改用八字真源首运虚岁(节气起运法,与八字盘同源),
+	// baziStyle+注入 baziYun:起运岁改用八字真源首运虚岁(节气起运法,与八字盘同源),
 	// 《参评诀》口径只服务命宫两档;无注入回退旧口径(零回归)。
 	const rule = CANPING_DAYUN_RULES.indexOf(dayunRule) >= 0 ? dayunRule : 'mingGongQiyun';
 	const inj = (rule === 'baziStyle' && Array.isArray(baziYun) && baziYun.length && baziYun[0] && baziYun[0].branch) ? baziYun : null;
@@ -254,7 +249,7 @@ export function buildSnapshotText(result, opts = {}) {
 	// 性别取层与大运法必须进快照:AI 此前看不出取的是上层洞门(男命)还是中层闺门(女命)、
 	// 也看不出大运用了哪一法(段头字串是导出锚点,一律不动,只在段内补行)。
 	lines.push(`性别取层：${result.kindMain === 'female' ? '女命（中层闺门）' : '男命（上层洞门）'}`);
-	// [Q-438/T-401] 右栏「四柱」「起数」卡此前不进快照:四柱行(年柱/月支/日支/时支,起数依据)与起数三值(顺数/逆数/子上轮)。
+	// 右栏「四柱」「起数」卡此前不进快照:四柱行(年柱/月支/日支/时支,起数依据)与起数三值(顺数/逆数/子上轮)。
 	if (result.fourPillars) {
 		const fp = result.fourPillars;
 		lines.push(`四柱：年柱${fp.yearGz || '—'}　月支${fp.monthBranch || '—'}　日支${fp.dayBranch || '—'}　时支${fp.hourBranch || '—'}`);
@@ -270,7 +265,7 @@ export function buildSnapshotText(result, opts = {}) {
 	lines.push('[大运·歲運]');
 	{
 		const q = result.qiyunDetail || {};
-		// [Win-D69] baziSourced=真源注入:排法/起运措辞照实(节气起运,与八字盘同源),AI 不再被
+		// baziSourced=真源注入:排法/起运措辞照实(节气起运,与八字盘同源),AI 不再被
 		// 「参评诀起运」误导;未注入(域外回退)维持旧措辞逐字。
 		const ruleCn = result.dayunRule === 'baziStyle'
 			? (result.baziSourced
@@ -284,10 +279,10 @@ export function buildSnapshotText(result, opts = {}) {
 				: '一岁起运');
 		lines.push(`排法：${ruleCn}  ${qCn}`);
 	}
-	// [v2 排版批量·表化] 同构逐条行改 GFM 表(紫微宫位总览范式):段头/值表达式零变更
+	// 同构逐条行改 GFM 表(紫微宫位总览范式):段头/值表达式零变更
 	// (ageStart-ageEnd岁/branch/顺numShun/textShun/逆numNi/textNi 逐字复用),仅排版骨架换表头+分隔行+数据行。
 	if (result.baziSourced) {
-		// [Win-D69] 真源档:干支+公历年两列(与八字盘可直接对照;AI 引用有年份锚)。
+		// 真源档:干支+公历年两列(与八字盘可直接对照;AI 引用有年份锚)。
 		lines.push('| 歲段 | 公历年 | 大运 | 顺 | 顺辞 | 逆 | 逆辞 |');
 		lines.push('| --- | --- | --- | --- | --- | --- | --- |');
 		(result.dayun || []).forEach((d) => {
@@ -309,7 +304,7 @@ export function buildSnapshotText(result, opts = {}) {
 		// 挂载/导出都缺流年。改由调用方喂入 liunianSeries(...).rows,逐岁出 太岁/大运/顺逆数(紧凑,不含逐句判语避免过长)。
 		lines.push('');
 		lines.push('[流年·歲運]');
-		// [v2 排版批量·表化] 1-120 岁全表改 GFM 表:值表达式逐字复用(age岁/yzz/太岁taisuiBranch/
+		// 1-120 岁全表改 GFM 表:值表达式逐字复用(age岁/yzz/太岁taisuiBranch/
 		// 大运dayunBranch/顺numShun/逆numNi),仅排版骨架变化;单行 else 分支(非同构全表)保持原样。
 		lines.push('| 歲 | 年·干支 | 太岁 | 大运 | 顺 | 逆 |');
 		lines.push('| --- | --- | --- | --- | --- | --- |');

@@ -8,7 +8,7 @@ import { mutualReceptionBetween } from '../engine/reception.js';
 import { DIR_BY_ELEMENT } from '../data/directions.js';
 import { signOfLon } from '../data/signs.js';
 import { lotDispositor } from '../data/lots.js';
-import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(随流派口径)
+import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(随流派口径)
 
 function cn(k){ return (PLANETS[k] || {}).cn || k || '—'; }
 const ANG_BONUS = { angular: 2, succedent: 0, cadent: -1.5 };
@@ -91,7 +91,7 @@ export function buildTopicDeepening(facts, category, opts){
 		const l3 = lordOf(facts, 3);
 		const merc = facts.planets.mercury;
 		const mercBad = merc && (merc.retro || merc.combustion === 'combust' || merc.dignityScore <= -4);
-		// [Q-146/T-53] 原直读后端 isVOC(按【全局】空亡口径算,不随流派);改走判读侧单源,
+		// 原直读后端 isVOC(按【全局】空亡口径算,不随流派);改走判读侧单源,
 		// opts 即 horaryJudgeOpts(含流派绑定 vocMode / vocIncludeOuter)。
 		const moonVoc = resolveMoonVoc(facts, opts || {}).voc;
 		const lines = [
@@ -154,7 +154,7 @@ export function buildTopicDeepening(facts, category, opts){
 	if(category === 'lost'){
 		return buildLostObject(facts, opts);
 	}
-	// ── [H6] 三新专题:婚姻分科 / 走失活物 / 通用买卖 ──
+	// ── 三新专题:婚姻分科 / 走失活物 / 通用买卖 ──
 	if(category === 'marriage'){
 		return buildMarriageTopic(facts);
 	}
@@ -174,7 +174,7 @@ export function buildTopicDeepening(facts, category, opts){
 	return null;
 }
 
-// ── [H6] 婚姻分科:两主接通 + 金星(婚姻自然征象) + 日月配合(男女光体) + 7 宫互容专查。──
+// ── 婚姻分科:两主接通 + 金星(婚姻自然征象) + 日月配合(男女光体) + 7 宫互容专查。──
 function buildMarriageTopic(facts){
 	const l1 = lordOf(facts, 1); const l7 = lordOf(facts, 7);
 	const lines = [cmpLine(facts, l1, '问者（1宫）', l7, '对象（7宫）')];
@@ -201,7 +201,7 @@ function buildMarriageTopic(facts){
 	return { title: '婚姻分科（两主接通·金星·日月配合·互容）', lines };
 }
 
-// ── [H6] 走失活物:小活物(猫犬禽)＝6 宫;大牲畜(马牛等驮畜)＝12 宫——两宫对照并给方位。──
+// ── 走失活物:小活物(猫犬禽)＝6 宫;大牲畜(马牛等驮畜)＝12 宫——两宫对照并给方位。──
 function buildLostAnimal(facts){
 	const l6 = lordOf(facts, 6); const l12 = lordOf(facts, 12);
 	const dirLine = (key, label) => {
@@ -262,7 +262,7 @@ function buildLostObject(facts, opts){
 	];
 	if(el) lines.push({ polarity: 'neutral', text: `场所类型（象征星元素=${el}）：${LOST_PLACE_BY_ELEMENT[el]}。` });
 	if(p2 && (p2.house === 8 || p2.house === 12)) lines.push({ polarity: 'negative', text: '象征星落 8/12 宫 → 难寻或被藏匿。' });
-	// [H6] 福点=失物之所在(传统失物三征之一):按 pofReversal 口径算落座+定位星。
+	// 福点=失物之所在(传统失物三征之一):按 pofReversal 口径算落座+定位星。
 	const asc = facts.meta.ascLon; const sun = facts.planets.sun && facts.planets.sun.lon; const moon = facts.planets.moon && facts.planets.moon.lon;
 	if(asc != null && sun != null && moon != null){
 		const useNight = !!(opts && opts.pofReversal) && !facts.meta.isDiurnal;
@@ -272,7 +272,7 @@ function buildLostObject(facts, opts){
 		const pofEl = pofSign && pofSign.element;
 		lines.push({ polarity: 'neutral', text: `福点（失物之所）落${pofSign ? pofSign.cn : '—'}座 ${(pofLon % 30).toFixed(1)}°${disp ? '·定位星' + cn(disp) : ''}${pofEl ? '（' + LOST_PLACE_BY_ELEMENT[pofEl] + '）' : ''}。` });
 	}
-	// [H6] 月亮方位(线索之向):月亮所落元素定方向。
+	// 月亮方位(线索之向):月亮所落元素定方向。
 	const pm = facts.planets.moon;
 	if(pm && SIGNS[pm.sign]){
 		const d = DIR_BY_ELEMENT[SIGNS[pm.sign].element];

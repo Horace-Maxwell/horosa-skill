@@ -83,7 +83,10 @@ def main() -> None:
             f"vendored aiExport.js not found at {VENDORED_AIEXPORT}\n"
             "run sync_vendored_runtime_sources.py first (mirror guard needs the vendored upstream copy)."
         )
-    text = VENDORED_AIEXPORT.read_text(encoding="utf-8", errors="replace")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _upstream_preset import read_aiexport_source  # 门面 + aiExport/ 目录（上游 v3.12.0 拆分）
+
+    text = read_aiexport_source(VENDORED_AIEXPORT)
     registry = _load_skill_registry()
 
     # 1. version lockstep

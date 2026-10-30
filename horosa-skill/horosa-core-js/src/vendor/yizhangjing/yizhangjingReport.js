@@ -1,8 +1,8 @@
 // 一掌经 · 模型装配 + AI 快照文本（引擎 + 断语数据 → 展示模型 / 快照串）。
 // UI 与 AI 挂载共用本模块；引擎(yizhangjingLocal)保持纯函数，本模块负责农历解析与断语拼接。
 import {
-	calcYizhangjing, BRANCHES, ZODIAC, STARS, gradeOf, wuxingState, xiaoxianStarAt, xunShenAt,
-	pillarWeights, nineGradeExact, tongxianList, xiaoxianStarAtDir, xiaoxianQuick, xunShenRoles,
+	calcYizhangjing, BRANCHES, ZODIAC, STARS, gradeOf, wuxingState, xunShenAt,
+	pillarWeights, nineGradeExact, tongxianList, xiaoxianStarAtDir, xunShenRoles,
 	flowSub, brotherCount, starPolarity, branchClash, pairHits, pillarWuxing, ziSubPeriod, starLabel, daoLabel,
 } from './yizhangjingLocal.js';
 import DATA from './data/yizhangjingData.json' with { type: 'json' };
@@ -21,7 +21,7 @@ ZODIAC.forEach((z, i) => { ZODIAC_TO_BRANCH[z] = BRANCHES[i]; });
 export function resolveLunarInput(bazi, opts) {
 	if (!bazi) return null;
 	const nl = bazi.nongli || {};
-	// [Q-358·续] 农历月 / 日 / 闰按日界口径取(23 点档「子初换日」随日柱进位次日,与紫微同源;其余逐字同 monthNum/dayNum)
+	// 农历月 / 日 / 闰按日界口径取(23 点档「子初换日」随日柱进位次日,与紫微同源;其余逐字同 monthNum/dayNum)
 	const lb = lunarByDayBoundary(nl);
 	const fc = bazi.fourColumns || {};
 	const gz = (p) => (p && (p.ganzi || p.ganZhi)) || '';
@@ -45,7 +45,7 @@ export function resolveLunarInput(bazi, opts) {
 		}
 	} else if (lb.leap) {
 		// 闰月归属：默认十五折半（十五含前作本月、后作下月）；
-		// 夜半折半（leapRule='midnight'）：十五当日且生时=子且钟面 00:xx(夜半后的早子;非全局「晚子时」所指 23 时)→作下月，余同十五折半。[Q-265/SO-20⑧ 术语校正]
+		// 夜半折半（leapRule='midnight'）：十五当日且生时=子且钟面 00:xx(夜半后的早子;非全局「晚子时」所指 23 时)→作下月，余同十五折半。
 		const day = lb.dayNum || 0;
 		const leapRule = opts && opts.leapRule === 'midnight' ? 'midnight' : 'half';
 		let toNext = day > 15;
@@ -336,12 +336,12 @@ export function buildYizhangjingModel(bazi, opts) {
 
 // 神煞落宫（合参层）：给定神煞名 + 人事十二宫，返回各宫断语（用现有 21×12 表）
 export function shenshaForPalace(shenshaName, palaceName) {
-	const row = SHENSHA.rows && SHENSHA.rows[shenshaName];
+	const row = SHENSHA.rows[shenshaName];
 	return row ? (row[palaceName] || '') : '';
 }
 
 export function listShensha() {
-	return Object.keys((SHENSHA && SHENSHA.rows) || {});
+	return Object.keys(SHENSHA.rows);
 }
 
 // AI 快照文本：计算盘 + 核心断语 + 文献层【诗文】【四柱文献】（后两段登记为默认关段：builder 恒产，导出层按设置控）
@@ -415,7 +415,7 @@ export function buildYizhangjingSnapshotText(model) {
 		L.push('【位置速断】');
 		model.posQuick.forEach((p) => { if (p.text) L.push(`${p.label}柱${p.star}：${p.text}`); });
 	}
-	// [Q-437/T-400] 页面「各柱逢星速断」「六道分布」「主星象义/星性」三卡此前不进快照(模型早已派生,只是 builder 没写)。
+	// 页面「各柱逢星速断」「六道分布」「主星象义/星性」三卡此前不进快照(模型早已派生,只是 builder 没写)。
 	if (model.pillarQuickHits && model.pillarQuickHits.length) {
 		L.push('');
 		L.push('【各柱逢星速断】');

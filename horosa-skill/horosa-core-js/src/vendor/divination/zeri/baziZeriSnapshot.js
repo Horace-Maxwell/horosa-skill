@@ -1,4 +1,4 @@
-// [Z2·八字择日] AI 快照附加段 builder。三段头🔒与 AI_EXPORT_PRESET_SECTIONS.bazizeri
+// AI 快照附加段 builder。三段头🔒与 AI_EXPORT_PRESET_SECTIONS.bazizeri
 // 追加段逐字成对(preflight 对偶锁);基底=八字全文快照(BaZi 同链),此处只拼择时态。
 import { baziLeafSummary } from './baziZeriConditionTypes.js';
 import { JOINER_CN } from './conditionTypes.js';
@@ -37,7 +37,7 @@ export function buildBaziZeriSnapshotExtra({ cfg, geo, natal, tree, results, tru
 	lines.push('[命中时段]');
 	const rows = Array.isArray(results) ? results : [];
 	if(rows.length){
-		// [Q-452 裁决 A / Q-453 裁决 2026-09-18] 清单上限全局可配(设置弹窗,缺省 60)+ 前 N 行附判读树(设定 vs 实际)——共用 appendZeriHitRows,
+		// 清单上限全局可配(设置弹窗,缺省 60)+ 前 N 行附判读树(设定 vs 实际)——共用 appendZeriHitRows,
 		// 行格式 / 尾句 / 截断句字节不变;explainAt 由宿主传入(同步引擎直算 / 异步预取缓存),缺则只列清单。
 		appendZeriHitRows(lines, rows, {
 			formatRow: (r, i)=>`${i + 1}. ${r.start} ~ ${r.end}(${r.durationMin}分)${r.pillarText ? ` ${r.pillarText}` : ''}`,

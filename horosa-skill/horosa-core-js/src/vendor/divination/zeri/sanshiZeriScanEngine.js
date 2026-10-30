@@ -1,4 +1,4 @@
-// [Z6·三式择日] 逐时辰扫描引擎(纯前端零 HTTP)——hourlyScanEngine 外壳第七实例。
+// 逐时辰扫描引擎(纯前端零 HTTP)——hourlyScanEngine 外壳第七实例。
 // 每样本起三盘(定案2):六壬(Z5 本地链)+奇门(Z0 外壳第一实例同函数)+太乙(Z3 本地链),
 // 判定单源全数继承三家(零第二实现);options=merged 平铺形经 splitSanshiOptions 单源拆分。
 // 某家起盘失败:样本不弃,该家条件全部判否+actual 注记(定案:勿静默吞);plateKey=三家
@@ -9,6 +9,7 @@ import { computeTaiyiScanPan, taiyiPlateKeyOf } from './taiyiZeriScanEngine.js';
 import { SANSHI_CONDITION_TYPES, makeSanshiZeriEvalCtx } from './sanshiZeriConditionTypes.js';
 import { splitSanshiOptions } from './sanshiOptionSplit.js';
 import { makeHourlyScanEngine } from './hourlyScanEngine.js';
+import { leadingYearOf } from '../../bazi/dateStrSafe.js';
 
 export const SANSHI_MAX_TOTAL_HITS = 1000;
 export const SANSHI_MAX_SPAN_DAYS_TOTAL = 1830;
@@ -40,7 +41,7 @@ export function computeSanshiScanPan(scanCtx, geoParams, options, dateStr, timeS
 	}
 	if(scanCtx && scanCtx.natal && out.liureng){ out.liureng._natal = scanCtx.natal; }
 	// 候选公历年:六壬家行年支按候选年现算(ctx.xingnian();独立六壬择日同修)
-	if(out.liureng){ out.liureng._candY = Number(`${dateStr}`.slice(0, 4)); }
+	if(out.liureng){ out.liureng._candY = leadingYearOf(dateStr); }
 	return out;
 }
 
@@ -75,7 +76,7 @@ export function evaluateSanshiTree(node, pan, ctx, explain){
 }
 
 // plateKey=三家拼接(计划裁定;失败家=FAIL 段保折叠正确)。
-// [十一轮] mask.lr/.qm=两家位级子掩码;[十四轮] mask.fams=家级掩码——树不涉之家整段
+// mask.lr/.qm=两家位级子掩码;mask.fams=家级掩码——树不涉之家整段
 // 以 'SKIP' 占位不读盘(用户实报:六壬单叶树被太乙 19:00 钟表换局劈成 1.8h+15分,
 // 徽章实证阴遁二十二→二十三局=真变盘但这棵树根本不判太乙)。未涉家不进判定,pass
 // 边界不受影响;mask 缺省 null=三段全拼(压测 kit/旧调用零回归)。
@@ -119,7 +120,7 @@ export function sanshiKeyMaskOf(tree){
 		},
 	};
 }
-// [十四轮] 徽章面 ⊆ 掩码后 key 面:未涉家不上徽章(合并行内该家值会变,钉行首=误导)。
+// 徽章面 ⊆ 掩码后 key 面:未涉家不上徽章(合并行内该家值会变,钉行首=误导)。
 function rowExtras(pan, mask){
 	const fams = (mask && mask.fams) || { lr: true, qm: true, ty: true };
 	const parts = [];

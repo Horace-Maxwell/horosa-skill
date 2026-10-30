@@ -37,7 +37,7 @@ export function receptionsOf(facts, key){
 
 // 两星互溶？(mutuals.normal/abnormal)
 export function mutualReceptionBetween(facts, a, b){
-	// [H1b 死链根修] 旧读法猜 it.mutual/it.pair/[beneficiary,supplier]——后端真键名是
+	// 旧读法猜 it.mutual/it.pair/[beneficiary,supplier]——后端真键名是
 	// {planetA:{id,rulerShip},planetB:{...}},pair 恒 [undefined,undefined] → 本函数恒 null,
 	// 互容对完成法/硬相位化解从未有过贡献。改消费 resultShapes.mutualPairsOf(带 strong/weak/mixed 分层)。
 	const bands = [];

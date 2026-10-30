@@ -162,3 +162,38 @@ def test_dynamic_relative_imports_get_the_js_suffix_too() -> None:
     kept = "export const a = () => import('./x.js'); export const b = () => import('lodash');\n"
     out, _ = rv.transform(kept)
     assert "import('./x.js')" in out and "import('lodash')" in out
+
+
+def test_bare_side_effect_imports_get_the_js_suffix_too() -> None:
+    """上游 v3.12.0 的 LiuRengMain 用 `import '../../utils/pageSettingsStore';` 只为执行模块顶层的设置登记。没有 `from`，
+    旧正则抓不到：不补 `.js`、也不重指 vendor 位置，整个六壬 / 三式合一 / 六壬择日链加载失败。"""
+    src = "import '../../utils/pageSettingsStore';\nimport { a } from './b';\nexport const c = a;\n"
+    out, notes = rv.transform(src)
+    assert "import '../../utils/pageSettingsStore.js';" in out and "from './b.js'" in out
+    assert any("bare side-effect" in n for n in notes)
+    kept = "import 'lodash';\nimport './x.js';\n"
+    out, _ = rv.transform(kept)
+    assert "import 'lodash';" in out and "import './x.js';" in out
+
+
+def test_truncation_keeps_tail_reexports_of_head_imports() -> None:
+    """LiuRengMain（上游 v3.12.0）把纯逻辑拆到 main/*.js，文件尾的 `export { … }` 里有只在头部 import 的名字；
+    截断时只留「头部定义的」会丢掉它们，三式合一按名从 LiuRengMain 导入时链接失败。"""
+    src = ("import { QIZHENG_PLANET_COLOR, buildQiZhengItems } from './main/ganzhiHelpers';\n"
+           "export function head(){ return 1; }\n"
+           "class LiuRengMain extends Component{ render(){ return QIZHENG_PLANET_COLOR; } }\n"
+           "export {\n\tbuildQiZhengItems,\n\tQIZHENG_PLANET_COLOR,\n\tonlyInTail,\n};\n")
+    out, _ = rv.apply_deviations(src, [{"kind": "truncate_before", "anchor": "^class LiuRengMain extends Component"}])
+    assert "export {\n\tbuildQiZhengItems,\n\tQIZHENG_PLANET_COLOR,\n};" in out and "onlyInTail" not in out
+
+
+def test_inline_requires_of_declared_packages_become_one_top_level_import() -> None:
+    """上游 v3.12.0 utils/civilMoment.js 在三个函数里各 `const moment = require('moment');`：ESM 下 require 未定义，
+    Balbillus / 三分主星 / 月相推运一跑就炸。声明了的依赖提成一条顶层默认导入；没声明的包不动（留给人工）。"""
+    src = ("import { a } from './a.js';\n"
+           "export function f(){\n\tconst moment = require('moment');\n\treturn moment();\n}\n"
+           "export function g(){\n\tconst moment = require('moment');\n\tconst x = require('left-pad');\n\treturn x(moment());\n}\n")
+    out, notes = rv._rewrite_package_requires(src, {"moment"})
+    assert out.count("import moment from 'moment';") == 1 and "require('moment')" not in out
+    assert "const x = require('left-pad');" in out  # 未声明的包留着
+    assert any("package require→import moment" in n for n in notes)

@@ -4,8 +4,8 @@
 // 逐条给「原意一句话 + 本盘实测值」;不可判定的条目如实标 unavailable,不臆造。
 import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
-import { viaCombustaRange, hourAgreementTest } from '../engine/radicality.js';
-import { resolveMoonVoc } from '../engine/moon.js';   // [Q-146] 月空单源(六口径)
+import { viaCombustaRange, hourAgreementTest, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
+import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(六口径)
 import { applyingAspects, aspectBetween } from '../engine/aspectsEngine.js';
 import { isBesieged } from '../engine/conditions.js';
 import { norm360, angularDist } from '../engine/utils.js';
@@ -13,12 +13,8 @@ import { norm360, angularDist } from '../engine/utils.js';
 const cn = (k) => (PLANETS[k] || {}).cn || k;
 const MAL = ['mars', 'saturn'];
 
-function lord1Of(facts){
-	const s = facts.meta.ascSign;
-	return s && SIGNS[s] ? SIGNS[s].domicile : null;
-}
 function vocOf(facts, eff){
-	// [Q-146/T-53] classic 档原直读后端 isVOC(那面旗按【全局】空亡口径算) → 左栏显式选 1647 时被全局顶掉;
+	// classic 档原直读后端 isVOC(那面旗按【全局】空亡口径算) → 左栏显式选 1647 时被全局顶掉;
 	// 改走单源 resolveMoonVoc,六口径同源。
 	return !!resolveMoonVoc(facts, eff ? { vocMode: eff.vocMode, vocIncludeOuter: !!eff.vocIncludeOuter } : {}).voc;
 }

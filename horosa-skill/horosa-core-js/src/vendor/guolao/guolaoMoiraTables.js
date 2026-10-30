@@ -8,7 +8,6 @@ export const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申
 
 // 难/仇(财)/恩/用 查表(prop 難仇恩用X;繁体星名已简化,金水=金+水孛 等复合保持原样)
 export const LIFE_HELPER_LABELS = ['难', '仇', '恩', '用'];
-export const LIFE_HELPER_ALT_LABELS = ['难', '财', '恩', '用'];
 export const LIFE_HELPER_TABLE = {
 	日: ['木炁', '土计', '金水', '火罗'],
 	月: ['土计', '火罗', '金水', '木炁'],

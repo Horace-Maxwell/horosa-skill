@@ -138,6 +138,8 @@ require_path "${CORE_JS_ROOT}/bin/cli.mjs"
 echo "installing horosa-core-js production deps (lunar-javascript)…"
 ( cd "${CORE_JS_ROOT}" && npm install --omit=dev --no-audit --no-fund --loglevel=error )
 require_path "${CORE_JS_ROOT}/node_modules/lunar-javascript/package.json"
+# 上游 v3.13.0：月相推运精确算法（vendored astroextra/lunationPhase.js）依赖 astronomy-engine。
+require_path "${CORE_JS_ROOT}/node_modules/astronomy-engine/package.json"
 
 rm -rf "${BUILD_ROOT}"
 mkdir -p "${STAGE_ROOT}/Horosa-Web/astrostudyui/scripts"

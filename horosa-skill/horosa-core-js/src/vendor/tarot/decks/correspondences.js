@@ -2,7 +2,7 @@
 // 这些是公有领域的体系事实(非受版权保护),据古典对应体系(Golden Dawn Book T 1888、传统占星界系)落数据。
 // 单一真值源:大牌/小牌/宫廷的对应叠层与各流派命名皆出自此,供 cardSchema.display_name / astro_line 消费。
 
-import { isTrumpArcana } from '../engine/arcana.js'; // [QA-9] 王牌判据单一真值源
+import { isTrumpArcana } from '../engine/arcana.js'; // 王牌判据单一真值源
 export const SUITS = ['wands', 'cups', 'swords', 'pentacles'];
 export const SUIT_ELEMENT = { wands: 'fire', cups: 'water', swords: 'air', pentacles: 'earth' };
 export const ELEMENT_CN = { fire: '火', water: '水', air: '风', earth: '土' };
@@ -115,13 +115,6 @@ export const COURT_CN = {
 	tdm: { page: '侍从', knight: '骑士', queen: '王后', king: '国王' },
 };
 
-// 大牌占星 → 元素(供尊位):元素型直接,星座型经 SIGN_ELEMENT,行星型无元素
-export function majorElement(corr){
-	if(corr.elem){ return corr.elem; }
-	if(corr.astro && SIGN_ELEMENT[corr.astro]){ return SIGN_ELEMENT[corr.astro]; }
-	return null;
-}
-
 // —— 对应叠层补全（卡巴拉质点 / 路径连质点 / Ace 象限 / 花色↔极性季节扑克）——
 // 数据源:古典对应体系(生命之树 10 质点、22 路径、天界象限、四花色社会/元素属性),公有领域体系事实。
 
@@ -178,7 +171,7 @@ export const DECAN_DATE = {
 	wands: { 2: '03-21~03-30', 3: '03-31~04-10', 4: '04-11~04-20', 5: '07-22~08-01', 6: '08-02~08-11', 7: '08-12~08-22', 8: '11-23~12-02', 9: '12-03~12-12', 10: '12-13~12-21' },
 	cups: { 2: '06-21~07-01', 3: '07-02~07-11', 4: '07-12~07-21', 5: '10-23~11-01', 6: '11-02~11-12', 7: '11-13~11-22', 8: '02-19~02-29', 9: '03-01~03-10', 10: '03-11~03-20' },
 	swords: { 2: '09-23~10-02', 3: '10-03~10-12', 4: '10-13~10-22', 5: '01-20~01-29', 6: '01-30~02-08', 7: '02-09~02-18', 8: '05-21~05-31', 9: '06-01~06-10', 10: '06-11~06-20' },
-	// [TP-DATA 真bug修] 钱币三组日期段原互相错位(2-4 摩羯旬误挂金牛日期/5-7 误挂处女/8-10 误挂摩羯),
+	// 钱币三组日期段原互相错位(2-4 摩羯旬误挂金牛日期/5-7 误挂处女/8-10 误挂摩羯),
 	// 与 DECAN 旬星表(2-4=Capricorn·5-6-7=Taurus·8-9-10=Virgo)自相矛盾;tarotDataFoundation 派生锚咬出,按旬星归位。
 	pentacles: { 2: '12-22~12-30', 3: '12-31~01-09', 4: '01-10~01-19', 5: '04-21~04-30', 6: '05-01~05-10', 7: '05-11~05-20', 8: '08-23~09-01', 9: '09-02~09-11', 10: '09-12~09-22' },
 };

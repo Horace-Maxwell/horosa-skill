@@ -63,12 +63,6 @@ export function yuanJiangOfDay(year, month, day) {
 	return { yuan, jiang };
 }
 
-// 宿名第二字(七曜)
-export function elementOf(mansionName) {
-	const name = typeof mansionName === 'object' ? mansionName.name : mansionName;
-	return name && name.length >= 2 ? name[1] : null;
-}
-
 // —— 年禽 ✅:(year+15) mod 28,0→28 ——
 // 此式本身即「三元甲子承袭」:1864上元甲子=氐、1924中元甲子=箕、1984下元甲子=虚,三锚全中;
 // 2002=角木蛟、2008=箕水豹(主流)。坊间另称 B 系「值日宿承袭·2002=箕」经核系单源内部矛盾,不采纳(详 yanqinSchools 注)。
@@ -187,10 +181,6 @@ export function qinKeByWuxing(a, b) {
 	if (sheng[b] === a) { return 'theySheng'; }
 	return 'peace';
 }
-// 吃宿名第二字(七曜)的便捷版(默认七政五行)
-export function qinKeJudge(meYao, theyYao) {
-	return qinKeByWuxing(YAO_TO_WUXING[meYao], YAO_TO_WUXING[theyYao]);
-}
 
 // —— 择日叠加:黄黑道十二值神 ✅ 古籍 ——
 // 青龙起位随月支(寅月龙在子),十二神顺数日支。monthZhiIdx/dayZhiIdx = 地支序(子0…亥11)。
@@ -204,15 +194,6 @@ export function jianChu(monthZhiIdx, dayZhiIdx) {
 	const idx = mod(dayZhiIdx - monthZhiIdx, 12);
 	const shen = JIANCHU_12[idx];
 	return { shen, good: JIANCHU_GOOD.has(shen), idx };
-}
-// 便捷:给公历日期(日支内算)+ 农历月支序,出黄黑道/建除。monthZhiIdx 须由调用方(农历)提供。
-export function huangHeiDaoOfDay(year, month, day, monthZhiIdx) {
-	const dayZhiIdx = ganzhiIdxOfDay(year, month, day) % 12;
-	return huangHeiDao(monthZhiIdx, dayZhiIdx);
-}
-export function jianChuOfDay(year, month, day, monthZhiIdx) {
-	const dayZhiIdx = ganzhiIdxOfDay(year, month, day) % 12;
-	return jianChu(monthZhiIdx, dayZhiIdx);
 }
 
 // —— 定局表生成(查表化身,零新算法;由已验证起禽式循环生成)✅ ——
@@ -269,7 +250,7 @@ export function castQinChart(year, month, day, hourBranch, opts) {
 		? mansionByIdx(hourZiStartIdx(year, month, day, useXun)) : null;
 	return {
 		ganzhi, yuan, jiang, ziStart,
-		// [Q-359/T-340] 星期改由同文件 JDN 求:(JDN+1) mod 7 → 0=周日;此前 Date.UTC 对 1582-10-15 前(儒略民用日期)按公历推、
+		// 星期改由同文件 JDN 求:(JDN+1) mod 7 → 0=周日;此前 Date.UTC 对 1582-10-15 前(儒略民用日期)按公历推、
 		// 公元 0–99 年被当 1900–1999。1582-10-15 后两式恒等(现代日期字节零变)。
 		weekday: WEEKDAY_TO_YAO[ mod(dayNumber(year, month, day) + 1, 7) ],
 		yearQin: yearQin(year),

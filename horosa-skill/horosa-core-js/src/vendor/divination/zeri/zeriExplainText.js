@@ -1,8 +1,9 @@
-// [Q-452/Q-453 裁决 2026-09-18] 择日快照「命中清单」共用尾巴:上限可配 + 前 N 行附判读树。
+// 择日快照「命中清单」共用尾巴:上限可配 + 前 N 行附判读树。
 // 判读树 = 工作台「详情▼」同一棵编译形 explain 树(group{op,pass,children} / leaf{type,actual,pass}),
 // 「设定」文本按 UI 树叶 DFS 序配对(compile 不增删叶,先序一致——与各工作台 renderExplainNode 同律)。
 // 九宿主 builder + 天星 builder 都走 appendZeriHitRows:行格式 / 尾句 / 截断句各自保留(字节不变),只把
 // 硬编码 60 换成可配上限,并在前 N 行下缩进附判读行。
+import { wallTextToMs } from './hourlyScanEngine.js';
 import { readGlobalZeriSnapshotMaxRows, readGlobalZeriSnapshotExplainRows, normalizeZeriSnapshotMaxRows, normalizeZeriSnapshotExplainRows } from '../../utils/zeriSnapshotPrefs.js';
 
 export const ZERI_GATE_CN = { all: '且(全部满足)', any: '或(任一满足)', xor: '异或(奇数满足)', not: '非(取反)' };
@@ -55,9 +56,8 @@ export function buildZeriRowExplainLines(explainResult, uiTree, leafSummary, ind
 export function zeriRowDurationMin(row){
 	if(row && Number.isFinite(Number(row.durationMin)) && `${row.durationMin}` !== ''){ return Math.round(Number(row.durationMin)); }
 	const parse = (s)=>{
-		const m = /^(-?\d{1,4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(`${s || ''}`.trim());
-		if(!m){ return NaN; }
-		return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+		const m = /^(-?\d{1,5}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(`${s || ''}`.trim());
+		return m ? wallTextToMs(`${m[1]} ${m[2]}`) : NaN;   // 墙钟单一来源(0-99 年不走 Date.UTC)
 	};
 	const a = parse(row && row.start);
 	const b = parse(row && row.end);

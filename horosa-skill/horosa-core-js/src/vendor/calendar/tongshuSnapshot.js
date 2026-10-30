@@ -1,5 +1,7 @@
 // 通书择日 AI 快照 builder（纯函数）。按流派分派；随各法实现逐步补全。
 import { TONGSHU_SCHOOL_MAP } from './tongshuSchools.js';
+import { parseDateParts, civilJdnOfDateStr } from '../bazi/dateStrSafe.js';
+import { civilMonthDays, civilJdnOfYmd } from '../utils/civilCalendar.js';
 import { buildHuangliDay } from './huangliDay.js';
 import { yongshiVerdict } from './tongshuData.js';
 import { donggongDay } from '../tongshu/donggong.js';
@@ -14,9 +16,10 @@ export function registerTongshuSection(school, fn) {
 	if (school in SECTION_BUILDERS) { SECTION_BUILDERS[school] = fn; }
 }
 
+// 日期串经单源拆(年带符号、1–5 位;公元前不会拆成 NaN)
 function parseYmd(ymd) {
-	const [y, m, d] = `${ymd}`.split('-').map((n)=> parseInt(n, 10));
-	return { y, m, d };
+	const p = parseDateParts(ymd);
+	return p ? { y: p.year, m: p.month, d: p.day } : { y: NaN, m: NaN, d: NaN };
 }
 
 function donggongSection(settings, ymd) {
@@ -40,9 +43,9 @@ function donggongSection(settings, ymd) {
 	return lines;
 }
 
-// [审计修] 第三参 ui(可选):页面把当前选中时辰传入({hour});挂载/无头缺省 → 玄空档自动优选
+// 第三参 ui(可选):页面把当前选中时辰传入({hour});挂载/无头缺省 → 玄空档自动优选
 // (与页面无选中时的默认口径一致)。此前玄空段写死午时,与页面所选时辰口径分叉。
-// [Q-459/T-422] 本月逐日表(候选段):只有确有月表的两派产段(董公=建除+金神七煞/三吉星+用事宜忌;
+// 本月逐日表(候选段):只有确有月表的两派产段(董公=建除+金神七煞/三吉星+用事宜忌;
 // 天元乌兔=逐日值星 + 太阳/太阴日),其余派返回空数组 → 不产段。与页面中栏同源同函数。
 function monthTableSection(settings, ymd) {
 	const { y, m, d } = parseYmd(ymd);
@@ -50,9 +53,9 @@ function monthTableSection(settings, ymd) {
 	const out = [];
 	try{
 		if (settings.school === 'donggong') {
-			const days = new Date(y, m, 0).getDate();
+			// 本月真实存在的日号(民用历单源:1500-02 有 29 日,1582-10 没有 5–14 日;与页面中栏同源)
 			const rows = [];
-			for (let d = 1; d <= days; d++) {
+			for (const d of civilMonthDays(y, m)) {
 				const r = donggongDay({ y, m, d });
 				const yv = settings.event ? yongshiVerdict(buildHuangliDay(y, m, d), settings.event) : null;
 				const tag = yv ? (yv.level === 'yi' ? '宜' : (yv.level === 'ji' ? '忌' : (yv.level === 'conflict' ? '冲' : '—'))) : '';
@@ -87,7 +90,7 @@ export function buildTongshuSnapshotText(settings, ymd, ui) {
 	const lines = [];
 	lines.push('[通书择日]');
 	lines.push(`流派：${school.label || settings.school}`);
-	// [Q-271/ZC-28] 只有声明 needs.event 的流派(董公)左栏才有「用事」;其余四派此前仍写出厂缺省「嫁娶」进 AI 真值。
+	// 只有声明 needs.event 的流派(董公)左栏才有「用事」;其余四派此前仍写出厂缺省「嫁娶」进 AI 真值。
 	if (school.needs && school.needs.event) { lines.push(`用事：${settings.event || '—'}`); }
 	lines.push(`用事日期：${ymd}`);
 
@@ -99,7 +102,7 @@ export function buildTongshuSnapshotText(settings, ymd, ui) {
 		lines.push(...(fn ? fn(settings, ymd, ui || {}) : ['（该流派待实现）']));
 	}
 
-	// [Q-459/T-422] 各流派「本月逐日表」候选段:董公中栏有「本月逐日值日」(建除 + 金神七煞/三吉星 +
+	// 各流派「本月逐日表」候选段:董公中栏有「本月逐日值日」(建除 + 金神七煞/三吉星 +
 	// 所选用事宜忌)、天元乌兔有「本月逐日值星」,快照此前只写所选那一日 —— AI 看不到同月其它日的优劣,
 	// 也就无法据快照回答「这个月还有哪天更合适」。按裁决作**默认关候选段**(段名已登记 preset 与 DEFAULT_OFF)。
 	const monthLines = monthTableSection(settings, ymd);
@@ -121,7 +124,7 @@ registerTongshuSection('qimen', (settings, ymd)=>{
 	const r = qimenDieShuDay({ y, m, d });
 	const lines = [`日干支：${r.dayGZ}（裴晋公叠数法·出行择时）`];
 	lines.push(`出行吉时：${r.bestHours.join('、') || '（本日无吉时，宜静守）'}`);
-	// [审计修] 补「解」句(row.jie,右栏渲染有快照无)。
+	// 补「解」句(row.jie,右栏渲染有快照无)。
 	r.rows.forEach((row)=>{ lines.push(`${row.hourZhi}时(${row.range})：叠数${row.sum}·${row.jx}${row.shi ? '　' + row.shi : ''}${row.jie ? '　解：' + row.jie : ''}`); });
 	return lines;
 });
@@ -139,15 +142,14 @@ registerTongshuSection('sanyuanliexiu', (settings, ymd)=>{
 		});
 	} else {
 		lines.push('本日非天帝加临（古法仅天帝有节气定位：芒种+4日 / 大雪+3日；余十五曜精确加临须七政星历，本地不臆造）。');
-		// [审计修] 补最近加临与全年加临清单(中栏渲染有快照无;与页面同引擎 sanyuanYearPoints 重推)。
+		// 补最近加临与全年加临清单(中栏渲染有快照无;与页面同引擎 sanyuanYearPoints 重推)。
 		try {
 			const points = sanyuanYearPoints(y);
 			const allPts = [...sanyuanYearPoints(y - 1), ...points, ...sanyuanYearPoints(y + 1)];
-			const base = new Date(y, m - 1, d).getTime();
+			const base = civilJdnOfYmd(y, m, d);   // 民用历日序数(跨改历不多算 10 天)
 			let nearest = null;
 			allPts.forEach((pt)=>{
-				const seg = `${pt.ymd}`.split('-').map((n)=> parseInt(n, 10));
-				const diff = Math.round((new Date(seg[0], seg[1] - 1, seg[2]).getTime() - base) / 86400000);
+				const diff = civilJdnOfDateStr(pt.ymd) - base;
 				if (!nearest || Math.abs(diff) < Math.abs(nearest.diff)) { nearest = { ...pt, diff }; }
 			});
 			if (nearest) {
@@ -172,7 +174,7 @@ registerTongshuSection('wutu', (settings, ymd)=>{
 		lines.push(`日干支：${r.dayGZ}（农历${r.dayInMonth}日）`);
 		lines.push(`乌兔值星：${r.star}（${r.jx === 'good' ? '吉' : '凶'}）${r.isSun ? '·太阳值日上吉' : (r.isMoon ? '·太阴值日次吉' : '')}`);
 	}
-	// [审计修] 补月朔干支(中栏抬头渲染有快照无;逐日值星自朔日起排的锚点)。
+	// 补月朔干支(中栏抬头渲染有快照无;逐日值星自朔日起排的锚点)。
 	if (M.shuoGZ) { lines.push(`月朔：${M.shuoGZ} 日起排`); }
 	lines.push(`本月太阳日：${M.sunDays.map((x)=> x.dayGZ).join('、') || '—'}`);
 	lines.push(`本月太阴日：${M.moonDays.map((x)=> x.dayGZ).join('、') || '—'}`);
@@ -186,7 +188,7 @@ registerTongshuSection('sanyuan', (settings, ymd, ui)=>{
 	lines.push(`日课四柱：年${D.year.gz}(${D.year.gua}·${D.year.wxNum}·${D.year.yun}运) 月${D.month.gz}(${D.month.gua}) 日${D.day.gz}(${D.day.gua}·${D.day.wxNum}·${D.day.yun}运)`);
 	if (D.ming) { lines.push(`主事仙命：${D.ming.gz}（${D.ming.gua}·${D.ming.wxNum}）`); }
 	lines.push(`宜用时辰（上吉+）：${D.bestHours.join('、') || '（本日无上吉时）'}`);
-	// [审计修] 此前写死午时 → 用户在页面选了别的时辰,AI 读到的却是午时日课(真值口径分叉)。
+	// 此前写死午时 → 用户在页面选了别的时辰,AI 读到的却是午时日课(真值口径分叉)。
 	// 现与页面同口径:所选时辰优先,未选自动优选(首个吉时,无则首行);另补格局注与日对仙命五机。
 	const rows = Array.isArray(D.rows) ? D.rows : [];
 	const autoRow = rows.find((x)=> x && x.level && x.level.jx === 'good') || rows[0];

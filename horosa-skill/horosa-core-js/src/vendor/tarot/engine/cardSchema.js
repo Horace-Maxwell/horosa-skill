@@ -10,17 +10,17 @@ import {
 	MODERN_PLANET, MODERN_PLANET_CN,
 } from '../decks/correspondences.js';
 import { reversedText } from './reversalModes.js';
-import { isTrumpArcana } from './arcana.js'; // [QA-9] 王牌判据单一真值源(零依赖叶子)
+import { isTrumpArcana } from './arcana.js'; // 王牌判据单一真值源(零依赖叶子)
 import { CORE78 } from '../decks/core78.js'; // 回退前课链查前一号牌(core78 不反向依赖本模块,无环)
 import { degreesMeaningOf } from '../decks/marseilleMeanings.js'; // 第三牌义轨「数字度」(马赛口径)
 import { courtEieOf, courtZodiacOf } from '../decks/courtSystems.js'; // TP7 宫廷元素/星座两体系
 
-// [QA-5] 「王牌」单一判据。牌组把大牌另名(minchiate_trump / visconti_trump)以标其体系,
+// 「王牌」单一判据。牌组把大牌另名(minchiate_trump / visconti_trump)以标其体系,
 // 但显示层此前一律写死 arcana === 'major' → 这两副的王牌在显示层全线漏判,落进数字牌分支,
 // 于是出「undefined of undefined」这样的脏名(快照/导出/挂载同源受害)。判读层本已有此判据(verdict),
 // 显示层却是另一套字面量口径 —— 两套口径就是病根,此处收敛为单源,verdict 改从此处取。
 export { isTrumpArcana };
-// [QA-5] 是否为「塔罗结构」的牌(王牌/四花色小牌/空白牌)。雷诺曼、吉普赛、扑克牌等牌组
+// 是否为「塔罗结构」的牌(王牌/四花色小牌/空白牌)。雷诺曼、吉普赛、扑克牌等牌组
 // 自成体系(花色不在四花色表内、序数超出一至十),套塔罗命名与旬星对应只会产出 null 串,
 // 故显示层遇之一律回落到牌自带的名与「—」。判据取数据本身(花色能否查到)而非枚举牌组名,新牌组自动适用。
 export function isTarotStructured(card){
@@ -29,13 +29,13 @@ export function isTarotStructured(card){
 	return !!(SUIT_NAME.rws && SUIT_NAME.rws[card.suit]);
 }
 
-// 对应叠层后缀（G3）：仅在 UI「显示对应」开启时追加，故经 opts.showCorrespondences 门控——
-// reportText 不传该 opts → [逐牌详解] 占象列逐字节不变（reportTextTable fixture 稳定）。
+// 对应叠层后缀（G3:路径连 X–Y / 质点 / 象限）:只在「显示进阶对应」开着、且是塔罗读法的牌组时追加。
+// 门控与「占象」整格的拼法收在下面 correspondenceOverlayOn / correspondenceCell —— 页面卡片、牌义表与 AI 快照同一函数。
 export function correspondenceSuffix(card, variant){
 	if(!card){ return ''; }
 	if(!isTarotStructured(card)){ return ''; }
 	if(isTrumpArcana(card.arcana)){
-		// [QA-8] 大陆派(变体 C)不用 GD 路径制 —— astroLine 在 C 档已明写「路径不显」,
+		// 大陆派(变体 C)不用 GD 路径制 —— astroLine 在 C 档已明写「路径不显」,
 		// 此处却仍按 GD 路径表附「路径连 X–Y」,同一张牌两行自相矛盾(既存于 tdm/wirth/egyptian,
 		// 本轮王牌判据修复后 visconti 亦入此径)。两处收敛为同一口径:C 档不附路径。
 		if(variant === 'C'){ return ''; }
@@ -60,6 +60,34 @@ export function correspondenceSuffix(card, variant){
 	return '';
 }
 
+// 进阶对应叠层开不开:塔罗读法的牌组 + 「显示进阶对应」开着(页面左栏同一个开关;没单独设过时由 reading 按牌组缺省解析)。
+export function correspondenceOverlayOn(caps, showCorrespondences){
+	return !!(caps && caps.readingMethod === 'tarot' && showCorrespondences);
+}
+// 对应视角:占象要用的四项(字母 / 路径变体、现代行星注、宫廷元素体系、宫廷星座体系)。
+// 这四个控件只在进阶对应开着时出现(变体与现代行星注另要牌组有变体能力,与页面左栏同一组门控);
+// 关着时一律按缺省口径(变体 = 牌组缺省,其余三项出厂值)—— 页面上看不见的设置不改看得见的结果。
+// 页面牌义表、卡片、单牌详情、生命树连线与 AI 快照同用这一个函数。
+export function correspondenceView(deck, s, caps){
+	const v = s || {};
+	const on = correspondenceOverlayOn(caps, v.showCorrespondences);
+	const withVariant = on && !!(caps && caps.variant);
+	return {
+		variant: withVariant ? v.variant : ((deck && deck.variant) || 'A'),
+		astroModern: withVariant ? !!v.astroModern : false,
+		courtElementSystem: on ? v.courtElementSystem : 'gd',
+		courtZodiacSystem: on ? v.courtZodiacSystem : 'gd_span',
+	};
+}
+// 「占象」一格:astroLine(按对应视角取四项)+ 进阶对应开着时的叠层后缀。
+// s = 页面 state 或快照的 reading.settings(两边键名相同:variant / astroModern / courtElementSystem / courtZodiacSystem / showCorrespondences)。
+export function correspondenceCell(card, deck, s, caps){
+	const v = s || {};
+	const cv = correspondenceView(deck, v, caps);
+	const line = astroLine(card, deck, cv.variant, cv.astroModern, { elementSystem: cv.courtElementSystem, zodiacSystem: cv.courtZodiacSystem });
+	return correspondenceOverlayOn(caps, v.showCorrespondences) ? `${line}${correspondenceSuffix(card, cv.variant)}` : line;
+}
+
 // deck 的 name_key(各派命名取哪一套)。未注册的 deck 回落 rws。
 export function deckNameKey(deck){
 	return (deck && deck.nameKey) || 'rws';
@@ -72,7 +100,7 @@ export function cardNumber(card, deck){
 	if(!ov){ return card.number; }
 	const deckId = (deck && deck.id) || 'rws';
 	if(ov[deckId] !== undefined){ return ov[deckId]; }
-	// [X1] 换号随【命名体系】走:wirth/egyptian/visconti 等 nameKey='tdm' 的牌组按大陆序
+	// 换号随【命名体系】走:wirth/egyptian/visconti 等 nameKey='tdm' 的牌组按大陆序
 	// (正义8·力量11),此前按 deck.id 查表(表内无其 id)恒回落 RWS 序,与其自declared命名矛盾。
 	const nk = deckNameKey(deck);
 	if(ov[nk] !== undefined){ return ov[nk]; }
@@ -83,7 +111,7 @@ export function cardNumber(card, deck){
 export function displayName(card, deck){
 	const nk = deckNameKey(deck);
 	if(card.arcana === 'blank'){ return `${card.name_en} ${card.name_cn}`; }
-	// [QA-5] 非塔罗结构(雷诺曼/吉普赛/扑克牌等)用自带名,不套四花色命名
+	// 非塔罗结构(雷诺曼/吉普赛/扑克牌等)用自带名,不套四花色命名
 	if(!isTarotStructured(card)){ return `${card.name_en || ''} ${card.name_cn || ''}`.trim(); }
 	if(isTrumpArcana(card.arcana)){
 		const name = (card.names && (card.names[nk] || card.names.rws)) || card.name_en;
@@ -137,7 +165,7 @@ export function displayNameEn(card, deck){
 export function astroLine(card, deck, variantOverride, modern, courtView){
 	const variant = variantOverride || (deck && deck.variant) || 'A';
 	if(card.arcana === 'blank'){ return '—(空白牌无对应)'; }
-	// [QA-5] 非塔罗结构的牌不套占星对应(此前会拼出「"null" · null(null) in null(null)」进快照/导出/挂载);
+	// 非塔罗结构的牌不套占星对应(此前会拼出「"null" · null(null) in null(null)」进快照/导出/挂载);
 	// 塔罗结构但该牌未载对应数据(如米兰凯特的美德/元素王牌 astro=null)同样以「—」如实呈现,不造假对应。
 	if(!isTarotStructured(card)){ return '—'; }
 	if(isTrumpArcana(card.arcana)){

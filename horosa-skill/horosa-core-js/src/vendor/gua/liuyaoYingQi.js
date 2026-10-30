@@ -2,31 +2,20 @@
 // 另附出空填空冲空的短中长期口径与占类专用规则(期日章)。只出「候选支+依据」,不作绝对日期断言。
 import { DIZHI, TIANGAN, LIUCHONG, LIUHE, CHANGSHENG_START, CHANGSHENG_START_ALT } from './LiuYaoConst.js';
 
-const zi = (i) => DIZHI[((i % 12) + 12) % 12];
-const idx = (z) => DIZHI.indexOf(z);
 // 五行墓支(水土同宫:金丑木未火戌水土辰;火土同宫:土戌)
 export function muZhiOf(wx, tuMode){
 	if(wx === '金'){ return '丑'; } if(wx === '木'){ return '未'; } if(wx === '火'){ return '戌'; }
 	if(wx === '水'){ return '辰'; }
-	// [Q-205/T-148] 不标长生档下不判土墓(与 changShengZhiOf 同律);金木水火墓库不依长生说,照旧。
+	// 不标长生档下不判土墓(与 changShengZhiOf 同律);金木水火墓库不依长生说,照旧。
 	if(wx === '土'){ return tuMode === 'off' ? '' : (tuMode === 'fire' ? '戌' : '辰'); }
 	return '';
 }
-// [Q-205/T-148] 「不标长生」(tuMode='off')档下不给长生支:此前 off 落到水土表,应期照出
+// 「不标长生」(tuMode='off')档下不给长生支:此前 off 落到水土表,应期照出
 // 「用神长生之月」、求财照给长生→帝旺链 —— 用户明明关了长生标注,判读里却还在用它。
 export function changShengZhiOf(wx, tuMode){
 	if(tuMode === 'off'){ return ''; }
 	const m = tuMode === 'fire' ? CHANGSHENG_START_ALT : CHANGSHENG_START;
 	return m[wx] || '';
-}
-
-// 未来 60 日内某支的命中日偏移(0=今日):由日支序推,UI 再换算日期
-export function futureZhiOffsets(targetZhi, dayZhi, span){
-	const t = idx(targetZhi), d = idx(dayZhi);
-	if(t < 0 || d < 0){ return []; }
-	const out = [];
-	for(let k = 0; k <= (span || 60); k++){ if((d + k) % 12 === t){ out.push(k); } }
-	return out;
 }
 
 // yong: { zhi, wuxing, moving, xunKong, voidKind, yuePo, ruMu, wangShuai, changsheng }
@@ -52,7 +41,7 @@ export function computeYingQi(yong, dong, ctx){
 		push('旬空:冲空(激活,应事急巧)', [LIUCHONG[yong.zhi]], '日/月/年', '出空填实冲空三法', '冲空不稳,所诱之事激烈突然');
 	}
 	if(yong.yuePo){
-		// [Q-205/T-153] 月破档:'inMonth'(默认)=当月为破、出月不破;'always'=不论出月长期标破。
+		// 月破档:'inMonth'(默认)=当月为破、出月不破;'always'=不论出月长期标破。
 		// 此前应期恒按「出月不破」写,与选了「不论出月」的用户所见相反(那档只改了装卦表标签)。
 		if(c.yuepoMode === 'always'){
 			push('月破(不论出月):逢填实或逢合方应,破象长期不解', [yong.zhi, LIUHE[yong.zhi]], '日/月', '通行应期法', '本档不以出月解破,须待填实/逢合');

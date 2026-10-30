@@ -120,7 +120,6 @@ export const PLANET_TEMPER = {
 export const DISEASE_BY_ELEMENT = {
 	fire: '胆汁质 / 发烧、急性热病', air: '多血质 / 痛风、血分之疾', earth: '忧郁质 / 痨病、慢性消耗', water: '粘液质 / 湿寒、咳嗽水饮',
 };
-export const DISEASE_PSYCH = { saturn: '世俗损失/忧郁', jupiter: '宗教烦恼', venus: '情伤', mars: '用脑过度/激动', mercury: '用脑过度' };
 
 // 死亡方式（§4.5，按 8 宫主/内星）
 export const DEATH_MODE = {
@@ -129,14 +128,6 @@ export const DEATH_MODE = {
 
 export function planetInSign(planetKey, signId){
 	return (PLANET_IN_SIGN[planetKey] || {})[signId] || null;
-}
-
-// 上升定位星选择逻辑（§4.1）——返回应描述的 {planetKey, signId, basis}
-export function pickDescriptor(facts, planetKey, aspectsToAsc){
-	const p = facts.planets[planetKey];
-	if(!p) return null;
-	// 简化实现：默认用「行星 in 其所落星座」；逆行/落陷时强调结合星座（已天然含星座）。
-	return { planetKey, signId: p.sign, basis: p.retro || p.dignityScore <= -4 ? 'planet+sign(弱势结合座)' : 'planet+sign' };
 }
 
 // 生成一段人物描述（行星 in 星座 + 性情）

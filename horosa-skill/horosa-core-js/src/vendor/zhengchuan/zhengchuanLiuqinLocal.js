@@ -24,16 +24,13 @@ export const LIUQIN_META = TABLES._meta || { gaps: [], ambiguous: [], correction
 
 const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-const SHENGXIAO = ['鼠', '牛', '虎', '兔', '龍', '蛇', '馬', '羊', '猴', '雞', '狗', '豬'];
-// 先天八卦数（本表用繁体卦名，与数据文件一致；仓内同名常量为简繁混排且未导出，不复用以免键错配）
-const XIANTIAN_GUA_NUM = { 乾: 1, 兌: 2, 離: 3, 震: 4, 巽: 5, 坎: 6, 艮: 7, 坤: 8 };
+const SHENGXIAO = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
 // 九宫序（洛书）：坎1 坤2 震3 巽4 中5 乾6 兌7 艮8 離9
 const GONG_OF_GUA = { 坎: 1, 坤: 2, 震: 3, 巽: 4, 中: 5, 乾: 6, 兌: 7, 艮: 8, 離: 9 };
 // 阳遁一局地盘：六仪三奇各居一宫（甲遁不上盘）
 const DIPAN = { 1: '戊', 2: '己', 3: '庚', 4: '辛', 5: '壬', 6: '癸', 7: '丁', 8: '丙', 9: '乙' };
 const GONG_OF_GAN = Object.keys(DIPAN).reduce((m, g) => { m[DIPAN[g]] = Number(g); return m; }, {});
 // 六甲旬首及其所遁之仪
-const XUN_SHOU = ['甲子', '甲戌', '甲申', '甲午', '甲辰', '甲寅'];
 const XUN_YI = { 甲子: '戊', 甲戌: '己', 甲申: '庚', 甲午: '辛', 甲辰: '壬', 甲寅: '癸' };
 // 三卦纯阳纳阳支、纯阴纳阴支 → 动爻落阴卦时其支无「甲X」可配（见 gaps）
 const YANG_ZHI = new Set(['子', '寅', '辰', '午', '申', '戌']);
@@ -279,6 +276,9 @@ export function calcXuanjiDongyao({ yearZhi, lunarMonth, lunarDay, hourZhi, isLe
 	const ai = ZHI.indexOf(askHourZhi);
 	const isDay = ai >= 3 && ai <= 8;
 	const table = isDay ? TABLES.tianSiXiang : TABLES.diSiXiang;
+	// 天象须属演算时辰那一套:是另一套的档(改了时辰没改天象、留空取本人时支时选了另一套)→ 取该套首项,
+	// 与页面「按时辰取首项」同(此前查不到即整段四象 / 动爻为空);两套都没有的值不臆造,照旧为空
+	if (!table[env] && (TABLES.tianSiXiang[env] || TABLES.diSiXiang[env])) env = isDay ? '晴' : '明';
 	const row = table[env];
 	const sixiang = row ? row[`${askHourZhi}時`] : null;
 	const dyTable = isDay ? TABLES.tianDongYao : TABLES.diDongYao;
@@ -294,11 +294,6 @@ export function calcXuanjiDongyao({ yearZhi, lunarMonth, lunarDay, hourZhi, isLe
 			{ label: '动爻', detail: sixiang ? `${isDay ? '天' : '地'}四象「${sixiang}」配宫位「${gong}」` : '四象不可得', value: dongYao ? `${dongYao} 爻动` : '—' },
 		],
 	};
-}
-
-/** 铁算心法各时辰之序列（演卦须秘咒定上卦，秘咒古籍未载 → 只供查阅） */
-export function xinFaSeq(hourZhi) {
-	return (TABLES.xinFaSeq || {})[hourZhi] || [];
 }
 
 export function calcLiuqin(input) {

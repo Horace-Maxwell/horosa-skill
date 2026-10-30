@@ -1,7 +1,7 @@
-// [Z0·择日八技法基建] 逐小时扫描通用外壳 —— 抽自 qimenScanEngine(奇门先例,42731 点 parity
+// 逐小时扫描通用外壳 —— 抽自 qimenScanEngine(奇门先例,42731 点 parity
 // +qimenZeriStress 46 例背书),供 八字/紫微/太乙/六壬/三式合一(以及奇门自身回改为第一实例)复用。
 //
-// 技法无关面(全在本文件):墙钟↔UTC 换算(0-99 年 setUTCFullYear 铁律)/逐小时采样+尾段补 t1
+// 技法无关面(全在本文件):墙钟↔UTC 换算(民用历轴,civilCalendar 单源)/逐小时采样+尾段补 t1
 // 终点样/「递归转变分解」到分钟/plateKey 行折叠/pick 两端内缩 1 分钟/CHUNK 让出主线程/
 // AbortSignal/maxHits·maxSpan 防呆/进度契约 {done,total,hits,partial}。
 // 技法注入面(makeHourlyScanEngine 五参+可选掩码):
@@ -17,7 +17,7 @@
 //     未知叶类型(已删类兜底)一律回退全位。判别网:类级判别测试+deps 完备闸(六壬先例)。
 //   evaluateTree(tree, pan, explain) → {pass}|判读树(内部自建各技法惰性 evalCtx)
 //   rowExtras(pan, keyMask?) → 行附加列对象(奇门 {juText}、六壬 {keTi}…;并入结果行顶层,勿用保留键)
-//     [十四轮合同] 徽章面 ⊆ 掩码后 key 面:徽章只可展示「行内恒定」的值——掩码掉的面
+//     徽章面 ⊆ 掩码后 key 面:徽章只可展示「行内恒定」的值——掩码掉的面
 //     (三式未涉家/八字未涉柱)在合并行内会变化,钉行首值=显示误导,必须随 keyMask 过滤。
 //     奇门/太乙达标论证:时家盘时辰内全要素恒定=行内零变(徽章任取);跨时辰=全盘真变
 //     不合并,无「行内变值」窗;黄历日粒度同理;py 三家按条件区间求交无盘 key 概念。
@@ -29,48 +29,81 @@
 // 🔴 不做「按四柱/时辰 memo 求值」:同四柱不保证同盘(至界分钟级翻局实抓),每样本直算。
 // 🔴 通书等日粒度技法不要硬套本壳(分钟 pick 语义不适用),用独立日粒度小引擎。
 
+import { civilWallMs, civilPartsFromWallMs, civilYmdExists } from '../../utils/civilCalendar.js';
+import { zoneOffsetMinutesOf } from '../../utils/zoneOffset.js';
+
 const MINUTE_MS = 60e3;
 
 function pad2(n){
 	return n < 10 ? `0${n}` : `${n}`;
 }
-// zone 兼容 fields.zone 的两种历史形态:数值小时(8/8.5/-3)与字符串('+08:00'/'8')。
+// zone 兼容 fields.zone 的历史形态:数值小时(8/8.5/-3)与字符串('+08:00' / '8' / '5.5')。
+// 解析走单源 utils/zoneOffset(与大运段界、民用历出生时刻同一口径);这里只补择日的缺省:认不出 → 东八区 480。
 export function zoneOffsetMinutes(zone){
-	if(typeof zone === 'number' && Number.isFinite(zone)){
-		return Math.round(zone * 60);
-	}
-	const text = `${zone === undefined || zone === null ? '' : zone}`.trim();
-	if(!text){
-		return 480;
-	}
-	const m = /^([+-]?)(\d{1,2})(?::?(\d{2}))?$/.exec(text);
-	if(!m){
-		return 480;
-	}
-	const sign = m[1] === '-' ? -1 : 1;
-	return sign * (Number(m[2]) * 60 + Number(m[3] || 0));
+	const z = typeof zone === 'number' ? zone : `${zone === undefined || zone === null ? '' : zone}`.trim();
+	const m = zoneOffsetMinutesOf(z);
+	return m === null ? 480 : m;
 }
-export function wallToMs(dateStr, timeStr, offsetMin){
-	const dp = `${dateStr || ''}`.split('-').map(Number);
-	const tp = `${timeStr || '00:00'}`.split(':').map(Number);
-	if(dp.length < 3 || dp.some((n)=>!Number.isFinite(n))){
+// ── 墙钟时间串单一来源(择日全族:本地逐小时引擎 / 黄历日引擎 / 远端分段编排 / 七政印度宿主 / 快照时长)──
+// ① 年份一律补足 4 位(公元 1–999 年此前拼成「500-07-19」一类,与项目日期串口径不一;带符号年原样保号)
+// ② 墙钟 ⇄ 毫秒一律经 civilCalendar 民用历轴(1582 以前儒略历;0–99 年不当 19xx)
+export function formatWallDate(y, mo, dd){
+	const yy = Number(y);
+	const ys = (yy < 0 ? '-' : '') + String(Math.abs(yy)).padStart(4, '0');
+	return `${ys}-${pad2(Number(mo))}-${pad2(Number(dd))}`;
+}
+const WALL_TEXT_RE = /^(-?\d+)-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/;
+// 'YYYY-MM-DD[ HH:mm[:ss]]'(年可带符号、可不足 4 位)按 UTC 当墙钟 → 毫秒;解析不了 / 这一天不存在 → NaN。
+// 不存在的日期(改历缺口 1582-10-05..14、2 月 30 日、公元 0 年)按公式代入会落到别的日子(缺口日 +10 天、
+// 2-30 → 3-02),所以一律 NaN,不静默挪日。
+export function wallTextToMs(text){
+	const m = WALL_TEXT_RE.exec(`${text === undefined || text === null ? '' : text}`.trim());
+	if(!m || !civilYmdExists(Number(m[1]), Number(m[2]), Number(m[3]))){
 		return NaN;
 	}
-	// setUTCFullYear 绕开 Date.UTC 对 0-99 年的 1900+ 历史映射(仓内铁律,见 baziLunarLocal)。
-	const d = new Date(0);
-	d.setUTCFullYear(dp[0], dp[1] - 1, dp[2]);
-	d.setUTCHours(tp[0] || 0, tp[1] || 0, tp[2] || 0, 0);
-	return d.getTime() - offsetMin * MINUTE_MS;
+	return wallYmdToMs(Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+}
+// 择日起止日期的存在性(全族入口单一判据:本地逐时 / 黄历日粒度 / 远端分段 / AI 工具):
+// 返回第一个不存在的日期的说明文案,全都存在 → ''。日期串可用 '/' 或 '-' 分隔,可带时刻尾巴。
+export function nonexistentWallDateMessage(...dateTexts){
+	for(let i = 0; i < dateTexts.length; i++){
+		const raw = `${dateTexts[i] === undefined || dateTexts[i] === null ? '' : dateTexts[i]}`.trim().replace(/\//g, '-');
+		const m = WALL_TEXT_RE.exec(raw);
+		if(m && !civilYmdExists(Number(m[1]), Number(m[2]), Number(m[3]))){
+			const y = Number(m[1]);
+			const mo = Number(m[2]);
+			const d = Number(m[3]);
+			const why = y === 0 ? '历史纪年没有公元 0 年' : ((y === 1582 && mo === 10 && d >= 5 && d <= 14) ? '1582-10-05 至 10-14 为改历缺口' : '当月没有这一天');
+			return `日期不存在:${formatWallDate(y, mo, d)}(${why})`;
+		}
+	}
+	return '';
+}
+// 年月日(时分秒)→ 墙钟毫秒(数值入参,热路径用)。民用历轴(civilCalendar 单源):1582-10-15 以前按儒略历
+// (世纪年 2 月 29 日是真日子,1582-10-04 的次日是 10-15),年份按历史纪年、0–99 年不当 19xx;
+// 1582-10-15 以后与 Date.UTC 逐位相同。逐时辰 / 逐日步进都在这条轴上走,改历缺口里的 10 天不会被当成真日期扫。
+export function wallYmdToMs(y, mo, dd, hh, mi, ss){
+	return civilWallMs(y, mo, dd, hh || 0, mi || 0, ss || 0);
+}
+// 墙钟毫秒 → 'YYYY-MM-DD HH:mm'
+export function msToWallText(ms){
+	const p = civilPartsFromWallMs(ms);
+	if(!p){ return ''; }
+	return `${formatWallDate(p.year, p.month, p.day)} ${pad2(p.hour)}:${pad2(p.minute)}`;
+}
+export function wallToMs(dateStr, timeStr, offsetMin){
+	const t = wallTextToMs(`${dateStr || ''} ${timeStr || '00:00'}`);
+	return Number.isFinite(t) ? t - offsetMin * MINUTE_MS : NaN;
 }
 export function msToWall(ms, offsetMin){
-	const d = new Date(ms + offsetMin * MINUTE_MS);
+	const p = civilPartsFromWallMs(ms + offsetMin * MINUTE_MS) || { year: NaN, month: NaN, day: NaN, hour: NaN, minute: NaN };
 	return {
-		y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, dd: d.getUTCDate(),
-		hh: d.getUTCHours(), mm: d.getUTCMinutes(),
+		y: p.year, mo: p.month, dd: p.day,
+		hh: p.hour, mm: p.minute,
 	};
 }
 export function wallDateStr(w){
-	return `${w.y}-${pad2(w.mo)}-${pad2(w.dd)}`;
+	return formatWallDate(w.y, w.mo, w.dd);
 }
 export function wallTimeStr(w){
 	return `${pad2(w.hh)}:${pad2(w.mm)}:00`;
@@ -102,7 +135,7 @@ export function makeHourlyScanEngine({
 	maxSpanDays = 1830,
 	stepMs = 3600e3,
 	chunkSamples = 96,
-	pickInsetMs = 3 * MINUTE_MS,	// [十三轮] 60s→180s:判定链与显示链的口径实现差兜底(EoT 简式 vs swiss 曾差 89s 穿透 60s 内缩=用户实抓两课不同盘;行≥1 时辰,3min 内缩无损「开始时刻」语义)
+	pickInsetMs = 3 * MINUTE_MS,	// 60s→180s:判定链与显示链的口径实现差兜底(EoT 简式 vs swiss 曾差 89s 穿透 60s 内缩=用户实抓两课不同盘;行≥1 时辰,3min 内缩无损「开始时刻」语义)
 }){
 	if(typeof computePanAt !== 'function' || typeof plateKeyOf !== 'function' || typeof evaluateTree !== 'function'){
 		throw new Error('makeHourlyScanEngine: computePanAt/plateKeyOf/evaluateTree 必填');
@@ -113,6 +146,10 @@ export function makeHourlyScanEngine({
 	// options: 技法盘面全参数;tree: 各技法 compile 产物;onProgress({done,total,hits,partial});
 	// signal: AbortSignal;limits.maxHits 仅供测试注入,生产恒默认。
 	async function scan({ cfg, geoParams, options, tree, onProgress, signal, limits }){
+		const missing = nonexistentWallDateMessage(cfg && cfg.startDate, cfg && cfg.endDate);
+		if(missing){
+			throw rangeError('invalid_date', missing);
+		}
 		const offsetMin = zoneOffsetMinutes(geoParams && geoParams.zone);
 		const t0 = wallToMs(cfg && cfg.startDate, (cfg && cfg.startTime) || '00:00', offsetMin);
 		const t1 = wallToMs(cfg && cfg.endDate, (cfg && cfg.endTime) || '23:59', offsetMin);
@@ -275,7 +312,7 @@ export function makeHourlyScanEngine({
 	// scanCtx 可由调用方传入(复用已建种子),缺省按该时刻年份现建。
 	function explainAt({ geoParams, options, tree, t, scanCtx }){
 		const text = `${t || ''}`.trim().replace('T', ' ');
-		const m = /^(\d{1,4})-(\d{2})-(\d{2})[ ](\d{2}):(\d{2})/.exec(text);
+		const m = /^(-?\d{1,5})-(\d{2})-(\d{2})[ ](\d{2}):(\d{2})/.exec(text);   // 年带符号 1–5 位(与日期串单源同口径)
 		if(!m){
 			return { t: text, tree: null, err: 'invalid_time' };
 		}

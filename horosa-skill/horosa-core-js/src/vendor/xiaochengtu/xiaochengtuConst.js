@@ -275,3 +275,6 @@ export const KLINE_YONG_GONG = {
 };
 export const KLINE_YONG_GONG_TEXT =
 	'比如我们提取数据预测的K线是光头光脚的阳线,他对应的用宫就是地盘的乾宫;如果我们提取数据预测的K线是有上下影线的阴线,他对应的用宫就是地盘的坎宫。';
+
+// 用宫下拉档(小成图页与 AI 挂载齿轮同一份):「1 坎宫 · 命病盗」
+export const YONG_GONG_OPTIONS = Object.keys(DI_PAN).map((g)=>({ value: Number(g), label: `${g} ${DI_PAN[g]}宫 · ${(GONG_INFO[g] || {}).zhu || ''}` }));

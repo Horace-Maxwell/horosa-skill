@@ -2,8 +2,7 @@
 // 飞伏生克与伏神可用、三层环境(太岁岁破/月建月破/日建日破)、承刚/穿害推导、真空口诀、灭没卦、
 // 余气旺衰、金锁八要素(德合刑冲克旺墓空)、新派量化打分、长生鬼沐浴鬼、怪爻。
 // 全部输出结构真值+古籍断义标签,吉凶综合交 AI。规则忠于《断易天机》《增删卜易》通行口径。
-import { DIZHI, ZHI_WUXING, ZHI_YINYANG, WUXING_SHENG, WUXING_KE, LIUCHONG, LIUHE, HAI, shengKe, isXing,
-	CHANGSHENG_START } from './LiuYaoConst.js';
+import { ZHI_WUXING, ZHI_YINYANG, WUXING_SHENG, WUXING_KE, LIUCHONG, LIUHE, HAI, shengKe, isXing } from './LiuYaoConst.js';
 import { changshengOf, wangShuaiByMonth } from './LiuYaoEngine.js';
 
 // 六亲生克链(父母生兄弟…;父母克子孙…)
@@ -31,7 +30,7 @@ export function sanCengEnv(ctx){
 // ── 日月生克:5.4「月建、日辰对爻的作用(最重要的外力)」逐爻明细 ──
 // 月日为卦外之天/君,单方面作用于爻:生扶/克制/冲(暗动·冲散·月破)/合/刑/值临/入墓。
 // 铁律:爻不反作用于月日(故「爻克月日」不记为对月日之克)。墓库:金墓丑·木墓未·水土墓辰·火墓戌。
-// [Q-205/T-148] 土墓随「土长生」档:水土同宫(默认)=辰,火土同宫=戌,不标长生=不判入墓。
+// 土墓随「土长生」档:水土同宫(默认)=辰,火土同宫=戌,不标长生=不判入墓。
 // 此前写死水土表 → 选「火土同宫」的用户,装卦表「入日墓/入月墓」与断诀/应期各按一套。
 const RIYUE_MU = { 金: '丑', 木: '未', 水: '辰', 土: '辰', 火: '戌' };
 const RIYUE_MU_FIRE = { ...RIYUE_MU, 土: '戌' };
@@ -277,19 +276,8 @@ export function mieMoOf(guaName, monthZhi){
 	return null;
 }
 
-// ── 生克力量比较(反神类):旺相克得休囚,休囚克不得旺相;动克得静,静克不得动 ──
-export function powerCanKe(attacker, defender){
-	if(!attacker || !defender){ return null; }
-	const aStrong = attacker.moving || attacker.wangShuai === '旺' || attacker.wangShuai === '相';
-	const dStrong = defender.wangShuai === '旺' || defender.wangShuai === '相';
-	if(!attacker.moving && !aStrong){ return { can: false, why: '静而休囚,克不得' }; }
-	if(!attacker.moving && dStrong){ return { can: false, why: '静爻克不得旺相爻' }; }
-	return { can: true, why: attacker.moving ? '动爻克得安静爻' : '旺相爻克得休囚爻' };
-}
-
 // ── 余气(四墓月):辰月木、未月火、戌月金、丑月水,本季余气之行加强(不改主状态,附标) ──
 const YUQI = { 辰: '木', 未: '火', 戌: '金', 丑: '水' };
-export function yuqiOf(monthZhi){ return YUQI[monthZhi] || ''; }
 export function wangShuaiWithYuqi(yaoWx, monthZhi, on){
 	const state = wangShuaiByMonth(yaoWx, monthZhi);
 	const strongByYuqi = !!on && YUQI[monthZhi] === yaoWx;
@@ -336,26 +324,6 @@ export function xinpaiScoreOf(y, dongbianMove){
 	}
 	const grade = score >= 3 ? '旺' : score >= 1 ? '相' : score >= -1 ? '休' : score >= -3 ? '囚' : '死';
 	return { score, grade, parts, note: '新派旺衰量化为代表性框架,各家细则不一' };
-}
-
-// ── 长生鬼/沐浴鬼(占病):鬼五行长生之日「男怕长生」;长生+1 位=沐浴,「女怕沐浴」 ──
-export function changShengGuiOf(guiWx, dayZhi){
-	if(!guiWx || !dayZhi){ return null; }
-	const start = CHANGSHENG_START[guiWx];
-	if(!start){ return null; }
-	const s = DIZHI.indexOf(start);
-	const muYu = DIZHI[(s + 1) % 12];
-	if(dayZhi === start){ return { kind: '长生鬼', duan: '男怕长生日得病' }; }
-	if(dayZhi === muYu){ return { kind: '沐浴鬼', duan: '女怕沐浴日得病' }; }
-	return null;
-}
-
-// ── 怪爻(占怪异):季月(辰戌丑未月)怪在初/上爻,仲月(子午卯酉)二五爻,孟月(寅申巳亥)三四爻;动为怪、静无 ──
-export function guaiYaoOf(monthZhi){
-	if('辰戌丑未'.indexOf(monthZhi) >= 0){ return [1, 6]; }
-	if('子午卯酉'.indexOf(monthZhi) >= 0){ return [2, 5]; }
-	if('寅申巳亥'.indexOf(monthZhi) >= 0){ return [3, 4]; }
-	return [];
 }
 
 // ── 进退神土路径开关:'chain'(丑辰未戌首尾连环,含戌→丑)/'break'(戌丑断开,土至戌为止) ──

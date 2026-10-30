@@ -96,16 +96,6 @@ export const SIGNS = {
 
 export const SIGN_ORDER = ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'];
 
-// 三方四正用法（择日核心，择日清单 §2.2）
-export const MODALITY_USAGE = {
-	cardinal: '开创·冒险·攻击·快速·不持久。适合开创新领域、速成、社交、比赛攻击力；婚姻次选。',
-	fixed: '稳定·扎根·持续 → 择日最佳，尤婚姻/事业。Taurus(酉) 第一（实质收入），次 Leo/Scorpio/Aquarius。',
-	mutable: '变动·不稳·短期·灵活。婚姻/事业忌；适合宴会、几小时内结束的社交。',
-};
-
-// 命度度数规则：Asc 尽量不选 28° 之后（变动气质）；固定特质要强取 1°–5°。
-export const ASC_DEGREE_RULE = { lateThreshold: 28, strongFixedRange: [1, 5] };
-
 export function signInfo(id){
 	return SIGNS[id] || null;
 }

@@ -14,7 +14,7 @@ export const DIVINATION_JUDGE_EVENT = 'horosa:divination-judge-globals-changed';
 
 // 默认值 = HORARY_PARAM_SPEC 各键的 classical 零回归值。
 export const DIVINATION_JUDGE_DEFAULTS = {
-	combustMitigateSameSign: false,   // 燃烧限同座（异座不判燃烧;判读层专属,后端 sunPos/phase 不看同座）[Q-144 裁决 2026-09-18] 全局缺省改关=与择日引擎缺省(chartFacts 门 === true)一致,拨开即真下发;卜卦按流派(classical 档学理绑定 true 不受此影响)
+	combustMitigateSameSign: false,   // 燃烧限同座（异座不判燃烧;判读层专属,后端 sunPos/phase 不看同座）全局缺省改关=与择日引擎缺省(chartFacts 门 === true)一致,拨开即真下发;卜卦按流派(classical 档学理绑定 true 不受此影响)
 	antiscia: true,                   // 映点参与判读（隐合/隐冲;显示层映点恒开,后端 antisciaOrb 另管）
 };
 
@@ -22,14 +22,15 @@ const BOOL_KEYS = ['combustMitigateSameSign', 'antiscia'];
 const ALL_KEYS = Object.keys(DIVINATION_JUDGE_DEFAULTS);
 
 let cache = null;
-// [SURF-R5c] 读侧自愈(照 classicalChartGlobals 同款):备份恢复直写本仓 raw 键不经 set,
+// 读侧自愈(照 classicalChartGlobals 同款):备份恢复直写本仓 raw 键不经 set,
 // 热 cache 恒旧值+恢复后改一档=旧 cache 整包回写覆盖恢复值。rawStr 比对+1s 节流。
 let cacheRawStr = null;
 let lastRawCheckAt = 0;
-function rawSelfHealCheck(){
+// force:写入前调用,不受节流 —— 写以存储现值为底(外部刚直写 / 别的窗口刚写的,1 秒内再改一项不再被缓存整包盖掉)
+function rawSelfHealCheck(force){
 	if(!cache){ return; }
 	const now = Date.now();
-	if(now - lastRawCheckAt < 1000){ return; }
+	if(!force && now - lastRawCheckAt < 1000){ return; }
 	lastRawCheckAt = now;
 	let rawStr = null;
 	try{ rawStr = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage.getItem(DIVINATION_JUDGE_STORAGE_KEY) : null; }catch(e){ return; }
@@ -76,6 +77,7 @@ export function divinationJudgeOverrides(){
 
 export function setDivinationJudgeGlobal(key, value){
 	if(ALL_KEYS.indexOf(key) < 0){ return; }
+	rawSelfHealCheck(true);   // 以存储现值为底(不以可能过期的缓存为底整包回写)
 	const next = normalize({ ...getDivinationJudgeGlobals(), [key]: value });
 	cache = next;
 	safeJsonStringifyToStorage(DIVINATION_JUDGE_STORAGE_KEY, next);

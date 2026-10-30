@@ -23,8 +23,13 @@ export const SiHuaTables = {
 
 // 当前流派（可变单例，镜像 ZWChart；默认=现状）。
 export const ZWSchool = { school: 'beipai' };
+// 四化流派中文名(界面显示单源;键为内部值,与左栏下拉同序)。
+export const ZW_SIHUA_SCHOOL_LABELS = { beipai: '通用·飞星', zhongzhou: '中州派', quanshu: '全书系', beixiang: '北派(天相忌)', custom: '自定义' };
+export function zwSihuaSchoolLabel(school){
+	return ZW_SIHUA_SCHOOL_LABELS[school] || ZW_SIHUA_SCHOOL_LABELS.beipai;
+}
 
-// [A4] 挂载/导出侧临时注入的自定义四化表(可变单例;非 null 时 custom 档优先于 localStorage)。
+// 挂载/导出侧临时注入的自定义四化表(可变单例;非 null 时 custom 档优先于 localStorage)。
 // 挂载 builder set → 用毕 finally 清 null,绝不写 LS ——崩溃残留也不会污染用户本机偏好。
 export const ZWSihuaCustom = { override: null };
 
@@ -49,8 +54,16 @@ export function normalizeSihuaCustomTable(raw){
 
 // 取当前流派的十干四化表；custom 先查注入单例(挂载侧)再读 localStorage，缺/坏一律回退 beipai（安全兜底）。
 export function getActiveSiHuaGan(){
-	const s = ZWSchool.school;
+	return sihuaTableFor(ZWSchool.school);
+}
+
+// 按指定流派取十干四化表(不动当前流派单例;双盘合盘等「两人各按各的流派」用)。
+// customTable:随盘自定义表(对象或 JSON 文本),合法则优先;否则 custom 档同 getActiveSiHuaGan 的取法。
+export function sihuaTableFor(school, customTable){
+	const s = school;
 	if(s === 'custom'){
+		const own = customTable !== undefined && customTable !== null && customTable !== '' ? normalizeSihuaCustomTable(customTable) : null;
+		if(own){ return own; }
 		if(ZWSihuaCustom.override && typeof ZWSihuaCustom.override === 'object'){ return ZWSihuaCustom.override; }
 		try{
 			const c = JSON.parse(localStorage.getItem('ziweiSihuaCustom'));
@@ -78,10 +91,10 @@ export const ZWColor = {
 	StarMainStroke: 'var(--horosa-ziwei-star-main, #9b6a2d)',
 	StarAssistStroke: 'var(--horosa-ziwei-star-assist, #327f8d)',
 	StarEvilStroke: 'var(--horosa-ziwei-star-evil, #a9473f)',
-	// [D0] 杂曜吉/凶独立 token(三主题区已定义,当前值=assist/evil 同值→零视觉变化;语义拆分后可独立调)。
+	// 杂曜吉/凶独立 token(三主题区已定义,当前值=assist/evil 同值→零视觉变化;语义拆分后可独立调)。
 	StarOthersGoodStroke: 'var(--horosa-ziwei-star-others-good, #327f8d)',
 	StarOthersBadStroke: 'var(--horosa-ziwei-star-others-bad, #a9473f)',
-	// [D1] 六煞黑字档色(三主题区各有定义;传统「六煞书黑」高对比中性色)
+	// 六煞黑字档色(三主题区各有定义;传统「六煞书黑」高对比中性色)
 	StarSixEvilStroke: 'var(--horosa-ziwei-star-sixevil, #2b2b2b)',
 	StarSmallStroke: 'var(--horosa-ziwei-house-muted, #8a8f95)',
 	HouseLineStroke: 'var(--horosa-ziwei-house-line, rgba(184, 137, 63, 0.22))',
@@ -90,8 +103,9 @@ export const ZWColor = {
 	HouseNameStroke: 'var(--horosa-ziwei-house-name, #d8ad63)',
 	HouseAgeStroke: 'var(--horosa-ziwei-house-age, #8794a8)',
 
+	// 徽标白字 ≥ 4.5:1(旧 禄 #c9912e 2.8 / 科 #1497a8 3.5 / 忌 #d44d43 4.3;同色相压深,权 #2868d8 本来就够)
 	'禄': {
-		bg: '#c9912e',
+		bg: '#976d23',
 		color: '#ffffff',
 	},
 	'权': {
@@ -99,11 +113,11 @@ export const ZWColor = {
 		color: '#ffffff',
 	},
 	'科': {
-		bg: '#1497a8',
+		bg: '#11808f',
 		color: '#ffffff',
 	},
 	'忌': {
-		bg: '#d44d43',
+		bg: '#d14137',
 		color: '#ffffff',
 	},
 };
@@ -113,7 +127,7 @@ export const ZWColor = {
 // key 与 luckSel 层 key 对齐（liunian=流年小限合并层、liuyue/liuri/liushi）。
 export const ZWPeriodColor = {
 	liunian: 'var(--horosa-ziwei-period-year, #7048e8)',   // 流年小限 紫
-	xiaoxian: 'var(--horosa-ziwei-period-xiaoxian, #9775fa)',   // [D3] 小限叠宫层 浅紫(独立 token,三主题区定义)
+	xiaoxian: 'var(--horosa-ziwei-period-xiaoxian, #9775fa)',   // 小限叠宫层 浅紫(独立 token,三主题区定义)
 	liuyue: 'var(--horosa-ziwei-period-month, #2f9e44)',   // 流月 绿
 	liuri: 'var(--horosa-ziwei-period-day, #e64980)',      // 流日 玫红
 	liushi: 'var(--horosa-ziwei-period-hour, #e8590c)',    // 流时 橙
@@ -188,11 +202,20 @@ export const BaziMonthTime = {
 	}
 };
 
+// 四化在界面(非盘面)上的颜色:明暗成对语义色 --horosa-sihua-*(合同 themeContrastContract 分档)。
+// 既当字色(资料参考表),也当界面药丸底(药丸字 = --horosa-on-solid)。盘面徽标仍用上面 ZWColor 的 bg / color(盘面不在界面字色合同)。
+// 旧做法直接拿盘面徽标底色当字色:禄 #c9912e 在宣纸底 2.7:1、白字压它 2.8:1。
+export const ZWHuaInk = {
+	'禄': 'var(--horosa-sihua-lu)',
+	'权': 'var(--horosa-sihua-quan)',
+	'科': 'var(--horosa-sihua-ke)',
+	'忌': 'var(--horosa-sihua-ji)',
+};
 export const SihuaColor = [];
-SihuaColor[0] = {color: ZWColor[SiHua.hua[0]].bg};
-SihuaColor[1] = {color: ZWColor[SiHua.hua[1]].bg};
-SihuaColor[2] = {color: ZWColor[SiHua.hua[2]].bg};
-SihuaColor[3] = {color: ZWColor[SiHua.hua[3]].bg};
+SihuaColor[0] = {color: ZWHuaInk[SiHua.hua[0]]};
+SihuaColor[1] = {color: ZWHuaInk[SiHua.hua[1]]};
+SihuaColor[2] = {color: ZWHuaInk[SiHua.hua[2]]};
+SihuaColor[3] = {color: ZWHuaInk[SiHua.hua[3]]};
 SihuaColor['禄'] = SihuaColor[0];
 SihuaColor['权'] = SihuaColor[1];
 SihuaColor['科'] = SihuaColor[2];

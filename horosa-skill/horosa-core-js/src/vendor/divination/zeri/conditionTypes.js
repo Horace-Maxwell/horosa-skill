@@ -7,7 +7,7 @@
 
 export const GROUP_TYPES = ['all', 'any', 'not', 'xor'];
 
-// [Q-478/T-440] 空数字框校验已独立成 divination/zeri/conditionFieldCheck.js(十处共用,避免把本表拖进别的分包)。
+// 空数字框校验已独立成 divination/zeri/conditionFieldCheck.js(十处共用,避免把本表拖进别的分包)。
 
 // 连接门中文单一真值源:工作台行首徽标/连接门四钮/AI 快照树文本三处共用。
 export const JOINER_CN = { all: '且', any: '或', xor: '异或' };
@@ -20,7 +20,7 @@ export const SCAN_BODIES = [
 export const SEVEN_BODIES = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
 
 const SEVEN_CN = { Sun: '太阳', Moon: '月亮', Mercury: '水星', Venus: '金星', Mars: '火星', Jupiter: '木星', Saturn: '土星' };
-// [Q-477/T-439] 条件表单里几处 multiselect/select 直接把英文键当 label 显示(Sun / Moon / Venus…),
+// 条件表单里几处 multiselect/select 直接把英文键当 label 显示(Sun / Moon / Venus…),
 // 与同表 body 型字段(经 AstroMsgCN 出中文)不一致。中文名在此单源,select 与 multiselect 共用。
 const BODY_CN = {
 	...SEVEN_CN,
@@ -97,7 +97,7 @@ export const EMINENCE_BAND_OPTIONS = [
 ];
 export const BEHENIAN_STARS = ['Algol', 'Alcyone', 'Aldebaran', 'Capella', 'Sirius', 'Procyon',
 	'Regulus', 'Algorab', 'Spica', 'Arcturus', 'Alphecca', 'Antares', 'Vega', 'Deneb Algedi', 'Fomalhaut',
-	// [W8 全谱轮] 扩编:古典常用亮星(后端 fixstar_ut 本就接受任意 swisseph 星名——原 15 颗
+	// 扩编:古典常用亮星(后端 fixstar_ut 本就接受任意 swisseph 星名——原 15 颗
 	// Behenian 是纯前端值域收窄;扩编面=古典文献高频亮星,名称须与 sefstars.txt 星名恰合)
 	'Betelgeuse', 'Rigel', 'Pollux', 'Castor', 'Altair', 'Canopus', 'Achernar', 'Bellatrix', 'Alphard', 'Denebola', 'Zosma', 'Sadalmelek', 'Markab', 'Scheat'];
 export const STAR_OPTIONS = BEHENIAN_STARS.map((v) => {
@@ -208,7 +208,7 @@ export const NUMERIC_FIELD_OPTIONS = [
 
 export const POINT_KIND_OPTIONS = [
 	{ value: 'angle', label: '四轴点' }, { value: 'planet', label: '星体' },
-	{ value: 'lot', label: '希腊点(福/灵/基/跃升)' },   // [Q-477/T-439] 旧标「福点」与下一字段可选四点不符
+	{ value: 'lot', label: '希腊点(福/灵/基/跃升)' },   // 旧标「福点」与下一字段可选四点不符
 	{ value: 'fixedLon', label: '固定黄经' },
 ];
 export const ANGLE_ID_OPTIONS = [
@@ -345,7 +345,7 @@ export const CONDITION_TYPES = {
 			{ key: 'orbLeft', kind: 'number', label: '前侧 orb', min: 0.5, max: 30, step: 0.5 },
 			{ key: 'orbRight', kind: 'number', label: '后侧 orb', min: 0.5, max: 30, step: 0.5 },
 			{ key: 'rescueEnabled', kind: 'toggle', label: '计救援' },
-			{ key: 'rescuers', kind: 'multiselect', label: '救星(全不选=无救星)', options: SEVEN_BODIES.map((b) => ({ value: b, label: scanBodyLabel(b) })) },   // [Q-477/T-439] 中文名;[Q-423/T-388] 空=无救星(后端不再回落金木)
+			{ key: 'rescuers', kind: 'multiselect', label: '救星(全不选=无救星)', options: SEVEN_BODIES.map((b) => ({ value: b, label: scanBodyLabel(b) })) },   // 中文名;空=无救星(后端不再回落金木)
 			{ key: 'rescueByBody', kind: 'toggle', label: '实体救援' },
 			{ key: 'rescueByRay', kind: 'toggle', label: '光线救援' },
 			{ key: 'mitigationReception', kind: 'toggle', label: '接纳缓解视为解围' },
@@ -402,8 +402,8 @@ export const CONDITION_TYPES = {
 		defaults: { pattern: 't_square', apex: 'any', members: 'any', orb: 6 },
 		fields: [
 			{ key: 'pattern', kind: 'select', label: '格局', options: PATTERN_OPTIONS },
-			// [Q-476/T-438] 选项从 SCAN_BODIES 收窄到 PATTERN_POOL_BODIES:后端格局池只有七政 + 三王,
-			// 旧表里的北交/南交/凯龙三档选了恒不命中(组合里不可能出现)。[Q-477/T-439] 同时改中文名。
+			// 选项从 SCAN_BODIES 收窄到 PATTERN_POOL_BODIES:后端格局池只有七政 + 三王,
+			// 旧表里的北交/南交/凯龙三档选了恒不命中(组合里不可能出现)。同时改中文名。
 			{ key: 'apex', kind: 'select', label: '顶点星', options: [{ value: 'any', label: '任意' }, ...PATTERN_POOL_BODIES.map((b) => ({ value: b, label: scanBodyLabel(b) }))], showIf: (p) => p.pattern === 't_square' || p.pattern === 'yod' },
 			{ key: 'orb', kind: 'number', label: 'orb', min: 1, max: 12, step: 0.5 },
 		],
@@ -419,7 +419,7 @@ export const CONDITION_TYPES = {
 		defaults: { planet: 'Moon', pointKind: 'angle', pointId: 'ASC', lotId: 'fortuna', pointLon: 0, relation: 'any', angles: [0], orb: 3 },
 		fields: [
 			{ key: 'planet', kind: 'body', label: '星体' },
-			// [Q-465/T-427] pointId 同理(四轴 ↔ 目标星共用一键)。
+			// pointId 同理(四轴 ↔ 目标星共用一键)。
 			{ key: 'pointKind', kind: 'select', label: '点类型', options: POINT_KIND_OPTIONS,
 				resetsByValue: { angle: { pointId: 'ASC' }, planet: { pointId: 'Venus' } } },
 			{ key: 'pointId', kind: 'select', label: '四轴', options: ANGLE_ID_OPTIONS, showIf: (p) => p.pointKind === 'angle' },
@@ -433,7 +433,7 @@ export const CONDITION_TYPES = {
 		validate(p){
 			if(!isBody(p.planet)){ return '需选择星体'; }
 			if(p.pointKind === 'planet' && !isBody(p.pointId)){ return '需选择目标星'; }
-			// [Q-465/T-427] pointId 同样两形态共用:选过星体再切回四轴点时旧校验不拦,整次搜索报错。
+			// pointId 同样两形态共用:选过星体再切回四轴点时旧校验不拦,整次搜索报错。
 			if(p.pointKind === 'angle' && ANGLE_ID_OPTIONS.every((o) => o.value !== p.pointId)){ return '请重新选择四轴点(点类型由星体切来时仍是星名)'; }
 			if(p.relation === 'angles' && !nonEmptyArr(p.angles)){ return '至少选一个相位角'; }
 			return '';
@@ -441,7 +441,7 @@ export const CONDITION_TYPES = {
 		compile(p){
 			const point = { kind: p.pointKind };
 			if(p.pointKind === 'angle' || p.pointKind === 'planet'){ point.id = p.pointId; }
-			if(p.pointKind === 'lot'){ point.id = p.lotId || 'fortuna'; }	// [W8] 四点放开(py lot_lon 已算 spirit/basis/exaltation)
+			if(p.pointKind === 'lot'){ point.id = p.lotId || 'fortuna'; }	// 四点放开(py lot_lon 已算 spirit/basis/exaltation)
 			if(p.pointKind === 'fixedLon'){ point.lon = Number(p.pointLon); }
 			const out = { planet: p.planet, point, relation: p.relation, orb: Number(p.orb) };
 			if(p.relation === 'angles'){ out.angles = (p.angles || []).map(Number); }
@@ -492,7 +492,7 @@ export const CONDITION_TYPES = {
 		fields: [
 			{ key: 'a', kind: 'body', label: 'A星', pair: 'ab' },
 			{ key: 'b', kind: 'body', label: 'B星', hint: '选与 A 相同的星=单星退化(直接用该星黄经)', pair: 'ab' },
-			// [Q-465/T-427] targetId 两形态共用一个键 → 切形态时同步重置成新形态的合法值(表单读 resetsByValue)。
+			// targetId 两形态共用一个键 → 切形态时同步重置成新形态的合法值(表单读 resetsByValue)。
 			{ key: 'targetKind', kind: 'select', label: '目标', options: [{ value: 'planet', label: '星体' }, { value: 'midpoint', label: '另一中点' }, { value: 'angle', label: '四轴点' }, { value: 'fixedLon', label: '固定黄经' }],
 				resetsByValue: { angle: { targetId: 'ASC' }, planet: { targetId: 'Venus' } } },
 			{ key: 'targetId', kind: 'body', label: '目标星', showIf: (p) => p.targetKind === 'planet' },
@@ -506,7 +506,7 @@ export const CONDITION_TYPES = {
 		validate(p){
 			if(!isBody(p.a) || !isBody(p.b)){ return '需选择 A/B 星'; }
 			if(p.targetKind === 'planet' && !isBody(p.targetId)){ return '需选择目标星'; }
-			// [Q-465/T-427] targetId 被「目标星」与「四轴」两形态共用:把目标从星体切到四轴点后,
+			// targetId 被「目标星」与「四轴」两形态共用:把目标从星体切到四轴点后,
 			// 四轴框显示的仍是星名(如 Venus),compile 发 {kind:'angle', id:'Venus'} → 后端判非法、
 			// 整次搜索报 invalid_conditions(方案载入审计还会误报成「该行恒不命中」)。此处按形态校验值域。
 			if(p.targetKind === 'angle' && ANGLE_ID_OPTIONS.every((o) => o.value !== p.targetId)){ return '请重新选择四轴点(目标由星体切来时仍是星名)'; }
@@ -920,7 +920,7 @@ export const CONDITION_TYPES = {
 	},
 };
 
-// ── [F7 复审遗留根修] 方案树 × 注册表 值域审计(2026-08-30) ────────────────────
+// ── 方案树 × 注册表 值域审计(2026-08-30) ────────────────────
 // 病理:方案/历史里存的 UI 树,若其叶引用了后续版本已删除的条件类、或 select/multiselect
 // 字段里已删除的选项值,载入后一路绿灯——needValues 只拦空数组、compile 不查值域、
 // evaluate 对未知值 includes() 恒 false ⇒ **该行静默恒不命中**,用户以为条件在生效。
@@ -1029,4 +1029,75 @@ export function compileTree(uiTree){
 		throw new Error('条件节点无效');
 	}
 	return compileSelf(uiTree);
+}
+
+// ── 择日各技法条件树 API 工厂(八字 / 黄历 / 印度 / 六壬 / 奇门 / 七政 / 三式 / 太乙 / 紫微 九张注册表共用)──
+// 叶 / 组工厂、叶摘要、编译(行链 → 后端树)原先各抄一份、只差注册表名,收成单一来源;各注册表模块按原名再导出。
+// 与上面天星这一套语义不同(不认父组 legacyOp、无 compile 钩子、空链报「条件列表为空」),不要混用。
+// 组节点无 op;兄弟第 2 个起各带 joiner(all/any/xor)表「本行与上方结果的连接门」,编译时左折叠、连续同门扁平为多元组。
+export function makeConditionTreeApi(registry){
+	function newLeaf(type, joiner){
+		const spec = registry[type];
+		return {
+			kind: 'leaf',
+			type,
+			negate: false,
+			joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
+			params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
+		};
+	}
+	function newGroup(joiner){
+		return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
+	}
+	function leafSummary(leaf){
+		const spec = leaf ? registry[leaf.type] : null;
+		if(!spec){
+			return '未知条件';
+		}
+		let body = '';
+		try{
+			body = spec.summary(leaf.params || {});
+		}catch(e){
+			body = '';
+		}
+		return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
+	}
+	function compileNode(node){
+		let compiled;
+		if(node.kind === 'group' || Array.isArray(node.children)){
+			compiled = compileRows(node.children);
+		}else{
+			const spec = registry[node.type];
+			if(!spec){
+				throw new Error(`未知条件类型:${node.type}`);
+			}
+			const msg = spec.validate ? spec.validate(node.params || {}) : '';
+			if(msg){
+				throw new Error(`「${spec.label}」条件:${msg}`);
+			}
+			compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
+		}
+		return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
+	}
+	function compileRows(children){
+		const list = Array.isArray(children) ? children : [];
+		if(!list.length){
+			throw new Error('条件列表为空');
+		}
+		let acc = compileNode(list[0]);
+		for(let i = 1; i < list.length; i++){
+			const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
+			const rhs = compileNode(list[i]);
+			if(acc.type === joiner && Array.isArray(acc.conditions)){
+				acc = { type: joiner, conditions: [...acc.conditions, rhs] };
+			}else{
+				acc = { type: joiner, conditions: [acc, rhs] };
+			}
+		}
+		return acc;
+	}
+	function compileTree(root){
+		return compileNode(root);
+	}
+	return { newLeaf, newGroup, leafSummary, compileTree };
 }

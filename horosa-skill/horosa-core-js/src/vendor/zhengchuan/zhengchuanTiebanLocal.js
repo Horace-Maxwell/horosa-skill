@@ -198,7 +198,8 @@ let versesPromise = null;
 export function loadTiebanVerses() {
 	if (!versesPromise) {
 		versesPromise = import('./data/zhengchuanTiebanVerses.json', { with: { type: 'json' } })
-			.then((m) => m.default || m);
+			.then((m) => m.default || m)
+			.catch((e) => { versesPromise = null; throw e; });   // 失败不缓存:下次调用重新载入(分包一次 503 / 换了哈希不至于本会话永远载不出)
 	}
 	return versesPromise;
 }

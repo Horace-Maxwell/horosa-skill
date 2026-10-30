@@ -78,7 +78,7 @@ function dignityLordsAt(sign, lon, sect, variants){
 	const s = SIGNS[sign] || {};
 	const v = variants || {};
 	const trip = s.element ? triplicityRulers(s.element, v.triplicityVariant) : null;
-	// [Q-553/T-515] 界主:variants.termsVariant 为数字档(0-4,来自全局/随盘)或迦勒底/自定义时走 almuten.termRulerForVariant
+	// 界主:variants.termsVariant 为数字档(0-4,来自全局/随盘)或迦勒底/自定义时走 almuten.termRulerForVariant
 	// (昼夜表 + 随盘表体);字符串旧键('ptolemaic' 等)与缺省仍走 termRulerAt(零回归)。
 	let term = null;
 	if(typeof v.termsVariant === 'number' || v.termsVariant === 'chaldean' || v.termsVariant === 'custom'){
@@ -97,7 +97,7 @@ function dignityLordsAt(sign, lon, sect, variants){
 	};
 }
 
-// [Q-553/T-515] 寿命链尊贵主星的界系 / 三分体系单源:opts.variants 显式 > 随盘 echo(facts.result.params.termsVariant / triplicity)
+// 寿命链尊贵主星的界系 / 三分体系单源:opts.variants 显式 > 随盘 echo(facts.result.params.termsVariant / triplicity)
 // > 全局古典设置(classicalGlobalValue);缺省(埃及界 + 多罗特三分)= 与旧表逐字相同(零回归)。帮助所称「随界系 / 三分体系设置实时更新」由此兑现。
 export function resolveLifespanVariants(facts, opts){
 	if(opts && opts.variants){ return opts.variants; }
@@ -115,7 +115,7 @@ export function resolveLifespanVariants(facts, opts){
 	return out;
 }
 
-// [Q-552/T-514] 阳性象限的宫位(升点→天顶、降点→天底):10/11/12 与 4/5/6;其余阴性象限。
+// 阳性象限的宫位(升点→天顶、降点→天底):10/11/12 与 4/5/6;其余阴性象限。
 const MASCULINE_QUADRANT_HOUSES = [10, 11, 12, 4, 5, 6];
 
 // 发光体的星座性别偏好（昼太阳喜阳性座、夜月亮喜阴性座）；其余点无性别约束。
@@ -157,7 +157,7 @@ function isAphetic(cand, method, facts){
 		}
 	}
 	// 多罗修斯：阴阳星座 × 阴阳象限双合（太阳须阳性座且阳性象限、月亮须阴性座且阴性象限方为有效释放点；
-	// 任一不合 = effeminatus/反性否决）。[Q-552/T-514] 此前只核星座阴阳,象限一支未实现。
+	// 任一不合 = effeminatus/反性否决）。此前只核星座阴阳,象限一支未实现。
 	// 象限阴阳按托勒密:升点→天顶、降点→天底两象限为阳性(整宫序 10/11/12、4/5/6 宫),其余两象限阴性(1/2/3、7/8/9 宫)。
 	if(rule.useGenderQuadrant){
 		const pref = genderPrefOf(cand.key);
@@ -265,13 +265,13 @@ function computeAlmuten(facts, variants){
 
 function rulersOfLife(facts, hyleg, almutenWinner){
 	if(!hyleg) return null;
-	// [WP-4] 家主星判法两派:'domicile'(庙主派 Porphyry·Antiochus,默认=历史现状)/
+	// 家主星判法两派:'domicile'(庙主派 Porphyry·Antiochus,默认=历史现状)/
 	// 'bound'(界主派 Valens·Rhetorius:取占控星度数的界主;界表随全局 termsVariant 四档)。
 	let oikodespotes = (SIGNS[hyleg.sign] || {}).domicile || null;
 	let masterMethod = 'domicile';
 	try{
 		if(classicalGlobalValue('domicileMasterMethod') === 'bound' && Number.isFinite(hyleg.lon)){
-			// [N4][R4-P2] 统一走 almuten.termRulerForVariant 单源(迦勒底昼夜/自定义表体全档);
+			// 统一走 almuten.termRulerForVariant 单源(迦勒底昼夜/自定义表体全档);
 			// isDiurnal 从盘上取,缺省按昼(与后端主口径一致)。
 			const bound = termRulerForVariant(hyleg.lon, {
 				termsVariant: Number(classicalGlobalValue('termsVariant')) || 0,
@@ -423,7 +423,7 @@ export function runLifespan(facts, opts){
 	if(!facts || !facts.meta) return null;
 	const sect = facts.meta.sect;
 	const hy = selectHyleg(facts, method);
-	const variants = resolveLifespanVariants(facts, opts);   // [Q-553/T-515] 界系 / 三分体系随设置
+	const variants = resolveLifespanVariants(facts, opts);   // 界系 / 三分体系随设置
 	const alcBase = findAlcocoden(facts, hy.hyleg, sect, variants);
 	const years = computeYears(facts, alcBase);
 	const almuten = computeAlmuten(facts, variants);

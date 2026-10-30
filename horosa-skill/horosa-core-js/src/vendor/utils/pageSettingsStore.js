@@ -7,8 +7,9 @@
 //
 // 口径(全站一致):
 //   · 只保留「设置」——口径 / 流派 / 算法 / 显示偏好。时间、地点、占事、起卦数字这类「输入」不进 schema。
-//   · 只在**用户亲手改控件**时落盘。载入命盘 / 事盘回灌、宿主页下发口径、AI 助手改设置都不经这里
-//     (否则打开一份旧案就把你的缺省悄悄改了)。
+//   · 只在**用户亲手改控件**时落盘。载入命盘 / 事盘回灌、宿主页下发口径都不经这里
+//     (否则打开一份旧案就把你的缺省悄悄改了)。唯一的例外是用户明确叫 AI 助手改某页设置:经 set_settings(facet=page)
+//     调本件 save,同一校验、要审批、写前整份快照可撤销 —— 等同用户亲手改,不是回灌。
 //   · 择日宿主里内嵌的那份技法页:只有宿主的扫描口径**取自内嵌盘**时才与独立页共用这份保存值(奇门择日);
 //     扫描引擎另有钉死口径的(六壬 / 太乙 / 三式择日)内嵌盘既不读也不写 —— 否则点选命中行看到的盘就不是扫描判定的那一盘。
 //   · 载入事盘 / 记录时,记录里**没有**的设置键回出厂值(fillMissing),不沿用保存值:旧案是按出厂口径存下的,
@@ -74,7 +75,9 @@ export function validateSettingValue(spec, value){
 	return { ok: true, value };
 }
 
-export function definePageSettings(storageKey, schema){
+// opts.effectiveDefaults(saved)(可选):没存过的键实际跟随别处的页(如随牌组吸附的项)给出「现值缺省」—— 入参是已保存的合法值,
+// 返回要覆盖出厂值的那几项。只给描述 / 查询用(currentDefaults),不改 load / defaults 的语义。
+export function definePageSettings(storageKey, schema, opts){
 	const fields = Object.keys(schema || {});
 	function defOf(spec){
 		if(spec.type === 'map' && spec.sparse){ return {}; }
@@ -182,7 +185,7 @@ export function definePageSettings(storageKey, schema){
 		return out;
 	}
 	function reset(){
-		try{ safeLocalStorageRemove(storageKey); }catch(e){ /* noop */ }
+		safeLocalStorageRemove(storageKey);
 		return defaults();
 	}
 	// 从一个 state 形状里摘出 schema 字段(比如存案 / 快照要带上当前口径时用)。
@@ -192,5 +195,16 @@ export function definePageSettings(storageKey, schema){
 		fields.forEach((f)=>{ if(Object.prototype.hasOwnProperty.call(obj, f)){ out[f] = obj[f]; } });
 		return out;
 	}
-	return { key: storageKey, fields: fields.slice(), schema, defaults, load, loadSaved, save, saveMapEntry, fillMissing, reset, pick, has: (f)=>fields.indexOf(f) >= 0 };
+	// 现值缺省 = 出厂值 + 设置件给的跟随项(没给 = 出厂值)。永不抛。
+	function currentDefaults(){
+		const out = defaults();
+		if(opts && typeof opts.effectiveDefaults === 'function'){
+			try{
+				const eff = opts.effectiveDefaults(loadSaved()) || {};
+				fields.forEach((f)=>{ if(eff[f] !== undefined){ out[f] = eff[f]; } });
+			}catch(e){ /* 跟随项算不出 → 出厂值 */ }
+		}
+		return out;
+	}
+	return { key: storageKey, fields: fields.slice(), schema, defaults, currentDefaults, load, loadSaved, save, saveMapEntry, fillMissing, reset, pick, has: (f)=>fields.indexOf(f) >= 0 };
 }

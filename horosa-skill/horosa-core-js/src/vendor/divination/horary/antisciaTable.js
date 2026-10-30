@@ -1,5 +1,5 @@
 // divination/horary/antisciaTable.js
-// [H8 两套合一] 全盘映点/对映点表——此前 UI(HoraryJudgment)与快照(horarySnapshot)各写一份:
+// 全盘映点/对映点表——此前 UI(HoraryJudgment)与快照(horarySnapshot)各写一份:
 // UI 版吃 opts.antisciaOrb、快照版写死 ≤1° ——同盘两处命中集可不同。收编为单一实现,
 // 两处 import,orb 同源 opts.antisciaOrb(缺省 1°=快照旧值,快照迁移零回归)。
 import { PLANETS } from '../data/planets.js';

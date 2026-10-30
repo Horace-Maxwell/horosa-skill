@@ -9,8 +9,6 @@ function invert(map){ const o = {}; Object.keys(map).forEach((k) => { o[map[k]] 
 const SHENG_PREV = invert(SHENG_NEXT); // 生 X 者(原神)
 const KE_PREV = invert(KE_NEXT);       // 克 X 者(忌神)
 
-export const LIUQIN_LIST = ['父母', '兄弟', '子孙', '妻财', '官鬼'];
-
 // ── 原神/忌神/仇神(用神为六亲时;世/应 用神返回 null) ──
 export function relativeRoles(yong){
 	if(!SHENG_PREV[yong]){ return null; }

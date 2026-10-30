@@ -1,4 +1,4 @@
-// [Z3·太乙择日] 条件注册表(时辰粒度)。判定单源:盘=calcTaiyi(太乙页同一本地引擎,parity
+// 条件注册表(时辰粒度)。判定单源:盘=calcTaiyi(太乙页同一本地引擎,parity
 // 五锚金标看守)、格局=computeGeju、主客胜负=computeVictory(太乙页断法面同函数)——
 // 主太乙算法/格局表修正,择日自动跟(制度层1)。spec 契约与 QIMEN/HUANGLI/BAZI 逐字段同构;
 // ctx=makeTaiyiZeriEvalCtx(pan)(格局/胜负惰性一次)。一键一行 Tab 缩进(preflight 键集契约)。
@@ -6,7 +6,7 @@ import { computeGeju } from '../../taiyi/core/taiyiGeju.js';
 import { computeVictory, computeEhui, computeShiJing, computeShenSuan, computeFenye, computeSanyuan, computeWuziyuan, TAIYI_GONG_INFO } from '../../taiyi/core/taiyiDuanfa.js';
 import { computeTaiyiShuli } from '../../taiyi/core/taiyiShuli.js';
 import { computeTaiyiNayin } from '../../taiyi/core/taiyiNayin.js';
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
 
 export { GROUP_TYPES, JOINER_CN };
 
@@ -23,7 +23,7 @@ export const TAIYI_GEJU_KINDS = [
 	{ value: 'dui', label: '对(始击相对)' },
 	{ value: 'ti', label: '提(二目提太乙)' },
 	{ value: 'xie', label: '挟(二目夹太乙)' },
-	{ value: 'ji', label: '击(始击犯主/客大将)' },   // [Q-471/T-433] 档名勘误:computeGeju 的 ji 判的是「始击与主/客大将同宫或对宫」,与太乙无关
+	{ value: 'ji', label: '击(始击犯主/客大将)' },   // 档名勘误:computeGeju 的 ji 判的是「始击与主/客大将同宫或对宫」,与太乙无关
 ];
 
 const opt = (arr)=>arr.map((v)=>({ value: v, label: v }));
@@ -57,7 +57,7 @@ export function makeTaiyiZeriEvalCtx(pan){
 			}
 			return victory;
 		},
-		// [W1 全谱轮] 数理/诸算/十精 惰性一次(断法面同函数;异常兜空=该叶判否不炸树)
+		// 数理/诸算/十精 惰性一次(断法面同函数;异常兜空=该叶判否不炸树)
 		shuli(){
 			if(shuli === undefined){
 				try{ shuli = computeTaiyiShuli(pan) || null; }catch(e){ shuli = null; }
@@ -169,7 +169,7 @@ export const TAIYI_CONDITION_TYPES = {
 		label: '游神落宫(五福/大游/小游)',
 		defaults: { who: 'wufuNum', values: ['1'] },
 		fields: [
-			{ key: 'who', kind: 'select', label: '游神', options: [{ value: 'wufuNum', label: '五福' }, { value: 'bigyoNum', label: '大游' }, { value: 'smyoNum', label: '小游' }, { value: 'threewindNum', label: '三风' }, { value: 'fivewindNum', label: '五风' }, { value: 'eightwindNum', label: '八风' }] },	// [W1] 风三游=同数形 pan 键,纯扩档
+			{ key: 'who', kind: 'select', label: '游神', options: [{ value: 'wufuNum', label: '五福' }, { value: 'bigyoNum', label: '大游' }, { value: 'smyoNum', label: '小游' }, { value: 'threewindNum', label: '三风' }, { value: 'fivewindNum', label: '五风' }, { value: 'eightwindNum', label: '八风' }] },	// 风三游=同数形 pan 键,纯扩档
 			{ key: 'values', kind: 'multiselect', label: '宫数(1-9)', options: opt(GONG9) },
 		],
 		validate: needValues,
@@ -251,7 +251,7 @@ export const TAIYI_CONDITION_TYPES = {
 		label: '主客大将宫',
 		defaults: { who: 'homeGeneral', values: ['1'] },
 		fields: [
-			{ key: 'who', kind: 'select', label: '将', options: [{ value: 'homeGeneral', label: '主大将' }, { value: 'awayGeneral', label: '客大将' }, { value: 'setGeneral', label: '定大将' }, { value: 'homeVGen', label: '主参将' }, { value: 'awayVGen', label: '客参将' }, { value: 'setVGen', label: '定参将' }] },	// [W1] 参将三席=pan 现成数键,纯遗漏补齐
+			{ key: 'who', kind: 'select', label: '将', options: [{ value: 'homeGeneral', label: '主大将' }, { value: 'awayGeneral', label: '客大将' }, { value: 'setGeneral', label: '定大将' }, { value: 'homeVGen', label: '主参将' }, { value: 'awayVGen', label: '客参将' }, { value: 'setVGen', label: '定参将' }] },	// 参将三席=pan 现成数键,纯遗漏补齐
 			{ key: 'values', kind: 'multiselect', label: '宫数(1-9)', options: opt(GONG9) },
 		],
 		validate: needValues,
@@ -283,7 +283,7 @@ export const TAIYI_CONDITION_TYPES = {
 		label: '宫内布神',
 		defaults: { board: 'gong16', gong: '子', names: [] },
 		fields: [
-			{ key: 'board', kind: 'select', label: '盘面', options: [{ value: 'gong16', label: '十六宫' }, { value: 'branch12', label: '十二支位' }], hint: 'buildPalaceMarks 同产两套布神,原仅暴露十六宫' },	// [W1] branch12 档
+			{ key: 'board', kind: 'select', label: '盘面', options: [{ value: 'gong16', label: '十六宫' }, { value: 'branch12', label: '十二支位' }], hint: 'buildPalaceMarks 同产两套布神,原仅暴露十六宫' },	// branch12 档
 			{ key: 'gong', kind: 'select', label: '宫', options: opt(GONG16).map((o)=>({ ...o })) },
 			{ key: 'names', kind: 'multiselect', label: '神名(空=宫内有任一神)', options: opt(['太乙', '文昌', '太岁', '合神', '计神', '始击', '定目', '君基', '臣基', '民基', '四神', '天乙', '地乙', '直符', '飞符', '主大', '主参', '客大', '客参', '五福', '帝符', '太尊', '飞鸟', '三风', '五风', '八风', '大游', '小游']) },	// buildPalaceMarks 28 神全集同源
 		],
@@ -305,7 +305,7 @@ export const TAIYI_CONDITION_TYPES = {
 	},
 	sanji_men: {
 		category: '门户',
-		// [Q-471/T-433] 类名勘误:本类没有「绝气」判面(绝气在「九宫属性」类的值域里);
+		// 类名勘误:本类没有「绝气」判面(绝气在「九宫属性」类的值域里);
 		// 且太乙恒落八正宫(四维 + 四正),原「临间神宫(其余)」档恒假,一并撤掉。
 		label: '太乙所临(门户/正宫)',
 		defaults: { mode: 'men', values: [] },
@@ -333,7 +333,7 @@ export const TAIYI_CONDITION_TYPES = {
 		defaults: { who: 'skyeyes', rel: 'same' },
 		fields: [
 			{ key: 'who', kind: 'select', label: '谁', options: [{ value: 'skyeyes', label: '文昌' }, { value: 'sf', label: '始击' }] },
-			{ key: 'rel', kind: 'select', label: '关系', options: [{ value: 'same', label: '同宫' }, { value: 'opposite', label: '对宫(环对冲)' }, { value: 'adjacent', label: '邻宫(迫象)' }   /* [Q-471/T-433] 掩=同宫、迫=前后一位:邻宫只对应迫 */] },
+			{ key: 'rel', kind: 'select', label: '关系', options: [{ value: 'same', label: '同宫' }, { value: 'opposite', label: '对宫(环对冲)' }, { value: 'adjacent', label: '邻宫(迫象)' }   /* 掩=同宫、迫=前后一位:邻宫只对应迫 */] },
 		],
 		summary(p){ return `${p.who === 'sf' ? '始击' : '文昌'}${({ same: '同', opposite: '对', adjacent: '邻' })[p.rel] || ''}太乙`; },
 		evaluate(pan, p){
@@ -352,7 +352,7 @@ export const TAIYI_CONDITION_TYPES = {
 	},
 	shuli_kind: {
 		category: '算数',
-		// [Q-271/ZC-31] 「平」档不可达(shuliLabel 任一 n≥1 皆有标签:1–9 无天、10 倍无人、≥11 长数),两处选项删除;
+		// 「平」档不可达(shuliLabel 任一 n≥1 皆有标签:1–9 无天、10 倍无人、≥11 长数),两处选项删除;
 		// 旧方案含「平」的叶子经值域审计提示(auditTreeAgainstRegistry)。
 		label: '数理类(重阳重阴和数无门…)',
 		defaults: { suan: 'home', kinds: ['重阳数'] },
@@ -503,68 +503,9 @@ export const TAIYI_CONDITION_TYPES = {
 };
 
 // ── 树工厂/摘要/编译(与奇门/黄历/八字同构) ──
-export function newTaiyiLeaf(type, joiner){
-	const spec = TAIYI_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newTaiyiGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function taiyiLeafSummary(leaf){
-	const spec = leaf ? TAIYI_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = TAIYI_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileTaiyiTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(TAIYI_CONDITION_TYPES);
+export const newTaiyiLeaf = TREE_API.newLeaf;
+export const newTaiyiGroup = TREE_API.newGroup;
+export const taiyiLeafSummary = TREE_API.leafSummary;
+export const compileTaiyiTree = TREE_API.compileTree;

@@ -18,7 +18,7 @@ export function dunOfKook(pan){
 const DIZHI = '子丑寅卯辰巳午未申酉戌亥'.split('');
 const RING16 = '子丑艮寅卯辰巽巳午未坤申酉戌乾亥'.split(''); // 十六神环落点序(=POS2INDEX)
 // tn→积年常数(0 统宗 / 1 金镜 / 2 淘金歌 / 3 太乙局≈统宗),与后端太乙引擎 accnum 的 tndict 同值。
-// [Q-157/T-74] 此前缺 2(淘金歌)→ 回落统宗 10153917(差 276 年)→ 古法公式=淘金歌 时三基起宫/游神方向覆盖错位。
+// 此前缺 2(淘金歌)→ 回落统宗 10153917(差 276 年)→ 古法公式=淘金歌 时三基起宫/游神方向覆盖错位。
 const EPOCH = { 0: 10153917, 1: 1936557, 2: 10154193, 3: 10153917 };
 
 // 默认流派选项(全 = kintaiyi 现行,覆盖为空操作)
@@ -43,7 +43,7 @@ export function isDefaultSchool(s){
 }
 
 // —— 移植 taiyi.py 公式 ——
-// [Q-298/T-284 裁决 2026-09-18] 计神覆盖「沿用底盘计式基准只改方向」:底盘按计式取太岁支(年計=年支 / 月計=月支 / 日計=日支 /
+// 计神覆盖「沿用底盘计式基准只改方向」:底盘按计式取太岁支(年計=年支 / 月計=月支 / 日計=日支 /
 // 時計(缺省)=时支 / 分計=分支),阳遁起寅、阴遁起申;此前覆盖层恒以年支起寅 → 选「逆行·古法」同时换了基准与起点。
 // start=寅(阳)|申(阴);顺:start+支序;逆:start-支序。
 function jishenZhi(baseZhi, dir, dun){
@@ -110,7 +110,7 @@ export function applyTaiyiSchool(basePan, school){
 		if(wcIdx >= 0){ pan.skyeyes = RING16[wcIdx]; overrides.add('skyeyes'); }
 	}
 	// 2) 计神方向 → 计神 + 始击(始击随计神/文昌)
-	const jishenBase = jishenBaseZhi(pan);   // [Q-298/T-284] 按底盘计式取基准支(缺柱回落年支)
+	const jishenBase = jishenBaseZhi(pan);   // 按底盘计式取基准支(缺柱回落年支)
 	if(s.jishen !== 'default' && jishenBase){
 		const js = jishenZhi(jishenBase, s.jishen, dun);
 		if(js){ pan.jigod = js; overrides.add('jigod'); }

@@ -1,5 +1,6 @@
 // 七政四余 / 果老星宗 前端数据镜像(对齐 astropy/astrostudy/guolao_const.py 真值源)。
 // 供资料页(G35)显示 + 未来左栏选项;纯数据,无副作用。中性词(无软件名/版权书名)。
+import { LIST_SIGNS, LIFEMASTERDEG74 } from '../../constants/AstroConst.js';
 
 export const SU28 = '角亢氐房心尾箕斗牛女虚危室壁奎娄胃昴毕觜参井鬼柳星张翼轸'.split('');
 // ⚠ 这【不是】排盘所用的宿界(本仓当前亦无任何 import):实际排盘按 doubingSu28 档位走
@@ -11,7 +12,6 @@ const DUZHU_CYCLE = ['木', '金', '土', '日', '月', '火', '水'];
 export const SU28_DEGREE_LORD = SU28.map((_, i)=>DUZHU_CYCLE[i % 7]);
 export const SU28_JIAO_START_MODERN = 203.84;   // 今宿 J2000(+50.29″/年)
 export const SU28_JIAO_START_ANCIENT = 199.43;  // 古宿(冻结)
-export const EQUATORIAL_TOTAL_DEGREE = 365.25;  // 赤道古度
 
 export const DIZHI = '子丑寅卯辰巳午未申酉戌亥'.split('');
 // 地支 → [黄道宫(西名/十二次), 宫主曜, 旺曜或'—', 旺度或'']
@@ -197,6 +197,19 @@ export const LIFE_MODE_OPTIONS = [
 	{ value: 'asc', label: '占星上升(默认)' }, { value: 'yumao', label: '日出安命' },
 	{ value: 'gumao', label: '遇卯安命(古法)' }, { value: 'cotrans', label: '赤黄转换' },
 ];
+// 命度法非「占星上升」时,命宫取命度(LifeMasterDeg74)所在星座;占星上升 / 盘上无命度 / 经度非数 → null(调用方回落上升点)。
+// 方盘 GLSZSignChart 与圆盘 GuoLaoNatalChart 同源。
+export function lifeMasterSignOf(fields, chartObj){
+	const mode = fields && fields.guolaoLifeMode && fields.guolaoLifeMode.value;
+	if(!mode || mode === 'asc'){ return null; }
+	const objs = (chartObj && chartObj.objects) || [];
+	let life = null;
+	for(let i = 0; i < objs.length; i++){ if(objs[i] && objs[i].id === LIFEMASTERDEG74){ life = objs[i]; break; } }
+	if(!life){ return null; }
+	const lon = Number(life.lon);
+	if(!Number.isFinite(lon)){ return null; }
+	return LIST_SIGNS[Math.floor((((lon % 360) + 360) % 360) / 30) % 12] || null;
+}
 export const BODY_MODE_OPTIONS = [
 	{ value: 'taiyin', label: '太阴落宫(果老)' }, { value: 'youjin', label: '逢酉(琴堂)' },
 ];
@@ -204,9 +217,6 @@ export const BODY_MODE_OPTIONS = [
 export const GUOLAO_DIZHI_LIST = '子丑寅卯辰巳午未申酉戌亥'.split('');
 export const LIFE_CUSTOM_ZHI_OPTIONS = GUOLAO_DIZHI_LIST.map((z)=>({ value: z, label: `自定命宫·${z}` }));
 export const BODY_CUSTOM_ZHI_OPTIONS = GUOLAO_DIZHI_LIST.map((z)=>({ value: z, label: `自定身宫·${z}` }));
-export const QINTANG_DIR_OPTIONS = [
-	{ value: 'you', label: '逆数至酉(命卯身酉)' }, { value: 'mao', label: '顺数至卯' },
-];
 export const LIFE_MASTER_MODE_OPTIONS = [
 	{ value: 'gong', label: '宫主(默认)' }, { value: 'du', label: '度主' }, { value: 'dudegrade', label: '贬宫主专度主' },
 ];

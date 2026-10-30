@@ -1,9 +1,6 @@
 import * as LRConst from '../liureng/LRConst.js';
 
 
-
-
-
 import {
 
 	JINKOU_SHENSHA_DOC,
@@ -31,12 +28,12 @@ import {
 	JINKOU_XINGNIAN_GE,
 } from './JinKouDoc.js';
 
-import { parseDateParts } from '../bazi/dateStrSafe.js';
+import { parseFieldsDateTime, parseDateTimeText } from '../utils/fieldsDateTime.js';
 // 五行配色统一对齐八字模块的品牌色板(--horosa-bazi-*)，全 app 一套色。
 // 金口诀主盘走 SVG presentation 属性(attr fill)，CSS 变量在此不解析，故落为对应 hex；
 // 主盘底色随暗黑模式翻深，浅色板的水/木/火会过暗不可读 → 按主题在 access 时取浅/深板(Proxy)，
 // 主盘重绘时即解析当前主题，明暗皆可读。
-const JINKOU_ELEMENT_COLOR_LIGHT = { '木': '#237a45', '火': '#c72d22', '土': '#805526', '金': '#e0892a', '水': '#275fc7' };
+const JINKOU_ELEMENT_COLOR_LIGHT = { '木': '#237a45', '火': '#c72d22', '土': '#805526', '金': '#866a00', '水': '#275fc7' };   // 金 = --horosa-bazi-metal 亮色值(旧 #e0892a 亮底 2.4:1)
 const JINKOU_ELEMENT_COLOR_DARK = { '木': '#66c486', '火': '#ff5f50', '土': '#c08a4c', '金': '#eda34a', '水': '#5f8fff' };
 function jinKouElementPalette(){
 	try {
@@ -442,9 +439,6 @@ function resolveIsDayInfo(timeZi, isDiurnal){
 		return { isDay: isDiurnal, basis: 'horizon', basisText: '真实地平·日出日落' };
 	}
 	return { isDay: containsVal(DayTimeZi, timeZi), basis: 'branch', basisText: '时支粗判·卯至申为昼' };
-}
-function resolveIsDay(timeZi, isDiurnal){
-	return resolveIsDayInfo(timeZi, isDiurnal).isDay;
 }
 
 function getGuiShenAtDiFen(dayGan, timeZi, diFen, guirengType, isDiurnal, schoolOpts){
@@ -931,34 +925,6 @@ function valueContainsAny(val, tokens){
 		}
 	}
 	return false;
-}
-
-function collectShenSha(liureng, tokens){
-	if(!liureng || !tokens || tokens.length === 0){
-		return [];
-	}
-	const maps = [
-		liureng.gods,
-		liureng.godsGan,
-		liureng.godsMonth,
-		liureng.godsZi,
-		liureng.godsYear && liureng.godsYear.taisui1 ? liureng.godsYear.taisui1 : null,
-	];
-	const res = [];
-	for(let i=0; i<maps.length; i++){
-		const one = maps[i];
-		if(!one){
-			continue;
-		}
-		const keys = Object.keys(one);
-		for(let j=0; j<keys.length; j++){
-			const key = keys[j];
-			if(valueContainsAny(one[key], tokens)){
-				res.push(key);
-			}
-		}
-	}
-	return uniq(res);
 }
 
 function rowStem(row){
@@ -2650,7 +2616,7 @@ export function buildJinKouData(liureng, options){
 			diFen: diFen,
 			xunKong: xunKongBranches.length ? xunKongBranches.join('') : '无',
 			siDaKong: siDaKong ? siDaKong : '无',
-			// [X1·P2-13] 月将/占时补齐:此前本地(非默认流派)路径中栏顶行画「—」、课情行显「无」。
+			// 月将/占时补齐:此前本地(非默认流派)路径中栏顶行画「—」、课情行显「无」。
 			yuejiang: jiangZi ? `${jiangZi}${jiang && jiang.name ? `·${jiang.name}` : ''}` : '',
 			zhanshi: timeZi || '',
 		},
@@ -2659,49 +2625,6 @@ export function buildJinKouData(liureng, options){
 
 function safeText(value){
 	return value === undefined || value === null ? '' : `${value}`;
-}
-
-function parseFieldsDateTime(fields){
-	if(!fields || !fields.date || !fields.time){
-		return null;
-	}
-	const dateStr = fields.date.value.format('YYYY-MM-DD');
-	const timeStr = fields.time.value.format('HH:mm:ss');
-	// BC 安全解析:'-7040-07-19' 裸 split('-') 会撕成 [NaN,7040,7,19](年 NaN 静默传播)
-	const _dp = parseDateParts(dateStr);
-	const d = _dp ? [_dp.year, _dp.month, _dp.day] : [];
-	const t = timeStr.split(':').map((item)=>parseInt(item, 10));
-	if(d.length < 3 || t.length < 2){
-		return null;
-	}
-	return {
-		year: d[0],
-		month: d[1],
-		day: d[2],
-		hour: t[0],
-		minute: t[1],
-		second: t[2] || 0,
-		date: dateStr,
-		time: timeStr,
-	};
-}
-
-function parseDateTimeText(text){
-	const raw = safeText(text).trim();
-	const match = raw.match(/^(-?\d{1,6})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
-	if(!match){
-		return null;
-	}
-	return {
-		year: parseInt(match[1], 10),
-		month: parseInt(match[2], 10),
-		day: parseInt(match[3], 10),
-		hour: parseInt(match[4], 10),
-		minute: parseInt(match[5], 10),
-		second: parseInt(match[6] || '0', 10),
-		date: `${match[1].padStart(4, '0')}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`,
-		time: `${match[4].padStart(2, '0')}:${match[5].padStart(2, '0')}:${(match[6] || '0').padStart(2, '0')}`,
-	};
 }
 
 function resolveCalculationDateTime(fields, nongli, options){

@@ -1,7 +1,7 @@
 // 塔罗 AI/导出快照文本(确定性增强):头(牌组·牌阵·设置·种子·指示牌) + 逐牌(各派名·正逆·占象·含义·尊位)
 //   + 综合块 + 可选定局/生命牌摘要。供 UI 直断与 AI 快照共用,单一真值源。
 import { getDeck, getDeckCards } from './deckRegistry.js';
-import { displayName, astroLine, cardMeaning } from './cardSchema.js';
+import { displayName, cardMeaning, correspondenceCell } from './cardSchema.js';
 import { orientationLabel } from './spreads.js';
 import { synthesizeText, yesNo, quintessence, theosophicalGroups, birthCards, yearCard, majorByNumber, countingChain, pairings, clarifier, YESNO_MODE_LABEL } from './verdict.js';
 import { REVERSAL_TEMPLATES } from './reversalModes.js';
@@ -14,7 +14,7 @@ function meaningOf(card, isReversed, system, reversalMode){
 	return cardMeaning(card, isReversed, system, reversalMode);
 }
 
-// [Q-223/T-189·FT-31] 设置行补非缺省口径(与页面「读法体系」节同源标签;缺省档不写,零回归)。
+// 设置行补非缺省口径(与页面「读法体系」节同源标签;缺省档不写,零回归)。
 const MEANING_LABEL = { manual: '逐牌义', waite: 'Waite 1911', degrees: '数字度' };
 const REVERSAL_GEN_LABEL = { fingers3: '三指定牌', all: '全逆' };
 function nonDefaultCalibre(eff, deck, caps){
@@ -28,8 +28,11 @@ function nonDefaultCalibre(eff, deck, caps){
 		if(eff.reversalGen && eff.reversalGen !== 'shuffle'){ out.push(`逆位产生 ${REVERSAL_GEN_LABEL[eff.reversalGen] || eff.reversalGen}`); }
 		if(eff.crossingUpright === false){ out.push('交叉牌不横置'); }
 	}
-	if(eff.courtElementSystem === 'alt'){ out.push('宫廷元素 位阶制'); }
-	if(eff.courtZodiacSystem === 'simple'){ out.push('宫廷星座 单座制'); }
+	// 宫廷两体系在页面「显示进阶对应」关着时不出控件:快照同样不写(页面看不见的设置不进 AI 内容)
+	if(eff.showCorrespondences){
+		if(eff.courtElementSystem === 'alt'){ out.push('宫廷元素 位阶制'); }
+		if(eff.courtZodiacSystem === 'simple'){ out.push('宫廷星座 单座制'); }
+	}
 	return out;
 }
 
@@ -47,13 +50,14 @@ export function buildReadingText(reading, question, opts){
 	const lines = [];
 	lines.push('[牌阵综览]');
 	lines.push(`【${reading.deckTitle || (deck && deck.title) || '塔罗'}】${reading.spreadTitle || ''}(种子:${reading.seed})`);
-	// [Q-222/T-185] 设置行与 [定局] 按 deck.caps 门控(与页面同源):无变体能力的牌组(雷诺曼/基帕/西比拉/扑克)不写「变体 A」,
+	// 设置行与 [定局] 按 deck.caps 门控(与页面同源):无变体能力的牌组(雷诺曼/基帕/西比拉/扑克)不写「变体 A」,
 	// 雷诺曼读法不出「定局」页,快照亦不写 Yes/No(此前 AI 拿到页面不承认的定局结论)。
 	const caps = (deck && deck.caps) || {};
 	const meta = [eff.reversals ? '逆位 ON' : '逆位 OFF'];
 	if(eff.dignities){ meta.push('元素尊位 ON'); }
-	if(eff.variant && caps.variant !== false){ meta.push(`变体 ${eff.variant}`); }
-	nonDefaultCalibre(eff, deck, caps).forEach((x)=>meta.push(x));   // [FT-31] 非缺省读法口径
+	// 「字母/路径变体」与页面同门控:牌组有变体能力且「显示进阶对应」开着才出控件,快照才写
+	if(eff.variant && caps.variant !== false && eff.showCorrespondences){ meta.push(`变体 ${eff.variant}`); }
+	nonDefaultCalibre(eff, deck, caps).forEach((x)=>meta.push(x));   // 非缺省读法口径
 	lines.push(`设置:${meta.join(' · ')}`);
 	if(q){ lines.push(`所问:${q}`); }
 	if(reading.significator && reading.significator.card){
@@ -64,7 +68,7 @@ export function buildReadingText(reading, question, opts){
 		if(reading.firstReversal.error){ lines.push(`单张逆位占卜:${reading.firstReversal.error}`); }
 		else{
 			lines.push(`单张逆位占卜:翻至第${reading.firstReversal.count}张现逆位(${reading.firstReversal.level})——${reading.firstReversal.note}`);
-			// [审计修] 自问句(右栏「可就此牌自问」渲染有快照无)。
+			// 自问句(右栏「可就此牌自问」渲染有快照无)。
 			if(Array.isArray(reading.firstReversal.questions) && reading.firstReversal.questions.length){
 				lines.push(`　可就此牌自问:${reading.firstReversal.questions.join('；')}`);
 			}
@@ -79,8 +83,9 @@ export function buildReadingText(reading, question, opts){
 		lines.push(`切牌(心态):${displayName(reading.cutCard.card, deck)}(${orientationLabel(reading.cutCard.isReversed)})——问卜者对此问的底层心态`);
 	}
 	lines.push('[逐牌详解]');
-	// [审计修] 补「位义」列(牌阵位含义 position.meaning+宫位元素相合注 slotElement——解读骨架,
+	// 补「位义」列(牌阵位含义 position.meaning+宫位元素相合注 slotElement——解读骨架,
 	// 「牌位」tab 渲染有快照曾无;缺省 —)。
+	// 「占象」格与页面牌义表 / 卡片同一函数(进阶对应开着时带路径 / 质点 / 象限后缀,关着不带)
 	lines.push('| 位置 | 位义 | 牌 | 正逆 | 占象 | 关键词 | 尊位 |');
 	lines.push('| --- | --- | --- | --- | --- | --- | --- |');
 	reading.draws.forEach((d) => {
@@ -90,7 +95,7 @@ export function buildReadingText(reading, question, opts){
 		const orient = d.crossed ? '横置' : orientationLabel(d.isReversed);
 		const posMeaning = [d.position && d.position.meaning ? d.position.meaning : '', d.position && d.position.slotElement ? `元素${d.position.slotElement}` : '']
 			.filter(Boolean).join('·') || '—';
-		lines.push(`| 位置${d.position.i}(${d.position.label}) | ${posMeaning} | ${displayName(card, deck)} | ${orient} | ${astroLine(card, deck, eff.variant, eff.astroModern, { elementSystem: eff.courtElementSystem, zodiacSystem: eff.courtZodiacSystem })} | ${meaningOf(card, d.isReversed, eff.meaningSystem, eff.reversalMode)} | ${dig} |`);
+		lines.push(`| 位置${d.position.i}(${d.position.label}) | ${posMeaning} | ${displayName(card, deck)} | ${orient} | ${correspondenceCell(card, deck, eff, caps)} | ${meaningOf(card, d.isReversed, eff.meaningSystem, eff.reversalMode)} | ${dig} |`);
 	});
 	// TP4 大牌加盖(表后逐条,与右栏牌义页同源)。
 	reading.draws.forEach((d) => {
@@ -99,16 +104,16 @@ export function buildReadingText(reading, question, opts){
 	});
 	if(reading.summary){ lines.push('[综合断语]'); lines.push(synthesizeText(reading.summary)); }
 	// 定局摘要(Yes/No + 精华牌;TP2 精华牌按 quintMode 口径,fool22 时另出三张分组加法)
-	// [Q-222/T-185] 雷诺曼读法(lenormand/kipper)页面不出「定局」页 → 快照同样不出该段(与 TarotMain 定局 TabPane 同门控)。
+	// 雷诺曼读法(lenormand/kipper)页面不出「定局」页 → 快照同样不出该段(与 TarotMain 定局 TabPane 同门控)。
 	if(caps.readingMethod !== 'lenormand') try{
 		const cards = getDeckCards(reading.deckId);
 		const v = yesNo(reading.draws, eff.verdictMode || 'majority');
 		const quint = quintessence(reading.draws, cards, undefined, eff.quintMode);
 		lines.push('[定局]');
-		// [Q-223/T-189·FT-31] 定局口径写中文标签(页面同 YESNO_MODE_LABEL;此前直出英文键 weighted_center)
+		// 定局口径写中文标签(页面同 YESNO_MODE_LABEL;此前直出英文键 weighted_center)
 		const vm = eff.verdictMode || 'majority';
 		lines.push(`Yes/No=${v.verdict}(${YESNO_MODE_LABEL[vm] || vm},score ${v.score})${quint ? ` · 精华牌 ${displayName(quint, deck)}${eff.quintMode === 'fool22' ? '(愚人廿二口径)' : ''}` : ''}`);
-		// [Q-223/T-189·FT-33③] 牌间关系(相邻/镜像/桥接)与澄清牌:页面定局页有、快照曾缺。
+		// 牌间关系(相邻/镜像/桥接)与澄清牌:页面定局页有、快照曾缺。
 		try{
 			const pr = pairings(reading.draws);
 			const pairName = (pp)=>`${displayName(pp.a, deck)}×${displayName(pp.b, deck)}`;
@@ -126,7 +131,7 @@ export function buildReadingText(reading, question, opts){
 				lines.push(`数值加法:底层 ${displayName(groups.total, deck)} · 外显 ${groups.outer ? displayName(groups.outer, deck) : '—'} · 左/承受 ${groups.left ? displayName(groups.left, deck) : '—'} · 右/主动 ${groups.right ? displayName(groups.right, deck) : '—'}`);
 			}
 		}
-		// [X1·P2-34] 计数链与右栏定局 tab 同源(此前显示有而 AI 不见)。
+		// 计数链与右栏定局 tab 同源(此前显示有而 AI 不见)。
 		const chain = countingChain(reading.draws, 0, Math.min(reading.draws.length, 8));
 		if(chain && chain.length > 1){ lines.push(`计数链:${chain.map((c)=>displayName(c, deck)).join(' → ')}`); }
 		// TP4 组合征象(命中才出;转化/健康类附护栏)。
@@ -141,7 +146,7 @@ export function buildReadingText(reading, question, opts){
 		const courts = courtSignDetect(reading.draws);
 		courts.forEach((c) => {
 			const det = c.hits.length ? `伴牌检测:更似${c.hits.map((h) => `${h.signCn}座`).join('/')}之人` : (c.baseSignCn ? `单座制约${c.baseSignCn}座` : '');
-			// [QA-6] 年龄/外貌取自 courtSignDetect 备好的结果(单源),不在此另行查表
+			// 年龄/外貌取自 courtSignDetect 备好的结果(单源),不在此另行查表
 			lines.push(`宫廷指认:${c.name}=${c.age};${c.appearance}${det ? `;${det}` : ''}(先人物解,不通再事件解)`);
 		});
 	}catch(e){ /* 定局可选,失败不阻断 */ }

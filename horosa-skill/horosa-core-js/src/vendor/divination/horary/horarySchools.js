@@ -25,7 +25,7 @@ export const HORARY_SCHOOL_ORDER = ['classical', 'renaissance', 'strict', 'seque
 export const HORARY_PARAM_SPEC = [
 	// —— 起盘（scope:school/global —— 卜卦页不渲染;流派绑定或全局设置管辖）——
 	{ key: 'hsys', group: '起盘', scope: 'school', label: '宫制', type: 'select', sendToBackend: true, default: 2,
-		// [Q-299/T-288 ①] 数值=后端 perchart.hsys[] 索引(与 AstroConst.HOUSE_SYSTEM_OPTIONS 同表):4=Koch / 9=Porphyry / 10=Campanus;
+		// 数值=后端 perchart.hsys[] 索引(与 AstroConst.HOUSE_SYSTEM_OPTIONS 同表):4=Koch / 9=Porphyry / 10=Campanus;
 		// 此前 4/5/7 标 Campanus/Koch/Porphyry,而后端 4/5/7 实为 Koch/Vehlow Equal/Sripati(流派只绑 0–3,页面不可达,但表须说真话)。
 		options: [ { value: 0, label: '整宫制' }, { value: 1, label: 'Alcabitius' }, { value: 2, label: 'Regiomontanus' }, { value: 3, label: 'Placidus' }, { value: 4, label: 'Koch' }, { value: 9, label: 'Porphyry' }, { value: 10, label: 'Campanus' } ] },
 	{ key: 'termsVariant', group: '起盘', scope: 'global', label: '界系', type: 'select', sendToBackend: true, default: 2,
@@ -63,7 +63,7 @@ export const HORARY_PARAM_SPEC = [
 		options: [ { value: 8.5, label: '8°30′（1647）' }, { value: 8, label: '8°（中世纪）' } ] },
 	{ key: 'underBeamsOrb', group: '太阳', scope: 'global', label: '日光束外界', type: 'select', default: 17,
 		options: [ { value: 17, label: '17°（1647）' }, { value: 15, label: '15°（较古）' } ] },
-	// [Q-144/T-51 2026-09-18] 缺省改 false:择日只下发 ≠ 缺省的键、判读门要求 === true → 旧缺省 true 时「显示开、引擎关、拨关仍关」=死开关;
+	// 缺省改 false:择日只下发 ≠ 缺省的键、判读门要求 === true → 旧缺省 true 时「显示开、引擎关、拨关仍关」=死开关;
 	// 卜卦七档流派各自绑定本键(全局值到不了卜卦),故本键实际只作用于择日判读层。缺省关 = 与引擎缺省逐字一致,拨开即真生效。
 	{ key: 'combustMitigateSameSign', group: '太阳', scope: 'global', label: '燃烧限同座（择日判读层；卜卦按流派）', type: 'switch', default: false,
 	  hint: '开启后异座近日星只算日光束下、不算燃烧(1647 主流口径)。卜卦盘由所选流派决定,不受此项。' },
@@ -97,7 +97,7 @@ export const HORARY_PARAM_SPEC = [
 		options: [ { value: 'either', label: '两口径任一' }, { value: 'lilly', label: '行星统辖版' }, { value: 'bonatti', label: '落座元素版' } ] },
 	{ key: 'perfectionStrict', group: '判读', scope: 'horary', label: '完成法严格度', type: 'select', default: 'standard',
 		options: [ { value: 'standard', label: '标准' }, { value: 'strict', label: '严格' }, { value: 'lenient', label: '宽松' } ] },
-	// —— [H2] 完成法新五键(default 全=现状零回归;流派学理差异见 SCHOOL_JUDGE_DIFF) ——
+	// —— 完成法新五键(default 全=现状零回归;流派学理差异见 SCHOOL_JUDGE_DIFF) ——
 	{ key: 'perfectionCandidates', group: '判读', scope: 'horary', label: '传光候选星集', type: 'select', default: 'withOuter',
 		options: [ { value: 'withOuter', label: '含三王星（现行）' }, { value: 'classical7', label: '仅七政（古典）' } ],
 		hint: '光线传递/汇集/阻断的第三星池;古典口径三王星不传光。交点/福点任何档皆不入池。' },
@@ -112,11 +112,11 @@ export const HORARY_PARAM_SPEC = [
 		hint: '入相星临留驻/刚回顺时,应期附「事有停滞/渐启动」修正注记。' },
 	{ key: 'backendConditionNotes', group: '判读', scope: 'horary', label: '实测状态入证词', type: 'switch', default: false,
 		hint: '后端实测字段入单星证词:留驻/度性(光明暗黑烟雾)/特殊度注记+围荣围耀正面证词+临留驻撤回风险。' },
-	// —— [H5] 徵象星语义四键(default 全=现状零回归;personScope/querentGender 属问事档不绑流派) ——
-	{ key: 'personScope', group: '判读', scope: 'horary', label: '问谁的事', type: 'select', default: 'self',
+	// —— 徵象星语义四键(default 全=现状零回归;personScope/querentGender 属问事档不绑流派) ——
+	{ key: 'personScope', group: '判读', scope: 'horary', label: '问谁的事', type: 'select', default: 'self', questionScoped: true,
 		options: [ { value: 'self', label: '自己（默认）' }, { value: 'spouse', label: '配偶（7 起）' }, { value: 'child', label: '子女（5 起）' }, { value: 'parent', label: '父母（随两派）' }, { value: 'sibling', label: '兄弟姊妹（3 起）' }, { value: 'friend', label: '朋友（11 起）' }, { value: 'boss', label: '上司（10 起）' }, { value: 'pet', label: '宠物（6 起）' } ],
 		hint: '问他人之事时用事宫经转宫法换算(如问配偶的事业=7 起第 10=本盘 4 宫);征象星/根本性同步吃转换后语义。' },
-	{ key: 'querentGender', group: '判读', scope: 'horary', label: '问者性别', type: 'select', default: '',
+	{ key: 'querentGender', group: '判读', scope: 'horary', label: '问者性别', type: 'select', default: '', questionScoped: true,
 		options: [ { value: '', label: '不指定（默认）' }, { value: 'male', label: '男' }, { value: 'female', label: '女' } ],
 		hint: '婚恋类对象自然征象分流:男问者→对象取金/月;女问者→对象取日/火(1647 口径)。不指定=恒金星。' },
 	{ key: 'moonPromotion', group: '判读', scope: 'horary', label: '月亮升格', type: 'select', default: 'note',
@@ -124,7 +124,7 @@ export const HORARY_PARAM_SPEC = [
 		hint: '四条件命中且主径无完成时,apply 档以月亮×事项星的完成法续判(应期随之)。' },
 	{ key: 'naturalSignifEnhanced', group: '判读', scope: 'horary', label: '自然征象增强', type: 'switch', default: false,
 		hint: '父/母类自然征象按昼夜分流(昼父=日/夜父=土);用事宫主三重受克凑二时自然征象升 co-quesited 标注。' },
-	// —— [H7] 裁决双轨(default legacy=旧四源阈值算法逐字节;流派默认翻转推迟 H10 凭双闸拍板) ——
+	// —— 裁决双轨(default legacy=旧四源阈值算法逐字节;流派默认翻转推迟 H10 凭双闸拍板) ——
 	{ key: 'verdictProfile', group: '判读', scope: 'horary', label: '裁决算法', type: 'select', default: 'legacy',
 		options: [ { value: 'legacy', label: '传统四源（现行）' }, { value: 'v2', label: '全证词池＋置信度' } ],
 		hint: 'v2=互容/接纳/时主/恒星/映点/almuten/围攻/月亮径/驻星等全证词入天平,去重软封顶,产 0-100 置信度+五档判语;结构护栏保完成法权威。' },
@@ -164,9 +164,9 @@ export const SCHOOL_JUDGE_DIFF = {
 		ascEarlyDeg: 3, ascLateDeg: 27, considerationsMode: 'warn',
 		vocMode: 'classic', vocMitigateSigns: false, combustMitigateSameSign: true,
 		pofReversal: false, fixedStarOrb: 2, perfectionStrict: 'standard', includeOuter: false,
-		// [H2] 新五键 classical 一律不绑=零回归锚(参数不存在时=引擎既有行为);
+		// 新五键 classical 一律不绑=零回归锚(参数不存在时=引擎既有行为);
 		// 传光候选收七政等学理绑定只落 renaissance/strict/sequence/hellenistic/medieval 五档。
-		// [H10 拍板 2026-08-24] classical 默认翻转(verdictProfile v2/receptionPerfection/
+		// classical 默认翻转(verdictProfile v2/receptionPerfection/
 		// rescueAfterDestruction 等)本轮一律不翻:分布闸首测健康(180 真盘 legacy↔v2 零强反转、
 		// 中位置信度 58、判别力 78%),但教科书真值闸未上线——历史文献卦例时刻须人工核实后录
 		// fixture(臆造时刻=学术造假风险)。翻默认推迟至文献闸+真实使用反馈到位后凭证据逐项再议。
@@ -280,7 +280,7 @@ export function schoolOf(id){
 	return HORARY_SCHOOLS[id] || HORARY_SCHOOLS.classical;
 }
 
-// [Q-296/T-280 ②] 判读三分制 → /chart 三分集字段值(盘面尊贵/接纳/互容与前端 almuten 同一口径)。
+// 判读三分制 → /chart 三分集字段值(盘面尊贵/接纳/互容与前端 almuten 同一口径)。
 export function horaryTriplicityOf(tripSystem){
 	return tripSystem === 'dorothean' ? 'Dorothean' : 'Ptolemaic';
 }
@@ -297,7 +297,7 @@ export function horaryBackendFields(id, overrides){
 	if(b.geminiBoundEmended) out.geminiBoundEmended = b.geminiBoundEmended;
 	// 福点反转随档下发（0=恒昼式,与判读 pofReversal 对齐;买通盘面与判读的福点口径）。
 	if(b.lotReversal !== null && b.lotReversal !== undefined) out.lotReversal = b.lotReversal;
-	// [Q-296/T-280 ②] 三分集随档下发:此前 tripSystem 只被前端 almuten 消费,盘面尊贵分/接纳/互容按全局
+	// 三分集随档下发:此前 tripSystem 只被前端 almuten 消费,盘面尊贵分/接纳/互容按全局
 	// triplicity(缺省 Dorothean)算 → 经典主流档(ptolemaic)的力量与接纳实为 Dorotheus 口径。
 	out.triplicity = horaryTriplicityOf((overrides && overrides.tripSystem) || b.tripSystem);
 	if(overrides){
@@ -356,16 +356,32 @@ export function presetOf(fields){
 	return hit || 'classical';
 }
 
-// 精确匹配版：overrides 为空 → 显预设名;有覆盖 → 『预设名·已自定义 N 项』语义由 UI 拼装。
-export function presetLabelOf(id, overrides){
-	const n = overrideCount(overrides);
-	const sc = schoolOf(id);
-	return n > 0 ? `${sc.cn} ·（已自定义 ${n} 项）` : sc.cn;
-}
-
 // 选择器 options（antd Select）。
 export function horarySchoolSelectOptions(){
 	return HORARY_SCHOOL_ORDER.map((id) => ({ label: HORARY_SCHOOLS[id].cn, value: id }));
 }
 
 export default HORARY_SCHOOLS;
+
+// 属「这一问」而不绑流派的判读键(spec 上 questionScoped:true):换流派时逐项判读覆盖回「随流派」,这几项保留。
+// 页面换派、AI 挂载齿轮换派(草稿联动 + 剪枝基准)、挂载重算换派三处同用这一个函数(与六爻换派保留占类 / 用神同一思路)。
+export const HORARY_QUESTION_SCOPED_KEYS = HORARY_PARAM_SPEC.filter((sp)=>sp.questionScoped).map((sp)=>sp.key);
+export function keepQuestionScoped(overrides){
+	const src = overrides && typeof overrides === 'object' ? overrides : {};
+	const out = {};
+	HORARY_QUESTION_SCOPED_KEYS.forEach((k)=>{ if(src[k] !== undefined){ out[k] = src[k]; } });
+	return out;
+}
+
+// 存档里的卜卦流派(单源):extra.horarySchool 认得就用;没存流派 → 按存档宫制反推(与页面 presetOf 同一判据:
+// 整宫 → 希腊化 / Alcabitius → 中世纪 / Placidus → 现代 ……);都没有 → 经典主流。
+// 齿轮基线展平、「换没换派」判定、挂载重算三处同用,不各写缺省 'classical'。
+export function horaryStoredSchool(payload, settings){
+	const p = payload && typeof payload === 'object' ? payload : {};
+	const ex = p.extra && typeof p.extra === 'object' ? p.extra : {};
+	if(ex.horarySchool && HORARY_SCHOOLS[ex.horarySchool]){ return `${ex.horarySchool}`; }
+	const st = settings && typeof settings === 'object' ? settings : (p.settings && typeof p.settings === 'object' ? p.settings : null);
+	const raw = st && st.hsys !== undefined && st.hsys !== null && st.hsys !== '' ? st.hsys : undefined;
+	const n = raw === undefined ? NaN : Number(raw);
+	return presetOf(Number.isFinite(n) ? { hsys: { value: n } } : null);
+}

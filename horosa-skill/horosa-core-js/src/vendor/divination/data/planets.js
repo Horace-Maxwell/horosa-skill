@@ -141,16 +141,6 @@ export const PLANETS = {
 	},
 };
 
-// 逆行解读口径（择日清单 §2.1）。retro_weakens 可配置（Marion March 一派不认为逆行必弱）。
-export const RETROGRADE_NOTES = {
-	mercury: '必避：签约、沟通、交通、购车、商业谈判。',
-	venus: '婚姻、买高价物品必避（除非破镜重圆式复合婚）；财务买卖避。',
-	mars: '购买机械/汽机车避；行动力类事项避。',
-	jupiter: '旅行/法律事务避（尤忌主管 9/7 宫且逆行）；多代表缺乏好运、经济不景气。',
-	outer: '三王星逆行太普遍通常不计；但若主管命宫/用事宫，仍不宜逆行。',
-	rule: '主管命宫/用事宫的内行星逆行始终标红。',
-};
-
 // 七行星平均日行度（卜卦口径 04§6.1，单位 °/日）：swift/slow 判定与应期快慢修正的单一阈值源。
 // 日/水/金三者同值（地心视角三者年绕一周）;地心争议档允许 opts.meanTable 覆盖（默认零回归）。
 export const MEAN_DAILY_MOTION = {

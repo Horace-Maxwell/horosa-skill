@@ -19,7 +19,7 @@ function yesNo(v, fallback){
 }
 
 // 返回单行文本;参数缺位按各技法惯例给缺省(晚子时归次日=否、23 点换日=否 与 BaZi.js 默认口径一致)。
-// [Q-191/T-134] note:同一张盘里存在第二种时标时的补注(如七政:盘面按钟面时,四柱另按真太阳时)。
+// note:同一张盘里存在第二种时标时的补注(如七政:盘面按钟面时,四柱另按真太阳时)。
 // 不传 = 旧行逐字节不变。
 export function buildTimeBasisLine({ timeAlg, lateZiHourUseNextDay, after23NewDay, zone, note } = {}){
 	const parts = [`时间基准：${timeBasisLabel(timeAlg)}`];

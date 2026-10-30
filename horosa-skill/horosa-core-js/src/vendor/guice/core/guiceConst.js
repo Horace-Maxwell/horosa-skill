@@ -13,7 +13,6 @@ export const XIANTIAN_NUM = Gua8.reduce((m, g, i) => { m[g.name] = i + 1; return
 // 后天正数：坎1 坤2 震3 巽4 [5=寄宫] 乾6 兑7 艮8 离9 [10=寄宫]
 // 五与十无卦可配 → 为寄宫之槽，其所寄之卦有异说，见 JI_GONG_MODES。
 export const HOUTIAN_NUM = { 坎: 1, 坤: 2, 震: 3, 巽: 4, 乾: 6, 兑: 7, 艮: 8, 离: 9 };
-export const JI_GONG_SLOTS = [5, 10];
 
 // ── 策数与轨数 ───────────────────────────────────────────
 export const CE_YANG = 36;
@@ -155,14 +154,6 @@ export const SHIYING_SETS = {
 // ── 六十甲子天地立成定数：两表并存（所载完全不同，故可切）────
 // 默认取心易发微表 —— 唯一完整占例之演算实取此表（用另一表其数与书中演算对不上）。
 export { LIUSHIJIAZI_DINGSHU } from './guiceJiaziShu.js';
-
-// ── 动静（体用四诀之一）────────────────────────────────
-export const DONGJING = {
-	静: ['体卦', '互卦', '中方应', '天时', '地理'],
-	动: ['用卦', '变卦', '人事', '器物'],
-	应期: { 坐: '应迟', 行: '应速', 立: '半迟半速' },
-	qiGuaYaoQiu: '起卦须一动一静方成卦',
-};
 
 export default {
 	XIANTIAN_NUM, HOUTIAN_NUM, DAN_GUA_CE, DAN_GUA_GUI, WUXING_SHENGCHENG,

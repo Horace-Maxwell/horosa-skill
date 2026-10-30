@@ -66,16 +66,6 @@ export function julianToJdn(year, month, day){
 	let m = month + 12 * a - 3;
 	return day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - 32083;
 }
-export function jdnToJulian(jdn){
-	let c = jdn + 32082;
-	let d = Math.floor((4 * c + 3) / 1461);
-	let e = c - Math.floor(1461 * d / 4);
-	let m = Math.floor((5 * e + 2) / 153);
-	const day = e - Math.floor((153 * m + 2) / 5) + 1;
-	const month = m + 3 - 12 * Math.floor(m / 10);
-	const year = d - 4800 + Math.floor(m / 10);
-	return { year, month, day };
-}
 
 // JDN → proleptic 格里历(供后端星历请求的日期串;现代域与系统历一致)
 export function jdnToGregorian(jdn){

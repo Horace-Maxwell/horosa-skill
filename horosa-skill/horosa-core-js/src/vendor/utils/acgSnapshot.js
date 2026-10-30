@@ -11,10 +11,10 @@ const PLANET_CN = {
 	Ceres: '谷神星', Pallas: '智神星', Juno: '婚神星', Vesta: '灶神星', Eris: '阋神星',
 };
 const MODE_CN = { mundo: '本体(in-mundo·真黄纬)', zodiac: '黄道度(β=0)' };
-const COORD_CN = { geo: '地心', helio: '日心', topo: '站心' };   // [Q-151/AX-15⑥] UI 有站心档,快照曾直出「topo」
+const COORD_CN = { geo: '地心', helio: '日心', topo: '站心' };   // UI 有站心档,快照曾直出「topo」
 const REL_CN = { davison: '戴维森时空中点盘', composite: '中点合盘', synastry: '双人叠加' };
 const KIND_CN = { transit: '行运', progressed: '二次推运' };
-// [Q-440] 本地空间画法 / 地理等价流派·取数·流派缺省 0°♈ 子午线(镜像后端 GEODETIC_ZERO;自定义值走 uiState.geodeticZero)
+// 本地空间画法 / 地理等价流派·取数·流派缺省 0°♈ 子午线(镜像后端 GEODETIC_ZERO;自定义值走 uiState.geodeticZero)
 const LS_MODE_CN = { great: '大圆', rhumb: '等角航线' };
 const GEODETIC_CN = { sepharial: '塞法里尔', mcrae: '麦克雷', johndro: '约翰德罗' };
 const GEODETIC_VAR_CN = { longitude: '黄经法', ra: '赤经法' };
@@ -140,7 +140,7 @@ export function buildAcgSectionText(){
 			? point.hits.map((h) => `${PLANET_CN[h.planet] || h.planet}${({ Asc: '上升', Desc: '下降', MC: '中天', IC: '天底' })[h.angle] || h.angle}线(偏差 ${h.orb}°)`).join('、')
 			: '无行星线经过'));
 	}
-	// [Q-440/T-403] ◆ 本地空间线 / ◆ 地理等价线:两图层开启时才进快照(纯渲染开关,数据恒在响应里),
+	// ◆ 本地空间线 / ◆ 地理等价线:两图层开启时才进快照(纯渲染开关,数据恒在响应里),
 	// 数据=后端 lines.lsAz(方位/高度)与 lines.geodetic(地理 MC/IC 经度),口径行写画法/流派/取数/子午线。
 	const uiLayers = latest.uiState || {};
 	if(uiLayers.showLS){

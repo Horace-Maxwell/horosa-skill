@@ -28,22 +28,14 @@ let chartshape = localStorage.getItem('suzhanChartShape');
 if(chartshape === undefined || chartshape === null){
 	chartshape = SZChart_Square;
 }else{
-	try{
-		chartshape = parseInt(chartshape);
-	}catch(e){
-		chartshape = SZChart_Square;
-	}
+	chartshape = parseInt(chartshape);
 }
 
 let houseStartMode = localStorage.getItem('suzhanHouseStartMode');
 if(houseStartMode === undefined || houseStartMode === null){
 	houseStartMode = SZHouseStart_Bazi;
 }else{
-	try{
-		houseStartMode = parseInt(houseStartMode, 10);
-	}catch(e){
-		houseStartMode = SZHouseStart_Bazi;
-	}
+	houseStartMode = parseInt(houseStartMode, 10);
 }
 if(houseStartMode !== SZHouseStart_ASC){
 	houseStartMode = SZHouseStart_Bazi;

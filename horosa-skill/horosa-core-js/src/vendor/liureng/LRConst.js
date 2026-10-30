@@ -1,3 +1,4 @@
+import { scriptWordAttrs } from '../utils/scriptMode.js';
 import * as AstroConst from '../../constants/AstroConst.js';
 
 export const LRChart_Circle = 0;
@@ -43,12 +44,14 @@ export const YingZi = ['丑', '卯', '巳', '未', '酉', '亥'];
 export const YangGan = ['甲', '丙', '戊', '庚', '壬'];
 export const YingGan = ['乙', '丁', '己', '辛', '癸'];
 
+// 盘面字色:明暗成对的主题色(svg 属性里的 var() 随主题即时换值)。旧写死色只为亮底挑:天将紫 #800080 暗底 1.9:1、
+// 时辰徽白字压 #CC9900 只有 2.6:1 —— 徽标底改走 gold、字走与它成对的 on-accent。
 export const LRColor = {
-	tianJiangColor: '#800080',
-	liuQinColor: '#948e33',
+	tianJiangColor: 'var(--horosa-hue-purple)',
+	liuQinColor: 'var(--horosa-element-earth)',
 	time:{
-		bg: '#CC9900',
-		color: '#ffffff',
+		bg: 'var(--horosa-gold)',
+		color: 'var(--horosa-on-accent)',
 	}
 };
 
@@ -536,11 +539,6 @@ export function getHouseColor(i){
 	return AstroConst.AstroColor.SignFill[sig];
 }
 
-export function getSigColor(i){
-	let sig = AstroConst.LIST_SIGNS[i];
-	return AstroConst.AstroColor[sig];
-}
-
 export function getSignZi(sign){
 	let idx = AstroConst.LIST_SIGNS.indexOf(sign);
 	return SignZiList[idx];
@@ -569,10 +567,6 @@ export function getGuiZi(chartObj, guirengType, isDiurnalOverride, yinyangSystem
 
 export function isRestrain(gz1, gz2){
 	return GanZiRestrain[gz1].indexOf(gz2) >= 0;
-}
-
-export function isBrother(gz1, gz2){
-	return GanZiBrother[gz1].indexOf(gz2) >= 0;
 }
 
 export function isAccrue(gz1, gz2){
@@ -656,3 +650,22 @@ export function getXun(gan, zi){
 	return xun;
 }
 
+// 十二天将缩写(单源:六壬页简盘 / 三式合一六壬圈 / 金口诀同用 —— 三式合一同步铁律;护栏 tianJiangShortSingleSource.test.js)
+export const TIANJIANG_SHORT = {
+	'贵人': '贵', '螣蛇': '蛇', '腾蛇': '蛇', '朱雀': '雀', '六合': '合', '勾陈': '勾', '青龙': '龙',
+	'天空': '空', '白虎': '虎', '太常': '常', '玄武': '玄', '太阴': '阴', '天后': '后',
+};
+
+// 天将名 → 单字缩写(表外的名取首字;空 → '')
+export function shortTianJiang(name){
+	const text = `${name === undefined || name === null ? '' : name}`.trim();
+	if(!text){ return ''; }
+	return TIANJIANG_SHORT[text] || Array.from(text)[0];
+}
+
+// 缩写字的节点属性:带全称与位次,界面简繁按整词定字(天后 → 后,不作「後」)
+export function tianJiangShortAttrs(name){
+	const text = `${name === undefined || name === null ? '' : name}`.trim();
+	const idx = Array.from(text).indexOf(shortTianJiang(text));
+	return (text.length > 1 && idx >= 0) ? scriptWordAttrs(text, idx) : {};
+}

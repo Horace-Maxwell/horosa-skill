@@ -20,7 +20,6 @@ export const HOUSE_MEANINGS = {
 
 export const ANGULAR_HOUSES = [1, 4, 7, 10];
 export const SUCCEDENT_HOUSES = [2, 5, 8, 11];
-export const CADENT_HOUSES = [3, 6, 9, 12];
 
 export function angularityOf(house){
 	if(ANGULAR_HOUSES.indexOf(house) >= 0) return 'angular';
@@ -35,19 +34,5 @@ export function turnedHouse(baseHouse, offset){
 	const o = ((offset - 1) % 12 + 12) % 12;
 	return ((b + o) % 12) + 1;
 }
-
-// 公司开业各宫象征（择日事业盘，择日清单 §2.3）
-export const COMPANY_HOUSE = {
-	1: '公司成员/股东/员工士气·企业文化(外显)', 2: '流动资产/金钱收入', 3: '内部沟通/内部文化',
-	4: '办公室/厂房/固定资产', 5: '中级主管/创新力', 6: '员工/劳工', 7: '对外关系/竞争者/法律/合作',
-	8: '会计/固定资产/税务', 9: '广告/顾问', 10: '最高管理者(总经理/总裁)', 11: '公司获利/合作', 12: '暗中的敌人/隐藏竞争者',
-};
-
-// 汽车各宫部位（购车/交车盘可类推任意「物」，择日清单 §2.3）
-export const CAR_HOUSE = {
-	1: '车头/驾驶座/点火', 2: '内装/音响', 3: '风扇/油泵/进气/轮圈', 4: '油管/后座/安全带/水箱',
-	5: '底盘/引擎/前灯/活塞', 6: '滤油器/备胎', 7: '避震/悬吊/雨刷', 8: '排气/消音/散热',
-	9: '顶棚/油箱', 10: '离合/煞车/变速箱', 11: '胎压/电池/化油器/电线', 12: '轮胎/行李箱',
-};
 
 export default HOUSE_MEANINGS;

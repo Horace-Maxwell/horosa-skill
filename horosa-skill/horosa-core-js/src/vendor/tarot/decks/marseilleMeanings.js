@@ -4,7 +4,7 @@
 // 宫廷四阶(此派等级序 侍从→王后→国王→骑士,骑士最高=携能量赴新层级的使者)。
 
 // 十度通表:义 + 危险。
-import { isTrumpArcana } from '../engine/arcana.js'; // [QA-9] 王牌判据单一真值源(零依赖叶子,不成环)
+import { isTrumpArcana } from '../engine/arcana.js'; // 王牌判据单一真值源(零依赖叶子,不成环)
 export const DEGREE_CORE = {
 	1: { label: '潜能', text: '全部潜能与开始——未显化的整体', danger: '滞留于纸上谈兵,始终不落地' },
 	2: { label: '积蓄', text: '积蓄、酝酿、预备——备而未发', danger: '按兵太久,积而不动则腐' },
@@ -98,7 +98,7 @@ export function degreesMeaningOf(card){
 
 // 马赛编号(此派原生框架:正义=VIII/力量=XI,与 RWS 对调;其余同号)。度/十进对/和21 皆按此运算。
 export function marseilleNumber(card){
-	// [QA-9] 认 *_trump:此前写死 'major',维斯康蒂/米兰凯特的王牌走不到下面的换号,
+	// 认 *_trump:此前写死 'major',维斯康蒂/米兰凯特的王牌走不到下面的换号,
 	// 力量↔正义的马赛换号对这两副静默失效(而马赛对读整套都建立在此编号上)。
 	if(!card || !isTrumpArcana(card.arcana)){ return card ? card.number : null; }
 	if(card.sid === 'strength'){ return 11; }
@@ -109,7 +109,7 @@ export function marseilleNumber(card){
 // 牌的「度」值(度间关系引擎用):数字牌=面值;大牌按马赛编号 1..10↔11..20 同度(n>10 取 n-10),0/21 在周期外;宫廷插位不入度。
 export function degreeOf(card){
 	if(!card){ return null; }
-	if(isTrumpArcana(card.arcana)){ // [QA-9] 同上
+	if(isTrumpArcana(card.arcana)){ // 同上
 		const n = marseilleNumber(card);
 		if(n >= 1 && n <= 10){ return n; }
 		if(n >= 11 && n <= 20){ return n - 10; }

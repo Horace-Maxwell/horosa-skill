@@ -6,18 +6,19 @@
 
 
 
+
 import * as AstroConst from '../../constants/AstroConst.js';
 import { littleEndian } from '../gua/littleEndian.js';
 
 
 
 import { getGua64, Gua64, Gua8, randYao, ZiList, HourZi, SixGods, getXunEmpty, LiuQi } from '../gua/GuaConst.js';
-import { pureGuaOf } from '../gua/LiuYaoEngine.js';   // [Q-448/T-411] 伏神卦(本宫首卦)——快照补完整装卦用
+import { pureGuaOf } from '../gua/LiuYaoEngine.js';   // 伏神卦(本宫首卦)——快照补完整装卦用
 
 import { analyzeLiuyao } from '../gua/liuyaoFacade.js';
-import { normalizeLiuyaoSettings, applyPreset, setOption, LIUYAO_SCHOOL_OPTIONS, LIUYAO_PRESETS, loadPersistedLiuyaoSettings, persistLiuyaoSettings } from '../gua/liuyaoSchools.js';
-
+import { normalizeLiuyaoSettings, applyPreset, factoryLiuyaoSettings, setOption, selectionDelta, applySelectionDelta, LIUYAO_SCHOOL_OPTIONS, LIUYAO_PRESETS, loadPersistedLiuyaoSettings, persistLiuyaoSettings } from '../gua/liuyaoSchools.js';
 import { definePageSettings } from '../utils/pageSettingsStore.js';
+
 
 
 
@@ -36,7 +37,8 @@ import { CHISHI_JUE, FADONG_JUE, LIUSHEN_FADONG, YAOWEI_XIANG, ZHANLEI_GANGYAO }
 
 
 
-// [视觉底线·2026-09-17] 最小尺寸是屏幕可读意图(物理 px),壳缩放 z 下按 1/z 折算成布局 px;z=1 恒等。
+// 最小尺寸是屏幕可读意图(物理 px),壳缩放 z 下按 1/z 折算成布局 px;z=1 恒等。
+
 
 
 
@@ -94,6 +96,19 @@ export function buildTimeGua(nongli){
 	return { yao, currentGua: guaidx, nongli };
 }
 
+// 按爻起卦(用户亲手摇出 / 报出的六爻)——纯函数,与 buildTimeGua 同形产物;装配与 onManualCast 逐步相同
+// (emptyYao → 填爻值与动爻 → getCurrentGua → setupYao),仅爻源不同。lines = 0 阴 / 1 阳 ×6(初爻在前);moving = 动爻位 1-6。
+export function buildLinesGua(lines, moving, nongli){
+	if(!Array.isArray(lines) || lines.length !== 6 || lines.some((v) => v !== 0 && v !== 1)){ return null; }
+	const mv = Array.isArray(moving) ? moving : [];
+	const yao = lines.map((v, i) => ({ value: v, change: mv.indexOf(i + 1) >= 0, color: AstroConst.AstroColor.Stroke, name: null }));
+	const gua = getGua64(littleEndian(lines));
+	const guaidx = gua ? gua.index : null;
+	if(guaidx === null || guaidx === undefined || !Gua64[guaidx]){ return null; }
+	for(let i = 0; i < yao.length; i++){ yao[i].name = Gua64[guaidx].yaoname[i]; }
+	return { yao, currentGua: guaidx, nongli: nongli || null };
+}
+
 // GFM 表化同构数据行(空 cell → —),供 AI 导出/挂载可读化;数据层零变化——表行可逆变换逐字复原旧格式行。
 const MD_DASH = '—';
 function pushMdRows(lines, header, rows){
@@ -104,7 +119,7 @@ function pushMdRows(lines, header, rows){
 	});
 }
 
-// [Q-208/T-162] 年干支取法单一化:此前只有 [断卦结构] 段按「定年界线」取(lunar 档取农历年支),
+// 年干支取法单一化:此前只有 [断卦结构] 段按「定年界线」取(lunar 档取农历年支),
 // 而 [起盘信息] 首段与左栏概览恒取立春系 → 立春↔正月初一窗口内同一快照/同一页出现两个年干支。
 // 缺省(lichun)档与既有取法逐字相同,只有 lunar 档且落在该窗口内的盘首段文字才变。
 function yearGzByBoundary(nongli, settings){
@@ -122,7 +137,7 @@ export function liuyaoStructLines(st){
 		if(!nowGua || !(yao && yao.length === 6 && yao.every((y)=>y && (y.value === 0 || y.value === 1)))){ return []; }
 		const nongli = (st && st.nongli) || {};
 		const settings = normalizeLiuyaoSettings(st && st.liuyaoSettings);
-		// [X1] 与 liuyaoSnapshotEx.buildSnapshotAnalysis 同口径(三处同口径铁律):
+		// 与 liuyaoSnapshotEx.buildSnapshotAnalysis 同口径(三处同口径铁律):
 		// 年界线吃 settings.yearBoundary(正月初一派取 yearGZByLunar);ctx 补 hourZhi/jieqiName
 		// (缺则时辰类神煞/节气派生在本段空转,与断诀段结论可不一致)。
 		const yearGz = lineText((settings.yearBoundary === 'lunar'
@@ -155,7 +170,7 @@ export function liuyaoStructLines(st){
 			const ys = a.yongShen;
 			const loc = (l)=>{ if(!l || !l.candidates || !l.candidates.length){ return '不上卦'; } return l.candidates.map((c)=>`${c.pos}爻`).join('/'); };
 			lines.push(`占测：${ys.label}　用神：${ys.yong}(${loc(ys.located.yong)})`);
-			// [Q-448/T-411] 次用神与取用说明:页面用神卡两行俱有(LiuYaoBoard「次用神」「取用说明」),
+			// 次用神与取用说明:页面用神卡两行俱有(LiuYaoBoard「次用神」「取用说明」),
 			// 快照此前只给 用/原/忌/仇 —— AI 看不到取用之由,遇「兄弟兼看」一类双用神更直接漏一半。
 			if(ys.secondary && ys.located && ys.located.secondary){ lines.push(`次用神：${ys.secondary}(${loc(ys.located.secondary)})`); }
 			if(ys.roles){ lines.push(`原神：${ys.roles.yuan}(${loc(ys.located.yuan)})　忌神：${ys.roles.ji}(${loc(ys.located.ji)})　仇神：${ys.roles.chou}(${loc(ys.located.chou)})`); }
@@ -168,7 +183,7 @@ export function liuyaoStructLines(st){
 			const fu = (a.fushenAll && a.fushenAll[i]) || y.fushen;
 			const fuTxt = fu && fu.liuqin ? `伏${fu.liuqin}${fu.zhi}${fu.wuxing}` : '';
 			const sha = a.shenSha && a.shenSha.perYao && a.shenSha.perYao[i] ? (a.shenSha.perYao[i].shensha || []).join(',') : '';
-			// [Q-448/T-411] 岁破/日破逐爻标:页面装卦表状态列早有(LiuYaoBoard 取 y.sanCeng 的这两项),
+			// 岁破/日破逐爻标:页面装卦表状态列早有(LiuYaoBoard 取 y.sanCeng 的这两项),
 			// 快照状态列此前只到 月破/旬空/入墓/长生帝旺绝 —— [断诀命中] 首行虽给出岁破日破之支,但要 AI 自行
 			// 逐爻比对才知道落在哪根爻上。与页面同源取 sanCeng,只取这两项(其余三层另有段)。
 			const sanCengPo = (y.sanCeng || []).filter((t)=>t === '岁破' || t === '日破');
@@ -184,7 +199,7 @@ export function liuyaoStructLines(st){
 				return [`第${m.pos}爻`, `${m.ben.liuqin}${m.ben.zhi}${m.ben.wuxing}`, `${m.bian.liuqin}${m.bian.zhi}${m.bian.wuxing}`, tags];
 			});
 			pushMdRows(lines, ['爻', '本卦', '变卦', '标记'], moveRows);
-			// [Q-201/T-144] 变爻范围=盲派(作用他爻)时页面有「盲派·变爻作用他爻」卡而快照无 → 齿轮对挂载零字节;仅 blind 且非空时出行(缺省 traditional 字节不变)。
+			// 变爻范围=盲派(作用他爻)时页面有「盲派·变爻作用他爻」卡而快照无 → 齿轮对挂载零字节;仅 blind 且非空时出行(缺省 traditional 字节不变)。
 			if(Array.isArray(a.dongBian.blindEffects) && a.dongBian.blindEffects.length){
 				lines.push(`盲派作用：${a.dongBian.blindEffects.map((e)=>`第${e.from}爻→第${e.to}爻(${e.toLiuqin || ''})${e.rel}`).join('、')}`);
 			}
@@ -201,7 +216,7 @@ export function buildGuaSnapshotText(fields, st){
 	const yao = st && st.yao ? st.yao : [];
 	const nongli = st && st.nongli ? st.nongli : {};
 	const guaDesc = st && st.guaDesc ? st.guaDesc : {};
-	// [Q-205/T-150] 六神关 → 快照不得再逐爻带六神:state.yao 的 god 由 fillYaoGods 就地写入(存档也带),
+	// 六神关 → 快照不得再逐爻带六神:state.yao 的 god 由 fillYaoGods 就地写入(存档也带),
 	// 与设置无关;闸口与中间栏同一处口径(见 renderChart 的 _liuSet.sixGods 清 god),否则「关掉的块不进快照」失信。
 	const _liuSettings = normalizeLiuyaoSettings(st && st.liuyaoSettings);
 	const showSixGods = !!_liuSettings.sixGods;
@@ -315,9 +330,9 @@ export function buildGuaSnapshotText(fields, st){
 				lines.push(`第${idx + 1}爻：${yinYang ? `${yinYang}，` : ''}爻名:${nm}${godAt(idx)}`);
 			});
 		};
-		// [Q-448/T-411] 关联卦完整装卦:页面「关联卦」区给 之/互/伏神/综/错 五卦各自完整装卦,
+		// 关联卦完整装卦:页面「关联卦」区给 之/互/伏神/综/错 五卦各自完整装卦,
 		// 快照此前逐爻只给之卦与互卦,错/综只写卦名、伏神卦一字不提 —— 页面看得见、AI 看不见。
-		// [Q-208/T-161 同律] 受左栏「关联卦显示」勾选控制:页面隐藏的卡不进快照(null=全显=缺省)。
+		// 受左栏「关联卦显示」勾选控制:页面隐藏的卡不进快照(null=全显=缺省)。
 		const _relSel = Array.isArray(_liuSettings.relatedCards) ? _liuSettings.relatedCards : null;
 		const relOn = (k)=>(!_relSel || _relSel.indexOf(k) >= 0);
 		if(hasMoving && bianGua && relOn('bian')){ pushGuaYao('之卦(变卦)', bianGua); }
@@ -391,6 +406,6 @@ export function buildGuaSnapshotText(fields, st){
 // 与**直接点某一爻**(0–5,是这一卦的输入)混在一起 —— 只保留取法:候选只列负值,点了具体某一爻时落盘自动被拒、
 // 库里仍是上一次选的取法。(铜钱字面 / 缺省爻态等另由六爻设置 liuyaoSettings 保留。)
 export const GUAZHAN_PAGE_SETTINGS = definePageSettings('horosa.guazhan.settings.v1', {
-	custGuaDongYao: { def: -1, oneOf: [-3, -2, -1] },
-	numGuaDongYao: { def: -1, oneOf: [-3, -2, -1] },
+	custGuaDongYao: { label: '自定义起卦·动爻取法', def: -1, oneOf: [-3, -2, -1] },
+	numGuaDongYao: { label: '数字起卦·动爻取法', def: -1, oneOf: [-3, -2, -1] },
 });

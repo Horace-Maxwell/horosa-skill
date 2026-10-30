@@ -1,6 +1,6 @@
 // utils/classicalParamSpec.js — 古典排盘参数单一真值源(spec 表)。
 //
-// [WP-1] 一键多方登记的病根:同一个键要在 ①CLASSICAL_GLOBAL_DEFAULTS ②INT/FLOAT_KEYS
+// 一键多方登记的病根:同一个键要在 ①CLASSICAL_GLOBAL_DEFAULTS ②INT/FLOAT_KEYS
 // ③newEmptyFields 播种 ④ASTRO_CHART_FIELDS 挂载齿轮 ⑤ChartDisplaySelector 控件
 // ⑥Java 白名单 ⑦快照自陈表 至少七处出现——历史上 viaCombustaVariant 漏③、三开关漏⑤
 // 都是「多方手工登记漂移」实锤。本表把「键的身份」(默认值/类型/档位/标签/分组/下发形态)
@@ -21,7 +21,7 @@
 //   seed       'always'=newEmptyFields 恒播种 wrapper|'conditional'=仅全局非默认才播
 //              (schema 历史无此键的,条件播保默认态键集逐字节不变)
 //              |'never'=不播种=本机全局偏好层:不进 fields/record 链(存档不随盘,换机回本机值);
-//              AI 快照面由 [F11] 快照敏感键收口、判读面由 judgeLayerOverrides 收口。
+//              AI 快照面由快照敏感键收口、判读面由 judgeLayerOverrides 收口。
 //              此集由 classicalSixthRoundParity.test.js 枚举冻结,扩张必须显式过审。
 //   hint       控件旁次级提示(可选)
 //
@@ -37,7 +37,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 1, label: '托勒密界·校勘本' },
 			{ value: 2, label: '托勒密界·经典传本' },
 			{ value: 3, label: '迦勒底界' },
-			{ value: 4, label: '自定义界表' },   // [WP-7] 编辑器存表后生效;无表自动降级埃及
+			{ value: 4, label: '自定义界表' },   // 编辑器存表后生效;无表自动降级埃及
 		] },
 	{ key: 'geminiBoundEmended', group: '界与尊贵', label: '双子界序（1647 印本两皆有据）', type: 'segmented', valueType: 'int',
 		default: 0, send: 'nonDefault', seed: 'conditional', enabledWhen: (v) => Number(v.termsVariant) === 2,
@@ -55,7 +55,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'Ptolemaic', label: '托勒密二主' },
 			{ value: 'PtolemaicWaterVariant', label: '水象变体' },
 		] },
-	// ── [WP-4] 尊贵与判定批 ──
+	// ── 尊贵与判定批 ──
 	{ key: 'dignityDebilities', group: '界与尊贵', label: '弱陷计负分（陷 −5 · 落 −4）', type: 'switch', valueType: 'int',
 		default: 1, send: 'nonDefault', seed: 'conditional' },
 	{ key: 'peregrineScore', group: '界与尊贵', label: '游离（外来）减分', type: 'segmented', valueType: 'int',
@@ -99,7 +99,7 @@ export const CLASSICAL_PARAM_SPEC = [
 		options: [
 			{ value: 'geo', label: '几何地平' },
 			{ value: 'ptolemy5', label: 'Ptolemy 5°' },
-			{ value: 'apparent', label: '视地平（真日出没·含折射）' },   // [WP-2] 第三档:swe rise_trans,极昼夜回落几何
+			{ value: 'apparent', label: '视地平（真日出没·含折射）' },   // 第三档:swe rise_trans,极昼夜回落几何
 		] },
 	{ key: 'westNodeType', group: '昼夜与区分', label: '月交点（真 / 平 · 全盘随动）', type: 'segmented', valueType: 'str',
 		default: 'mean', send: 'nonDefault', seed: 'always',
@@ -123,7 +123,7 @@ export const CLASSICAL_PARAM_SPEC = [
 		options: [
 			{ value: 8.5, label: '8°30′（1647）' },
 			{ value: 8, label: '8°（中世纪）' },
-			{ value: 15, label: '15°（希腊化）' },   // [WP-2] 流派分档:希腊化传统宽界
+			{ value: 15, label: '15°（希腊化）' },   // 流派分档:希腊化传统宽界
 		] },
 	{ key: 'combustOwnChariotExempt', group: '太阳三态', label: '界内三分内免燃烧（own chariot）', type: 'switch', valueType: 'int',
 		default: 0, send: 'nonDefault', seed: 'conditional', hint: 'Porphyry' },
@@ -134,7 +134,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 15, label: '15°（较古）' },
 		] },
 	// ── 月亮与空亡 ────────────────────────────────────────────────────────
-	{ key: 'vocMode', group: '月亮与空亡', label: '空亡口径（月亮 isVOC 全盘随动）', type: 'select', valueType: 'str',
+	{ key: 'vocMode', group: '月亮与空亡', label: '空亡口径（全盘月亮空亡判定随之改）', type: 'select', valueType: 'str',
 		default: 'classic', defaultAliases: ['lilly', 'backend'], send: 'nonDefault', seed: 'always',
 		options: [
 			{ value: 'classic', label: '无入相即空（1647 · 现行）' },
@@ -168,7 +168,7 @@ export const CLASSICAL_PARAM_SPEC = [
 		default: 1, send: 'nonDefault', seed: 'always' },
 	{ key: 'lotsDocReverse', group: '希腊点', label: '四点文档序公式（婚·子·友·疾）', type: 'switch', valueType: 'int',
 		default: 0, send: 'nonDefault', seed: 'conditional' },
-	// ── [WP-3] 希腊点变体批(perchart._applyLotVariants 一体后处理;默认=历史现值零回归) ──
+	// ── 希腊点变体批(perchart._applyLotVariants 一体后处理;默认=历史现值零回归) ──
 	{ key: 'hermeticLotsReversal', group: '希腊点', label: '六星点按昼夜反转（福点另设；关则恒同式）', type: 'switch', valueType: 'int',
 		default: 1, send: 'nonDefault', seed: 'conditional', hint: '批判本校勘' },
 	{ key: 'erosConstruction', group: '希腊点', label: '爱欲 · 必然构成', type: 'segmented', valueType: 'str',
@@ -192,7 +192,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'sign', label: '整星座（sign）' },
 		] },
 	// ── 相位与容许度 ──────────────────────────────────────────────────────
-	// ── [WP-5a] 容许度体系批(orbSystem 默认 perObject=flatlib 现状「任一星轨覆盖」;
+	// ── 容许度体系批(orbSystem 默认 perObject=flatlib 现状「任一星轨覆盖」;
 	// 注意现状**不是**半距和——半距和判据只在择日 orbPolicy 判读层,勘察实锤) ──
 	{ key: 'orbSystem', group: '相位与容许度', label: '容许度判据体系', type: 'select', valueType: 'str',
 		default: 'perObject', send: 'nonDefault', seed: 'conditional',
@@ -228,7 +228,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 2, label: '2°' },
 			{ value: 3, label: '3°' },
 		] },
-	// ── [WP-5b] 相位参与对象扩展(默认全 0=响应零字段零回归;恒星汇合引用现成 chart.stars) ──
+	// ── 相位参与对象扩展(默认全 0=响应零字段零回归;恒星汇合引用现成 chart.stars) ──
 	{ key: 'aspectIncludeCusps', group: '相位与容许度', label: '宫头参与相位（≤3°）', type: 'switch', valueType: 'int',
 		default: 0, send: 'nonDefault', seed: 'conditional' },
 	{ key: 'aspectIncludeLots', group: '相位与容许度', label: '希腊点参与相位（点为受体 · ≤3°）', type: 'switch', valueType: 'int',
@@ -261,7 +261,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'off', label: '关（仅逆行 R 标）' },
 			{ value: 'exactWindow', label: '距留点 ≤1 日' },
 			{ value: 'distance', label: '距留点黄经 ≤2′' },
-			{ value: 'absSpeed', label: '日速 <1′（绝对阈；三王星均速本低于此,恒近留）' },   // [Q-299/T-288 ⑤] 据实标注:慢星请用相对速度/留点法
+			{ value: 'absSpeed', label: '日速 <1′（绝对阈；三王星均速本低于此,恒近留）' },   // 据实标注:慢星请用相对速度/留点法
 			{ value: 'relSpeed', label: '日速 <3% 均速（相对阈,快慢星通用）' },
 		] },
 	{ key: 'eclipseTimeMode', group: '恒星与天象', label: '食时刻口径（星历食相表）', type: 'segmented', valueType: 'str',
@@ -270,7 +270,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'max', label: '食甚时刻' },
 			{ value: 'syzygy', label: '精确朔望' },
 		] },
-	// ── [WP-6] 返照与推运 ──
+	// ── 返照与推运 ──
 	{ key: 'solarReturnVariant', group: '返照与推运', label: '太阳返照法', type: 'segmented', valueType: 'str',
 		default: 'precise', send: 'nonDefault', seed: 'conditional',
 		options: [
@@ -292,7 +292,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 1, label: '1°' },
 			{ value: 0, label: '0°（纯宫界）' },
 		] },
-	// ── [WP-8] 灵学扩展(近代推算体系;默认全关=零字段零卡) ──
+	// ── 灵学扩展(近代推算体系;默认全关=零字段零卡) ──
 	{ key: 'vulcanCalc', group: '灵学扩展', label: '祝融星（推算行星）', type: 'segmented', valueType: 'str',
 		default: 'off', send: 'nonDefault', seed: 'conditional',
 		options: [
@@ -305,10 +305,10 @@ export const CLASSICAL_PARAM_SPEC = [
 		options: [
 			{ value: 'off', label: '关' },
 			{ value: 'equal', label: '等权' },
-			{ value: 'weighted', label: '加权（发光体×3 · 水金火×2 · 其余×1）' },   // [Q-299/T-288 ③] 与 RAY_WEIGHT 实现同文
+			{ value: 'weighted', label: '加权（发光体×3 · 水金火×2 · 其余×1）' },   // 与 RAY_WEIGHT 实现同文
 		] },
-	// polarMcMode 已删档(2026-08-18 用户拍板):'aboveHorizon' swap 分支实测不可达(极区兜底后 MC
-	// altitudeTrue 恒正,78N/89N×三季全天实证)=唯一非默认档死路;引擎恒走 equator 现状行为,零行为变化。
+	// polarMcMode 已删档,不再是可选项:极圈内天顶口径由引擎单源定死 —— MC 一律取子午线上中天交点,
+	// 本时刻它落地平下时盘面 / 快照带「极区天顶」徽记(flatlib swe.upperMeridianAscmc)。
 ];
 
 // ── 派生视图(供 classicalChartGlobals/契约测试消费;调用方零遍历成本) ──

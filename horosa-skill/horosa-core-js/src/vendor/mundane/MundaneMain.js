@@ -39,9 +39,11 @@ import { mundaneDistribution, mundanePatternMeaning } from './patterns.js';
 // 故恒等键即正解：调用方（tools/mundaneCards.js）传 patKey 时用同一常量 HEADLESS_PAT_KEY。
 const astroSymbol = (id) => id; const chartRequestKey = () => 'headless';
 
+import { formatSignedDate, leadingYearOf, datePartOf } from '../bazi/dateStrSafe.js';
 
 
 
+import { segmentIndex } from '../utils/segmentIndex.js';
 
 const Option = XQSelect.Option;
 const TabPane = XQTabs.TabPane;
@@ -78,7 +80,7 @@ const ELEMENT_SHORT = { fire: '火', earth: '土', air: '风', water: '水' };
 
 const MODALITY_CN = { cardinal: '基本', fixed: '固定', mutable: '变动' };
 const SEASON_INGRESS_CN = { aries: '春分·白羊', cancer: '夏至·巨蟹', libra: '秋分·天秤', capricorn: '冬至·摩羯' };
-// [Q-150/T-60] 两个页面级覆盖的中文名(左栏下拉与 AI 快照同源,改文案只改这一处)。
+// 两个页面级覆盖的中文名(左栏下拉与 AI 快照同源,改文案只改这一处)。
 export const MUNDANE_ORB_SCHEME_CN = { moiety: '受冲容许 ≤2°(古典收紧)', by_aspect: '按相位(现代 ≤3°)' };
 export const MUNDANE_INGRESS_RULE_CN = { quarterly: '季度制(按四轴模式递归)', aries_annual: '全年制(白羊盘主全年)', capricorn_year: '摩羯优先(冬至为年首)' };
 
@@ -129,7 +131,12 @@ const AGE_EPOCHS = [
 ];
 
 export function currentYear(){
-	try{ return new Date().getFullYear(); }catch(e){ return 2026; }
+	return new Date().getFullYear();
+}
+
+// 盘面事实(buildFacts 遇缺字段的盘会抛):各卡 / 各段一律按「无事实」处理。
+function safeFacts(chart){
+	try{ return buildFacts(chart); }catch(e){ return null; }
 }
 
 function clampYear(v, dflt){
@@ -227,7 +234,7 @@ export function formatMundaneChorographyTable(axes){
 	return out.join('\n');
 }
 
-// ── [Q-444/T-407] 右栏 33 卡 → AI 快照段(此前只覆盖 8 卡)。每段与对应 render*Card 同一 describe/纯函数与同一入参;
+// ── 右栏 33 卡 → AI 快照段(此前只覆盖 8 卡)。每段与对应 render*Card 同一 describe/纯函数与同一入参;
 // 页面按需拉取物(相位格局/四季/返照/次限/校正/重定位/木土会合/Barbault/九主/食时长)由 state 传入,算过才成段;
 // 静态教义表(色占/彗星/过境通则/龟形分野等)按用户裁决只留可算部分+简注,不整表灌入。全部异常降级为不产段。
 const MUN_SIGN_CN = (k) => ((SIGNS[k] || {}).cn || k || '');
@@ -243,7 +250,7 @@ export function buildMundaneCardSections(chart, extra, state, facts){
 	const out = [];
 	const push = (lines) => { if(lines && lines.length > 1){ out.push(lines.join('\n')); } };
 	if(!chart){ return out; }
-	const f = facts || (() => { try{ return buildFacts(chart); }catch(e){ return null; } })();
+	const f = facts || safeFacts(chart);
 	const isNatalLike = type !== 'cycles';
 
 	// ── 概览页 ──
@@ -443,13 +450,13 @@ export function buildMundaneCardSections(chart, extra, state, facts){
 			const m = f.planets ? f.planets.moon : null;
 			const L = ['[吠陀世运·年度盘]'];
 			if(st.vedicMoment){ L.push(`当前入境时刻：${st.vedicMoment}`); }
-			if(m && m.lon != null){ const i = Math.floor(norm360m(m.lon) / (13 + 20 / 60)); L.push(`盘中月宿：${NAKSHATRA_27[i]}（第 ${i + 1} 宿）${NAK_KEYPOINTS[i] ? ' ' + NAK_KEYPOINTS[i] : ''}`); }
+			if(m && m.lon != null){ const i = segmentIndex(norm360m(m.lon), 13 + 20 / 60, 27); L.push(`盘中月宿：${NAKSHATRA_27[i]}（第 ${i + 1} 宿）${NAK_KEYPOINTS[i] ? ' ' + NAK_KEYPOINTS[i] : ''}`); }
 			const age = (ex.vedicFoundingYear != null) ? Math.max(0, (ex.vedicYear || currentYear()) - ex.vedicFoundingYear) : null;
 			const muntha = (age != null && ex.vedicNatalAsc) ? munthaSign(ex.vedicNatalAsc, age) : null;
 			if(muntha){ L.push(`Muntha 敏感点：${MUN_SIGN_CN(muntha)}（建国上升每年顺进一座,盘龄 ${age}）`); }
 			push(L);
 			if(m && m.lon != null){
-				const startStr = st.vedicMoment ? st.vedicMoment.slice(0, 10) : `${ex.vedicYear || currentYear()}-04-14`;
+				const startStr = st.vedicMoment ? datePartOf(st.vedicMoment) : `${ex.vedicYear || currentYear()}-04-14`;
 				const r = vimshottariFromMoon(m.lon, startStr, ex.vedicDashaYearLen === 360 ? 360 : 365.2425);
 				if(r){
 					const D = ['[世运大运]', `（Vimshottari · 年长口径 ${ex.vedicDashaYearLen === 360 ? '360（传统）' : '365.2425（现代）'}）起运主 ${PLANET_CN_V[r.lordKey]}（月在第 ${r.nakIdx + 1} 宿,余额 ${(r.balanceRatio * 100).toFixed(1)}%）`];

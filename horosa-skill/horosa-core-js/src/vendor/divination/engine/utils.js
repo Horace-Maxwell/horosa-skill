@@ -20,6 +20,15 @@ export function signedDelta(a, b){
 export function signIndexOfLon(lon){ return Math.floor(norm360(lon) / 30); }
 export function degInSign(lon){ return norm360(lon) % 30; }
 
+// 取本盘公历年(恒星岁差修正用):读 /chart 回传的 params.birth / date;缺则用中性年 2000(岁差差异 <1° 可忽略)。
+// 卜卦 / 择日 / 偶然尊贵 / 根本性判定共用这一份。
+export function chartYearFromFacts(facts){
+	const p = facts && facts.result && facts.result.params;
+	const ds = p && (p.birth || p.date);
+	if(ds){ const m = String(ds).match(/(-?\d{3,4})/); if(m){ return Number(m[1]); } }
+	return 2000;
+}
+
 // 'House7' → 7
 export function houseNumFromId(id){
 	const m = /House\s*(\d+)/i.exec(String(id || ''));
@@ -55,4 +64,3 @@ export function scoreSelfDignity(selfDignity){
 	if(!Array.isArray(selfDignity)) return 0;
 	return selfDignity.reduce((s, t) => s + (DIGNITY_TOKEN_SCORE[t] || 0), 0);
 }
-export function dignityTokenScore(token){ return DIGNITY_TOKEN_SCORE[token] || 0; }

@@ -5,7 +5,7 @@
 //   decan_full   旬星全谱法(逐张:数字牌=旬10天窗/宫廷=跨段区间/星座大牌=月份区间/行星大牌=曜日/王牌=象限季;三元素大牌不用于计时)
 //   ace_hunt     翻至王牌法(独立52子集去大牌去侍从,种子派生:王牌定季→已翻的该季宫廷定月→其座三旬小牌定旬)
 import { shuffle } from './shuffle.js';
-import { isTrumpArcana } from './arcana.js'; // [QA-9] 王牌判据单一真值源(零依赖叶子)
+import { isTrumpArcana } from './arcana.js'; // 王牌判据单一真值源(零依赖叶子)
 import { timing } from './verdict.js';
 import {
 	SUITS, DECAN, DECAN_DATE, signDateRange, SIGN_CN, PLANET_CN, PLANET_WEEKDAY,
@@ -21,7 +21,7 @@ export const TIMING_METHOD_LABEL = {
 function firstMajorFromRest(restIds, byId){
 	for(let i = 0; i < (restIds || []).length; i++){
 		const c = byId[restIds[i]];
-		// [QA-9] 认 *_trump:此前写死 'major',维斯康蒂/米兰凯特阵中明明有大牌却报「异常牌组」,两法全废
+		// 认 *_trump:此前写死 'major',维斯康蒂/米兰凯特阵中明明有大牌却报「异常牌组」,两法全废
 		if(c && isTrumpArcana(c.arcana)){ return c; }
 	}
 	return null;
@@ -45,7 +45,7 @@ function courtSpanDate(card){
 // 单张牌的旬星全谱计时文案。
 export function decanTimingOf(card){
 	if(!card){ return null; }
-	if(isTrumpArcana(card.arcana)){ // [QA-9] 同上
+	if(isTrumpArcana(card.arcana)){ // 同上
 		if(card.astro && SIGN_CN[card.astro]){ return `${SIGN_CN[card.astro]}座区间 ${signDateRange(card.astro) || ''}`; }
 		if(card.astro && PLANET_CN[card.astro]){ return `${PLANET_CN[card.astro]}主日(${PLANET_WEEKDAY[card.astro] || ''})`; }
 		return '三元素之牌:不用于计时';
@@ -140,7 +140,7 @@ export function computeTimingLines(reading, deckCards, method, opts){
 		if(m === 'major_number'){
 			const unit = o.unit === '天' || o.unit === '月' ? o.unit : '周';
 			if(major.number === 0){ return [`另取大牌=${major.name_cn}:此事难成于期内,不必以时相待。`]; }
-			// [Q-223/T-189·FT-31] 单位「月」写「个月」:「约 N 月内」易读成月份
+			// 单位「月」写「个月」:「约 N 月内」易读成月份
 			return [`另取大牌=${major.name_cn}(${major.number}) → 约 ${major.number} ${unit === '月' ? '个月' : unit}内`];
 		}
 		if(major.astro && SIGN_CN[major.astro]){

@@ -1,37 +1,39 @@
-// [Z1·黄历择日] 日粒度扫描引擎(纯前端零 HTTP)。
+// 日粒度扫描引擎(纯前端零 HTTP)。
 // 供数单源 = buildHuangliDay(老黄历卡片/吉日榜/日子馆/AI 快照同一函数,自带 memo)——
 // 主黄历算法修正,择日自动跟。日粒度技法**不套** hourlyScanEngine(分钟 pick 语义不适用,
 // 见其头注释铁律):逐日判定+连续命中日合并成行;行 pick=起日 12:00(跳老黄历页黄金采样点,
 // 日级字段与 hour 无关,无边界内缩需求)。
 // 树求值形状与奇门同构(组 all/any/not/xor + 叶 spec.evaluate),explain 叶序=UI 树 DFS 先序。
 import { buildHuangliDay } from '../../calendar/huangliDay.js';
+import { formatWallDate, nonexistentWallDateMessage } from './hourlyScanEngine.js';
 import { HUANGLI_CONDITION_TYPES, makeHuangliZeriEvalCtx } from './huangliZeriConditionTypes.js';
+import { datePartOf, parseDateParts } from '../../bazi/dateStrSafe.js';
+import { civilJdnOfYmd, civilYmdOfJdn } from '../../utils/civilCalendar.js';
 
 export const HUANGLI_MAX_TOTAL_HITS = 1000;
 export const HUANGLI_MAX_SPAN_DAYS_TOTAL = 1830;
-const DAY_MS = 86400e3;
 const CHUNK_DAYS = 64;
 
 function pad2(n){
 	return n < 10 ? `0${n}` : `${n}`;
 }
-// 日序号↔公历(UTC 序数日;0-99 年 setUTCFullYear 铁律同外壳)。
+// 日序号(自 1970-01-01 起的民用日序,结果行 startOrd / endOrd 对外口径;1583 年起与 Date.UTC ÷ 一日逐值相同)⇄ 民用日期
+// (civilCalendar 单源:1582 以前儒略历,世纪年 2 月 29 日照扫;1582-10-04 的次日是 10-15,缺口里的 10 天不当真日期;0–99 年不当 19xx)。
+const EPOCH_JDN = civilJdnOfYmd(1970, 1, 1);
 function ymdToOrd(y, m, d){
-	const dt = new Date(0);
-	dt.setUTCFullYear(y, m - 1, d);
-	dt.setUTCHours(0, 0, 0, 0);
-	return Math.round(dt.getTime() / DAY_MS);
+	return civilJdnOfYmd(y, m, d) - EPOCH_JDN;
 }
 function ordToYmd(ord){
-	const dt = new Date(ord * DAY_MS);
-	return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+	const p = civilYmdOfJdn(ord + EPOCH_JDN);
+	return { y: p.year, m: p.month, d: p.day };
 }
 function ymdText(w){
-	return `${w.y}-${pad2(w.m)}-${pad2(w.d)}`;
+	return formatWallDate(w.y, w.m, w.d);   // 年补足 4 位(墙钟时间串单一来源)
 }
 function parseDateStr(s){
-	const m = /^(\d{1,4})-(\d{1,2})-(\d{1,2})$/.exec(`${s || ''}`.trim());
-	return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null;
+	// 黄历日引擎的可靠域是公元 1–9999 年(域外照旧判无效范围)
+	const p = parseDateParts(`${s || ''}`.trim());
+	return p && p.year >= 1 && p.year <= 9999 ? { y: p.year, m: p.month, d: p.day } : null;
 }
 
 export function evaluateHuangliTree(node, day, ctx, explain){
@@ -75,6 +77,12 @@ function dayBadge(day){
 // 主入口。cfg:{startDate,endDate}(日粒度,无时刻);tree:compile 产物(与奇门同构);
 // onProgress({done,total,hits,partial});signal:AbortSignal;limits.maxHits 测试注入。
 export async function scanHuangli({ cfg, tree, onProgress, signal, limits }){
+	const missing = nonexistentWallDateMessage(cfg && cfg.startDate, cfg && cfg.endDate);
+	if(missing){
+		const err = new Error(missing);
+		err.code = 'invalid_date';
+		throw err;
+	}
 	const w0 = parseDateStr(cfg && cfg.startDate);
 	const w1 = parseDateStr(cfg && cfg.endDate);
 	if(!w0 || !w1){
@@ -180,7 +188,7 @@ export async function scanHuangli({ cfg, tree, onProgress, signal, limits }){
 
 // 单日判读(结果行「详情」):t='YYYY-MM-DD'(或含时刻,截日)。
 export function explainHuangliAt({ tree, t }){
-	const w = parseDateStr(`${t || ''}`.trim().slice(0, 10));
+	const w = parseDateStr(datePartOf(`${t || ''}`.trim()));
 	if(!w){
 		return { t: `${t || ''}`, tree: null, err: 'invalid_time' };
 	}

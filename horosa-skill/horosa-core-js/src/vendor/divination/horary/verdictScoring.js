@@ -1,5 +1,5 @@
 // divination/horary/verdictScoring.js
-// [卜卦改进 H7] 裁决双轨:
+// 裁决双轨:
 //   'legacy'(缺省)=四源证词+阈值3 三值 leaning——从 horaryEngine.buildVerdict 逐字节搬家,
 //     输出对象(positive/negative/posScore/negScore/leaning/summary)键序值全同=零回归;
 //   'v2'=证词池扩容(互容/接纳分层/拒绝/时主/恒星/映点/almuten/围攻荣耀/月亮径/自然徵象/
@@ -118,7 +118,7 @@ export function collectTestimoniesV2(ctx){
 		if(f.polarity === 'positive') push(positive, '月亮：' + f.text_zh, f.weight, 'moon', 'moon_' + (f.key || 'g'));
 		else if(f.polarity === 'negative') push(negative, '月亮：' + f.text_zh, f.weight, 'moon', 'moon_neg');
 	});
-	// ④ 两主单星状态(同 legacy;[复审P2] factor=per-planet×per-finding——燃烧/落陷/逆行是
+	// ④ 两主单星状态(同 legacy;factor=per-planet×per-finding——燃烧/落陷/逆行是
 	// 独立缺陷,各自全额;去重只防「同一现象多条描述」,不该把一颗星的不同病折成 30%)。
 	[querentKey, quesitedKey].filter(Boolean).forEach((k) => {
 		const c = conds[k]; if(!c) return;
@@ -165,7 +165,7 @@ export function collectTestimoniesV2(ctx){
 	if(almuten && almuten.quesitedCusp && querentKey && (almuten.quesitedCusp.winners || []).indexOf(querentKey) >= 0){
 		push(positive, `事项宫头 almuten＝问者星 ${cn(querentKey)} → 事在问者掌中`, 1, 'almuten');
 	}
-	// ⑩ [复审P2 拍板] 围攻证词单一记账源=conds(isBesieged 凶围 w2+backendConditionNotes 档的
+	// ⑩ 围攻证词单一记账源=conds(isBesieged 凶围 w2+backendConditionNotes 档的
 	// 围荣围耀)——此前本函数再读 besiegement 详断重复计分(凶围/围荣两处叠满)。详断表仍
 	// 全量进 UI 卡与快照段,只是不再二次入天平。
 	// ⑪ 月亮独立成事径(半个完成法)
@@ -220,7 +220,7 @@ export function aggregateV2(pool, ctx){
 	if(perf && perf.destroyed && !perf.rescue && confidence > 41){
 		confidence = 41; guards.push('destruction_ceiling');
 	}
-	// [复审P3] 破坏+有救径但本档未改判:上限 57(uncertain 顶)——不许产 lean_yes 与
+	// 破坏+有救径但本档未改判:上限 57(uncertain 顶)——不许产 lean_yes 与
 	// Query I「难成」并行矛盾;有救径的确不该压满 41,留在未定带。
 	if(perf && perf.destroyed && perf.rescue && confidence > 57){
 		confidence = 57; guards.push('rescue_pending');

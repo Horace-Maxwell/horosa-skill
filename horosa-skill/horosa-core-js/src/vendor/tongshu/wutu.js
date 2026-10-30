@@ -6,6 +6,7 @@
 // 日月木金水为吉、土孛火罗计为凶；太阳值日上吉、太阴值日次吉。
 // 源例「癸亥七月」有异文（月朔误作戊戌实为己巳、太阴廿三实为廿二），本引擎按自洽算法+实历勘正。
 import { Solar } from 'lunar-javascript';
+import { civilJdnOfYmd } from '../utils/civilCalendar.js';
 
 const DIZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 const YANG_GAN = new Set(['甲', '己', '丁', '壬', '戊', '癸']);   // 阳顺；余（乙庚丙辛）阴逆
@@ -19,9 +20,9 @@ export const PAISHAN_STAR = {
 };
 
 function isYang(gan) { return YANG_GAN.has(gan); }
+// 两日相隔天数:民用历日序数相减(civilCalendar 单源;1582 以前儒略历,跨改历不多算 10 天)。
 function dayDiff(a, b) {
-	return Math.round((new Date(a.getYear(), a.getMonth() - 1, a.getDay()).getTime()
-		- new Date(b.getYear(), b.getMonth() - 1, b.getDay()).getTime()) / 86400000);
+	return civilJdnOfYmd(a.getYear(), a.getMonth(), a.getDay()) - civilJdnOfYmd(b.getYear(), b.getMonth(), b.getDay());
 }
 
 // 给定 solar 日 → 该农历月月朔 solar（减去农历日-1）。

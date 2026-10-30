@@ -1,4 +1,4 @@
-// [Z6·三式择日] 条件注册表=六壬/奇门/太乙三家**程序化合并**(定案2:跨三式合参条件一棵树
+// 条件注册表=六壬/奇门/太乙三家**程序化合并**(定案2:跨三式合参条件一棵树
 // 混排,每样本起三盘)。零手抄:键=`lr_*/qm_*/ty_*` 前缀,label/category 加「六壬·」等家名
 // 前缀(工作台 OptGroup 按 category 自动分组);evaluate 分派到 `spec.evaluate(pan[fam],
 // params, ctx[fam])`——三家 spec 契约逐字段同构(Z0 统一契约)是零适配合并的前提。
@@ -7,7 +7,7 @@
 import { LIURENG_CONDITION_TYPES, makeLiurengZeriEvalCtx } from './liurengZeriConditionTypes.js';
 import { QIMEN_CONDITION_TYPES, makeQimenEvalCtx } from './qimenConditionTypes.js';
 import { TAIYI_CONDITION_TYPES, makeTaiyiZeriEvalCtx } from './taiyiZeriConditionTypes.js';
-import { GROUP_TYPES, JOINER_CN } from './conditionTypes.js';
+import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
 
 export { GROUP_TYPES, JOINER_CN };
 
@@ -62,68 +62,9 @@ function mergeFamilies(){
 export const SANSHI_CONDITION_TYPES = mergeFamilies();
 
 // ── 树工厂/摘要/编译(与其它择日技法同构) ──
-export function newSanshiLeaf(type, joiner){
-	const spec = SANSHI_CONDITION_TYPES[type];
-	return {
-		kind: 'leaf',
-		type,
-		negate: false,
-		joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all',
-		params: spec ? JSON.parse(JSON.stringify(spec.defaults)) : {},
-	};
-}
-export function newSanshiGroup(joiner){
-	return { kind: 'group', negate: false, joiner: GROUP_TYPES.indexOf(joiner) >= 0 ? joiner : 'all', children: [] };
-}
-
-export function sanshiLeafSummary(leaf){
-	const spec = leaf ? SANSHI_CONDITION_TYPES[leaf.type] : null;
-	if(!spec){
-		return '未知条件';
-	}
-	let body = '';
-	try{
-		body = spec.summary(leaf.params || {});
-	}catch(e){
-		body = '';
-	}
-	return `${leaf.negate ? '非·' : ''}${spec.label}·${body}`;
-}
-
-function compileSelf(node){
-	let compiled;
-	if(node.kind === 'group' || Array.isArray(node.children)){
-		compiled = compileChain(node.children);
-	}else{
-		const spec = SANSHI_CONDITION_TYPES[node.type];
-		if(!spec){
-			throw new Error(`未知条件类型:${node.type}`);
-		}
-		const msg = spec.validate ? spec.validate(node.params || {}) : '';
-		if(msg){
-			throw new Error(`「${spec.label}」条件:${msg}`);
-		}
-		compiled = { type: node.type, params: JSON.parse(JSON.stringify(node.params || {})) };
-	}
-	return node.negate ? { type: 'not', conditions: [compiled] } : compiled;
-}
-function compileChain(children){
-	const list = Array.isArray(children) ? children : [];
-	if(!list.length){
-		throw new Error('条件列表为空');
-	}
-	let acc = compileSelf(list[0]);
-	for(let i = 1; i < list.length; i++){
-		const joiner = GROUP_TYPES.indexOf(list[i].joiner) >= 0 ? list[i].joiner : 'all';
-		const rhs = compileSelf(list[i]);
-		if(acc.type === joiner && Array.isArray(acc.conditions)){
-			acc = { type: joiner, conditions: [...acc.conditions, rhs] };
-		}else{
-			acc = { type: joiner, conditions: [acc, rhs] };
-		}
-	}
-	return acc;
-}
-export function compileSanshiTree(root){
-	return compileSelf(root);
-}
+// 实现单一来源:conditionTypes.makeConditionTreeApi(本注册表)。
+const TREE_API = makeConditionTreeApi(SANSHI_CONDITION_TYPES);
+export const newSanshiLeaf = TREE_API.newLeaf;
+export const newSanshiGroup = TREE_API.newGroup;
+export const sanshiLeafSummary = TREE_API.leafSummary;
+export const compileSanshiTree = TREE_API.compileTree;

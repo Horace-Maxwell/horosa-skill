@@ -9,7 +9,7 @@ import { FIXED_STARS, starLonAt } from '../data/fixedStars.js';
 import { bodyPartsOf, degreePosition, moleSide, moleFrontBack } from '../data/bodyParts.js';
 import { aspectBetween, aspectsOf } from './aspectsEngine.js';
 import { isBesieged } from './conditions.js';
-import { norm360, angularDist } from './utils.js';
+import { norm360, angularDist, chartYearFromFacts } from './utils.js';
 import { mutualReceptionBetween } from './reception.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }
@@ -66,7 +66,7 @@ export function radicality(facts, opts){
 	}
 	// strict 口径：追加「判断前考量」——土星落七宫 / 七宫主受损（七宫为事项宫的类别不套用，避免与事项征象混淆）。
 	if(opts.considerationsMode === 'strict'){
-		// [H5] 七宫例外同步吃转宫后语义:人称档转宫可使实际用事宫落 7(如问子女的兄弟=5起3=7)
+		// 七宫例外同步吃转宫后语义:人称档转宫可使实际用事宫落 7(如问子女的兄弟=5起3=7)
 		// ——判据升为「类别表 ∨ 实际 quesitedHouse===7」;旧调用不传 quesitedHouse=现状零回归。
 		const seventhIsQuesited = ['marriage', 'lawsuit', 'theft', 'trade'].indexOf(opts.category) >= 0
 			|| (opts.sigs && opts.sigs.quesitedHouse === 7);
@@ -82,7 +82,7 @@ export function radicality(facts, opts){
 	if(lord1 && facts.planets[lord1]){
 		const lp = facts.planets[lord1];
 		if(lp.combustion === 'combust'){
-		// [H8] 「与日互容」救济:命主虽燃烧,若与太阳互容(居王之殿受王庇)受灼可解——注记式降级。
+		// 「与日互容」救济:命主虽燃烧,若与太阳互容(居王之殿受王庇)受灼可解——注记式降级。
 		const muSun = lord1 !== 'sun' ? mutualReceptionBetween(facts, lord1, 'sun') : null;
 		warnings.push({ key: 'l1_combust', text: `上升定位星（${cn(lord1)}）燃烧：问卜者状态受灼${muSun ? '——但与太阳互容（居王之殿受其庇），受灼可解，警示降级' : ''}。`, mitigated: !!muSun });
 	}
@@ -113,13 +113,7 @@ export function viaCombustaRange(variant){
 function starLonNow(nameEn, facts){
 	const st = FIXED_STARS.find((s) => s.name_en === nameEn);
 	if(!st) return null;
-	let year = 2000;
-	try{
-		const p = facts && facts.result && facts.result.params;
-		const ds = p && (p.birth || p.date);
-		if(ds){ const m = String(ds).match(/(-?\d{3,4})/); if(m){ year = Number(m[1]); } }
-	}catch(e){ /* noop */ }
-	return starLonAt(st.lon_1995, year);
+	return starLonAt(st.lon_1995, chartYearFromFacts(facts));
 }
 
 // ── 时主-命主一致（正面根基确认，05§3.3/3.4）：
@@ -203,7 +197,7 @@ export function considerations19(facts, opts){
 	add(5, 'saturn_1st', sat && sat.house === 1, { text_zh: `土星在第 1 宫${sat && sat.retro ? '（且逆行，更甚）' : ''}：事不兴/拖延` });
 	add(6, 'saturn_7th', sat && sat.house === 7, { text_zh: '土星在第 7 宫：占星师判断易受蚀（替人判时）' });
 	// 6→7 七宫主受克（问题不涉七宫时）
-	// [复审C3] 例外判据与 strict 警告块同款:类别表补 trade(7 宫四角) ∨ 实际 quesitedHouse===7
+	// 例外判据与 strict 警告块同款:类别表补 trade(7 宫四角) ∨ 实际 quesitedHouse===7
 	// (H5 人称档转宫可使实际用事宫落 7);旧调用不传 sigs.quesitedHouse=现状零回归。
 	const seventhIsQuesited = ['marriage', 'lawsuit', 'theft', 'trade'].indexOf(opts.category) >= 0
 		|| (opts.sigs && opts.sigs.quesitedHouse === 7);

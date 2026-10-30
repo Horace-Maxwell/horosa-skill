@@ -1,18 +1,20 @@
 import { Solar, LunarUtil, Lunar, LunarMonth, EightChar } from 'lunar-javascript';
 import { isLunarJsYearReliable, lunarDomainNotice } from './lunarDomainGuard.js';
-import { NaYin, SixtyJiaZi } from './ZWConst.js';
+import { NaYin } from './ZWConst.js';
 import { calcFourPillarShenSha } from './baziShenShaLocal.js';
 import { computeWuxingStrength } from './baziWuxing.js';
 import { computeFenYe } from './baziFenYe.js';
 import { computeGejuYongShen } from './baziGejuYongShen.js';
 import { computeMangPai } from './baziMangPai.js';
 import { parseDateParts } from './dateStrSafe.js';
+import { civilWallMs, civilPartsFromWallMs, civilYmdExists, civilMonthDays } from '../utils/civilCalendar.js';
 import { parseZoneHours, bjShiftMinutes, shiftSolarMinutes } from '../utils/beijingTimeShift.js';
+import { resolveAfter23NewDay, resolveLateZiHourUseNextDay } from '../utils/dayBoundaryResolve.js';
 
 const GANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const ZHIS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 
-// 纳音长生：纳音五行在各地支的十二长生（子→亥序），供旧版柱细览（Zhu/FourZhu）显示「纳音·长生」。
+// 纳音长生：纳音五行在各地支的十二长生（子→亥序），供八字各视图(旧版界面 / 古式表 / 细盘 / 大运)显示「纳音·长生」。
 // 与后端 wuxingphase.json「纳音{五行}_{支}」逐项一致（土从水土同长生）。纳音末字即其五行（如「天河水」→水）。
 // 注：细盘「星运」= 日干十二长生、「自坐」= 本柱干自坐长生，均走 getSelfZuo，与此纳音长生无关。
 const NAYIN_PHASE = {
@@ -30,7 +32,7 @@ function naYinPhase(naying, zhi){
 	return (row && zi >= 0) ? row[zi] : '';
 }
 
-// ── [长生三派统一内核 2026-08-08] 与 Java 权威 wuxingphase.json 三表逐格全等(360 格对拍金标锁):
+// ── 与 Java 权威 wuxingphase.json 三表逐格全等(360 格对拍金标锁):
 //   0 火土同  :全干不分阴阳(阴干随其阳干搭档同起同顺),土随火(戊己与丙丁同起寅顺)
 //   1 水土同  :同上不分阴阳,但土(戊己)寄水从申起顺(off=4)
 //   2 阳顺阴逆:阳干顺、阴干逆(= lunar.js 现状口径)
@@ -217,13 +219,9 @@ const ZHI_GUA = {
 	午: TRIGRAMS.离, 未: TRIGRAMS.坤, 申: TRIGRAMS.兑, 酉: TRIGRAMS.兑, 戌: TRIGRAMS.乾, 亥: TRIGRAMS.坎,
 };
 
-function mod(num, base){
-	return ((num % base) + base) % base;
-}
-
 // parseZoneHours / bjShiftMinutes / shiftSolarMinutes 已抽到 ./beijingTimeShift(与节气种子、河洛等同用一份)。
 
-function parseGeoDegrees(value, limit){
+export function parseGeoDegrees(value, limit){
 	if(value === undefined || value === null || value === ''){
 		return null;
 	}
@@ -260,15 +258,7 @@ function parseDateTime(params){
 	};
 }
 
-function dayOfYearUTC(date){
-	// setUTCFullYear 不做 0-99 → 1900+ 的历史映射(该映射只在 Date.UTC/构造器发生)
-	const start = new Date(0);
-	start.setUTCFullYear(date.getUTCFullYear(), 0, 1);
-	start.setUTCHours(0, 0, 0, 0);
-	return Math.floor((date.getTime() - start.getTime()) / 86400000) + 1;
-}
-
-// [十三轮根修] 均时差 NOAA/Meeus 高精度式(太阳平黄经/平近点角/偏心率/黄赤交角级数,
+// 均时差 NOAA/Meeus 高精度式(太阳平黄经/平近点角/偏心率/黄赤交角级数,
 // 误差 <15s,1800-2200)。旧教科书简式(9.87sin2B−7.53cosB−1.5sinB,dayOfYear 粒度,
 // 误差 ±1-2 分钟)与后端 swiss 精确 EoT 在时辰界骑线级分叉——用户实抓:2026-08-31
 // 简式 +29s vs swiss −60s 差 89s,六壬择日行 17:14 起而主页酉界 17:15:10,pick 落
@@ -276,7 +266,11 @@ function dayOfYearUTC(date){
 // RealSunTimeOffset.java 查表仅显式 RealSun 档覆写(且该表 zip 存疑),权威=swiss。
 // 返回分钟(视−平,+=真太阳快);输入=UTC 毫秒(儒略世纪级数,非 dayOfYear)。
 function equationOfTime(utcMs){
-	const jd = utcMs / 86400000 + 2440587.5;
+	return equationOfTimeAtJd(utcMs / 86400000 + 2440587.5);
+}
+
+// 同上,输入儒略日(远端农历路径按儒略 / 格里历日序算出的时刻用它,与本地引擎同一公式)
+export function equationOfTimeAtJd(jd){
 	const T = (jd - 2451545.0) / 36525.0;
 	const rad = Math.PI / 180;
 	const L0 = (280.46646 + 36000.76983 * T + 0.0003032 * T * T) % 360;
@@ -294,43 +288,45 @@ function equationOfTime(utcMs){
 	return (eotRad / rad) * 4;	// 度→分钟(1°=4min)
 }
 
-function applyApparentSolarTime(parts, params){
+function applyApparentSolarTime(parts, params, quiet){
 	// timeAlg=0 真太阳时（经度差 + 均时差 EoT）；timeAlg=3 平太阳时（仅经度差，去 EoT）；其余不调整。
 	const alg = Number(params.timeAlg);
 	if(alg !== 0 && alg !== 3){
 		return parts;
 	}
-	// [十三轮] lon 缺失回退 gpsLon(紫微家 Z4「只认 lon 键,缺失=真太阳静默不生效」实抓
+	// lon 缺失回退 gpsLon(紫微家 Z4「只认 lon 键,缺失=真太阳静默不生效」实抓
 	// 修法收编到源头;六壬工作台 geo 曾只发 gpsLon=整条校正静默跳过退化成钟表口径)。
 	let lon = parseGeoDegrees(params.lon, 180);
 	if(!Number.isFinite(lon)){
 		lon = parseGeoDegrees(params.gpsLon, 180);
 	}
 	if(!Number.isFinite(lon)){
-		if(typeof console !== 'undefined' && !applyApparentSolarTime._warnedNoLon){
+		// quiet:只为显示「真太阳时」那一行而算(调用方没选真太阳时档)—— 缺经度是常态,不报
+		if(!quiet && !applyApparentSolarTime._warnedNoLon){
 			applyApparentSolarTime._warnedNoLon = true;
 			console.warn('[baziLunarLocal] 真太阳时档缺经度(lon/gpsLon 均无):校正跳过,退化为钟表口径');
 		}
 		return parts;
 	}
 	const zoneHours = parseZoneHours(params.zone);
-	// 🔴 AD 1–99 年必须绕开 Date.UTC 的 0-99 → 1900+ 历史映射(ECMA MakeFullYear):
-	// 曾用 Date.UTC → 公元 1-99 年的盘整体平移到 20 世纪(真太阳时默认档=必经路径,
-	// 四柱/大运/神煞全错;本仓铁律见 julianDayIndex.js 头注)。setUTCFullYear 无此映射。
-	const wall = new Date(0);
-	wall.setUTCFullYear(parts.year, parts.month - 1, parts.day);
-	wall.setUTCHours(parts.hour, parts.minute, parts.second, 0);
-	const utcForEot = new Date(wall.getTime() - zoneHours * 3600000);
+	// 民用日期不存在(1582-10-05 … 10-14 之类):不校正,原样交给历法引擎报错(与「直接时间」档同一结果)
+	if(!civilYmdExists(parts.year, parts.month, parts.day)){
+		return parts;
+	}
+	// 校正在民用历墙钟轴上做(civilCalendar 单源):1582-10-15 以前按儒略历(世纪年 2 月 29 日、1582-10-04 → 10-15 跨日都对),
+	// 公元 1–99 年不会被当成 19xx;1582-10-15 以后与 Date.UTC 逐位相同。拆回年月日也走同一单源,不经 JS Date(外推格里历)。
+	const wallMs = civilWallMs(parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second);
+	const utcForEotMs = wallMs - zoneHours * 3600000;
 	const ltcSeconds = (lon - zoneHours * 15) * 4 * 60;
-	const eotSeconds = alg === 0 ? equationOfTime(utcForEot.getTime()) * 60 : 0;
-	const adjusted = new Date(wall.getTime() + Math.round(ltcSeconds + eotSeconds) * 1000);
+	const eotSeconds = alg === 0 ? equationOfTime(utcForEotMs) * 60 : 0;
+	const adjusted = civilPartsFromWallMs(wallMs + Math.round(ltcSeconds + eotSeconds) * 1000);
 	return {
-		year: adjusted.getUTCFullYear(),
-		month: adjusted.getUTCMonth() + 1,
-		day: adjusted.getUTCDate(),
-		hour: adjusted.getUTCHours(),
-		minute: adjusted.getUTCMinutes(),
-		second: adjusted.getUTCSeconds(),
+		year: adjusted.year,
+		month: adjusted.month,
+		day: adjusted.day,
+		hour: adjusted.hour,
+		minute: adjusted.minute,
+		second: adjusted.second,
 	};
 }
 
@@ -620,6 +616,48 @@ function buildStemBranchRelations(four){
 	};
 }
 
+// 两人之间(跨盘)的干支对照:与本盘「刑冲合会」同一套规则表,不另抄一份。
+// 逐对判:天干五合 / 相冲;地支六合 / 三合(两支同局,与本盘「两支即列」同口径)/ 六冲 / 相刑(三刑任两支、子卯、同支自刑)/ 六害(穿)。
+// 返回 [{ kind, key }]:kind 与本盘关系键同名(ganHe / ganCong / ziHe6 / ziHe3 / ziCong / ziXing / ziCuan),key = 规则名。
+function pairRuleHits(a, b, groups){
+	const out = [];
+	if(!a || !b){ return out; }
+	groups.forEach(([kind, rules])=>{
+		rules.forEach((rule)=>{
+			const cells = rule.cells;
+			const hit = cells.length === 2
+				? ((cells[0] === a && cells[1] === b) || (cells[0] === b && cells[1] === a))
+				: (a !== b && cells.indexOf(a) >= 0 && cells.indexOf(b) >= 0);
+			if(hit){ out.push({ kind, key: rule.key }); }
+		});
+	});
+	return out;
+}
+export function pairStemRelations(a, b){
+	return pairRuleHits(a, b, [['ganHe', GAN_HE_RULES], ['ganCong', GAN_CONG_RULES]]);
+}
+export function pairBranchRelations(a, b){
+	return pairRuleHits(a, b, [['ziCong', ZHI_CONG_RULES], ['ziHe6', ZHI_HE6_RULES], ['ziHe3', ZHI_HE3_RULES], ['ziXing', ZHI_XING_RULES], ['ziCuan', ZHI_CUAN_RULES]]);
+}
+// 两组地支合起来才齐的三合局 / 三会局 / 三刑:三支齐全、任一方自己凑不齐(两人各出至少一支)。
+// listA / listB = [{ cell, label }];返回 [{ kind, key, fromA, fromB }](fromA / fromB = 该方出的那几项)。
+export function crossBranchFormations(listA, listB){
+	const A = (Array.isArray(listA) ? listA : []).filter((x)=>x && x.cell);
+	const B = (Array.isArray(listB) ? listB : []).filter((x)=>x && x.cell);
+	const has = (list, c)=>list.some((x)=>x.cell === c);
+	const out = [];
+	[['ziHe3', ZHI_HE3_RULES], ['ziHui', ZHI_HUI_RULES], ['ziXing', ZHI_XING_RULES]].forEach(([kind, rules])=>{
+		rules.forEach((rule)=>{
+			const cells = rule.cells;
+			if(cells.length !== 3){ return; }
+			if(!cells.every((c)=>has(A, c) || has(B, c))){ return; }
+			if(cells.every((c)=>has(A, c)) || cells.every((c)=>has(B, c))){ return; }
+			out.push({ kind, key: rule.key, fromA: A.filter((x)=>cells.indexOf(x.cell) >= 0), fromB: B.filter((x)=>cells.indexOf(x.cell) >= 0) });
+		});
+	});
+	return out;
+}
+
 function makePillar(label, ganzi, data){
 	const gan = `${ganzi || ''}`.charAt(0);
 	const zhi = `${ganzi || ''}`.charAt(1);
@@ -648,11 +686,6 @@ function makePillar(label, ganzi, data){
 		huGuaUp: GAN_GUA[gan] || TRIGRAMS.乾,
 		huGuaDown: ZHI_GUA[zhi] || TRIGRAMS.坤,
 	};
-}
-
-function ganziAt(ganzi, delta){
-	const idx = SixtyJiaZi.indexOf(ganzi);
-	return SixtyJiaZi[mod((idx >= 0 ? idx : 0) + delta, 60)];
 }
 
 function pillarFromGanzi(label, ganzi, dayGan){
@@ -743,7 +776,7 @@ function buildFourColumns(eightChar, opts){
 	let timeNaYin = eightChar.getTimeNaYin();
 	let timeDiShi = eightChar.getTimeDiShi();
 	let timeXunKong = eightChar.getTimeXunKong();
-	const lateZiHourUseNextDay = opts && opts.lateZiHourUseNextDay !== undefined ? opts.lateZiHourUseNextDay : 1;
+	const lateZiHourUseNextDay = resolveLateZiHourUseNextDay(opts && opts.lateZiHourUseNextDay);
 	const overrideTimeGan = computeOverrideTimeGan(eightChar, lateZiHourUseNextDay);
 	if(overrideTimeGan){
 		// 替换 time ganzi 的天干,zhi 保持(子时跨日,zhi 永远是子);
@@ -754,7 +787,7 @@ function buildFourColumns(eightChar, opts){
 		if(newShiShenGanRaw){
 			timeShiShenGan = newShiShenGanRaw;
 		}
-		const newNaYin = (LunarUtil.NAYIN && LunarUtil.NAYIN[newGanZhi]) || (NaYin && NaYin[newGanZhi]);
+		const newNaYin = (LunarUtil.NAYIN && LunarUtil.NAYIN[newGanZhi]) || NaYin[newGanZhi];
 		if(newNaYin){
 			timeNaYin = newNaYin;
 		}
@@ -859,13 +892,14 @@ function buildFlowDays(year, month, dayGan){
 	if(!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12){
 		return [];
 	}
-	// lunar.js Solar.fromYmd 不校验越界日（31 号也照存），故用公历 JS Date 取该月实际天数。
-	const daysInMonth = (function(){ const _d = new Date(0); _d.setFullYear(year, month, 0); return _d.getDate(); })();
-	if(!Number.isFinite(daysInMonth) || daysInMonth < 1){
+	// lunar.js Solar.fromYmd 不校验越界日（31 号也照存），故按民用历取该月真实存在的日号
+	// (civilCalendar 单源:1500-02 有 29 日、1582-10 没有 5–14 日;不经 JS Date 的外推格里历)。
+	const monthDays = civilMonthDays(year, month);
+	if(!monthDays.length){
 		return [];
 	}
 	const out = [];
-	for(let d = 1; d <= daysInMonth; d++){
+	for(const d of monthDays){
 		let solar = null;
 		try{
 			solar = Solar.fromYmd(year, month, d);
@@ -1043,9 +1077,10 @@ function formatStartLuck(yun, precision){
 	const d = yun.getStartDay();
 	const h = yun.getStartHour ? yun.getStartHour() : 0;
 	if(precision === 'integer'){
-		// 起运整数：按 3 天折 1 岁的余日就近进位为整岁（通行口径）。
-		const rounded = Math.max(1, Math.round(y + mo / 12 + d / 365));
-		return `出生后约${rounded}年起运`;
+		// 起运整数：按 3 天折 1 岁折出的年月日就近取整为整岁（通行口径）。
+		// 不足半年就近取整得 0:命理通行不说「约 0 年起运」,写「不足 1 年起运」(此前 Math.max(1, …) 硬记 1 年,与「就近取整」不符)。
+		const rounded = Math.round(y + mo / 12 + d / 365);
+		return rounded < 1 ? '出生后不足1年起运' : `出生后约${rounded}年起运`;
 	}
 	return `出生后${y}年${mo}个月${d}天${h}小时起运`;
 }
@@ -1126,7 +1161,7 @@ function buildNongli(lunar, solar, apparentSolar, ziweiLunar, jieqiLunar){
 	};
 }
 
-// [A3·核心层 memo] 时空核心(solar/lunar/eightChar/yun/大运/紫微农历)只依赖下列键;
+// 时空核心(solar/lunar/eightChar/yun/大运/紫微农历)只依赖下列键;
 // 五个派生开关(minggongMethod/phaseType/godKeyPos/fenyeVersion/cangVersion)与 lateZiHourUseNextDay/
 // dayunPrecision 均在核心之外 —— 用户在选项轴来回拨时核心层零重算(实测核心占大头)。
 // 状态安全:唯一 setter eightChar.setSect 由 after23NewDay 驱动且 after23 在核心键内 → 每个缓存桶
@@ -1161,7 +1196,7 @@ function buildBaziCore(params){
 	//   after23NewDay=1「23点算第二天」= 23点起日柱进位次日 → setSect(1)=Exact 进位
 	//   after23NewDay=0「24点算第二天」= 23点仍属今日、24点才换日柱 → setSect(2)=Exact2 不进位
 	// 对应 lunar.js: setSect(1)在 hour∈[23,24) 时 dayGan+1；setSect(2) 不进位。
-	const dayPillarShift = params && (params.after23NewDay === 1 || params.after23NewDay === '1' || params.after23NewDay === true);
+	const dayPillarShift = resolveAfter23NewDay(params && params.after23NewDay) === 1;   // 缺键取全局现值(此前缺键 = 不进位)
 	eightChar.setSect(dayPillarShift ? 1 : 2);
 	const gender = Number(params.gender) === 0 ? 0 : 1;
 	const yun = eightChar.getYun(gender);
@@ -1169,7 +1204,7 @@ function buildBaziCore(params){
 	const daYunList = yun.getDaYun(10);
 	// 晚子时·紫微所用农历:after23NewDay=1 且本命落 23 点子时段 → 日柱已进位次日,紫微随之取次日历日。
 	const ziweiLunar = ziweiLunarFor(lunar, solar, dayPillarShift, apparentParts.hour);
-	// [A3·profile 定谳] 三推运 builder(流年/主运/小运,lunar.js 逐年重演)≈ 全函数 97% 耗时,
+	// 三推运 builder(流年/主运/小运,lunar.js 逐年重演)≈ 全函数 97% 耗时,
 	// 且只依赖核心键参数 → 随核心一并缓存;消费侧以 slice() 发新数组防外部 push/splice 互染。
 	const dayGan = eightChar.getDayGan();
 	const direction = buildDirection(daYunList, dayGan, solar);
@@ -1198,12 +1233,16 @@ function getBaziCore(params){
 	return bundle;
 }
 
+// 「节气按纬度调整」发给取数端的值:本引擎不实现该项、界面也不提供 → 恒 0。
+// 八字页 / AI 无头重算 / 八字择日内嵌同一来源;旧记录带来的 1 不再下发(否则回退 Java 的域会真把节气平移)。
+export const BAZI_ADJUST_JIEQI_SENT = 0;
+
 export function buildLocalBaziResult(params){
 	const core = getBaziCore(params);
 	const { rawParts, apparentParts, solar, lunar, baziLunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar } = core;
 	const dayGan = eightChar.getDayGan();
 	// v3 第二开关 lateZiHourUseNextDay: 默认 1 (跟现有 lunar.js Exact 行为一致, 时干用次日干起子时)。
-	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
+	const lateZiHourUseNextDay = resolveLateZiHourUseNextDay(params && params.lateZiHourUseNextDay);
 	const minggongMethod = (params && params.minggongMethod === 'shufa') ? 'shufa' : 'tongxing';
 	// [B 三档接活] phaseType 归一:显式 0/1/2 才按档生效;缺参恒 2(= lunar 原值,byte-perfect)。
 	// 🔴 缺参不许归 0:档0 已补全火土同语义(覆盖阴干 diShi),而 9 个不传参的技法调用方
@@ -1257,7 +1296,7 @@ export function buildLocalBaziResult(params){
 	if(bazi.nongli){
 		try{
 			bazi.nongli.clockTime = solarFromParts(rawParts).toYmdHms();
-			bazi.nongli.solarTime = solarFromParts(applyApparentSolarTime(rawParts, { ...(params || {}), timeAlg: 0 })).toYmdHms();
+			bazi.nongli.solarTime = solarFromParts(applyApparentSolarTime(rawParts, { ...(params || {}), timeAlg: 0 }, true)).toYmdHms();
 		}catch(e){
 			// keep going even if either time cannot be formatted for an edge-case date
 		}
@@ -1270,7 +1309,7 @@ export function buildLocalBaziResult(params){
 }
 
 // [奇门择日] 扫描专用轻量 nongli:与 buildLocalBaziResult 同链(视太阳时→lunar.js→四柱→buildNongli),
-// 但跳过三推运/五行力量/格局用神/盲派等排盘无关派生([A3·profile 定谳]三推运≈97% 耗时),
+// 但跳过三推运/五行力量/格局用神/盲派等排盘无关派生(三推运≈97% 耗时),
 // 也不走 baziCoreMemo(8 桶,扫描逐时全 miss 反会把交互命中挤出)。产出仅含奇门引擎消费面:
 // { bazi: { gender, nongli, fourColumns } };组装范式与 dunjiaBackendParity.test.js 一致:
 //   calcDunJia(fields, { ...lite.bazi.nongli, bazi: lite.bazi }, options, ctx)
@@ -1286,14 +1325,17 @@ export function buildLocalNongliLite(params){
 	const apparentParts = applyApparentSolarTime(rawParts, params || {});
 	const solar = solarFromParts(apparentParts);
 	const lunar = solar.getLunar();
-	const baziLunar = absoluteTimeLunar(lunar, solar, params && params.zone);
+	// 南半球月令 / 命宫起法与全量版同口径(择日扫描按内嵌八字页的这两项起盘);不传 = 不对冲 / 通行版,其它技法零变化
+	const southFlip = !!(params && params.southMonth === 'chong' && isSouthLatitude(params));
+	const baziLunar = absoluteTimeLunar(lunar, solar, params && params.zone, southFlip);
 	const eightChar = baziLunar.getEightChar();
-	const dayPillarShift = params && (params.after23NewDay === 1 || params.after23NewDay === '1' || params.after23NewDay === true);
+	const dayPillarShift = resolveAfter23NewDay(params && params.after23NewDay) === 1;   // 缺键取全局现值(此前缺键 = 不进位)
 	eightChar.setSect(dayPillarShift ? 1 : 2);
-	const lateZiHourUseNextDay = (params && (params.lateZiHourUseNextDay === 0 || params.lateZiHourUseNextDay === '0' || params.lateZiHourUseNextDay === false)) ? 0 : 1;
+	const lateZiHourUseNextDay = resolveLateZiHourUseNextDay(params && params.lateZiHourUseNextDay);
 	// [B 三档接活] 兼容出口钉 phaseType:2(=lunar 原值):此前硬码 0 的原意即「lunar 现状」(旧世界 0≡2),
 	// 档0 补全火土同语义后,0 会覆盖阴干 diShi——其他技法(遁甲/三式等)消费面保持逐字节不变须钉 2。
-	const fourColumns = buildFourColumns(eightChar, { lateZiHourUseNextDay, minggongMethod: 'tongxing', phaseType: 2, godKeyPos: '年' });
+	const minggongMethod = (params && params.minggongMethod === 'shufa') ? 'shufa' : 'tongxing';
+	const fourColumns = buildFourColumns(eightChar, { lateZiHourUseNextDay, minggongMethod, phaseType: 2, godKeyPos: '年' });
 	const ziweiLunar = ziweiLunarFor(lunar, solar, dayPillarShift, apparentParts.hour);
 	const gender = Number(params && params.gender) === 0 ? 0 : 1;
 	const genderText = gender === 1 ? 'Male' : 'Female';

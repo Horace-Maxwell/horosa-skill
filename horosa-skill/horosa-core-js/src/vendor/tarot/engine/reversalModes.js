@@ -9,7 +9,7 @@ export const REVERSAL_MODES = [
 export const REVERSAL_TEMPLATES = {
 	blocked: { label: '受阻/压抑', note: '正位能量受阻、被压抑或否认', tpl: (up) => `${up}——但能量受阻、被压抑或否认` },
 	internal: { label: '内化/私密', note: '能量转向内在、私密', tpl: (up) => `${up}——转向内在、私密地体验` },
-	// [QA-1] 原 tpl 直接返回预存逆位义 → 与 'stored' 档逐字全等 = 死开关(切了无反应)。
+	// 原 tpl 直接返回预存逆位义 → 与 'stored' 档逐字全等 = 死开关(切了无反应)。
 	// 两档实为不同取义路径:stored=照牌义表既有的逆位栏读;opposite=宣告「把正位反过来」并与正位并陈以便对照,
 	// 且在牌义表无预存逆位栏时(如马赛数字度轨的部分牌)仍可成文,而 stored 会落空。
 	opposite: { label: '相反/反义', note: '把正位义反过来读(与正位并陈对照)', tpl: (up, down) => (down ? `反于正位「${up}」:${down}` : `反于正位「${up}」`) },

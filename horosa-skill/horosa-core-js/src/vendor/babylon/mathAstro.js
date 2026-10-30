@@ -4,7 +4,7 @@
 // 日期:Δt(tithi,超整月基数部分)= Δλ(度)+ c(各行星常数)。
 
 import { sexParse, norm360 } from './units.js';
-import { SYSTEM_A, SYSTEM_B, DATE_CONSTANTS, LUNAR, SAROS } from '../divination/data/babylonianData.js';
+import { SYSTEM_A, SYSTEM_B, DATE_CONSTANTS, LUNAR } from '../divination/data/babylonianData.js';
 
 const S = sexParse;
 
@@ -181,17 +181,6 @@ export const TRAPEZOID = (() => {
 	};
 })();
 
-// 外行星「推」细分(带符号子弧;示例=木星文献值)
-export const JUPITER_PUSHES = [
-	{ seg: 'Ω→Γ', note: '不可见期(偕日没→偕日升)' },
-	{ seg: 'Γ→Φ', arc: null, note: '顺行加速段' },
-	{ seg: 'Φ→Θ', arc: S('−4;25'.replace('−', '-')), note: '逆行前半' },
-	{ seg: 'Θ→Ψ', arc: S('-5;35'), note: '逆行后半' },
-	{ seg: 'Φ→Ψ 全逆行', arc: S('-10;0') },
-	{ seg: 'Ω→Φ(跨升)', arc: S('22;15'), time: '2,30 tithi' },
-];
-export const ACT817_RULE = { s1: 1 / 3, ar: 1 / 2, s2: 2 / 3 };
-
 // ── 月亮列(可真算部分)───────────────────────────────────────────────
 export const LUNAR_PHI = { m: '1,57;47,57,46,40', M: '2,17;4,48,53,20', d: '2;45,55,33,20', mu: '2,7;26,26,40' };
 export function lunarPhiSeq(count, v0, dir0){
@@ -206,8 +195,6 @@ export const LUNAR_SOLAR_ZONES = [
 export function lunarBSeq(lon0, count){
 	return synodicSeriesA(lon0, LUNAR_SOLAR_ZONES, count);
 }
-// System B 太阳速度锯齿(A 列)
-export const LUNAR_SOLAR_B = { m: '28;10,39,40', M: '30;1,59,20', d: null, mu: '29;6,19,20' };
 // 昼长 C(UŠ):四锚线性锯齿(A 规范分至在基本宫 10°;3:2 比 216/144/180)
 export function dayLengthC(lonSun, solsticeDeg){
 	const sd = solsticeDeg === undefined ? 10 : solsticeDeg;
@@ -238,8 +225,6 @@ export function lunarFSeqA(count, v0, dir0){
 	return zigzagSeq(v0 === undefined ? LUNAR_F_A.mu : v0, dir0 === undefined ? 1 : dir0, count,
 		{ m: LUNAR_F_A.m, M: LUNAR_F_A.M, d: LUNAR_F_A.d });
 }
-export const LUNAR_J_SLOW = S('0;57,3,45');
-export const LUNAR_K_MEAN_DAYS = S('0;31,50,8,20');
 
 // ── Saros 食可能模式(38 = 33×6 + 5×5;5 组 8,7,8,7,8)──────────────────
 export function sarosPattern(){
@@ -254,20 +239,6 @@ export function sarosPattern(){
 		m -= 6; m += 5;   // 组间一步 5 月
 	}
 	return out;   // 38 项;末 + 5 = 223
-}
-export function sarosInfo(){ return SAROS; }
-
-// 由锚食月号(自某朔望起算的月序)铺 38 格食可能(前后各一 Saros 范围)
-export function eclipsePossibilities(anchorMonthIndex, monthsSpan){
-	const pat = sarosPattern();
-	const out = [];
-	for(let saros = -2; saros <= 2; saros++){
-		for(let i = 0; i < pat.length; i++){
-			const m = anchorMonthIndex + saros * 223 + pat[i];
-			if(Math.abs(m - anchorMonthIndex) <= monthsSpan){ out.push(m); }
-		}
-	}
-	return out.sort((a, b) => a - b).filter((v, i, arr) => i === 0 || v !== arr[i - 1]);
 }
 
 // 验证辅助:周期恒等(供 jest 与自检面板)

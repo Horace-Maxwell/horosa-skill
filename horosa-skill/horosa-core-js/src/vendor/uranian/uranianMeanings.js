@@ -13,6 +13,7 @@
 //         pictureMeaning / medicalMeaning。
 //   composeShort 两因子查表优先级:个人点轴义 → 经典判语 → 含虚星图样例 → 关键词合成。
 
+import * as AstroText from '../../constants/AstroText.js';
 import * as AstroConst from '../constants/AstroConst.js';
 
 // ───────────────────────── 基义:因子关键词 ─────────────────────────
@@ -79,6 +80,8 @@ export function pairKey(a, b){
 export function factorLabel(id){
 	const f = FACTOR_MEANINGS[id];
 	if (f && f.label) return f.label;
+	// 不在汉堡因子表里的点(紫气 / 暗月 / 南交 …)取全站中文短名,不把英文 id 露给界面 / AI 快照
+	if (id != null && AstroText.AstroTxtMsg[id]) return AstroText.AstroTxtMsg[id];
 	return id == null ? '' : String(id);
 }
 

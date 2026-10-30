@@ -1,4 +1,3 @@
-import { safeLocalStorageSet } from '../gua/safeStorage.js';
 // perfFlags.js —— 流畅度优化项的独立开关(默认全开,调用时读取)。
 //
 // 每项优化只动「时机/调度」不动「内容/语义」,但仍各配 kill-switch:现场发现异常时
@@ -33,16 +32,16 @@ import { safeLocalStorageSet } from '../gua/safeStorage.js';
 //   safeLocalStorageSet('horosa.perf.chartCloneLite', '0')        // 出盘缓存冻结共享引用(关=每次深拷贝)
 //   safeLocalStorageSet('horosa.perf.hoverPrefetch', '0')         // 导航悬停预取 chunk(关=点击才载)
 //   safeLocalStorageSet('horosa.perf.netResultCache', '0')        // 请求结果 L3 持久缓存(IndexedDB,跨重启 0 往返)
-//   safeLocalStorageSet('horosa.perf.bootGate', '0')              // [B1] early 导航后端探活门(关=请求直发,未起时报错重试)
-//   safeLocalStorageSet('horosa.perf.bootGateFastRetry', '0')     // [R5 S2] 就绪门探活重试 50ms(关=回旧 350ms;壳确认事件两档都即时放行)
-//   safeLocalStorageSet('horosa.perf.requestPriorityLane', '0')   // [R5 T5] 后台预取请求带 X-Horosa-Priority 头(引擎侧让用户请求先算;关=永不加头)
-//   safeLocalStorageSet('horosa.perf.rsaSessionKey', '0')         // [A2] RSA 会话密钥复用(关=每请求重算 2048 位模幂)
-//   safeLocalStorageSet('horosa.perf.cryptoV2', '0')              // [R5 T0] 响应改会话钥 AES-GCM + WebCrypto 异步解(关=旧 RSA 信封 + 主线程 JS 解)
-//   safeLocalStorageSet('horosa.perf.recordStoreFastWrite', '0')  // [P0-S5] 记录库写路径:逐记录序列化缓存+装饰排序+缓存对象身份保持(关=整库 stringify/parse 旧路径)
-//   safeLocalStorageSet('horosa.perf.sourcesCache', '0')          // [P0-S2] AI 分析源列表指纹缓存+引用稳定+单条 O(1) 查找(关=每次全建新数组)
+//   safeLocalStorageSet('horosa.perf.bootGate', '0')              // early 导航后端探活门(关=请求直发,未起时报错重试)
+//   safeLocalStorageSet('horosa.perf.bootGateFastRetry', '0')     // 就绪门探活重试 50ms(关=回旧 350ms;壳确认事件两档都即时放行)
+//   safeLocalStorageSet('horosa.perf.requestPriorityLane', '0')   // 后台预取请求带 X-Horosa-Priority 头(引擎侧让用户请求先算;关=永不加头)
+//   safeLocalStorageSet('horosa.perf.rsaSessionKey', '0')         // RSA 会话密钥复用(关=每请求重算 2048 位模幂)
+//   safeLocalStorageSet('horosa.perf.cryptoV2', '0')              // 响应改会话钥 AES-GCM + WebCrypto 异步解(关=旧 RSA 信封 + 主线程 JS 解)
+//   safeLocalStorageSet('horosa.perf.recordStoreFastWrite', '0')  // 记录库写路径:逐记录序列化缓存+装饰排序+缓存对象身份保持(关=整库 stringify/parse 旧路径)
+//   safeLocalStorageSet('horosa.perf.sourcesCache', '0')          // AI 分析源列表指纹缓存+引用稳定+单条 O(1) 查找(关=每次全建新数组)
 //   safeLocalStorageSet('horosa.perf.agentBatchSelect', '0')      // AI 助手批量建档只在批尾选中末条(关=逐条选中)
-//   safeLocalStorageSet('horosa.perf.contextCachePrune', '0')     // [P0-S4] AI 源上下文缓存条数上限裁剪(关=缓存只增不减)
-//   safeLocalStorageSet('horosa.perf.usageOrderedPreload', '0')   // [R5 N2] chunk 预载 / 引擎与数据预热按本机技法使用频次排序(关=写死的概率序)
+//   safeLocalStorageSet('horosa.perf.contextCachePrune', '0')     // AI 源上下文缓存条数上限裁剪(关=缓存只增不减)
+//   safeLocalStorageSet('horosa.perf.usageOrderedPreload', '0')   // chunk 预载 / 引擎与数据预热按本机技法使用频次排序(关=写死的概率序)
 // 恢复:对应 key removeItem 或设 '1'。
 
 export function flagEnabled(key){
@@ -56,7 +55,7 @@ export function flagEnabled(key){
 	return true;
 }
 
-// [P0-S4] AI 分析源上下文缓存(IndexedDB context_cache)条数上限裁剪:按写计数触发,超过上限时沿
+// AI 分析源上下文缓存(IndexedDB context_cache)条数上限裁剪:按写计数触发,超过上限时沿
 // updatedAt 索引删最旧(命中记录会被触摸续命)。关=不裁剪,回到「缓存只增不减」的旧行为。
 export function contextCachePruneEnabled(){
 	return flagEnabled('horosa.perf.contextCachePrune');
@@ -106,7 +105,7 @@ export function techniqueCacheEnabled(){
 	return flagEnabled('horosa.perf.techniqueCache');
 }
 
-// [A1] L3 持久结果缓存(IndexedDB):同参跨会话零网络零 RSA。默认开;置 '0' 一键回退到纯内存 L1/L2。
+// L3 持久结果缓存(IndexedDB):同参跨会话零网络零 RSA。默认开;置 '0' 一键回退到纯内存 L1/L2。
 export function netResultCacheEnabled(){
 	return flagEnabled('horosa.perf.netResultCache');
 }
@@ -149,18 +148,18 @@ export function leadingDebounceEnabled(){
 }
 
 export function bootGateEnabled(){
-	// [B1] 桌面壳 early 导航(前后端启动重叠)时,请求层按目标根探活排队;
+	// 桌面壳 early 导航(前后端启动重叠)时,请求层按目标根探活排队;
 	// 关=请求直发(后端未起时走既有报错/重试/离线横幅,行为回到旧序)。
 	return flagEnabled('horosa.perf.bootGate');
 }
 
-// [R5 S2] 就绪门探活重试间隔 50ms(回环拒连探测近零成本;旧 350ms 让首盘平均多等 175ms)。
+// 就绪门探活重试间隔 50ms(回环拒连探测近零成本;旧 350ms 让首盘平均多等 175ms)。
 // 关=回旧 350ms。壳的 horosa:backend-confirmed 事件与之无关:两档都是事件一到立即放行。
 export function bootGateFastRetryEnabled(){
 	return flagEnabled('horosa.perf.bootGateFastRetry');
 }
 
-// [R5 T0] 响应加解密 v2:请求头声明能力(X-Horosa-Crypto: gcm1),服务端用请求里已协商的会话钥做 AES-128-GCM
+// 响应加解密 v2:请求头声明能力(X-Horosa-Crypto: gcm1),服务端用请求里已协商的会话钥做 AES-128-GCM
 // (免每响应 RSA 私钥运算),前端用浏览器原生 WebCrypto 异步解、不占主线程。关=服务端回旧 RSA 信封(Encrypted: 1)。
 // 依赖会话钥复用(rsaSessionKey 关时本能力自动不声明)与 crypto.subtle 在场。
 export function cryptoV2Enabled(){
@@ -168,12 +167,12 @@ export function cryptoV2Enabled(){
 }
 
 export function rsaSessionKeyEnabled(){
-	// [A2] :9999 请求体加密的 AES 钥+RSA 密文会话内复用(每会话一次 2048 位模幂,
+	// 9999 请求体加密的 AES 钥+RSA 密文会话内复用(每会话一次 2048 位模幂,
 	// 旧式=每请求一次、主线程)。关=逐请求随机钥(字节行为回旧)。Java 侧零改动。
 	return flagEnabled('horosa.perf.rsaSessionKey');
 }
 
-// [P0-S5] 命盘/事盘记录库写路径的纯 CPU 优化(储存字节与旧路径恒等):
+// 命盘/事盘记录库写路径的纯 CPU 优化(储存字节与旧路径恒等):
 //   ① 逐记录序列化缓存(WeakMap<记录对象, JSON 串>):一次写只序列化新建/合并的 1-2 条,其余记录直接拼串;
 //   ② 排序装饰-排序-去装饰:每记录 Date.parse 一次(旧比较器每次比较各 parse 两次);
 //   ③ 写后缓存对象身份保持:未触碰记录跨写仍是同一对象(读缓存共享引用契约不变)。
@@ -182,7 +181,7 @@ export function recordStoreFastWriteEnabled(){
 	return flagEnabled('horosa.perf.recordStoreFastWrite');
 }
 
-// [P0-S2] AI 分析「可挂载源」列表(listAnalysisSources)指纹缓存:按记录指纹复用 entry 对象、
+// AI 分析「可挂载源」列表(listAnalysisSources)指纹缓存:按记录指纹复用 entry 对象、
 // 记录集无变化时返回同一数组引用(setState 同引用免重渲),findAnalysisSourceById 单条经内核 cid 索引 O(1) 查找。
 // 关=每次全建新数组/新 entry 对象(旧行为)。
 export function sourcesCacheEnabled(){
@@ -190,7 +189,7 @@ export function sourcesCacheEnabled(){
 }
 
 export function aiBodyEncryptEnabled(){
-	// [G2] :9999 AI 分析请求体 RSA 会话束封套(与排盘 API 同机制)。关=回明文请求体
+	// 9999 AI 分析请求体 RSA 会话束封套(与排盘 API 同机制)。关=回明文请求体
 	// (后端有明文直通宽容,恒可回退);响应两态皆不加密。
 	return flagEnabled('horosa.sec.aiBodyEncrypt');
 }
@@ -265,7 +264,7 @@ export function optionDebounceEnabled(){
 }
 
 // R4-B5b(horosa_main_chain_abort_v1):/chart 主链新发先 abort 旧在途(网络层取消;
-// 结果层正确性由 fieldsEpoch 代际保证,此闸释放连接与后端算力)。关=旧请求自然完成。
+// 结果层正确性由主盘提交代次(astro 模型 chartCommitGen)保证,此闸释放连接与后端算力)。关=旧请求自然完成。
 //
 // 🔴🔴 **默认改为关**(horosa_main_chain_abort_default_off_v1)——实测它会连「本该活下来的
 // 那一个」一起取消,造成 chartObj 永不更新的正确性事故:

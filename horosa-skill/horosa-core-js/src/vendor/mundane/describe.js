@@ -375,7 +375,7 @@ export function buildMundaneStarPoints(facts){
 // rulesetKey(可选)：传入世运规则集 → 按其 termsVariant/triplicityVariant 给 computeAlmuten 换界主/三分主表;
 // 缺省=默认现状(modern=埃及界+多罗修斯,零回归)。中世纪档 termsVariant='ptolemaic' → 界主换托勒密界、
 // 年主/盘主据之重算(切档真换 victor);三分各档暂皆多罗修斯(换表机制已打通,供日后档位选用)。
-// [G6] 偶然加减分层(定局偶然状态口径,叠加在五点尊贵+宫位分之上;只在世运 victor 卡生效,
+// 偶然加减分层(定局偶然状态口径,叠加在五点尊贵+宫位分之上;只在世运 victor 卡生效,
 // 绝不回写 computeAlmuten/寿命引擎 —— 主限链 byte-perfect 不碰)。
 // 古籍此节仅定性(「当令昼/夜主加分;隐宫/焦伤/逆行/被围攻降格」,宫位分已由 HOUSE_SCORES 承担),
 // 数值为本引擎统一刻度(与尊贵 5..1 同源),明细逐项回显供稽核。
@@ -412,7 +412,7 @@ export function describeMundaneVictor(facts, rulesetKey){
 	let alm = null;
 	try{ alm = computeAlmuten(facts, variants); }catch(e){ return null; }
 	if(!alm || !alm.winner){ return null; }
-	// [G6] 偶然层叠加:基分(五点尊贵+宫位)+偶然增减 → 终分排序;胜者可能因焦伤/逆行易主。
+	// 偶然层叠加:基分(五点尊贵+宫位)+偶然增减 → 终分排序;胜者可能因焦伤/逆行易主。
 	const acc = mundaneAccidentalAdjust(facts);
 	const scores = Object.keys(alm.totals || {})
 		.map((k) => {
@@ -596,7 +596,7 @@ export function describeMundaneFromChart(chart){
 	try{ return describeMundaneChart(buildFacts(chart)); }catch(e){ return []; }
 }
 
-// [G11] 四轴特殊点(赤道上升点 EastPoint / 天顶点 Vertex / 反天顶 Antivertex)。
+// 四轴特殊点(赤道上升点 EastPoint / 天顶点 Vertex / 反天顶 Antivertex)。
 // 公式照录古籍坐标篇:λ_EQ = atan2(cos RAMC, −sin RAMC·cos ε)(即 RA=RAMC+90° 的黄道点);
 // Vertex = 以余纬(90−|φ|)代入 ASC 公式、取西半球交点;Antivertex = Vertex+180°。
 // RAMC 由 λ_MC 反推(黄纬 0:RA = atan2(sin λ·cos ε, cos λ));ε 取平均黄赤交角 23.4367°

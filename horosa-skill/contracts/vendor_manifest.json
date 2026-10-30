@@ -371,11 +371,6 @@
       "mode": "verbatim",
       "deviations": []
     },
-    "divination/data/midpoints.js": {
-      "upstream": "divination/data/midpoints.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
     "divination/data/monomoiriaTriplicity.js": {
       "upstream": "divination/data/monomoiriaTriplicity.js",
       "mode": "verbatim",
@@ -398,11 +393,6 @@
     },
     "divination/data/regionCharts.js": {
       "upstream": "divination/data/regionCharts.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/data/shipParts.js": {
-      "upstream": "divination/data/shipParts.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1495,12 +1485,6 @@
           "why": "剥掉 React 组件尾部（4554–6436）。锚点是正则而非行号：上游一编辑行号就漂，锚点找不到会报错而不是悄悄剪错。"
         },
         {
-          "kind": "import_redirect",
-          "specifier": "../../constants/AstroConst.js",
-          "to": "../astroextra/progConst.js",
-          "why": "纯逻辑段只用到 SUN/MOON/MERCURY/VENUS/MARS/JUPITER/SATURN 七个经典行星常量；progConst 是仓里现成的窄 shim（balbillus 已在用），避免拖进 1128 行 AstroConst。"
-        },
-        {
           "kind": "stub_import",
           "specifier": "../xq-ui.js",
           "stub": "",
@@ -1511,12 +1495,6 @@
           "specifier": "../xq-icons.js",
           "stub": "",
           "why": "图标库（同上）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import LRSanChuanRelationMini, { sanChuanRelationSnapshotLines }",
-          "to": "import { sanChuanRelationSnapshotLines }",
-          "why": "同一行 import 既有 JSX 小图（默认导出，只在被剥掉的 React 尾部用）又有纯函数 sanChuanRelationSnapshotLines（纯逻辑段 buildLiuRengSnapshotText 的 [三传] 在用）。v3.11.0 之前整行 stub 成空，于是纯逻辑段一走到 [三传] 递生递克行就 ReferenceError。vendored 的 LRSanChuanRelationMini.js 已剥掉默认导出，故只保留具名那一半（孤儿 import 清理不认 `import X, { … }` 形态，须声明）。"
         },
         {
           "kind": "stub_import",
@@ -1559,6 +1537,12 @@
           "find": "const TabPane = Tabs.TabPane;\n",
           "to": "",
           "why": "同上（TabPane 在纯逻辑段一次都没用到）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../liureng/LRSanChuanRelationMini.js",
+          "stub": "",
+          "why": "上游 v3.12.0 起本文件只默认导入 JSX 小图（只在被剥掉的 React 尾部用）；纯函数 sanChuanRelationSnapshotLines 已随快照拆到 main/snapshot.js 具名导入。vendored 的 LRSanChuanRelationMini.js 已剥掉默认导出。"
         }
       ]
     },
@@ -2168,6 +2152,18 @@
           "specifier": "./storageutil.js",
           "stub": "// headless stub：上游 getStore() 取 dva 全局 store（读「当前载入的事盘」）。headless 无 store、也没有「载入的旧案」——\n// 设置一律由每次调用显式传入，故恒 null → getKentangSavedCasePayload 回 null（与上游「未载入事盘」同一分支）。\nconst getStore = () => null;",
           "why": "LiuRengMain.js（truncate 后仍在的模块级函数）只用 caseFieldSnapshot / caseGenderValue / getKentangSavedCasePayload；后者在 headless 恒走「未载入事盘」分支"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../components/comp/DateTime.js",
+          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
+          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./constants.js",
+          "stub": "// headless stub：utils/constants.js 混着后端地址（ServerRoot 读 window / localStorage），不 vendor；\n// 这里只要四个缺省坐标常量，值与上游 constants.js 逐字相同。\nconst DefLat = '26n04';\nconst DefLon = '119e19';\nconst DefGpsLat = 26.076417371316914;\nconst DefGpsLon = 119.31516153077507;",
+          "why": "上游 v3.12.0 起 kentangCaseSave 按名导入四个缺省坐标；constants.js 其余部分是后端地址与浏览器存储，headless 不用"
         }
       ]
     },
@@ -2183,14 +2179,7 @@
     "utils/zeriSnapshotPrefs.js": {
       "upstream": "utils/zeriSnapshotPrefs.js",
       "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "replace_text",
-          "find": "if(typeof localStorage !== 'undefined'){",
-          "to": "if(false){   // headless：不探测全局 localStorage（Node ≥25 实验性全局无 --localstorage-file 会告警/抛），恒走缺省；调用方可经 opts 显式覆盖",
-          "why": "AGENTS §5 闭包提取陷阱 ②：headless 恒无浏览器持久化，别探测 globalThis.localStorage；缺省（60 行 / 3 行判读树）与上游无全局设置时一致"
-        }
-      ]
+      "deviations": []
     },
     "xiaochengtu/xiaochengtuConst.js": {
       "upstream": "components/xiaochengtu/core/xiaochengtuConst.js",
@@ -2561,7 +2550,7 @@
         {
           "kind": "stub_import",
           "specifier": "../../utils/shellZoom.js",
-          "stub": "// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的 getViewportHeight；headless 无视口。\n// 定义同名函数让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。\nfunction getLayoutViewportHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }",
+          "stub": "// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的视口高度；headless 无视口。\n// 定义同名函数让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。\n// 上游 v3.12.0 起改名 getLayoutViewportHeight → getPageLayoutHeight。\nfunction getPageLayoutHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }",
           "why": "模块私有 getViewportHeight 引用它，但只在 React 构造器里被调。"
         },
         {
@@ -2753,14 +2742,7 @@
       "upstream": "utils/perfFlags.js",
       "mode": "verbatim",
       "why": "v3.11.2：huangliDay.js 新引 flagEnabled（九星值日 / 时辰宜忌惰性计算开关）。整文件是无副作用的纯函数集（每个开关一函数，读 window.localStorage 且全部 try/window 守卫）——headless 下 flagEnabled 恒 true = 上游缺省全开。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "./safeStorage.js",
-          "to": "../gua/safeStorage.js",
-          "why": "safeLocalStorageSet 只在注释示例与 opt-in 开关里用；指向既有的 headless no-op shim。"
-        }
-      ]
+      "deviations": []
     },
     "bazi/baziAgeText.js": {
       "upstream": "components/cntradition/baziAgeText.js",
@@ -2779,6 +2761,135 @@
           "why": "lunarDomainGuard 已 vendor 在 bazi/ 下（单份）。"
         }
       ]
+    },
+    "utils/civilMoment.js": {
+      "upstream": "utils/civilMoment.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/timeLordYears.js": {
+      "upstream": "utils/timeLordYears.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/dateTimeParse.js": {
+      "upstream": "utils/dateTimeParse.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/civilCalendar.js": {
+      "upstream": "utils/civilCalendar.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/zoneOffset.js": {
+      "upstream": "utils/zoneOffset.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/dayBoundaryResolve.js": {
+      "upstream": "utils/dayBoundaryResolve.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/globalSetupStore.js": {
+      "upstream": "utils/globalSetupStore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/segmentIndex.js": {
+      "upstream": "utils/segmentIndex.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/lunarText.js": {
+      "upstream": "utils/lunarText.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/zeri/zeriPageCalibre.js": {
+      "upstream": "divination/zeri/zeriPageCalibre.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/scriptMode.js": {
+      "upstream": "utils/scriptMode.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/fieldsDateTime.js": {
+      "upstream": "utils/fieldsDateTime.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/birthRunYear.js": {
+      "upstream": "components/lrzhan/main/birthRunYear.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "../../comp/DateTime.js",
+          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
+          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
+        }
+      ]
+    },
+    "liureng/main/castLayout.js": {
+      "upstream": "components/lrzhan/main/castLayout.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/panData.js": {
+      "upstream": "components/lrzhan/main/panData.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "../../comp/DateTime.js",
+          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
+          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
+        }
+      ]
+    },
+    "liureng/main/snapshot.js": {
+      "upstream": "components/lrzhan/main/snapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/referenceData.js": {
+      "upstream": "components/lrzhan/main/referenceData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/referenceMatch.js": {
+      "upstream": "components/lrzhan/main/referenceMatch.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/zoneText.js": {
+      "upstream": "utils/zoneText.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/qimenPageShared.js": {
+      "upstream": "components/dunjia/qimenPageShared.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/caseDivTime.js": {
+      "upstream": "utils/caseDivTime.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/ganzhiHelpers.js": {
+      "upstream": "components/lrzhan/main/ganzhiHelpers.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/scriptConvert/scriptMatch.js": {
+      "upstream": "utils/scriptConvert/scriptMatch.js",
+      "mode": "verbatim",
+      "deviations": []
     }
   }
 }
