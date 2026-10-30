@@ -105,6 +105,9 @@ SENTINEL_TREES: dict[str, dict[str, object]] = {
     # 套件）、resources/ 与根级文件同样无人比对。
     "Horosa-Web/astropy": {"copy": "whole"},          # Python 算法本体 + 端点层 + 上游测试（sync 脚本 :71 整棵 rsync）
     "Horosa-Web/flatlib-ctrad2": {"copy": "whole"},   # 天文/相位内核（sync 脚本 :72 整棵 rsync）
+    # v0.46.1：上游 v3.12.0 把 aiExport.js 拆成门面 + 目录，sync 脚本随之整棵 rsync `aiExport/`——守卫此前只比门面（哨兵）
+    # 与版本号，目录里的 presets.js 等漂到上游本地未推送提交（多出四个技法键）零信号，是导出段基线检查间接撞出来的。
+    "Horosa-Web/astrostudyui/src/utils/aiExport": {"copy": "whole"},
 }
 # 与 sync_vendored_runtime_sources.sh 的 RSYNC_FILTERS 保持一致。
 TREE_EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".cache", "_CodeSignature", ".horosa-logs", ".git"}

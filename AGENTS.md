@@ -505,6 +505,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 60）。
   上游 v3.12.0 起 `aiExport.js` / `aiAnalysisContext.js` 是**门面 + 同名目录**（版本号与预设段在 `aiExport/presets.js`）：读源码的脚本与测试
   一律读「本文件 + 该目录」（`scripts/_upstream_preset.read_aiexport_source`，测试里 `read_facade_source`），只读门面会读不到实现。
+  vendored 的 `aiExport/` 整棵进 `verify_upstream_sync.SENTINEL_TREES` 逐文件比对（v0.46.1）——sync 脚本每加一条 rsync，守卫同一提交里加同一棵树。
   raw vendor 起 chart 服务**不再 hard-fail**：`kentang/registry.py` 现用 `_LazyMountedService`
   （默认 `HOROSA_KENTANG_LAZY=1`），缺引擎只在首请求时响亮 500 + 下次重试；18 个 mount 引擎均在
   vendored 集内，无需再手打 graceful-kentang-mount 补丁（打包脚本仍对 staged 拷贝保留该分支以防旧树）。

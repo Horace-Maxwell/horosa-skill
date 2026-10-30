@@ -178,6 +178,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **守卫**：`tests/test_mcp_result_budget.py`（进程内真 MCP 客户端：八字线上 ≤ 预算 < 1 MiB、AI 读的部分逐字相同、小结果不变；
   负向对照：去掉预算分支 → 2 480 848 B，红）；surface_audit HTTP 阶段 4/4。
 - **规则**：传输层也有上限——加大结果的工具或字段时，用进程内 MCP 客户端量线上字节，不只看 service 信封。
+- **发 v0.46.1 前又撞出一处守卫盲区**：做四技法时 `vendor/runtime-source` 被同步到上游本地未推送的 HEAD；只恢复了
+  `verify_upstream_sync` 报出的 4 个 astropy 文件后它就绿了，可 vendored 的 `aiExport/` 目录（presets 等 6 个文件，多出四个技法键）
+  仍是未推送版本——v0.46.0 给同步脚本加了这棵树的整棵 rsync，守卫的 `SENTINEL_TREES` 没跟上，是导出段基线检查间接撞出来的。
+  修：`SENTINEL_TREES` 加 `astrostudyui/src/utils/aiExport`（整棵比对；1328 → 1340 个文件，负向对照：改一个 presets.js → 红）。
+  规则：sync 脚本每新增一条 rsync，守卫同一提交里加同一棵树。
 
 ### v0.46.0 / 2026-10-30 — main CI：windows-smoke 两红（argv 过长、time.tzset），本机全绿
 
