@@ -18,7 +18,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # v0.46.0：15 → 25。v0.45.1 时整个 job 已用 14:34 / 15（97%，单元测试 12:13）；v3.13.0 同步加了约 200 条测试后单元测试
+    # 12:51，job 在零安装步被超时取消（41115172448，所有已跑步骤全绿）。按 LESSONS v0.45.1「占比 > 90% 就提前加」留足余量。
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7

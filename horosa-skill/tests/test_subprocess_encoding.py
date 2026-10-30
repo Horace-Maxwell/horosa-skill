@@ -172,3 +172,28 @@ def test_scripts_write_text_with_explicit_lf() -> None:
 def test_lf_guard_catches_the_old_shape() -> None:
     assert len(write_text_calls_without_newline("p.write_text(s, encoding='utf-8')\n")) == 1
     assert write_text_calls_without_newline("p.write_text(s, encoding='utf-8', newline='\\n')\n") == []
+
+
+def test_node_argv_size_is_capped_on_every_platform() -> None:
+    """v0.46.0 windows-smoke：整盘 JSON 进 node argv → WinError 206，只在 Windows 红。esm_argv 在所有平台上拦超长 argv。
+    负向对照：去掉 esm_argv 的长度检查 → 这条红。"""
+    from node_esm import ARGV_CHAR_LIMIT, esm_argv
+
+    esm_argv("1", "x" * 100)  # 小参数照常
+    with pytest.raises(ValueError, match="temp file"):
+        esm_argv("1", "x" * (ARGV_CHAR_LIMIT + 1))
+
+
+def test_time_tzset_is_guarded_for_windows() -> None:
+    """time.tzset 只在 POSIX 上有（v0.46.0 windows-smoke 实红）：用到它的测试必须带 `hasattr(time, "tzset")` 的 skipif。"""
+    import ast
+
+    hits = []
+    for path in sorted(Path(__file__).parent.glob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
+            calls = [c for c in ast.walk(fn) if isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "tzset"]
+            guards = "".join(ast.unparse(d) for d in fn.decorator_list)
+            if calls and "hasattr(time, 'tzset')" not in guards:   # 只认条件本身（reason 文案里写了 tzset 不算）
+                hits.append(f"{path.name}::{fn.name}")
+    assert hits == [], hits

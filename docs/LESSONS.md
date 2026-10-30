@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.46.0 (2026-10-30) | main CI windows-smoke 两红：整盘 JSON 进 node argv（WinError 206）、`time.tzset`（POSIX 专有）；本机全绿 | `esm_argv` 全平台拦 > 24 000 字符；tzset 必须带 `hasattr` 条件（AST 守卫，负向对照收紧过） |
 | v0.46.0-dev (2026-10-30) | 上游 v3.11.3 → v3.13.0：vendor 清单全绿，手抄件十余处静默过期（印占分盘标签表、写死的缺省 / 文案、民用历日期运算、yearsystem129 后端字段已删仍在读）；顺带查出印度 Tajika 缺省缺席、金口诀昼夜粗判 | `audit_upstream_ports.py` + 台账（变了的上游名字 ∩ skill 提到的 → 必须有结论，审到当前 pin）；`also_derived_from` 多源看守；手抄表逐值 / civil 移植差分测试 |
 | v0.45.1 (2026-10-28) | 发版矩阵 windows-11-arm（仿真 x64）pytest 在 2700 s 被杀，~98%、零失败；v0.45.0 时已占 96% 无人察觉；同批 windows-latest 反而更快 | 只给 `--expect-emulated` lane 加 900 s（3600），守卫同时校验仍装得进 job 的 90 分钟；lane 脚本取自派发提交（main），不必挪 tag |
 | v0.45.1-dev (2026-10-28) | MCP SDK 1.x → 2.3 + 澄清闸走 MRTR：`mcp.get_context()` 没了、模型属性改 snake_case（`model_dump()` 量出来的不是线上形状）、`read_resource` 不收 AnyUrl（setup 探针把异常吞成 None）、`streamable_http_client` 只给两个流、调用结果是 `CallToolResult` | 上下文放 ContextVar；量线上形状一律 `by_alias=True`；探针传字符串；闸门三条路（MRTR / 服务端发起 / 结构化错误），真 SDK 客户端两种协议各跑一遍端到端；篡改 requestState 被 SDK 拒（-32602） |
@@ -162,6 +163,20 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.46.0 / 2026-10-30 — main CI：windows-smoke 两红（argv 过长、time.tzset），本机全绿
+
+- **现象**：同步提交 8ac208c 推上 main，CI 41111578614 的 windows-smoke 红 2 条（2340 过），fail-fast 把 test job 取消：
+  `test_sync313_ports` 把整盘夹具 JSON 塞进 `node -e` 的 argv → `WinError 206`（命令行超长）；`test_sync313_historical` 调了
+  POSIX 专有的 `time.tzset` → AttributeError。
+- **根因**：Windows 命令行总长上限 32 767 字符、`time.tzset` 不存在——两样在 mac / Linux 上都不会响。
+- **修**：夹具改写临时文件、只传路径；tzset 对拍加 `skipif(not hasattr(time, "tzset"))`（mac / Linux lane 覆盖）。
+- **同一天第二红**：修完上面两条后 CI 41115172448 的 test job 在「零安装（wheel）」步被**超时取消**（15 分钟）——所有已跑步骤全绿。
+  v0.45.1 时该 job 已用 14:34 / 15（97%）无人察觉，这轮约 200 条新测试把单元测试推到 12:51。`timeout-minutes` 15 → 25。
+  这正是 v0.45.1 那条「占比 > 90% 就提前加」的规则没人执行：每次发版顺手看一眼 test job 时长 / 预算。
+- **守卫**：`tests/node_esm.esm_argv` 在**所有平台**上拦 > 24 000 字符的 argv（`test_node_argv_size_is_capped_on_every_platform`）；
+  `test_time_tzset_is_guarded_for_windows` 要求调 `time.tzset` 的测试带 `hasattr(time, 'tzset')` 条件（只认条件本身——第一版只查
+  「装饰器文本含 tzset」，`reason` 文案就能让它放行，负向对照没红，已收紧）。
 
 ### v0.46.0-dev / 2026-10-30 — 上游 v3.11.3 → v3.13.0 全量同步：vendor 清单全绿，手抄件却十余处过期
 

@@ -12,6 +12,9 @@ import subprocess
 from pathlib import Path, PurePath
 
 _ABS_MODULE_PATH = re.compile(r"^(?:/|[A-Za-z]:[\\/]).*\.(?:m?js)$")
+# Windows 命令行总长上限 32 767 字符；整盘 JSON 塞进 argv 只在 windows-smoke 报 WinError 206（v0.46.0 实红过），本机全绿。
+# 在所有平台上提前拦：大载荷写临时文件、只传路径。
+ARGV_CHAR_LIMIT = 24_000
 
 
 def module_url(path: PurePath | str) -> str:
@@ -29,6 +32,12 @@ def esm_argv(script: str, *args: PurePath | str) -> list[str]:
         if _ABS_MODULE_PATH.match(text):
             raise ValueError(f"pass module paths as Path objects, not strings ({text!r}): Windows ESM needs file:// URLs")
         argv.append(text)
+    total = sum(len(part) for part in argv)
+    if total > ARGV_CHAR_LIMIT:
+        raise ValueError(
+            f"node argv is {total} chars (> {ARGV_CHAR_LIMIT}): Windows caps the command line at 32 767 — "
+            "write the payload to a temp file and pass its path"
+        )
     return argv
 
 

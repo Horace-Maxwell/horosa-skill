@@ -865,6 +865,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 
 ### 8.1 验证流程
 
+- **Windows-only 的两类测试坑（v0.46.0）**：大载荷别进 node argv（Windows 命令行上限 32 767 字符，`esm_argv` 全平台拦
+  > 24 000）——写临时文件传路径；`time.tzset` 是 POSIX 专有，用到它的测试带 `skipif(not hasattr(time, "tzset"))`。
 - **并行 agent 的负向对照只回退自己那一处（v0.46.0）**：session scratchpad 是所有子 agent 共用的——同名 `negctl.py` 被覆盖后由另一个
   agent 误执行，「整文件备份 → 改 → 写回」会抹掉别人这几秒内的并发改动。脚本放各自子目录、起唯一名字；变异用就地字符串替换，
   跑完只把这一处改回来（并核对 diffstat 与变异前一致）。
