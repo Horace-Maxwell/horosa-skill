@@ -524,6 +524,7 @@ def test_small_date_string_helpers_match_vendored() -> None:
 
 
 @requires_node
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset 只在 POSIX 上有（本进程钉 TZ=UTC 比对；mac / Linux lane 覆盖）")
 def test_civil_instant_ms_matches_vendored_in_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     """civilInstantMsOfStr（主限「表中距今最近行」的时刻轴）：钟面按 parseDateTimeMs（严格 ISO 纯日期 = UTC 0 点、其余本机钟面）
     + 民用历与外推格里历同一标签之差。两侧都钉在 TZ=UTC 比（本机时区只影响「本机钟面」那一项）。

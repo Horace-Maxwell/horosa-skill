@@ -200,17 +200,21 @@ def test_rizi_person_bazi_uses_global_day_boundary() -> None:
 # ── 大六壬：timeAlg 进 builder（v3.13.0 main/snapshot.js:20-26）───────────────────────────────────
 
 @requires_node
-def test_liureng_snapshot_prints_clock_time_line_when_time_alg_is_1() -> None:
+def test_liureng_snapshot_prints_clock_time_line_when_time_alg_is_1(tmp_path: Path) -> None:
     """上游 v3.13.0 buildLiuRengSnapshotText 读 params.timeAlg：=1 时 [起盘信息] 出「时间算法：直接时间(按钟表时定时辰)」。
     skill 此前不把 timeAlg 交给 builder → 选了直接时间，快照里看不出来。
     负向对照：liureng.js 的 params 去掉 timeAlg → 红。"""
     fixture = json.loads((PKG / "horosa-core-js" / "test" / "fixtures" / "chart_liureng.json").read_text(encoding="utf-8"))
     base = {**fixture, "date": "2026-04-04", "time": "21:18:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+    # 盘 JSON 走临时文件、不走命令行参数：Windows 命令行上限约 32 KB，整盘夹具塞进 argv 报 WinError 206（windows-smoke 实红过）。
+    payload = tmp_path / "liureng_payload.json"
+    payload.write_text(json.dumps(base, ensure_ascii=False), encoding="utf-8", newline="\n")
     texts = _node(
         "tools/liureng.js",
-        "const p = JSON.parse(argv[0]); return [m.runLiureng(p).snapshot_text,"
+        "const fs = await import('node:fs'); const p = JSON.parse(fs.readFileSync(argv[0], 'utf8'));"
+        " return [m.runLiureng(p).snapshot_text,"
         " m.runLiureng({...p, options: {timeAlg: 1}}).snapshot_text, m.runLiureng({...p, timeAlg: 1}).snapshot_text];",
-        json.dumps(base),
+        str(payload),
     )
     line = "时间算法：直接时间(按钟表时定时辰)"
     assert line not in texts[0]
