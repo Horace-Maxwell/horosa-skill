@@ -1342,6 +1342,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
 
+- **多进程共写的追加文件一律走 `appendlog.append_line`（v0.46.2-dev）。** Windows 上 `open(path, "a")` / `os.open(O_APPEND)` 的追加是 CRT 模拟的
+  （seek + write 两步，8 进程并发每轮丢约 24% 的行）；`append_line` 在 Windows 用只申请 `FILE_APPEND_DATA` 的原生句柄（内核在末尾原子写），
+  整行一次 `WriteFile`。trace 与决策台账已改；新增任何被多个 MCP 会话共写的 `.jsonl` 照此办。守卫 `tests/test_appendlog.py`（含旧写法本机丢行的负向对照）。
 - **本机门禁镜像在 Windows 上走 `python -m pytest`（v0.43.1-dev）。** `run_ci_gates.local_command`：ci.yml 的 `uv run pytest …` 在 Windows 上实际执行
   `uv run python -m pytest …`（应用控制可能拦新 venv 的 `pytest.exe`）；镜像对照面（`ci_test_steps`）不变。新增 console-script 型步骤时登记进
   `_CONSOLE_SCRIPT_MODULES`。

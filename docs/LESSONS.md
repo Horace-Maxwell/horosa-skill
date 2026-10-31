@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.46.2-dev (2026-10-31) | Windows 原生复验 v0.46.1 时盯上一条「如实承认的边界」：trace / 决策台账被多个 MCP 会话共写，Windows 上 CRT 的 O_APPEND 是模拟的（seek + write 两步），8 进程 × 200 行每轮丢约 24%；守卫用例在 Windows 上一直 skip | `appendlog.append_line`：Windows 用只申请 FILE_APPEND_DATA 的原生句柄（内核在末尾原子写，1600/1600、16 进程 × 240 KB 行 960/960），trace 与台账都走它；跨进程用例取消 Windows 跳过 + 负向对照用例证明旧写法本机确实会丢 |
 | v0.46.1 (2026-10-31) | 编辑发布说明触发的 completeness 必然误报：release 事件检出 tag 的提交，那里的 server.json 还是上一版 mcpb sha | completeness 的 checkout 固定默认分支；流水线形状测试锁住 |
 | v0.46.1-dev (2026-10-30) | 八字结果走 streamable HTTP 整条失败：官方 SDK 客户端 SSE 单事件上限 1 MiB，原始盘序列化后 2.48 MB（v0.45.1 起即如此） | MCP 层线上体积预算 900 KB：超出时只略去 data 里最大的原始子树，AI 读的部分不动；进程内真客户端量线上字节的测试 |
 | v0.46.0 (2026-10-30) | main CI windows-smoke 两红：整盘 JSON 进 node argv（WinError 206）、`time.tzset`（POSIX 专有）；本机全绿 | `esm_argv` 全平台拦 > 24 000 字符；tzset 必须带 `hasattr` 条件（AST 守卫，负向对照收紧过） |
@@ -165,6 +166,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.46.2-dev / 2026-10-31 — Windows 跨进程追加：CRT 的 O_APPEND 是模拟的，换只申请 FILE_APPEND_DATA 的原生句柄（`appendlog`）
+
+- **起因**：v0.46.1 Windows 原生复验（`--check` [OK]、门禁 25/25、release lane 12/12 / live 2449 passed）后逐条看 live 的 49 个 skip，
+  其余都是「需要上游 checkout」类，唯独 `test_concurrent_processes_never_corrupt_the_trace_file` 写着「Windows 的 O_APPEND 由 CRT 模拟，
+  跨进程追加本就不原子」——v0.43.0 起被当成边界「如实承认」，没有修。
+- **影响**：同一天的 trace `.jsonl` 和决策台账 `jev_events.jsonl` 由每个挂着 horosa 的 MCP 会话（Claude Code / Cursor / Codex …）各自追加。
+  Windows 上 `os.open(O_APPEND)` / `open(path, "a")` 的句柄拿的是普通写权限，CRT 每次写前自己 seek 到末尾，两步之间别的进程插进来就互相盖：
+  本机 8 进程 × 200 行每轮只剩 1215–1245 / 1600 行能解析（记录凭空消失、或两条拼成一行）。`memory show` / `trace` 读到的就是缺了的历史。
+- **根因 / 修**：内核本身有原子追加——句柄**只**申请 `FILE_APPEND_DATA`（不带 `FILE_WRITE_DATA`）时，NtWriteFile 忽略偏移、写在当前文件末尾
+  （learn.microsoft.com NtWriteFile 的 ByteOffset 段；Rust `OpenOptions::append` 在 Windows 上就这么开）。新增 `horosa_skill/appendlog.py`：
+  Windows 用 `CreateFileW(FILE_APPEND_DATA | SYNCHRONIZE, 共享读写删)` + 单次 `WriteFile` 交整行（短写按错误处理、绝不续写半行），POSIX 仍是
+  O_APPEND。trace 与决策台账都走它；台账顺带不再在 Windows 上写 CRLF。同机同负载 1600 / 1600，16 进程 × 80–240 KB 行 960 / 960。
+  不需要跨进程锁，进程内的锁保留（保同进程行序）。
+- **守卫**：`tests/test_appendlog.py`（8 进程 × 150 行全部完整、建文件且保留旧内容、目录不存在报 OSError、台账写 LF 并能 tail；
+  `test_crt_append_really_loses_lines_on_windows` 是负向对照：同负载下旧写法本机确实丢行，证明守卫不是因为负载轻才绿）；
+  `test_runtime_lifecycle.py::test_concurrent_processes_never_corrupt_the_trace_file` 取消 Windows 跳过。负向对照：去掉 Windows 分支 → 两条并发用例红。
+- **法则**：「如实承认的边界」也要定期复查——当时的结论是「为尽力而为的记录器上跨进程锁不划算」，但正确的修法根本不需要锁。
+  Windows 上任何多进程共写的追加文件一律走 `appendlog.append_line`，别用 `open(path, "a")`。
 
 ### v0.46.1 / 2026-10-31 — 编辑发布说明触发的 completeness 必然误报（检出的是 tag 不是 main）
 

@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from horosa_skill.appendlog import append_line
+
 logger = logging.getLogger(__name__)
 LEDGER_FILENAME = "jev_events.jsonl"
 
@@ -28,8 +30,9 @@ class DecisionLedger:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-            with self._lock, self.path.open("a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+            # 多个 MCP 会话共写同一份账本：整行一次原子追加（Windows 上 open("a") 的 CRT 模拟追加会互相盖行，见 appendlog）。
+            with self._lock:
+                append_line(self.path, (line + "\n").encode("utf-8"))
             return True
         except (OSError, TypeError, ValueError):
             logger.debug("decision ledger append failed", exc_info=True)

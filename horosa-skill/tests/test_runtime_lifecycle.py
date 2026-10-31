@@ -73,18 +73,12 @@ def test_auto_ports_reuse_what_the_registry_recorded(monkeypatch, tmp_path) -> N
 # ---------------------------------------------------------------- D7 trace 并发
 
 def test_concurrent_processes_never_corrupt_the_trace_file(tmp_path) -> None:
-    """N 进程 × M 事件全部可解析 —— **POSIX only**。
+    """N 进程 × M 事件全部可解析——**所有平台**。
 
-    诚实说明，两条都被现实纠正过：
-    ① 旧写法在 macOS/APFS 上撕不出来（8 进程 × 520 KB 行，250 行全绿）；它靠的是 CPython 的
-       实现细节。改成 O_APPEND + 单次写是把「碰巧成立」变成「写明成立」。
-    ② 但 O_APPEND 的跨进程原子性**在 Windows 上不成立** —— CI 当场打脸：4 进程 × 60 次写
-       只剩 191/213 行（每次跑还不一样）。Windows 的 O_APPEND 由 CRT 模拟，
-       「定位到末尾 + 写」不是一个原子操作。trace 是尽力而为的本地记录器，为它上跨进程锁
-       不划算，所以这条断言只在 POSIX 上做，Windows 的边界如实写在 tracing.py 的注释里。
+    ① 旧写法在 macOS/APFS 上撕不出来（8 进程 × 520 KB 行，250 行全绿），靠的是 CPython 实现细节；O_APPEND + 单次写把它写明。
+    ② Windows 上 CRT 的 O_APPEND 是模拟的：CI 4 进程 × 60 次写剩 191/213 行，这条曾经只在 POSIX 上断言。
+       v0.46.1-dev 起 Windows 走只申请 FILE_APPEND_DATA 的原生句柄（appendlog.py），内核保证每次写落在末尾，取消了 Windows 跳过。
     """
-    if os.name == "nt":
-        pytest.skip("Windows 的 O_APPEND 由 CRT 模拟，跨进程追加本就不原子（见 tracing.py 注释）")
     worker = tmp_path / "w.py"
     worker.write_text(
         "import os, sys\n"
