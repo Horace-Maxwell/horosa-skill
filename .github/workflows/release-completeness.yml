@@ -52,7 +52,12 @@ jobs:
     steps:
       # v0.38.0 A3: the expected platform set comes from horosa-skill/contracts/release_platforms.json
       # (`since`-gated), so this guard needs the repo checked out.
+      # v0.46.1: always the default branch. On `release` events the default checkout is the TAG's commit, whose
+      # server.json still carries the previous mcpb sha (the backfill commit lands on main after the tag) — editing a
+      # release's notes then failed the sha check by construction (41144995786). The sha check means "main's server.json".
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
       - name: Resolve the published `latest` release
         id: latest
         run: |

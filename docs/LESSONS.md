@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.46.1 (2026-10-31) | 编辑发布说明触发的 completeness 必然误报：release 事件检出 tag 的提交，那里的 server.json 还是上一版 mcpb sha | completeness 的 checkout 固定默认分支；流水线形状测试锁住 |
 | v0.46.1-dev (2026-10-30) | 八字结果走 streamable HTTP 整条失败：官方 SDK 客户端 SSE 单事件上限 1 MiB，原始盘序列化后 2.48 MB（v0.45.1 起即如此） | MCP 层线上体积预算 900 KB：超出时只略去 data 里最大的原始子树，AI 读的部分不动；进程内真客户端量线上字节的测试 |
 | v0.46.0 (2026-10-30) | main CI windows-smoke 两红：整盘 JSON 进 node argv（WinError 206）、`time.tzset`（POSIX 专有）；本机全绿 | `esm_argv` 全平台拦 > 24 000 字符；tzset 必须带 `hasattr` 条件（AST 守卫，负向对照收紧过） |
 | v0.46.0-dev (2026-10-30) | 上游 v3.11.3 → v3.13.0：vendor 清单全绿，手抄件十余处静默过期（印占分盘标签表、写死的缺省 / 文案、民用历日期运算、yearsystem129 后端字段已删仍在读）；顺带查出印度 Tajika 缺省缺席、金口诀昼夜粗判 | `audit_upstream_ports.py` + 台账（变了的上游名字 ∩ skill 提到的 → 必须有结论，审到当前 pin）；`also_derived_from` 多源看守；手抄表逐值 / civil 移植差分测试 |
@@ -164,6 +165,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.46.1 / 2026-10-31 — 编辑发布说明触发的 completeness 必然误报（检出的是 tag 不是 main）
+
+- **现象**：补写 v0.46.0 发布说明后，`release`（edited）事件触发的 release-completeness（41144995786）红：
+  「server.json mcpb fileSha256 (adc7d973…) != sha256 of the published horosa-skill-0.46.0.mcpb (92b4148f…)」。
+- **根因**：`release` 事件下 `actions/checkout` 默认检出 **tag 的提交**；mcpb sha 的回填提交按流程总在打 tag 之后才落 main，
+  所以 tag 上的 server.json 永远是上一版的 sha。schedule / dispatch 检出 main 才对得上——编辑任何一个 release 都会误报。
+- **修**：checkout 固定 `ref: ${{ github.event.repository.default_branch }}`（该检查本意就是「main 上的 server.json」）。
+- **守卫**：`tests/test_release_pipeline_shape.py::test_completeness_checks_mains_server_json_even_on_release_events`
+  （负向对照：去掉 ref → 红）。
 
 ### v0.46.1-dev / 2026-10-30 — 发布后 surface_audit：八字结果走 streamable HTTP 整条失败（SSE 单事件 > 1 MiB）
 
