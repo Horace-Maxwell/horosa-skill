@@ -1,9 +1,8 @@
 // 推运图族四子页:演进推运(Néroman)/ 推运图(Bezza)/ 周日小限(Jay)/ 双黄道(Michon)。
 // 计算在后端 /astroextra/<接口>(astrostudy/directed_figures.py);口径、名称与 AI 快照正文单源在 utils/directedFigures。
-// 版式与界推运 / 太阳弧同一套:头卡(标题 · 口径与关键数值 · 说明 · 带标签的控件栅格)→ 有盘三页左 17 栏本命内圈 + 推运外圈双盘、
-// 右 7 栏窄表 → 宽表整宽放在盘下;双黄道只有头卡 + 两张整宽表。改任何设置自动重算,旧结果留着(角标「更新中…」)。
-
-
+// 版式与主限法盘同一个(progPageLayout):左边整列是盘(双黄道是回归 / 恒星双环图),右栏固定头(标题行 →「时间选择」紧凑时间块 →「设置」)
+// + 只在卡内滚动的表格卡片。
+// 改任何设置自动重算,旧结果留着(角标「更新中…」);取不到结果时盘位显示原因,并每隔十几秒自动重试。
 
 
 
@@ -17,12 +16,13 @@ const headlessUnreachable = (name) => () => { throw new Error(`headless: AstroEx
 const unwrapResult = headlessUnreachable('unwrapResult');
 const chartParams = headlessUnreachable('chartParams');
 
+
+
 // headless stub：today / chartZone 只服务 buildDirectedFigureSnapshotText 的「目标时刻缺省 = 本盘时区今日」——skill 由
 // Python 侧按同一口径（_today_for_chart(zone)）先定好 targetDate 再发请求，这条路径不可达。
 const headlessUnreachableProg = (name) => () => { throw new Error(`headless: astroProgSnapshot.${name} 不可达（目标时刻在 Python 侧定）`); };
 const today = headlessUnreachableProg('today');
 const chartZone = headlessUnreachableProg('chartZone');
-
 
 // headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层
 // 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。

@@ -6,9 +6,9 @@
   "file": "components/help/AuxchartHelpDoc.js",
   "upstream_source_marker": "xingque_help_docs",
   "upstream_app_version": "3.13.0",
-  "upstream_git_sha": "8964bfd5503b"
+  "upstream_git_sha": "59465ffe5011"
  },
- "generated_at": "2026-10-30T15:35:44-04:00",
+ "generated_at": "2026-10-30T20:17:30-04:00",
  "categories": [
   {
    "name": "手册",

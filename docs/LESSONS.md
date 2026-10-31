@@ -228,6 +228,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   - `tests/test_runtime_python_lock.py::test_requirements_provenance_header_names_the_recorded_upstream_pin`：需求文件首行 sha == 记录的 pin
     （对照：首行改成 8964bfd5 → 红）。
   - selfcheck.mjs 一条值级金标（页面键 → 口径键、空串齿轮回落缺省、过点事件 ±10 岁窗）。
+- **再跟 59465ffe（同日，上游又多一个本地版式提交）**：vendored `AstroDirectedFigures.js` 的纯逻辑段没变，只是 import 换了一批 ——
+  `moment` / `UpdatingBadge` 两条 `stub_import` 变成「specifier not found」，新默认导入 `MichonDualRing` 报 UNRESOLVED；删两条、补一条
+  `stub_import ""` 即 `--check` 0 待办（新具名导入 progPageLayout / perfFlags / derivedChartSource 由孤儿清理自动删，stub 审计无残留绑定）。
+  真正的漂移在**手抄件**：`audit_upstream_ports.py --scan --from 8964bfd5 --to 59465ffe` 11 条命中里 10 条只是 React render 改版，
+  唯一的逻辑改动是星历 `ephPos`（入座行只带 toSign + lon → 旧 `fmtDegree` 出「- 30.00°」）。它**零新文案**，
+  `test_every_upstream_builder_literal_is_in_the_port` 恒绿、离线金标也恒绿（金标是旧上游跑的）——只有端口审计看得见。
+  修：`engine/astroextra_snapshots._eph_pos` 移植 + 金标位置列按上游 node 重算（113 格，逐格先断言旧格 == 上游旧 fmtDegree）；
+  守卫 `test_ephemeris_event_positions_equal_upstream_ephpos`（上游 @babel 抽 ephPos 在 node 里跑，夹具全部事件行 + 14 条边界行逐格比；
+  对照：去掉 29.99 夹取 → 红；入座行改回 fmt_degree → 金标两红）。判词草稿（11 条）在会话 scratch，随 pin 前移一并并进台账。
 - **没做 / 遗留**：pin 不能前移（上游提交未公开）：upstream-sync 的技法键 / 运行时漂移与端口审计台账「to-pin」两项按设计红，等上游推送后
   `verify_upstream_sync.py --require-upstream --write-state` + 端口审计台账前移（判词草稿在会话 scratch）。孤儿 import 清理认默认导入
   会让 395 份 verbatim 件里别的文件也变（大面积重渲染），这轮只用声明式 stub，没改流水线。

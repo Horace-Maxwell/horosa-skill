@@ -668,6 +668,91 @@ def test_every_upstream_builder_literal_is_in_the_port() -> None:
     assert missing == [], f"upstream builder text changed — re-port engine/astroextra_snapshots.py: {missing[:10]}"
 
 
+# 上游 59465ffe 改了星历事件的「位置」列（ephPos：入座行只带 toSign + lon，旧版 fmtDegree 出「- 30.00°」）——纯数值逻辑、零新文案，
+# 上面的文案哨兵看不见。这里把上游 AstroExtraCommon.signName/fmtNum/fmtDegree + AstroEphemeris.ephPos/ephDegree 用上游 @babel
+# 抽出来在 node 里跑：夹具全部事件行 + 边界行（逆行入座、刚过边界、无 lon、带 sign、非法 toSign、负黄经）逐格与 Python 移植比。
+_EPH_UPSTREAM_JS = r"""
+import { register, createRequire } from 'node:module';
+import fs from 'node:fs';
+register(process.argv[1]);
+const require = createRequire(process.argv[2]);
+const parser = require('@babel/parser');
+const generate = require('@babel/generator').default;
+const AstroConst = await import(process.argv[3]);
+const AstroText = await import(process.argv[4]);
+function pick(file, names){
+  const want = new Set(names);
+  const ast = parser.parse(fs.readFileSync(new URL(file), 'utf8'), { sourceType: 'module', plugins: ['jsx', 'classProperties'] });
+  const out = [];
+  for (let node of ast.program.body) {
+    if (node.type === 'ExportNamedDeclaration' && node.declaration) node = node.declaration;
+    let name = null;
+    if (node.type === 'FunctionDeclaration' && node.id) name = node.id.name;
+    if (node.type === 'VariableDeclaration' && node.declarations.length === 1 && node.declarations[0].id.type === 'Identifier') name = node.declarations[0].id.name;
+    if (name && want.has(name)) { out.push(generate(node, { comments: false }).code); want.delete(name); }
+  }
+  if (want.size) throw new Error('missing upstream declarations: ' + [...want].join(','));
+  return out;
+}
+const decls = [...pick(process.argv[5], ['signName', 'fmtNum', 'fmtDegree']), ...pick(process.argv[6], ['ephPos', 'ephDegree'])];
+const api = new Function('AstroConst', 'AstroText', decls.join('\n') + '\nreturn { ephDegree };')(AstroConst, AstroText);
+const rows = JSON.parse(fs.readFileSync(process.argv[7], 'utf8'));
+process.stdout.write(JSON.stringify(rows.map((e) => api.ephDegree(e))));
+"""
+_EPH_EDGE_ROWS = [
+    None,
+    {},
+    {"toSign": "Cancer", "lon": 89.99999998},  # 求根落在边界下侧 → 进入座 0.00
+    {"toSign": "Gemini", "lon": 89.99999998},  # 逆行入座 → 该座 29.99
+    {"toSign": "Aries", "lon": 359.9999999},  # 跨 0° 的入座
+    {"toSign": "Pisces", "lon": 0.0000001},  # 逆行跨 0° 回双鱼
+    {"toSign": "Taurus", "lon": 75.5},  # 远离边界（座内 45.5 → 29.99 夹住）
+    {"toSign": "NotASign", "lon": 123.456},
+    {"lon": -15.25},
+    {"lon": "200.5"},
+    {"lon": None},
+    {"sign": "Leo", "signlon": 12.345, "lon": 999},
+    {"sign": "", "lon": 45.678},
+    {"toSign": "Leo", "lon": "abc"},  # Number("abc") = NaN → '-'
+]
+
+
+@needs_upstream
+@pytest.mark.skipif(not (_UPSTREAM_SRC.parent / "node_modules" / "@babel" / "parser").is_dir(), reason="needs upstream node_modules (@babel)")
+def test_ephemeris_event_positions_equal_upstream_ephpos(tmp_path: Path) -> None:
+    import subprocess
+
+    from node_esm import esm_argv
+
+    rows: list = []
+    for sc in FIX["scenarios"].values():
+        for key in ("ingresses", "stations", "lunarPhases", "eclipses"):
+            rows.extend(sc["ephemeris"].get(key) or [])
+    rows.extend(_EPH_EDGE_ROWS)
+    rows_json = tmp_path / "rows.json"
+    rows_json.write_text(json.dumps(rows, allow_nan=False), encoding="utf-8")
+    loader = tmp_path / "ext_loader.mjs"
+    loader.write_text(
+        "export async function resolve(s, c, next) { try { return await next(s, c); } catch (err) {\n"
+        "  if ((s.startsWith('.') || s.startsWith('/')) && !/\\.(?:[cm]?js|json)$/.test(s)) { return next(`${s}.js`, c); }\n"
+        "  throw err; } }\n",
+        encoding="utf-8",
+    )
+    ui = _UPSTREAM_SRC.parent
+    argv = esm_argv(
+        _EPH_UPSTREAM_JS, loader, ui / "package.json", _UPSTREAM_SRC / "constants/AstroConst.js", _UPSTREAM_SRC / "constants/AstroText.js",
+        _UPSTREAM_SRC / "components/astro/AstroExtraCommon.js", _UPSTREAM_SRC / "components/astro/AstroEphemeris.js", f"{rows_json}",
+    )
+    done = subprocess.run(["node", "--no-warnings", *argv[1:]], capture_output=True, text=True, encoding="utf-8", timeout=120)
+    assert done.returncode == 0, done.stderr[-4000:]
+    upstream = json.loads(done.stdout)
+    py_rows = json.loads(rows_json.read_text(encoding="utf-8"))
+    ours = [A._eph_degree(r) for r in py_rows]
+    assert len(upstream) == len(ours) > 100
+    assert [(i, u, o) for i, (u, o) in enumerate(zip(upstream, ours)) if u != o] == []
+    assert "巨蟹 0.00°" in ours and "双子 29.99°" in ours  # 边界两侧都真的被走到
+
+
 @needs_upstream
 def test_method_notes_variants_and_tables_track_upstream() -> None:
     snap = (_UPSTREAM_SRC / "utils/astroAiSnapshot.js").read_text(encoding="utf-8")

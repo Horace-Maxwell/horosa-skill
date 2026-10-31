@@ -3070,21 +3070,9 @@
         },
         {
           "kind": "stub_import",
-          "specifier": "moment",
-          "stub": "",
-          "why": "只服务子页的日期控件。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
           "specifier": "../xq-ui.js",
           "stub": "",
           "why": "UI 组件库，只服务 React 尾部（模块级 `const { Option } = Select;` 另由 replace_text 删）。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../common/UpdatingBadge.js",
-          "stub": "",
-          "why": "子页角标组件。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
         },
         {
           "kind": "stub_import",
@@ -3097,6 +3085,12 @@
           "specifier": "./AstroDoubleChart.js",
           "stub": "",
           "why": "本命 + 推运双盘绘图组件，只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./MichonDualRing.js",
+          "stub": "",
+          "why": "双黄道回归 / 恒星双环 SVG 绘图组件（上游 59465ffe 起双黄道子页用它画盘），只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
         },
         {
           "kind": "replace_text",

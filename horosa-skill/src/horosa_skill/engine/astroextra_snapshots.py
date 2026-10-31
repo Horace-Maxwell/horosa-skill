@@ -3,6 +3,7 @@
 上游（Horosa-Public HEAD 9b74714b，`Horosa-Web/astrostudyui/src/`；文件:行 = 该 HEAD）：
 
 - `components/astro/AstroEphemeris.js:25-126`   defaultEphemerisWindow / buildEphemerisSnapshotText / ephemerisLimitsText
+  （+ ephPos / ephDegree：上游 59465ffe「星历入座行位置显示修正」，事件位置列不再出「- 30.00°」）
 - `components/astro/AstroReturnTimeline.js:13-45` buildReturnTimelineSnapshotText
 - `components/astro/AstroPrenatalSyzygy.js:27-86` buildPrenatalSyzygySnapshotText / splitDateTime
 - `components/astro/astroProgSnapshot.js:16-142`  PROG_SNAPSHOT_VARIANTS / buildProgSnapshotText（'prog' 与 'vedicprog' 两支同源）
@@ -821,6 +822,33 @@ def _fmt_date_of(item: Any) -> str:
     return "-"
 
 
+def _eph_pos(e: Any) -> Any:
+    """AstroEphemeris.js ephPos（上游 59465ffe 起，页面表与 AI 快照同用）：后端入座行只带 toSign + lon（无 sign）、留行只带 lon，
+    直接交 fmtDegree 会出「- 30.00°」。有 sign → 原样；否则入座行座名取 toSign、度数从该座起量，其余按黄经取座；座内度数夹
+    [0, 29.99]（≥30：>345 → 0，否则 29.99）。lon 非有限 → None（fmtDegree → '-'）。"""
+    if not _js_truthy(e) or not isinstance(e, dict):
+        return None
+    if _js_truthy(_get(e, "sign")):
+        return e
+    lon = _js_number(_get(e, "lon"))
+    if not math.isfinite(lon):
+        return None
+    x = math.fmod(math.fmod(lon, 360) + 360, 360)
+    to_sign = _get(e, "toSign")
+    idx = LIST_SIGNS.index(to_sign) if _js_truthy(to_sign) and to_sign in LIST_SIGNS else -1
+    if idx < 0:
+        idx = math.floor(x / 30) % 12
+    deg = math.fmod(math.fmod(x - idx * 30, 360) + 360, 360)
+    if deg >= 30:
+        deg = 0 if deg > 345 else 29.99
+    return {"sign": LIST_SIGNS[idx], "signlon": min(deg, 29.99)}
+
+
+def _eph_degree(e: Any) -> str:
+    # AstroEphemeris.js ephDegree = fmtDegree(ephPos(e))
+    return fmt_degree(_eph_pos(e))
+
+
 def ephemeris_limits_text(params: Any) -> str:
     """AstroEphemeris.js:114-126 ephemerisLimitsText：后端三道截断（区间/逐日/行运触发）明示句；无截断 → ''。"""
     if not _js_truthy(params) or not isinstance(params, dict):
@@ -889,7 +917,7 @@ def build_ephemeris_snapshot_text(
     if not ing:
         lines.append("| — | — | — | — |")
     for e in ing[:cap]:
-        lines.append(f"| {_cell(_get(e, 'datetime'))} | {_txt_name(_get(e, 'body'))} | {_txt_name(_get(e, 'toSign'))} | {fmt_degree(e)} |")
+        lines.append(f"| {_cell(_get(e, 'datetime'))} | {_txt_name(_get(e, 'body'))} | {_txt_name(_get(e, 'toSign'))} | {_eph_degree(e)} |")
     lines.append("")
     lines.append("留与顺逆转向：")
     lines.append("| 时间 | 星体 | 方向 | 位置 |")
@@ -897,7 +925,7 @@ def build_ephemeris_snapshot_text(
     if not sta:
         lines.append("| — | — | — | — |")
     for e in sta[:cap]:
-        lines.append(f"| {_cell(_get(e, 'datetime'))} | {_txt_name(_get(e, 'body'))} | {_cell(_get(e, 'direction'))} | {fmt_degree(e)} |")
+        lines.append(f"| {_cell(_get(e, 'datetime'))} | {_txt_name(_get(e, 'body'))} | {_cell(_get(e, 'direction'))} | {_eph_degree(e)} |")
     lines.append("")
     lines.append("朔望弦：")
     lines.append("| 时间 | 月相 | 月亮位置 |")
@@ -905,7 +933,7 @@ def build_ephemeris_snapshot_text(
     if not ph:
         lines.append("| — | — | — |")
     for e in ph[:cap]:
-        lines.append(f"| {_cell(_get(e, 'datetime'))} | {_cell(_get(e, 'phase'))} | {fmt_degree(e)} |")
+        lines.append(f"| {_cell(_get(e, 'datetime'))} | {_cell(_get(e, 'phase'))} | {_eph_degree(e)} |")
     lines.append("")
     lines.append("食相：")
     lines.append("| 时间 | 类型 | 细分 | 位置 | 食分 |")
@@ -920,7 +948,7 @@ def build_ephemeris_snapshot_text(
         else:
             digit_text = f"{fmt_num(digit)}{(' ' + _js_str(band)) if _js_truthy(band) else ''}"
         lines.append(
-            f"| {_cell(_get(e, 'datetime'))} | {_cell(_get(e, 'type'))} | {_cell(_get(e, 'eclipseType'))} | {fmt_degree(e)} | {digit_text} |"
+            f"| {_cell(_get(e, 'datetime'))} | {_cell(_get(e, 'type'))} | {_cell(_get(e, 'eclipseType'))} | {_eph_degree(e)} | {digit_text} |"
         )
     lines.append("")
     lines.append("[行运触发本命]")
