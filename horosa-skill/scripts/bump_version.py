@@ -52,7 +52,8 @@ SITES: tuple[str, ...] = (
     "docs/runtime-payload-manifest.example.json",
 )
 # Lines that mention an OLD version as history and must not be rewritten.
-HISTORY_MARKERS = ("as of v", " 起", "Since v", "自 v", "v0.27.0–")
+# "from v"（v0.46.1）：README_EN「from v0.41.0 every release is listed …」是历史起点，此前每次 bump 都被改成当前版本（0.45.1 → 0.46.0 → 0.46.1）。
+HISTORY_MARKERS = ("as of v", " 起", "Since v", "自 v", "v0.27.0–", "from v")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 

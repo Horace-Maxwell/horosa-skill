@@ -75,7 +75,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `110 / 110 ok=true` |
-| Engineering tests | `2385 / 2385 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 112 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `2386 / 2386 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 112 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `100` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`107` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
@@ -443,7 +443,7 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (121) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
 | **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (121) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
 | **Agent Plugins v1** (VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code) | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`; VS Code "Chat: Install Plugin From Source" with the repo URL; `qwen extensions install Horace-Maxwell/horosa-skill`; Kiro "Import power from GitHub" | compact (11) | Root `plugin.json` + `mcp.json` (spec 1.0.0): the command is `uvx` + the wheel pinned to this version, so **uv must be installed**; run `uvx --from <wheel> horosa-skill install` once for the offline runtime. Codex reads the same manifest via `codex plugin marketplace add Horace-Maxwell/horosa-skill` (not tested); OpenClaw / Claude Code keep using `.claude-plugin/` |
-| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (121) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.46.1 every release is listed automatically once it goes public |
+| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (121) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.41.0 every release is listed automatically once it goes public |
 | **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (121) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (11) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (11) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
@@ -542,7 +542,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 2385 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 2386 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

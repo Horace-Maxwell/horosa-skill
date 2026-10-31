@@ -44,3 +44,12 @@ def test_the_rule_does_not_state_a_site_count() -> None:
     import re
 
     assert not re.search(r"\d+\s*个站点", _bump_rule()), "name the sites; a count goes stale (it said 16 while SITES had 19)"
+
+
+def test_history_sentence_with_from_v_is_not_rewritten() -> None:
+    """README_EN「from v0.41.0 every release is listed automatically」是历史起点：此前每次 bump 都被改成当前版本
+    （0.45.1 → 0.46.0 → 0.46.1，v0.46.1 合并时发现）。负向对照：从 HISTORY_MARKERS 去掉 "from v" → 红。"""
+    line = "listing each release's `.mcpb` only; from v0.46.1 every release is listed automatically once it goes public |"
+    assert bump_version._is_history(line, "0.46.1")
+    readme = (PKG_ROOT.parent / "README_EN.md").read_text(encoding="utf-8")
+    assert "from v0.41.0 every release is listed automatically" in readme
