@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import json
 import os
 from contextvars import ContextVar
 from typing import Any
@@ -150,7 +151,86 @@ class HorosaMCPServer(MCPServer):
             # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
             raw = await anyio.to_thread.run_sync(localize, raw, self.output_script)
         protocol = context.protocol_version if context._request_context is not None else None
-        return _with_file_link(raw, tool.fn_metadata.convert_result(raw), str(protocol or ""))
+        converted = tool.fn_metadata.convert_result(raw)
+        if _wire_bytes(converted) > MCP_RESULT_WIRE_BUDGET:
+            raw = await anyio.to_thread.run_sync(_fit_result_budget, raw, tool.fn_metadata.convert_result)
+            converted = tool.fn_metadata.convert_result(raw)
+        return _with_file_link(raw, converted, str(protocol or ""))
+
+
+# 一次工具结果的线上体积上限（v0.46.1）。官方 MCP SDK（mcp 2.x）客户端走 streamable HTTP 时单条 SSE 事件上限
+# 1 MiB（1 048 576 B），超出整条调用报「Server-sent event exceeded the 1048576 byte limit」；stdio 没有这个上限，但同样会把
+# 数百 KB 的原始引擎树塞进 AI 上下文。八字 bazi_birth 的原始盘（smallDirection / direction 整生流年·大运明细 ≈ 0.8 MB）
+# 序列化成 text 块约 2.2 MB——v0.45.1 起即如此，v0.46.0 发布后 surface_audit 的 HTTP 阶段查出。超预算时从 data 里最大的
+# 原始子树起逐个换成说明占位，直到放得下：快照、导出段、技法依据卡等给 AI 读的部分一律不动；本机存档仍是全量。
+MCP_RESULT_WIRE_BUDGET = 900_000
+_PROTECTED_DATA_KEYS = frozenset({
+    "snapshot_text", "export_snapshot", "technique_card", "compute_sources", "route", "knowledge_context", "file",
+})
+
+
+def _wire_bytes(converted: Any) -> int:
+    """转换后结果（CallToolResult 或内容块列表）按 JSON-RPC 线上形状的 UTF-8 字节数。"""
+    if hasattr(converted, "model_dump_json"):
+        return len(converted.model_dump_json(by_alias=True, exclude_none=True).encode("utf-8"))
+    if isinstance(converted, (list, tuple)):
+        return sum(_wire_bytes(block) for block in converted)
+    return len(json.dumps(converted, ensure_ascii=False, default=str).encode("utf-8"))
+
+
+def _json_bytes(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
+
+
+def _fit_result_budget(raw: Any, convert: Any) -> Any:
+    """把超预算结果里 `data` 下最大的原始子树（深度 ≤ 2、不含受保护键）逐个换成说明占位，直到线上体积放得下。
+
+    不改入参（逐层浅拷贝）；放不下（受保护的部分本身就超）时原样返回已裁的那份——宁可交出能用的部分，也不让客户端整条报错。"""
+    if hasattr(raw, "model_dump"):   # 工具回的是 ToolEnvelope（pydantic）：按 JSON 形状拿出来再裁
+        raw = raw.model_dump(mode="json")
+    if not isinstance(raw, dict) or not isinstance(raw.get("data"), dict):
+        return raw
+    result = dict(raw)
+    data = dict(result["data"])
+    result["data"] = data
+    run_id = ((result.get("memory_ref") or {}) if isinstance(result.get("memory_ref"), dict) else {}).get("run_id")
+    omitted: list[str] = []
+    while _wire_bytes(convert(result)) > MCP_RESULT_WIRE_BUDGET:
+        candidates: list[tuple[int, tuple[str, ...]]] = []
+        for key, value in data.items():
+            if key in _PROTECTED_DATA_KEYS or _is_placeholder(value):
+                continue
+            if isinstance(value, dict) and value:
+                candidates.extend((_json_bytes(sub), (key, sub_key)) for sub_key, sub in value.items() if not _is_placeholder(sub))
+            candidates.append((_json_bytes(value), (key,)))
+        # 先拿最大的二级子树（八字 = bazi.smallDirection / bazi.direction，四柱等小块留着）；只剩一级可拿时才整键拿掉。
+        deep = [c for c in candidates if len(c[1]) == 2 and c[0] >= 50_000]
+        pick = max(deep or candidates, default=None)
+        if pick is None:
+            break
+        size, path = pick
+        placeholder = {
+            "omitted": "too_large_for_mcp",
+            "bytes": size,
+            "note": (f"原始引擎明细过大（约 {size // 1024} KB），MCP 返回体略去；snapshot_text / export_snapshot 已含其要点。"
+                     f"完整结果在本机存档：`horosa-skill memory show {run_id or '<run_id>'}`。"),
+        }
+        if len(path) == 2:
+            parent = dict(data[path[0]])
+            parent[path[1]] = placeholder
+            data[path[0]] = parent
+        else:
+            data[path[0]] = placeholder
+        omitted.append(".".join(path))
+    if omitted:
+        warnings = list(result.get("warnings") or [])
+        warnings.append(f"返回体超过 MCP 单条消息上限，已略去原始明细：{'、'.join(omitted)}（本机存档为全量）。")
+        result["warnings"] = warnings
+    return result
+
+
+def _is_placeholder(value: Any) -> bool:
+    return isinstance(value, dict) and value.get("omitted") == "too_large_for_mcp"
 
 
 # resource_link 内容块随 MCP 2025-06-18 修订进入规范。只给协商到该修订或更新的客户端：更早的客户端按旧联合类型

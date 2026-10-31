@@ -218,3 +218,11 @@ def test_ci_wheel_path_runs_a_real_stdio_probe_on_both_os() -> None:
     assert "--surface full" in smoke and "-ne $fullTools" in smoke and "full_tools" in smoke and "-ne 116" not in smoke
     assert "uvx --from $whl horosa-skill setup" in smoke and "uv build --wheel" in smoke
     assert ".horosa\\wheels" in smoke and "--no-cache-wheel" not in smoke and "wheel_cached_path" in smoke
+
+
+def test_completeness_checks_mains_server_json_even_on_release_events() -> None:
+    """v0.46.1：release(edited) 事件默认检出 tag 的提交，那里的 server.json 还是上一版 mcpb sha（回填在打 tag 之后才落 main）
+    → 编辑发布说明必然误报（41144995786）。负向对照：去掉 checkout 的 ref → 红。"""
+    step = COMPLETENESS[COMPLETENESS.index("- uses: actions/checkout@v5"):]
+    step = step[: step.index("- name:")]
+    assert "ref: ${{ github.event.repository.default_branch }}" in step

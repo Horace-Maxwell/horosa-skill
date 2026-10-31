@@ -172,10 +172,10 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
   找缺省要追字段的**种子**，不是 getter 的兜底值（此前据兜底值写成缺省 1，钟表时出盘多个版本）。
 - **backend predict/astroextra 型**：harmonic / agepoint / distributions / jaynesprog / vedicprog /
   planetaryarc 等——Python `_call_remote` + Python snapshot builder。推运图族四法（neroman / bezzafigure / jayprofection / michon，
-  v0.46.1）后端 `/astroextra/<接口>` 算、vendored 上游 `AstroDirectedFigures.snapshotText` 排版（progextra）。
+  v0.47.0）后端 `/astroextra/<接口>` 算、vendored 上游 `AstroDirectedFigures.snapshotText` 排版（progextra）。
 - **上游无头路径是「请求型」**（builder 自己 fetch，如 `buildDirectedFigureSnapshotText`）时，请求体只能由 Python 手算——这是一份
   手抄件。让 JS 工具用 vendored 上游函数把同一份设置重算成 `request_fields` 回传，runner 与自己发出的逐键比对，不一致即报错
-  （`tool.directed_request_mismatch`；v0.46.1）——值错了后端照样算出一张「合理」的盘，没有这一步漂移零信号。
+  （`tool.directed_request_mismatch`；v0.47.0）——值错了后端照样算出一张「合理」的盘，没有这一步漂移零信号。
 - **三式合一（v0.40.0 起）**：Python 只取数（一份三式 nongli + 展示真太阳时 + `/chart` hsys 1 + 奇门/太乙 runner），
   整段快照由 vendored 上游 `buildSanShiUnitedSnapshotText`（`tools/sanshiUnited.js` 按上游 `performRecalcByNongli` 装配）产出；
   六壬层用 SanShiUnitedMain 自带三函数、占时取奇门盘时柱（随 `timeAlg`），不再另起 `/liureng/gods` 子盘。
@@ -343,7 +343,7 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 归一化前被拒、且都绕过 `agent_recovery`。内联 `$defs` 时**绝不能残留 `$ref`**（模型自引用会让 pydantic
 构不出 arg model，服务器起不来）。
 
-**tools/list 预算（v0.46.1）**：全量面硬顶 256 KB 已近满（v0.46.1 推运图族四法之后 260 223 B，余量 ~1.9 KB）；一个 BirthInput 技法工具的广告层
+**tools/list 预算（v0.47.0）**：全量面硬顶 256 KB 已近满（v0.47.0 推运图族四法之后 260 223 B，余量 ~1.9 KB）；一个 BirthInput 技法工具的广告层
 ≈ 1.9–2.7 KB。新工具只广告域核心 + 推运目标字段 + 闸门三键，口径旋钮一律 `ADVERTISE_HIDDEN`（guidance `options_keys` 必须有说明，
 `test_guidance_documents_house_systems_hidden_knobs_and_gate_vocab` 守）；对该技法**不改结果**的域核心键（如只按回归黄道算的四法的
 `zodiacal` / `siderealAyanamsa`）也可列进 `ADVERTISE_HIDDEN`——广告层会剔除，校验层照收。硬顶与 2% 容差永不为放新工具而抬；新增工具后
@@ -509,12 +509,13 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   守。v0.40.0 前 32 份 JSON 只登记 1 份，上游 v3.11.0 改 `hellenisticData.json` 日/月中年（39.5→69.5/66.5）零信号滞留。
   Python 侧若手抄了同一张表（如 `predictive_text.PLANETARY_YEARS`），测试要与 vendored JSON 互锚。
 - **重同步 `vendor/runtime-source`**：`sync_vendored_runtime_sources.sh` + 显式 `HOROSA_SOURCE_ROOT`
-  （对上游 READ-ONLY）。脚本拷的是上游**工作树**、把 HEAD sha 写进 `contracts/upstream_python_requirements.txt` 首行；上游 HEAD 有未推送提交时 pin 不能前移（`--write-state` 的 `pin_to_record` 拒写），首行要改回记录的 pin（`test_requirements_provenance_header_names_the_recorded_upstream_pin`，v0.46.1）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
+  （对上游 READ-ONLY）。脚本拷的是上游**工作树**、把 HEAD sha 写进 `contracts/upstream_python_requirements.txt` 首行；上游 HEAD 有未推送提交时 pin 不能前移（`--write-state` 的 `pin_to_record` 拒写），首行要改回记录的 pin（`test_requirements_provenance_header_names_the_recorded_upstream_pin`，v0.47.0）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
   目录枚举的 sync 清单会漏它 → 重同步后**域外（BC/远期）请求静默 500**。守卫 =
   `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 60）。
   上游 v3.12.0 起 `aiExport.js` / `aiAnalysisContext.js` 是**门面 + 同名目录**（版本号与预设段在 `aiExport/presets.js`）：读源码的脚本与测试
   一律读「本文件 + 该目录」（`scripts/_upstream_preset.read_aiexport_source`，测试里 `read_facade_source`），只读门面会读不到实现。
+  vendored 的 `aiExport/` 整棵进 `verify_upstream_sync.SENTINEL_TREES` 逐文件比对（v0.46.1）——sync 脚本每加一条 rsync，守卫同一提交里加同一棵树。
   raw vendor 起 chart 服务**不再 hard-fail**：`kentang/registry.py` 现用 `_LazyMountedService`
   （默认 `HOROSA_KENTANG_LAZY=1`），缺引擎只在首请求时响亮 500 + 下次重试；18 个 mount 引擎均在
   vendored 集内，无需再手打 graceful-kentang-mount 补丁（打包脚本仍对 staged 拷贝保留该分支以防旧树）。
@@ -528,7 +529,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 2. `service/runners/<族>.py` 里加 `_run_*_tool` runner（mixin 方法；跨族只经 `self.` 调）；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
    分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理；「周日小限」含「小限」
-   要从 profection 排除、`jay` 是 `jayne` 的前缀不能单列、「推运图」这类字面泛化的名字只在没有更具体命中时兜底，v0.46.1）。
+   要从 profection 排除、`jay` 是 `jayne` 的前缀不能单列、「推运图」这类字面泛化的名字只在没有更具体命中时兜底，v0.47.0）。
    路由语料 `contracts/router_corpus.json` 每个新工具至少一中一英两例，`verify_router_corpus.py --update-baseline` 锁住。
 4. 导出契约：`exports/registry.py` preset **逐工具**对齐 builder 实际产段（权威清单 = `aiExport.js` 的
    `EXPORT_TECHNIQUES` + `EXPORT_PRESET_SECTIONS`，不是组件目录；照抄会多列 UI-only 死条目、漏列真产段）。
@@ -1099,6 +1100,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.2 MCP 面 · schema · 错误信封（MCP surface / schema / errors）
 
+- **工具结果有线上体积预算（v0.46.1）**：官方 MCP SDK 客户端 streamable HTTP 单条 SSE 事件上限 1 MiB，超出整条调用失败。
+  `mcp_runner.MCP_RESULT_WIRE_BUDGET`（900 000 B）：转换后超预算时只略去 `data` 里最大的原始子树（说明占位 + `memory show` 指引），
+  快照 / 导出段 / 依据卡不动（`tests/test_mcp_result_budget.py`）。加大结果的工具或字段时，用进程内 MCP 客户端量线上字节。
 - **工具面（v0.45.0）**：全量面 = 114 技法 + 11 门面，精简面 = 11 门面 + `horosa_tool_run`。新加的非技法工具做成门面，
   **别塞进 `TOOL_DEFINITIONS`**（那里每一项都计入技法总数）。检索与精读分两个工具（`horosa_knowledge_search` / `horosa_knowledge_read`）。常驻（`anthropic/alwaysLoad`）：
   guidance / dispatch / tool_run / knowledge_search。报告结果带 `file` 文件卡；MCP 层只给协商到 2025-06-18 及以后的客户端追加
