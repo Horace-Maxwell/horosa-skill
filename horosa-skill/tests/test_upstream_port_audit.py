@@ -45,3 +45,25 @@ def test_hits_are_names_that_skill_code_mentions(tmp_path: Path, monkeypatch: py
     hits = aup.skill_hits([("buildFooSnapshot", "changed"), ("FOO_TABLE", "removed"), ("msg", "changed"), ("UNUSED_X", "changed")])
     assert set(hits) == {"buildFooSnapshot", "FOO_TABLE"}  # 短 / 全小写名不计；没被提到的不计
     assert hits["FOO_TABLE"] == {"upstream": "removed", "skill_files": ["src/port.py"]}
+
+
+def test_files_the_skill_cites_by_name_are_hits_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """v3.13.1 冬至日柱订正改在 preciseCalcBridge.js 的内部函数里，tools/qimen.js 只提文件名 → 名字级扫描零信号。
+    负向对照：main() 里去掉 `hits.update(skill_file_hits(...))` → 真扫 965af0f4..06f25f21 时 file:… 命中全消失（实跑过）；
+    这里钉住匹配规则本身：文件名 / ≥8 字驼峰主名算，短而泛的主名（timing）不算，没被提到的不算。"""
+    root = tmp_path / "pkg"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "qimen.js").write_text("// 照 utils/preciseCalcBridge.js 的 fetchPreciseJieqiSeed\n", encoding="utf-8")
+    (root / "src" / "enrich.py").write_text("# preciseCalcBridge.normalizeJieqiParams；timing 口径；见 helper.py\n", encoding="utf-8")
+    monkeypatch.setattr(aup, "PKG_ROOT", root)
+    monkeypatch.setattr(aup, "SCAN_ROOTS", (root / "src",))
+    hits = aup.skill_file_hits([
+        "Horosa-Web/astrostudyui/src/utils/preciseCalcBridge.js",
+        "Horosa-Web/astropy/astrostudy/perchart_parts/timing.py",
+        "Horosa-Web/astropy/astrostudy/helper.py",
+        "Horosa-Web/astrostudyui/src/utils/unrelatedThing.js",
+    ])
+    assert hits == {
+        "file:astrostudyui/src/utils/preciseCalcBridge.js": {"upstream": "changed", "skill_files": ["src/enrich.py", "src/qimen.js"]},
+        "file:astropy/astrostudy/helper.py": {"upstream": "changed", "skill_files": ["src/enrich.py"]},
+    }

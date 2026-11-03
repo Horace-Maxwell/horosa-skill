@@ -192,6 +192,10 @@ def western_options_doc(tool_name: str) -> dict[str, str]:
         if tool_name == "chart":
             for name in _EMINENCE_KEYS:
                 doc[name] = str(BirthInput.model_fields[name].description)
+        # v3.13.1 日出 / 日没口径：上游古典全局设置（ChartDisplaySelector / 卜卦择日盘 DivinationChartShell 热同步 / 七政），
+        # 后端各西占盘端点均收；印占不随此项（IndiaChartKernel 恒按视日出）→ 印度工具不挂说明。
+        if definition.domain in {"astro", "predict", "chart"} and not tool_name.startswith("india"):
+            doc["sunriseMode"] = str(BirthInput.model_fields["sunriseMode"].description)
         # wave 3b：本命四盘的严格接纳缺省 0（BirthInput 字段不进 tools/list 广告层，说明只在这里出；日界两键是各家族模型的
         # ADVERTISE_HIDDEN 字段，上面的隐藏旋钮循环已自动带出）。service 侧消费点：`_apply_chart_request_defaults` / `_chart_family_snapshot_fields`。
         from horosa_skill.service import _STRONG_RECEPTION_DEFAULT_TOOLS

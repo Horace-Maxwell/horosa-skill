@@ -119,6 +119,9 @@ class BaZiBirthInput(FlexibleModel):
     dayunPrecision: Any | None = _unadvertised()
     school: Any | None = _unadvertised()
     ageStyle: Any | None = _unadvertised()
+    # v3.13.1 天医口径（BaZi.js:1086 genParams / baziShenShaLocal.js normalizeTianyiSchool / CnTraditionInput.js:560-566）：
+    # xieji 协纪辨方书（缺省，天医正月起戌顺行 + 地医对冲）| ziping 子平（月支退一位，无地医）。只换四柱 / 流运神煞的天医落支。
+    tianyiSchool: Any | None = _unadvertised()
     cnUnifiedZone: bool | None = _unadvertised()
     # v0.36.0（PR #17，@xipfs）：此前未声明 → MCP 扁平面（FastMCP arg_model 丢未声明键）静默丢性别，快照恒
     # 「性别：未知」、大运顺逆无法判定；CLI/tool_run/dispatch 不受影响（FlexibleModel extra=allow）。
@@ -209,7 +212,7 @@ class CalendarMonthInput(FlexibleModel):
     # 以下三组喂给页面聚合快照的三个子模块（老黄历 / 通书择日 / 日子馆），纯前端推演、零后端往返。
     hour: int | None = Field(default=None, description="0–23 整点小时；影响 [时辰吉凶] 的当前时标记。")
     tongshu: dict[str, Any] | None = Field(default=None, description="通书 {school,event,liexiuUse,mingYear}；school 键见 guidance")
-    rizi: dict[str, Any] | None = Field(default=None, description="日子馆 {event, year, topN, persons:[{name,date,time,gender,role}]}；给了 persons 才产 [日子馆·个性化择日]/[当事人八字]。")
+    rizi: dict[str, Any] | None = Field(default=None, description="日子馆 {event, year, topN, persons:[{name,date,time,zone,gender,role}]}；给了 persons 才产 [日子馆·个性化择日]/[当事人八字]。")
 
 
 class HuangliInput(FlexibleModel):

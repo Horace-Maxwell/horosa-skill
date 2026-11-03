@@ -497,14 +497,18 @@ const ISOPSEPHY_MAP = (() => {
 	const m = {};
 	GREEK_ISOPSEPHY.forEach((r) => { m[r.letter] = r.value; });
 	m['ς'] = 200; // 终止 sigma
+	m['ϝ'] = 6;   // digamma(stigma 的古写)
+	m['ϙ'] = 90;  // 古 koppa
 	return m;
 })();
 
-// 名字 isopsephy:逐字母求和(仅计已知希腊字母,忽略其他字符)
+// 名字 isopsephy:逐字母求和(仅计已知希腊字母,忽略其他字符)。
+// 先拆掉重音 / 气息符(NFD 后去组合符):希腊文输入法打出的 έ ά ή ί ό ύ ώ 都带音调,
+// 不拆就整字母被当成「不认识」跳过,名字数值少算(αλέξανδρος 少了 ε 的 5)
 export function isopsephy(name){
 	if(!name) return 0;
 	let sum = 0;
-	for(const ch of String(name).toLowerCase()){
+	for(const ch of String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()){
 		if(ISOPSEPHY_MAP[ch] != null) sum += ISOPSEPHY_MAP[ch];
 	}
 	return sum;

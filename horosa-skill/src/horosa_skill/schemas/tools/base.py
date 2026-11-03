@@ -3,9 +3,14 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
+from horosa_skill.astro_rulers import (
+    HOUSE_SYSTEM_LABELS,
+    SUNRISE_MODE_DEFAULT,
+    SUNRISE_MODES,
+)
+from horosa_skill.errors import bilingual
 
 
 class FlexibleModel(BaseModel):
@@ -125,6 +130,24 @@ class BirthInput(FlexibleModel):
     # 与主限法同理：本仓早已能经 extra 透传，声明只为可发现性。
     westNodeType: Any | None = Field(default=None, description="交点取法：真交点 / 平交点。")
     sectBuffer: Any | None = Field(default=None, description="同异宗(sect)判定的地平缓冲角。")
+    # v3.13.1 日出 / 日没口径（classicalParamSpec.js:104-112；后端白名单 helper.py:245 / webchartsrv.py:116 / webmodernsrv.py:58 /
+    # Java 四 controller + astrostudycn ChartController:567-570）。缺省 center 不下发（上游 send:'nonDefault' = 缺省请求体零变）：
+    # 校验器把显式 'center' 归一成 None；值域外报 tool.invalid_payload。BirthInput 字段不在域核心 → 自动不进广告层（计入隐藏旋钮数）。
+    sunriseMode: str | None = Field(
+        default=None,
+        description="日出 / 日没口径：center=日心·不计折射（缺省）| apparent=日面上缘·含大气折射（历书）；影响七政日出安命 / 报时星 / 星盘信息日出日没。",
+    )
+
+    @field_validator("sunriseMode", mode="before")
+    @classmethod
+    def _sunrise_mode_non_default(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        text = f"{value}".strip()
+        if text not in SUNRISE_MODES:
+            raise ValueError(bilingual(f"sunriseMode 只能取 {'/'.join(SUNRISE_MODES)}（收到 {value!r}）",
+                                        f"sunriseMode must be one of {'/'.join(SUNRISE_MODES)} (got {value!r})"))
+        return None if text == SUNRISE_MODE_DEFAULT else text
     cazimiOrb: Any | None = Field(default=None, description="核心内(cazimi)容许度。")
     combustOrb: Any | None = Field(default=None, description="燃烧(combust)容许度。")
     underBeamsOrb: Any | None = Field(default=None, description="日光下(under the beams)容许度。")

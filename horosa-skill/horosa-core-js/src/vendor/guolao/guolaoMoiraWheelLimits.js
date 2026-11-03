@@ -12,6 +12,8 @@
 // 并逐字新增第四来源 birthJdFromFields（盘缺 jd 时按出生字段 DateTime 补算；headless fields 非 DateTime → null，同上游）。
 // formatGodName 另以 moiraFormatGodName 导出：上游 main/snapshot.js / main/format.js / GuoLaoMoiraPanel.js 即这样 import
 // （guolaoMoira.js 随之删去 GuoLaoChartMain 旧私有副本）。
+// v3.13.1：逐字另抽 PLANET_DEFS / MOIRA_ASPECTS / MOIRA_DEFAULT_ASPECTS / moiraHiddenIds / moiraObjSpeed /
+// computeMoiraAspectPairs（七政相位单源：盘面连线 · 右栏相位页 · AI 快照 [相位] 同源；入相/离相按与位置同口径的日速判）。
 import * as AstroConst from '../../constants/AstroConst.js';
 import { childYearsSpan, longLifeMapForYear } from './guolaoMoiraTables.js';
 import { buildLocalJieqiYearSeed } from '../utils/localNongliAdapter.js';
@@ -337,6 +339,107 @@ function longLifeCharFor(rules, zi, kind){
 	const ctx = kind === 'transit' ? ys.transit : ys.birth;
 	const map = longLifeMapForYear(ctx && ctx.yearPole);
 	return map ? (map[zi] || '') : '';
+}
+
+
+// ── GuoLaoMoiraWheel.js:124-144 PLANET_DEFS / :167-240 MOIRA_ASPECTS · computeMoiraAspectPairs（v3.13.1，逐字）──
+// 七政相位单源：上游盘面连线、右栏「相位」页（main/aspectsNodeMode.js buildGuolaoAspectRows）与 AI 快照 [相位]
+// （main/snapshot.js buildGuolaoAspectSection）同取此函数；guolaoMoira.js 的 [相位] 段由此 import。
+const PLANET_DEFS = [
+	{id: AstroConst.SUN, label: '日'},
+	{id: AstroConst.MOON, label: '月'},
+	{id: AstroConst.VENUS, label: '金'},
+	{id: AstroConst.JUPITER, label: '木'},
+	{id: AstroConst.MERCURY, label: '水'},
+	{id: AstroConst.MARS, label: '火'},
+	{id: AstroConst.SATURN, label: '土'},
+	{id: AstroConst.SOUTH_NODE, label: '计'},
+	{id: AstroConst.NORTH_NODE, label: '罗'},
+	{id: AstroConst.PURPLE_CLOUDS, label: '炁'},
+	{id: AstroConst.DARKMOON, label: '孛'},
+	// 天海冥(天王/海王/冥王):后端 chart.objects 本就返回,加入可显示星曜(星曜选择器可开关、进星曜带/表/相位/AI);
+	// 七政四余传统无此三星,但用户钦定加入;色按顺逆留+庙旺派生(planetColor),无需专属色。
+	{id: AstroConst.URANUS, label: '天'},
+	{id: AstroConst.NEPTUNE, label: '海'},
+	{id: AstroConst.PLUTO, label: '冥'},
+	// 升(Asc)/顶(MC):本命与流年行星带均画,进星曜选择器可开关,并与 Moira 同款参与相位。
+	{id: AstroConst.ASC, label: '升'},
+	{id: AstroConst.MC, label: '顶'},
+];
+
+// 相位（會衝刑合半合半刑四合）：度 / 容许度 / 色 / 线型，照 Moira aspects 表
+const MOIRA_ASPECTS = [
+	{key: '會', angle: 0, orb: 12, color: '#00b35a', dash: '5 3'},
+	{key: '衝', angle: 180, orb: 6, color: '#8a4bff', dash: '8 3 2 3'},
+	{key: '刑', angle: 90, orb: 3, color: '#e07a18', dash: ''},
+	{key: '合', angle: 120, orb: 4, color: '#d23b3b', dash: '10 4'},
+	{key: '半合', angle: 60, orb: 2, color: '#c79a1e', dash: '2 3'},
+	{key: '半刑', angle: 45, alt: 135, orb: 1.5, color: '#c64fb8', dash: '2 3'},
+	{key: '四合', angle: 30, alt: 150, orb: 1, color: '#8a8a3a', dash: '2 3'},
+];
+const MOIRA_DEFAULT_ASPECTS = ['會', '衝', '刑', '合', '半合'];
+
+// 七政相位单源(盘面连线 / 右栏「相位」页 / AI 快照同用):会照角度按盘面显示口径(黄仪取黄经、赤仪取赤经),
+// 只认已勾选的相位药丸(aspectSet)与容许度设置(aspectOrbs,缺项取上表内置值);隐藏的曜不参与。
+// 一对星按上表次序取第一个命中的相位(與盘面连线逐条一致)。状态(入相 / 离相)按两星日速推下一时刻误差增减判,无速度给「—」;
+// 日速与位置同口径:黄仪取黄经日速 lonspeed,赤仪取赤经日速 raspeed(曾赤仪也拿黄经日速推赤经位置,近合 / 慢星对子会判反)。
+function moiraHiddenIds(hiddenPlanets){
+	const hidden = hiddenPlanets || [];
+	if(!hidden.length){ return null; }
+	const ids = new Set();
+	PLANET_DEFS.forEach((def)=>{ if(hidden.indexOf(def.label) >= 0){ ids.add(def.id); } });
+	return ids;
+}
+function moiraObjSpeed(obj, preferLon = false){
+	if(!obj){ return null; }
+	const lonSpeed = Number(obj.lonspeed !== undefined ? obj.lonspeed : obj.speed);
+	if(!preferLon && obj.raspeed !== undefined && obj.raspeed !== null){
+		const raSpeed = Number(obj.raspeed);
+		// 后端合成点(福点 / 紫炁等)raspeed 恒写 0、不是真日速:此时若有黄经日速就退回黄经日速。
+		if(Number.isFinite(raSpeed) && (raSpeed !== 0 || !Number.isFinite(lonSpeed) || lonSpeed === 0)){ return raSpeed; }
+	}
+	return Number.isFinite(lonSpeed) ? lonSpeed : null;
+}
+export function computeMoiraAspectPairs(chart, opts){
+	const o = opts || {};
+	const set = o.aspectSet || MOIRA_DEFAULT_ASPECTS;
+	if(!set || !set.length){ return []; }
+	const objects = (chart && chart.objects) || [];
+	const preferLon = isEclipticDisplayChart(chart);
+	const hiddenIds = moiraHiddenIds(o.hiddenPlanets);
+	const orbs = o.aspectOrbs || {};
+	const items = PLANET_DEFS.map((def)=>{
+		if(hiddenIds && hiddenIds.has(def.id)){ return null; }
+		const obj = objects.find((x)=>x && x.id === def.id);
+		const deg = objectRa(obj, preferLon);
+		return (obj && deg !== null) ? { id: def.id, label: def.label, deg: norm(deg), speed: moiraObjSpeed(obj, preferLon) } : null;
+	}).filter(Boolean);
+	const sepOf = (a, b)=>{ let g = Math.abs(a - b) % 360; if(g > 180){ g = 360 - g; } return g; };
+	const out = [];
+	for(let i = 0; i < items.length; i++){
+		for(let j = i + 1; j < items.length; j++){
+			const gap = sepOf(items[i].deg, items[j].deg);
+			let hit = null;
+			let target = 0;
+			for(let k = 0; k < MOIRA_ASPECTS.length; k++){
+				const sp = MOIRA_ASPECTS[k];
+				if(set.indexOf(sp.key) < 0){ continue; }
+				const orb = Number.isFinite(Number(orbs[sp.key])) ? Number(orbs[sp.key]) : sp.orb;
+				if(Math.abs(gap - sp.angle) <= orb){ hit = sp; target = sp.angle; break; }
+				if(sp.alt !== undefined && Math.abs(gap - sp.alt) <= orb){ hit = sp; target = sp.alt; break; }
+			}
+			if(!hit){ continue; }
+			const err = Math.abs(gap - target);
+			let state = '—';
+			if(items[i].speed !== null && items[j].speed !== null){
+				const dt = 0.01;   // 天
+				const next = Math.abs(sepOf(items[i].deg + items[i].speed * dt, items[j].deg + items[j].speed * dt) - target);
+				state = err < 1e-6 ? '精确' : (next < err ? '入相' : '离相');
+			}
+			out.push({ a: items[i], b: items[j], aspect: hit, angle: target, gap, orb: err, state });
+		}
+	}
+	return out;
 }
 
 export {

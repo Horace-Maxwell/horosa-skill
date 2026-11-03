@@ -196,7 +196,8 @@ export function buildGuolaoInfoSections(payload) {
   // 上游三段各自带 `|| '无'` 兜底（builder 内部 try/catch 降级「无」）；整桥失败才进 errors（Python 回退旧行式 + 告警）。
   let tables = null;
   try {
-    tables = buildGuolaoSnapshotTablesForSnapshot(result, fields, src.moiraRules || null);
+    // [相位] 吃显示偏好（上游 main/snapshot.js:1221 buildGuolaoAspectSection(result, _gDisp)）：display 缺相位三键 → 出厂缺省。
+    tables = buildGuolaoSnapshotTablesForSnapshot(result, fields, src.moiraRules || null, display);
   } catch (e) {
     errors.push({ section: '七政四余宫位与二十八宿星曜/神煞/相位', message: `${(e && e.message) || e}` });
   }

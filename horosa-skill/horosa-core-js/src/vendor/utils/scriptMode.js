@@ -68,6 +68,8 @@ export function getStoredScriptMode(){
 
 // ── 运行态 ────────────────────────────────────────────────────────────────────────────
 let convert = null;          // 已加载的 toHant
+let convertClassic = null;   // 古籍转换档(玄学史古籍原文 / 引文:落在 CLASSIC_SCOPE_CLASS 容器内的节点用它)
+export const CLASSIC_SCOPE_CLASS = 'horosa-script-classic';
 let matchKeyFn = null;       // 已加载的 toMatchKey(繁体折回简体写法)
 let matchConv = null;        // 检索比对用的转换器对象(scriptConvert/scriptMatch 的 conv;即转换器模块本身)
 let loading = null;          // 加载中的 Promise
@@ -125,6 +127,7 @@ function loadConverter(){
 		loading = converterLoader()
 			.then((m)=>{
 				convert = (m && (m.toHant || m.default)) || null;
+				convertClassic = (m && typeof m.toHantClassic === 'function') ? m.toHantClassic : null;
 				matchKeyFn = (m && typeof m.toMatchKey === 'function') ? m.toMatchKey : null;
 				matchConv = convert ? { ...m, toHant: convert } : null;
 				return convert;
@@ -157,6 +160,10 @@ function isEditSurface(n){
 // 逐字出图:父元素带整词与位次 → 按整词转,取对应那几位(转换逐码点等长)
 function convertInContext(node, v){
 	const p = node.parentElement;
+	// 古籍原文 / 引文区域:范 / 里 缺省保留原字(姓氏范、里坊里),界面其余处逐字不变
+	if(convertClassic && p && typeof p.closest === 'function' && p.closest(`.${CLASSIC_SCOPE_CLASS}`)){
+		return convertClassic(v);
+	}
 	if(p && p.hasAttribute(SCRIPT_WORD_ATTR)){
 		const word = Array.from(p.getAttribute(SCRIPT_WORD_ATTR) || '');
 		const idx = parseInt(p.getAttribute(SCRIPT_IDX_ATTR), 10);
@@ -900,6 +907,7 @@ export function __resetScriptModeForTest(){
 // 传真转换器模块即可),缺省只有 toHant / toMatchKey 两样
 export function __setConverterForTest(fn, keyFn, extra){
 	convert = fn;
+	convertClassic = (extra && typeof extra.toHantClassic === 'function') ? extra.toHantClassic : null;
 	matchKeyFn = keyFn === undefined ? null : keyFn;
 	matchConv = fn ? { ...(extra || {}), toHant: fn, ...(matchKeyFn ? { toMatchKey: matchKeyFn } : {}) } : null;
 }

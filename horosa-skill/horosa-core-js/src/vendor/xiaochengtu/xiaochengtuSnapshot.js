@@ -1,7 +1,8 @@
 // 小成图 AI 段表 builder（自 星阙 XiaoChengTuMain.buildXiaoChengTuSnapshotText 逐字提取，headless）。
 // 段表：问事/起卦/佈局/推导/四象/应期（+股市，仅 qi.mode==='stock' 出）。LUOSHU_ROWS 为 Main.js
 // 模块级 const（洛书九宫排布），须一并提取（闭包陷阱①）。
-// 🔴 函数体与上游 XiaoChengTuMain.js 同名函数逐字相同（上游 v3.13.0 965af0f4，:61-135）；源 sha 由
+// 🔴 函数体与上游 XiaoChengTuMain.js 同名函数逐字相同（上游 v3.13.1 06f25f21，:61-135；v3.13.1 该文件只在起卦失败分支
+// 加 clearModuleAISnapshot —— 页面 AI 快照槽的事，skill 起卦失败即结构化报错、本就不出快照，函数体未动）；源 sha 由
 // contracts/vendor_manifest.json 的 derived_sha256 看守 —— 上游一动即红，复核函数体后 --restamp。
 // 此前本文件是更早一版的手抄件，落后上游：缺 piKoujing（「闢」卦细判口径）、四象行的升降/情伪、
 // 两分定半月的(升降)注与应期推演链 —— 口径开关因此在 skill 里无处生效。

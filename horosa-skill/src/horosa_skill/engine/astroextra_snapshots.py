@@ -7,7 +7,7 @@
 - `components/astro/AstroReturnTimeline.js:13-45` buildReturnTimelineSnapshotText
 - `components/astro/AstroPrenatalSyzygy.js:27-86` buildPrenatalSyzygySnapshotText / splitDateTime
 - `components/astro/astroProgSnapshot.js:16-142`  PROG_SNAPSHOT_VARIANTS / buildProgSnapshotText（'prog' 与 'vedicprog' 两支同源）
-- `components/astro/AstroProgChart.js:21-27`      MINOR_VARIANT_OPTIONS / MINOR_VARIANT_LABEL
+- `components/astro/AstroProgChart.js:25-31`      MINOR_VARIANT_OPTIONS / MINOR_VARIANT_LABEL
 - `components/astro/AstroExtraCommon.js:63-82`    signName / fmtNum / fmtDegree
 - `utils/astroAiSnapshot.js:45-177,507-551`       msg / splitDegree / whichTerm / formatSignDegree / lonToSignDegree /
   gfmTableLines / buildHouseCuspLines / buildStarAndLotPositionLines
@@ -1110,7 +1110,7 @@ PROG_SNAPSHOT_VARIANTS: dict[str, dict[str, Any]] = {
     },
 }
 
-# AstroProgChart.js:21-27（[Q-180] 缺省 synodic = 标准朔望月）
+# AstroProgChart.js:25-31（v3.13.1 行号；值未变。[Q-180] 缺省 synodic = 标准朔望月）
 MINOR_VARIANT_OPTIONS: tuple[tuple[str, str], ...] = (
     ("synodic", "朔望月每年（标准·默认）"),
     ("sidereal", "恒星月每年"),

@@ -56,8 +56,11 @@ export function deriveDerivedHouseRows(chartObj, base){
 export const OBLIQUITY = 23.44; // 当世黄赤交角约值(度)。
 const DEG = Math.PI / 180;
 
-// 7 气候带固定表:带号 / 城(英·中)/ 纬度(度分串·十进制)/ 最长昼(小时)/ Valens 半圆累计级数。
-const VALENS_SERIES = [210, 214, 218, 222, 226, 230, 234]; // 每带 +4,半圆(180°方向)上升时度累计级数。
+// 7 气候带固定表:带号 / 城(英·中)/ 纬度(度分串·十进制)/ 最长昼(小时);半圆上升时度由最长昼折算(见 semicircleRising)。
+// 半圆上升时度 = 巨蟹至射手六座上升时度之和(Valens《选集》卷一·7 的定义):夏至日太阳在巨蟹 0° 随东方地平升起、
+// 落时上升点恰为摩羯 0°,这半圈在「最长昼」里升完 → 和 = 15 × 最长昼(时)。Valens 自家七带从最长昼 14h 起、每带 +4
+// (210 → 234),与本表 13–16h 七带不是同一组;曾把那串数直接套在本表上(第 3 带以外全错位)。
+export function semicircleRising(longestDay){ return 15 * Number(longestDay); }
 const BANDS_BASE = [
 	{ n: 1, cityEn: 'Meroe', cityCn: '麦罗埃', latStr: '16°27′', lat: 16.45, longestDay: 13 },
 	{ n: 2, cityEn: 'Syene', cityCn: '塞伊尼(阿斯旺)', latStr: '23°51′', lat: 23.85, longestDay: 13.5 },
@@ -73,11 +76,12 @@ export function buildBands(){
 	const data = Array.isArray(KLIMATA) ? KLIMATA : [];
 	return BANDS_BASE.map((b, i)=>{
 		const d = data[i] || {};
+		const longestDay = (typeof d.longest_day_h === 'number') ? d.longest_day_h : b.longestDay;
 		return {
 			...b,
 			lat: (typeof d.lat === 'number') ? d.lat : b.lat,
-			longestDay: (typeof d.longest_day_h === 'number') ? d.longest_day_h : b.longestDay,
-			valens: VALENS_SERIES[i],
+			longestDay,
+			valens: semicircleRising(longestDay),
 		};
 	});
 }
@@ -465,7 +469,7 @@ export function buildKlimataSnapshotLines(chartObj, fields){
 	const band = bands[curIdx];
 	const lines = [];
 	if(band){
-		lines.push(`出生纬度 ${Math.abs(latDeg).toFixed(2)}°${latDeg < 0 ? 'S' : 'N'},归入第 ${band.n} 气候带（${band.cityCn}·最长昼 ${band.longestDay}h·半圆级数 ${band.valens}）。`);
+		lines.push(`出生纬度 ${Math.abs(latDeg).toFixed(2)}°${latDeg < 0 ? 'S' : 'N'},归入第 ${band.n} 气候带（${band.cityCn}·最长昼 ${band.longestDay}h·巨蟹至射手上升时度 ${band.valens}）。`);
 	}
 	const ascs = obliqueAscensions(latDeg);
 	lines.push('| 星座 | 上升时度 | 折恒星时 |');

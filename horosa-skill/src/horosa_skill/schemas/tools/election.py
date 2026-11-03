@@ -5,7 +5,7 @@ from typing import Any, ClassVar
 
 from pydantic import Field
 
-from horosa_skill.schemas.tools.base import BirthInput
+from horosa_skill.schemas.tools.base import BirthInput, _unadvertised
 from horosa_skill.schemas.tools.cn_divination import QimenInput
 
 
@@ -63,6 +63,10 @@ class BaziZeriInput(ZeriScanInput):
     lateZiHourUseNextDay: int | None = None
     godKeyPos: str | None = None
     phaseType: int | None = None
+    # 内嵌八字页键（v3.13.1 zeriPageCalibre.js:84 BAZI_PAGE_SCAN_KEYS）：扫描与展示盘同口径；词表同 bazi_birth。
+    southMonth: Any | None = _unadvertised()
+    minggongMethod: Any | None = _unadvertised()
+    tianyiSchool: Any | None = _unadvertised()
 
 
 class TaiyiZeriInput(ZeriScanInput):

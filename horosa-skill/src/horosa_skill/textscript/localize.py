@@ -41,37 +41,63 @@ DATA_TEXT_TOOLS = frozenset({"knowledge_read"})
 PROTOCOL_TOOLS = frozenset({"export_parse", "export_registry", "knowledge_registry"})
 
 
-def _text(value: Any, script: str) -> Any:
+# 古籍转换档（上游 v3.13.1 toHantClassic / CLASSIC_SCOPE_CLASS）：玄史的「原文」区段里「范 / 里」缺省保留原字
+# （姓氏范、地名范阳、里坊里）。上游按 DOM 容器划区（XuanShi{Events,Figures,Celestial,Micro,Search} 的原文 / 史书原文
+# 块）；本仓玄史出的是一段快照文本，原文落在「原文：」行（详情）或条目行里的「原文：…」一格（列表，格间「；」），
+# 区段 = 「原文：」之后到行尾 / 下一格标签为止。标签集 = service/text/divination._XUANSHI_FIELD_ORDER 在原文之后的各项。
+CLASSIC_TOOLS = frozenset({"xuanshi"})
+_CLASSIC_HEAD = "原文："
+_CLASSIC_NEXT_LABELS = ("白话", "解读", "可信度", "互见", "摘要", "正文", "说明", "注")
+
+
+def classic_spans(text: str) -> tuple[tuple[int, int], ...]:
+    spans: list[tuple[int, int]] = []
+    at = text.find(_CLASSIC_HEAD)
+    while at >= 0:
+        start = at + len(_CLASSIC_HEAD)
+        line_end = text.find("\n", start)
+        end = len(text) if line_end < 0 else line_end
+        for label in _CLASSIC_NEXT_LABELS:
+            cut = text.find(f"；{label}：", start, end)
+            if cut >= 0:
+                end = cut
+        spans.append((start, end))
+        at = text.find(_CLASSIC_HEAD, end)
+    return tuple(spans)
+
+
+def _text(value: Any, script: str, classic: bool = False) -> Any:
     if isinstance(value, str):
-        return convert(value, script)
+        return convert(value, script, classic_spans(value) if classic else ())
     if isinstance(value, list):
-        return [_text(item, script) if isinstance(item, (str, list)) else _walk(item, script) for item in value]
-    return _walk(value, script)
+        return [_text(item, script, classic) if isinstance(item, (str, list)) else _walk(item, script, classic) for item in value]
+    return _walk(value, script, classic)
 
 
-def _walk(value: Any, script: str) -> Any:
+def _walk(value: Any, script: str, classic: bool = False) -> Any:
     if isinstance(value, list):
-        return [_walk(item, script) for item in value]
+        return [_walk(item, script, classic) for item in value]
     if not isinstance(value, dict):
         return value
     if value.get("tool") in PROTOCOL_TOOLS and "input_normalized" in value:
         return value
+    classic = classic or value.get("tool") in CLASSIC_TOOLS
     out: dict[str, Any] = {}
     for key, item in value.items():
         if key in SKIP_KEYS:
             out[key] = item
         elif key == "data" and isinstance(item, dict) and value.get("tool") in DATA_TEXT_TOOLS:
-            out[key] = _walk(item, script)
+            out[key] = _walk(item, script, classic)
         elif key == "data" and isinstance(item, dict):
-            out[key] = {k: (_walk({k: v}, script)[k] if k in DATA_KEYS else v) for k, v in item.items()}
+            out[key] = {k: (_walk({k: v}, script, classic)[k] if k in DATA_KEYS else v) for k, v in item.items()}
         elif key == "details" and isinstance(item, dict):
             out[key] = _details(item, script)
         elif key == "technique" and isinstance(item, dict) and "preset_sections" in item:
             out[key] = item  # export_snapshot.technique = 导出注册表条目（段名是设置键），不是给人读的
         elif key in TEXT_KEYS:
-            out[key] = _text(item, script)
+            out[key] = _text(item, script, classic)
         else:
-            out[key] = _walk(item, script)
+            out[key] = _walk(item, script, classic)
     return out
 
 

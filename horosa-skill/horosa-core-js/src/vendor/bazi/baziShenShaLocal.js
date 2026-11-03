@@ -289,7 +289,7 @@ export const BAZI_MONTH_STEMS = {
     "子壬": ["月德贵人"],
     "丑庚": ["月德贵人"],
     "寅丙": ["月德贵人"],
-    "卯申": ["月德贵人"],
+    "卯甲": ["月德贵人"],   // 亥卯未月德在甲(此前误抄成天德的「卯申」→ 卯月月德恒不出;Java gods.json 同为甲)
     "辰壬": ["月德贵人"],
     "巳庚": ["月德贵人"],
     "午丙": ["月德贵人"],
@@ -299,6 +299,8 @@ export const BAZI_MONTH_STEMS = {
     "戌丙": ["月德贵人"],
     "亥甲": ["月德贵人"],
 };
+// 天德贵人一列混有天干(寅丁 / 辰壬 / 巳辛 / 未甲 / 申癸 / 戌丙 / 亥乙 / 丑庚)与地支(卯申 / 午亥 / 酉寅 / 子巳):
+// 消费方须拿柱的干、支各查一次(干键只登天德,不会误中别的月令神煞)。
 export const BAZI_MONTH_BRANCH = {
     "子巳": ["天德贵人"],
     "子寅": ["天马", "地医"],
@@ -471,8 +473,20 @@ const BAZI_SANQI = [['甲', '戊', '庚'], ['乙', '丙', '丁'], ['壬', '癸',
 const BAZI_YINCHA = new Set(['丙子', '丁丑', '戊寅', '辛卯', '壬辰', '癸巳', '丙午', '丁未', '戊申', '辛酉', '壬戌', '癸亥']);
 // 十恶大败日（§5.9，禄入空亡，特定日柱）
 const BAZI_SHIE = new Set(['甲辰', '乙巳', '丙申', '丁亥', '戊戌', '己丑', '庚辰', '辛巳', '壬申', '癸亥']);
-// 天医（§5.3，月支退一位）：所在柱地支命中即取
+// 天医两家起法(只取其一,由「天医口径」tianyiSchool 定;缺省协纪):
+//   协纪 xieji(缺省)= 月令表 BAZI_MONTH_BRANCH 那对:天医正月起戌顺行(月支 +8)、地医为其对冲(月支 +2)
+//     ——《协纪辨方书》《六壬指南》;
+//   子平 ziping = 月支退一位(正月见丑),只有天医、无地医(下表)。
+// 曾两套并存:同一张盘两个地支都挂「天医」。
 const BAZI_TIANYI_MED = { 寅: '丑', 卯: '寅', 辰: '卯', 巳: '辰', 午: '巳', 未: '午', 申: '未', 酉: '申', 戌: '酉', 亥: '戌', 子: '亥', 丑: '子' };
+export const TIANYI_SCHOOLS = ['xieji', 'ziping'];
+export function normalizeTianyiSchool(v){ return v === 'ziping' ? 'ziping' : 'xieji'; }
+const XIEJI_ONLY = new Set(['天医', '地医']);
+// 月令表命中:子平口径下去掉协纪那对(天医 / 地医),子平天医另由 BAZI_TIANYI_MED 给
+function monthHits(key, school){
+  const hits = fromMap(BAZI_MONTH_BRANCH, key);
+  return school === 'ziping' ? hits.filter((n)=>!XIEJI_ONLY.has(n)) : hits;
+}
 // 月德合（§5.3 衍生，月支三合局 → 合月德之干）：寅午戌→辛、申子辰→丁、亥卯未→己、巳酉丑→乙
 const BAZI_YUEDEHE = { 寅: '辛', 午: '辛', 戌: '辛', 申: '丁', 子: '丁', 辰: '丁', 亥: '己', 卯: '己', 未: '己', 巳: '乙', 酉: '乙', 丑: '乙' };
 // 天德合（§5.3 衍生，合天德之干/支，按月支）
@@ -495,7 +509,8 @@ function allowedBases(godKeyPos){
   return { Y: true, D: false }; // 默认 '年'：年主位基组 + 月令（恒）；不含日主位基组。
 }
 
-export function calcPillarShenSha(base, target, godKeyPos){
+export function calcPillarShenSha(base, target, godKeyPos, opts){
+  const tySchool = normalizeTianyiSchool(opts && opts.tianyiSchool);
   const yearGan = base && base.yearGan ? base.yearGan : '';
   const yearZhi = base && base.yearZhi ? base.yearZhi : '';
   const monthZhi = base && base.monthZhi ? base.monthZhi : '';
@@ -523,8 +538,10 @@ export function calcPillarShenSha(base, target, godKeyPos){
   ];
   // 月令基组（以月支为基，恒含）
   const monthBase = [
-    ...fromMap(BAZI_MONTH_BRANCH, monthZhi + zhi),
+    ...monthHits(monthZhi + zhi, tySchool),
+    ...monthHits(monthZhi + gan, tySchool),   // 天德落天干的八个月
     ...fromMap(BAZI_MONTH_STEMS, monthZhi + gan),
+    (tySchool === 'ziping' && zhi && BAZI_TIANYI_MED[monthZhi] === zhi) ? '天医' : null,
   ];
   return dedupe([
     ...(allow.Y ? yearBase : []),
@@ -533,7 +550,8 @@ export function calcPillarShenSha(base, target, godKeyPos){
   ]);
 }
 
-export function calcFourPillarShenSha(four, godKeyPos){
+export function calcFourPillarShenSha(four, godKeyPos, opts){
+  const tySchool = normalizeTianyiSchool(opts && opts.tianyiSchool);
   const getGan = (item)=>item && item.stem ? item.stem.cell || '' : '';
   const getZhi = (item)=>item && item.branch ? item.branch.cell || '' : '';
   const Yg = getGan(four && four.year), Yz = getZhi(four && four.year);
@@ -548,7 +566,7 @@ export function calcFourPillarShenSha(four, godKeyPos){
   const augZaishaYear = (zhi)=>(zhi && BAZI_ZAISHA[Yz] === zhi) ? '灾煞' : null;
   const augJinyuDay = (zhi)=>(zhi && BAZI_JINYU[Dg] === zhi) ? '金舆' : null;
   const augZaishaDay = (zhi)=>(zhi && BAZI_ZAISHA[Dz] === zhi) ? '灾煞' : null;
-  const augTianyi = (zhi)=>(zhi && BAZI_TIANYI_MED[Mz] === zhi) ? '天医' : null;
+  const augTianyi = (zhi)=>(tySchool === 'ziping' && zhi && BAZI_TIANYI_MED[Mz] === zhi) ? '天医' : null;
   const augYuedehe = (gan)=>(gan && BAZI_YUEDEHE[Mz] === gan) ? '月德合' : null;
   const augTiandehe = (gan, zhi)=>(BAZI_TIANDEHE[Mz] && (BAZI_TIANDEHE[Mz] === gan || BAZI_TIANDEHE[Mz] === zhi)) ? '天德合' : null;
 
@@ -571,9 +589,9 @@ export function calcFourPillarShenSha(four, godKeyPos){
       ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Yz)],
       ['A', ...fm(BAZI_DAY_STEMS, Dg + Yz)],
       ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Yz)],
-      ['D', ...fm(BAZI_DAY_BRANCH, Dz + Yg)],
+      ['D', ...fm(BAZI_DAY_BRANCH, Dz + Yz)],   // 此前误写 Dz + Yg(拿年干查支表,恒不中)
       ['M', ...fm(BAZI_MONTH_STEMS, Mz + Yg)],
-      ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Yz)],
+      ['M', ...monthHits(Mz + Yz, tySchool)], ['M', ...monthHits(Mz + Yg, tySchool)],
       ['Y', augJinyuYear(Yz)], ['D', augJinyuDay(Yz)],
       ['Y', augZaishaYear(Yz)], ['D', augZaishaDay(Yz)],
       ['M', augTianyi(Yz)], ['M', augYuedehe(Yg)], ['M', augTiandehe(Yg, Yz)],
@@ -583,7 +601,7 @@ export function calcFourPillarShenSha(four, godKeyPos){
       ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Mz)], ['A', ...fm(BAZI_DAY_STEMS, Dg + Mz)],
       ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Mz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Mz)],
       ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Mz)], ['D', ...fm(BAZI_DAY_BRANCH, Dz + Mz)],
-      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Mg)],
+      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Mg)], ['M', ...monthHits(Mz + Mg, tySchool)],
       ['Y', augJinyuYear(Mz)], ['D', augJinyuDay(Mz)],
       ['Y', augZaishaYear(Mz)], ['D', augZaishaDay(Mz)],
       ['M', augTianyi(Mz)], ['M', augYuedehe(Mg)], ['M', augTiandehe(Mg, Mz)],
@@ -592,7 +610,7 @@ export function calcFourPillarShenSha(four, godKeyPos){
       ['Y', ...fm(BAZI_DAY_YEAR_STEMS, Yg + Dz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yg + Dz)],
       ['D', ...fm(BAZI_DAY_YEAR_STEMS, Dg + Dz)], ['A', ...fm(BAZI_DAY_STEMS, Dg + Dz)],
       ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Dz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Dz)],
-      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Dg)], ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Dz)],
+      ['M', ...fm(BAZI_MONTH_STEMS, Mz + Dg)], ['M', ...monthHits(Mz + Dz, tySchool)], ['M', ...monthHits(Mz + Dg, tySchool)],
       ['Y', augJinyuYear(Dz)], ['D', augJinyuDay(Dz)],
       ['Y', augZaishaYear(Dz)], ['D', augZaishaDay(Dz)],
       ['M', augTianyi(Dz)], ['M', augYuedehe(Dg)], ['M', augTiandehe(Dg, Dz)],
@@ -604,7 +622,7 @@ export function calcFourPillarShenSha(four, godKeyPos){
       ['D', ...fm(BAZI_DAY_BRANCH, Dz + Tz)],
       ['Y', ...fm(BAZI_YEAR_DAY_BRANCH, Yz + Tz)], ['Y', ...fm(BAZI_YEAR_BRANCH, Yz + Tz)],
       ['D', ...fm(BAZI_YEAR_DAY_BRANCH, Dz + Tz)], ['D', ...fm(BAZI_DAY_BRANCH, Dz + Tz)],
-      ['M', ...fm(BAZI_MONTH_BRANCH, Mz + Tz)], ['M', ...fm(BAZI_MONTH_STEMS, Mz + Tg)],
+      ['M', ...monthHits(Mz + Tz, tySchool)], ['M', ...monthHits(Mz + Tg, tySchool)], ['M', ...fm(BAZI_MONTH_STEMS, Mz + Tg)],
       ['Y', augJinyuYear(Tz)], ['D', augJinyuDay(Tz)],
       ['Y', augZaishaYear(Tz)], ['D', augZaishaDay(Tz)],
       ['M', augTianyi(Tz)], ['M', augYuedehe(Tg)], ['M', augTiandehe(Tg, Tz)],
@@ -637,7 +655,8 @@ export function calcFourPillarShenSha(four, godKeyPos){
 }
 
 // 流运（大运/流年/流月/流日）某柱神煞：以本命年/月/日干支为基，查流运柱干支。
-export function calcFlowShenSha(four, gan, zhi){
+export function calcFlowShenSha(four, gan, zhi, opts){
+  const tySchool = normalizeTianyiSchool(opts && opts.tianyiSchool);
   if(!four || !zhi){ return []; }
   const getGan = (item)=>item && item.stem ? item.stem.cell || '' : '';
   const getZhi = (item)=>item && item.branch ? item.branch.cell || '' : '';
@@ -648,7 +667,7 @@ export function calcFlowShenSha(four, gan, zhi){
   const aug = [];
   if(zhi && (BAZI_JINYU[Yg] === zhi || BAZI_JINYU[Dg] === zhi)){ aug.push('金舆'); }
   if(zhi && (BAZI_ZAISHA[Yz] === zhi || BAZI_ZAISHA[Dz] === zhi)){ aug.push('灾煞'); }
-  if(zhi && BAZI_TIANYI_MED[Mz] === zhi){ aug.push('天医'); }
+  if(tySchool === 'ziping' && zhi && BAZI_TIANYI_MED[Mz] === zhi){ aug.push('天医'); }
   if(gan && BAZI_YUEDEHE[Mz] === gan){ aug.push('月德合'); }
   if(BAZI_TIANDEHE[Mz] && (BAZI_TIANDEHE[Mz] === gan || BAZI_TIANDEHE[Mz] === zhi)){ aug.push('天德合'); }
   return dedupe([
@@ -661,7 +680,8 @@ export function calcFlowShenSha(four, gan, zhi){
     ...fm(BAZI_YEAR_BRANCH, Yz + zhi),
     ...fm(BAZI_YEAR_DAY_BRANCH, Dz + zhi),
     ...fm(BAZI_DAY_BRANCH, Dz + zhi),
-    ...fm(BAZI_MONTH_BRANCH, Mz + zhi),
+    ...monthHits(Mz + zhi, tySchool),
+    ...monthHits(Mz + (gan || ''), tySchool),
     ...fm(BAZI_MONTH_STEMS, Mz + (gan || '')),
     ...aug,
   ]);

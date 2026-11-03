@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.0-dev (2026-11-03) | 上游 v3.13.0 → v3.13.1 再同步：vendor 清单 / 名字级审计全绿，奇门本地路由节气种子却一直无日柱（局数大面积错）；冬至日柱订正改在内部函数、skill 只引了文件名；公元前目标日被四位年正则拒收 | 端口审计加文件级命中；qimen 补日柱（live 种子 fixture）；`_astroextra_date` 走民用历；五域逐函数复核 |
 | v0.46.2-dev (2026-10-31) | Windows 原生复验 v0.46.1 时盯上一条「如实承认的边界」：trace / 决策台账被多个 MCP 会话共写，Windows 上 CRT 的 O_APPEND 是模拟的（seek + write 两步），8 进程 × 200 行每轮丢约 24%；守卫用例在 Windows 上一直 skip | `appendlog.append_line`：Windows 用只申请 FILE_APPEND_DATA 的原生句柄（内核在末尾原子写，1600/1600、16 进程 × 240 KB 行 960/960），trace 与台账都走它；跨进程用例取消 Windows 跳过 + 负向对照用例证明旧写法本机确实会丢 |
 | v0.46.1 (2026-10-31) | 编辑发布说明触发的 completeness 必然误报：release 事件检出 tag 的提交，那里的 server.json 还是上一版 mcpb sha | completeness 的 checkout 固定默认分支；流水线形状测试锁住 |
 | v0.46.1-dev (2026-10-30) | 八字结果走 streamable HTTP 整条失败：官方 SDK 客户端 SSE 单事件上限 1 MiB，原始盘序列化后 2.48 MB（v0.45.1 起即如此） | MCP 层线上体积预算 900 KB：超出时只略去 data 里最大的原始子树，AI 读的部分不动；进程内真客户端量线上字节的测试 |
@@ -167,6 +168,43 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.0-dev / 2026-11-03 — 上游 v3.13.1 再同步：审计看名字看不到文件、奇门种子从来没日柱、公元前目标日被拒
+
+**背景**：星阙 v3.13.1（06f25f21，314 文件）公开后再全面同步一轮，此前各轮修复一并复核。五个域并行（八字紫微历 / 七政 / 星运 /
+西占本命古典 / 卜类三式神数繁体），每域逐函数比对 965af0f4..06f25f21。
+
+**症状 → 根因 → 守卫**
+
+1. **冬至日柱订正，名字级审计零信号**。上游改在 `utils/preciseCalcBridge.js` 的内部函数 `fillJieqiDayGanzhiFromLocal`；
+   `tools/qimen.js` 的注释只提文件名和没改的 `fetchPreciseJieqiSeed`。`audit_upstream_ports.py --scan` 只认「改了的顶层名字被 skill
+   提到」，47 条命中里没有它。→ 扫描加**文件级命中**：`Horosa-Web/` 下（前端 / Python 后端 / Java / flatlib）两 pin 间改过、文件名
+   （或 ≥8 字驼峰主名）被 skill 引用的文件，键 `file:<路径>`，同样要结论（本区间 +63 条；负向对照：去掉合并那行 → 110 → 47）。
+   `tests/test_upstream_port_audit.py` 钉匹配规则（短而泛的主名如 timing 不算）。
+2. **追下去发现更大的存量缺陷**：chart 服务 Python `/jieqi/year` 从不回日柱，qimen.js 也从不补 → 种子 `dayGanzhi` 全空，飞盘 / 混合 /
+   日家 / 金函 / 刻家（置闰 / 无闰 / 茅山）回落甲子 / 旧锚，局数大面积错（2024-12-15 日家 阴遁九局 应六局；2024-03-01 飞盘无闰
+   阳遁九局雨水 应一局惊蛰）。测试一直绿：喂的是自带日柱的假种子。→ 逐行移植 `fillJieqiDayGanzhiFromLocal`（含 v3.13.1 按交节当天
+   取日柱），live 录的种子 fixture（`tests/fixtures/sync3131_jieqi_live.json`）+ 整盘对拍 Java 种子；三式合一同修。
+3. **公元前目标日被拒**。`PredictiveRunners._astroextra_date`（prog / 推运图族 targetDate、星历区间）四位年正则 + `datetime()`；区间
+   先后用字符串比。→ 民用历校验 / 输出 / JDN 比较（`tests/test_sync3131_civil_dates.py`，两处负向对照实跑）。
+4. **节的含义变了，兜底还在**。七政 [相位] 改为七政相位（會衝刑合半合、出厂容许度、入离按同口径日速，赤仪取赤经日速、raspeed=0
+   回落 lonspeed）；旧 Python 兜底读后端通用占星相位，JS 一失败就印出上游已判错的定义 → 删兜底、失败为「无」。黄道盘的默认显示
+   坐标走不到赤经速度分支，测试必须用赤仪盘。
+5. **口径行「因为错误的原因通过」**。`sunriseMode` 进 [起盘信息] 古典口径行：`_CLS_CALIBRE_HEAD_DEFAULTS` 和
+   `classical_backend_overrides` 尾巴都会产出同一句，删其一输出不变 → 只有逐键对上游源的守卫能抓。
+6. **半接线**。八字择时页的 southMonth / minggongMethod（v3.13.0 起）只到扫描或只到展示盘之一；本版加 tianyiSchool 时一并补成
+   双向（顶层 + options 双读、扫描回传 page_options）。教训：上游给择日宿主加页键表时，扫描合并与展示回写两头都查。
+7. **读发布说明要对准改动所在层**。「八字晚子时与时间算法改了四柱真跟着变」是上游 UI 重取时漏了覆盖层，skill 没有这层、三键本就直传
+   → 无需移植，只加「开关真改四柱」的守卫。
+8. **工作方式坑**：(a) zsh 不拆 `$VAR`，`E="env …"; $E uv run …` 没跑测试（一次负向对照白做，改 export 重跑）；(b) 负向对照的回退写成
+   `replace(new, old)` 且 new 为空时会把 old 插到文件头（弄坏过 char rules，当场修复）；(c) live 探针不带 env 直接 `Settings(...)`
+   会用已安装 runtime 的旧 JS，要钉 `HOROSA_CORE_JS_ROOT`；(d) 并行 agent 跑测试撞上别人正写 vendored JS，`js_engine.execution_failed`
+   一大片，几秒后重跑全绿——合并期见到先重跑再查。
+
+**新设置（随上游）**：`sunriseMode`（BirthInput，center 缺省 / apparent，只在 apparent 下发；宿占为死键不发不显）、`draconicHouses`
+（whole / shift）、`tianyiSchool`（xieji / ziping）、日子馆 `persons[].zone`；繁体古籍档（玄史「原文」区段 范 / 里 保留原字）。
+**未移植（明确）**：上游 AI 分析「决策层（TypeSafe System One，实验、缺省关）」——那是上游自带聊天界面接第三方服务，skill 本身就是
+AI 客户端的工具层；宿占其余上游死键（westNodeType 等）仍随 BirthInput 下发、对宿盘无影响，留作后续。
 
 ### v0.46.2-dev / 2026-10-31 — Windows 跨进程追加：CRT 的 O_APPEND 是模拟的，换只申请 FILE_APPEND_DATA 的原生句柄（`appendlog`）
 

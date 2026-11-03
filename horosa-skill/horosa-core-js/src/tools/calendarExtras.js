@@ -89,9 +89,12 @@ export function runCalendarExtras(payload) {
           // 上游 RiziMain.baziOf（v3.13.0 RiziMain.js:76-92）：日界 / 晚子时随全局（出厂 1/1）显式下发——
           // （vendored v3.13.0 buildLocalBaziResult 缺键也取全局；显式下发与上游同形，不靠引擎缺省。）
           // 日期段走 datePartOf（公元前 '-0300-03-10' 不被 slice(0, 10) 截成 '-0300-03-1'）。
+          // v3.13.1 RiziMain.js:86-90：时区随当事人生辰下发（交节按绝对时刻判；不传 = 引擎按东八区，
+          // 节气前后出生者换时区年 / 月柱不变）。skill 的当事人只在给了 zone 时下发（缺省 = 旧行为东八区，零回归）。
           bazi = personBazi({
             date: datePartOf(`${p.date || ''}`),
             time: `${p.time || '12:00:00'}`.slice(0, 8),
+            ...(p.zone !== undefined && p.zone !== null && `${p.zone}` !== '' ? { zone: `${p.zone}` } : {}),
             gender: p.gender,
             after23NewDay: defaultAfter23NewDay() ? 1 : 0,
             lateZiHourUseNextDay: defaultLateZiHourUseNextDay() ? 1 : 0,

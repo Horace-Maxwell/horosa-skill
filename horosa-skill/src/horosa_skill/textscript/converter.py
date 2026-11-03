@@ -12,7 +12,8 @@ s2tw / s2hk 两级：①（Horosa 词组表 ∪ STPhrases ∪ STCharacters）②
 为什么术数字要逐位定、不能靠词组表：最长匹配先吃掉前一个字，「真实干支」切出「实干」→ 真實幹支、
 「的历法」切出「的历」→ 的歷法——这类跨词错切补不完。逐位定字只看原文：该字落在白名单词里（冲击、克服、历史…）
 取该词的写法，否则取术数缺省（沖 / 剋 / 曆 / 干 …）。白名单词自己也会跨词（「3 天后」「立春后土」），按左右邻字再判；
-「克」「只」按上下文定（生克义作剋、量词作隻）。判据表与上游 hantRules.js 逐项相同（v3.13.0，测试比对）。
+「克」「只」按上下文定（生克义作剋、量词作隻）。判据表与上游 hantRules.js 逐项相同（v3.13.1，测试比对）；
+古籍转换档（玄史原文区段里「范 / 里」缺省保留原字，上游 v3.13.1 toHantClassic）见 to_traditional_classic。
 """
 from __future__ import annotations
 
@@ -152,6 +153,14 @@ class _Rules:
         place = doc.get("place_label", {})
         self.place_prefixes = tuple(place.get("prefixes", ()))
         self.place_keep = frozenset(place.get("keep", ""))
+        # 古籍转换档（上游 v3.13.1 hantRules.js CLASSIC_INDEX / CLASSIC_NOT_RIGHT）：字 → (整词表[长词优先、同长按表序]，
+        # 取字，右邻否决集)。只在 classic 区段生效。
+        self.classic: dict[str, tuple[list[tuple[str, int]], str, frozenset[str]]] = {}
+        for char, spec in doc.get("classic", {}).items():
+            if char.startswith("_"):
+                continue
+            words = sorted(((w, w.index(char)) for w in spec["words"]), key=lambda item: -len(item[0]))
+            self.classic[char] = (words, spec["to"], frozenset(spec.get("right_veto", "")))
 
     def guards_of(self, char: str, word: str) -> list[dict]:
         """本词判据 / 词边字判据（以该字开头）/ 词尾字判据（以该字收尾）——都要通过才算命中。"""
@@ -273,7 +282,19 @@ def _zhi_is_classifier(rules: _Rules, source: str, index: int) -> bool:
 _CONTEXTS = {"ke": _ke_context, "zhi": _zhi_is_classifier}
 
 
-def _apply_char_rules(source: str, converted: str) -> str:
+def _classic_char(rules: _Rules, source: str, index: int) -> str:
+    """上游 classicCharAt（hantRules.js v3.13.1）：右邻否决 → 原字；落在整词表（原文逐字相等）→ 取 to；否则保留原字。"""
+    words, to, veto = rules.classic[source[index]]
+    if _at(source, index + 1) in veto:
+        return source[index]
+    for word, offset in words:
+        start = index - offset
+        if start >= 0 and source[start : start + len(word)] == word:
+            return to
+    return source[index]
+
+
+def _apply_char_rules(source: str, converted: str, classic: tuple[tuple[int, int], ...] = ()) -> str:
     """按**原文**逐位重判术数用字（与词典怎么切词无关）。与上游星阙 hantRules.js 的 applyHantDomainRules 同一算法：
 
     ① 串首是「出生地:」→ 整串音译地名，keep 里的字取原字；
@@ -285,6 +306,9 @@ def _apply_char_rules(source: str, converted: str) -> str:
     原文永远是简体，用不着它；而引擎输出里有简繁混排的上游原文（「忙里偷閒，動里求靜」），它会把「里」留成简体写法。
 
     所有字典条目逐码点等长（测试锁），原文与译文按位对齐；万一不等长（字典升级），原样退回词典结果。
+
+    `classic` = 古籍区段 [(起, 止), …]（上游 toHantClassic 作用的古籍原文 / 引文容器）：区段内的「范 / 里」先于一切
+    判据按古籍档定字（_classic_char，上游 applyHantDomainRules 的 opts.classic 分支同位置）。
     """
     if len(source) != len(converted):
         return converted
@@ -294,6 +318,9 @@ def _apply_char_rules(source: str, converted: str) -> str:
         return converted
     out = list(converted)
     for index, char in enumerate(source):
+        if classic and char in rules.classic and any(start <= index < end for start, end in classic):
+            out[index] = _classic_char(rules, source, index)
+            continue
         if place_label and char in rules.place_keep:
             out[index] = char
             continue
@@ -335,6 +362,18 @@ def to_traditional(text: str, script: str) -> str:
     if not _has_cjk(text):
         return text
     return _apply_char_rules(text, _variants(script).apply(_simplified_to_traditional().apply(text)))
+
+
+@lru_cache(maxsize=256)
+def to_traditional_classic(text: str, script: str, spans: tuple[tuple[int, int], ...]) -> str:
+    """同 to_traditional，另把 spans 内的「范 / 里」按古籍档定字（上游 v3.13.1 toHantClassic）。spans 空 = to_traditional。"""
+    if not spans:
+        return to_traditional(text, script)
+    if script not in _VARIANTS:
+        raise ValueError(f"不支持的文字：{script} / unsupported script: {script}")
+    if not _has_cjk(text):
+        return text
+    return _apply_char_rules(text, _variants(script).apply(_simplified_to_traditional().apply(text)), spans)
 
 
 @lru_cache(maxsize=512)

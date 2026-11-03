@@ -168,7 +168,9 @@ _RAW_KNOBS: dict[str, dict[str, Knob]] = {
         "lunarYear": _k("int", "农历年（manualLunar 时读）"),
         "lunarMonth": _k("int", "农历月（manualLunar 时读；亦作演法月禽/投胎的农历月覆写）", lo=1, hi=12),
         "lunarDay": _k("int", "农历日（manualLunar 时读）", lo=1, hi=30),
-        "school": _k("enum", "演法·流派预设（缺省 chibenli 池本理）",
+        # 上游 v3.13.1：canchou（参筹秘书）并入 jiangxi、hidden 不再单列，键保留（旧值照解析、结果与江西派逐字同，
+        # 仅流派名显示「参筹秘书(＝江西派)」）→ 本仓照收作旧值别名。
+        "school": _k("enum", "演法·流派预设（缺省 chibenli 池本理；canchou 已并入 jiangxi，旧值照收）",
                      choices=("chibenli", "canchou", "guangdong", "jiangxi", "fenghuang", "chenbingyu", "wangfu"), layer="skill"),
         "woBi": _k("enum", "演法·我/彼归属", choices=("fan", "shi", "daoWo"), layer="skill"),
         "xunOffset": _k("bool", "演法·时禽旬头位移", layer="skill"),

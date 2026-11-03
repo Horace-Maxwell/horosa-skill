@@ -1,7 +1,7 @@
-import { buildLocalJieqiYearSeed } from '../vendor/utils/localNongliAdapter.js';
+import { buildLocalJieqiYearSeed, getDayGanZhi } from '../vendor/utils/localNongliAdapter.js';
 import { makeFields, normalizeDateTimeInput } from '../shared/fields.js';
 import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
-import { dateKeyOfStr } from '../vendor/bazi/dateStrSafe.js';
+import { dateKeyOfStr, parseDateParts } from '../vendor/bazi/dateStrSafe.js';
 import {
   buildDunJiaSnapshotText,
   calcDunJia,
@@ -18,7 +18,7 @@ function inferYear(fields) {
 }
 
 // 后端 jieqi24 → 节气种子。上游 v3.12.0 删掉了 DunJiaCalc.buildJieqiYearSeed，同一转换收进网络模块
-// utils/preciseCalcBridge.js 的 fetchPreciseJieqiSeed（:459-476，不 vendor：它自带 request）。这里逐字照它：
+// utils/preciseCalcBridge.js 的 fetchPreciseJieqiSeed（:445-500 @v3.13.1，不 vendor：它自带 request）。这里逐字照它：
 // 日期键走 dateKeyOfStr（带符号年份，公元前 / 五位年不误读）、节气名原样、日干支先认 dayGanzhi / dayGanZhi 再回落四柱日柱。
 function safeText(v, d = '') {
   return v === undefined || v === null ? d : `${v}`;
@@ -63,8 +63,48 @@ export function jieqiSeedFromYearResult(yearRes) {
   return Object.keys(seed).length ? seed : null;
 }
 
+// 上游 preciseCalcBridge.fillJieqiDayGanzhiFromLocal（:234-279 @v3.13.1）：后端 /jieqi/year 的节气行不带日柱时
+// （本仓奇门打的是 Python 同名路由，恒不带；上游页面的 seedOnly 请求打 Java，同样不带），按本地历法补上。
+// v3.13.1「冬至日柱订正」：按交节日**自身日期**取日柱（getDayGanZhi），不再按节气名去本地年表捡——本地表的
+// 「冬至」是上年 12 月那个、后端的冬至是本年 12 月，按名捡则冬至日柱恒错一年（置闰至锚 / 日家至甲子随之错）。
+// 只有交节日期读不出、或与种子年相距 > 1 年（含公元前：dp.year > 0 守卫同上游）才回落按名查本地年表。
+export function fillJieqiDayGanzhiFromLocal(result, yearHint, zone) {
+  if (!result || !Array.isArray(result.jieqi24)) {
+    return result;
+  }
+  const year = parseInt(safeText(yearHint || result.year), 10);
+  if (!year || Number.isNaN(year)) {
+    return result;
+  }
+  let localSeed = null;
+  const getLocalDayGanzhi = (term, time) => {
+    const dp = parseDateParts(safeText(time));
+    if (dp && dp.year > 0 && Math.abs(dp.year - year) <= 1) {
+      return getDayGanZhi(dp.year, dp.month, dp.day);
+    }
+    if (!localSeed) {
+      localSeed = buildLocalJieqiYearSeed(year, zone);
+    }
+    return safeText(localSeed && localSeed[term] && localSeed[term].dayGanzhi);
+  };
+  let changed = false;
+  const jieqi24 = result.jieqi24.map((entry) => {
+    const term = safeText(entry && entry.jieqi);
+    if (!term || seedDayGanzhi(entry)) {
+      return entry;
+    }
+    const localDay = getLocalDayGanzhi(term, entry && entry.time);
+    if (!localDay) {
+      return entry;
+    }
+    changed = true;
+    return { ...(entry || {}), dayGanzhi: localDay };
+  });
+  return changed ? { ...result, jieqi24, localDayGanzhiFilled: true } : result;
+}
+
 function buildYearSeed(result, year, zone) {
-  const raw = unwrapResultEnvelope(result);
+  const raw = fillJieqiDayGanzhiFromLocal(unwrapResultEnvelope(result), year, zone);
   if (raw && typeof raw === 'object' && Array.isArray(raw.jieqi24) && raw.jieqi24.length > 0) {
     const seed = jieqiSeedFromYearResult(raw);
     if (seed) {

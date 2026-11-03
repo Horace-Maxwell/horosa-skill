@@ -730,6 +730,11 @@ function getQimenOptionsKey(options){
 		options.keZiZhengHuanShi ? 1 : 0,
 		safe(options.jinhanMenPai),
 		safe(options.yearJiaJu),
+		// 三式把盘类 / 相关人员 / 时间算法也交给起盘(法奇门读 pan.options.chartCategory 定日干内心↔实质);
+		// 曾漏入键 → 切「盘类」命中旧盘,判读口径纹丝不动(独立页这两项走组件 ctx,不经此键)
+		safe(options.timeAlg),
+		safe(options.chartCategory),
+		safe(options.faRelatedPeople),
 	].join('|');
 }
 

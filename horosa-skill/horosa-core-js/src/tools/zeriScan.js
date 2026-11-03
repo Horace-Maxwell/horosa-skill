@@ -46,6 +46,17 @@ import {
 import { compileSanshiTree } from '../vendor/divination/zeri/sanshiZeriConditionTypes.js';
 import { buildSanshiZeriSnapshotExtra } from '../vendor/divination/zeri/sanshiZeriSnapshot.js';
 import { splitSanshiOptions } from '../vendor/divination/zeri/sanshiOptionSplit.js';
+import { BAZI_PAGE_SCAN_KEYS, BAZI_PAGE_FACTORY } from '../vendor/divination/zeri/zeriPageCalibre.js';
+
+// 八字择时扫描实际吃的内嵌八字页键值：给了用给的、没给 = 出厂值（baziScanParams / computeBaziScanPan 同缺省）。
+function baziPageOptions(options) {
+  const out = {};
+  BAZI_PAGE_SCAN_KEYS.forEach((key) => {
+    const value = options && options[key];
+    out[key] = value !== undefined && value !== null && value !== '' ? value : BAZI_PAGE_FACTORY[key];
+  });
+  return out;
+}
 
 // 七政 / 印度择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），JS 侧只剩排版。
 // 所以它们只有 ConditionTypes（供 compile 校验，与后端求值器同源词表）+ Snapshot，没有 ScanEngine。
@@ -252,6 +263,10 @@ export async function runZeriScan(payload) {
         // Python 据此把展示盘写成扫描判定的那一盘（上游 SanshiZeriMain.applyWorkbenchCalibre「所见行=所判口径」），
         // 不在 Python 侧手抄键表。
         ...(technique === 'sanshizeri' ? { option_split: splitSanshiOptions(options) } : {}),
+        // 八字择时：内嵌八字页键（vendored zeriPageCalibre.BAZI_PAGE_SCAN_KEYS = 南半球月令 / 命宫起法 / 天医口径）
+        // 扫描实际所用之值（缺 = BAZI_PAGE_FACTORY 出厂值）。上游 BaziZeriMain 点结果行按冻结值回写内嵌八字页 →
+        // Python 据此把展示盘写成同口径（「所见行=所判口径」），键表单源不在 Python 手抄。
+        ...(technique === 'bazizeri' ? { page_options: baziPageOptions(options) } : {}),
       },
       snapshot_text: '',
     };

@@ -860,7 +860,7 @@ function buildFourColumns(eightChar, opts){
 	};
 	// 死选项接线·godKeyPos（神煞主位 年/日/年日）：默认 '年'。透传给逐柱神煞查法。
 	const godKeyPos = (opts && (opts.godKeyPos === '日' || opts.godKeyPos === '年日')) ? opts.godKeyPos : '年';
-	const shenSha = calcFourPillarShenSha(four, godKeyPos);
+	const shenSha = calcFourPillarShenSha(four, godKeyPos, { tianyiSchool: opts && opts.tianyiSchool });
 		['year', 'month', 'day', 'time'].forEach((key)=>{
 			if(four[key]){
 				four[key].shenSha = shenSha[key] || [];
@@ -1253,7 +1253,9 @@ export function buildLocalBaziResult(params){
 	// 死选项接线·godKeyPos（神煞主位 年/日/年日）：默认 '年'（与 Java GodsHelper/BaZiDirect 一致；
 	// 旧本地实现恒并年+日是 bug）。月柱基组恒含；按年/日/年日切年柱与日柱基组（见 calcFourPillarShenSha）。
 	const godKeyPos = (params && (params.godKeyPos === '日' || params.godKeyPos === '年日')) ? params.godKeyPos : '年';
-	const fourColumns = buildFourColumns(eightChar, { lateZiHourUseNextDay, minggongMethod, phaseType, godKeyPos });
+	// 天医口径(协纪 xieji 缺省 / 子平 ziping):只换天医 / 地医落支,进 params → 缓存键随之变
+	const tianyiSchool = params && params.tianyiSchool === 'ziping' ? 'ziping' : 'xieji';
+	const fourColumns = buildFourColumns(eightChar, { lateZiHourUseNextDay, minggongMethod, phaseType, godKeyPos, tianyiSchool });
 	// 月律分野（人元司令）：节后天数 → 司令藏干（版本可切，纯展示派生）
 	let fenYe = null;
 	try{

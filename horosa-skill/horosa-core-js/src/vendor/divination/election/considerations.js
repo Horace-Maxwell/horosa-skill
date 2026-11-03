@@ -4,7 +4,7 @@
 // 逐条给「原意一句话 + 本盘实测值」;不可判定的条目如实标 unavailable,不臆造。
 import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
-import { viaCombustaRange, hourAgreementTest, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
+import { viaCombustaRange, inViaCombusta, hourAgreementTest, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
 import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(六口径)
 import { applyingAspects, aspectBetween } from '../engine/aspectsEngine.js';
 import { isBesieged } from '../engine/conditions.js';
@@ -40,7 +40,7 @@ export function lillyConsiderations(facts, eff){
 	out.push(mk('asc_late', '上升度数过晚(27–29°)', ad !== null && ad !== undefined && ad > 27,
 		ad !== null && ad !== undefined ? `上升 ${ad.toFixed(1)}°` : '—', '事已太晚/已定局,判断不安全'));
 	const vcr = viaCombustaRange(eff && eff.viaCombustaVariant);
-	const inVC = moon && norm360(moon.lon) >= vcr[0] && norm360(moon.lon) <= vcr[1];
+	const inVC = !!moon && inViaCombusta(moon.lon, eff && eff.viaCombustaVariant);
 	out.push(mk('via_combusta', '月在燃烧之路', inVC,
 		moon ? `月黄经 ${moon.lon.toFixed(1)}°(火道界 ${vcr[0]}°–${vcr[1]}°)` : '—', '月受克受扰,事态不稳、盘不可靠(合角宿一者除)'));
 	out.push(mk('moon_voc', '月亮空亡', vocOf(facts, eff),
@@ -85,8 +85,7 @@ export function rameseyMoonImpediments(facts, eff){
 	out.push(mk('m3_nodes', '③ 近交点/食处(首尾 12° 内)', nodeHit,
 		nodeLon !== null ? `距交点轴 ${Math.min(angularDist(moon.lon, nodeLon), angularDist(moon.lon, norm360(nodeLon + 180))).toFixed(1)}°` : '', '近食蚀之地,光受蚀'));
 	out.push(mk('m4_voc', '④ 空亡', vocOf(facts, eff), '', '入新座前不结任何相位'));
-	const vcr = viaCombustaRange(eff && eff.viaCombustaVariant);
-	out.push(mk('m5_via', '⑤ 居燃烧之路', norm360(moon.lon) >= vcr[0] && norm360(moon.lon) <= vcr[1], '',
+	out.push(mk('m5_via', '⑤ 居燃烧之路', inViaCombusta(moon.lon, eff && eff.viaCombustaVariant), '',
 		'婚姻及一切女人之事、买卖、旅行最忌'));
 	out.push(mk('m6_besieged', '⑥ 被火土围合', isBesieged('moon', facts), '', '腹背受敌'));
 	const hardMal = apps.filter((a) => MAL.indexOf(a.other) >= 0 && [0, 90, 180].indexOf(a.angle) >= 0);

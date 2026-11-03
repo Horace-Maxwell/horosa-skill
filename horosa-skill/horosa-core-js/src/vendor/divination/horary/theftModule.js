@@ -30,7 +30,7 @@ const RESULT_BY_MOON_APPLY = {
 	jupiter: '月入相木星 → 安全寻回 / 和平归还', venus: '月入相金星 → 安全逃脱 / 和平归还',
 };
 
-export function runTheft(facts){
+export function runTheft(facts, opts){
 	const steps = [];
 	const add = (label, text, polarity) => steps.push({ label, text, polarity: polarity || 'neutral' });
 
@@ -49,7 +49,7 @@ export function runTheft(facts){
 		if(a && a.applying){ recover = `命主 ${cn(lord1)} 与盗贼星 ${cn(thief)} 入相位 → 能追到盗贼 / 失物可寻。`; recoverPol = 'positive'; }
 	}
 	if(moon){
-		if([7, 8].indexOf(moon.house) >= 0 || isViaCombusta(moon.lon)){ recover = '月落 7/8 宫或燃烧之路 → 多半找不回。'; recoverPol = 'negative'; }
+		if([7, 8].indexOf(moon.house) >= 0 || isViaCombusta(moon.lon, (opts || {}).viaCombustaVariant)){ recover = '月落 7/8 宫或燃烧之路 → 多半找不回。'; recoverPol = 'negative'; }
 		else if([1, 10].indexOf(moon.house) >= 0){ recover = '月落 1/10 宫 → 较有望寻回。'; recoverPol = 'positive'; }
 	}
 	add('① 能否找回', recover, recoverPol);

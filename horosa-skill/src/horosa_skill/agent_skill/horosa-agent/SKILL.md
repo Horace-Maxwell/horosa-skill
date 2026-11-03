@@ -64,6 +64,10 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 
 七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`planetaryHourMethod`（行星时制式 sunrise 缺省 /
 unequal / equal24，报时星随之）、`moiraTransitDate`（[流年流曜] 的流年时刻，缺省今天）；宿度制 `doubingSu28` 缺省 0 荀爽距星（星阙 v3.13.0）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
+七政 [相位] 是七政相位（會 0° / 衝 180° / 刑 90° / 合 120° / 半合 60°，入相 / 离相按与位置同口径的日速），不是西占通用相位（星阙 v3.13.1）。
+日出 / 日没口径 `sunriseMode`：`center` 日心·不计折射（缺省）/ `apparent` 日面上缘·含大气折射——西占各盘、七政（日出安命 / 报时星）通用，印占不随；
+龙盘 `draconic` 另有 `draconicHouses`：`whole` 整宫随龙盘上升（缺省）/ `shift` 本命宫头平移（各星落宫同本命）。八字 `tianyiSchool`：`xieji` 协纪辨方书（缺省）/
+`ziping` 子平，只换天医 / 地医落支，[神煞（四柱与三元）] 首行印口径（以上星阙 v3.13.1）。
 河洛 `heluo` 可传 `liunianStep2`（ying/sequential）、`ziShuMode`、`jiGongMode` 等取法旋钮（全表见 guidance）。
 只知道四柱不知道生日：`bazi_inverse {pillars:["甲子","丙寅","戊辰","庚申"], fromYear, count}` 反查候选出生时刻
 （免确认门，候选每 60 年重现，请让用户确认年代）。八字口诀层：`knowledge_read {domain:"bazi_pithy", category:"三字诀", key:"甲"}`

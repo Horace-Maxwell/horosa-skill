@@ -295,14 +295,36 @@
 			{"op": "same", "stars": ["天相", "廉贞", "擎羊"]}
 		]
 	},
-	"巨机卯酉": {
-		"category": "破格", "source_ref": "紫微斗数全书",
-		"duanyi": "天机巨门同守卯酉，巨机酉宫，纵有财官亦多破荡，宜防口舌迁变。",
+	"巨机同临": {
+		"category": "富贵", "source_ref": "紫微斗数全书",
+		"duanyi": "天机巨门同守卯宫命，乙辛己丙年生至公卿，不贵即富（甲年禄到寅卯有擎羊破格，平常）。",
 		"logic": "AND",
 		"conditions": [
 			{"op": "same", "stars": ["天机", "巨门"]},
 			{"op": "inMing", "star": "天机"},
-			{"op": "mingZhi", "branches": ["卯", "酉"]}
+			{"op": "mingZhi", "branches": ["卯"]},
+			{"op": "yearGan", "gans": ["乙", "辛", "己", "丙"]}
+		]
+	},
+	"巨机居酉": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "巨机酉上化吉者，纵有财官也不终；酉逢机巨日无精，宜防口舌迁变。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["天机", "巨门"]},
+			{"op": "inMing", "star": "天机"},
+			{"op": "mingZhi", "branches": ["酉"]}
+		]
+	},
+	"巨机破荡(女命)": {
+		"category": "破格", "source_ref": "紫微斗数全书",
+		"duanyi": "巨宿天机为破荡，女命巨机于卯酉，虽富贵不免淫佚。",
+		"logic": "AND",
+		"conditions": [
+			{"op": "same", "stars": ["天机", "巨门"]},
+			{"op": "inMing", "star": "天机"},
+			{"op": "mingZhi", "branches": ["卯", "酉"]},
+			{"op": "female"}
 		]
 	},
 	"日月反背": {

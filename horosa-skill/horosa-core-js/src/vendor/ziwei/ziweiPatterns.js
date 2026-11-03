@@ -111,6 +111,13 @@ function evalCond(cond, ctx){
 		// WP-G 新增 op：noneInTrine(stars 全不在三方四正,负判「无辅拱」)、notInMing(某星不在命宫)。
 		case 'noneInTrine': return !list('stars').some((s)=>ctx.trine.has(ctx.idx(s)));
 		case 'notInMing': return ctx.idx(String(cond.star)) !== ctx.life;
+		// 生年干在列(巨机同临:乙辛己丙)、女命(巨机卯酉破荡专论女命);性别三形态同 ZiWeiHelper.chartMale
+		case 'yearGan': return list('gans').indexOf(String(ctx.chart.yearGan)) >= 0;
+		case 'female': {
+			const g = ctx.chart.gender;
+			if(g !== undefined && g !== null){ return g === 'Female' || g === 0 || g === '0'; }
+			return ctx.chart.male === false;
+		}
 		default: return false;
 	}
 }

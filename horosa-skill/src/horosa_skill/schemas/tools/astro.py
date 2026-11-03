@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from horosa_skill.astro_rulers import DRACONIC_HOUSE_MODES
+from horosa_skill.errors import bilingual
 from horosa_skill.schemas.tools.base import (
     _LIFESPAN_METHOD_DESC,
     BirthInput,
@@ -304,6 +306,24 @@ class DraconicInput(BirthInput, _ChartDayBoundaryKnobs):
     predictive: bool | None = False
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     orb: float | None = 2.0
+    # v3.13.1 龙盘「宫位口径」（AstroDraconicLab.js:19-25/69；后端 progressions.py:441 + Java AstroExtraController 白名单）。
+    # 词表单源 astro_rulers.DRACONIC_HOUSE_MODES；缺省 whole 不下发（runner 只在 shift 时带键），不进广告层（预算）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"draconicHouses"})
+    draconicHouses: str | None = Field(
+        default=None,
+        description="宫位口径：whole=整宫·随龙盘上升（缺省）| shift=本命宫头平移·保留分宫制（各星落宫与本命一致，只换星座）。",
+    )
+
+    @field_validator("draconicHouses", mode="before")
+    @classmethod
+    def _draconic_houses_known(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        text = f"{value}".strip()
+        if text not in DRACONIC_HOUSE_MODES:
+            raise ValueError(bilingual(f"draconicHouses 只能取 {'/'.join(DRACONIC_HOUSE_MODES)}（收到 {value!r}）",
+                                        f"draconicHouses must be one of {'/'.join(DRACONIC_HOUSE_MODES)} (got {value!r})"))
+        return text
 
 
 class RelocationInput(BirthInput, _ChartDayBoundaryKnobs):

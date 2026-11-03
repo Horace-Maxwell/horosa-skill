@@ -163,17 +163,20 @@ def test_guolao_gods_section_comes_from_moira_rules_with_long_life_char(tmp_path
 
 @requires_node
 def test_guolao_aspect_section_is_the_upstream_gfm_table_with_cn_names(tmp_path) -> None:
-    """[相位] = 上游 buildGuolaoAspectSection（:2158-2179）GFM 五列表；名 = msg()（AstroTxtMsg：Uranus→天）、相位名 =
-    GUOLAO_ASPECT_LABEL_CN、误差 = round(orb,3)。旧版是「日 60˚ Uranus（离相，误差9.668）」行式——共享 AstroConst shim 缺
-    URANUS 等常量时名表键塌成 "undefined"，同一行也会印 Uranus（负向对照之二）。"""
+    """[相位] = 上游 buildGuolaoAspectSection（main/snapshot.js:1252-1271）GFM 五列表；名 = msg()（AstroTxtMsg：Uranus→天）、
+    误差 = round(orb,3)。旧版是「日 60˚ Uranus（离相，误差9.668）」行式——共享 AstroConst shim 缺 URANUS 等常量时名表键塌成
+    "undefined"，同一行也会印 Uranus（负向对照之二）。
+    v3.13.1 起行源改为七政相位单源 computeMoiraAspectPairs（GuoLaoMoiraWheel.js:200-240）：相位名 =「會 0°」式七政名，
+    不再是后端通用占星表的「六合 (60°)」（旧断言「日 六合 天 9.668」在 v3.13.0 前是上游行为，现超出半合 2° 容许、不列）；
+    七政逐对全量独立复算见 tests/test_sync3131_guolao.py。"""
     env, _ = _guolao_run(tmp_path)
     body = _section(env.data["snapshot_text"], "相位")
     assert body.startswith("| 主体 | 相位 | 对象 | 状态 | 误差 |\n| --- | --- | --- | --- | --- |\n")
-    sep = GUOLAO_FIX["chart_natal"]["aspects"]["normalAsp"]["Sun"]["Separative"]
-    uranus = next(a for a in sep if a["id"] == "Uranus")
-    orb = round(uranus["orb"] * 1000) / 1000
-    assert f"| 日 | 六合 (60°) | 天 | 离相 | {orb:g} |" in body.split("\n")
-    assert "Uranus" not in body and "Neptune" not in body
+    objs = {o["id"]: o for o in GUOLAO_FIX["chart_natal"]["chart"]["objects"]}
+    gap = abs(objs["Venus"]["lon"] - objs["Uranus"]["lon"]) % 360  # 黄仪盘（displayCoord=ecliptic）取黄经
+    orb = round(min(gap, 360 - gap) * 1000) / 1000
+    assert f"| 金 | 會 0° | 天 | 入相 | {orb:g} |" in body.split("\n")
+    assert "Uranus" not in body and "Neptune" not in body and "六合 (60°)" not in body
 
 
 @requires_node

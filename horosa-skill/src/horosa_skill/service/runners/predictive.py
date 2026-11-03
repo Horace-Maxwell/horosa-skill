@@ -3,10 +3,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from horosa_skill import predictive_text as _ptext
+from horosa_skill.civil_calendar import (
+    _civil_jdn,
+    _civil_ymd_exists,
+    _format_signed_date,
+    _parse_date_parts,
+)
 from horosa_skill.engine.astroextra_snapshots import (
     DEFAULT_MINOR_VARIANT,
     MINOR_VARIANT_LABEL,
@@ -31,7 +37,12 @@ from horosa_skill.errors import (
     ToolValidationError,
 )
 from horosa_skill.service import _clock
-from horosa_skill.service._common import _date_part_of, _finite_number, _require_option, _to_slash_date
+from horosa_skill.service._common import (
+    _date_part_of,
+    _finite_number,
+    _require_option,
+    _to_slash_date,
+)
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import _sign_degree
 from horosa_skill.service.text.predictive import (
@@ -438,23 +449,24 @@ class PredictiveRunners:
 
     @staticmethod
     def _astroextra_date(payload: dict[str, Any], key: str, *, code: str) -> str | None:
-        """YYYY-MM-DD（亦收 YYYY/MM/DD、单位数月日）→ 规范 YYYY-MM-DD；缺省/空 → None（走上游缺省）。"""
+        """YYYY-MM-DD（亦收 YYYY/MM/DD、单位数月日）→ 规范 YYYY-MM-DD；缺省/空 → None（走上游缺省）。
+
+        民用历口径（civil_calendar）：带号 1–6 位年（公元前 / 五位年）照收，1582-10-15 前按儒略历判日子存不存在、
+        无年 0；输出 dateStrSafe.formatSignedDate 同形（上游页面把日期选择器的串原样下发给后端）。此前是四位年正则 +
+        `datetime()`，公元前本命盘的 targetDate / 星历区间一律报「不是合法日期」。"""
         raw = payload.get(key)
         text = f"{raw if raw is not None else ''}".strip()
         if not text:
             return None
-        match = re.fullmatch(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", text)
-        try:
-            if not match:
-                raise ValueError(text)
-            value = datetime(int(match.group(1)), int(match.group(2)), int(match.group(3)))
-        except ValueError:
+        match = re.fullmatch(r"([+-]?\d{1,6})[-/](\d{1,2})[-/](\d{1,2})", text, re.ASCII)
+        ymd = (int(match.group(1)), int(match.group(2)), int(match.group(3))) if match else None
+        if ymd is None or not (1 <= ymd[1] <= 12) or not _civil_ymd_exists(*ymd):
             raise ToolValidationError(
                 f"{key} 不是合法日期（要 YYYY-MM-DD）：{text!r} / {key} is not a valid date (expected YYYY-MM-DD): {text!r}",
                 code=code,
                 details={"field": key, "value": raw},
-            ) from None
-        return value.strftime("%Y-%m-%d")
+            )
+        return _format_signed_date(*ymd)
 
     def _run_ephemeris_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         """星历（AstroEphemeris.buildEphemerisSnapshotText）：区间内入座/留逆/朔望弦/食相 + 行运触发本命。
@@ -470,7 +482,7 @@ class PredictiveRunners:
         end_date = self._astroextra_date(payload, "endDate", code="tool.ephemeris_invalid_window") or (
             today + timedelta(days=90)
         ).strftime("%Y-%m-%d")
-        if end_date < start_date:
+        if _civil_jdn(*_parse_date_parts(end_date)) < _civil_jdn(*_parse_date_parts(start_date)):   # 带号年不能比字符串
             raise ToolValidationError(
                 f"星历结束日早于开始日：{start_date} → {end_date}（只给 startDate 时 endDate 仍按上游缺省=今日+90天）"
                 f" / ephemeris endDate precedes startDate: {start_date} → {end_date} (pass endDate too)",

@@ -41,12 +41,17 @@ _RESULT_SENSITIVE_FIELDS: tuple[tuple[str, str, frozenset[str] | None], ...] = (
     ("lateZiHourUseNextDay", "晚子时·时干开关", _CN_DOMAINS),
     ("guirengType", "贵人法", _CN_DOMAINS),
     ("southMonth", "南半球月令", _CN_DOMAINS),
+    ("tianyiSchool", "天医口径", _CN_DOMAINS),   # v3.13.1 八字（BaZi.js:437 快照行同名）
     ("timeAlg", "时间算法", None),
     ("pdMethod", "主限法", _ASTRO_DOMAINS),
     ("tradition", "古典口径", _ASTRO_DOMAINS),
     ("predictive", "预测数据", _ASTRO_DOMAINS),
     ("zodiacal", "黄道制", _ASTRO_DOMAINS),
     ("hsys", "分宫制", _ASTRO_DOMAINS),
+    # v3.13.1：日出 / 日没口径（classicalParamSpec.js:107；缺省 center 由 BirthInput 校验器归一成 None → 只有 apparent 才回显）、
+    # 龙盘宫位口径（AstroDraconicLab.js:24；whole/shift 改各星落宫）。
+    ("sunriseMode", "日出 / 日没口径", None),
+    ("draconicHouses", "龙盘宫位口径", _ASTRO_DOMAINS),
     ("gender", "性别", None),
     ("school", "流派", None),
     ("profile", "传本", None),
@@ -60,6 +65,11 @@ _DAY_BOUNDARY_DEFAULT_TOOLS = frozenset({
     "bazi_birth", "bazi_direct", "ziwei_birth", "liureng_gods", "liureng_runyear", "jinkou",
     "nongli_time", "qimen", "taiyi", "sanshiunited",
 })
+# 字段在这些工具上是死键（不参与计算）→ 卡片不回显。宿占：上游 techniqueMountSettings.js:1722 SUZHAN_DEAD_CLASSICAL_KEYS
+# 收 sunriseMode（宿占挂载齿轮隐去它、recordPayloadKeys 不带它，:1774）；runners/guolao._run_suzhan_tool 同样不下发。
+_FIELD_DEAD_FOR_TOOLS: dict[str, frozenset[str]] = {
+    "sunriseMode": frozenset({"suzhan"}),
+}
 # 闸门状态：调用方声称「设置已与用户确认」还是「接受默认」，是报告里最该留痕的一项。
 _GATE_FIELDS: tuple[tuple[str, str], ...] = (
     ("agent_confirmed_settings", "已与用户确认设置"),
@@ -100,6 +110,8 @@ def _settings_used(
     used: dict[str, Any] = {}
     for field, label, domains in _RESULT_SENSITIVE_FIELDS:
         if domains is not None and (domain or "") not in domains:
+            continue
+        if tool_name in _FIELD_DEAD_FOR_TOOLS.get(field, ()):
             continue
         if field in input_normalized and input_normalized[field] is not None:
             used[field] = {"label": label, "value": input_normalized[field]}

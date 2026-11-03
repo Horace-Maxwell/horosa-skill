@@ -1,8 +1,8 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "965af0f4caba8e093399d3e3c0e3d50db2b7bfec",
-  "upstream_git_committed_at": "2026-10-29T20:02:57-04:00",
-  "upstream_app_version": "3.13.0",
+  "upstream_git_sha": "06f25f216c237bf539aaf8d8dde569364672b4d8",
+  "upstream_git_committed_at": "2026-11-02T23:14:03-05:00",
+  "upstream_app_version": "3.13.1",
   "aiexport_settings_version": 60,
   "skill_mirrored_version": 60,
   "upstream_checked_at_package_version": "0.46.1",
@@ -15,6 +15,7 @@
     "bazi",
     "bazizeri",
     "beiji",
+    "bezzafigure",
     "calendar",
     "canping",
     "cetian",
@@ -45,6 +46,7 @@
     "indiachart",
     "indiazeri",
     "jaynesprog",
+    "jayprofection",
     "jieqi",
     "jieqi_chunfen",
     "jieqi_dongzhi",
@@ -60,8 +62,10 @@
     "locastro",
     "lunarreturn",
     "lunationphase",
+    "michon",
     "mundane",
     "nanji",
+    "neroman",
     "otherbu",
     "persiandirected",
     "planetaryages",
@@ -108,9 +112,9 @@
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 395,
+    "files_compared": 397,
     "files_unmatched": 28,
-    "tree_sha256": "0ba92f52d0c6a2d681c4e15b033e5343d7e9f130f3e61c96707d023c23c0a2cf"
+    "tree_sha256": "751800c98fd25e21b41866d37399653ff0f434171b4ab1dba0cd26d3d7ab8222"
   },
   "runtime_source": {
     "sentinels_verified": 7

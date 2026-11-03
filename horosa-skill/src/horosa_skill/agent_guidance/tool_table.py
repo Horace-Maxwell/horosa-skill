@@ -229,6 +229,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "**展示盘按 bazi_birth 自己的算源铸**（与直接调该工具逐字同段）；"
             "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
             "\n起局三开关（timeAlg/after23NewDay/lateZiHourUseNextDay）顶层与 options 双读，options 优先；真太阳时会改时支，改它命中集就变。"
+            "\n内嵌八字页三键（southMonth none|chong · minggongMethod tongxing|shufa · tianyiSchool xieji|ziping，"
+            "词表同 bazi_birth）同样双读：扫描按它起盘 / 查神煞，展示盘同口径（星阙 v3.13.1 BAZI_PAGE_SCAN_KEYS）。"
             "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "day_ganzhi（日柱干支） / hour_ganzhi（时柱干支） / month_year_gz（年月柱干支） / zhi_relation（支间关系） / gan_wuhe（天干五合） / sanhe_ju（地支三合局） / shensha_has（吉神在柱） / shensha_not（凶煞回避） / nayin_wuxing（柱纳音五行） / changsheng（日干长生态） / xunkong（旬空） / wuxing_day（日主五行）；…共 26 类，完整表见 vendored baziZeriConditionTypes。"
@@ -1393,6 +1395,7 @@ _MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
         "zodiacBoundary": "lichun 立春（缺省）| lunar 正月初一（[起盘信息] 生肖行）",
         "southMonth": "none 不对冲（缺省）| chong 对冲（只对南纬出生生效：月支取对冲之支、月干五虎遁重起；[起盘信息] 南半球月令行）",
         "cangVersion/fenyeVersion": "common（缺省）| fenye 分野加权 / fajue 法诀版",
+        "tianyiSchool": "xieji 协纪辨方书（缺省：天医正月起戌顺行、地医为其对冲）| ziping 子平（月支退一位、无地医）；[神煞（四柱与三元）] 首行天医口径",
         "phaseType": "0 长生火土同（缺省）| 1 水土同 | 2 阳顺阴逆",
         "timeAlg": "0 真太阳时（缺省）| 1 直接时间 | 3 平太阳时（2 春分定卯时上游未实现，报错）",
         "byLon": "true → 整盘走 Java /bazi/*（本地引擎不实现；五行力量等本地派生段随之不出）",

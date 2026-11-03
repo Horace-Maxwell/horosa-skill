@@ -408,7 +408,7 @@ function computeHorary(result, category, opts){
 		}
 	}
 	const describe = buildDescribe(facts, querentKey, quesitedKey, category || 'general', sigs);
-	const theft = (category === 'theft') ? runTheft(facts) : null;
+	const theft = (category === 'theft') ? runTheft(facts, opts) : null;   // 燃烧之路边界随卜卦流派 / 全局变体
 	return {
 		facts, category: category || 'general', school: opts.school || 'classical',
 		// sharedRuler 必须透传:significators.js 在命主=事主同星时写出五法(A-E)裁决对象,

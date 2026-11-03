@@ -4,11 +4,13 @@
 // v3.11 wave3b 同源追加（与格局闭包共用 msg / objectLon / houseFullLabel / computeAscSignIndex / orderGods，
 // 及同一个 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、
 // [神煞] buildRulesGodsSection → buildHouseGodsSection 回退、[相位] buildGuolaoAspectSection
-// （含 GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows）与 signDegMin，逐字。
+// （含 buildGuolaoAspectRows；v3.13.1 前为 GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows 通用占星相位表）与 signDegMin，逐字。
+// 🔴 v3.13.1：[相位] 改与盘面连线同一单源 computeMoiraAspectPairs（GuoLaoMoiraWheel.js，取自 guolaoMoiraWheelLimits.js）——
+//   七政七相（會衝刑合半合半刑四合）、按显示偏好勾选与容许度、入相/离相按与位置同口径的日速判；不再读后端 chart.aspects。
 // 🔴 v3.13.0：上游 GuoLaoChartMain.js 把这些闭包拆进 components/guolao/main/ ——
 //   snapshot.js（格局闭包 / 快照段 / objectLon / orderGods / getZiGods …）、moiraConst.js（MOIRA_* 常量）、
 //   format.js（safeList / safeMap / normDegree）、fieldModes.js（signFromLon / guolaoLifeModeFromFields /
-//   computeAscSignIndex / houseFullLabel）、aspectsNodeMode.js（GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows）；
+//   computeAscSignIndex / houseFullLabel）、aspectsNodeMode.js（buildGuolaoAspectRows；v3.13.1 前 GUOLAO_ASPECT_LABEL_CN / aspectName / buildAspectRows）；
 //   msg = components/astro/AstroHelper.js astroMsgPlainText、splitDegree 改名 AstroHelper.signDegMin（函数体逐字同旧），
 //   formatGodName 改取 GuoLaoMoiraWheel 的 moiraFormatGodName（cleanText ≡ 旧 replace(/\s+/g,'')）。
 //   main/*.js 顶层 import request / services / DateTime（取数编排与 React 页面状态），整份 vendor 仍不可行，故仍逐字抽取。
@@ -18,7 +20,7 @@ import * as SZConst from '../suzhan/SZConst.js';
 import * as Su28Helper from '../su28/Su28Helper.js';
 import {
 	GUOLAO_LIFE_MODE_ASC, GUOLAO_LIFE_MODE_COTRANS, GUOLAO_LIFE_MODE_YUMAO, normalizeGuolaoLifeMode,
-	moiraGodsFromRuleHits, moiraLongLifeCharFor, moiraFormatGodName as formatGodName,
+	moiraGodsFromRuleHits, moiraLongLifeCharFor, moiraFormatGodName as formatGodName, computeMoiraAspectPairs,
 } from './guolaoMoiraWheelLimits.js';
 import { parseDateParts } from '../bazi/dateStrSafe.js';
 
@@ -671,56 +673,22 @@ function signDegMin(degree){
 	return [deg, min];
 }
 
-// main/aspectsNodeMode.js:9-58
-// 🆕 中文相位名(含度数)用于 AI 挂载快照 + AI 导出 — 避免输出占星字体字形码(R/W/P/M 等)给 LLM 看成乱码。
-// UI 内部渲染走 AstroMsg 字形码 + 占星字体不受影响(各自管线分离)。
-const GUOLAO_ASPECT_LABEL_CN = {
-	Asp0: '合 (0°)',
-	Asp30: '半六合 (30°)',
-	Asp45: '半方 (45°)',
-	Asp60: '六合 (60°)',
-	Asp90: '方 (90°)',
-	Asp120: '三合 (120°)',
-	Asp135: '补半方 (135°)',
-	Asp150: '梅花 (150°)',
-	Asp180: '冲 (180°)',
-};
-function aspectName(deg){
-	if(GUOLAO_ASPECT_LABEL_CN[`Asp${deg}`]){ return GUOLAO_ASPECT_LABEL_CN[`Asp${deg}`]; }
-	if(AstroText.AstroTxtMsg && AstroText.AstroTxtMsg[`Asp${deg}`]){ return AstroText.AstroTxtMsg[`Asp${deg}`]; }
-	return Number.isFinite(Number(deg)) ? `${deg}°` : '';
-}
-
-function buildAspectRows(aspects){
-	const normal = aspects && aspects.normalAsp ? aspects.normalAsp : aspects;
-	const rows = [];
-	if(!normal || typeof normal !== 'object'){
-		return rows;
-	}
-	Object.keys(normal).forEach((key)=>{
-		const bucket = normal[key] || {};
-		[
-			['Applicative', '入相'],
-			['Exact', '精确'],
-			['Separative', '离相'],
-			['None', '容许'],
-		].forEach(([field, state])=>{
-			safeList(bucket[field]).forEach((asp, idx)=>{
-				if(!asp || !asp.id){
-					return;
-				}
-				rows.push({
-					key: `${key}-${asp.id}-${field}-${idx}`,
-					from: msg(key),
-					to: msg(asp.id),
-					aspect: aspectName(asp.asp),
-					state,
-					orb: Number.isFinite(Number(asp.orb)) ? `${Math.round(Number(asp.orb) * 1000) / 1000}` : '',
-				});
-			});
-		});
-	});
-	return rows;
+// main/aspectsNodeMode.js:8-23（v3.13.1，逐字）
+// 七政相位行(右栏「相位」页与 AI 快照同用):与盘面连线同一单源 computeMoiraAspectPairs ——
+// 七种七政相位(會 0° / 衝 180° / 刑 90° / 合 120° / 半合 60° / 半刑 45°·135° / 四合 30°·150°),
+// 只列已勾选的相位药丸、按左栏容许度设置、隐藏的曜不列。曾按通用占星相位表列(合 = 0°,名称与容许度都与盘面不同)。
+// prefs = 七政显示偏好(guolaoDisplay:aspects / aspectOrbs / hiddenPlanets)。
+function buildGuolaoAspectRows(chart, prefs){
+	const p = prefs || {};
+	const pairs = computeMoiraAspectPairs(chart, { aspectSet: p.aspects, aspectOrbs: p.aspectOrbs, hiddenPlanets: p.hiddenPlanets });
+	return pairs.map((pr)=>({
+		key: `${pr.a.id}-${pr.b.id}-${pr.aspect.key}`,
+		from: msg(pr.a.id),
+		to: msg(pr.b.id),
+		aspect: `${pr.aspect.key} ${pr.angle}°`,
+		state: pr.state,
+		orb: `${Math.round(pr.orb * 1000) / 1000}`,
+	}));
 }
 
 // main/snapshot.js:674-762
@@ -867,13 +835,13 @@ function buildRulesGodsSection(moiraRules){
 	return out.join('\n');
 }
 
-// main/snapshot.js:1250-1270
-// AI 快照·相位段（右栏「相位」面板已显示但此前未导出）：复用 buildAspectRows，与盘面的相位表同源；异常降级「无」。
-export function buildGuolaoAspectSection(result){
+// main/snapshot.js:1250-1271（v3.13.1，逐字）
+// AI 快照·相位段:与右栏「相位」页、盘上的相位连线同一单源(buildGuolaoAspectRows → computeMoiraAspectPairs):
+// 七政相位、按显示偏好的相位勾选与容许度;异常降级「无」。displayPrefs 缺省 = 出厂(會衝刑合半合、内置容许度)。
+export function buildGuolaoAspectSection(result, displayPrefs){
 	try{
 		const chart = getChart(result);
-		const aspects = (chart && chart.aspects) || (result && result.aspects) || null;
-		const rows = buildAspectRows(aspects);
+		const rows = buildGuolaoAspectRows(chart, displayPrefs);
 		if(!rows || !rows.length){
 			return '无';
 		}
@@ -894,15 +862,17 @@ export function buildGuolaoAspectSection(result){
 // skill 侧桥接（同 buildLocalMoiraPatternsForSnapshot）：上游 _buildGuolaoSnapshotTextV2Core（:2031-2140）在一次
 // SNAPSHOT_PREFER_LON 黄仪窗口内依次产 [七政四余宫位与二十八宿星曜]（:2079 buildHouseSuAndGodsSection(result,
 // planetDisplay, fields)——无头 buildGuolaoSnapshotForFields 传 null）、[神煞]（:2086 rules 源 → 历法 ziGods 回退）
-// 与 [相位]（:2138）。三段取值表达式与各自 `|| '无'` 兜底逐字照搬。
-function buildGuolaoSnapshotTablesForSnapshot(result, fields, moiraRules){
+// 与 [相位]（main/snapshot.js:1221 buildGuolaoAspectSection(result, _gDisp)）。三段取值表达式与各自 `|| '无'` 兜底逐字照搬。
+// displayPrefs = 上游 _gDisp（页面显示偏好；headless 由 Python 给，缺 aspects/aspectOrbs/hiddenPlanets → 出厂缺省，
+// 同上游 getStoredGuolaoDisplay 读不到键时的 GUOLAO_DEFAULT_DISPLAY）。
+function buildGuolaoSnapshotTablesForSnapshot(result, fields, moiraRules, displayPrefs){
 	const _snapChart = result && result.chart ? result.chart : result;
 	SNAPSHOT_PREFER_LON = !!(_snapChart && _snapChart.displayCoord === 'ecliptic');
 	try{
 		return {
 			houseSu: buildHouseSuAndGodsSection(result, null, fields) || '无',
 			gods: buildRulesGodsSection(moiraRules) || buildHouseGodsSection(result, fields) || '无',
-			aspects: buildGuolaoAspectSection(result) || '无',
+			aspects: buildGuolaoAspectSection(result, displayPrefs) || '无',
 		};
 	}finally{
 		SNAPSHOT_PREFER_LON = false;

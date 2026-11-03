@@ -3,10 +3,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from horosa_skill.astro_rulers import (
+    DRACONIC_HOUSE_LABELS,
+    DRACONIC_HOUSE_MODE_DEFAULT,
+    DRACONIC_HOUSE_MODES,
+)
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
 from horosa_skill.engine.astroextra_snapshots import fmt_num
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
-from horosa_skill.service._common import _is_astro_chart_payload, _render_snapshot_text, _to_slash_date
+from horosa_skill.service._common import (
+    _is_astro_chart_payload,
+    _render_snapshot_text,
+    _to_slash_date,
+)
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import (
     ASTRO_TEXT_MAP,
@@ -479,15 +488,26 @@ class WesternRunners:
     def _run_draconic_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 龙盘：各点黄经减北交点（交点归零）。后端把标准 chart-wrap 放在响应的 `chart` 键下——
         # 与 /astroextra/harmonic 同一形状，比导出层通用段构建器预期深一层，故同样摊平到顶层。
-        response = self._call_remote("/astroextra/draconic", {**payload, "predictive": 0})
+        # v3.13.1 宫位口径（AstroDraconicLab.js:19-25/69）：上游页面恒带 draconicHouses；后端缺键 = 整宫（Java 白名单注释
+        # 「缺键 = 整宫 = 零回归」）→ skill 只在 shift 时下发，缺省请求体与 v3.13.0 字节相同。
+        house_mode = payload.get("draconicHouses") if payload.get("draconicHouses") in DRACONIC_HOUSE_MODES else DRACONIC_HOUSE_MODE_DEFAULT
+        remote_payload = {k: v for k, v in payload.items() if k != "draconicHouses"}
+        if house_mode != DRACONIC_HOUSE_MODE_DEFAULT:
+            remote_payload["draconicHouses"] = house_mode
+        response = self._call_remote("/astroextra/draconic", {**remote_payload, "predictive": 0})
         chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
         # [龙盘] 专属段（v3.9.2 派生盘快照重定源）：龙首归零基准/位置/同频，逐字镜像
-        # AstroDraconicLab.js:46-55；仅头一行（无位置无同频）不产段（上游 out.length > 1 同判）。
+        # AstroDraconicLab.js:78-84（v3.13.1 起多一行宫位口径，段恒出）。
         lines: list[str] = []
         if response.get("nodeLon") is not None:
             # [Q-351/T-332]（AstroDraconicLab.js:4-7/53）注明真 / 平交点：本命盘 params.westNodeType === 'true' → 真交点，否则平交点。
             node_type = "真交点" if payload.get("westNodeType") in ("true", True) else "平交点"
             lines.append(f"北交点 {fmt_num(response['nodeLon'], 2)}°（{node_type}） → 归零白羊 0°（龙盘基准）")
+        # v3.13.1 AstroDraconicLab.js:80：宫位口径行无条件 push（缺省档同样写出）→ [龙盘] 段恒出。
+        lines.append(
+            f"宫位口径：{DRACONIC_HOUSE_LABELS.get(house_mode) or DRACONIC_HOUSE_LABELS[DRACONIC_HOUSE_MODE_DEFAULT]}"
+            f"{'，各星落宫与本命一致' if house_mode == 'shift' else ''}"
+        )
         lines.extend(_derived_position_lines(response.get("positions"), "龙盘"))
         lines.extend(_derived_conjunction_lines(response.get("conjunctions")))
         return {
@@ -496,7 +516,8 @@ class WesternRunners:
             "positions": response.get("positions", []),
             "conjunctions": response.get("conjunctions", []),
             "raw": response,
-            **({"_derivedSelf": {"title": "龙盘", "lines": lines}} if lines else {}),
+            # 上游 out = [段头, 交点行?, 宫位口径行, …]：v3.13.1 起宫位口径行恒在 → out.length > 1 恒真、[龙盘] 恒出。
+            "_derivedSelf": {"title": "龙盘", "lines": lines},
         }
 
     def _run_relocation_tool(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -244,12 +244,26 @@ export function guolaoPlanetaryHourMethod(fields){
 	return (v === 'unequal' || v === 'equal24') ? v : 'sunrise';
 }
 
-// [起盘信息] 口径六行：_buildGuolaoSnapshotTextV2Core（main/snapshot.js:1144-1163）内联的 lines.push 逐字收成函数。
+// main/params.js:29-35 guolaoSunriseMode（v3.13.1，逐字；classicalGlobalValue headless 无 → 缺省 center）。
+// 日出 / 日没口径(星盘设置里的全局「日出 / 日没口径」;随盘存过的以盘为准):'center' 日心 · 不计折射(缺省)/
+// 'apparent' 日面上缘 · 含大气折射。日出安命(命宫 / 命度)与报时星都按这一刻;页面、缓存键、快照同读此函数。
+export function guolaoSunriseMode(fields){
+	const fv = fields && fields.sunriseMode ? fields.sunriseMode.value : undefined;
+	const v = (fv !== undefined && fv !== null && `${fv}` !== '') ? `${fv}` : `${classicalGlobalValue('sunriseMode') || 'center'}`;
+	return v === 'apparent' ? 'apparent' : 'center';
+}
+
+// [起盘信息] 口径六行：_buildGuolaoSnapshotTextV2Core（main/snapshot.js:1144-1164）内联的 lines.push 逐字收成函数。
+// v3.13.1：罗计取法行后加「日出口径」行（main/snapshot.js:1153，仅 params.sunriseMode === 'apparent' 时）。
 // _gDisp = 页面显示偏好（命主取法/行运法），headless 由调用方按挂载齿轮四键给（Python _guolao_display_settings）。
 // params = 起盘参数（上游 fieldsToParams 产物，读 params.planetaryHourMethod）；headless 调用方未给时按上游
 // fieldsToParams 同一判据 guolaoPlanetaryHourMethod(fields) 补（params.js:164 params.planetaryHourMethod = hourMethod）。
 export function buildGuolaoSetupLines(fields, _gDisp, params){
-	if(!params || typeof params !== 'object'){ params = { planetaryHourMethod: guolaoPlanetaryHourMethod(fields) }; }
+	// fieldsToParams（main/params.js:169-177）同判据：日出口径仅 apparent 才带（缺省不发）；行星时制式只供本函数读档名。
+	if(!params || typeof params !== 'object'){
+		params = { planetaryHourMethod: guolaoPlanetaryHourMethod(fields) };
+		if(guolaoSunriseMode(fields) === 'apparent'){ params.sunriseMode = 'apparent'; }
+	}
 	const lines = [];
 	lines.push(`七政命度：${guolaoLifeModeName(guolaoLifeModeFromFields(fields))}`);
 	lines.push(`罗计：${guolaoNodeModeName(guolaoNodeModeFromFields(fields))}`);
@@ -260,6 +274,7 @@ export function buildGuolaoSetupLines(fields, _gDisp, params){
 	const _gHm = params && params.planetaryHourMethod === 'unequal' ? '昼夜不等时' : (params && params.planetaryHourMethod === 'equal24' ? '廿四时等分' : '日出起算 · 等长时');
 	lines.push(`报时星太阳时：${_gTs === 'off' ? '钟表时' : (_gTs === 'mean' ? '平太阳时(仅经度)' : '真太阳时(经度+均时差)')}（行星时制式：${_gHm}${_gHm === '日出起算 · 等长时' ? ',此制式下太阳时三档结果相同' : ''}）`);
 	lines.push(`罗计取法：${_gNt === 'true' ? '真交点' : '平交点'}；月孛取法：${_gLt === 'true' ? '真远地点' : '平远地点'}`);
+	if(params && params.sunriseMode === 'apparent'){ lines.push('日出口径：日面上缘 · 含大气折射(日出安命与报时星按此刻)'); }   // 缺省(日心不计折射)不加行 = 零回归
 	// G20/G22/G31/G3 身宫法/命主取法/行运法/宿度制 注入快照。身宫法读 fields(类A);命主取法/行运法读全局显示偏好(类B)。
 	const _gBody = guolaoFieldValue(fields, 'guolaoBodyMode', getStoredGuolaoBodyMode);
 	const _gDispSafe = _gDisp || {};

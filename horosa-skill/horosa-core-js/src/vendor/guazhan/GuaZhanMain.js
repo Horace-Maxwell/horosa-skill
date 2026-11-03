@@ -128,36 +128,45 @@ function yearGzByBoundary(nongli, settings){
 	return (normalizeLiuyaoSettings(settings).yearBoundary === 'lunar') ? (n.yearGZByLunar || lichun) : lichun;
 }
 
+// 已起卦状态(页面 state / 事盘 payload.gua)→ analyzeLiuyao 结果 + 日干;卦不全返 null。
+// 断卦结构段(liuyaoStructLines)与其他只要分析结果的调用方同用这一份,口径不分叉。
+export function analyzeLiuyaoState(st){
+	const nowGua = st && st.currentGua !== null && st.currentGua !== undefined && Gua64[st.currentGua] ? Gua64[st.currentGua] : null;
+	const yao = st && st.yao ? st.yao : [];
+	if(!nowGua || !(yao && yao.length === 6 && yao.every((y)=>y && (y.value === 0 || y.value === 1)))){ return null; }
+	const nongli = (st && st.nongli) || {};
+	const settings = normalizeLiuyaoSettings(st && st.liuyaoSettings);
+	// 与 liuyaoSnapshotEx.buildSnapshotAnalysis 同口径(三处同口径铁律):
+	// 年界线吃 settings.yearBoundary(正月初一派取 yearGZByLunar);ctx 补 hourZhi/jieqiName
+	// (缺则时辰类神煞/节气派生在本段空转,与断诀段结论可不一致)。
+	const yearGz = lineText((settings.yearBoundary === 'lunar'
+		? (nongli.yearGZByLunar || nongli.yearGanZi || nongli.yearJieqi)
+		: (nongli.yearJieqi || nongli.yearGanZi || nongli.yearGZByLunar)) || nongli.year);
+	const monthGz = lineText(nongli.monthGanZi);
+	const dayGz = lineText(nongli.dayGanZi);
+	const hourGz = lineText(nongli.timeGanZi || nongli.hourGanZi);
+	const ctx = {
+		dayGan: dayGz.length >= 2 ? dayGz[0] : null, dayZhi: dayGz.length >= 2 ? dayGz[1] : null,
+		monthGan: monthGz.length >= 2 ? monthGz[0] : null, monthZhi: monthGz.length >= 2 ? monthGz[1] : null,
+		monthNum: (['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑'].indexOf(monthGz.length >= 2 ? monthGz[1] : '') + 1) || null,
+		yearGan: yearGz.length >= 2 ? yearGz[0] : null, yearZhi: yearGz.length >= 2 ? yearGz[1] : null,
+		hourZhi: hourGz.length >= 2 ? hourGz[1] : null,
+		jieqiName: lineText(nongli.jieqi || nongli.jieqiName) || null,
+	};
+	const moving = [];
+	yao.forEach((y, i)=>{ if(y.change){ moving.push(i + 1); } });
+	const analysis = analyzeLiuyao(nowGua, moving, ctx, settings);
+	return analysis ? { analysis, settings, dayGan: ctx.dayGan } : null;
+}
+
 // 六爻断卦结构段(流派/用神/旺衰/飞伏/卦身/动变/神煞/六神),供 AI 挂载/导出/储存复用(单一真值源=analyzeLiuyao)。
 // st 缺 liuyaoSettings 时用默认设置(默认全显,零回归既有行只追加)。
 export function liuyaoStructLines(st){
 	try{
-		const nowGua = st && st.currentGua !== null && st.currentGua !== undefined && Gua64[st.currentGua] ? Gua64[st.currentGua] : null;
-		const yao = st && st.yao ? st.yao : [];
-		if(!nowGua || !(yao && yao.length === 6 && yao.every((y)=>y && (y.value === 0 || y.value === 1)))){ return []; }
-		const nongli = (st && st.nongli) || {};
-		const settings = normalizeLiuyaoSettings(st && st.liuyaoSettings);
-		// 与 liuyaoSnapshotEx.buildSnapshotAnalysis 同口径(三处同口径铁律):
-		// 年界线吃 settings.yearBoundary(正月初一派取 yearGZByLunar);ctx 补 hourZhi/jieqiName
-		// (缺则时辰类神煞/节气派生在本段空转,与断诀段结论可不一致)。
-		const yearGz = lineText((settings.yearBoundary === 'lunar'
-			? (nongli.yearGZByLunar || nongli.yearGanZi || nongli.yearJieqi)
-			: (nongli.yearJieqi || nongli.yearGanZi || nongli.yearGZByLunar)) || nongli.year);
-		const monthGz = lineText(nongli.monthGanZi);
-		const dayGz = lineText(nongli.dayGanZi);
-		const hourGz = lineText(nongli.timeGanZi || nongli.hourGanZi);
-		const ctx = {
-			dayGan: dayGz.length >= 2 ? dayGz[0] : null, dayZhi: dayGz.length >= 2 ? dayGz[1] : null,
-			monthGan: monthGz.length >= 2 ? monthGz[0] : null, monthZhi: monthGz.length >= 2 ? monthGz[1] : null,
-			monthNum: (['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑'].indexOf(monthGz.length >= 2 ? monthGz[1] : '') + 1) || null,
-			yearGan: yearGz.length >= 2 ? yearGz[0] : null, yearZhi: yearGz.length >= 2 ? yearGz[1] : null,
-			hourZhi: hourGz.length >= 2 ? hourGz[1] : null,
-			jieqiName: lineText(nongli.jieqi || nongli.jieqiName) || null,
-		};
-		const moving = [];
-		yao.forEach((y, i)=>{ if(y.change){ moving.push(i + 1); } });
-		const a = analyzeLiuyao(nowGua, moving, ctx, settings);
-		if(!a){ return []; }
+		const r = analyzeLiuyaoState(st);
+		if(!r){ return []; }
+		const a = r.analysis;
+		const settings = r.settings;
 		const lines = [];
 		const presetLabel = (LIUYAO_PRESETS[settings.school] && LIUYAO_PRESETS[settings.school].label) || (settings.school === 'custom' ? '自定义' : settings.school);
 		lines.push('');

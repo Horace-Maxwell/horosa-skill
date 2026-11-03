@@ -22,23 +22,22 @@ from horosa_skill.service._common import (
 )
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import (
-    _aspect_text,
     _build_base_info_lines,
     _build_house_cusp_lines,
     _build_star_and_lot_position_lines,
-    _planet_label,
-    _round3,
 )
 from horosa_skill.service.text.chart_family import _headerless_astro_snapshot_text
 from horosa_skill.time_basis import GUOLAO_TIME_BASIS_NOTE, build_time_basis_line
 
-# ── 七政四余·大限（命度→十二宫）+ 相位：星阙 GuoLaoMoiraWheel/GuoLaoChartMain 的 Python 移植 ──
-# 仅作 JS 段 builder（vendored buildGuolaoLimitSection / buildGuolaoAspectSection）整体失败时的兜底（已进 warnings）。
+# ── 七政四余·大限（命度→十二宫）：星阙 GuoLaoMoiraWheel/GuoLaoChartMain 的 Python 移植 ──
+# 仅作 JS 段 builder（vendored buildGuolaoLimitSection）整体失败时的兜底（已进 warnings）。
+# [相位] 不设 Python 兜底：上游 v3.13.1 起 [相位] = 七政相位单源 computeMoiraAspectPairs（GuoLaoMoiraWheel.js:167-240，
+# 七政七相 + 显示偏好勾选/容许度 + 同口径日速判入相/离相），旧兜底读后端通用占星 chart.aspects（合 0°/六合/三合…，
+# 名称与容许度都与七政盘面不同——上游 aspectsNodeMode.js:11 明言「曾按通用占星相位表列」）；JS 失败时 [相位] 为「无」。
 # 政余格局（buildLocalMoiraPatterns Moira DSL）v0.11.0 起 JS vendor（guolaoMoira.js）评估；神煞行所需的
 # chart.nongli.bazi.guolaoGods 由 runner 以 Java /nongli/time 挂上（上游 Java /chart 同形）。见 _run_guolao_chart_tool。
 _GUOLAO_LIMIT_SEQ = [11.0, 10.0, 11.0, 15.0, 8.0, 7.0, 11.0, 4.5, 4.5, 4.5, 5.0, 5.0]
 _GUOLAO_HOUSE_BRANCH = ("命宫", "财帛", "兄弟", "田宅", "男女", "奴仆", "夫妻", "疾厄", "迁移", "官禄", "福德", "相貌")
-_GUOLAO_ASP_STATES = (("Applicative", "入相"), ("Exact", "精确"), ("Separative", "离相"), ("None", "容许"))
 
 
 def _guolao_norm(deg: Any) -> float:
@@ -106,27 +105,6 @@ def _build_guolao_limit_lines(chart: dict[str, Any], payload: dict[str, Any]) ->
         f"第{r['index']}限 {r['palace']}：{r['from_age']}-{r['to_age']}岁（{r['from_year']}-{r['to_year']}年），约{r['years']}年"
         for r in _guolao_limit_table(life, birth_year)
     ]
-
-
-def _build_guolao_aspect_lines(chart: dict[str, Any], response: dict[str, Any]) -> list[str]:
-    aspects = (chart.get("aspects") if isinstance(chart, dict) else None) or (response.get("aspects") if isinstance(response, dict) else None)
-    normal = aspects.get("normalAsp") if isinstance(aspects, dict) and isinstance(aspects.get("normalAsp"), dict) else aspects
-    lines: list[str] = []
-    if not isinstance(normal, dict):
-        return lines
-    for key, bucket in normal.items():
-        if not isinstance(bucket, dict):
-            continue
-        for field, state in _GUOLAO_ASP_STATES:
-            for asp in bucket.get(field) or []:
-                if not isinstance(asp, dict) or not asp.get("id"):
-                    continue
-                try:
-                    orb_text = f"，误差{_round3(float(asp.get('orb')))}"
-                except (TypeError, ValueError):
-                    orb_text = ""
-                lines.append(f"{_planet_label(key)} {_aspect_text(asp.get('asp'))} {_planet_label(asp.get('id'))}（{state}{orb_text}）")
-    return lines
 
 
 def _moira_transit_moment(payload: dict[str, Any]) -> tuple[str, str]:
@@ -218,7 +196,7 @@ def _build_guolao_snapshot_text(
     gods（[神煞]：rules 源 → 历法 ziGods 回退）/ limitSection（[大限]）/ masters（[三主与化曜]）/ limitCalc（[限法实算]）/
     aspects（[相位] GFM 表）。段序同上游 _buildGuolaoSnapshotTextV2Core（GuoLaoChartMain.js:2031-2140）：大限 → 三主与化曜 →
     限法实算 →（虚实/本命化曜/流年流曜 由 runner 插在 [政余格局] 之前）。info_sections 为空（JS 段 builder 整体失败，已进
-    warnings）时宫位表 / 相位回退 Python 旧行式、[神煞] 为「无」。"""
+    warnings）时宫位表回退 Python 旧行式、[神煞] / [相位] 为「无」。"""
     info = info_sections if isinstance(info_sections, dict) else {}
     chart = response.get("chart", {})
     houses = chart.get("houses") if isinstance(chart, dict) else []
@@ -238,7 +216,8 @@ def _build_guolao_snapshot_text(
                     house_lines.append(f"星曜：{obj.get('id', '—')} {obj.get('su28', '')}".strip())
             house_lines.append("")
         house_text = "\n".join(house_lines).strip()
-    aspect_text = f"{info.get('aspects') or ''}".strip() or "\n".join(_build_guolao_aspect_lines(chart, response)).strip()
+    # [相位]：JS 段 builder 的 buildGuolaoAspectSection 结果；整桥失败（已进 warnings）→「无」（见文件头：不设旧行式兜底）。
+    aspect_text = f"{info.get('aspects') or ''}".strip()
     info_lines = [
         # 上游 params.date = fields.date.value.format('YYYY/MM/DD')（GuoLaoChartMain.js:2337/2043）。
         f"日期：{_guolao_slash_date(payload.get('date', '—'))} {payload.get('time', '—')}",
@@ -279,7 +258,7 @@ def _build_guolao_snapshot_text(
         # 政余格局 (星阙 v2.6.x Moira DSL)：由 vendored guolaoMoira.js (buildLocalMoiraPatterns) 评估，经 js_client 注入。
         # 神煞行（天贵/玉贵/岁驾…）读 chart.nongli.bazi.guolaoGods —— runner 已把本命四柱挂上（同上游 Java /chart 形）。
         ("政余格局", (pattern_text or "").strip() or "无"),
-        # 上游 :2138 buildGuolaoAspectSection(result)（GFM 五列表，无相位 → '无'）。
+        # 上游 main/snapshot.js:1221 buildGuolaoAspectSection(result, _gDisp)（GFM 五列表，无相位 → '无'）。
         ("相位", aspect_text or "无"),
     ]
     return _render_snapshot_text(sections)

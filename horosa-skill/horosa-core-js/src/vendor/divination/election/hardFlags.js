@@ -3,7 +3,7 @@
 // 带 * 的规则参照当前 topic.must_avoid 决定触发/升降级。
 import { aspectsOf } from '../engine/aspectsEngine.js';
 import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(六口径)
-import { viaCombustaRange, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
+import { viaCombustaRange, inViaCombusta, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
 import { PLANETS } from '../data/planets.js';
 import { angularDist, norm360 } from '../engine/utils.js';
 import { isEgyptianDay } from '../data/egyptianDays.js';
@@ -44,7 +44,7 @@ export function evalHardFlags(facts, topic, school){
 		if(ma.some((a) => a.angle === 180)) add('moon_opposition', 'medium', '月亮逢冲（180°）：尤不利合作', 'moon');
 		if(moon.combustion) add('moon_combust', 'medium', '月亮在日光束下，力量受限', 'moon');
 		const vcr = viaCombustaRange(eff && eff.viaCombustaVariant);
-		if(norm360(moon.lon) >= vcr[0] && norm360(moon.lon) <= vcr[1]){
+		if(inViaCombusta(moon.lon, eff && eff.viaCombustaVariant)){
 			const vcTxt = (!eff || eff.viaCombustaVariant === 'standard' || !eff.viaCombustaVariant)
 				? '月在燃烧之路（天秤15°–天蝎15°）：最糟阻碍之一'
 				: `月在燃烧之路（本档界 ${vcr[0]}°–${vcr[1]}°）：最糟阻碍之一`;

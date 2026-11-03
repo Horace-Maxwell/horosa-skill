@@ -96,10 +96,13 @@ class MingliRunners:
         # v3.11.2：南半球月令（BaZi.js:1031 genParams 缺省 'none'；baziLunarLocal.js flipMonthPillar 只在 isSouthLatitude 时生效；
         # Java /bazi/birth /bazi/direct 读同名参数 southMonth=chong|none 进缓存键）。
         "southMonth": ("none", "chong"),
+        # v3.13.1 天医口径（baziStoredOpt.js:15 BAZI_OPT_DOMAINS.tianyiSchool / techniqueMountSettings.js:2123-2126）。
+        "tianyiSchool": ("xieji", "ziping"),
     }
     _BAZI_OPTION_DEFAULTS: dict[str, Any] = {
         "godKeyPos": "年", "phaseType": 0, "timeAlg": 0, "minggongMethod": "tongxing",
         "fenyeVersion": "common", "cangVersion": "common", "dayunPrecision": "precise", "southMonth": "none",
+        "tianyiSchool": "xieji",
     }
 
     def _bazi_option(self, payload: dict[str, Any], key: str) -> Any:
@@ -167,6 +170,12 @@ class MingliRunners:
             # v3.11.2 南半球月令：进 params（本地引擎核心缓存键含它；Java 回退时随 java_payload 一起发）。
             "southMonth": self._bazi_option(payload, "southMonth"),
         }
+        # v3.13.1 天医口径：本地引擎（baziLunarLocal.js:1256-1258 → calcFourPillarShenSha）换天医 / 地医落支，快照
+        # [神煞（四柱与三元）] 首行「天医口径：…」（BaZi.js:437）。上游 genParams 恒带（缺省 xieji），引擎与快照对缺键
+        # 同按 xieji → 只在非缺省时进 params（缺省不发 = 零回归；Java 回退不读此键，神煞随 Java 口径）。
+        tianyi = self._bazi_option(payload, "tianyiSchool")
+        if tianyi != self._BAZI_OPTION_DEFAULTS["tianyiSchool"]:
+            params["tianyiSchool"] = tianyi
         snapshot: dict[str, Any] = {}
         for key in ("school", "ageStyle", "zodiacBoundary"):
             if payload.get(key) not in (None, ""):

@@ -110,6 +110,14 @@ export function viaCombustaRange(variant){
 	return [195, 225];
 }
 
+// 燃烧之路判定单一来源:区间含起不含止 [lo, hi),与后端排盘 isViaCombust、天星择日扫描同口径(帮助文档「含起不含止」)。
+export function inViaCombusta(lon, variant){
+	if(lon === null || lon === undefined || !Number.isFinite(Number(lon))) return false;
+	const l = norm360(Number(lon));
+	const r = viaCombustaRange(variant);
+	return l >= r[0] && l < r[1];
+}
+
 function starLonNow(nameEn, facts){
 	const st = FIXED_STARS.find((s) => s.name_en === nameEn);
 	if(!st) return null;
@@ -184,7 +192,7 @@ export function considerations19(facts, opts){
 	});
 	// 4 燃烧之路（救济：合 Spica/Arcturus 当年实位）
 	const vc = viaCombustaRange(opts.viaCombustaVariant);
-	const inVC = moon && norm360(moon.lon) >= vc[0] && norm360(moon.lon) <= vc[1];
+	const inVC = !!moon && inViaCombusta(moon.lon, opts.viaCombustaVariant);
 	const spica = starLonNow('Spica', facts); const arct = starLonNow('Arcturus', facts);
 	const vcSaved = inVC && ((spica !== null && angularDist(moon.lon, spica) <= 1.5) || (arct !== null && angularDist(moon.lon, arct) <= 1.5));
 	add(4, 'via_combusta', inVC, {

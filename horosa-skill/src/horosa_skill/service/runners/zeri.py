@@ -584,6 +584,12 @@ class ZeriRunners:
             for key in ("godKeyPos", "phaseType"):
                 if options.get(key) is not None:
                     out[key] = options[key]
+            # v3.13.1：内嵌八字页键（南半球月令 / 命宫起法 / 天医口径；zeriPageCalibre.js:82-85 BAZI_PAGE_SCAN_KEYS）
+            # 扫描按其冻结值起盘、点结果行按冻结值回写八字页（BaziZeriMain.js:243-251）→ 展示盘同口径。
+            # 键表与出厂值由 JS 扫描回传的 page_options 单源给（tools/zeriScan.js baziPageOptions），不在此手抄。
+            # 此前 skill 不回写 → options 里给的 southMonth / minggongMethod 只改扫描、展示盘仍按缺省。
+            if isinstance(option_split, dict):
+                out.update({k: v for k, v in option_split.items() if v not in (None, "")})
             return out
         if tool_name == "ziweizeri":
             # ZiweiZeriMain.buildFields（:318-332）：gender/timeAlg 取扫描 options，缺省 1/1 = 扫描引擎缺省
@@ -709,6 +715,10 @@ class ZeriRunners:
             # 紫微扫描按 options.gender 起盘（ziweiZeriScanEngine.computeZiweiScanPan），上游工作台常驻该键；
             # 此前 skill 既不声明也不合并顶层 gender → 女命恒按男命扫描，展示盘却按顶层性别出。
             top_keys = (*top_keys, "gender")
+        if tool_name == "bazizeri":
+            # 内嵌八字页键（zeriPageCalibre.js:84 BAZI_PAGE_SCAN_KEYS）：顶层写法同 bazi_birth 同名键，双读合并进扫描 options
+            # —— 否则顶层 tianyiSchool / southMonth 只改展示盘（base_payload 透传）、扫描仍按出厂口径。
+            top_keys = (*top_keys, "southMonth", "minggongMethod", "tianyiSchool")
         options = {
             **self._ZERI_PAGE_DEFAULT_OPTIONS.get(tool_name, {}),
             **{k: payload[k] for k in top_keys if payload.get(k) is not None},
@@ -754,7 +764,11 @@ class ZeriRunners:
         # 把冻结的扫描 options 回写进 pick 后的显示盘）。此前 base_payload 丢掉 options、只剩顶层 →
         # options 里给的时间算法/贵人/日界对展示盘全无效，且缺省时展示盘走基底工具自己的缺省
         # （紫微扫描恒钟表时、展示盘却按 ziwei_birth 的真太阳时出），同一次结果里两套口径。
-        base_payload.update(self._zeri_display_overrides(tool_name, options, scan_data.get("option_split")))
+        # 三式回传 option_split（三家口径拆分）、八字回传 page_options（内嵌八字页键），各自只出现在本技法的扫描结果里。
+        base_payload.update(self._zeri_display_overrides(
+            tool_name, options,
+            scan_data.get("page_options") if tool_name == "bazizeri" else scan_data.get("option_split"),
+        ))
         # 走公共 run_tool 而非各自的私有 runner：六个基底技法的内部调用形状并不统一
         # （qimen 是 _run_qimen_tool(payload)、liureng 是 _run_liureng_tool(name, payload)、
         # bazi/ziwei 干脆没有私有 runner 而走通用远端路径）。run_tool 对四种都一致，

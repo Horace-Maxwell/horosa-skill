@@ -12,6 +12,9 @@ This audit closes the gap with a ledger:
 * `--scan --from OLD --to NEW` (maintainer machine, needs `$HOROSA_SOURCE_ROOT` with its astrostudyui
   node_modules): lists every upstream top-level name whose comment-stripped code changed between the two pins and
   that a skill file mentions (Python under `src/horosa_skill`, JS glue under `horosa-core-js/src/tools|shared`).
+  Since v0.47.0 the scan also lists every upstream file under `Horosa-Web/` (UI, Python backend, Java, flatlib) that
+  changed between the pins and whose file name a skill file cites (`file:<path>` keys) — hand copies often cite the
+  file, not the inner function that changed (v3.13.1: the 冬至 day-pillar fix in preciseCalcBridge.js).
   Each hit must carry a verdict in `contracts/upstream_port_audit.json` (`no_port …` / `port_unchanged …` /
   `ported …` / `reviewed …`); unreviewed hits fail. `--write-skeleton PATH` dumps the hit list as a starting point.
 * default (no `--scan`, CI-safe): the ledger must be audited **to the recorded upstream pin**
@@ -105,6 +108,36 @@ def skill_hits(changed: list[tuple[str, str]]) -> dict[str, dict]:
     return hits
 
 
+# 文件级引用（v0.47.0）：skill 手抄常写「照 utils/preciseCalcBridge.js 的 …」而不点出改动的那个内部函数名
+# —— v3.13.1 冬至日柱订正改的是 fillJieqiDayGanzhiFromLocal，tools/qimen.js 只提了文件名和没改的 fetchPreciseJieqiSeed，
+# 名字级扫描零信号。所以两 pin 之间改过的上游文件（Horosa-Web 下全部：前端、Python 后端、Java、flatlib），只要 skill
+# 文件提到它的文件名（或 ≥8 字的驼峰文件主名），也算一条命中，键为 `file:<Horosa-Web 下相对路径>`。
+FILE_SCAN_ROOT = "Horosa-Web"
+_FILE_SKIP = re.compile(r"(/__tests__/|/tests?/|\.test\.|\.(less|css|md)$|/components/help/)")
+
+
+def changed_files(source_root: Path, old: str, new: str) -> list[str]:
+    out = subprocess.run(["git", "-C", str(source_root), "diff", "--name-only", old, new, "--", FILE_SCAN_ROOT],
+                         check=True, capture_output=True, text=True, encoding="utf-8").stdout
+    return [path for path in out.split() if not _FILE_SKIP.search(path)]
+
+
+def skill_file_hits(paths: list[str]) -> dict[str, dict]:
+    files = [p for root in SCAN_ROOTS for p in root.rglob("*")
+             if p.suffix in (".py", ".js", ".mjs") and "knowledge/data" not in p.as_posix()]
+    texts = {p: p.read_text(encoding="utf-8", errors="replace") for p in files}
+    hits: dict[str, dict] = {}
+    for path in paths:
+        base = path.rsplit("/", 1)[-1]
+        stem = base.rsplit(".", 1)[0]
+        options = [re.escape(base)] + ([re.escape(stem)] if len(stem) >= 8 and re.search(r"[A-Z]", stem) else [])
+        pattern = re.compile(rf"(?<![A-Za-z0-9_])(?:{'|'.join(options)})(?![A-Za-z0-9_])")
+        where = sorted(p.relative_to(PKG_ROOT).as_posix() for p, text in texts.items() if pattern.search(text))
+        if where:
+            hits[f"file:{path.removeprefix(FILE_SCAN_ROOT + '/')}"] = {"upstream": "changed", "skill_files": where}
+    return hits
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--scan", action="store_true", help="recompute hits between two upstream pins (needs HOROSA_SOURCE_ROOT)")
@@ -131,6 +164,7 @@ def main(argv: list[str]) -> int:
     ledger = _load(LEDGER)
     old, new = args.old or ledger.get("from"), args.new or ledger.get("to")
     hits = skill_hits(changed_names(Path(root), old, new))
+    hits.update(skill_file_hits(changed_files(Path(root), old, new)))
     reviewed = (ledger.get("reviewed") or {}) if new == ledger.get("to") else {}
     missing = sorted(name for name in hits if name not in reviewed)
     if args.write_skeleton:

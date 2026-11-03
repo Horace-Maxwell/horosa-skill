@@ -124,6 +124,20 @@ _COMPOSITE_HOUSE_MODE = "compositeWholeFromAsc"
 # v3.13.0 wholeSignRulers.js:232-241 —— 极区天顶标记 houses[].polarMc（flatlib swe.upperMeridianAscmc 打 'upperMeridian'）。
 POLAR_MC_NOTE = "极区天顶：本时刻子午线上中天交点在地平以下；各分宫制的 MC 一律按上中天交点取（不换作 IC），宫头仍按所选分宫制。"
 
+# ── 古典口径小词表（schemas 与 engine 共用的叶子模块；七政 / 卜卦 / 择日等各 runner 直接 import 这里，别再各抄一份）──
+# v3.13.1 日出 / 日没口径（classicalParamSpec.js:104-112 `sunriseMode`，default 'center'，send:'nonDefault'）：
+# center = 日心落地平、不计折射（现行）；apparent = 日面上缘 + 大气折射（历书，swisseph rise_trans）。
+# 后端只认 'apparent'（perchart_parts/timing.py:40-42 _sunriseMode：其余一律 center）；消费 = 七政日出安命 / 报时星 /
+# 星盘信息日出日没。印占不随此项（IndiaChartKernel 恒按 rise_trans）。
+SUNRISE_MODE_DEFAULT = "center"
+SUNRISE_MODES: tuple[str, ...] = ("center", "apparent")
+# v3.13.1 龙盘「宫位口径」（AstroDraconicLab.js:19-25 DRACONIC_HOUSE_MODES / DRACONIC_HOUSE_LABELS，请求键 draconicHouses）：
+# whole = 按龙盘上升所在整座等分（缺省，宫位打 hsysDerived）；shift = 本命宫头一并减北交点黄经（保留分宫制，各星落宫同本命）。
+# 后端 progressions.py:441 只认 'shift'，其余一律 whole（thirteenthchart.py:167-175 HOUSE_MODES）。
+DRACONIC_HOUSE_MODE_DEFAULT = "whole"
+DRACONIC_HOUSE_MODES: tuple[str, ...] = ("whole", "shift")
+DRACONIC_HOUSE_LABELS: dict[str, str] = {"whole": "整宫(随龙盘上升)", "shift": "本命宫头平移(保留分宫制)"}
+
 
 def js_template_str(value: Any) -> str:
     """JS 模板串 `${v}` 的 Python 等价（仅本模块用到的标量形态）：bool → true/false、整值浮点去 .0。"""

@@ -1,7 +1,7 @@
 // divination/engine/moon.js
 // 月亮专项（卜卦核心，构建清单 §2.2 + Dorotheus Ch5）。
 import { norm360, angularDist, chartIdOfKey } from './utils.js';
-import { viaCombustaRange } from './radicality.js';
+import { inViaCombusta } from './radicality.js';
 import { applyingAspects } from './aspectsEngine.js';
 
 const PTOLEMAIC_ANG = [0, 60, 90, 120, 180];
@@ -17,10 +17,9 @@ export function viaCombustaLabel(variant){
 	return '天秤15°–天蝎15°';
 }
 
-// 燃烧之路：天秤 15° – 天蝎 15° ≈ 黄经 195°–225°
-export function isViaCombusta(moonLon){
-	const l = norm360(moonLon);
-	return l >= 195 && l <= 225;
+// 燃烧之路：默认天秤 15° – 天蝎 15° ≈ 黄经 195°–225°;传 variant 则按 viaCombustaRange 四档边界
+export function isViaCombusta(moonLon, variant){
+	return inViaCombusta(moonLon, variant);
 }
 
 // opts（卜卦流派可选；不传 = 择日/既有调用，行为字节不变）：
@@ -119,8 +118,8 @@ export function moonReport(facts, opts){
 	}else if(vocNote === 'kenodromia' && vocRes.classic){
 		f.push({ key: 'voc_active', polarity: 'neutral', weight: 1, text_zh: '按现行（1647「无入相即空」）口径为空相，但未来仍有对七曜的准确入相（希腊化口径不作空亡）' });
 	}
-	const vcr = viaCombustaRange(opts.viaCombustaVariant);
-	if(norm360(m.lon) >= vcr[0] && norm360(m.lon) <= vcr[1]){
+	const inVc = isViaCombusta(m.lon, opts.viaCombustaVariant);
+	if(inVc){
 		// 注记边界随变体(此前恒写「天秤15°–天蝎15°」,窄口径/全宫变体下与判定不符)。
 		f.push({ key: 'via_combusta', polarity: 'negative', weight: 2, text_zh: `月亮在燃烧之路（${viaCombustaLabel(opts.viaCombustaVariant)}）：最糟阻碍之一；尤忌婚姻/女性事务/买卖/出国（保密类除外）` });
 	}
@@ -154,7 +153,8 @@ export function moonReport(facts, opts){
 	}
 
 	const score = f.reduce((s, x) => s + (x.polarity === 'positive' ? x.weight : (x.polarity === 'negative' ? -x.weight : 0)), 0);
-	return { findings: f, voc: voc, viaCombusta: isViaCombusta(m.lon), phase: mp.phase, score };
+	// viaCombusta 布尔与上方注记同一边界(随燃烧之路变体),不再恒按传统 195°–225°
+	return { findings: f, voc: voc, viaCombusta: inVc, phase: mp.phase, score };
 }
 
 export default moonReport;

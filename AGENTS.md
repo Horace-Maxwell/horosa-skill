@@ -195,6 +195,9 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
   dateStrSafe（1582-10-15 前儒略历、无 0 年、公元前前导负号、1–6 位年）；Python `datetime` 只认外推格里历 1–9999 年。禁止对命盘
   日期新写 `strptime` / `fromisoformat` / `datetime + timedelta` / `[:4]` / `replace("-", "/")` / `len()==10`——公元前会被 try 吞成
   「无数据」，1500 年静默差一天；派生请求的 `ad` 随时刻本身（chartAtMoment）。值对拍用上游源在 node 里跑（`tests/test_sync313_historical.py`）。
+  **调用方给的目标日 / 区间日也算（v0.47.0）**：`PredictiveRunners._astroextra_date` 曾是四位年正则 + `datetime()`，公元前本命盘一给
+  targetDate / 星历区间就报「不是合法日期」，区间先后又是字符串比较（`'-0400…' < '-0500…'`）——校验用 `_civil_ymd_exists`、输出
+  `_format_signed_date`、比较用 `_civil_jdn`（`tests/test_sync3131_civil_dates.py`）。
 - **frontend-读数型 Python 移植**：planetaryages（读 `chart.objects`+`params.birth`）/ yearsystem129
   / persiandirected 等——读已算好的 chart（yearsystem129 / agepoint / distributions v0.46.0 起改为 vendored 上游 JS 出文本：上游删了
   后端 yearsystem129.py，`/chart` 不再回 `predictives.yearsystem129`）
@@ -450,7 +453,9 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 移植、`tools/*.js` 胶水、写死的缺省 / 文案 / 常量表）是第二份真相。重钉上游前必须
 `HOROSA_SOURCE_ROOT=… uv run python scripts/audit_upstream_ports.py --scan --from <旧 pin> --to <新 pin>`：新旧上游之间代码变了、
 且被 skill 提到的每个上游名字都要在 `contracts/upstream_port_audit.json` 有结论（no_port / port_unchanged / ported / reviewed），
-台账审到的 pin == 记录的上游 pin（preflight 硬闸）。手抄表配逐值源码锚（`tests/test_sync313_ports_guard.py`），日期运算移植配
+台账审到的 pin == 记录的上游 pin（preflight 硬闸）。**v0.47.0 起也按文件**：手抄常只写「照 utils/preciseCalcBridge.js 的 …」而不点出
+改了的内部函数（v3.13.1 冬至日柱订正改在 `fillJieqiDayGanzhiFromLocal`，名字级扫描零信号），所以 `Horosa-Web/` 下（前端 / Python
+后端 / Java / flatlib）两 pin 间改过、且文件名被 skill 引用的每个文件也是一条 `file:<路径>` 命中，同样要结论。手抄表配逐值源码锚（`tests/test_sync313_ports_guard.py`），日期运算移植配
 vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsystem129.py`）时，grep skill 里该字段的每个读者——照读旧字段
 只会 ok=true 地返回「无数据」；优先整份 vendor 上游前端模块而不是重抄。手工件逐字搬了**多份**上游文件的，在条目上加
 `also_derived_from {上游路径: sha256}`，每个源各自比戳（`--restamp` 一并重记）。
@@ -882,7 +887,11 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   > 24 000）——写临时文件传路径；`time.tzset` 是 POSIX 专有，用到它的测试带 `skipif(not hasattr(time, "tzset"))`。
 - **并行 agent 的负向对照只回退自己那一处（v0.46.0）**：session scratchpad 是所有子 agent 共用的——同名 `negctl.py` 被覆盖后由另一个
   agent 误执行，「整文件备份 → 改 → 写回」会抹掉别人这几秒内的并发改动。脚本放各自子目录、起唯一名字；变异用就地字符串替换，
-  跑完只把这一处改回来（并核对 diffstat 与变异前一致）。
+  跑完只把这一处改回来（并核对 diffstat 与变异前一致）。变异必须是**非空且唯一**的替换：`replace(new, old)` 式回退在 new 为空串时会把 old
+  插到文件开头（v0.47.0 一次弄坏 `horosa_char_rules.json`）。zsh 不对 `$VAR` 做词拆分，`E="env A=1 B=2"; $E uv run …` 根本没跑测试——
+  env 用 `export` 或逐个写出。
+- **live 验本仓 JS 改动要钉 `HOROSA_CORE_JS_ROOT`（v0.47.0）**：探针里直接 `Settings(...)` 不带 env 时，js_client 优先用已安装的
+  `~/.horosa/runtime/current/horosa-core-js`，比的是旧 JS。
 - **tests/ 里起 node 的子进程必须 `encoding="utf-8"`（v0.40.0 首推 windows-smoke 红）**：`text=True` 在 Windows 按控制台代码页解，CJK 金标 JSON 直接 UnicodeDecodeError；`tests/test_subprocess_encoding.py` 的 node 扫描守着（负向对照），本机 macOS 复现不了，只有 Windows job 抓得到。起 node ESM 一律经 `tests/node_esm.py`（模块路径传 Path → `file://` URL；Windows 不认裸盘符路径 `ERR_UNSUPPORTED_ESM_URL_SCHEME`），别处不许再写 `--input-type=module`。
 - **工作流 / 文档里的计数必须有真值文件（v0.40.0 首推 CI 红）**：ci.yml 的 stdio 探针工具数从 `contracts/mcp_list_budget.json` 读（`full_tools` / `compact_tools`），README 客户端表的「全量 N」由 `verify_docs_sync.check_full_surface_counts` 对同一契约锁；`run_ci_gates.py` 不跑「wheel 真起 stdio」两步，推之前核它们的断言值。
 **验证流程**：
@@ -1480,6 +1489,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   受限网络的三条路成文于 `docs/INSTALL_RESTRICTED_NETWORK.md`（v0.38.0 B3）。
 
 ## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
+
+**奇门节气种子要补日柱（v0.47.0，上游 preciseCalcBridge.fillJieqiDayGanzhiFromLocal）**：chart 服务的 Python `/jieqi/year` 从不带日柱
+（Java 版不加 `seedOnly` 才带）。`tools/qimen.js` 当年只抄了 `fetchPreciseJieqiSeed` 没抄补日柱，种子 `dayGanzhi` 全空 → 本地路由
+（飞盘 / 混合 / 日家 / 金函 / 刻家，置闰 / 无闰 / 茅山）回落 甲子 / 旧锚，局数大面积错，测试喂的是自带日柱的假种子所以一直绿。
+日柱按交节当天的日期取（v3.13.1：按节气名查本地表会把冬至取成上年 12 月那个）。验证用 live 种子 fixture（`tests/test_sync3131_bu.py`）。
+**节的含义变了，Python 兜底也要删**：七政 [相位] v3.13.1 改为七政相位（會衝刑合半合、同口径日速判入离），旧 Python 兜底读后端通用占星
+`chart.aspects`——JS 一失败就静默印出上游已判错的口径；改为「无」。**口径行有两张表同产一句时**（`_CLS_CALIBRE_HEAD_DEFAULTS` 与
+`classical_backend_overrides` 尾巴），删一张表里的键输出不变，只有逐键对上游源才抓得住（`tests/test_sync3131_western.py`）。
 
 **晚子时双开关（upstream v2.2.1+）**：`after23NewDay` 与 `lateZiHourUseNextDay` 两个**独立** flag 只在
 `hour == 23` 生效；完整规格、自检矩阵（`2026-05-27 23:30:00` 四象限）与向用户问法的**属主 =

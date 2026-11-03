@@ -25,23 +25,24 @@ export const DEFAULT_YANQIN_SETTINGS = {
 	qinWuxing: 'std',      // 二十八禽五行:常规七政(默认零回归)| 汪绂重配
 };
 
-// 7 预设(只列与 default 不同项;其余继承 default)。note 为左栏悬浮说明。分组见 PRESET_GROUPS。
+// 7 预设(只列与 default 不同项;其余继承 default;参筹已并入江西派、hidden,选择器列 6 档)。note 为左栏悬浮说明。分组见 PRESET_GROUPS。
 export const YANQIN_PRESETS = {
 	chibenli:   { label: '池本理《禽星易见》', group: '主流', overrides: {}, note: '江西派宗本·四库著录;翻禽=我/倒将=彼,时日禽彼我公用,不载活曜' },
-	canchou:    { label: '参筹秘书(汪三益)', group: '主流', overrides: { huoYaoVariant: 'fanqin', sansuo: 'fanqin' }, note: '江西派集大成·七元甲子420日5040时局;重活曜番禽、略三传锁泊' },
+	// 参筹秘书与江西派在本软件已实现的开关范围内同口径(覆盖项逐项相同)→ 并入江西派;canchou 键保留(旧记录 / 快照 school=canchou 仍解析、结果与江西派逐字同)但不再单列(hidden)
+	canchou:    { label: '参筹秘书(＝江西派)', group: '主流', hidden: true, overrides: { huoYaoVariant: 'fanqin', sansuo: 'fanqin' }, note: '与江西派同口径(活曜番禽、翻禽倒将);已并入「江西派」' },
 	guangdong:  { label: '广东派(邵义德)', group: '主流', overrides: { sansuo: 'suobo', huoYaoVariant: 'off' }, note: '重三传锁泊、略活曜番禽;占卜主流' },
-	jiangxi:    { label: '江西派(翻禽倒将)', group: '主流', overrides: { huoYaoVariant: 'fanqin', sansuo: 'fanqin' }, note: '详活曜番禽、略三传锁泊;翻禽倒将判吉凶' },
+	jiangxi:    { label: '江西派(翻禽倒将)', group: '主流', overrides: { huoYaoVariant: 'fanqin', sansuo: 'fanqin' }, note: '详活曜番禽、略三传锁泊;翻禽倒将判吉凶(参筹秘书 · 汪三益同此口径)' },
 	fenghuang:  { label: '凤凰演禽(现代占课)', group: '主流', overrides: { woBi: 'shi', huoYaoVariant: 'fanqin', sansuo: 'both' }, note: '时禽=我/翻禽=彼(与池本理相反);完整三传四课+锁泊,不立命宫' },
 	chenbingyu: { label: '陈炳聿/赖公禽星术', group: '主流', overrides: { woBi: 'daoWo', huoYaoVariant: 'fanqin' }, note: '池本理一系翻禽倒将;番禽=彼正将、到将=我正将、时禽=我副将、活曜=我本身' },
 	wangfu:     { label: '汪绂双池派(重配五行)', group: '变体', overrides: { qinWuxing: 'wangfu' }, note: '演宿翻禽:年月日时禽取池本理口诀,惟禽星五行重配(亢火/牛木坐实,余26宿待校);占断生克按重配' },
 };
 // 左栏预设分组(主流派 / 变体流派)。王肯堂积年、钟林晃分禽算法待校未入预设;拆字/宿曜为独立子系统。
 export const PRESET_GROUPS = [
-	{ label: '主流派', keys: ['chibenli', 'canchou', 'guangdong', 'jiangxi', 'fenghuang', 'chenbingyu'] },
+	{ label: '主流派', keys: ['chibenli', 'guangdong', 'jiangxi', 'fenghuang', 'chenbingyu'] },
 	{ label: '变体流派', keys: ['wangfu'] },
 ];
 
-export const YANQIN_SCHOOL_OPTIONS = Object.keys(YANQIN_PRESETS).map((k) => ({ value: k, label: YANQIN_PRESETS[k].label }));
+export const YANQIN_SCHOOL_OPTIONS = Object.keys(YANQIN_PRESETS).filter((k) => !YANQIN_PRESETS[k].hidden).map((k) => ({ value: k, label: YANQIN_PRESETS[k].label }));
 
 // 套用预设:default 上盖 overrides
 export function applyPreset(presetKey) {
@@ -58,8 +59,16 @@ function sameAsPreset(settings, presetKey) {
 export function setOption(settings, key, value) {
 	const next = { ...(settings || DEFAULT_YANQIN_SETTINGS), [key]: value };
 	const presetKey = next.school === 'custom' ? null : next.school;
-	if (presetKey && !sameAsPreset(next, presetKey)) { next.school = 'custom'; }
+	if (presetKey && !sameAsPreset(next, presetKey)) { next.school = 'custom'; next.schoolBase = presetKey; }
+	if (next.school === 'custom') { rematchPreset(next); }
 	return next;
+}
+
+// 自定义态下改回到偏离前流派(schoolBase)的组合 → 归回该流派;此前 custom 只进不出,改一项再改回仍显示「自定义(已偏离预设)」。
+// 凑成别的预设不改标(仍是自定义组合,齿轮 / 回放链同此语义)
+function rematchPreset(next) {
+	const hit = next.schoolBase && YANQIN_PRESETS[next.schoolBase] && sameAsPreset(next, next.schoolBase) ? next.schoolBase : null;
+	if (hit) { next.school = hit; delete next.schoolBase; }
 }
 
 // 我/彼角色解析(供占卜/择日断语用):返回 { me, they } ∈ {'shi'时禽,'fan'翻禽,'dao'倒将主将}

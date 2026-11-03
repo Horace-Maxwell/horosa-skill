@@ -79,10 +79,10 @@ export const QIZHENG_ZERI_LOCKED = {
 };
 
 // ── 八字(八字择日) ──
-// 南半球月令 / 命宫起法:扫描起盘照用内嵌八字页当前值(baziScanParams → buildLocalNongliLite),
-// 开始择时那一刻冻结,点结果行时按冻结值回写;旧方案没带 → 出厂值(none / tongxing)
-export const BAZI_PAGE_SCAN_KEYS = ['southMonth', 'minggongMethod'];
-export const BAZI_PAGE_FACTORY = Object.freeze({ southMonth: 'none', minggongMethod: 'tongxing' });
+// 南半球月令 / 命宫起法 / 天医口径:扫描起盘照用内嵌八字页当前值(baziScanParams → buildLocalNongliLite;
+// 天医口径进神煞条件),开始择时那一刻冻结,点结果行时按冻结值回写;旧方案没带 → 出厂值(none / tongxing / xieji)
+export const BAZI_PAGE_SCAN_KEYS = ['southMonth', 'minggongMethod', 'tianyiSchool'];
+export const BAZI_PAGE_FACTORY = Object.freeze({ southMonth: 'none', minggongMethod: 'tongxing', tianyiSchool: 'xieji' });
 
 // 锁定表 → 回写值 { key: value }
 export function lockedValuesOf(table){

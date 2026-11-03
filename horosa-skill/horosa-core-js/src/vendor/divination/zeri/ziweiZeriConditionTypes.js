@@ -8,12 +8,21 @@ import {
 	LIFE_MASTER, BODY_MASTER,
 } from '../../ziwei/data/ziweiTables.js';
 import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';
-// 格局=主页格局 tab 同函数(detectPatterns/ziweige 51 格);宫干四化=ZWConst 活表。
+// 格局=主页格局 tab 同函数(detectPatterns/ziweige 全表);宫干四化=ZWConst 活表。
 import { detectPatterns } from '../../ziwei/ziweiPatterns.js';
 import GE_PATTERNS from '../../ziwei/data/tables/ziweige.json' with { type: 'json' };
 import { getActiveSiHuaGan } from '../../bazi/ZWConst.js';
 
 export { GROUP_TYPES, JOINER_CN };
+
+// 旧格局名 → 现格局名:「巨机卯酉」(卯酉一并作破格)按《紫微斗数全书》拆成「巨机居酉」(破格)与「巨机破荡(女命)」,
+// 卯宫另立富贵格「巨机同临」。存过旧名的择日方案按拆分后的两格判,不静默落空。
+const LEGACY_GEJU_ALIAS = { '巨机卯酉': ['巨机居酉', '巨机破荡(女命)'] };
+export function expandLegacyGeju(values){
+	const out = [];
+	values.forEach((v)=>{ (LEGACY_GEJU_ALIAS[v] || [v]).forEach((x)=>{ if(out.indexOf(x) < 0){ out.push(x); } }); });
+	return out;
+}
 
 export const ZHI12 = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 // 十四正曜/六吉/六煞:千年常量(与 ZiweiCalc 的十四正曜同序,此处为 UI 值域层)。
@@ -477,10 +486,10 @@ export const ZIWEI_CONDITION_TYPES = {
 			return { pass, actual: `候选命宫${cz}·本命命宫${n.mingZhi}(${liuhe ? '六合' : sanhe ? '三合' : same ? '同支' : '无合'})` };
 		},
 	},
-	geju_hit: {
+	geju_hit: {   // 旧方案里的已拆分格局名经 expandLegacyGeju 展开
 		category: '格局',
 		keyDeps: ['yearGan', 'yearZi', 'anchorM', 'anchorLeap', 'anchorD', 'timeZi'],
-		label: '格局命中(51 格)',
+		label: `格局命中(${Object.keys(GE_PATTERNS).length} 格)`,
 		defaults: { mode: 'with', broken: 'any', values: ['紫府同宫'] },
 		fields: [
 			{ key: 'mode', kind: 'select', label: '判法', options: [{ value: 'with', label: '命中任一' }, { value: 'without', label: '全不命中(避格)' }] },
@@ -495,7 +504,7 @@ export const ZIWEI_CONDITION_TYPES = {
 				? all
 				: all.filter((g)=>(p.broken === 'broken' ? g.broken : !g.broken));
 			const names = new Set(scoped.map((g)=>g.name));
-			const got = (p.values || []).filter((v)=>names.has(v));
+			const got = expandLegacyGeju(p.values || []).filter((v)=>names.has(v));
 			const pass = p.mode === 'without' ? got.length === 0 : got.length > 0;
 			return { pass, actual: `格局:${all.length ? all.map((g)=>`${g.name}${g.broken ? '(破)' : ''}`).join('、') : '无'}` };
 		},

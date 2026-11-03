@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from horosa_skill.textscript.converter import to_simplified, to_traditional, traditional_only_characters
+from horosa_skill.textscript.converter import (
+    to_simplified,
+    to_traditional,
+    to_traditional_classic,
+    traditional_only_characters,
+)
 
 SIMPLIFIED = "zh-Hans"
 TRADITIONAL = "zh-Hant"
@@ -34,9 +39,12 @@ def parse_script(value: object) -> str | None:
     return _ALIASES.get(str(value).strip().lower())
 
 
-def convert(text: str, script: str) -> str:
+def convert(text: str, script: str, classic_spans: tuple[tuple[int, int], ...] = ()) -> str:
+    """classic_spans：古籍原文区段（上游 v3.13.1 toHantClassic 的作用域），区段内「范 / 里」缺省保留原字。"""
     if script == SIMPLIFIED or not text:
         return text
+    if classic_spans:
+        return to_traditional_classic(text, script, classic_spans)
     return to_traditional(text, script)
 
 

@@ -5,6 +5,7 @@ import copy
 import re
 from typing import Any
 
+from horosa_skill.astro_rulers import SUNRISE_MODES
 from horosa_skill.errors import (
     HorosaSkillError,
     ToolTransportError,
@@ -94,6 +95,10 @@ class GuolaoRunners:
         "guolaoEqTropicalAnchor": ("dongzhi", "chunfen"),
         # v3.13.0 行星时制式（星盘设置全局键；七政 main/params.js:20-27 guolaoPlanetaryHourMethod，缺省 sunrise）。
         "planetaryHourMethod": ("sunrise", "unequal", "equal24"),
+        # v3.13.1 日出 / 日没口径（星盘设置全局键；七政 main/params.js:29-35 guolaoSunriseMode，缺省 center 日心·不计折射，
+        # apparent = 日面上缘·含大气折射）。七政日出安命与报时星按此刻（后端 perchart_parts/timing.py _sunriseMode）。
+        # 值域单源 astro_rulers.SUNRISE_MODES；字段声明 + 校验在 BirthInput（缺省 center 归一成 None = 不下发）。
+        "sunriseMode": SUNRISE_MODES,
     }
     # 只在某些宿度制下生效的子选项（fieldsToParams GuoLaoChartMain.js:2360-2394 的门控）：别的制下上游不下发。
     _GUOLAO_MODE_GATED: dict[str, tuple[int, ...]] = {
@@ -180,6 +185,10 @@ class GuolaoRunners:
         # 太阳时三档在这两种制式下才真正分开；缺省不发 = 零回归。
         if settings.get("planetaryHourMethod") in ("unequal", "equal24"):
             remote["planetaryHourMethod"] = settings["planetaryHourMethod"]
+        # 日出 / 日没口径：仅 apparent（上缘 + 折射）才透传（v3.13.1 main/params.js:174-177）→ 日出安命与报时星按视日出；
+        # 缺省不发 = 零回归。Java /chart（命度点 LifeMasterDeg74 取点）同吃本请求体，ChartController.java:567-570 照转 Python。
+        if settings.get("sunriseMode") == "apparent":
+            remote["sunriseMode"] = "apparent"
         # G10-13 四余取法：仅真值才透传（:2375-2380）。
         if settings.get("guolaoNodeType") == "true":
             remote["guolaoNodeType"] = "true"
@@ -202,7 +211,7 @@ class GuolaoRunners:
         """JS 段 builder 的 fields（上游页面 fields 形：{键: {value}}）：宿度制 + 起盘口径键。"""
         fields: dict[str, Any] = {"doubingSu28": {"value": su28}}
         for key in ("guolaoLifeMode", "guolaoBodyMode", "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
-                    "planetaryHourMethod"):
+                    "planetaryHourMethod", "sunriseMode"):
             if key in settings:
                 fields[key] = {"value": settings[key]}
         return fields
@@ -295,12 +304,12 @@ class GuolaoRunners:
                     "moiraRules": moira_rules or {},
                 },
             )
-        except Exception as exc:  # noqa: BLE001 — 七段来自 JS；失败 → [大限]/宫位表/相位回退 Python 旧行式、其余缺席，进 warnings
+        except Exception as exc:  # noqa: BLE001 — 七段来自 JS；失败 → [大限]/宫位表回退 Python 旧行式、其余缺席，进 warnings
             _degrade(
                 "guolao info sections build failed: %s", exc,
                 note=(
-                    "七政四余 [大限] 回退内置旧算法（首限四舍童限、元旦年界）、[七政四余宫位与二十八宿星曜]/[相位] 回退旧行式、"
-                    "[神煞] 本次为「无」，[三主与化曜]/[限法实算] 与命度/身度行本次未产出（JS 段 builder 失败）。"
+                    "七政四余 [大限] 回退内置旧算法（首限四舍童限、元旦年界）、[七政四余宫位与二十八宿星曜] 回退旧行式、"
+                    "[神煞]/[相位] 本次为「无」，[三主与化曜]/[限法实算] 与命度/身度行本次未产出（JS 段 builder 失败）。"
                 ),
             )
             return {}
@@ -516,7 +525,10 @@ class GuolaoRunners:
                 details={"field": "doubingSu28", "value": raw_su28, "valid": sorted(self._SU28_MODES)},
             )
         house_start = 1 if payload.get("houseStartMode") in (1, True, "1") else 0
-        remote_payload = {**payload, "predictive": False, "doubingSu28": su28}
+        # sunriseMode（v3.13.1 日出 / 日没口径）对宿占是死键：上游 techniqueMountSettings.js:1722 SUZHAN_DEAD_CLASSICAL_KEYS
+        # 收它、宿占 recordPayloadKeys（:1774）不带它；宿占快照只读星曜宿度 / 宫位 / 农历时支，不读日出日没
+        # （vendored v3.13.1 实例实测 apparent 与缺省快照逐字同）→ 不下发（技法卡同不回显，reports/technique_card._FIELD_DEAD_FOR_TOOLS）。
+        remote_payload = {**{k: v for k, v in payload.items() if k != "sunriseMode"}, "predictive": False, "doubingSu28": su28}
         nongli_alg = payload.get("nongliTimeAlg")
         if nongli_alg is not None:
             # ChartController.java:84-88 [Q-419/T-383]：农历四柱时间算法 0 真太阳时（缺省）/1 直接时间/3 平太阳时。

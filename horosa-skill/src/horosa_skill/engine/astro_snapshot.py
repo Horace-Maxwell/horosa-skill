@@ -36,6 +36,8 @@ from typing import Any
 
 from horosa_skill.astro_rulers import (
     POLAR_MC_NOTE,
+    SUNRISE_MODE_DEFAULT,
+    SUNRISE_MODES,
     build_dispositor_ruler_tail_lines,
     build_house_system_ruler_section_lines,
     derived_whole_sign_label_of,
@@ -303,6 +305,8 @@ CLASSICAL_PARAM_SPEC_NON_DEFAULT: tuple[tuple[str, str | None, str, Any, tuple[A
     ("almutenTripMode", None, "str", "all", (), ("all", "sectRulerOnly")),
     ("planetaryHourMethod", None, "str", "sunrise", (), ("sunrise", "unequal", "equal24")),
     ("sectBuffer", None, "str", "geo", (), ("geo", "ptolemy5", "apparent")),
+    # v3.13.1 classicalParamSpec.js:107-112 日出 / 日没口径（词表单源 astro_rulers.SUNRISE_MODES）。
+    ("sunriseMode", None, "str", SUNRISE_MODE_DEFAULT, (), SUNRISE_MODES),
     ("westNodeType", None, "str", "mean", (), ("mean", "true")),
     ("nodeExaltation", None, "int", 0, (), None),
     ("cazimiOrb", None, "float", 17 / 60, (), (17 / 60, 16 / 60, 1)),
@@ -405,6 +409,8 @@ _CLS_CALIBRE_LABELS: dict[str, tuple[str, dict[str, str] | None, Callable[[Any],
     "triplicity": ("三分集", {"Ptolemaic": "托勒密二主", "PtolemaicWaterVariant": "托勒密·水象变体"}, None),
     "westNodeType": ("月交点", {"true": "真交点"}, None),
     "sectBuffer": ("区分判定", {"ptolemy5": "Ptolemy 5°缓冲", "apparent": "视地平(含折射)"}, None),
+    # v3.13.1 astroAiSnapshot.js:331。
+    "sunriseMode": ("日出 / 日没口径", {"apparent": "日面上缘·含大气折射"}, None),
     "lotReversal": ("福点", {"0": "恒昼式(不随昼夜反转)"}, None),
     "houseCuspAdvance": ("落宫宫头前移", None, lambda v: f"{_js_str(v)}°"),
     "cazimiOrb": ("日心 cazimi", None, lambda v: f"{_js_str(_js_math_round(_js_number(v) * 60))}′"),
@@ -440,10 +446,10 @@ _CLS_CALIBRE_LABELS: dict[str, tuple[str, dict[str, str] | None, Callable[[Any],
     "returnLatitudeMode": ("返照落宫", {"withLatitude": "计入黄纬(Umar al-Tabari 法)"}, None),
     "vulcanCalc": ("祝融星", {"weston": "轨道根数法", "baker": "水星系推算"}, None),
 }
-# astroAiSnapshot.js:378-381 头七键默认值（数值键只 0/1 两档按 parseInt 比）。
+# astroAiSnapshot.js:374-377 头键默认值（数值键只 0/1 两档按 parseInt 比）；v3.13.1 插入 sunriseMode（sectBuffer 与 lotReversal 之间）。
 _CLS_CALIBRE_HEAD_DEFAULTS: dict[str, Any] = {
     "termsVariant": 0, "geminiBoundEmended": 0, "leoBoundFirst": 0, "triplicity": "Dorothean",
-    "westNodeType": "mean", "sectBuffer": "geo", "lotReversal": 1,
+    "westNodeType": "mean", "sectBuffer": "geo", "sunriseMode": SUNRISE_MODE_DEFAULT, "lotReversal": 1,
 }
 
 

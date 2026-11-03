@@ -67,7 +67,7 @@ export function makeBaziZeriEvalCtx(pan, natal){
 		shensha(){
 			if(!shensha){
 				try{
-					shensha = calcFourPillarShenSha(pan.four, pan.godKeyPos) || {};
+					shensha = calcFourPillarShenSha(pan.four, pan.godKeyPos, { tianyiSchool: pan.tianyiSchool }) || {};
 				}catch(e){
 					shensha = {};
 				}

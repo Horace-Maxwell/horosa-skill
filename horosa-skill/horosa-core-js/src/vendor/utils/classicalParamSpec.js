@@ -101,6 +101,15 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'ptolemy5', label: 'Ptolemy 5°' },
 			{ value: 'apparent', label: '视地平（真日出没·含折射）' },   // 第三档:swe rise_trans,极昼夜回落几何
 		] },
+	// 日出 / 日没口径:center = 日心落地平、不计折射(现行,缺省);apparent = 日面上缘 + 大气折射(天文台 / 历书口径,swe rise_trans)。
+	// 消费:七政日出安命(命宫 / 命度)、报时星(行星时制式「日出起算」时)、星盘信息的日出 / 日没(perchart_parts/timing.py)。
+	// 印占不随此项(其命盘核心恒按 rise_trans 视口径)。
+	{ key: 'sunriseMode', group: '昼夜与区分', label: '日出 / 日没口径', type: 'segmented', valueType: 'str',
+		default: 'center', send: 'nonDefault', seed: 'always',
+		options: [
+			{ value: 'center', label: '日心 · 不计折射（现行）' },
+			{ value: 'apparent', label: '日面上缘 · 含大气折射（历书）' },
+		] },
 	{ key: 'westNodeType', group: '昼夜与区分', label: '月交点（真 / 平 · 全盘随动）', type: 'segmented', valueType: 'str',
 		default: 'mean', send: 'nonDefault', seed: 'always',
 		options: [

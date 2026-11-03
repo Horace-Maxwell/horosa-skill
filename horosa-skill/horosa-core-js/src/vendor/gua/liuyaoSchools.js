@@ -130,8 +130,16 @@ export function setOption(settings, key, value){
 	else if(key === 'shenshaEx'){ next.shenshaEx = { ...next.shenshaEx, ...value }; }
 	else { next[key] = value; }
 	const presetKey = next.school === 'custom' ? null : next.school;
-	if(presetKey && !sameAsPreset(next, presetKey)){ next.school = 'custom'; }
+	if(presetKey && !sameAsPreset(next, presetKey)){ next.school = 'custom'; next.schoolBase = presetKey; }
+	if(next.school === 'custom'){ rematchPreset(next); }
 	return next;
+}
+
+// 自定义态下改回到偏离前流派(schoolBase)的组合 → 归回该流派;此前 custom 只进不出,改一项再改回仍显示「自定义(已偏离预设)」。
+// 凑成别的预设不改标(仍是自定义组合,齿轮 / 回放链同此语义)
+function rematchPreset(next){
+	const hit = next.schoolBase && LIUYAO_PRESETS[next.schoolBase] && sameAsPreset(next, next.schoolBase) ? next.schoolBase : null;
+	if(hit){ next.school = hit; delete next.schoolBase; }
 }
 
 function sameAsPreset(settings, presetKey){

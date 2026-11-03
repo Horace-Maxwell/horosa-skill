@@ -9,6 +9,8 @@
 //   · v3.11.2 复核（上游 BaZi.js f7b3dbbb → 45bfa578）：[起盘信息] 南纬「南半球月令」行、小运 / 板块表岁数经 baziAgeText.js 单源、流年年份 addDisplayYears 跨纪元；其余闭包逐字未变。
 //   · v3.13.0 复核（上游 BaZi.js 45bfa578 → d0257613）：农历行「闰」字改走 utils/lunarText.leapPrefix（上游自修「闰闰X月」，本文件原先的
 //     同义声明式偏离随之撤除、改 import 已 vendored 的 lunarText.js）；[起盘信息]「节气修正」行改按实际口径写（仅回退 Java 且带 1 才写「调整」）。
+//   · v3.13.1 复核（上游 BaZi.js d0257613 → 07eb4ac4）：[神煞（四柱与三元）] 首行新增「天医口径」（BaZi.js:437，读 params.tianyiSchool，
+//     缺省协纪恒印）；其余改动在 React 组件内（onFieldsChange 重取带覆盖层 / onBaziOptChange 指纹 / genParams 加 tianyiSchool），闭包外。
 // 函数体与模块级常量逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../utils/xxx）。
 // 上游页面主路径（fetchBaziCached，BaZi.js:781-820）= 本地 buildLocalBaziResult 优先、抛错才回退 Java
 // /bazi/birth；两条路都经 normalizeBaziResult → buildBaziSnapshotText。编排见 tools/baziLocal.js。
@@ -372,6 +374,7 @@ function buildBaziSnapshotText(params, result){
 
 	lines.push('');
 	lines.push('[神煞（四柱与三元）]');
+	lines.push(`天医口径：${params && params.tianyiSchool === 'ziping' ? '子平（月支退一位，无地医）' : '协纪辨方书（正月起戌顺行，地医为其对冲）'}`);
 	lines.push(`年柱：${gzGodText(four.year)}`);
 	lines.push(`月柱：${gzGodText(four.month)}`);
 	lines.push(`日柱：${gzGodText(four.day)}`);

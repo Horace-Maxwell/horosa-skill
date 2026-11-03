@@ -50,6 +50,7 @@ export function computeBaziScanPan(geoParams, options, dateStr, timeStr){
 		// 0→'年日'(年日互查) 1→'年' 2→'日';缺省='年'(与 allowedBases 默认分支同义,零回归)。
 		godKeyPos: normalizeGodKeyPos(options && options.godKeyPos),
 		phaseType: options && options.phaseType,
+		tianyiSchool: options && options.tianyiSchool === 'ziping' ? 'ziping' : 'xieji',   // 天医口径(内嵌八字页键,神煞条件按它查)
 	};
 }
 
