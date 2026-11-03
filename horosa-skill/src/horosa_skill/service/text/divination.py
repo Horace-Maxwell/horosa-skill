@@ -1,6 +1,7 @@
 """天文地占（geomancy）快照与选项表、玄史记录。"""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from horosa_skill.service._common import (
@@ -269,7 +270,104 @@ _XUANSHI_FIELD_ORDER: tuple[tuple[str, str], ...] = (
 )
 
 
+def _xuanshi_near_same(a: Any, b: Any) -> bool:
+    """上游 xuanshiDate.js:117 nearSame：白话与原文字符集重合度 >0.85 视为近乎相同 → 详情隐藏白话（Set 按码点，同 Python set(str)）。"""
+    if not a or not b:
+        return False
+    sa, sb = set(f"{a}"), set(f"{b}")
+    return len(sa & sb) / max(len(sa), len(sb), 1) > 0.85
+
+
+_XUANSHI_YMD = re.compile(r"^(-?\d{1,5})-(\d{1,2})-(\d{1,2})")
+
+
+def _xuanshi_celestial_calendar_label(rec: dict[str, Any]) -> str:
+    """上游 xuanshiDate.js:26-43 celestialCalendarKind/Label：modern_date（缺则 modern_date_disp）早于 1582-10-15 标「儒略历」，
+    否则「公历」；带 julian_date 的旧载荷一律「公历」；串形不是 Y-M-D（如 disp「1050年4月4日」）也落「公历」——照上游。"""
+    md = rec.get("modern_date") or rec.get("modern_date_disp")
+    if not md:
+        return ""
+    if rec.get("julian_date"):
+        return "公历"
+    m = _XUANSHI_YMD.match(f"{md}")
+    if m is None:
+        return "公历"
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return "儒略历" if y < 1582 or (y == 1582 and (mo < 10 or (mo == 10 and d < 15))) else "公历"
+
+
+def _xuanshi_celestial_date(rec: dict[str, Any]) -> str:
+    """上游 xuanshiDate.js:45-51 celestialDateWithCalendar：「前139年3月（儒略历）」；无日期返 ''。"""
+    disp = rec.get("modern_date_disp") or rec.get("modern_date")
+    if not disp:
+        return ""
+    label = _xuanshi_celestial_calendar_label(rec)
+    return f"{disp}（{label}）" if label else f"{disp}"
+
+
+def _xuanshi_is_celestial(rec: dict[str, Any]) -> bool:
+    # 天象族（/celestial 列表、/celestial_event 详情、/microchronology 列表）的原文键是 `original`；玄学事件族是 `original_text`。
+    return "original" in rec and "original_text" not in rec
+
+
+def _xuanshi_brief_text(value: Any) -> str:
+    # 列表行是一行一条：值里的换行收成空格，否则条目被拆行、「原文：」古籍区段也只罩到第一行。
+    text = " ".join(part.strip() for part in f"{value}".splitlines() if part.strip())
+    return text[:120] + "…" if len(text) > 120 else text
+
+
+def _xuanshi_celestial_lines(rec: dict[str, Any], *, brief: bool) -> list[str]:
+    """天象记录：照上游 XuanShiCelestial.js@06f25f21 renderDetail（:330-404）与列表卡（:475-487）的取字段与次序。
+
+    详情 = 标题行（天象类 · 朝代 · 历法标注日期，:358）+ 史书卷次 / 有交叉 chip（:361-366）+ 正文三格「原文 / 白话（与原文
+    nearSame 则不出）/ 解读」（:369-371）+「天象档案」侧栏（出处=citation / 原历日 / 纪年 / 主体 / 动作 / 对象 / 公历|儒略历 /
+    主题，:389-399）。列表 = 天象类 / 朝代 / 历法标注日期 chip + `original || interpretation || date_phrase` 一格（:480-487）。
+    编号（event_id）是本仓多出的一格：AI 拿它回调 celestial_event。"""
+    def has(key: str) -> bool:
+        value = rec.get(key)
+        return value is not None and f"{value}".strip() != ""
+
+    lines: list[str] = []
+    if has("event_id"):
+        lines.append(f"编号：{rec['event_id']}")
+    if has("omen"):
+        lines.append(f"天象类：{rec['omen']}")
+    if has("dynasty"):
+        lines.append(f"朝代：{rec['dynasty']}")
+    date = _xuanshi_celestial_date(rec)
+    if date:
+        lines.append(f"日期：{date}")
+    if has("history"):
+        lines.append(f"史书：《{rec['history']}》" + (f"卷{rec['volume_no']}" if has("volume_no") else ""))
+    if brief:
+        for key, label in (("original", "原文"), ("interpretation", "解读"), ("date_phrase", "原历日")):
+            if has(key):
+                lines.append(f"{label}：{_xuanshi_brief_text(rec[key])}")
+                break
+        return lines
+    if rec.get("has_crosswalk"):
+        lines.append("交叉：有")
+    if has("original"):
+        lines.append(f"原文：{rec['original']}")
+    if has("modern") and not _xuanshi_near_same(rec.get("modern"), rec.get("original")):
+        lines.append(f"白话：{rec['modern']}")
+    if has("interpretation"):
+        lines.append(f"解读：{rec['interpretation']}")
+    for key, label in (("citation", "出处"), ("date_phrase", "原历日"), ("era", "纪年"), ("subject", "主体"),
+                       ("action", "动作"), ("target", "对象")):
+        if has(key):
+            lines.append(f"{label}：{rec[key]}")
+    md = rec.get("modern_date_disp") or rec.get("modern_date")
+    if md and f"{md}".strip():
+        lines.append(f"{_xuanshi_celestial_calendar_label(rec) or '公历'}：{md}")
+    if has("routing_theme"):
+        lines.append(f"主题：{rec['routing_theme']}")
+    return lines
+
+
 def _xuanshi_record_lines(rec: dict[str, Any], *, brief: bool) -> list[str]:
+    if _xuanshi_is_celestial(rec):
+        return _xuanshi_celestial_lines(rec, brief=brief)
     lines: list[str] = []
     seen: set[str] = set()
     for key, label in _XUANSHI_FIELD_ORDER:
@@ -281,9 +379,10 @@ def _xuanshi_record_lines(rec: dict[str, Any], *, brief: bool) -> list[str]:
         seen.add(key)
         if isinstance(value, list):
             value = "、".join(f"{v}" for v in value[:12])
-        text = f"{value}"
-        if brief and len(text) > 120:
-            text = text[:120] + "…"
+        # 上游 XuanShiEvents.js:168 详情：白话与原文 nearSame 则不出白话。
+        if key == "modern_text" and not brief and _xuanshi_near_same(value, rec.get("original_text")):
+            continue
+        text = _xuanshi_brief_text(value) if brief else f"{value}"
         lines.append(f"{label}：{text}")
         if brief and len(lines) >= 4:
             break

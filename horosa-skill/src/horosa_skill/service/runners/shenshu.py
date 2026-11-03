@@ -147,7 +147,7 @@ class ShenshuRunners:
                 if isinstance(fw_data, dict) and fw_data.get("ok") is False:
                     _degrade("tieban framework snapshot not produced: %s", (fw_data.get("error") or {}).get("message"))
                 if extra:
-                    # 上游 `${text}\n\n${suffix}`（KinAstroMain.js:346）：框架段与盘面之间空一行。
+                    # 上游 `${text}\n\n${suffix}`（KinAstroMain.js:325）：框架段与盘面之间空一行。
                     snapshot_text = f"{snapshot_text}\n\n{extra}".strip()
             except Exception as exc:  # noqa: BLE001 — 富化失败不影响盘面
                 _degrade("tieban framework snapshot failed: %s", exc)
@@ -221,7 +221,7 @@ class ShenshuRunners:
         settings_applied: dict[str, dict[str, Any]],
         result_extra: dict[str, Any],
     ) -> tuple[dict[str, Any], str]:
-        """五兆计算键（sync311 F3/F4）：镜像上游 buildWuZhaoSnapshotForFields（WuZhaoMain.js:368-396）。
+        """五兆计算键（sync311 F3/F4）：镜像上游 buildWuZhaoSnapshotForFields（WuZhaoMain.js:326-354）。
 
         * 11 个计算键全量下发（缺省同上游 DEFAULT_OPTIONS）；
         * 性别：五兆后端只认 'male'/'female'（webwuzhaosrv.py:497-499）——顶层 gender 1/0 与 options.gender
@@ -317,7 +317,7 @@ class ShenshuRunners:
         if lunar_month is not None:
             settings_applied["yanqinLunarMonth"] = {"label": "演法农历月", "value": lunar_month}
         extra = f"{(yanfa or {}).get('text') or ''}".strip()
-        # 上游 `text + '\n\n' + yanfa`（KinAstroMain.js:359）：演法段与盘面之间空一行。
+        # 上游 `text + '\n\n' + yanfa`（KinAstroMain.js:338）：演法段与盘面之间空一行。
         return f"{snapshot_text}\n\n{extra}".strip() if extra else snapshot_text
 
     def _xianqin_lunar_month(self, payload: dict[str, Any]) -> int | None:

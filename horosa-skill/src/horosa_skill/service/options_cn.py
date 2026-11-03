@@ -150,7 +150,7 @@ def _gua_year_ganzi(liureng: Any) -> str:
     return ""
 
 
-# 金口诀排盘流派五键 + 时间基准的词表与缺省（上游 JinKouMain.js:857-864 JINKOU_PAGE_SETTINGS，首项 = 缺省）。
+# 金口诀排盘流派五键 + 时间基准的词表与缺省（上游 JinKouMain.js:837-844 JINKOU_PAGE_SETTINGS，首项 = 缺省）。
 # 上游本地引擎对认不出的值静默归缺省（buildJinKouData `=== 'jiaojie' ? … : 'zhongqi'`），headless 改为报错。
 _JINKOU_SCHOOL_VOCAB: dict[str, tuple[str, ...]] = {
     "schoolYueJiang": ("zhongqi", "jiaojie"),
@@ -422,7 +422,7 @@ def _qimen_effective_options(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _qimen_local_route_reasons(options: dict[str, Any]) -> list[str]:
-    """上游路由单源 isQimenLocalRoute / qimenLocalOnlyOverrides（DunJiaCalc.js:1195-1226）的 Python 镜像。
+    """上游路由单源 isQimenLocalRoute / qimenLocalOnlyOverrides（DunJiaCalc.js:1224-1255）的 Python 镜像。
 
     非空 = 走本地 calcDunJia（年/月/日/刻/金函家、飞盘/混合、阴盘报数、七组本地口径任一非缺省）——ken `/qimen/pan`
     只收排盘家/起局法/盘式，这些口径后端不认、合并阶段也不施加，照打 ken 会得到「按缺省出盘、[盘型]却标所选」。
@@ -482,7 +482,7 @@ def _parse_taiyi_datetime_text(text: Any) -> dict[str, int] | None:
 
 
 def _qimen_ken_payload(payload: dict[str, Any], options: dict[str, Any], nongli: Any) -> dict[str, Any]:
-    """`/qimen/pan` 请求体，逐键对齐上游 fetchQimenPan（DunJiaCalc.js:1473-1495）。
+    """`/qimen/pan` 请求体，逐键对齐上游 fetchQimenPan（DunJiaCalc.js:1502-1522）。
 
     时间：timeAlg=0（缺省）用 nongli.birth 校正后的真太阳时分量（上游 resolveCalcDateTime）——此前 skill 恒发钟表时，
     ken 只把 realSunTime 当回显，于是九宫按钟表时起、时柱按真太阳时标，两套时辰。

@@ -12,6 +12,7 @@ from horosa_skill.errors import (
     ToolValidationError,
     bilingual,
 )
+from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from horosa_skill.service import _clock
 from horosa_skill.service._common import _ganzhi_year
 from horosa_skill.service._context import _degrade
@@ -77,7 +78,95 @@ class GuolaoRunners:
                     details={"field": key, "value": raw, "allowed": list(allowed)},
                 )
             display[disp_key] = "" if disp_key == "minorLimitType" and value == "gudu" else value
+        display.update(self._guolao_aspect_display_prefs(payload))
         return display
+
+    # 七政相位显示偏好（上游页面显示偏好 horosaGuolaoDisplay，GuoLaoChartStyle.js:355 GUOLAO_ALL_ASPECTS / :367-391
+    # GUOLAO_DEFAULT_DISPLAY.aspects·hiddenPlanets·aspectOrbs / :392-407 normHiddenList·normAspectOrbs（0–30）；
+    # GuoLaoMoiraWheel.js:124-144 PLANET_DEFS 标签 / :168-177 MOIRA_ASPECTS 内置容许度 · MOIRA_DEFAULT_ASPECTS）。
+    # 上游无头复算以本机显示偏好为底（getStoredGuolaoDisplay）→ main/snapshot.js:1221 buildGuolaoAspectSection(result, _gDisp)
+    # 只改 [相位]；挂载齿轮不收、快照不印设置行。skill：缺省（或与出厂等值）不进 display = vendored computeMoiraAspectPairs
+    # 走出厂（`o.aspectSet || MOIRA_DEFAULT_ASPECTS`），零回归；上游静默滤掉的非法值这里报错（改参数结果必须变）。
+    # 逐值看守：tests/test_sync3131_guolao_prefs.py。
+    _GUOLAO_ALL_ASPECTS: tuple[str, ...] = ("會", "衝", "刑", "合", "半合", "半刑", "四合")
+    _GUOLAO_DEFAULT_ASPECTS: tuple[str, ...] = ("會", "衝", "刑", "合", "半合")
+    _GUOLAO_ASPECT_BUILTIN_ORBS: dict[str, float] = {"會": 12, "衝": 6, "刑": 3, "合": 4, "半合": 2, "半刑": 1.5, "四合": 1}
+    _GUOLAO_ASPECT_ORB_MAX = 30
+    # PLANET_DEFS（序 + 标签 + AstroConst id）。
+    _GUOLAO_PLANET_DEFS: tuple[tuple[str, str], ...] = (
+        ("Sun", "日"), ("Moon", "月"), ("Venus", "金"), ("Jupiter", "木"), ("Mercury", "水"), ("Mars", "火"), ("Saturn", "土"),
+        ("South Node", "计"), ("North Node", "罗"), ("Purple Clouds", "炁"), ("Dark Moon", "孛"),
+        ("Uranus", "天"), ("Neptune", "海"), ("Pluto", "冥"), ("Asc", "升"), ("MC", "顶"),
+    )
+    # 便利别名（简体相位名 / 繁体曜标签）：归一到上游键后再校验。
+    _GUOLAO_ASPECT_ALIASES: dict[str, str] = {"会": "會", "冲": "衝"}
+    _GUOLAO_PLANET_ALIASES: dict[str, str] = {"計": "计", "羅": "罗", "頂": "顶"}
+
+    @staticmethod
+    def _guolao_pref_list(key: str, raw: Any) -> list[str]:
+        if isinstance(raw, str):
+            return [part for part in re.split(r"[,，、\s]+", raw) if part]
+        if isinstance(raw, (list, tuple)):
+            return [f"{part}".strip() for part in raw]
+        raise ToolValidationError(
+            bilingual(f"七政四余 {key} 须为列表或逗号串：{raw!r}。", f"guolao_chart {key} must be a list or a comma string: {raw!r}."),
+            code="tool.guolao_invalid_display_setting",
+            details={"field": key, "value": raw},
+        )
+
+    @staticmethod
+    def _guolao_pref_error(key: str, raw: Any, allowed: Any, zh: str = "取值无效", en: str = "is invalid") -> ToolValidationError:
+        shown = "、".join(f"{a}" for a in allowed) if isinstance(allowed, (list, tuple)) else f"{allowed}"
+        return ToolValidationError(
+            bilingual(f"七政四余 {key} {zh}：{raw!r}（可选：{shown}）。", f"guolao_chart {key} {en}: {raw!r} (allowed: {shown})."),
+            code="tool.guolao_invalid_display_setting",
+            details={"field": key, "value": raw, "allowed": list(allowed) if isinstance(allowed, (list, tuple)) else allowed},
+        )
+
+    def _guolao_aspect_display_prefs(self, payload: dict[str, Any]) -> dict[str, Any]:
+        prefs: dict[str, Any] = {}
+        raw = payload.get("guolaoAspects")
+        if raw is not None and raw != "":
+            picked: set[str] = set()
+            for item in self._guolao_pref_list("guolaoAspects", raw):
+                name = self._GUOLAO_ASPECT_ALIASES.get(item, item)
+                if name not in self._GUOLAO_ALL_ASPECTS:
+                    raise self._guolao_pref_error("guolaoAspects", item, self._GUOLAO_ALL_ASPECTS)
+                picked.add(name)
+            if picked != set(self._GUOLAO_DEFAULT_ASPECTS):
+                prefs["aspects"] = [name for name in self._GUOLAO_ALL_ASPECTS if name in picked]
+        raw = payload.get("guolaoAspectOrbs")
+        if raw is not None and raw != "":
+            if not isinstance(raw, dict):
+                raise self._guolao_pref_error("guolaoAspectOrbs", raw, "{相位: 0–30}", "须为对象", "must be an object")
+            orbs: dict[str, float] = {}
+            for item, value in raw.items():
+                name = self._GUOLAO_ASPECT_ALIASES.get(f"{item}".strip(), f"{item}".strip())
+                if name not in self._GUOLAO_ALL_ASPECTS:
+                    raise self._guolao_pref_error("guolaoAspectOrbs", item, self._GUOLAO_ALL_ASPECTS)
+                try:
+                    num = float(value) if not isinstance(value, bool) else float("nan")
+                except (TypeError, ValueError):
+                    num = float("nan")
+                if not (0 <= num <= self._GUOLAO_ASPECT_ORB_MAX):   # NaN / ±inf 也落这里（上游 Number.isFinite && 0–30）
+                    raise self._guolao_pref_error(f"guolaoAspectOrbs.{name}", value, "0–30")
+                if num != self._GUOLAO_ASPECT_BUILTIN_ORBS[name]:
+                    orbs[name] = int(num) if num.is_integer() else num
+            if orbs:
+                prefs["aspectOrbs"] = orbs
+        raw = payload.get("guolaoHiddenPlanets")
+        if raw is not None and raw != "":
+            labels = {label for _, label in self._GUOLAO_PLANET_DEFS}
+            by_id = dict(self._GUOLAO_PLANET_DEFS)
+            hidden: set[str] = set()
+            for item in self._guolao_pref_list("guolaoHiddenPlanets", raw):
+                label = by_id.get(item) or self._GUOLAO_PLANET_ALIASES.get(item, item)
+                if label not in labels:
+                    raise self._guolao_pref_error("guolaoHiddenPlanets", item, [lb for _, lb in self._GUOLAO_PLANET_DEFS])
+                hidden.add(label)
+            if hidden:
+                prefs["hiddenPlanets"] = [label for _, label in self._GUOLAO_PLANET_DEFS if label in hidden]
+        return prefs
 
     # 七政起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；GuoLaoChartStyle.js 各 getStored* 缺省）。
     # 值域逐字同上游 normalize*/getStored*（认不出的值报错，不静默归一成缺省）。宿度制值域 = guolaoData.SU28_MODE_LABEL 的键
@@ -442,7 +531,7 @@ class GuolaoRunners:
                     "guolaoBodyMode": guolao_settings.get("guolaoBodyMode", "taiyin"),
                 }
                 transit_params = {**moira_params, "date": transit_date, "time": transit_time, "predictive": True}
-                # 流年盘同本命盘一样经罗计换位（上游 applyGuolaoNodeMode(tRaw, steppedFields)，GuoLaoChartMain.js:2570）。
+                # 流年盘同本命盘一样经罗计换位（上游 applyGuolaoNodeMode(tRaw, steppedFields)，GuoLaoChartMain.js:229）。
                 transit_chart = _apply_guolao_node_mode(
                     self._call_remote("/chart", {k: v for k, v in transit_params.items() if v is not None}), guolao_settings
                 )
@@ -510,7 +599,7 @@ class GuolaoRunners:
 
     def _run_suzhan_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         """宿占（F11）：与上游页面同源 —— 盘 = Java /chart（ChartController 附农历四柱 chart.nongli），
-        快照 = vendored buildSuzhanSnapshotText（SuZhanMain.js:396-428）。
+        快照 = vendored buildSuzhanSnapshotText（SuZhanMain.js:316-348）。
 
         v0.40 前：doubingSu28 当 bool（缺省 True=斗柄定房，上游缺省 0 且有九档）、houseStartMode 缺省 1（上游 0=八字公式）
         且快照是手写 port 根本不读它、hsys 缺省 0（上游页面 1）、宫位只印 House1…。人事十二宫「八字公式起盘」要
@@ -525,10 +614,11 @@ class GuolaoRunners:
                 details={"field": "doubingSu28", "value": raw_su28, "valid": sorted(self._SU28_MODES)},
             )
         house_start = 1 if payload.get("houseStartMode") in (1, True, "1") else 0
-        # sunriseMode（v3.13.1 日出 / 日没口径）对宿占是死键：上游 techniqueMountSettings.js:1722 SUZHAN_DEAD_CLASSICAL_KEYS
-        # 收它、宿占 recordPayloadKeys（:1774）不带它；宿占快照只读星曜宿度 / 宫位 / 农历时支，不读日出日没
-        # （vendored v3.13.1 实例实测 apparent 与缺省快照逐字同）→ 不下发（技法卡同不回显，reports/technique_card._FIELD_DEAD_FOR_TOOLS）。
-        remote_payload = {**{k: v for k, v in payload.items() if k != "sunriseMode"}, "predictive": False, "doubingSu28": su28}
+        # 上游 techniqueMountSettings.js:1722 SUZHAN_DEAD_CLASSICAL_KEYS 41 个西占古典键（含 v3.13.1 sunriseMode）对宿占是死键：
+        # 宿占挂载齿轮隐去、recordPayloadKeys（:1774）不带；宿占快照只读星曜宿度 / 宫位 / 农历时支（vendored v3.13.1 实例实测
+        # 带非缺省死键与缺省快照逐字同，八字公式 / ASC 两档）→ 照收不下发（技法卡同不回显，reports/technique_card._FIELD_DEAD_FOR_TOOLS）。
+        dead = frozenset(SUZHAN_DEAD_CLASSICAL_KEYS)
+        remote_payload = {**{k: v for k, v in payload.items() if k not in dead}, "predictive": False, "doubingSu28": su28}
         nongli_alg = payload.get("nongliTimeAlg")
         if nongli_alg is not None:
             # ChartController.java:84-88 [Q-419/T-383]：农历四柱时间算法 0 真太阳时（缺省）/1 直接时间/3 平太阳时。

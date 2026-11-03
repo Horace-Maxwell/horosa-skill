@@ -170,7 +170,7 @@ _HOUSE_FRAMES = (
 
 
 def _dial_planet_house(lon: float, cusps: list[Any]) -> int:
-    """uranianDial.js:132 planetHouse：按弧长口径判点落宫（跨 0° 安全，不等距同样适用）。"""
+    """uranianDial.js:130 planetHouse：按弧长口径判点落宫（跨 0° 安全，不等距同样适用）。"""
     position = _dial_norm360(lon)
     for index in range(12):
         start, end = float(cusps[index]), float(cusps[(index + 1) % 12])
@@ -239,7 +239,7 @@ def _parse_local_moment(text: Any) -> datetime | None:
 
 
 def _germany_rectify_lines(payload: dict[str, Any], rectify_events: Any, dial_points: list[dict[str, Any]]) -> list[str]:
-    """[校时预览]（上游 AstroMidpoint.js:433-468 buildRectifySection + uranianDial.js:389 rectificationHits，[Q-442/T-405]）。
+    """[校时预览]（上游 AstroMidpoint.js:433-468 buildRectifySection + uranianDial.js:387 rectificationHits，[Q-442/T-405]）。
 
     有待校事件（带 date）才产段。盘基/容许度/太阳弧取上游显示仓缺省（90° / 1° / Naibod；headless 无显示仓），
     容许度随请求 `orb`（上游 disp.orb）。Asc 微调滑块是即时预览态，不进快照（命中表按 0 微调）。
@@ -523,7 +523,7 @@ def _build_germany_snapshot_text(
 
 
 def _dice_split_degree(degree: Any) -> tuple[int, int]:
-    """DiceMain.js:57 splitDegree：Number(degree) 非数 → [0,0]；负数先 +360；座内度/分向下取整。"""
+    """DiceMain.js:58 splitDegree：Number(degree) 非数 → [0,0]；负数先 +360；座内度/分向下取整。"""
     try:
         number = float(degree)
     except (TypeError, ValueError):
@@ -704,7 +704,7 @@ def _relation_name(value: Any) -> str:
 # ── 合盘快照 helpers：逐字镜像上游 components/astro/AstroRelative.js:28-133（本文件的 msg/round3/aspectText 与
 # astroAiSnapshot 同名函数略有不同：aspectText 对 null 回 '0˚'、对非数回 `${asp || ''}`）。表格一律 GFM，空列表不产段。
 def _rel_aspect_text(asp: Any) -> str:
-    """AstroRelative.js:48-54 aspectText。"""
+    """AstroRelative.js:38-44 aspectText。"""
     num = _js_number_undef(asp)
     if math.isnan(num):
         return _js_template_str(asp) if asp not in (None, "", 0, False) and asp is not _REL_UNDEF else ""
@@ -757,7 +757,7 @@ _REL_ASPECT_HEAD = ["| 星A | 星B | 相位 | 误差 |", "| --- | --- | --- | --
 
 
 def _relative_aspect_lines(items: Any) -> list[str]:
-    """AstroRelative.js:74-94 pushAspectArray（A对B相位 / B对A相位）：空列表 → []（不产段）。"""
+    """AstroRelative.js:64-84 pushAspectArray（A对B相位 / B对A相位）：空列表 → []（不产段）。"""
     if not isinstance(items, list) or not items:
         return []
     lines = list(_REL_ASPECT_HEAD)
@@ -778,7 +778,7 @@ def _relative_aspect_lines(items: Any) -> list[str]:
 
 
 def _relative_midpoint_lines(mapping: Any) -> list[str]:
-    """AstroRelative.js:96-118 pushMidpointMap（A对B中点相位 / B对A中点相位）：无键 → []。"""
+    """AstroRelative.js:86-108 pushMidpointMap（A对B中点相位 / B对A中点相位）：无键 → []。"""
     if not isinstance(mapping, dict) or not mapping:
         return []
     lines = ["| 星A | 中点 | 相位 | 误差 |", "| --- | --- | --- | --- |"]
@@ -798,7 +798,7 @@ def _relative_midpoint_lines(mapping: Any) -> list[str]:
 
 
 def _relative_antiscia_lines(items: Any, type_label: str) -> list[str]:
-    """AstroRelative.js:120-133 pushAntisciaArray（映点 / 反映点）：空列表 → []。"""
+    """AstroRelative.js:110-123 pushAntisciaArray（映点 / 反映点）：空列表 → []。"""
     if not isinstance(items, list) or not items:
         return []
     return [*_REL_ASPECT_HEAD, *(
@@ -825,7 +825,7 @@ _RELATIVE_TAB_BY_CODE = {"0": "Comp", "1": "Composite", "2": "Synastry", "3": "T
 
 
 def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    """上游 components/astro/AstroRelative.js:135-233 buildRelativeSnapshotText 逐字移植（本仓一次只起一个盘型 +
+    """上游 components/astro/AstroRelative.js:125-234 buildRelativeSnapshotText 逐字移植（本仓一次只起一个盘型 +
     上游无头合盘 buildRelativeSnapshotForRecords（aiAnalysisContext.js:1225-1260）同款把「关系量化」接在后面）。
 
     - 比较盘（Comp）：A/B 互摄相位 · 中点相位 · 映点/反映点 八张 GFM 表（空列表不产段）+ [比较盘-星盘A/B] 无头整盘

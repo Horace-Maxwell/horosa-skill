@@ -183,19 +183,23 @@ def _local_offset_ms_at(astro_year: int, month: int, day: int, hour: int, minute
     """本机时区在该外推格里历钟面上的 UTC 偏移（毫秒）：datetime 能表示的年份按本机时区规则取；公元 1 年以前 / 9999 年以后
     取 1 年 / 9999 年同一钟面的偏移（JS Date 对这些年份同样只按本机 tz 数据外推）。"""
     from datetime import datetime as _dt
+    from datetime import timedelta as _td
 
     y = min(max(astro_year, 1), 9999)
     try:
-        local = _dt(y, month, min(day, 28) if month == 2 else day, hour, minute, second).astimezone()
+        # 24:00（parseDateTimeParts 认作次日 0 点）→ 取次日 0 点的偏移；此前 datetime(…, 24) 抛错、落到「此刻」的偏移（跨夏令时差 1 小时）。
+        wall = _dt(y, month, min(day, 28) if month == 2 else day, min(hour, 23), minute, second) + _td(hours=max(hour - 23, 0))
+        local = wall.astimezone()
     except (ValueError, OverflowError, OSError):
         local = _dt.now().astimezone()
     offset = local.utcoffset()
     return int(offset.total_seconds() * 1000) if offset is not None else 0
 
 
-def _parse_date_time_ms(text: Any) -> float | None:
+def _parse_date_time_ms(text: Any, *, date_only_utc: bool = True) -> float | None:
     """dateTimeParse.parseDateTimeMs（字符串支）：写了时区按它；严格 ISO 纯日期 = UTC 0 点；其余按本机钟面。
-    年份按天文年（与 ECMAScript 同；外推格里历）。认不出 → None（上游 NaN）。"""
+    年份按天文年（与 ECMAScript 同；外推格里历）。认不出 → None（上游 NaN）。
+    date_only_utc=False = toMs(v, false)，即 parseLocalDateTimeMs（见 `_parse_local_date_time_ms`）。"""
     p = _parse_date_time_parts(text)
     if not p:
         return None
@@ -203,9 +207,50 @@ def _parse_date_time_ms(text: Any) -> float | None:
     utc_ms = (jdn - _UNIX_EPOCH_JDN) * _MS_PER_DAY + ((p["hour"] * 60 + p["minute"]) * 60 + p["second"]) * 1000 + p["ms"]
     if p["offsetMin"] is not None:
         return utc_ms - p["offsetMin"] * 60000
-    if p["isoDateOnly"]:
+    if p["isoDateOnly"] and date_only_utc:
         return utc_ms
     return utc_ms - _local_offset_ms_at(p["year"], p["month"], p["day"], p["hour"], p["minute"], p["second"])
+
+
+def _parse_local_date_time_ms(value: Any) -> float | None:
+    """dateTimeParse.parseLocalDateTimeMs（@06f25f21）：没写时区一律按本机钟面（纯日期 = 本机 0 点，**不是** Date.parse 的
+    UTC 0 点）；有限数字原样（毫秒）；认不出 → None（上游 NaN）。年 1–6 位带号、斜杠 / 横杠混用、T 或多个空白、秒与小数秒、
+    24:00 = 次日 0 点、2 月 29 日不论哪年都认（按外推格里历落到 3 月 1 日，与 V8 同）。"""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value) if math.isfinite(value) else None
+    return _parse_date_time_ms(value, date_only_utc=False)
+
+
+def _local_offset_ms_of_instant(ms: float) -> int:
+    """`-new Date(ms).getTimezoneOffset() * 60000`：本机时区在该瞬时的 UTC 偏移（毫秒）。datetime 表示不了的瞬时、或本机
+    取不到该瞬时的时区规则（Windows 的 localtime 不收 1970 以前）→ 取「此刻」的偏移（与 `_local_offset_ms_at` 同一兜底）。"""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from datetime import timezone as _tz
+
+    try:
+        local = (_dt(1970, 1, 1, tzinfo=_tz.utc) + _td(milliseconds=ms)).astimezone()
+    except (ValueError, OverflowError, OSError):
+        local = _dt.now().astimezone()
+    offset = local.utcoffset()
+    return int(offset.total_seconds() * 1000) if offset is not None else 0
+
+
+# JS 的 \d 只认 ASCII、`$` 不吃行尾换行 → re.ASCII + fullmatch。
+_CHART_ZONE_RE = re.compile(r"([+-])(\d{2}):(\d{2})(?::(\d{2}))?", re.ASCII)
+
+
+def _birth_instant_ms_in_zone(birth: Any, zone: Any) -> float | None:
+    """astroAiSnapshot.js:1978-1985 birthInstantMsInZone（@06f25f21）逐式移植：出生钟面经 parseLocalDateTimeMs 读成本机钟面
+    毫秒，再「加回本机在该瞬时的偏移、减去本盘时区（±HH:MM[:SS]）」= 按本盘时区解读的真实瞬时；时区不合法 / 钟面认不出
+    → 原样返回本机钟面毫秒（None = NaN）。出生串自带时区尾巴时上游同样再按 zone 折一遍——照搬。
+    「盘主当前年龄」只在 -1 < 年龄 < 200 时出，所以 1826 年以前（含儒略历 / 公元前 / 5 位年）的出生恒不出年龄行。"""
+    local_ms = _parse_local_date_time_ms(birth)
+    m = _CHART_ZONE_RE.fullmatch(zone) if isinstance(zone, str) else None
+    if m is None or local_ms is None:
+        return local_ms
+    zone_sec = (-1 if m.group(1) == "-" else 1) * (int(m.group(2)) * 3600 + int(m.group(3)) * 60 + int(m.group(4) or 0))
+    return local_ms + _local_offset_ms_of_instant(local_ms) - zone_sec * 1000
 
 
 def _civil_instant_ms_of_str(text: Any) -> float | None:

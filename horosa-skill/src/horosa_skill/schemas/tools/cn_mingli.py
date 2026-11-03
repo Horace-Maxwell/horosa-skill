@@ -10,7 +10,7 @@ from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _unadvert
 
 class JieQiBirthInput(BirthInput):
     """出生节气窗：定位出生时刻前后的节气精确时刻（八字起运窗的同源数据）。"""
-    hsys: int | None = 0  # 上游 JieQiChartsMain.js:1014 页面初始 hsys 0（节气盘家族与 JieQiYearInput 同）
+    hsys: int | None = 0  # 上游 JieQiChartsMain.js:1032 页面初始 hsys 0（节气盘家族与 JieQiYearInput 同）
 
     useLocalMao: int | None = Field(default=None, description="真太阳时卯时口径开关（0/1，缺省 0，上游同默认）")
     byLon: int | None = Field(default=None, description="按经度修正开关（0/1，缺省 0，上游同默认）")
@@ -26,7 +26,7 @@ class ZiWeiBirthInput(FlexibleModel):
     lat: str
     lon: str
     gender: bool | None = Field(default=True, description="性别：true/1=男（默认），false/0=女；'男'/'女'/'M'/'F' 会自动归一。")
-    # 日界（F2）：上游出厂缺省 1=23 点换日（utils/dayBoundary.js:39-45 defaultAfter23NewDay）。缺省不发送 →
+    # 日界（F2）：上游出厂缺省 1=23 点换日（utils/dayBoundary.js:29-35 defaultAfter23NewDay）。缺省不发送 →
     # Java /ziwei/birth 缺省 1（ZiWeiController.java:87）；本地引擎档由 runner 显式补 1（ZiWeiMain.js:680-681）。
     after23NewDay: bool | None = Field(default=None, description="日界 1=23点换日(默认) 0=24点")
     # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
@@ -112,7 +112,7 @@ class BaZiBirthInput(FlexibleModel):
     lateZiHourUseNextDay: int | bool | None = None
     phaseType: int | None = 0
     ad: int | None = 1
-    # 盘法/流派（F9，上游 techniqueMountSettings.js:1705-1740 + BaZi.js:961-985 genParams 缺省）：
+    # 盘法/流派（F9，上游 techniqueMountSettings.js:1705-1740 + BaZi.js:1058-1087 genParams 缺省）：
     # minggongMethod tongxing(缺省)|shufa · dayunPrecision precise(缺省)|integer ·
     # school zonghe(缺省)|fuyi|geju|tiaohou|bingyao|tongguan|mangpai|nayin · ageStyle nominal(虚岁,缺省)|real(周岁)。
     minggongMethod: Any | None = _unadvertised()
@@ -136,7 +136,7 @@ class BaZiBirthInput(FlexibleModel):
     # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
     # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。
     period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")
-    # [Q-191/T-135]（上游 v3.11.0 BaZi.js:369-375，页面 baziOpt.zodiacBoundary）：生肖岁首。
+    # [Q-191/T-135]（上游 v3.11.0 BaZi.js:882-888，页面 baziOpt.zodiacBoundary）：生肖岁首。
     zodiacBoundary: str | None = Field(
         default=None,
         description="生肖岁首：lichun=立春（缺省，同星阙页面缺省）| lunar=正月初一。只改 [起盘信息] 的「生肖：X（岁首=…）」行；正月初一与立春之间出生者两档差一个生肖。",
@@ -289,7 +289,7 @@ class HeLuoInput(FlexibleModel):
     pureGanKunVariant: str | None = None  # 'current'★ | 'alt' 纯卦乾坤落爻反向（抄本异·待核）
     liunianStep2: str | None = None  # 'ying'★ 应爻法 | 'sequential' 逐爻上行
     monthYangLing: bool | int | str | None = None  # 阳令手定；缺省按月支推
-    # 上游挂载 schema heluo 另两键（techniqueMountSettings.js:1883-1904）：
+    # 上游挂载 schema heluo 另两键（techniqueMountSettings.js:2274-2295）：
     # 'tuWangKunGen'★ 土王寄坤艮 | 'siFangBoOnly' 直取四方伯（土用期不补坤艮）→ [命运篇] 化工行
     quHuaGong: str | None = Field(default=None, description="取化工 tuWangKunGen/siFangBoOnly")
     # 纪年基准（黄帝纪元差，缺省 2697，0 可达）→ [断验] 纪年行

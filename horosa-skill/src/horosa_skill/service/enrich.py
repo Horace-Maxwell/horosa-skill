@@ -149,7 +149,7 @@ class EnrichMixin:
         return effective
 
     def _pdchart_default_datetime(self, payload: dict[str, Any]) -> tuple[str, str]:
-        """上游 AstroPrimaryDirectionChart.js:454 defaultPdChartDateTime：首条（过滤后）主限行的「日期」列，
+        """上游 AstroPrimaryDirectionChart.js:485 defaultPdChartDateTime：首条（过滤后）主限行的「日期」列，
         按 UTC 墙钟解释（dirZone='+00:00'）；取不到行 → 出生次日同一墙钟挂 +00:00。"""
         chart_payload = {**payload, "predictive": 1, "includePrimaryDirection": 1}
         for key in ("datetime", "dirZone", "dirLat", "dirLon"):
@@ -307,7 +307,7 @@ class EnrichMixin:
         if not isinstance(response_data, dict) or not response_data.get("jyotish"):
             return response_data
         src = payload or {}
-        # [起盘信息] 口径行（上游 indiaCalibreLine(fields)，IndiaChart.js:1113-1124）的分宫制/岁差：取后端**实际用的**口径
+        # [起盘信息] 口径行（上游 indiaCalibreLine(fields)，IndiaChart.js:1230-1241）的分宫制/岁差：取后端**实际用的**口径
         # （响应 params.hsys / params.ayanamsa = webindiasrv 按 indiaHsys→hsys、indiaAyanamsa→ayanamsa→siderealMode 解析后的值），
         # 与上游页面「请求即已归一」同一结果；缺回显时按同一取值序落请求值。
         echo = response_data.get("params") if isinstance(response_data.get("params"), dict) else {}
@@ -379,7 +379,7 @@ class EnrichMixin:
     def _attach_india_extra_vargas(
         self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]
     ) -> dict[str, Any]:
-        """[附加分盘]（上游 v3.11.0 #80，IndiaChart.js:1219-1333 buildIndiaSnapshotForFields 的 extraVargas 分支）。
+        """[附加分盘]（上游 v3.11.0 #80，IndiaChart.js:1357-1476 buildIndiaSnapshotForFields 的 extraVargas 分支）。
 
         主盘之外再挂几张分盘（如婚姻 D9 + 子女 D7），每张只出「宫位宫头 + 星与虚点 + 行星」简表（整张分盘快照约
         2.6 万字，N 张全出会把预算吃穿）。归一（值域/去重/上限 4）后剔掉主盘自身（planIndiaExtraVargas），逐张另取

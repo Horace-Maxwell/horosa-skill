@@ -136,7 +136,7 @@ class SanshiRunners:
         current_year = payload.get("jieqi_year_current")
         if not isinstance(current_year, dict):
             current_year = _jieqi_year(year)
-        # 日家(2)/金函(6) 腊月过冬至需次年至日 → 种子年 y-1,y,y+1（上游 jieqiSeedYears，DunJiaCalc.js:1243）。
+        # 日家(2)/金函(6) 腊月过冬至需次年至日 → 种子年 y-1,y,y+1（上游 jieqiSeedYears，DunJiaCalc.js:1272）。
         next_year = None
         if _js_parse_int(options.get("paiPanType")) in (2, 6):
             next_year = payload.get("jieqi_year_next")
@@ -189,7 +189,7 @@ class SanshiRunners:
         # 口径单源：顶层日界两开关（0/1 整数，JS buildOptions 按 `=== 1` 标「换日」）∪ options，options 优先。
         options = {**_day_boundary_switches(payload), **(payload.get("options") or {})}
         # 时间基准（上游 TaiYiMain TAIYI_PAGE_SETTINGS.timeBasis def 'direct'，TIME_BASIS_OPTIONS 两档）：
-        # trueSolar 时 ken 按 nongli.birth 的真太阳时分量起局（上游 resolveCalculationDateTime，TaiYiCalc.js:254）。
+        # trueSolar 时 ken 按 nongli.birth 的真太阳时分量起局（上游 resolveCalculationDateTime，TaiYiCalc.js:204）。
         # 此前该档既不发也不施加，快照却标「真太阳时」—— ken 恒按钟表时起局。
         time_basis = options.get("timeBasis") or "direct"
         if time_basis not in ("direct", "trueSolar"):
@@ -278,7 +278,7 @@ class SanshiRunners:
             )
             liureng = remote.get("liureng", remote)
         nongli = liureng.get("nongli") if isinstance(liureng, dict) and isinstance(liureng.get("nongli"), dict) else {}
-        # 地分缺省 = 自动取占时支（上游 JinKouMain.js:907 diFenAuto:true → resolveJinKouDiFen 首次起课取
+        # 地分缺省 = 自动取占时支（上游 JinKouMain.js:902 diFenAuto:true → resolveJinKouDiFen 首次起课取
         # 占时支）。此前缺省发「子」给 ken（本地脚手架却取占时支），默认盘恒按子地分起。
         difen = _jinkou_resolve_difen(payload.get("diFen") or options.get("diFen"), nongli.get("time"))
         options["diFen"] = difen
@@ -377,7 +377,7 @@ class SanshiRunners:
         runyear = None
         remote_payloads: dict[str, Any] = {"/liureng/gods": gods_payload}
         if tool_name == "liureng_runyear":
-            # 上游 genRunYearParams（LiuRengMain.js:5090）：出生档 + 起课档，卦年干支取起课盘年柱。
+            # 上游 genRunYearParams（LiuRengMain.js:619）：出生档 + 起课档，卦年干支取起课盘年柱。
             runyear_payload = _liureng_remote_payload("liureng_runyear", payload)
             if not runyear_payload.get("guaYearGanZi"):
                 gua_year = _gua_year_ganzi(liureng)
@@ -440,7 +440,7 @@ class SanshiRunners:
         ① 三式农历 = genParams → fetchPreciseNongli（:3235-3265 / :3984）：timeAlg 与日界两键随三式 options，
            出厂 0 / 1 / 1（构造器 :2037-2047，日界两键 = 全局出厂值），上游恒显式发送；
         ② 真太阳时显示值 = resolveDisplaySolarTime（:2226-2248）：timeAlg=0 即该农历 birth，否则另取一份真太阳时农历；
-        ③ 星盘 = props.chartObj（主页全局盘，三式与之共享 hsys / zodiacal，出厂 1 / 0 —— utils/newChartSeeds.js:38-41）；
+        ③ 星盘 = props.chartObj（主页全局盘，三式与之共享 hsys / zodiacal，出厂 1 / 0 —— utils/newChartSeeds.js:42-45）；
         ④ 奇门盘 = getKinqimenDunJia（:2281-2308）：同一份三式农历，context = {displaySolarTime, isDiurnal=星盘昼夜}
            （calcDunJia 的神煞贵人按它分昼夜，normalizeKinqimenData 沿用这层）；getQimenOptions（:3297-3346）显式带日界两键；
         ⑤ 太乙盘 = getKintaiyiPan（:2319-2340）：同一份三式农历（trueSolar 基准取它的 birth）；
@@ -479,7 +479,7 @@ class SanshiRunners:
         }
         liureng_options = _sanshi_liureng_options(payload)
         taiyi_options = dict(payload.get("taiyi_options") or {})
-        # 上游三式合一太乙区的时间基准键名是 taiyiTimeBasis（SanShiUnitedMain.js:446 / :2326，缺省 direct，
+        # 上游三式合一太乙区的时间基准键名是 taiyiTimeBasis（SanShiUnitedMain.js:453 / :2219，缺省 direct，
         # 不随盘 timeAlg 串改）；skill 的 taiyi_options 用 taiyi 工具原名 timeBasis —— 两种写法都认，taiyi_options 优先。
         if payload.get("taiyiTimeBasis") not in (None, "") and taiyi_options.get("timeBasis") in (None, ""):
             taiyi_options["timeBasis"] = payload["taiyiTimeBasis"]

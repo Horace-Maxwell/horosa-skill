@@ -4,7 +4,7 @@
 
 - `utils/astroAiSnapshot.js:179-188`   fieldValue
 - `utils/astroAiSnapshot.js:327-419`   CLS_CALIBRE_LABELS / CLS_CALIBRE_HEAD_DEFAULTS / buildClassicalCalibreLine
-- `utils/astroAiSnapshot.js:422-500`   buildBaseInfoLines（[起盘信息] / [信息] 头部）
+- `utils/astroAiSnapshot.js:418-500`   buildBaseInfoLines（[起盘信息] / [信息] 头部）
 - `utils/astroAiSnapshot.js:553-698`   buildInfoSection（[信息]）
 - `utils/astroAiSnapshot.js:702-773`   buildAspectSection（[相位]，三子块 GFM 表 + [WP-5b] 扩展对象）
 - `utils/astroAiSnapshot.js:780-915`   buildPlanetSection（[行星]，五子块）
@@ -89,7 +89,7 @@ LIST_POINTS: tuple[str, ...] = (
     "Cupido", "Hades", "Zeus", "Kronos", "Apollon", "Admetos", "Vulcanus", "Poseidon",
 )
 
-# constants/AstroConst.js:1215-1218 NAK_LORD_CN（[行星]◆位置与速度 的「月宿」列宿主中文）
+# constants/AstroConst.js:1109-1112 NAK_LORD_CN（[行星]◆位置与速度 的「月宿」列宿主中文）
 NAK_LORD_CN: dict[str, str] = {
     "Ketu": "计都", "Venus": "金星", "Sun": "太阳", "Moon": "月亮", "Mars": "火星",
     "Rahu": "罗睺", "Jupiter": "木星", "Saturn": "土星", "Mercury": "水星",
@@ -222,28 +222,28 @@ def clean_lines(lines: list[Any]) -> list[str]:
 
 
 def as_name_list(ids: Any) -> str:
-    """astroAiSnapshot.js:246-251 asNameList。"""
+    """astroAiSnapshot.js:241-246 asNameList。"""
     if not _js_truthy(ids) or _js_len(ids) == 0:
         return ""
     return " , ".join(name for name in (msg(item) for item in ids) if name)
 
 
 def dignity_text(ary: Any) -> str:
-    """astroAiSnapshot.js:269-274 dignityText：空 → 游走。"""
+    """astroAiSnapshot.js:264-269 dignityText：空 → 游走。"""
     if not _js_truthy(ary) or _js_len(ary) == 0:
         return "游走"
     return "，".join(msg(item) for item in ary)
 
 
 def ruleship_text(arr: Any) -> str:
-    """astroAiSnapshot.js:295-300 ruleshipText。"""
+    """astroAiSnapshot.js:290-295 ruleshipText。"""
     if not _js_truthy(arr) or _js_len(arr) == 0:
         return ""
     return "+".join(msg(item) for item in arr)
 
 
 def format_speed(obj: Any) -> str:
-    """astroAiSnapshot.js:276-293 formatSpeed。"""
+    """astroAiSnapshot.js:271-288 formatSpeed。"""
     if not _js_truthy(obj) or not isinstance(obj, dict):
         return ""
     lonspeed = _get(obj, "lonspeed")
@@ -262,7 +262,7 @@ def format_speed(obj: Any) -> str:
 
 
 def stars_map(chart_obj: Any) -> dict[str, list[Any]]:
-    """astroAiSnapshot.js:256-267 getStarsMap。"""
+    """astroAiSnapshot.js:251-262 getStarsMap。"""
     chart = _as_dict(chart_obj.get("chart")) if isinstance(chart_obj, dict) else {}
     mapping: dict[str, list[Any]] = {}
     for star in _as_list(chart.get("stars")):
@@ -272,7 +272,7 @@ def stars_map(chart_obj: Any) -> dict[str, list[Any]]:
 
 
 def format_stars_lines(stars: Any) -> list[str]:
-    """astroAiSnapshot.js:313-325 formatStarsLines：item[4]（后端中文名）优先，否则 msg(item[0])。"""
+    """astroAiSnapshot.js:308-320 formatStarsLines：item[4]（后端中文名）优先，否则 msg(item[0])。"""
     lines: list[str] = []
     for item in stars or []:
         if not isinstance(item, (list, tuple)):
@@ -401,7 +401,7 @@ def classical_backend_overrides_from_fields(fields: Any) -> dict[str, Any]:
     return classical_backend_overrides(get_val)
 
 
-# astroAiSnapshot.js:329-376 CLS_CALIBRE_LABELS：(label, map|None, fmt|None)。map 键 = JS 属性键（`${value}`）。
+# astroAiSnapshot.js:324-372 CLS_CALIBRE_LABELS：(label, map|None, fmt|None)。map 键 = JS 属性键（`${value}`）。
 _CLS_CALIBRE_LABELS: dict[str, tuple[str, dict[str, str] | None, Callable[[Any], str] | None]] = {
     "termsVariant": ("界系", {"1": "托勒密·校勘本", "2": "托勒密·经典传本", "3": "迦勒底(推演)", "4": "自定义界表"}, None),
     "geminiBoundEmended": ("双子界序", {"1": "校勘对调"}, None),
@@ -454,7 +454,7 @@ _CLS_CALIBRE_HEAD_DEFAULTS: dict[str, Any] = {
 
 
 def _calibre_phrase(key: str, value: Any) -> str:
-    """astroAiSnapshot.js:383-389 classicalCalibrePhrase。"""
+    """astroAiSnapshot.js:379-385 classicalCalibrePhrase。"""
     spec = _CLS_CALIBRE_LABELS.get(key)
     if spec is None:
         return f"{key}={_js_str(value)}"
@@ -467,7 +467,7 @@ def _calibre_phrase(key: str, value: Any) -> str:
 
 
 def build_classical_calibre_line(fields: Any) -> str:
-    """astroAiSnapshot.js:391-419 buildClassicalCalibreLine：只列非默认键；全默认 → ''（零增行）。"""
+    """astroAiSnapshot.js:387-415 buildClassicalCalibreLine：只列非默认键；全默认 → ''（零增行）。"""
     parts: list[str] = []
     for key, default in _CLS_CALIBRE_HEAD_DEFAULTS.items():
         value = field_value(fields, key)
@@ -514,7 +514,7 @@ def _day_boundary_bit(value: Any) -> int:
 
 
 def build_base_info_lines(chart_obj: Any, fields: Any, *, with_time_basis: bool = False) -> list[str]:
-    """astroAiSnapshot.js:422-500 buildBaseInfoLines。
+    """astroAiSnapshot.js:418-500 buildBaseInfoLines。
 
     [V6-W2]（:457-467）宫制/黄道取值源 = 「请求参数优先、后端 echo 兜底」：fields 数字值就是发出去的排盘入参，
     标注与计算恒同源（echo 优先时 hsys 8/24 的回显与 1/0 撞名 → 标注撒谎）。派生盘宫位被后端强制成变换后上升整宫
@@ -592,7 +592,7 @@ def _has_ruler_or_exalt(ary: Any) -> bool:
 
 
 def _keep_reception_line(item: Any, *, abnormal: bool, only_ruler_exalt: bool) -> bool:
-    """astroAiSnapshot.js:221-234 keepReceptionLine。"""
+    """astroAiSnapshot.js:216-229 keepReceptionLine。"""
     if not only_ruler_exalt:
         return True
     if not _js_truthy(item) or not isinstance(item, dict):
@@ -604,7 +604,7 @@ def _keep_reception_line(item: Any, *, abnormal: bool, only_ruler_exalt: bool) -
 
 
 def _keep_mutual_line(item: Any, *, only_ruler_exalt: bool) -> bool:
-    """astroAiSnapshot.js:236-244 keepMutualLine。"""
+    """astroAiSnapshot.js:231-239 keepMutualLine。"""
     if not only_ruler_exalt:
         return True
     if not isinstance(item, dict) or not isinstance(item.get("planetA"), dict) or not isinstance(item.get("planetB"), dict):
@@ -1679,7 +1679,7 @@ SU28_ORDER: tuple[str, ...] = (
     "角", "亢", "氐", "房", "心", "尾", "箕", "斗", "牛", "女", "虚", "危", "室", "壁",
     "奎", "娄", "胃", "昴", "毕", "觜", "参", "井", "鬼", "柳", "星", "张", "翼", "轸",
 )
-# constants/AstroConst.js:616-627 DEFAULT_OBJECTS（models/app.js:201 页面 planetDisplay 缺省）/ TRADITION_OBJECTS
+# constants/AstroConst.js:616-627 DEFAULT_OBJECTS（models/app.js:255 页面 planetDisplay 缺省）/ TRADITION_OBJECTS
 DEFAULT_OBJECTS: tuple[str, ...] = (
     "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "North Node", "South Node", "Pars Fortuna", "Asc", "MC",
 )

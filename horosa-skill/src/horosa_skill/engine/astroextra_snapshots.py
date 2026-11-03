@@ -33,11 +33,12 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from horosa_skill.astro_rulers import POLAR_MC_NOTE, polar_mc_of
+from horosa_skill.civil_calendar import _birth_instant_ms_in_zone
 
 # JS `undefined` 哨兵：JSON 里的 null 在 Python 是 None（= JS null），缺键才是 undefined。
 _UNDEFINED: Any = object()
@@ -284,7 +285,7 @@ EGYPTIAN_TERMS: dict[str, tuple[tuple[str, int, int], ...]] = {
     "Aquarius": (("Mercury", 0, 7), ("Venus", 7, 13), ("Jupiter", 13, 20), ("Mars", 20, 25), ("Saturn", 25, 30)),
     "Pisces": (("Venus", 0, 12), ("Jupiter", 12, 16), ("Mercury", 16, 19), ("Mars", 19, 28), ("Saturn", 28, 30)),
 }
-# 上游 constants/AstroConst.js:1045 HOUSE_SYSTEM_OPTIONS → HouseSys（键为 `${value}`）
+# 上游 constants/AstroConst.js:939 HOUSE_SYSTEM_OPTIONS → HouseSys（键为 `${value}`）
 HOUSE_SYS: dict[str, str] = {
     "0": "整宫制",
     "1": "Alcabitus",
@@ -312,7 +313,7 @@ HOUSE_SYS: dict[str, str] = {
     "23": "Savard-A",
     "24": "福点整宫制",
 }
-# 上游 constants/AstroConst.js:1079 INDIA_AYANAMSA_OPTIONS → ayanamsaLabel 用的 label
+# 上游 constants/AstroConst.js:973 INDIA_AYANAMSA_OPTIONS → ayanamsaLabel 用的 label
 AYANAMSA_LABELS: dict[str, str] = {
     "lahiri": "Lahiri / Chitrapaksha",
     "lahiri_icrc": "Lahiri ICRC（官定2022）",
@@ -474,7 +475,7 @@ def fmt_degree(item: Any) -> str:
 
 
 def _txt_name(obj_id: Any) -> str:
-    """ephName（AstroEphemeris.js:18-21）/ psName（AstroPrenatalSyzygy.js:32-35）：空 → '-'，否则 AstroTxtMsg[id] || id。"""
+    """ephName（AstroEphemeris.js:24-27）/ psName（AstroPrenatalSyzygy.js:32-35）：空 → '-'，否则 AstroTxtMsg[id] || id。"""
     if obj_id is _UNDEFINED or obj_id is None or obj_id == "":
         return "-"
     key = _js_str(obj_id)
@@ -482,7 +483,7 @@ def _txt_name(obj_id: Any) -> str:
 
 
 def _sym(obj_id: Any) -> str:
-    """astroProgSnapshot.js:80 `sym`：AstroTxtMsg[id] || `${id}`（无空值兜底）。"""
+    """astroProgSnapshot.js:90 `sym`：AstroTxtMsg[id] || `${id}`（无空值兜底）。"""
     key = _js_str(obj_id)
     return ASTRO_TXT_MSG.get(key) or key
 
@@ -749,38 +750,13 @@ def predictive_birth_header_lines(chart_obj: Any) -> list[str]:
     return ["[起盘信息]", *lines, ""]
 
 
-def _js_date_parse_local(text: str) -> float | None:
-    """`Date.parse(text)` 的秒级时间戳（None = NaN）。ISO 带时刻无时区 → 本地时间；纯日期 → UTC。"""
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M"):
-        try:
-            return datetime.strptime(text, fmt).timestamp()
-        except ValueError:
-            continue
-    try:
-        return datetime.strptime(text, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
-    except ValueError:
-        return None
-
-
-_ZONE_RE = re.compile(r"^([+-])(\d{2}):(\d{2})(?::(\d{2}))?$")
-
-
 def _birth_instant_ts_in_zone(birth: Any, zone: Any) -> float | None:
-    """v3.13.0 astroAiSnapshot.js birthInstantMsInZone：出生钟面按本盘时区（±HH:MM[:SS]）解读成真实瞬时；
-    没有合法时区 → 按本机时区解读（原样）。此前一律按本机时区 → 本机与盘不在同一时区时「当前年龄」差出时差。
-    钟面解析沿用 `_js_date_parse_local`（parseLocalDateTimeMs 的常见写法子集）。"""
-    text = _js_str(birth).strip().replace("/", "-").replace(" ", "T", 1)
-    m = _ZONE_RE.match(zone) if isinstance(zone, str) else None
-    if not m:
-        return _js_date_parse_local(text)
-    zone_sec = (-1 if m.group(1) == "-" else 1) * (int(m.group(2)) * 3600 + int(m.group(3)) * 60 + int(m.group(4) or 0))
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
-        try:
-            wall = datetime.strptime(text, fmt)
-        except ValueError:
-            continue
-        return wall.replace(tzinfo=timezone.utc).timestamp() - zone_sec
-    return None
+    """astroAiSnapshot.js:1978-1985 birthInstantMsInZone（秒级；None = NaN）：出生钟面按本盘时区（±HH:MM[:SS]）解读成真实瞬时；
+    没有合法时区 → 按本机钟面（原样）。钟面解析 = dateTimeParse.parseLocalDateTimeMs 全式（civil_calendar 单源）——此前用
+    strptime 只认几种 ISO 写法：「24:00」、多个空白、带时区尾巴的出生串认不出（不出年龄行），无时区时纯日期按 UTC 0 点
+    （上游 parseLocalDateTimeMs 是本机 0 点）。"""
+    ms = _birth_instant_ms_in_zone(birth, zone)
+    return None if ms is None else ms / 1000
 
 
 def current_moment_lines(chart_obj: Any, extra_lines: list[str] | None, now: datetime) -> list[str]:
@@ -801,7 +777,7 @@ def current_moment_lines(chart_obj: Any, extra_lines: list[str] | None, now: dat
 
 
 def method_note_lines(notes: list[str] | None) -> list[str]:
-    """astroAiSnapshot.js:2140-2146 buildMethodNoteLines（notes = 该键的 PREDICTIVE_METHOD_NOTES）。"""
+    """astroAiSnapshot.js:2156-2162 buildMethodNoteLines（notes = 该键的 PREDICTIVE_METHOD_NOTES）。"""
     if not notes:
         return []
     return ["[方法说明]", *notes, ""]
@@ -811,7 +787,7 @@ def method_note_lines(notes: list[str] | None) -> list[str]:
 
 
 def _fmt_date_of(item: Any) -> str:
-    # AstroEphemeris.js:109-112 fmtDateOf
+    # AstroEphemeris.js:130-133 fmtDateOf
     if _js_truthy(item) and isinstance(item, dict):
         if _js_truthy(item.get("date")):
             return _js_str(item["date"])
@@ -850,7 +826,7 @@ def _eph_degree(e: Any) -> str:
 
 
 def ephemeris_limits_text(params: Any) -> str:
-    """AstroEphemeris.js:114-126 ephemerisLimitsText：后端三道截断（区间/逐日/行运触发）明示句；无截断 → ''。"""
+    """AstroEphemeris.js:135-147 ephemerisLimitsText：后端三道截断（区间/逐日/行运触发）明示句；无截断 → ''。"""
     if not _js_truthy(params) or not isinstance(params, dict):
         return ""
     lim = params.get("limits")

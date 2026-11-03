@@ -49,7 +49,7 @@ export function runYizhangjing(payload) {
   // timeAlg 缺省 0（真太阳时；sync311 wave 3b，此前误为 1）：上游 AI 挂载无头路径 buildYizhangjingSnapshotForRecord →
   // buildChartBaziParams 取 buildFieldObject 的 timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603,1793,2198）；
   // 挂载齿轮缺省亦 0（techniqueMountSettings.js:147,1908-1911）。页面 YiZhangJingMain.getModel 的
-  // `fieldVal(f, 'timeAlg', 1)`（:124）读全局 fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:375-377 +
+  // `fieldVal(f, 'timeAlg', 1)`（:124）读全局 fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:380-382 +
   // newChartSeeds.js:43），回退值 1 从不生效。页面与无头同为 0；canping/heluo 同改。
   const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
   // 日界 / 晚子时：上游 YiZhangJingMain.getModel 读盘面 fields，缺席回退全局出厂默认
@@ -65,7 +65,7 @@ export function runYizhangjing(payload) {
   };
   const off = (v) => v === false || v === 0 || v === '0' || v === 'false';
 
-  // 排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键（KinAstroMain.js:3357-3380），缺省 = 上游
+  // 排盘选项 = 上游 KinAstroMain.buildYizhangjingOpts 同键（KinAstroMain.js:3241-3264），缺省 = 上游
   // KINASTRO_PAGE_SETTINGS 出厂档（KinAstroMain.js:1039-1056，即「秘传口诀」预设）：定月法、顺逆规则、
   // 命宫定法、大限一宫年数、大限起法、小限起宫/顺逆、逐年法、流年十二神组、早子时、重犯口诀组、
   // 星名系统、六道术语、童限显示、神煞合参层（出厂关）。
@@ -84,7 +84,7 @@ export function runYizhangjing(payload) {
     //   齿轮拨「小限」也一样：它等于挂载 schema 缺省 'xiaoxian'（techniqueMountSettings.js:1944），被
     //   pruneOptionsToNonDefault（:2508-2555）剪掉 → 走同一条缺省路；只有拨「流年十二神」才下发。
     // ⚠ 页面与无头不一致：桌面页（及 AI 导出读的页面模块快照，aiExport.js:6710-6712）按 KINASTRO_PAGE_SETTINGS
-    //   yizhangjingAnnual 出厂 'xiaoxian'（KinAstroMain.js:1046,3357-3365）只出小限。此处按无头路径。
+    //   yizhangjingAnnual 出厂 'xiaoxian'（KinAstroMain.js:992,3241-3249）只出小限。此处按无头路径。
     annualMethod: input.annualMethod === 'liunian' || input.annualMethod === 'xiaoxian' ? input.annualMethod : '',
     flowShenSet: input.flowShenSet || 'A',
     zaoZiAdjust: !!input.zaoZiAdjust,

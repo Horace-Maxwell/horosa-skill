@@ -56,7 +56,7 @@ export function runJinkou(payload) {
   if (payload.isDiurnal !== undefined && options.isDiurnal === undefined) {
     options.isDiurnal = payload.isDiurnal;
   }
-  // 十二长生五行：上游缺省随日干（JinKouMain.js:1551 wx = GanZiWuXing[dayGan]，wuxingAuto），同时喂本地引擎
+  // 十二长生五行：上游缺省随日干（JinKouMain.js:1597 wx = GanZiWuXing[dayGan]，wuxingAuto），同时喂本地引擎
   // （phaseTable）与快照；此前 skill 把「四位旺相五行」(wangElem) 当十二长生五行传给快照，两个概念混了。
   const dayGan = `${(liureng.nongli && liureng.nongli.dayGanZi) || ''}`.substr(0, 1);
   const wuxing = options.wuxing || LRConst.GanZiWuXing[dayGan] || '土';

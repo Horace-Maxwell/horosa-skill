@@ -27,7 +27,7 @@ GLOBAL_AGENT_RULES: list[str] = [
 
 COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
-# 日界缺省（F2）：上游出厂缺省 1=「23 点算第二天」（utils/dayBoundary.js:39-45 defaultAfter23NewDay、models/astro.js:395-398）。
+# 日界缺省（F2）：上游出厂缺省 1=「23 点算第二天」（utils/dayBoundary.js:29-35 defaultAfter23NewDay、models/astro.js:395-398）。
 # v0.40 前这里写「False=星阙默认」且 schema 硬塞 False 下发 → bazi/ziwei/liureng/nongli 静默按 24 点换日。
 _AFTER23_DEFAULT_MEANING = "星阙默认：23 点换日（缺省不传=引擎默认 1）；0=24 点换日"
 CONFIRMATION_FIELDS: list[str] = list(SENSITIVE_SETTINGS["confirmation_fields"])

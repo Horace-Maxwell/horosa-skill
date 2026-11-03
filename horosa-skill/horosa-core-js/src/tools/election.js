@@ -51,7 +51,7 @@ function resolveCrisisBase(input, invalid, errors) {
 
 // 回归盘：Python 按上游 returnCharts.solveReturnBefore 求出「择日时刻之前最近一次」精确回归时刻，
 // 把**最后一次成功起的盘**（上游 facts 的来源盘）连同 momentStr 交过来；这里只做上游同款 buildFacts(R)
-// （returnCharts.js:43/:55），拼回 { momentStr, facts } 这个上游形状。缺盘 = 该返未求得（上游 null）。
+// （returnCharts.js:45/:55），拼回 { momentStr, facts } 这个上游形状。缺盘 = 该返未求得（上游 null）。
 function returnEntry(raw, errors, label) {
   if (!raw || typeof raw !== 'object' || !raw.chart || typeof raw.chart !== 'object') return null;
   try {

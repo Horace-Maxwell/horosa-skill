@@ -362,7 +362,7 @@ _FIXED_STAR_ORB_MODE_DEFAULT = "school"
 
 
 def _fixed_star_orb_params(params: dict[str, Any]) -> dict[str, Any]:
-    """上游 classicalChartGlobals.js:271 fixedStarOrbParamsFor：/astroextra/analysis 的恒星轨参数。
+    """上游 classicalChartGlobals.js:273 fixedStarOrbParamsFor：/astroextra/analysis 的恒星轨参数。
 
     随盘优先（chart 级键 starOrb/starOrbMode，缺则前端名 fixedStarOrb/fixedStarOrbMode），再缺取全局缺省；
     档位仅 byMagnitude 时下发（Python fixed_star_hits 据此逐星取星等表轨）。
@@ -664,7 +664,7 @@ def _india_chart_zone_now(zone: Any) -> datetime:
 def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """india_chart 的后端请求体：skill 侧开关 → 后端键（上游 IndiaChart.fieldsToParams 同一翻译）。
 
-    `indiaTripataki`（上游挂载齿轮名）→ 后端 `tripataki=1`（IndiaChart.js:123-124；webindiasrv 读 data.get('tripataki')，
+    `indiaTripataki`（上游挂载齿轮名）→ 后端 `tripataki=1`（IndiaChart.js:141-142；webindiasrv 读 data.get('tripataki')，
     12 次建盘 ≈0.3-0.8s 故 opt-in）。`indiaExtraVargas` 不下发主盘请求（附加分盘逐张另取）。
     其余条件透传逐条对齐 fieldsToParams（IndiaChart.js:79-143）与 resolveIndiaHeadlessParams（:1197-1213）：
     dashaSystem 展示体系不下发；indiaSchool 只补预设岁差/宫制（本身不下发）；问事族只在起了卦（prashnaTime）时下发，

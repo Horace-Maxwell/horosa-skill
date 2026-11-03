@@ -65,6 +65,7 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`planetaryHourMethod`（行星时制式 sunrise 缺省 /
 unequal / equal24，报时星随之）、`moiraTransitDate`（[流年流曜] 的流年时刻，缺省今天）；宿度制 `doubingSu28` 缺省 0 荀爽距星（星阙 v3.13.0）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
 七政 [相位] 是七政相位（會 0° / 衝 180° / 刑 90° / 合 120° / 半合 60°，入相 / 离相按与位置同口径的日速），不是西占通用相位（星阙 v3.13.1）。
+七政 [相位] 显示偏好（同星阙页面，只改 [相位]）：`guolaoAspects`（加选 半刑 / 四合，`[]` = 不列）、`guolaoAspectOrbs` `{相位: 0–30}`、`guolaoHiddenPlanets`（日 月 … 升 顶）。
 日出 / 日没口径 `sunriseMode`：`center` 日心·不计折射（缺省）/ `apparent` 日面上缘·含大气折射——西占各盘、七政（日出安命 / 报时星）通用，印占不随；
 龙盘 `draconic` 另有 `draconicHouses`：`whole` 整宫随龙盘上升（缺省）/ `shift` 本命宫头平移（各星落宫同本命）。八字 `tianyiSchool`：`xieji` 协纪辨方书（缺省）/
 `ziping` 子平，只换天医 / 地医落支，[神煞（四柱与三元）] 首行印口径（以上星阙 v3.13.1）。
@@ -250,7 +251,7 @@ deterministic local fallback answered; `horosa-skill jev status` shows the state
 | 邵子参评数 / 河洛理数 | `canping` / `heluo` |
 | 六爻 | `sixyao` |
 | 卦义 | `gua_desc`, `gua_meiyi` |
-| 宿占 | `suzhan` |
+| 宿占 | `suzhan`（西占古典键 termsVariant / orbSystem / sunriseMode 等 41 个对宿占无效：照收、不下发、卡片不印，同星阙） |
 | 一掌经 | `yizhangjing` |
 | 神数正传（铁板 / 邵子 / 大定 / 六亲 / 铁算心易） | `zhengchuan`（school 选流派；除铁算心易外需生辰） |
 | 小六壬 | `xiaoliuren`（三数或占时起课，冻结值；改流派只重排） |

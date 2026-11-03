@@ -172,7 +172,7 @@ AYANAMSA_OPTION_LABELS: dict[str, str] = {
 
 
 def ayanamsa_option_label(key: Any) -> str:
-    """AstroConst.ayanamsaLabel（AstroConst.js:1220）：缺省 → ''；'user' → 自定义；未登记原样。"""
+    """AstroConst.ayanamsaLabel（AstroConst.js:1114）：缺省 → ''；'user' → 自定义；未登记原样。"""
     if not key:
         return ""
     if key == "user":
@@ -181,7 +181,7 @@ def ayanamsa_option_label(key: Any) -> str:
 
 
 def zodiacal_display_text(zodiacal_raw: Any, ayan_key: Any) -> str:
-    """AstroConst.zodiacalDisplayText（AstroConst.js:1227）：回归黄道 / 恒星黄道·<ayan> / 恒星黄道（无具体岁差时）。"""
+    """AstroConst.zodiacalDisplayText（AstroConst.js:1121）：回归黄道 / 恒星黄道·<ayan> / 恒星黄道（无具体岁差时）。"""
     is_sidereal = zodiacal_raw == "Sidereal" or f"{zodiacal_raw}" == "1" or zodiacal_raw == "恒星黄道"
     if not is_sidereal:
         return "回归黄道"

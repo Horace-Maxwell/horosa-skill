@@ -181,7 +181,8 @@ function buildGuolaoInfoFactsForSnapshot(params, result, transitParams, display,
 // [起盘信息] 口径六行 + 命度/身度/宿主行 + [大限] + [三主与化曜] + [限法实算]（上游 _buildGuolaoSnapshotTextV2Core:2046-2104 同序同源）
 // + [七政四余宫位与二十八宿星曜] / [神煞] / [相位] 三段（:2079 / :2086 / :2138，vendored 同一黄仪窗口桥接）。
 // payload: { chart: /chart 响应（chart.nongli 已挂本命四柱）, params: {date:'YYYY/MM/DD',time,…}, transitParams, display:
-//   {lifeMasterMode, minorLimitType, tongxianBase, limitChildBase, limitYearBoundary}, fields, moiraRules }
+//   {lifeMasterMode, minorLimitType, tongxianBase, limitChildBase, limitYearBoundary, [aspects, aspectOrbs, hiddenPlanets]（非缺省才带）},
+//   fields, moiraRules }
 export function buildGuolaoInfoSections(payload) {
   const errors = [];
   const src = payload || {};

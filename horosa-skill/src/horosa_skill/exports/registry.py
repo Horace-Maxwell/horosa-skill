@@ -635,7 +635,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 紫微四化仅在给了 ziweiSihua 入参时产；奇门遁甲（v13/上游 v3.8.0 的三式奇门腿汇总段）是挂载重算链
     # （aiAnalysisContext regenerateSanshiUnifiedSnapshot）的顶段，live builder 不产 → 同列可选段。
     # 快照由 vendored 上游 buildSanShiUnitedSnapshotText 产出后，太乙派生段与六壬断卦段都是**挑段**：
-    # appendPickedSections「仅在该段存在且有正文时输出」（SanShiUnitedMain.js:1411-1420）——太乙段随 ken 的
+    # appendPickedSections「仅在该段存在且有正文时输出」（SanShiUnitedMain.js:1298-1307）——太乙段随 ken 的
     # pan.sections（同 taiyi 的可选集），断卦段随六壬断卦层（同 liureng 的可选集）。此前 skill 自拼快照时给缺段填
     # 「（本盘未产出「X」）」占位，故无需登记；占位不是上游形态，已去掉 → 条件段双登记。
     "sanshiunited": ["紫微四化", "奇门遁甲",

@@ -43,11 +43,34 @@ PROTOCOL_TOOLS = frozenset({"export_parse", "export_registry", "knowledge_regist
 
 # 古籍转换档（上游 v3.13.1 toHantClassic / CLASSIC_SCOPE_CLASS）：玄史的「原文」区段里「范 / 里」缺省保留原字
 # （姓氏范、地名范阳、里坊里）。上游按 DOM 容器划区（XuanShi{Events,Figures,Celestial,Micro,Search} 的原文 / 史书原文
-# 块）；本仓玄史出的是一段快照文本，原文落在「原文：」行（详情）或条目行里的「原文：…」一格（列表，格间「；」），
-# 区段 = 「原文：」之后到行尾 / 下一格标签为止。标签集 = service/text/divination._XUANSHI_FIELD_ORDER 在原文之后的各项。
+# 块）；本仓玄史出的是一段快照文本，原文落在「原文：」格（详情一格一行；列表一条一行、格间「；」）。
+# 区段 = 「原文：」之后到下一格标签（「；标签：」或下一行以「标签：」开头）/ 段头「[」/ 列表序号行 / 文末为止——
+# 详情的原文可以是多行（玄学事件 original_text 有 2209 条带换行，上游 XuanShiEvents.js:113 的 pre-line 容器整块古籍档），
+# 续行一并罩住；列表行的值在渲染时已收成一行（divination._xuanshi_brief_text）。
+# 标签集 = service/text/divination 里原文之后可能出现的各格（通用 _XUANSHI_FIELD_ORDER 在原文之后的各项 + 天象族
+# _xuanshi_celestial_lines 的档案格）；tests/test_sync3131_followups.py 用真库逐条核对区段 == 原文。
 CLASSIC_TOOLS = frozenset({"xuanshi"})
 _CLASSIC_HEAD = "原文："
-_CLASSIC_NEXT_LABELS = ("白话", "解读", "可信度", "互见", "摘要", "正文", "说明", "注")
+_CLASSIC_NEXT_LABELS = (
+    "白话", "解读", "可信度", "互见", "摘要", "正文", "说明", "注",
+    "出处", "原历日", "纪年", "主体", "动作", "对象", "公历", "儒略历", "主题",
+)
+_CLASSIC_LINE_STOPS = tuple(f"{label}：" for label in _CLASSIC_NEXT_LABELS) + ("[",)
+
+
+def _classic_cut(text: str, start: int, end: int) -> int:
+    for label in _CLASSIC_NEXT_LABELS:
+        cut = text.find(f"；{label}：", start, end)
+        if cut >= 0:
+            end = cut
+    return end
+
+
+def _classic_boundary(line: str) -> bool:
+    if line.startswith(_CLASSIC_LINE_STOPS):
+        return True
+    digits = len(line) - len(line.lstrip("0123456789"))
+    return 0 < digits and line[digits:digits + 2] == ". "  # 列表下一条「12. …」
 
 
 def classic_spans(text: str) -> tuple[tuple[int, int], ...]:
@@ -56,13 +79,20 @@ def classic_spans(text: str) -> tuple[tuple[int, int], ...]:
     while at >= 0:
         start = at + len(_CLASSIC_HEAD)
         line_end = text.find("\n", start)
-        end = len(text) if line_end < 0 else line_end
-        for label in _CLASSIC_NEXT_LABELS:
-            cut = text.find(f"；{label}：", start, end)
-            if cut >= 0:
-                end = cut
+        line_end = len(text) if line_end < 0 else line_end
+        end = _classic_cut(text, start, line_end)
+        while end == line_end and line_end < len(text):  # 本行没被下一格截断 → 看续行
+            nxt = line_end + 1
+            nxt_end = text.find("\n", nxt)
+            nxt_end = len(text) if nxt_end < 0 else nxt_end
+            if _classic_boundary(text[nxt:nxt_end]):
+                break
+            line_end = nxt_end
+            end = _classic_cut(text, nxt, nxt_end)
+        while end > start and text[end - 1] in "\n \t":
+            end -= 1
         spans.append((start, end))
-        at = text.find(_CLASSIC_HEAD, end)
+        at = text.find(_CLASSIC_HEAD, max(end, start))
     return tuple(spans)
 
 

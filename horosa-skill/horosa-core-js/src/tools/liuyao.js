@@ -6,13 +6,13 @@
 //   ② 扁平齿轮 liuyaoSettings → mergeLiuyaoGearSettings（v3.13.0 aiAnalysisContext/regenCase.js:447-491），仅在给了键时注入；
 //   ③ 进 builder 前先 await 断语库（ensureLiuyaoDoctrineLoaded :1735-1737，[Q-391/T-373]：不载则 [占类断语]
 //      的《断易天机》摘要行整段静默缺失）；
-//   ④ 快照 = buildGuaSnapshotText(buildCaseSnapshotFields(record), st)（GuaZhanMain.js:201-391，
+//   ④ 快照 = buildGuaSnapshotText(buildCaseSnapshotFields(record), st)（GuaZhanMain.js:225-415，
 //      regenerateSixyaoSnapshot:1756 同一调用）：[起盘信息]（含 旬空 行与起卦时间「X时」后缀）/ [卦象]（本/互/之/
 //      错/综卦）/ [六爻与动爻]（本卦逐爻 + 之/互/伏神/综/错卦逐爻装卦）/ [断卦结构] / [卦辞与断语] /
 //      [判语库·参考诀表] / [断诀命中] / [占类断语]，段序、行式逐字节即上游。
 //   无头卦不带 guaDesc（buildTimeGua 只回 {yao,currentGua,nongli}）→ [卦辞与断语] 只有段头（上游同形，
 //   GuaZhanMain.js:62-63 注明挂载路径无 guaDesc）；卦辞原文仍由 Python 侧 /gua/desc 回在 data.descriptions。
-//   无头卦亦不带 god（页面 fillYaoGods 渲染期才写，GuaZhanMain.js:1482-1493）→ 逐爻行无「六神:」后缀，
+//   无头卦亦不带 god（页面 fillYaoGods 渲染期才写，GuaZhanMain.js:1666-1677）→ 逐爻行无「六神:」后缀，
 //   六神在 [断卦结构] 表内（同上游无头路径）。
 import { buildTimeGua, buildGuaSnapshotText } from '../vendor/guazhan/GuaZhanMain.js';
 import { loadDoctrine } from '../vendor/gua/data/liuyaoDoctrineCache.js';
@@ -23,7 +23,7 @@ import { YONGSHEN_CATEGORIES } from '../vendor/gua/liuyaoYongShen.js';
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 
 // ── 六爻判读口径（liuyaoSettings）────────────────────────────────────────────────────
-// 键表 = 上游 AI 挂载齿轮 SIXYAO_FIELDS 的 24 个 name 与控件类型（techniqueMountSettings.js:614-676，
+// 键表 = 上游 AI 挂载齿轮 SIXYAO_FIELDS 的 24 个 name 与控件类型（techniqueMountSettings.js:696-764，
 // 上游 HEAD 9b74714b），逐键移植。上游 mergeLiuyaoGearSettings 就是按这张 schema 机械求白名单的；
 // skill 不 vendor 那份 2798 行的 schema 文件（它 import 了半棵 UI 常量树），故只移植「键名 + 是否开关」——
 // 值域与缺省仍由 vendored liuyaoSchools / 各判读引擎自己的词表决定。键表漂移由
@@ -95,9 +95,9 @@ function liuyaoSettingsReport(flat) {
   return { ignored, invalid };
 }
 
-// 上游 fetchPreciseNongli 的 ensureYearGZByLunar（preciseCalcBridge.js:361-377）：后端 /nongli/time 不产
+// 上游 fetchPreciseNongli 的 ensureYearGZByLunar（preciseCalcBridge.js:323-336）：后端 /nongli/time 不产
 // yearGZByLunar，缺键时按同一份本地历法（buildLocalNongliFallback → buildLocalBaziResult(...).bazi.nongli，
-// :220-224）补上，其余字段一字不动 —— 不补则六爻「定年界线=正月初一」（yearBoundary='lunar'）恒回落立春。
+// :173-177）补上，其余字段一字不动 —— 不补则六爻「定年界线=正月初一」（yearBoundary='lunar'）恒回落立春。
 // 入参 = skill 发给 /nongli/time 的同一份请求；日界两开关缺席时取上游挂载路径实发值 1/1
 // （buildCaseSnapshotParams:819-820 恒带 defaultAfter23NewDay()/defaultLateZiHourUseNextDay() = 出厂 1/1，
 // 与后端缺省同值）。
@@ -131,7 +131,7 @@ function manualLines(lines) {
 // 上游 buildCaseSnapshotFields(record)（aiAnalysisContext.js:780-797）的同形薄适配：buildGuaSnapshotText 只读
 // date/time（.value.format）、zone、lon/lat（两者皆为对象即出「经纬度」行）、gender 五项。缺省逐项照上游：
 // zone 缺省 '+08:00'、lon/lat 缺省 ''、gender = record.gender ?? 1（:791；起课时间合成源 timepointDraft.gender
-// 亦缺省 1，AIAnalysisMain.js:996；页面全局 fields.gender 出厂 1，models/astro.js:410）→ 缺省即「求测人性别：男」。
+// 亦缺省 1，AIAnalysisMain.js:340；页面全局 fields.gender 出厂 1，models/astro.js:415）→ 缺省即「求测人性别：男」。
 // record 缺 date/time（直调 JS、无占时）→ 不建 date/time 字段，builder 即不出「日期」行（fieldTime 为空）。
 // date/time 是同一 DateTime 的两种格式化（:784-785）：这里直接回 Python 已归一的 'YYYY-MM-DD' / 'HH:mm:ss' 串，
 // 不做二次校验（公元前等非常规日期照印，不因格式化炸掉整份快照）。

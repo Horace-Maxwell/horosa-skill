@@ -125,7 +125,7 @@ class RelativePartyInput(FlexibleModel):
 class RelativeInput(FlexibleModel):
     inner: RelativePartyInput
     outer: RelativePartyInput
-    # 无头挂载 aiAnalysisContext.js:1228 `recordA.hsys ?? 1`（页面 AstroRelative.js:534 硬钉 0；缺省冲突跟无头路径）。
+    # 无头挂载 aiAnalysisContext.js:1228 `recordA.hsys ?? 1`（页面 AstroRelative.js:553 硬钉 0；缺省冲突跟无头路径）。
     hsys: int | None = 1
     zodiacal: int | None = 0
     siderealAyanamsa: Any | None = None
@@ -138,7 +138,7 @@ class GuoLaoInput(BirthInput):
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "guolaoNodeMode", "guolaoTrueSolarTime", "guolaoNodeType", "guolaoLilithType",
         "guolaoAyanamsa", "guolaoTuibianMethod", "guolaoGufaPrecess", "guolaoEqTropicalAnchor",
-        "guolaoLimitYearBoundary",
+        "guolaoLimitYearBoundary", "guolaoAspects", "guolaoAspectOrbs", "guolaoHiddenPlanets",
     })
     # 宿度制（上游 GuoLaoChartStyle.js:19 缺省 0 荀爽距星——v3.13.0 由 2 改；值域 guolaoData.SU28_MODE_LABEL 0–8）。BirthInput 那个是 bool
     # （宿占用），这里放宽成 int —— 2–8 此前被 pydantic 拒；旧 true/false 照后端 parseSu28Mode 解释为 1/0。
@@ -158,6 +158,12 @@ class GuoLaoInput(BirthInput):
     # 上游页面显示偏好 horosaGuolaoDisplay.limitYearBoundary（GuoLaoInput.js:850；GuoLaoChartStyle.GUOLAO_LIMIT_YEAR_BOUNDARIES），
     # 无头复算读同一份全局偏好（_buildGuolaoSnapshotTextV2Core:2058 getStoredGuolaoDisplay）。
     guolaoLimitYearBoundary: str | None = Field(default=None, description="大限年界：gregorian 公历元旦（缺省，Moira）| lichun 立春 | dongzhi 冬至（本地节气表精算）。改 [大限] 首限起点与各限起讫年（立春前生人岁次上一年、冬至后生人下一年）。")
+    # 七政相位显示偏好（上游页面显示偏好 horosaGuolaoDisplay.aspects / aspectOrbs / hiddenPlanets，GuoLaoChartStyle.js:355-407；
+    # 无头复算同读 getStoredGuolaoDisplay → main/snapshot.js:1221 buildGuolaoAspectSection(result, _gDisp)）。只改 [相位]，
+    # 挂载齿轮不收、快照也不印设置行（同上游）；缺省不下发 = 出厂（會衝刑合半合、内置容许度、全显示）。校验在 runners/guolao。
+    guolaoAspects: list[str] | str | None = Field(default=None, description="[相位] 只列哪些七政相位：會 衝 刑 合 半合 半刑 四合 中任选（列表或逗号串；缺省 會衝刑合半合；[] = 不列，段为「无」）。")
+    guolaoAspectOrbs: dict[str, Any] | None = Field(default=None, description="[相位] 各相位容许度覆盖 {相位: 0–30}（缺省内置 會12 衝6 刑3 合4 半合2 半刑1.5 四合1）。")
+    guolaoHiddenPlanets: list[str] | str | None = Field(default=None, description="[相位] 不参与的曜（按盘面标签）：日 月 金 木 水 火 土 计 罗 炁 孛 天 海 冥 升 顶（也收 Sun / North Node 等 id）。")
     # 起盘口径（上游页面左栏 / 挂载齿轮 techniqueMountSettings.js:1123-1181；缺省 = GuoLaoChartStyle.js getStored* 缺省）。
     guolaoNodeMode: str | None = Field(default=None, description="罗计命名：northKetuSouthRahu 北计南罗（缺省）| northRahuSouthKetu 北罗南计（整盘换位）。")
     guolaoTrueSolarTime: str | None = Field(default=None, description="报时星太阳时：true 真太阳时（缺省）| mean 平太阳时 | off 钟表时。")
@@ -193,7 +199,7 @@ class ACGInput(BirthInput):
     )
     eventDirection: str | None = Field(default=None, description="事件查找方向：next（缺省）|prev")
     eventFromDate: str | None = Field(default=None, description="事件查找起点日期 YYYY-MM-DD（缺省取盘面日期）")
-    # 上游 AstroAcg.genParams（AstroAcg.js:348-372）的其余引擎口径 + CCG + 关系盘 + 快照图层：照常声明（校验 + MCP
+    # 上游 AstroAcg.genParams（AstroAcg.js:347-371）的其余引擎口径 + CCG + 关系盘 + 快照图层：照常声明（校验 + MCP
     # 扁平面收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance，后端认不出的值经 meta 回显比对后告警。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "geodeticZero", "cuspLines", "coord", "posType", "horizon", "nodeType", "lilithType", "draconic", "harmonic",

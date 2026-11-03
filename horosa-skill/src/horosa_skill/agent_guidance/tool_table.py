@@ -1274,7 +1274,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
                 "when": "lat < 0 / 纬度串带 s",
             },
         ],
-        # 上游 BaZi.js:961-985 genParams + techniqueMountSettings.js:1692-1740 缺省。
+        # 上游 BaZi.js:1058-1087 genParams + techniqueMountSettings.js:1692-1740 缺省。
         safe_defaults=[
             {"field": "timeAlg", "value": 0, "meaning": "星阙默认：真太阳时"},
             {"field": "after23NewDay", "value": 1, "meaning": _AFTER23_DEFAULT_MEANING},

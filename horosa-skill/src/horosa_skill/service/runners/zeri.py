@@ -660,7 +660,7 @@ class ZeriRunners:
     ) -> list[Any]:
         """[Q-453] 后端扫描家族（天星/七政/印度）命中清单前 N 行的判读树。
 
-        与上游宿主 prefetchSnapshotExplains（TianxingElectionMain.js:358-374 等三处）同式：扫描完成后对前
+        与上游宿主 prefetchSnapshotExplains（TianxingElectionMain.js:383-399 等三处）同式：扫描完成后对前
         N 行（zeriSnapshotExplainRows，缺省 3）逐行打 /explain，t = row.pick 或 start+':00'、'-'→'/'；结果按
         行序交给 builder 的 explainAt。单行失败按上游置 null（该行只列清单、不附判读），但失败本身进
         envelope.warnings，不静默。
@@ -878,7 +878,7 @@ class ZeriRunners:
         merged: dict[str, Any] = dict(self._ZERI_BACKEND_SCAN_DEFAULTS.get(tool_name, {}))
         if tool_name == "indiazeri" and payload.get("indiaAyanamsa") is not None:
             # 与 india_chart 同词表的 indiaAyanamsa 作 ayanamsa 的别名（上游印度择时页把扫描岁差回写
-            # 显示盘的 indiaAyanamsa 字段，IndiaZeriMain.js:350 —— 两名同一值）；显式 ayanamsa 优先。
+            # 显示盘的 indiaAyanamsa 字段，IndiaZeriMain.js:397 —— 两名同一值）；显式 ayanamsa 优先。
             merged["ayanamsa"] = payload["indiaAyanamsa"]
         for source in (payload, options):
             for key in keys:

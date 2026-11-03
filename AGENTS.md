@@ -393,6 +393,9 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 ### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
 
+**古籍档（v0.47.0 / v0.47.1）**：玄史「原文」区段走上游 toHantClassic（范 / 里缺省保留原字，只在整词表里作 範 / 裡）；span 必须覆盖**多行**原文
+（到下一字段标签 / 段头 / 编号行），守卫对整库逐条断言 span == 原文。别的工具不走古籍档。
+
 **模型**：存档、引擎、门禁、内部逻辑永远是简体原文；只在结果**离开进程**时按 `HOROSA_OUTPUT_SCRIPT`
 （`zh-Hans` 缺省 / `zh-Hant` 台湾字形 / `zh-Hant-HK` 香港字形；设置界面是一个布尔勾选：MCPB `traditional_chinese`、
 插件 `traditionalChinese`；`setup` / `client config --output-script`）转换。缺省简体 = **逐字节不变**、转换器根本不跑

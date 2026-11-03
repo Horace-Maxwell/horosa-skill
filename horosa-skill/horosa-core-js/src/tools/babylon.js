@@ -66,7 +66,7 @@ export function runBabylon(payload) {
   // 于是无论选哪一档，十二分恒 B、肘度恒默认，而 [起盘信息] 行照常打出所选档名。
   // 派系显示名由档派生，不再要求调用方自带 schemeCn。
   // v3.11：`era` 进 [起盘信息] 纪元行（babylonAiSnapshot.js:219-221，塞琉古 / 安息 = S.E.−64），
-  // `ephemerisSource` 选 [数理星历] 木星的阶梯/锯齿函数（:120）—— 上游 effectiveOpts（BabylonMain.js:170-177）与
+  // `ephemerisSource` 选 [数理星历] 木星的阶梯/锯齿函数（:120）—— 上游 effectiveOpts（BabylonMain.js:179-186）与
   // 挂载再生（aiAnalysisContext.js:3215-3224）都是 judgeOpts ∪ {ephemerisSource, solstice} 两键随档、显式覆盖。
   const preset = BABYLON_SCHEMES[`${source.scheme || ''}`] || null;
   const opts = {

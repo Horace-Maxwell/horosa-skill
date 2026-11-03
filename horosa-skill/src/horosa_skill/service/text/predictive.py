@@ -18,6 +18,7 @@ from horosa_skill.service import _clock
 from horosa_skill.civil_calendar import (
     _MS_PER_DAY,
     _UNIX_EPOCH_JDN,
+    _birth_instant_ms_in_zone,
     _civil_date_str_of_jdn,
     _civil_wall_ms,
     _civil_wall_ms_of_moment,
@@ -253,25 +254,17 @@ def _predictive_common_sections_text(
     moment_lines = [f"导出时刻：{now.strftime('%Y-%m-%d %H:%M')}"]
     birth_text = f"{payload.get('date') or ''} {payload.get('time') or ''}".strip()
     if birth_text:
-        try:
-            birth_dt = datetime.strptime(birth_text[:16].replace("/", "-"), "%Y-%m-%d %H:%M")
-        except ValueError:
-            try:
-                birth_dt = datetime.strptime(birth_text[:10].replace("/", "-"), "%Y-%m-%d")
-            except ValueError:
-                birth_dt = None
-        if birth_dt is not None:
-            # 上游 v3.12.0 birthInstantMsInZone(params.birth, params.zone)：出生钟面按**本盘时区**解读（此前按本机时区，
-            # 本机与盘不在同一时区时年龄差出时差）；「导出时刻」仍是本机钟面（上游 new Date()）。
-            try:
-                birth_instant = _birth_instant_in_zone(birth_dt, payload.get("zone"))
-                age = (now.astimezone() - birth_instant).total_seconds() / (365.2425 * 24 * 3600)
-            except (OverflowError, OSError, ValueError):
-                age = (now - birth_dt).total_seconds() / (365.2425 * 24 * 3600)
-            if -1 < age < 200:
+        # 上游 astroAiSnapshot.js:1987-2004 buildCurrentMomentLines → birthInstantMsInZone(params.birth, params.zone)：出生钟面经
+        # parseLocalDateTimeMs 全式解析（秒 / 24:00 / T 分隔 / 多个空白 / 斜杠横杠混用都认），按**本盘时区**解读；「导出时刻」仍是
+        # 本机钟面（上游 new Date()）。此前 strptime 截前 16 位：秒被丢、「T」分隔与 24:00 退成当日 0 点。
+        # 1826 年以前（含儒略历 2 月 29 日 / 公元前 / 5 位年）的出生，上游年龄 ≥200 → 不出这行；认不出的串（上游 NaN）同样不出。
+        birth_ms = _birth_instant_ms_in_zone(birth_text, payload.get("zone"))
+        if birth_ms is not None:
+            age = (now.astimezone().timestamp() * 1000 - birth_ms) / (365.2425 * 24 * 3600 * 1000)
+            if math.isfinite(age) and -1 < age < 200:
                 # 上游 `Math.round(age * 100) / 100`（半数向 +∞，整数不带 .0）。
                 moment_lines.append(f"盘主当前年龄：{_ptext.js_str(_ptext.js_round2(age))} 岁")
-    # 上游 buildCurrentMomentLines(chartObj, extraLines)（astroAiSnapshot.js:2002-2018）：各键 timeline 定位行
+    # 上游 buildCurrentMomentLines(chartObj, extraLines)（astroAiSnapshot.js:1987-2003）：各键 timeline 定位行
     # （当前年龄点 / 当前分配星 / 当前向运年龄 / 当前所处…）由 builder 用自己的时间轴算好，追加在基线两行后。
     for line in extra_lines or []:
         if line:
@@ -284,7 +277,7 @@ def _predictive_common_sections_text(
 
 
 def _ap_name(value: Any) -> str:
-    """上游 AstroAgePoint.js:19 apName / AstroDistributions.js:21 distName：空 → '-'，否则 AstroTxtMsg。"""
+    """上游 AstroAgePoint.js:27 apName / AstroDistributions.js:31 distName：空 → '-'，否则 AstroTxtMsg。"""
     if value is None or value == "":
         return "-"
     return _ptext.astro_txt(value)
@@ -387,7 +380,7 @@ def _build_jaynesprog_snapshot_text(
     return "\n".join(lines).strip()
 
 
-# 上游 components/astro/AstroPlanetaryArc.js:19 ARC_SOURCES（页面/挂载齿轮同值域）。
+# 上游 components/astro/AstroPlanetaryArc.js:21 ARC_SOURCES（页面/挂载齿轮同值域）。
 _ARC_SOURCES = ("Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Sun")
 
 
@@ -480,7 +473,7 @@ def _full_years_between(birth: Any, when: datetime) -> int | None:
 def _build_planetaryages_snapshot_text(
     response: dict[str, Any], as_of: str | None, *, now: datetime | None = None, moment_lines: list[str] | None = None
 ) -> str:
-    """逐字镜像上游 utils/planetaryAges.js:79-127 buildPlanetaryAgesSnapshotText。
+    """逐字镜像上游 utils/planetaryAges.js:75-118 buildPlanetaryAgesSnapshotText。
 
     当前年龄缺省按「此刻」（上游 buildPlanetaryAges(chartObj) 无 asOf → moment()；skill 旧实现无 asOf 即不标
     当前带，与本仓 guidance「缺省=今天」矛盾）；asOf 给了则按该日（skill 扩展，同 JS asOf 形参）。
@@ -1083,7 +1076,7 @@ _PD_CORE_SUPPORTED_BASE_IDS = frozenset({
 
 
 def _pd_base_object_id(text: Any) -> str:
-    """AstroPrimaryDirectionChart.js:205 baseDirectionObjectId。"""
+    """AstroPrimaryDirectionChart.js:222 baseDirectionObjectId。"""
     raw = f"{text or ''}"
     parts = raw.split("_")
     if len(parts) < 3:
@@ -1106,7 +1099,7 @@ def _pd_is_antiscia_row(row: list[Any]) -> bool:
 
 
 def _pd_display_rows(rows: Any, pd_method: str, show_pd_bounds: Any) -> list[list[Any]]:
-    """AstroPrimaryDirectionChart.js:235 buildDisplayRows（只取过滤后的原始行）。"""
+    """AstroPrimaryDirectionChart.js:248 buildDisplayRows（只取过滤后的原始行）。"""
     hide_bounds = show_pd_bounds in (0, False)
     is_core = pd_method == "core_alchabitius"
     out: list[list[Any]] = []
@@ -1170,14 +1163,6 @@ def _today_for_chart(zone: Any) -> str:
     """上游 astroProgSnapshot.js:18-21 today(zone) / regenHoraryElection.js:196-199 todayDateStr(zone)：
     给了 zone（非空）= nowForChart(zone) 的日期；不给 = 本机今日。"""
     return (_now_for_chart(zone) if zone else _clock.now()).strftime("%Y-%m-%d")
-
-
-def _birth_instant_in_zone(birth_wall: datetime, zone: Any) -> datetime:
-    """上游 astroAiSnapshot.js birthInstantMsInZone(birth, zone)：出生钟面按本盘时区解读；时区不合法 → 按本机时区（原样）。"""
-    seconds = _chart_zone_seconds(zone)
-    if seconds is None:
-        return birth_wall.astimezone()
-    return birth_wall.replace(tzinfo=timezone(timedelta(seconds=seconds)))
 
 
 def _is_gregorian_leap(year: int) -> bool:

@@ -360,7 +360,7 @@ def _disambiguate_echo_num(chart_obj: Any, num: str | None) -> str | None:
 
 
 def resolve_house_system(chart_obj: Any, fields: Any) -> dict[str, Any]:
-    """wholeSignRulers.js:178 resolveHouseSystem：当前分宫制 {num, label, isAscWholeSign}（极区回退时另附 fallback）。
+    """wholeSignRulers.js:187 resolveHouseSystem：当前分宫制 {num, label, isAscWholeSign}（极区回退时另附 fallback）。
 
     取值序与 [起盘信息] 同：fields.hsys（发出去的入参）→ params.hsys（请求 echo）→ 反查 chart.hsys 文本；数字位命中即权威。
     """

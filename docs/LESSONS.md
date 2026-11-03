@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.1-dev (2026-11-03) | v0.47.0 收尾项：宿占整张死键表、七政显示偏好、玄史天象记录字段、繁体古籍档漏多行原文、年龄行日期解析、127 处过期上游行号 | 古籍档 span 对整库 33 117 条记录逐条钉；年龄行在 node 里对上游 210 例对拍；死键 / 偏好表逐值对上游 |
 | v0.47.0-dev (2026-11-03) | 上游 v3.13.0 → v3.13.1 再同步：vendor 清单 / 名字级审计全绿，奇门本地路由节气种子却一直无日柱（局数大面积错）；冬至日柱订正改在内部函数、skill 只引了文件名；公元前目标日被四位年正则拒收 | 端口审计加文件级命中；qimen 补日柱（live 种子 fixture）；`_astroextra_date` 走民用历；五域逐函数复核 |
 | v0.46.2-dev (2026-10-31) | Windows 原生复验 v0.46.1 时盯上一条「如实承认的边界」：trace / 决策台账被多个 MCP 会话共写，Windows 上 CRT 的 O_APPEND 是模拟的（seek + write 两步），8 进程 × 200 行每轮丢约 24%；守卫用例在 Windows 上一直 skip | `appendlog.append_line`：Windows 用只申请 FILE_APPEND_DATA 的原生句柄（内核在末尾原子写，1600/1600、16 进程 × 240 KB 行 960/960），trace 与台账都走它；跨进程用例取消 Windows 跳过 + 负向对照用例证明旧写法本机确实会丢 |
 | v0.46.1 (2026-10-31) | 编辑发布说明触发的 completeness 必然误报：release 事件检出 tag 的提交，那里的 server.json 还是上一版 mcpb sha | completeness 的 checkout 固定默认分支；流水线形状测试锁住 |
@@ -168,6 +169,23 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.1-dev / 2026-11-03 — v0.47.0 收尾：按行切的 span 漏多行值、两个上游日期解析器口径不同、上游 norm* 静默丢值
+
+**背景**：v0.47.0（星阙 v3.13.1）发版同时把同步报告里列为「未做」的几项补完（两路 agent，独立 worktree，不碰正在打包的 main）。
+
+1. **繁体古籍档漏多行原文**。v0.47.0 的 `classic_spans` 只认「原文：」那一行；玄史 2 209 条事件的 `original_text` 是多行的，
+   续行在 zh-Hant 里仍被转成 範 / 裡。→ span 延到下一个字段标签 / 段头 / 列表编号行；守卫对**整库 33 117 条记录**断言 span 恰等于原文
+   （手挑样例抓不到）。
+2. **两个上游日期解析器不同口径**。`parseLocalDateTimeMs` 把纯日期当本地 0 点，`Date.parse` / `parseDateTimeMs` 当 UTC 0 点；strptime
+   移植在 24:00、T 分隔、秒、时区尾巴上都会漂。「盘主当前年龄」改为逐式移植 `birthInstantMsInZone`，node 里跑上游
+   `buildCurrentMomentLines` 冻结时钟对拍 30 种出生串 × 7 个时区（`tests/test_sync3131_followups.py`）。`_local_offset_ms_at` 遇 24:00
+   曾抛错回落成「此刻偏移」，一并修。
+3. **上游 norm* 静默丢非法值**（七政 `normAspectOrbs` / `normHiddenList`）：照抄会让用户以为设置生效了。skill 侧报
+   `tool.guolao_invalid_display_setting`（与既有 `_GUOLAO_DISPLAY_KEYS` 同策略），这是有意偏离。
+4. **宿占死键整表**：上游 `SUZHAN_DEAD_CLASSICAL_KEYS` 41 键照收不下发、技法卡不回显；live 实测下发与否快照 sha 相同。
+5. **过期行号**：791 处 `File.js:a-b` 引用里 216 处名字已不在所引行；按「名字恰在所引行的上游版本」做 diff 映射，严格改 127 处，
+   89 处无法机判留清单（不做 CI 守卫：引用与符号的对应是启发式）。
 
 ### v0.47.0-dev / 2026-11-03 — 上游 v3.13.1 再同步：审计看名字看不到文件、奇门种子从来没日柱、公元前目标日被拒
 

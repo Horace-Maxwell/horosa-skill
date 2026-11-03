@@ -431,17 +431,17 @@ _PD_TERMS_VARIANT_LABELS = {1: "托勒密界·校勘本", 2: "托勒密界·经�
 
 
 def _pd_msg(value: Any) -> str:
-    """AstroDirectMain.js:100-111 msg：AstroTxtMsg[id] → AstroMsg[id]（恒星/宫位等文字条目）→ id。"""
+    """AstroDirectMain.js:115-126 msg：AstroTxtMsg[id] → AstroMsg[id]（恒星/宫位等文字条目）→ id。"""
     return _ptext.astro_msg(value)
 
 
 def _pd_msg_with_house(chart_wrap: dict[str, Any], object_id: Any) -> str:
-    """AstroDirectMain.js:113 msgWithHouse = appendPlanetHouseInfoById(msg(id), chartObj, id, {showHouse,showRuler})。"""
+    """AstroDirectMain.js:128 msgWithHouse = appendPlanetHouseInfoById(msg(id), chartObj, id, {showHouse,showRuler})。"""
     return _normalize_ai_planet_label(_append_planet_house_info(_pd_msg(object_id), chart_wrap, f"{object_id}"))
 
 
 def _pd_ext_base_text(base: str) -> str | None:
-    """AstroDirectMain.js:153 extDirectionBaseText（S/P 扩展本体语义短名）。"""
+    """AstroDirectMain.js:168 extDirectionBaseText（S/P 扩展本体语义短名）。"""
     matched = re.fullmatch(r"Cusp(\d+)", base or "")
     if matched:
         return f"第{matched.group(1)}宫头"
@@ -520,7 +520,7 @@ def _pd_split_degree(value: Any) -> tuple[int, int]:
 
 
 def _pd_degree_text(value: Any, pd_method: str) -> str:
-    """AstroDirectMain.js:122 degreeText：horosa_legacy 走 splitDegree，其余 floor 度/floor 分。"""
+    """AstroDirectMain.js:137 degreeText：horosa_legacy 走 splitDegree，其余 floor 度/floor 分。"""
     if pd_method == "horosa_legacy":
         deg, minute = _pd_split_degree(value)
         return f"{deg}度{minute}分"
@@ -540,7 +540,7 @@ def _pd_degree_text(value: Any, pd_method: str) -> str:
 
 
 def _pd_split_degree_text(value: Any) -> str:
-    """AstroPrimaryDirectionChart.js:69 splitDegreeText / aiAnalysisContext pdSplitDegreeText（当前Arc）。"""
+    """AstroPrimaryDirectionChart.js:82 splitDegreeText / aiAnalysisContext pdSplitDegreeText（当前Arc）。"""
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -852,7 +852,7 @@ def _build_pdchart_snapshot_text(payload: dict[str, Any], response: dict[str, An
     )
 
 
-# 上游 components/astro/AstroZR.js:314-322 ZR_BASE_POINTS：福点/六希腊点/四轴 11 项 + 十二星座（[Q-174/T-114]）。
+# 上游 components/astro/AstroZR.js:319-329 ZR_BASE_POINTS：福点/六希腊点/四轴 11 项 + 十二星座（[Q-174/T-114]）。
 _ZR_BASE_POINTS = (
     "Pars Fortuna", "Pars Spirit", "Pars Mercury", "Pars Venus", "Pars Mars", "Pars Jupiter", "Pars Saturn",
     "Asc", "Desc", "MC", "IC", *_ptext.LIST_SIGNS,
@@ -867,12 +867,12 @@ _ZR_AI_MODES = {
 
 
 def _zr_sign_name(sign: Any) -> str:
-    """AstroZR.js:63 signName：空 → '无'，否则 AstroTxtMsg。"""
+    """AstroZR.js:64 signName：空 → '无'，否则 AstroTxtMsg。"""
     return _ptext.astro_txt(sign) if sign else "无"
 
 
 def _zr_node_line(item: dict[str, Any] | None) -> str:
-    """AstroZR.js:70 nodeLine：座-日期[-LB][-截]（[Q-362/T-343] truncated=末段子期按父期截断）。"""
+    """AstroZR.js:71 nodeLine：座-日期[-LB][-截]（[Q-362/T-343] truncated=末段子期按父期截断）。"""
     if not item:
         return "无"
     base = f"{_zr_sign_name(item.get('sign'))}-{item.get('date') or '无'}"
@@ -882,7 +882,7 @@ def _zr_node_line(item: dict[str, Any] | None) -> str:
 
 
 def _zr_mark_special_flags(items: Any, parent_sign_idx: int) -> list[dict[str, Any]]:
-    """AstroZR.js:79 markZRSpecialFlags：同父下第二个「与父座对冲」的子期标 LB（跳宫）。"""
+    """AstroZR.js:85 markZRSpecialFlags：同父下第二个「与父座对冲」的子期标 LB（跳宫）。"""
     if not isinstance(items, list):
         return []
     opposite = 0
@@ -1049,7 +1049,7 @@ def _zr_period_start_ms(item: Any) -> int | None:
 
 
 def _zr_current_period_line(items: Any, now: datetime | None = None) -> str:
-    """AstroZR.js:221-231 zrCurrentPeriodLine：「当前所处：L1 X期（…至…）/ L2 Y期（…至…）」。"""
+    """AstroZR.js:217-227 zrCurrentPeriodLine：「当前所处：L1 X期（…至…）/ L2 Y期（…至…）」。"""
     if not isinstance(items, list):
         return ""
     moment = now or _clock.now().astimezone()
@@ -1075,7 +1075,7 @@ def _zr_items(response: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _build_zr_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:
-    """逐字镜像上游 components/astro/AstroZR.js:233-311 buildZRAISnapshot(Body)（[当前时点]/[方法说明] 由统一出口追加）。
+    """逐字镜像上游 components/astro/AstroZR.js:229-307 buildZRAISnapshot(Body)（[当前时点]/[方法说明] 由统一出口追加）。
 
     F8：基点 basePoint（福点/六希腊点/四轴/十二星座）→ 段头 [基于<名>推运]（此前恒写「基于X点推运」字面占位）；
     输出层级 aiMode（L1 全列 / 某 L1 下全部 L2 / 某 L2 下全部 L3 / 某 L3 下全部 L4）+ aiL1Idx/aiL2Idx/aiL3Idx 钻取。

@@ -512,13 +512,13 @@ def _build_jieqi_compact_chart_text(payload: dict[str, Any], chart_wrap: dict[st
 
 
 def _normalize_ganzi(text: Any) -> str:
-    """JieQiChartsMain.js:349 normalizeGanZi：取前两字。"""
+    """JieQiChartsMain.js:352 normalizeGanZi：取前两字。"""
     raw = f"{text or ''}".strip()
     return raw[:2] if len(raw) >= 2 else raw
 
 
 def _simple_four_columns(nongli: Any) -> dict[str, dict[str, str]] | None:
-    """JieQiChartsMain.js:354 toSimpleFourColumns：农历字段 → 四柱 ganzi（无纳音）。"""
+    """JieQiChartsMain.js:357 toSimpleFourColumns：农历字段 → 四柱 ganzi（无纳音）。"""
     if not isinstance(nongli, dict) or not nongli:
         return None
     return {
@@ -530,7 +530,7 @@ def _simple_four_columns(nongli: Any) -> dict[str, dict[str, str]] | None:
 
 
 def _jieqi_four_columns(item: Any) -> dict[str, Any] | None:
-    """JieQiChartsMain.js:378 getJieqiFourColumns：bazi.fourColumns → fourColumns → bazi(农历形) → nongli。"""
+    """JieQiChartsMain.js:381 getJieqiFourColumns：bazi.fourColumns → fourColumns → bazi(农历形) → nongli。"""
     if not isinstance(item, dict):
         return None
     bazi = item.get("bazi")
@@ -548,7 +548,7 @@ def _jieqi_four_columns(item: Any) -> dict[str, Any] | None:
 
 
 def _compact_jieqi_seed_row(item: dict[str, Any]) -> dict[str, Any]:
-    """JieQiChartsMain.js:420 compactJieqiSeedResult 的逐行形状：四柱只留 ganzi/naying（Java 四柱对象带神煞/卦等，体量大）。"""
+    """JieQiChartsMain.js:423 compactJieqiSeedResult 的逐行形状：四柱只留 ganzi/naying（Java 四柱对象带神煞/卦等，体量大）。"""
     four = _jieqi_four_columns(item)
 
     def part(value: Any) -> dict[str, str]:

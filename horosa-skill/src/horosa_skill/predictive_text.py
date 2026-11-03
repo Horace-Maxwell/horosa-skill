@@ -74,7 +74,7 @@ def js_to_fixed(value: Any, digits: int) -> str:
 
 
 def js_fmt_num(value: Any, digits: int = 2) -> str:
-    """上游 components/astro/AstroExtraCommon.js:67 `fmtNum`：非有限数 → '-'，否则 toFixed(digits)。"""
+    """上游 components/astro/AstroExtraCommon.js:74 `fmtNum`：非有限数 → '-'，否则 toFixed(digits)。"""
     if value is None or isinstance(value, bool):
         return "-"
     try:
@@ -130,7 +130,7 @@ UPSTREAM_ASTRO_MSG_FALLBACK: dict[str, str] = {
 
 
 def astro_msg(value: Any) -> str:
-    """AstroDirectMain.js:100-111 `msg(id)`：null → ''；AstroTxtMsg[id] → AstroMsg[id] → `${id}`。"""
+    """AstroDirectMain.js:115-126 `msg(id)`：null → ''；AstroTxtMsg[id] → AstroMsg[id] → `${id}`。"""
     if value is None:
         return ""
     key = js_str(value)
@@ -162,7 +162,7 @@ def zodiacal_display_text(zodiacal_raw: Any, ayan_key: Any) -> str:
 
 
 def build_predictive_birth_lines(chart_wrap: dict[str, Any] | None) -> list[str]:
-    """上游 utils/astroAiSnapshot.js:1956 `buildPredictiveBirthLines(chartObj)`。
+    """上游 utils/astroAiSnapshot.js:1929 `buildPredictiveBirthLines(chartObj)`。
 
     chart_wrap = /chart 响应（{params, chart}）。缺盘时只出 params 能给的行（不猜昼夜）。
     """

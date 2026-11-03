@@ -12,7 +12,7 @@ import { conditionSummaryText } from '../vendor/divination/zeri/conditionGlyph.j
 import { zeriRowOpts, withLeafKind, explainAtFromList } from './zeriSnapshotOpts.js';
 
 // ── [单时判读]（/electionscan/explain 的文本化）────────────────────────────────
-// 语汇与配对规则逐字取自上游 ConditionBuilderModal.js:139-181（renderExplainNode）：
+// 语汇与配对规则逐字取自上游 ConditionBuilderModal.js:102-133（renderExplainNode）：
 //   组行 = GATE_CN2[op] + ✓/✗；叶 = 「设定 <conditionSummary>」+「实际 <actual> ✓/✗」；
 //   设定文本按 UI 树叶 DFS 序与 explain 树（编译形）先序配对 —— compile 不增删叶，先序一致。
 // 差异仅在呈现介质：文本导出用 conditionSummaryText（glyph 回退 title），缩进代替嵌套边框。
@@ -108,7 +108,7 @@ export function runTianxing(payload) {
   // --- snapshot ---
   const rawCtx = input.ctx && typeof input.ctx === 'object' ? input.ctx : {};
   // [Q-452/Q-453] 命中清单上限 + 前 N 行附判读树：判读是服务端的，Python 按上游 prefetchSnapshotExplains
-  // 预取、按行序交来（input.explains），这里装成 builder 读的 ctx.explainAt（TianxingElectionMain.js:425）。
+  // 预取、按行序交来（input.explains），这里装成 builder 读的 ctx.explainAt（TianxingElectionMain.js:450）。
   const ctx = {
     ...rawCtx,
     tree: withLeafKind(rawCtx.tree || null),

@@ -79,7 +79,7 @@ export function runCalendarExtras(payload) {
     if (people.length) {
       // 上游 RiziMain.baziOf：person 本身保留，八字挂在它的 `bazi` 字段上（riziSnapshot 用
       // `persons.filter(p => p && p.bazi)` 决定 [当事人八字] 段出不出）。
-      // 🔴 `time` 必须是**纯时刻**。下游 parseDateTime（baziLunarLocal.js:265）做
+      // 🔴 `time` 必须是**纯时刻**。下游 parseDateTime（baziLunarLocal.js:247）做
       // `time.split(':')` 后 Number()，传完整日期时间串时首段 '2020-01-01 14' → NaN → hour 恒 0，
       // 于是每个当事人都按 00:30 起盘、时柱恒子时、23 点日界永不触发；而这些喜忌又喂
       // scoreDayForPerson，整个 [日子馆·个性化择日] 排名都建立在错盘上。

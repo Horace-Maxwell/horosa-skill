@@ -38,7 +38,7 @@ function splitCard(block) {
   return { title: m ? m[1] : null, text };
 }
 
-// 世运口径（上游页面设置 MUNDANE_PAGE_SETTINGS，MundaneMain.js:519-526）：规则集四派 + 两个页面级覆盖 + 吠陀世运三键。
+// 世运口径（上游页面设置 MUNDANE_PAGE_SETTINGS，MundaneMain.js:526-533）：规则集四派 + 两个页面级覆盖 + 吠陀世运三键。
 // 值域锚定引擎自带表（MUNDANE_RULESETS / MUNDANE_ORB_SCHEME_CN / MUNDANE_INGRESS_RULE_CN / SIGN_ORDER），认不出的回执 invalid。
 function settingsCheck(settings) {
   const s = settings && typeof settings === 'object' ? settings : {};

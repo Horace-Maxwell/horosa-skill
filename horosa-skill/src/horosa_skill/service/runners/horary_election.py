@@ -273,7 +273,7 @@ class HoraryElectionRunners:
     # 上游 divination/engine/timeLords.js:209-210（returnCharts.js 的回归周期与平均速率 RATE 都取它）。
     _SOLAR_RETURN_DAYS = 365.25
     _LUNAR_RETURN_DAYS = 27.321661
-    # fetchPdHitsNearElection（returnCharts.js:98）：±windowDays（缺省 240）、按 |Δ日| 升序取前 limit（缺省 8）。
+    # fetchPdHitsNearElection（returnCharts.js:100）：±windowDays（缺省 240）、按 |Δ日| 升序取前 limit（缺省 8）。
     _ELECTION_PD_WINDOW_DAYS = 240
     _ELECTION_PD_LIMIT = 8
     _ELECTION_PD_TIME_KEY_COMPAT = {"Cardan": "Cardano", "Placidus": "Ptolemy"}  # returnCharts.js:106 旧存档值兼容

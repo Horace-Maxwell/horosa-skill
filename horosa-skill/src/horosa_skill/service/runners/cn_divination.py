@@ -787,7 +787,7 @@ class CnDivinationRunners:
             lines = _normalize_gua_lines(struct.get("lines")) or lines
         current_code = payload.get("gua_code") or _derive_gua_code(lines)
         changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
-        # 卦辞原文：上游无头卦不带 guaDesc，[卦辞与断语] 只有段头（GuaZhanMain.js:338-363 + :62-63）；
+        # 卦辞原文：上游无头卦不带 guaDesc，[卦辞与断语] 只有段头（GuaZhanMain.js:475-506 + :62-63）；
         # /gua/desc 照旧取来放 data.descriptions（结构化数据面，不进快照）。
         descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
         snapshot_text = struct.get("snapshot_text") or ""

@@ -100,7 +100,7 @@ class WesternRunners:
             "export_snapshot": self._augment_export_payload(technique="planet_cycles", snapshot_text=snapshot_text),
         }
 
-    # ── 占星地图（AstroCartoGraphy）请求口径：上游 AstroAcg.genParams（AstroAcg.js:348-372）逐键 ──────────────
+    # ── 占星地图（AstroCartoGraphy）请求口径：上游 AstroAcg.genParams（AstroAcg.js:347-371）逐键 ──────────────
     # 引擎口径键（ACGraph.__init__ 按名读，ACGraph.py:239-340）：缺省即后端默认、零回归；给了才下发。
     _ACG_ENGINE_KEYS = (
         "mode", "lsMode", "geodetic", "geodeticVar", "geodeticZero", "cuspLines", "coord", "posType", "horizon",
@@ -137,7 +137,7 @@ class WesternRunners:
             "lsMode": payload.get("lsMode", "great"),
             "geodetic": payload.get("geodetic", "sepharial"),
             "geodeticVar": payload.get("geodeticVar", "longitude"),
-            # 上游 genParams 恒带 hsys = 页面「落点宫制」（缺省 placidus，AstroAcg.js:130/184）：宫尖线与落点报告同用。
+            # 上游 genParams 恒带 hsys = 页面「落点宫制」（缺省 placidus，AstroAcg.js:131/184）：宫尖线与落点报告同用。
             "hsys": payload.get("pointHsys") or "placidus",
         }
         for key in self._ACG_ENGINE_KEYS:

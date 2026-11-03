@@ -18,6 +18,7 @@ import json
 from datetime import datetime, timezone
 from functools import lru_cache
 from horosa_skill.contracts_locator import contract_path
+from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from typing import Any
 
 TECHNIQUE_CARD_SCHEMA = "horosa.skill.technique_card.v1"
@@ -66,10 +67,8 @@ _DAY_BOUNDARY_DEFAULT_TOOLS = frozenset({
     "nongli_time", "qimen", "taiyi", "sanshiunited",
 })
 # 字段在这些工具上是死键（不参与计算）→ 卡片不回显。宿占：上游 techniqueMountSettings.js:1722 SUZHAN_DEAD_CLASSICAL_KEYS
-# 收 sunriseMode（宿占挂载齿轮隐去它、recordPayloadKeys 不带它，:1774）；runners/guolao._run_suzhan_tool 同样不下发。
-_FIELD_DEAD_FOR_TOOLS: dict[str, frozenset[str]] = {
-    "sunriseMode": frozenset({"suzhan"}),
-}
+# 整表（41 键，含 sunriseMode；宿占挂载齿轮隐去、recordPayloadKeys 不带，:1774）；runners/guolao._run_suzhan_tool 同样不下发。
+_FIELD_DEAD_FOR_TOOLS: dict[str, frozenset[str]] = {key: frozenset({"suzhan"}) for key in SUZHAN_DEAD_CLASSICAL_KEYS}
 # 闸门状态：调用方声称「设置已与用户确认」还是「接受默认」，是报告里最该留痕的一项。
 _GATE_FIELDS: tuple[tuple[str, str], ...] = (
     ("agent_confirmed_settings", "已与用户确认设置"),

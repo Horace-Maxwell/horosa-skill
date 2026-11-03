@@ -73,7 +73,7 @@ class MingliRunners:
         }
 
     # ── 八字（F9）──────────────────────────────────────────────────────────────────────────────
-    # 上游八字页主路径是**本地** lunar.js 引擎：BaZi.js:716-755 fetchBaziCached（bazi_direct 同形 :757-795）
+    # 上游八字页主路径是**本地** lunar.js 引擎：BaZi.js:782-821 fetchBaziCached（bazi_direct 同形 :757-795）
     # `buildLocalBaziResult(params)` 成功即用，抛错（lunar-js 不可靠域：公元前 / 万年后 / 不可解析日期）才回退
     # Java /bazi/birth；两条路都经 normalizeBaziResult → buildBaziSnapshotText（BaZi.js:1000-1046）。
     # v0.40 前本仓整盘走 Java：godKeyPos 缺省「年日」（页面「年」，techniqueMountSettings.js:1699）、命宫缺省
@@ -81,7 +81,7 @@ class MingliRunners:
     # 快照是 Python 手写 port（缺纳音长生列 / 命宫起法标注 / 起运行 / 小运年龄口径 / 三维分列）。
     # 现与页面同源：本地引擎 + vendored builder（vendor/bazi/baziSnapshot.js，逐字抽自 BaZi.js）。
     _BAZI_OPTION_VOCAB: dict[str, tuple[Any, ...]] = {
-        # 取值表逐条对照 techniqueMountSettings.js:1692-1740（八字挂载设置）；缺省 = BaZi.js:961-985 genParams。
+        # 取值表逐条对照 techniqueMountSettings.js:1692-1740（八字挂载设置）；缺省 = BaZi.js:1058-1087 genParams。
         # timeAlg 2（春分定卯时）上游置灰「尚无独立换算」（CnTraditionInput.js:517），不收。
         "godKeyPos": ("年", "日", "年日"),
         "phaseType": (0, 1, 2),
@@ -130,7 +130,7 @@ class MingliRunners:
         return fallback
 
     def _bazi_params(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-        """上游 genParams（BaZi.js:961-985）同形同序的起盘参数 + 只进快照的附加项（:1029 snapshotParams / 挂载 period）。"""
+        """上游 genParams（BaZi.js:1058-1087）同形同序的起盘参数 + 只进快照的附加项（:1029 snapshotParams / 挂载 period）。"""
         gender = payload.get("gender")
         # 性别缺省 = 上游「未知(按男排)」档 -1（CnTraditionInput.js:506-509）：引擎按男排、快照印「性别：未知」。
         gender = 1 if gender in (1, True, "1") else (0 if gender in (0, False, "0") else -1)

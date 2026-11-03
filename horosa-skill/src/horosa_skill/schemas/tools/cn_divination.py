@@ -293,6 +293,22 @@ class SanShiUnitedInput(FlexibleModel):
     ziweiSihua: dict[str, Any] | None = Field(default=None, description="紫微四化层选择 {daxianIdx, liunianIdx}；给了才产 [紫微四化] 段。")
 
 
+# 宿占的死键（上游 utils/techniqueMountSettings.js:1722-1726 SUZHAN_DEAD_CLASSICAL_KEYS @06f25f21，逐值同序；
+# tests/test_sync3131_suzhan_dead_keys.py 对上游逐值看守）：宿占快照只读宫位 / 星曜宿度 / 农历时支
+# （SuZhanMain.buildSuzhanSnapshotText），这 41 个西占古典判读键对宿占正文零消费 → 上游挂载齿轮隐去、
+# recordPayloadKeys（:1774）不带。skill 照收（BirthInput 共享键，老调用方传了不报错），但不下发后端
+# （runners/guolao._run_suzhan_tool）、技法卡不回显（reports/technique_card._FIELD_DEAD_FOR_TOOLS）——同上游「隐去」，不出警告。
+SUZHAN_DEAD_CLASSICAL_KEYS: tuple[str, ...] = (
+    "termsVariant", "sectBuffer", "leoBoundFirst", "triplicity", "lotReversal", "lotsDocReverse", "nodeExaltation",
+    "geminiBoundEmended", "cazimiOrb", "combustOrb", "underBeamsOrb", "vocMode", "vocIncludeOuter", "fixedStarOrbMode",
+    "fixedStarOrb", "antisciaOrb", "viaCombustaVariant", "combustOwnChariotExempt", "stationMarking", "hermeticLotsReversal",
+    "erosConstruction", "lotFortuneVariant", "lotFatherCombustAlt", "lotProjection", "dignityDebilities", "almutenTripMode",
+    "planetaryHourMethod", "sunriseMode", "orbSystem", "luminaryOrbBonus", "aspectIncludeCusps", "aspectIncludeLots",
+    "aspectIncludeMidpoints", "solarReturnVariant", "returnLatitudeMode", "vulcanCalc", "strongRecption", "simpleAsp",
+    "virtualPointReceiveAsp", "orbScale", "useStoredOrbs",
+)
+
+
 class SuZhanInput(BirthInput):
     # F11（上游 SuZhanMain.js:396-428 + models/astro.js）：宫制缺省 1（页面共享 astro 模型 DefaultHouseSystem=1）；
     # 外盘/盘型只影响快照两行标签（上游缺省不带键 → 不出那两行，故缺省 None）；人事十二宫缺省 0=八字公式起盘

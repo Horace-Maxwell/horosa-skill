@@ -444,9 +444,12 @@ def test_current_age_reads_the_birth_wall_clock_in_the_chart_zone(frozen: None) 
 
 
 def test_birth_instant_in_zone_falls_back_to_machine_zone_for_bad_zones() -> None:
+    # v0.47.x：predictive 的出生瞬时改走 civil_calendar._birth_instant_ms_in_zone（birthInstantMsInZone 全式，含 parseLocalDateTimeMs）。
+    from horosa_skill.civil_calendar import _birth_instant_ms_in_zone
+
     wall = datetime(1995, 6, 3, 5, 30)
-    assert T._birth_instant_in_zone(wall, "+08:00") == datetime(1995, 6, 2, 21, 30, tzinfo=timezone.utc)
-    assert T._birth_instant_in_zone(wall, "bogus") == wall.astimezone()
+    assert _birth_instant_ms_in_zone("1995-06-03 05:30", "+08:00") == datetime(1995, 6, 2, 21, 30, tzinfo=timezone.utc).timestamp() * 1000
+    assert _birth_instant_ms_in_zone("1995-06-03 05:30", "bogus") == wall.astimezone().timestamp() * 1000
     assert T._chart_zone_seconds("+05:45:30") == 5 * 3600 + 45 * 60 + 30 and T._chart_zone_seconds("+8:00") is None
     assert T._chart_zone_seconds(timedelta(hours=1)) is None
 

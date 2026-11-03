@@ -40,7 +40,7 @@ export function runHeluo(payload) {
   // 缺省 0（sync311 wave 3b，此前误为 1）：上游 AI 挂载无头路径 buildHeluoSnapshotForRecord → buildChartShusuanBazi →
   // buildChartBaziParams 取 buildFieldObject 的 timeAlg = record.timeAlg ?? 0（aiAnalysisContext.js:603,1793）；挂载齿轮
   // 缺省亦 0（techniqueMountSettings.js:147,1882）。页面 HeLuoMain.getModel 的 `fieldVal(f, 'timeAlg', 1)`（:188）读全局
-  // fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:375-377 + newChartSeeds.js:43），回退值 1 从不生效。
+  // fields.timeAlg —— 该字段恒在、出厂种子 0（models/astro.js:380-382 + newChartSeeds.js:48），回退值 1 从不生效。
   const timeAlg = input.timeAlg === undefined || input.timeAlg === null ? 0 : input.timeAlg;
   // 日界 / 晚子时：上游两路缺省同为全局出厂 1/1 —— 无头 buildFieldObject after23NewDay = record ?? defaultAfter23NewDay()
   // （aiAnalysisContext.js:606）、页面 fieldVal(f,'after23NewDay',defaultAfter23NewDay())（HeLuoMain.js:191-192）。
@@ -112,7 +112,7 @@ export function runHeluo(payload) {
     // 缺省 2697；与上游 KinAstroMain.buildHeluoOpts 同式 parseInt、0 可达（[Q-265/SO-18]）。
     huangdiOffset: Number.isFinite(parseInt(input.huangdiOffset, 10)) ? parseInt(input.huangdiOffset, 10) : 2697,
   };
-  // 取化工法（上游挂载 schema heluo.quHuaGong，techniqueMountSettings.js:1883-1886）：只认两档，余者回缺省。
+  // 取化工法（上游挂载 schema heluo.quHuaGong，techniqueMountSettings.js:2274-2277）：只认两档，余者回缺省。
   const quHuaGong = input.quHuaGong === 'siFangBoOnly' ? 'siFangBoOnly' : 'tuWangKunGen';
   const monthYangLing = (input.monthYangLing === undefined || input.monthYangLing === null || input.monthYangLing === '')
     ? undefined

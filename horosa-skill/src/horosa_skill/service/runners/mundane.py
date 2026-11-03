@@ -213,7 +213,7 @@ class MundaneRunners:
             _degrade("navanayaka raja syzygy failed: %s", exc)
         return None
 
-    # 世运口径（上游页面设置 MUNDANE_PAGE_SETTINGS，MundaneMain.js:519-526 + 吠陀世运输入 :1330-1340）：进每张卡的 extra
+    # 世运口径（上游页面设置 MUNDANE_PAGE_SETTINGS，MundaneMain.js:526-533 + 吠陀世运输入 :1330-1340）：进每张卡的 extra
     # （buildMundaneCardSections 读 ex.mundaneRuleset / mundaneOrbScheme / mundaneIngressRule / vedic*），规则集行进快照头。
     _MUNDANE_SETTING_KEYS = (
         "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear", "vedicNatalAsc",
@@ -363,7 +363,7 @@ class MundaneRunners:
             except Exception as exc:  # noqa: BLE001 — 求根/富化失败不许带崩入宫盘
                 _degrade("mundane solunar build failed: %s", exc)
         # 吠陀世运（vedicmundane）：恒星黄道 Lahiri 的梅沙（白羊）入境盘。
-        # 上游 castVedicIngress（MundaneMain.js:1282）用 vedicMundane.solveVedicSolarIngress('ingress_0') 求根，
+        # 上游 castVedicIngress（MundaneMain.js:1293）用 vedicMundane.solveVedicSolarIngress('ingress_0') 求根，
         # 再把页面盘改成 恒星黄道 Lahiri · hsys 0 · tradition 0 在该时刻起盘；[吠陀世运·年度盘]/[世运大运]/
         # [KP 副主链] 读的正是这张盘，st.vedicMoment = 求根时刻。求根走同一个忠实端口 _solve_vedic_ingress
         # （九主各职也用它）——此前这里借用恒星派的 _solve_sidereal_ingress（步速 0.9856、首步规则不同），
@@ -787,12 +787,12 @@ class MundaneRunners:
         return sections
 
     # ── 世运右栏卡片段（上游 v3.11 [Q-444/T-407]）─────────────────────────────────────────────
-    # 产段函数 = 上游 components/mundane/MundaneMain.js:232 `buildMundaneCardSections(chart, extra, state, facts)`，
+    # 产段函数 = 上游 components/mundane/MundaneMain.js:239 `buildMundaneCardSections(chart, extra, state, facts)`，
     # vendored 逐字（horosa-core-js/src/vendor/mundane/MundaneMain.js，manifest truncate_before 剥 UI 尾部），
     # 经 JS 工具 `mundane_cards` 调用。上游页面的「按需拉取物」在 React state 里；这里由 Python 取数后原样喂入
     # （请求型编排归 Python，AGENTS §5）。无数据即不成段，与上游「算过才成段」同形。
     #
-    # 支持的盘型（上游 MUNDANE_TYPES，MundaneMain.js:43）。region（地区盘）走 _run_mundane_region_chart：按 regionKey 取
+    # 支持的盘型（上游 MUNDANE_TYPES，MundaneMain.js:45）。region（地区盘）走 _run_mundane_region_chart：按 regionKey 取
     # vendored regionCharts.js 的预置建置盘（上游 applyRegion 同一取值），底盘即该建置盘、不求入宫。
     _MUNDANE_SUPPORTED_TYPES = frozenset(
         {"", "ingress", "newmoon", "fullmoon", "solecl", "lunecl", "cycles", "solunar", "vedicmundane", "mundanehorary", "region"}
@@ -927,7 +927,7 @@ class MundaneRunners:
         return "\n\n".join(blocks)
 
     def _mundane_pattern_data(self, chart_payload: dict[str, Any]) -> list[Any] | None:
-        """[盘型格局] 的「相位格局」行：上游「查格局」按钮（MundaneMain.js:825 computeMundanePatterns）以
+        """[盘型格局] 的「相位格局」行：上游「查格局」按钮（MundaneMain.js:836 computeMundanePatterns）以
         chartParams(chart) 打 /astroextra/analysis、取 `patterns`（后端 detect_patterns）。
 
         请求体照 AstroExtraCommon.chartParams 的键：盘面时刻/地点/宫制/黄道 + tradition=false·predictive=false。
@@ -1067,7 +1067,7 @@ class MundaneRunners:
     ) -> dict[str, Any] | None:
         """日/月食判读卡的食盘。
 
-        上游（MundaneMain.js:669 scanEvents → :688 useMoment）：/astroextra/ephemeris 扫出食表，用户点选一行 →
+        上游（MundaneMain.js:676 scanEvents → :688 useMoment）：/astroextra/ephemeris 扫出食表，用户点选一行 →
         extra.selectedMoment = 该行 localTime、eclipseTypeText = 该行 eclipseType，页面盘改排到食时刻，
         并以该时刻打 /astroextra/eclipsedetail 取食时长（:703 fetchEclipseDetail → state.eclipseDetail）。
         headless 选行口径：与 skill 既有 [日食图]/[月食图] 段同一次食——eclipsedetail 自「入宫时刻 − 2 日」向后
