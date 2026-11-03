@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
 import time
 import uuid
@@ -12,6 +11,7 @@ from typing import Any, Iterator
 
 import httpx
 
+from horosa_skill.appendlog import append_line
 from horosa_skill.config import Settings
 
 
@@ -123,20 +123,11 @@ class TraceRecorder:
             return
         target = self.trace_dir / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl"
         try:
-            # 一次写完整行 + O_APPEND。**跨进程原子性只在 POSIX 上成立。**
+            # 一次追加完整一行，跨进程原子（多个 MCP 会话共写同一天的 .jsonl）：POSIX 靠 O_APPEND，
+            # Windows 靠只申请 FILE_APPEND_DATA 的原生句柄——CRT 的 O_APPEND 是模拟的，「定位 + 写」会互相盖
+            # （v0.43.0 CI：4 进程 × 60 次写剩 191/213 行；v0.46.1-dev 起换原生追加，见 appendlog.py）。
             #
-            # 两次被现实纠正，都记在这里：
-            # ① 「旧写法（TextIOWrapper 追加）会撕行」—— 本机 (macOS/APFS) **复现不了**：
-            #    8 进程 × 520 KB 行并发追加，250 行全部可解析。它安全靠的是 CPython 的实现细节
-            #    （close 时把整行交给一次 raw.write），而 O_APPEND 让那次 write(2) 原子。
-            #    改成显式的 O_APPEND + 单次写不是「修了一个 bug」，是把「碰巧成立」变成「写明成立」。
-            # ② 「那 O_APPEND 就到处成立了吧」—— **Windows 上不成立**，CI 当场打脸：
-            #    4 进程 × 60 次写只剩 191/213 行（每次跑还不一样）。Windows 的 O_APPEND 由 CRT
-            #    模拟，「定位到末尾 + 写」不是一个原子操作，并发追加会互相盖。
-            #    trace 是尽力而为的本地记录器，为它上跨进程锁不划算；所以这里如实承认边界，
-            #    对应的守卫用例也只在 POSIX 上断言跨进程完整性（见 test_runtime_lifecycle）。
-            #
-            # 真正**能演示**、且各平台一致的旧缺陷是没有行长上限：开了 HOROSA_TRACE_CAPTURE_PAYLOADS
+            # 另一条各平台一致的旧缺陷是没有行长上限：开了 HOROSA_TRACE_CAPTURE_PAYLOADS
             # 之后一个几 MB 的事件会被整条写进去，.jsonl 迅速膨胀到没法读。下面的截断补上这一条。
             line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
             if len(line) > _MAX_TRACE_LINE_BYTES:
@@ -147,10 +138,7 @@ class TraceRecorder:
                     "original_bytes": len(line),
                 }
                 line = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
-            # 🔴 进程内串行化。Windows 上**线程之间**就会丢行（CI 实测 6 线程 × 40 次写只剩 190 行）：
-            # 每次 _write_event 各开一个 fd，而 Windows 的 O_APPEND 由 CRT 模拟，
-            # 「定位到末尾 + 写」不是一个原子操作，两个 fd 各按自己的偏移写就互相盖。
-            # 一把模块级锁只挡同进程的并发，成本可忽略；跨进程的边界如实留在下面的说明里。
+            # 进程内仍串行化（成本可忽略）：原生追加已让线程 / 进程间互不覆盖，这把锁保住同进程内的行序。
             with _WRITE_LOCK:
                 self._append_line(target, line)
         except Exception:
@@ -161,16 +149,7 @@ class TraceRecorder:
 
     def _append_line(self, target: Path, line: bytes) -> None:
         """把一整行追加到 target。调用方必须持有 `_WRITE_LOCK`。"""
-        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-        try:
-            # 🔴 `os.write` **可以短写**，返回值必须看。不看的后果不是「少几个字节」，而是
-            # 那一行没有结尾的 \n —— 下一条记录接在它后面，两条并成一行，整行解析不了。
-            # 症状是「行数比写入次数少」，而不是显眼的报错。
-            written = 0
-            while written < len(line):
-                written += os.write(fd, line[written:])
-        finally:
-            os.close(fd)
+        append_line(target, line)
 
     def _emit_otlp(self, event: dict[str, Any]) -> None:
         endpoint = self.settings.trace_otlp_endpoint

@@ -673,6 +673,18 @@
         "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
         "horosa-skill/tests/test_mcp_result_budget.py"
       ]
+    },
+    {
+      "id": "windows.append-data-atomic",
+      "subject": "windows",
+      "fact": "NtWriteFile ignores ByteOffset and writes at the current end of file when the handle was opened with only FILE_APPEND_DATA (no FILE_WRITE_DATA); having only FILE_APPEND_DATA access does not allow writing anywhere except the end-of-file mark. The MSVC CRT's O_APPEND (used by Python os.open / open(..., 'a')) instead opens with write access and seeks to the end before each write, so concurrent appenders from several processes overwrite each other.",
+      "source_url": "https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntwritefile",
+      "verified_on": "2026-10-31",
+      "affects": [
+        "horosa-skill/src/horosa_skill/appendlog.py",
+        "horosa-skill/src/horosa_skill/tracing.py",
+        "horosa-skill/src/horosa_skill/decisions/ledger.py"
+      ]
     }
   ]
 }
