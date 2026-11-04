@@ -1366,6 +1366,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
 
+- **树里出现的每个 `HOROSA_*` 名字都要进 `config.ENV_FLAG_REGISTRY`（v0.47.2-dev）。** skill 不读的（测试开关、启动器交给上游引擎的旋钮、
+  星阙桌面端构建脚本的变量）登记为 `internal`，否则维护机 / 用户 shell 里合法的变量每次启动都报「未知环境变量」，告警沦为噪音。
+  不是环境变量的名字写进 `tests/test_config.py::_NOT_ENV_FLAGS` 并给理由。守卫 `test_every_horosa_name_in_the_tree_is_registered`。
 - **多进程共写的追加文件一律走 `appendlog.append_line`（v0.46.2-dev）。** Windows 上 `open(path, "a")` / `os.open(O_APPEND)` 的追加是 CRT 模拟的
   （seek + write 两步，8 进程并发每轮丢约 24% 的行）；`append_line` 在 Windows 用只申请 `FILE_APPEND_DATA` 的原生句柄（内核在末尾原子写），
   整行一次 `WriteFile`。trace 与决策台账已改；新增任何被多个 MCP 会话共写的 `.jsonl` 照此办。守卫 `tests/test_appendlog.py`（含旧写法本机丢行的负向对照）。

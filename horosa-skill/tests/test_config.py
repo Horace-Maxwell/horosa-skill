@@ -140,3 +140,43 @@ def test_host_runs_emulated_reads_the_arch_report_and_the_fallback_table(monkeyp
     assert config_module._host_runs_emulated() is True, "Windows on ARM 跑 x64 载荷 = 仿真"
     monkeypatch.setattr(manager_module, "_platform_key", lambda: "darwin-arm64")
     assert config_module._host_runs_emulated() is False
+
+
+# ── v0.47.2-dev · 代码里出现的每个 HOROSA_* 名字都已登记（否则合法的维护机 / 用户 shell 每次启动都报「未知环境变量」）──
+
+# 不是环境变量、或故意不登记的名字（各有理由；新增要写明）。
+_NOT_ENV_FLAGS = {
+    "HOROSA_APP_CONTROL_STUB": "模块属性（应用控制替身打的标记），不是环境变量",
+    "HOROSA_CHECKOUT": "测试里的客户端占位符 ${env:HOROSA_CHECKOUT}，由客户端展开，skill 不读",
+    "HOROSA_EPHE_FASTPATH": "负向对照里故意拼错的 HOROSA_EPHE_PATH_FASTPATH",
+    "HOROSA_TYPO": "测试故意用的未知旗标",
+    "HOROSA_TYPO_FLAG": "测试故意用的未知旗标",
+}
+
+
+def test_every_horosa_name_in_the_tree_is_registered() -> None:
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    pattern = re.compile(r"\bHOROSA_[A-Z0-9_]*[A-Z0-9]\b")
+    found: dict[str, str] = {}
+    for base in ("src", "tests", "scripts"):
+        for path in (root / base).rglob("*"):
+            if path.suffix in {".py", ".ps1", ".sh", ".mjs", ".js"} and path.is_file() and "node_modules" not in path.parts:
+                for name in pattern.findall(path.read_text(encoding="utf-8", errors="replace")):
+                    found.setdefault(name, f"{base}/{path.relative_to(root / base).as_posix()}")
+    unregistered = {name: where for name, where in found.items()
+                    if name not in config_module.ENV_FLAG_REGISTRY and name not in config_module.REMOVED_ENV_FLAGS
+                    and name not in _NOT_ENV_FLAGS}
+    assert not unregistered, f"登记进 config.ENV_FLAG_REGISTRY（skill 不读的写 internal）或写进 _NOT_ENV_FLAGS 并给理由：{unregistered}"
+    stale = sorted(name for name in _NOT_ENV_FLAGS if name not in found)
+    assert not stale, f"_NOT_ENV_FLAGS 里的名字已不在树里，删掉：{stale}"
+
+
+def test_maintainer_and_desktop_variables_do_not_warn(monkeypatch) -> None:
+    for key in list(__import__("os").environ):
+        if key.startswith("HOROSA_"):
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("HOROSA_VERAPDF", r"C:\tools\verapdf\verapdf.bat")
+    monkeypatch.setenv("HOROSA_JAVA_HOME", r"C:\jdk-17")
+    assert config_module.audit_env_flags(force=True) == []

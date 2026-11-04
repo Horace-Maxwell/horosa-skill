@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-04) | Windows 维护机补 veraPDF 后把 `HOROSA_VERAPDF` 设成用户级变量，skill 每次启动多报一行「未知环境变量」；同一台机器上`HOROSA_JAVA_HOME`（星阙桌面端构建脚本的 JDK 路径）一直在误报。扫全树：代码里 12 个 HOROSA_* 名字没进注册表（7 个真变量：测试开关 + 启动器交给上游引擎的旋钮；5 个不是环境变量） | 登记为 internal；`test_every_horosa_name_in_the_tree_is_registered` 扫 src / tests / scripts，新名字不登记即红，不是环境变量的写进 `_NOT_ENV_FLAGS` 并给理由 |
 | v0.47.1-dev (2026-11-03) | v0.47.0 收尾项：宿占整张死键表、七政显示偏好、玄史天象记录字段、繁体古籍档漏多行原文、年龄行日期解析、127 处过期上游行号 | 古籍档 span 对整库 33 117 条记录逐条钉；年龄行在 node 里对上游 210 例对拍；死键 / 偏好表逐值对上游 |
 | v0.47.0-dev (2026-11-03) | 上游 v3.13.0 → v3.13.1 再同步：vendor 清单 / 名字级审计全绿，奇门本地路由节气种子却一直无日柱（局数大面积错）；冬至日柱订正改在内部函数、skill 只引了文件名；公元前目标日被四位年正则拒收 | 端口审计加文件级命中；qimen 补日柱（live 种子 fixture）；`_astroextra_date` 走民用历；五域逐函数复核 |
 | v0.46.2-dev (2026-10-31) | Windows 原生复验 v0.46.1 时盯上一条「如实承认的边界」：trace / 决策台账被多个 MCP 会话共写，Windows 上 CRT 的 O_APPEND 是模拟的（seek + write 两步），8 进程 × 200 行每轮丢约 24%；守卫用例在 Windows 上一直 skip | `appendlog.append_line`：Windows 用只申请 FILE_APPEND_DATA 的原生句柄（内核在末尾原子写，1600/1600、16 进程 × 240 KB 行 960/960），trace 与台账都走它；跨进程用例取消 Windows 跳过 + 负向对照用例证明旧写法本机确实会丢 |
@@ -169,6 +170,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-04 — 合法的 HOROSA_* 变量也报「未知环境变量」：注册表只收 skill 自己读的，漏了测试开关与引擎旋钮
+
+- **现象**：v0.47.1 Windows 原生复验时按用户同意装了 veraPDF 1.30.3（官方安装包、GPG 校验），把 `HOROSA_VERAPDF` 设成用户级环境变量，
+  好让门禁 / lane 都带上 PDF/UA-1 全量校验（`test_verapdf_says_pdf_ua_1` 在 Windows 首次跑并通过；10 份真报告 PDF 全部 `PASS ua1`）。
+  随即 skill 每次启动多报一行「未知环境变量 HOROSA_VERAPDF（拼写有误？…）」。同一台机器上 `HOROSA_JAVA_HOME` 早就在这么报，被当成噪音放过。
+- **根因**：`config.ENV_FLAG_REGISTRY` 只登记了 skill 进程会读的变量；测试开关（`HOROSA_VERAPDF`）、启动器交给上游 Java / chart 进程的引擎旋钮
+  （`HOROSA_EPHE_PATH_FASTPATH` / `HOROSA_DESKTOP_MONGO_*` / `HOROSA_MONGO_FALLBACK_DIR` / `HOROSA_ENABLE_STARTUP_*`）、星阙桌面端 Windows 构建脚本
+  （`Prepare_Runtime_Windows.ps1`）读的 `HOROSA_JAVA_HOME` 都在维护机或用户 shell 里合法存在。没有任何守卫要求「树里出现的名字都登记」。
+- **修**：上述 8 个登记为 `internal`；新增 `tests/test_config.py::test_every_horosa_name_in_the_tree_is_registered`（扫 src / tests / scripts 的
+  `HOROSA_*`，不在注册表、REMOVED、`_NOT_ENV_FLAGS` 里即红；`_NOT_ENV_FLAGS` 收模块属性 / 客户端占位符 / 故意拼错的负向对照，每条带理由，
+  名字从树里消失也红）与 `test_maintainer_and_desktop_variables_do_not_warn`。负向对照：从注册表删掉 `HOROSA_VERAPDF` → 两条红。
+- **法则**：「未知环境变量」告警的价值在于抓拼写错误，误报一多它就成了噪音、真错也被放过。加任何 `HOROSA_*` 名字（哪怕只在测试或启动器里）同一提交登记。
 
 ### v0.47.1-dev / 2026-11-03 — v0.47.0 收尾：按行切的 span 漏多行值、两个上游日期解析器口径不同、上游 norm* 静默丢值
 

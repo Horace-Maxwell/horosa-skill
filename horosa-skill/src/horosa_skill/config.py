@@ -107,6 +107,18 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_JEV_TIMEOUT_MS": "experimental",
     "HOROSA_JEV_LEDGER": "experimental",
     "HOROSA_JEV_LIVE": "internal",
+    # v0.47.2-dev：skill 自己不读、但维护机 / 用户 shell 里合法存在的变量——不登记，每次启动都报「未知环境变量」。
+    # 测试开关：veraPDF 可执行文件（tests/test_pdf_tagged.py 的 PDF/UA-1 全量校验）。
+    "HOROSA_VERAPDF": "internal",
+    # 启动器（start_horosa_local.ps1 / start_vendored_instance.sh）交给上游 Java / chart 进程的引擎旋钮。
+    "HOROSA_EPHE_PATH_FASTPATH": "internal",
+    "HOROSA_DESKTOP_MONGO_OPTIONAL": "internal",
+    "HOROSA_DESKTOP_MONGO_SKIP_PING": "internal",
+    "HOROSA_MONGO_FALLBACK_DIR": "internal",
+    "HOROSA_ENABLE_STARTUP_CRON": "internal",
+    "HOROSA_ENABLE_STARTUP_TRANSGROUP_INIT": "internal",
+    # 星阙桌面端 Windows 构建脚本（Prepare_Runtime_Windows.ps1）读的 JDK 路径：装着桌面端构建环境的机器常设成用户级变量。
+    "HOROSA_JAVA_HOME": "internal",
 }
 # removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
 REMOVED_ENV_FLAGS: dict[str, str] = {}
