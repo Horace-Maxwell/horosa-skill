@@ -49,6 +49,8 @@ HOROSA_SOURCE_ROOT=<Horosa-Public checkout> uv run python scripts/preflight_rele
 
 ```bash
 export HOROSA_SOURCE_ROOT=/path/to/Horosa-Public                # 只读；唯一参照源
+# 选哪棵树：本地上游 HEAD == 公开远端（git ls-remote 核）→ 同步与 --scan 用本地；本地多未推送提交 → 先等上游推送，不钉未公开的提交。
+# 公开克隆只给门禁用：不能 --depth（bazi_pithy 的 generated_at 取文件历史，生成脚本拒绝浅克隆），且没有 gitignore 的 dist-file 与 node_modules。
 git -C "$HOROSA_SOURCE_ROOT" status --porcelain                # 只允许非 vendored 路径的 WIP；vendored 子树必须干净
 PIN=$(python3 -c 'import json;print(json.load(open("horosa-skill/contracts/upstream_provenance.json"))["upstream_git_sha"])')
 git -C "$HOROSA_SOURCE_ROOT" branch --contains "$PIN"          # 为空 = 上游改写了历史：逐文件核旧内容是否保留，别信 diff 的文件数
@@ -65,6 +67,7 @@ node scripts/build_hover_knowledge_bundle.mjs && uv run python scripts/build_kno
 uv run python scripts/gen_technique_provenance.py && uv run python scripts/gen_technique_provenance.py --check
 uv run python scripts/audit_upstream_ports.py --scan --from "$PIN" --to <新上游 sha>   # 手抄移植审计：每个 UNREVIEWED 逐条核对，
 #   结论写进 contracts/upstream_port_audit.json（no_port / port_unchanged / ported / reviewed），再把 from/to 改成本次区间
+#   结论按区间：换区间时 reviewed 随之换；0 hit 先对上一区间跑同一条命令做对照
 uv run python scripts/verify_upstream_sync.py --require-upstream --write-state   # 全绿才写 provenance
 uv run python scripts/run_ci_gates.py                                            # 再做下面的 live 验证
 ```

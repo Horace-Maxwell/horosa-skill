@@ -458,7 +458,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 且被 skill 提到的每个上游名字都要在 `contracts/upstream_port_audit.json` 有结论（no_port / port_unchanged / ported / reviewed），
 台账审到的 pin == 记录的上游 pin（preflight 硬闸）。**v0.47.0 起也按文件**：手抄常只写「照 utils/preciseCalcBridge.js 的 …」而不点出
 改了的内部函数（v3.13.1 冬至日柱订正改在 `fillJieqiDayGanzhiFromLocal`，名字级扫描零信号），所以 `Horosa-Web/` 下（前端 / Python
-后端 / Java / flatlib）两 pin 间改过、且文件名被 skill 引用的每个文件也是一条 `file:<路径>` 命中，同样要结论。手抄表配逐值源码锚（`tests/test_sync313_ports_guard.py`），日期运算移植配
+后端 / Java / flatlib）两 pin 间改过、且文件名被 skill 引用的每个文件也是一条 `file:<路径>` 命中，同样要结论。扫描 0 hit 时先跑上一区间做对照（v0.47.2-dev），证明扫描器真在工作。**公开克隆不能 `--depth`**（`bazi_pithy` 的 `generated_at` 取文件历史，生成脚本已拒绝浅克隆），且缺 dist-file / node_modules：本地上游 == 公开远端时同步与 `--scan` 用本地。手抄表配逐值源码锚（`tests/test_sync313_ports_guard.py`），日期运算移植配
 vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsystem129.py`）时，grep skill 里该字段的每个读者——照读旧字段
 只会 ok=true 地返回「无数据」；优先整份 vendor 上游前端模块而不是重抄。手工件逐字搬了**多份**上游文件的，在条目上加
 `also_derived_from {上游路径: sha256}`，每个源各自比戳（`--restamp` 一并重记）。

@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-04) | 上游 v3.13.2 只改桌面端就绪门 + 版本号，skill 结果不变；`--depth` 克隆让 `bazi_pithy` 的 `generated_at` 静默写错；公开克隆缺 dist-file 与 @babel/parser | 生成脚本拒绝浅克隆（先红后绿）；Runbook 写明本地上游 == 公开远端时同步 / `--scan` 用本地、门禁用非浅公开克隆；0 hit 先跑上一区间对照 |
 | v0.47.2-dev (2026-11-04) | Windows 维护机补 veraPDF 后把 `HOROSA_VERAPDF` 设成用户级变量，skill 每次启动多报一行「未知环境变量」；同一台机器上`HOROSA_JAVA_HOME`（星阙桌面端构建脚本的 JDK 路径）一直在误报。扫全树：代码里 12 个 HOROSA_* 名字没进注册表（7 个真变量：测试开关 + 启动器交给上游引擎的旋钮；5 个不是环境变量） | 登记为 internal；`test_every_horosa_name_in_the_tree_is_registered` 扫 src / tests / scripts，新名字不登记即红，不是环境变量的写进 `_NOT_ENV_FLAGS` 并给理由 |
 | v0.47.1-dev (2026-11-03) | v0.47.0 收尾项：宿占整张死键表、七政显示偏好、玄史天象记录字段、繁体古籍档漏多行原文、年龄行日期解析、127 处过期上游行号 | 古籍档 span 对整库 33 117 条记录逐条钉；年龄行在 node 里对上游 210 例对拍；死键 / 偏好表逐值对上游 |
 | v0.47.0-dev (2026-11-03) | 上游 v3.13.0 → v3.13.1 再同步：vendor 清单 / 名字级审计全绿，奇门本地路由节气种子却一直无日柱（局数大面积错）；冬至日柱订正改在内部函数、skill 只引了文件名；公元前目标日被四位年正则拒收 | 端口审计加文件级命中；qimen 补日柱（live 种子 fixture）；`_astroextra_date` 走民用历；五域逐函数复核 |
@@ -170,6 +171,19 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-04 — 上游 v3.13.2 再同步：结果不变的版本也要走全流程，公开克隆的三个坑
+
+- **上游这版**：`10fb75de` 只修桌面端软件内更新后第一次启动的就绪门（`backendBootGate.js`，skill 没 vendor 也没引用）+ 版本号（`RuntimeWire.java` 的
+  `RUNTIME_VERSION`，skill 没人读）。注意 `453d39be` 不是 `10fb75de` 的祖先：上游把它压进了发布提交；pin `06f25f21` 仍在 main 上，历史没改写。
+- **踩到（浅克隆）**：用 `git clone --depth 3` 跑知识重生，`bazi_pithy.json` 的 `generated_at` 从 2026-02-22 变成 2026-10-29——这个字段取**该文件**的最后一次提交，
+  浅克隆里 `git log -- 文件` 停在历史边界。脚本不报错、其余 56 处戳都对，只有逐行看 diff 才发现。其余 26 个知识包取 HEAD 提交时间，不受影响。
+  修：`gen_bazi_pithy_pack.py` 遇浅克隆直接拒绝。守卫 `tests/test_gen_bazi_pithy_pack.py`（先红后绿：未加检查时浅克隆那条测试红）。
+- **公开克隆另外两个缺口**：`dist-file` 被上游 gitignore（`sync_vendored_runtime_sources.sh` 报缺），`--scan` 要上游 `node_modules/@babel/parser`。
+  规则：本地上游 HEAD == 公开远端、vendored 子树干净时，同步和 `--scan` 直接用本地上游（只读）；公开克隆只用于门禁，且不能浅。写进了 OPERATIONS Runbook。
+- **「0 hit」要对照**：端口审计本区间 0 hit，先拿上一区间跑同一条命令确认扫描器真在工作（132 hit）。对照里另外冒出 4 条 unreviewed（`XuanShiCelestial` / `XuanShiEvents`
+  名字 + 文件各一）：都是 v0.47.1 的 `a918290` 才首次引用（`git log -S` 确认），晚于那个区间的审计，不是漏审。台账结论按区间，本区间 `reviewed` 清空。
+- **怎么确认「结果不变」**：知识包 diff 去掉戳行后 0 行；`revendor --check` 0 待办；jar 内 `RuntimeWire` 确为 `3.13.2-runtime1`（确认是新构建）。
 
 ### v0.47.2-dev / 2026-11-04 — 合法的 HOROSA_* 变量也报「未知环境变量」：注册表只收 skill 自己读的，漏了测试开关与引擎旋钮
 

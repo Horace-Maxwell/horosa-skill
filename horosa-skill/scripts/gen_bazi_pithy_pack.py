@@ -40,6 +40,9 @@ def _git(root: Path, *args: str) -> str:
 
 
 def build(upstream: Path) -> dict:
+    # generated_at 取这个文件的最后一次提交：浅克隆里 `git log -- 文件` 停在历史边界，会静默写出错的日期（2026-11-04 踩过）。
+    if _git(upstream, "rev-parse", "--is-shallow-repository").strip() == "true":
+        raise SystemExit(f"gen-bazi-pithy-pack: {upstream} is a shallow clone; generated_at needs full history (git fetch --unshallow)")
     raw = json.loads(_git(upstream, "show", f"HEAD:{UPSTREAM_REL}"))
     sha = _git(upstream, "rev-parse", "HEAD").strip()[:12]
     committed_at = _git(upstream, "log", "-1", "--format=%cI", "--", UPSTREAM_REL).strip()
