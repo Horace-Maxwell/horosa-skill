@@ -181,6 +181,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **坑 1 · 管道下的 CLI**：`_print_json` 一直按字节写 UTF-8，但帮助与 stderr 走文本流，管道 / 重定向时是 ANSI 代码页。cp1252 下 60 个命令 55 个 `--help` 抛 UnicodeEncodeError；
   stderr 的 JSON 错误信封混着 `\uXXXX` 与裸 cp1252 字节，**不是合法 UTF-8**——只有 shell 的 agent 按 SKILL.md 契约读 `code` 时 UnicodeDecodeError，拿不到要问用户的话。
   修：`_HorosaApp.__call__` 在所有入口把两条流统一成 UTF-8（已是 UTF-8 的不动，控制台不受影响）。CliRunner 换掉了真流，抓不到，守卫起真子进程并用 `PYTHONIOENCODING=cp1252` 三平台复现。
+  这条守卫首推（8df42d0）就在 Linux runner 红、本机与 windows-smoke 绿：Typer 见到 `GITHUB_ACTIONS` 强制终端模式，rich 把 `--input` 拆成 `\x1b[1;36m-\x1b[0m\x1b[1;36m-input`；Windows 上 rich 的旧控制台判定压掉 ANSI，连 `FORCE_COLOR` 也复现不了。第一次的解释「怪 FORCE_COLOR」没被复现证实——把 `rich.console.detect_legacy_windows` 打成 False 才在本机看到同样的字节。测试里断言帮助文字要设 `_TYPER_FORCE_DISABLE_TERMINAL=1`（f9592bf）。
 - **坑 2 · 路径闸先 resolve 再判**：`_report_output_path` 的威胁模型写明「MCP 工具可被提示注入调用」，却先 `candidate.resolve()`。对 UNC 路径这一步就向对方发起 SMB 连接（Windows 缺省允许向远端送
   NTLM 认证），被拒绝之前凭据已经送出去；实测 `\\192.0.2.1\share\x.pdf` 卡 21 秒才「拒绝」。同一道闸还放行 `NUL`（报告进空设备却报成功）、`x.pdf:stream`（NTFS 备用数据流，文件看不见）、`CON` / `AUX`
   （建出资源管理器难删的文件），`\\?\GLOBALROOT\…` 与 `a<b>.pdf` 抛裸 OSError。修：`winpaths`（纯字符串、不碰文件系统），Windows 上在 resolve **之前**拦；用户在 `HOROSA_REPORT_OUTPUT_ROOTS`

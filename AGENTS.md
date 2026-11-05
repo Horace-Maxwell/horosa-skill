@@ -1376,7 +1376,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
 
 - **CLI 的 stdout / stderr 恒为 UTF-8（v0.47.2-dev，`_HorosaApp.__call__` + `_utf8_stdio`）。** 管道 / 重定向下 Windows 文本流是 ANSI 代码页，曾让 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8。
-  CliRunner 换掉真流抓不到这类问题：测输出编码一律起真子进程 + `PYTHONIOENCODING=cp1252`（三平台都复现），见 `tests/test_cli_stdio_encoding.py`。
+  CliRunner 换掉真流抓不到这类问题：测输出编码一律起真子进程 + `PYTHONIOENCODING=cp1252`（三平台都复现），见 `tests/test_cli_stdio_encoding.py`；断言帮助文字要设 `_TYPER_FORCE_DISABLE_TERMINAL=1`，否则 Linux runner 上 `GITHUB_ACTIONS` 让 rich 把选项名拆进 ANSI 色码（Windows 本机复现不了）。
 - **Windows 上别的进程开着文件是常态（v0.47.2-dev，`fsretry`）。** Python 的 `open()` 不带 FILE_SHARE_DELETE，有读者时 `os.replace` / `unlink` 抛 PermissionError：src 里禁裸 `os.replace`（`test_no_raw_os_replace_in_the_package`），
   多个会话共读的状态文件读也走 `fsretry.read_text`；放锁（`pidlock.release`）绝不抛——从 finally 冒出去会盖掉调用方结果并把锁留在盘上。判共享冲突注意 `open()` 的 PermissionError 只带 errno 13、winerror 是 None。
 - **树里出现的每个 `HOROSA_*` 名字都要进 `config.ENV_FLAG_REGISTRY`（v0.47.2-dev）。** skill 不读的（测试开关、启动器交给上游引擎的旋钮、
