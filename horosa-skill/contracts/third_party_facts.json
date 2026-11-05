@@ -685,6 +685,18 @@
         "horosa-skill/src/horosa_skill/tracing.py",
         "horosa-skill/src/horosa_skill/decisions/ledger.py"
       ]
+    },
+    {
+      "id": "windows.reserved-names-and-ntlm",
+      "subject": "windows",
+      "fact": "Reserved device names: CON, PRN, AUX, NUL, COM1-9, COM¹²³, LPT1-9, LPT¹²³, also when followed by an extension (NUL.txt is NUL); CreateFile treats CONIN$ / CONOUT$ as console handles. '\\\\?\\' disables path parsing, '\\\\.\\' reaches the device namespace, '\\\\server\\share' is UNC, and 'C:x' is drive-relative. The 'Restrict NTLM: Outgoing NTLM traffic to remote servers' policy defaults to Not defined = Allow all, so opening a UNC path can send NTLM authentication to that server.",
+      "source_url": "https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file",
+      "verified_on": "2026-11-05",
+      "affects": [
+        "horosa-skill/src/horosa_skill/winpaths.py",
+        "horosa-skill/src/horosa_skill/service/api/reports.py",
+        "horosa-skill/src/horosa_skill/knowledge/user.py"
+      ]
     }
   ]
 }

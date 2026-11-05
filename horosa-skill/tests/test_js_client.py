@@ -98,3 +98,15 @@ def test_js_client_non_object_json_stdout_is_transport_error(tmp_path: Path, mon
         with pytest.raises(ToolTransportError) as exc_info:
             client.run("qimen", {"question": "x"})
         assert exc_info.value.code == "js_engine.invalid_shape", stdout
+
+
+def test_timeout_recovery_does_not_blame_the_install() -> None:
+    """长窗口择时超时曾被 js_engine 前缀规则说成「确认已安装离线 runtime」。"""
+    from horosa_skill.errors import classify_code, recovery_for
+
+    assert classify_code("js_engine.timeout") == ("js_engine", "exact")
+    recovery = recovery_for("js_engine.timeout", {})["agent_recovery"]
+    assert recovery["next_action"] == "shorten_window_or_raise_timeout"
+    assert "HOROSA_JS_ENGINE_TIMEOUT_SECONDS" in recovery["prompt_to_user"]
+    assert "已安装离线 runtime" not in recovery["prompt_to_user"]
+    assert recovery_for("js_engine.node_unavailable", {})["agent_recovery"]["next_action"] == "install_or_set_node_then_retry"

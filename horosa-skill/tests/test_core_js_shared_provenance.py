@@ -16,6 +16,7 @@ MANIFEST = PKG_ROOT / "contracts" / "vendor_manifest.json"
 
 # basename → 为什么它是自写件而不是 vendor（上游没有同职能文件）
 ALLOWLIST: dict[str, str] = {
+    "lunarYearCache.js": "skill 自写：给 npm 包 lunar-javascript 的 LunarYear.fromYear 撑大缓存（库只留一年，太乙择时逐小时重算百年节气）——上游页面没有墙钟，没这个需求，也无对应文件",
     "fields.js": "skill 自写：JS 工具入参归一（日期 / 时间串校验、fields 对象构造）——上游对应逻辑散在各 React 输入组件里，无独立纯函数模块",
     "unpack.js": "skill 自写：Result / ResultKey 信封拆包（unwrapResultEnvelope 等）——上游散落在各 request 调用点，无独立模块",
 }

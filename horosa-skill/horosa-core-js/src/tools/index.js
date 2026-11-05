@@ -1,3 +1,4 @@
+import '../shared/lunarYearCache.js';
 import { runAstroExtra } from './astroextra.js';
 import { runCanping } from './canping.js';
 import { runElectionTool } from './election.js';

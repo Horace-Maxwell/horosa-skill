@@ -117,6 +117,17 @@ RECOVERY_KINDS: dict[str, dict[str, _Any]] = {
 
 # 精确码表：语义明确、需要专门指路的码。
 RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
+    # 引擎是好的，只是这次算得久：不能落到前缀规则的「确认已安装 runtime」（v0.47.2-dev 实测：长窗口择时超时被说成没装 runtime）。
+    "js_engine.timeout": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "这次计算超过了 JS 引擎的时间上限（引擎本身没坏，不用重装）。择日 / 择时类把搜索窗口拆短分段再搜；确实要算这么久，"
+            "把 HOROSA_JS_ENGINE_TIMEOUT_SECONDS 调大并重启客户端。",
+            "This computation ran past the JS engine's time limit (the engine is fine, nothing to reinstall). For election / date-search "
+            "tools, split the window into shorter ranges; if it really needs that long, raise HOROSA_JS_ENGINE_TIMEOUT_SECONDS and restart the client.",
+        ),
+        "next_action": "shorten_window_or_raise_timeout",
+    },
     # 自备知识库（knowledge/user.py）：都是使用者自己能改的输入问题，不是「重试 / 体检」。
     "knowledge.user_not_found": {
         "kind": "input",

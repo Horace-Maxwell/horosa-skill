@@ -20,6 +20,7 @@ import tempfile
 import threading
 from pathlib import Path
 from typing import Any
+from horosa_skill import fsretry
 
 MODEL_NAME = "bge-small-zh-v1.5-int8"
 MODEL_REPO = "Xenova/bge-small-zh-v1.5"
@@ -126,7 +127,7 @@ def download(settings: Any, *, timeout: float = 120.0) -> dict[str, Any]:
                     digest.update(block)
             if digest.hexdigest() != sha:
                 raise ValueError(f"{name} 的 sha256 对不上（{digest.hexdigest()} ≠ {sha}），已丢弃")
-            os.replace(tmp, target)
+            fsretry.replace(tmp, target)
         except BaseException:
             with contextlib.suppress(OSError):
                 os.unlink(tmp)

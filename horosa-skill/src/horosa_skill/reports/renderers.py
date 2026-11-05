@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from horosa_skill import fsretry
 from horosa_skill.errors import bilingual
 from horosa_skill.textscript import SIMPLIFIED, TRADITIONAL_HK
 
@@ -83,7 +84,7 @@ def render_report(
         else:  # pdf
             _render_pdf(document, tmp_path, script)
         payload = tmp_path.read_bytes()
-        os.replace(str(tmp_path), str(output_path))
+        final_path = _place_rendered(tmp_path, output_path)
     except BaseException as exc:
         tmp_path.unlink(missing_ok=True)  # cleanup on ANY exit, cancellation included
         # Only an ordinary render failure degrades to TXT. Ctrl-C, SystemExit and an MCP cancel (BaseException) must
@@ -97,11 +98,35 @@ def render_report(
                 return degraded
         raise
     return {
-        "path": str(output_path),
+        "path": str(final_path),
         "format": normalized,
         "file_size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
+        **({"requested_output_path": str(output_path)} if final_path != output_path else {}),
     }
+
+
+def _place_rendered(tmp_path: Path, output_path: Path) -> Path:
+    """把渲染好的临时文件原子地放到位，返回最终路径。
+
+    Windows 上目标开在 Acrobat / Word 里时 replace 拿不到（共享冲突，等也等不来）。整份报告已经渲染好，不能因为用户开着上一版就退化成
+    TXT（v0.47.2-dev 之前正是如此）：存到旁边第一个空闲的 `名字 (1).pdf`，由调用方如实告知。其他错误照常抛。
+    """
+    try:
+        fsretry.replace(tmp_path, output_path)
+        return output_path
+    except PermissionError as exc:
+        if not fsretry.is_sharing_violation(exc):
+            raise
+    for index in range(1, 100):
+        candidate = output_path.with_name(f"{output_path.stem} ({index}){output_path.suffix}")
+        if not candidate.exists():
+            fsretry.replace(tmp_path, candidate, budget_seconds=0.2)
+            return candidate
+    raise PermissionError(bilingual(
+        f"目标文件正被占用，旁边也没有空闲的名字：{output_path}",
+        f"output file is in use and no free name next to it: {output_path}",
+    ))
 
 
 def _is_technique_report(document: dict[str, Any]) -> bool:

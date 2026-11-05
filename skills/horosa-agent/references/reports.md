@@ -101,3 +101,5 @@ uv run horosa-skill report from-tool liureng_gods \
 相对路径按输出目录解析；绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS`（`os.pathsep` 分隔的白名单根，由用户在环境里配）之内，
 否则 `report.output_path_not_allowed`（`details.allowed_roots` 列出可写根，不写任何文件）。这三个工具的 MCP annotations 标 `destructiveHint=true`
 （会覆盖同名文件），客户端可能要求确认。
+
+结果里出现下面的字段时**必须告诉用户**，不要只报「已生成」：`requested_output_path` = 目标正被别的程序占用（多半开着上一版），新报告另存到 `artifact_path`，旧文件没动；`degraded_from` + `degrade_reason` = 没能生成该格式，已退化成纯文本（`format` 是 `txt`，全文都在）。

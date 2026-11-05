@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from horosa_skill import fsretry
 from horosa_skill.runtime.procs import pid_alive
 
 
@@ -49,10 +50,7 @@ def pid_lock(
     try:
         yield lock_path
     finally:
-        try:
-            lock_path.unlink()
-        except FileNotFoundError:
-            pass
+        release(lock_path)
 
 
 def try_pid_lock(lock_path: Path, *, stale_after_seconds: float = 3600.0, owner: str = "") -> bool:
@@ -66,9 +64,11 @@ def try_pid_lock(lock_path: Path, *, stale_after_seconds: float = 3600.0, owner:
 
 
 def release(lock_path: Path) -> None:
+    """放锁。Windows 上别的进程正读着锁文件时 unlink 会 PermissionError：短暂重试——旧实现的 pid_lock 让它从 finally 冒出去，
+    锁还留在盘上（持有者活着不可回收），其他进程只能等满超时。放锁绝不抛：真删不掉也比盖掉调用方的结果好。"""
     try:
-        lock_path.unlink()
-    except (FileNotFoundError, OSError):
+        fsretry.unlink(lock_path)
+    except OSError:
         pass
 
 

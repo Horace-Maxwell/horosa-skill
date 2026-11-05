@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from horosa_skill import fsretry
 from horosa_skill.runtime.pidlock import pid_lock
 
 SCHEMA_VERSION = 2
@@ -40,7 +41,7 @@ def utc_now() -> str:
 def read_state(path: Path) -> dict[str, Any] | None:
     """读状态文件。不存在 / 坏掉 / 不是对象 → None。缺的 v2 键按缺省补齐。"""
     try:
-        raw = path.read_text(encoding="utf-8")
+        raw = fsretry.read_text(path)
     except (FileNotFoundError, NotADirectoryError):
         return None
     except OSError:
@@ -78,7 +79,7 @@ def write_state(path: Path, payload: dict[str, Any]) -> None:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_name, str(path))
+        fsretry.replace(tmp_name, str(path))
     except BaseException:
         # os.replace 抛错时临时文件还在 —— 必须清掉，否则 runtime 根下会攒满 .tmp 残片。
         try:

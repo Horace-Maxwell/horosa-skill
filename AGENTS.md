@@ -161,6 +161,8 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 
 ### 4.2 算源普查（每个技法由谁算）与算源标注
 
+**`lunar-javascript` 的年缓存由 `src/shared/lunarYearCache.js` 撑大（v0.47.2-dev）**：库只缓存一个 LunarYear、构造一次重算 31 个节气，而 `buildSmallDirection` 每起一盘逐年排约百年流年表；容量必须大于一次横扫（LRU 小于横扫长度命中率恒为 0，第一版 32 实测没快）。`tools/index.js` 第一行引入；太乙 / 三式择时一周 30 秒 → 4.8 秒，320 条引擎请求修前修后逐字节相同。
+
 **工具算源普查**（决定改哪一层）：
 
 - **ken-fed**：qimen / taiyi / jinkou（+ sanshiunited 两腿）——ken 算，JS 排版。
@@ -1020,6 +1022,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
 | 自备知识库里明明有文件，计算时告警「没能带入」/ `knowledge mine` 里没有它 | 文件读不了（非 UTF-8 / UTF-16 / GB18030、> 2 MB、空、与别的文件同名、链到文件夹外）或同名多条有歧义 | 看 `knowledge mine` 的 `problems`（逐个文件写了原因）；歧义时用完整 id（相对路径去扩展名）；误删的从 `knowledge trash` → `knowledge restore <trash_id>` 放回（v0.43.1-dev） |
 | 只有 Windows：太乙 / 三式合一报 `runtime.*` 或空的 `taiyi` 段，chart 服务 stderr 是 `DLL load failed while importing _parse_times: An Application Control policy has blocked this file` | Smart App Control 拒绝加载载荷里的 `astropy/time/_parse_times.pyd`（无签名、流行度不够；同一文件在旧根放行、新装 / 升级后被拦） | v0.43.1-dev 起 manager 每次 start 把应用控制替身拷进随包 Python（astropy 落回纯 Python 解析器，结果不变）：升级 skill 后 `runtime restart`；stderr 应改见 `horosa: Windows Application Control blocked … using the pure-Python fallback` |
+| 只有 Windows：管道 / 重定向下 `horosa-skill --help` 抛 UnicodeEncodeError，或 stderr 的 JSON 解析时 UnicodeDecodeError | 文本流是 ANSI 代码页（cp1252 / cp936），而 JSON 输出按 UTF-8 写 | v0.47.2-dev 起所有入口统一 UTF-8；消费方一律按 UTF-8 解码（PowerShell 5.1 管道仍会按 OEM 重编码，用 `--output` 文件） |
+| 报告路径变成 `名字 (1).pdf`，结果带 `requested_output_path` | 目标开在 Acrobat / Word 里，新报告另存（设计行为） | 关掉旧文件后重新生成即回原名；旧文件未动 |
+| 太乙 / 三式合一择时报 `js_engine.timeout` | 窗口太长撞 60 秒墙钟（三式合一 92 天贴边），不是引擎坏了 | 拆短窗口，或调大 `HOROSA_JS_ENGINE_TIMEOUT_SECONDS` 并重启客户端 |
 | Windows：客户端里 horosa 起不来 / `setup` 在 `stdio_probe` 失败带 `diagnosis.cause = windows_app_control_blocked`；终端里 `uv run …` 报 `Failed to spawn: … (os error 4551)` | Smart App Control（应用控制）拒绝运行 uv 给该环境现生成的 `Scripts\*.exe`（trampoline 无签名、无云端信誉，同机时拦时放）；`python.exe` 不受影响 | `setup` / `client config` 加 `--entry module`（SAC 开着时 `--entry auto` 已自动这样写）→ 配置变成 `… python -m horosa_skill serve`；终端里同样改用 `uv run python -m horosa_skill …`；doctor `windows.smart_app_control` 看状态；不必关闭 SAC（v0.43.1-dev 台账） |
 | Windows：`setup`（或 lane 的客户端步骤）在 `stdio_probe` 失败，失败包带 `details.diagnosis.cause = windows_file_in_use`（stderr 尾巴是 `failed to remove file …\Scripts\horosa-skill.exe … (os error 32)`） | 另一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的 exe / 已加载的 .pyd；客户端那条 `uv run` 要先把 venv 同步到当前版本（`git pull` 换过版本号就会触发），删不掉被占文件，server 未启动即退出。macOS/Linux 可替换运行中的文件，不会遇到 | 关掉（或重启）挂着 horosa 的会话再重跑；终端里的 `uv run` 可临时 `UV_NO_SYNC=1`（依赖未变时安全）；维护机复验一律在**独立 git worktree**（自有 venv）里跑门禁与 lane，别和本机开着的 MCP 会话抢同一个 venv（v0.39.0 台账） |
 | `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
@@ -1269,6 +1274,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.3.1 报告 · 盘图 · PDF（reports / figures）
 
+- **`output_path` 的字符串闸在第一次文件系统访问之前（v0.47.2-dev，`winpaths`）。** `resolve()` 不是纯函数：对 UNC 路径它会向对方发起 SMB 连接并送出 NTLM 认证（实测卡 21 秒才拒绝）。Windows 上网络 / 设备路径、保留设备名（含 `NUL.pdf`、`COM¹`）、
+  NTFS 备用数据流、非法字符一律先拦；`HOROSA_REPORT_OUTPUT_ROOTS` 配过的共享按字符串放行。新增任何接收路径的工具走同一道闸（`test_guard_refuses_before_touching_the_filesystem`）。
+- **`render_report` 的结果要原样传到调用方（v0.47.2-dev）。** `format` 记真实格式，`degraded_from` / `degrade_reason` / `requested_output_path` 进结果与摘要（`_render_outcome_fields` / `_render_outcome_notes`）——此前退化成 TXT 仍报「已生成 PDF」。
+  目标被占用（开在 Acrobat / Word 里）不算渲染失败：`_place_rendered` 另存 `名字 (1).pdf`，旧文件不动。
 - **PDF 按字补字形（v0.43.1-dev）。** 主字体（Songti / 雅黑）缺的字逐字走补字链 `_PDF_GLYPH_FALLBACK_CANDIDATES`：扩展 B 古籍字
   （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
   阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
@@ -1366,6 +1375,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
 
+- **CLI 的 stdout / stderr 恒为 UTF-8（v0.47.2-dev，`_HorosaApp.__call__` + `_utf8_stdio`）。** 管道 / 重定向下 Windows 文本流是 ANSI 代码页，曾让 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8。
+  CliRunner 换掉真流抓不到这类问题：测输出编码一律起真子进程 + `PYTHONIOENCODING=cp1252`（三平台都复现），见 `tests/test_cli_stdio_encoding.py`。
+- **Windows 上别的进程开着文件是常态（v0.47.2-dev，`fsretry`）。** Python 的 `open()` 不带 FILE_SHARE_DELETE，有读者时 `os.replace` / `unlink` 抛 PermissionError：src 里禁裸 `os.replace`（`test_no_raw_os_replace_in_the_package`），
+  多个会话共读的状态文件读也走 `fsretry.read_text`；放锁（`pidlock.release`）绝不抛——从 finally 冒出去会盖掉调用方结果并把锁留在盘上。判共享冲突注意 `open()` 的 PermissionError 只带 errno 13、winerror 是 None。
 - **树里出现的每个 `HOROSA_*` 名字都要进 `config.ENV_FLAG_REGISTRY`（v0.47.2-dev）。** skill 不读的（测试开关、启动器交给上游引擎的旋钮、
   星阙桌面端构建脚本的变量）登记为 `internal`，否则维护机 / 用户 shell 里合法的变量每次启动都报「未知环境变量」，告警沦为噪音。
   不是环境变量的名字写进 `tests/test_config.py::_NOT_ENV_FLAGS` 并给理由。守卫 `test_every_horosa_name_in_the_tree_is_registered`。

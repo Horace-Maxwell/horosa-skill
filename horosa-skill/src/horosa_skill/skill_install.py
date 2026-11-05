@@ -26,6 +26,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from horosa_skill import fsretry
 from horosa_skill import __version__
 from horosa_skill.errors import bilingual
 
@@ -247,7 +248,7 @@ def export_zip(dest_dir: Path | None = None, *, source: Path | None = None) -> P
     with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for rel in bundle_digests(base):
             archive.write(base / rel, f"{SKILL_NAME}/{rel}")
-    os.replace(tmp, target)
+    fsretry.replace(tmp, target)
     return target
 
 

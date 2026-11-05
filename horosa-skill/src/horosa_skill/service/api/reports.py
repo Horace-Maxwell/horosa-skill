@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import copy
+import os
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
+from horosa_skill import winpaths
 from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.engine.registry import resolve_tool_name
 from horosa_skill.errors import ToolValidationError, bilingual
@@ -57,6 +59,20 @@ def _file_card(path: Any, format_name: str | None = None) -> dict[str, Any] | No
     return {"path": str(target), "uri": target.as_uri(), "name": target.name,
             "mime": _REPORT_MIME.get(kind, "application/octet-stream"),
             "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+def _render_outcome_fields(rendered: dict[str, Any]) -> dict[str, Any]:
+    """render_report 如实报告的「没按要求写成」：降级成 TXT / 目标被占用另存。此前这里全部丢弃，调用方只看到「已生成 PDF」和一个 .txt 路径。"""
+    return {key: rendered[key] for key in ("degraded_from", "degrade_reason", "requested_output_path") if key in rendered}
+
+
+def _render_outcome_notes(rendered: dict[str, Any]) -> list[str]:
+    notes: list[str] = []
+    if rendered.get("degraded_from"):
+        notes.append(f"未能生成 {str(rendered['degraded_from']).upper()}，已退化为纯文本（全文都在）：{rendered.get('degrade_reason')}")
+    if rendered.get("requested_output_path"):
+        notes.append(f"{rendered['requested_output_path']} 正被别的程序占用（多半开着上一版），新报告另存为 {rendered['path']}；旧文件没动。")
+    return notes
+
 
 class ReportsAPI:
     def record_ai_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -242,15 +258,38 @@ class ReportsAPI:
         """报告类工具的 `output_path` 闸（v0.40.0 P0）：MCP 工具可被提示注入调用，此前 `Path(output_path).resolve()` 后
         直接 `os.replace` —— 一次被注入的调用就能覆盖用户任意文件。现在：缺省 → 存储层的缺省产物路径；给了 →
         相对路径按输出目录解析，绝对路径必须落在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根之内，否则
-        `report.output_path_not_allowed`（不写任何文件）。"""
+        `report.output_path_not_allowed`（不写任何文件）。
+
+        Windows 上字符串闸在 `resolve()` **之前**（v0.47.2-dev）：resolve 一个 UNC 路径就会向对方发起 SMB 连接并带上用户的 NTLM 凭据，
+        被拒绝之前凭据已经送出去了；NUL / CON、NTFS 备用数据流这类路径则「成功」却看不到文件。见 winpaths.py。"""
         if requested is None or f"{requested}".strip() == "":
             return default
         roots = self._report_output_roots()
-        candidate = Path(f"{requested}".strip()).expanduser()
+        text = f"{requested}".strip()
+
+        def refuse(reason_cn: str, reason_en: str, resolved: str | None = None) -> ToolValidationError:
+            return ToolValidationError(
+                bilingual(f"output_path 不可用：{reason_cn}（给的是 {text}）。改用输出目录内的普通相对路径。",
+                          f"output_path cannot be used: {reason_en} (got {text}). Use a plain relative path inside the output directory."),
+                code="report.output_path_not_allowed",
+                details={"requested": text, "resolved": resolved, "reason": reason_en, "allowed_roots": [str(r) for r in roots]},
+            )
+
+        if os.name == "nt":
+            if winpaths.is_network_or_device_path(text) and not winpaths.is_under_network_root(text, [str(r) for r in roots]):
+                raise refuse("网络路径 / 设备路径不在白名单内（只有 HOROSA_REPORT_OUTPUT_ROOTS 配过的共享可写）",
+                             "network or device path outside the allow-list (only shares configured in HOROSA_REPORT_OUTPUT_ROOTS are writable)")
+            problem = winpaths.path_problem(text)
+            if problem is not None:
+                raise refuse(*problem)
+        candidate = Path(text).expanduser()
         if not candidate.is_absolute():
             base = roots[0] if roots else Path(default).parent
             candidate = base / candidate
-        resolved = candidate.resolve()
+        try:
+            resolved = candidate.resolve()
+        except (OSError, ValueError) as exc:  # 路径过长、含 NUL 字节等：不是合法路径，别让裸异常穿出错误信封
+            raise refuse(f"不是合法路径（{type(exc).__name__}）", f"not a usable path ({type(exc).__name__})") from exc
         if not any(resolved == root or root in resolved.parents for root in roots):
             raise ToolValidationError(
                 bilingual(
@@ -345,7 +384,7 @@ class ReportsAPI:
                 artifact = self.store.record_report_artifact(
                     run_id=request.run_id,
                     tool_name=tool_name,
-                    format_name=normalized_format,
+                    format_name=rendered["format"],
                     path=Path(rendered["path"]),
                     trace_id=trace["trace_id"],
                     group_id=trace["group_id"],
@@ -371,12 +410,13 @@ class ReportsAPI:
 
             result = {
                 **artifact,
-                "file": _file_card(artifact.get("artifact_path"), normalized_format),
+                "file": _file_card(artifact.get("artifact_path"), rendered["format"]),
                 "document_schema": document["schema"],
                 "title": document["title"],
                 "source": document["source"],
                 "answer_writeback": answer_writeback,
-                "summary": [f"已生成 {normalized_format.upper()} 结构化报告：{artifact['artifact_path']}"],
+                **_render_outcome_fields(rendered),
+                "summary": [f"已生成 {rendered['format'].upper()} 结构化报告：{artifact['artifact_path']}", *_render_outcome_notes(rendered)],
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -712,9 +752,11 @@ class ReportsAPI:
                 "format": rendered["format"],
                 "file_size": rendered.get("file_size"),
                 "file": _file_card(rendered["path"], rendered["format"]),
+                **_render_outcome_fields(rendered),
                 "document": document,
                 "summary": [
                     f"已生成技法依据报告（{document['technique_count']} 个技法）：{rendered['path']}",
+                    *_render_outcome_notes(rendered),
                     *(
                         []
                         if document["consistency"]["all_clear"]

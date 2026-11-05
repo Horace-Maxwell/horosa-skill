@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from horosa_skill import fsretry
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.service._common import _REPO_ROOT, _render_snapshot_text
 from horosa_skill.service._context import _degrade
@@ -55,7 +56,7 @@ class AstrodataRunners:
                 try:
                     with gzip.open(source, "rb") as fin, open(tmp, "wb") as fout:
                         shutil.copyfileobj(fin, fout, length=1024 * 1024)
-                    os.replace(tmp, cached)
+                    fsretry.replace(tmp, cached)
                     stamp.write_text(src_sig, encoding="utf-8")
                 finally:
                     if tmp.exists():

@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
 
 import typer
 
-from horosa_skill import clients_extra
+from horosa_skill import clients_extra, fsretry
 
 
 def _write_json_file(path: Path, payload: object) -> Path:
@@ -54,7 +53,7 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(f"{target.name}.horosa-tmp")
         tmp.write_text(clients_extra.render_dsh_patch(payload), encoding="utf-8")
-        os.replace(tmp, target)
+        fsretry.replace(tmp, target)
         return {"path": str(target), "format": "dsh-patch", "root_key": "insert", "servers": sorted(payload.get("insert") or {}),
                 "backup": str(backup) if backup else None}
     # v0.41.0：新客户端的根键（OpenCode `mcp`、Amp 字面量 `amp.mcpServers`）由产物显式声明，不进通用猜测表——
@@ -128,7 +127,7 @@ def _merge_client_config(path: Path, payload: object) -> dict[str, Any]:
     # 纯 JSON 分支照旧走平台换行。
     tmp.write_text(output_text, encoding="utf-8", newline="" if written_format == "jsonc" else None)
     try:
-        os.replace(tmp, target)
+        fsretry.replace(tmp, target)
     finally:
         if tmp.exists():
             tmp.unlink()
@@ -160,7 +159,7 @@ def _write_yaml_merge(target: Path, payload: dict[str, Any]) -> dict[str, Any]:
     tmp = target.with_name(f"{target.name}.horosa-tmp")
     tmp.write_bytes(text.encode("utf-8"))  # yaml_block 已按原文件换行拼好；文本模式写会在 Windows 上二次翻译成 \r\r\n
     try:
-        os.replace(tmp, target)
+        fsretry.replace(tmp, target)
     finally:
         if tmp.exists():
             tmp.unlink()

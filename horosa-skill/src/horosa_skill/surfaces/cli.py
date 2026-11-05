@@ -66,7 +66,31 @@ from horosa_skill.surfaces.setup_flow import (
 )
 from horosa_skill.surfaces import runtime_helpers
 
-app = typer.Typer(
+
+def _utf8_stdio(*streams: Any) -> None:
+    """把 stdout / stderr 统一成 UTF-8（已是 UTF-8 的不动）。
+
+    `_print_json` 一直按字节写 UTF-8，但帮助与 stderr 走文本流：管道 / 重定向下 Windows 的文本流是系统 ANSI 代码页（cp1252 / cp936）。
+    v0.47.2-dev 实测（cp1252）：60 个命令里 55 个 `--help` 抛 UnicodeEncodeError；stderr 的 JSON 错误信封混着 `\\uXXXX` 与裸 cp1252 字节，
+    不是合法 UTF-8——只有 shell 的 agent 按契约读它的 `code` 时直接 UnicodeDecodeError。控制台（已是 UTF-8）不受影响。
+    pythonw / 被替换成无 reconfigure 的流时跳过。
+    """
+    for stream in streams or (sys.stdout, sys.stderr):
+        encoding = (getattr(stream, "encoding", None) or "").lower().replace("-", "")
+        reconfigure = getattr(stream, "reconfigure", None)
+        if encoding != "utf8" and reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
+class _HorosaApp(typer.Typer):
+    """所有入口（console script、`python -m horosa_skill`、`python -m horosa_skill.surfaces.cli`）都经 `app()`；CliRunner 不走这里，不碰它的流。"""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        _utf8_stdio()
+        return super().__call__(*args, **kwargs)
+
+
+app = _HorosaApp(
     help=(
         "Horosa Skill CLI — 本地术数/占星技法工具箱。\n"
         "上手三步：`install`（装离线 runtime）→ `selfcheck`（活体验证）→ `serve`（起 MCP 接 AI 客户端）。\n"

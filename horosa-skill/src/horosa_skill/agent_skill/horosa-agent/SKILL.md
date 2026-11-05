@@ -325,7 +325,8 @@ debug commands, stale-runtime signals like `source: null`).
 
 An agent that can run commands but cannot mount an MCP server (CI bots, `codex exec` without MCP, plain
 shell tools) gets the same contract through the CLI. **stdout is always exactly one JSON document**;
-progress lines and error envelopes go to stderr, so parse stdout only.
+progress lines and error envelopes go to stderr, so parse stdout only. Both streams are always UTF-8, on every
+platform and code page — decode them as UTF-8.
 
 | Need | Command |
 | --- | --- |

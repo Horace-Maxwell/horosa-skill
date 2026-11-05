@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
 | v0.47.2-dev (2026-11-04) | 上游 v3.13.2 只改桌面端就绪门 + 版本号，skill 结果不变；`--depth` 克隆让 `bazi_pithy` 的 `generated_at` 静默写错；公开克隆缺 dist-file 与 @babel/parser | 生成脚本拒绝浅克隆（先红后绿）；Runbook 写明本地上游 == 公开远端时同步 / `--scan` 用本地、门禁用非浅公开克隆；0 hit 先跑上一区间对照 |
 | v0.47.2-dev (2026-11-04) | Windows 维护机补 veraPDF 后把 `HOROSA_VERAPDF` 设成用户级变量，skill 每次启动多报一行「未知环境变量」；同一台机器上`HOROSA_JAVA_HOME`（星阙桌面端构建脚本的 JDK 路径）一直在误报。扫全树：代码里 12 个 HOROSA_* 名字没进注册表（7 个真变量：测试开关 + 启动器交给上游引擎的旋钮；5 个不是环境变量） | 登记为 internal；`test_every_horosa_name_in_the_tree_is_registered` 扫 src / tests / scripts，新名字不登记即红，不是环境变量的写进 `_NOT_ENV_FLAGS` 并给理由 |
 | v0.47.1-dev (2026-11-03) | v0.47.0 收尾项：宿占整张死键表、七政显示偏好、玄史天象记录字段、繁体古籍档漏多行原文、年龄行日期解析、127 处过期上游行号 | 古籍档 span 对整库 33 117 条记录逐条钉；年龄行在 node 里对上游 210 例对拍；死键 / 偏好表逐值对上游 |
@@ -171,6 +172,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-05 — Windows 面没测过的形状：管道编码、路径闸先 resolve、共享冲突、报告目标开着、择时百年表
+
+- **起因**：v0.47.1 已复验无新发布，这轮不重跑发布清单，专测 Windows 上从没覆盖的形状（静态扫 + 每个可疑点写探针真跑）。**扫过且没问题的**：文件 I/O 与子进程编码全部显式、
+  `tzdata` 已声明、SQLite（WAL + busy_timeout，6 进程 22 815 次写 0 错）、4 进程抢冷启动（3 轮都恰好一对服务、无残锁）、1931 / 1969 / 2040 年全技法无 OSError（`civil_calendar`
+  的 1970 前偏移兜底在年龄计算里两头抵消，无害）。
+- **坑 1 · 管道下的 CLI**：`_print_json` 一直按字节写 UTF-8，但帮助与 stderr 走文本流，管道 / 重定向时是 ANSI 代码页。cp1252 下 60 个命令 55 个 `--help` 抛 UnicodeEncodeError；
+  stderr 的 JSON 错误信封混着 `\uXXXX` 与裸 cp1252 字节，**不是合法 UTF-8**——只有 shell 的 agent 按 SKILL.md 契约读 `code` 时 UnicodeDecodeError，拿不到要问用户的话。
+  修：`_HorosaApp.__call__` 在所有入口把两条流统一成 UTF-8（已是 UTF-8 的不动，控制台不受影响）。CliRunner 换掉了真流，抓不到，守卫起真子进程并用 `PYTHONIOENCODING=cp1252` 三平台复现。
+- **坑 2 · 路径闸先 resolve 再判**：`_report_output_path` 的威胁模型写明「MCP 工具可被提示注入调用」，却先 `candidate.resolve()`。对 UNC 路径这一步就向对方发起 SMB 连接（Windows 缺省允许向远端送
+  NTLM 认证），被拒绝之前凭据已经送出去；实测 `\\192.0.2.1\share\x.pdf` 卡 21 秒才「拒绝」。同一道闸还放行 `NUL`（报告进空设备却报成功）、`x.pdf:stream`（NTFS 备用数据流，文件看不见）、`CON` / `AUX`
+  （建出资源管理器难删的文件），`\\?\GLOBALROOT\…` 与 `a<b>.pdf` 抛裸 OSError。修：`winpaths`（纯字符串、不碰文件系统），Windows 上在 resolve **之前**拦；用户在 `HOROSA_REPORT_OUTPUT_ROOTS`
+  配过的共享照常可写（字符串比对且折叠 `..`）；resolve 的 OSError / ValueError 收成干净拒绝。知识库 id 共用同一份保留名（补 CONIN$ / CONOUT$ / COM¹ 这几个缺口）。
+- **坑 3 · 共享冲突**：Python 的 `open()` 不带 FILE_SHARE_DELETE，有人读着目标时 `os.replace` / `unlink` 抛 PermissionError。10 进程 15 秒写读 runtime-state.json：87% 的写失败、11.5% 的读返回
+  None（调用方当成 runtime 没在跑）、3 个进程 15 秒只完成 2 次加锁更新。后者是 `pid_lock` 的 finally 只接 FileNotFoundError：PermissionError 冒出去、锁留在盘上，持有者活着不可回收，别人等满超时。
+  修：`fsretry`（只重试共享冲突，预算 2 秒）走所有 replace / 状态读 / 放锁，放锁绝不抛。修后同负载 0 错误、0 假空、加锁更新 366 次。注意 `open()` 走 CRT，失败只带 errno 13、**winerror 是 None**（第一版只认 winerror，还剩 2% 假空）。
+- **坑 4 · 报告目标开在阅读器里**：重新生成时上一版开在 Acrobat / Word 里，replace 失败被当「渲染失败」退化成 TXT，整份排好的报告扔掉。修：另存旁边第一个空闲的 `名字 (1).pdf`，结果带
+  `requested_output_path`，旧文件不动。**顺带发现（跨平台）**：`report_render` 把 `degraded_from` / `degrade_reason` 全丢了——退化后仍回 `format: pdf`、「已生成 PDF」和一个 .txt 路径，正是注释说绝不能发生的静默降级。现在格式、摘要、字段都如实。
+- **坑 5 · 择时性能**：探针发现 1969 年的太乙择时超时，以为是 Windows 日期问题，换单独跑 + 拉长超时才发现没有 1970 断崖（2000 年 45 秒、1971 年 57 秒、1931 年 60 秒、1800 年 25 秒），只是撞 60 秒墙钟。
+  CPU profile：90% 在 lunar.js、63% 在 `eLon`；每扫一小时 `calcTaiyi → buildBaziCore → buildSmallDirection` 逐年排约百年流年表，而库只缓存**一个** LunarYear、构造一次重算 31 个节气。
+  窗口上限 92 天却连 9 天都撑不到。**第一版 LRU 容量 32，实测一点没快**：顺序横扫百年、容量小于横扫长度时每条都在用到之前被挤掉，命中率恒为 0；看 profile 的调用链才定位。容量改 1024：一周 30 秒 → 4.8 秒，92 天窗口 53–60 秒内跑完。
+  库内都走 `LunarYear.fromYear` 这个公开属性，所以不改库、不改 vendored 上游。**等价性**：全部技法 × 3 个年代共 320 条真实引擎请求，修前（干净 origin/main）修后重放，stdout 逐字节相同，总引擎耗时 386 → 204 秒。
+  三式合一 92 天仍贴着墙钟，`js_engine.timeout` 的恢复说明改成「拆短窗口或调大 HOROSA_JS_ENGINE_TIMEOUT_SECONDS」——此前落到前缀规则，把超时说成「确认已安装 runtime」。
+- **守卫**：`tests/test_cli_stdio_encoding.py`、`tests/test_winpaths.py`（闸必须在任何 resolve 之前）、`tests/test_fsretry.py`（真多进程撞状态文件；src 里禁裸 `os.replace`；目标被占 / 退化如实回报）、
+  `tests/test_lunar_year_cache.py`（按真实横扫长度断言命中，不比耗时）、`tests/test_js_client.py`。负向对照 13 条全红；其中「存档记真实格式」第一次没红，查出测试没断言它，已补。
+- **法则**：威胁模型写「可被注入调用」的闸，字符串判断必须在第一次文件系统访问之前——resolve 不是纯函数。Windows 上别的进程开着文件是常态，不是异常；多个会话共写的文件一律走 `fsretry`。
+  降级信息只有传到调用方才算没静默。给缓存定容量要看访问模式：顺序横扫下容量小于横扫长度等于没有缓存，「加了缓存」要靠 profile 验证，不是靠读代码。
 
 ### v0.47.2-dev / 2026-11-04 — 上游 v3.13.2 再同步：结果不变的版本也要走全流程，公开克隆的三个坑
 
