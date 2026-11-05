@@ -22,8 +22,12 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _cli(tmp_path: Path, *args: str, module: str = "horosa_skill") -> subprocess.CompletedProcess[bytes]:
-    env = {k: v for k, v in os.environ.items() if not k.startswith("HOROSA_") and k != "PYTHONUTF8"}
+    # Typer 见到 GITHUB_ACTIONS / FORCE_COLOR / PY_COLORS 就强制终端模式，rich 把 `--input` 拆成 `\x1b[1;36m-\x1b[0m\x1b[1;36m-input`，
+    # 字面子串查不到（只在 Linux runner 红：Windows 上 rich 的旧控制台判定不出 ANSI，本机复现不了）。这里只测编码，关掉终端模式。
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("HOROSA_") and k not in {"PYTHONUTF8", "GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS"}}
     env.update({
+        "_TYPER_FORCE_DISABLE_TERMINAL": "1",
         "PYTHONIOENCODING": "cp1252",
         "HOROSA_SKILL_DATA_DIR": str(tmp_path / "data"),
         "HOROSA_RUNTIME_ROOT": str(tmp_path / "rt"),
