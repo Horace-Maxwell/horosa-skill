@@ -126,6 +126,7 @@ class ReportsAPI:
                     },
                 ) from exc
 
+            scan: dict[str, Any] = {}
             results = self.store.query_runs(
                 run_id=request.run_id,
                 tool=request.tool,
@@ -137,15 +138,24 @@ class ReportsAPI:
                 limit=max(1, request.limit),
                 offset=max(0, getattr(request, "offset", 0) or 0),
                 include_payload=request.include_payload,
+                scan_report=scan,
             )
             trace["result_count"] = len(results)
+            not_scanned = int(scan.get("not_scanned") or 0)
+            summary = [f"已检索到 {len(results)} 条本地 run 记录。"]
+            if not_scanned:
+                summary.append(
+                    f"另有 {not_scanned} 条较早的记录只按问题与答案检索过，盘面正文没有搜；"
+                    "用 after / before / tool / entity 缩小范围后可以搜到。"
+                )
             return {
                 "ok": True,
                 "count": len(results),
                 "results": results,
+                "not_scanned": not_scanned,
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
-                "summary": [f"已检索到 {len(results)} 条本地 run 记录。"],
+                "summary": summary,
             }
 
     def show_memory(self, payload: dict[str, Any]) -> dict[str, Any]:

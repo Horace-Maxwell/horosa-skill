@@ -335,21 +335,29 @@ class MemoryStore:
         except sqlite3.Error:
             pass
 
-    def _fts_run_ids(self, conn: sqlite3.Connection, text: str) -> set[str]:
-        # 文本转 FTS 短语（转义引号），返回命中 run id 集；FTS 缺失/查询异常回空集（走深扫）。
-        # trigram 分词要求查询 ≥3 码点（中文两字词等短查询直接回落深扫，不发无效查询）。
+    def _indexed_text_rows(
+        self, conn: sqlite3.Connection, select: str, filters: list[str], params: list[Any], text: str, limit: int
+    ) -> list[sqlite3.Row]:
+        """问题与答案里含 `text` 的 run（新到旧，受同一组过滤），不受深扫窗口限制。
+
+        FTS trigram 要求查询 ≥3 码点；短查询（中文两字词）与缺 FTS5 的环境走 LIKE，只比这三列，万把行也是毫秒级。"""
         needle = (text or "").strip()
-        if len(needle) < 3:
-            return set()
-        try:
+        if not needle:
+            return []
+        order = "ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?"
+        if len(needle) >= 3:
             phrase = '"' + needle.replace('"', '""') + '"'
-            rows = conn.execute(
-                "SELECT runs.id FROM runs_fts JOIN runs ON runs.rowid = runs_fts.rowid WHERE runs_fts MATCH ?",
-                (phrase,),
-            ).fetchall()
-            return {row["id"] for row in rows}
-        except sqlite3.Error:
-            return set()
+            clause = "AND runs.rowid IN (SELECT rowid FROM runs_fts WHERE runs_fts MATCH ?)"
+            try:
+                return conn.execute("\n".join([select, *filters, clause, order]), [*params, phrase, limit]).fetchall()
+            except sqlite3.OperationalError:
+                pass  # 环境缺 FTS5：下面的 LIKE 兜底
+        pattern = "%" + needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        clause = (
+            r"AND (runs.query_text LIKE ? ESCAPE '\' OR runs.user_question_text LIKE ? ESCAPE '\'"
+            r" OR runs.ai_answer_text LIKE ? ESCAPE '\')"
+        )
+        return conn.execute("\n".join([select, *filters, clause, order]), [*params, pattern, pattern, pattern, limit]).fetchall()
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
         columns = {
@@ -642,19 +650,27 @@ class MemoryStore:
         limit: int = 20,
         offset: int = 0,
         include_payload: bool = True,
+        scan_report: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        sql = [
-            """
-            SELECT DISTINCT runs.id, runs.entrypoint, runs.query_text, runs.created_at, runs.updated_at
-                , runs.subject_json, runs.group_id, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
-                , runs.usage_count, runs.last_used_at
+        """`text` 分两层：问题与答案走索引，全库可搜；工具调用与产物文件（盘面正文）只深扫最新的候选窗口，读文件不便宜。
+
+        传 `scan_report` 字典会填 `deep_scan_window` 与 `not_scanned`（窗口外、产物没被搜过的 run 数），调用方据此如实告知。"""
+        joins = """
             FROM runs
             LEFT JOIN tool_calls ON tool_calls.run_id = runs.id
             LEFT JOIN entities ON entities.run_id = runs.id
             LEFT JOIN artifacts ON artifacts.run_id = runs.id
             WHERE 1=1
             """
-        ]
+        select = (
+            """
+            SELECT DISTINCT runs.id, runs.entrypoint, runs.query_text, runs.created_at, runs.updated_at
+                , runs.subject_json, runs.group_id, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
+                , runs.usage_count, runs.last_used_at, runs.rowid AS run_rowid
+            """
+            + joins
+        )
+        sql: list[str] = []
         params: list[Any] = []
         if run_id:
             sql.append("AND runs.id = ?")
@@ -686,13 +702,23 @@ class MemoryStore:
             # Text search also scans artifact file contents, so fetch a wider local candidate window
             # before applying the final in-process filter.
             candidate_limit = max(candidate_limit * 20, 200)
-        # rowid 次键：同秒创建的多个 run 顺序确定（分页/翻页稳定）。
-        sql.append("ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?")
-        params.append(candidate_limit)
-
         with self.connect() as conn:
-            rows = conn.execute("\n".join(sql), params).fetchall()
-            fts_hits: set[str] = self._fts_run_ids(conn, text) if text else set()
+            # rowid 次键：同秒创建的多个 run 顺序确定（分页/翻页稳定）。
+            order = "ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?"
+            rows = conn.execute("\n".join([select, *sql, order]), [*params, candidate_limit]).fetchall()
+            indexed_rows = self._indexed_text_rows(conn, select, sql, params, text, target_count) if text else []
+            fts_hits = {row["id"] for row in indexed_rows}
+            if scan_report is not None:
+                scan_report["deep_scan_window"] = candidate_limit if text else 0
+                scan_report["not_scanned"] = 0
+                if text and len(rows) >= candidate_limit:
+                    total = conn.execute("\n".join(["SELECT COUNT(DISTINCT runs.id)" + joins, *sql]), params).fetchone()[0]
+                    scan_report["not_scanned"] = max(0, total - len(rows))
+            if indexed_rows:
+                # 窗口外的索引命中并进候选，仍按新到旧走下面的循环。
+                by_id = {row["id"]: row for row in rows}
+                by_id.update((row["id"], row) for row in indexed_rows)
+                rows = sorted(by_id.values(), key=lambda row: (row["created_at"], row["run_rowid"]), reverse=True)
             results = []
             for row in rows:
                 artifact_sql = """

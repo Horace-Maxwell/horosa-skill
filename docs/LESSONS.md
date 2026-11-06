@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | `memory_query` 的 `text` 只看最近 400 条：FTS 查得到，`query_runs` 却回 0 条，且不告诉调用方；两字词根本不走 FTS | 问题与答案走索引全库可搜（FTS，短查询 / 缺 FTS5 用 LIKE），并进候选；盘面正文深扫仍有窗口，结果带 `not_scanned`；`tests/test_memory_search.py` |
 | v0.47.2-dev (2026-11-06) | 记忆库出问题拖垮整个服务：只读库 / 路径不可用让 `MemoryStore()` 抛错、服务建不起来；只坏中间页的库构造时看不出来，每次存档都 malformed，重启也不隔离；隔离日志承诺的「memory 工具重建索引」不存在 | 构造不抛（`init_error`，下次操作自愈）；写路径 `_writer` 遇 malformed 且 `integrity_check` 确认后隔离重建；删掉那句承诺；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-06) | `horosa_memory_query` 说明写「run summaries」，缺省却带全量产物：20 份 63 KB 的星盘线上 1.8 MB，超 1 MiB SSE 上限；2 MB 的八字 42.5 MB。v0.46.1 的预算只认顶层 `data`，记忆结果没有，`horosa_memory_show` 2.1 MB 同样绕过 | `include_payload` 缺省 false；`_fit_result_budget` 按形状裁，记忆产物先裁原始子树、再整份占位；`tests/test_memory_mcp_budget.py` |
 | v0.47.2-dev (2026-11-06) | 答案写回把唯一一份盘面写成 0 字节：`_refresh_run_artifacts` 原地 `write_text`，真卷写满时重试 `ok: true` 也救不回来，`report_render` 只剩 `report.source_not_found`；并发读者 26/1851 读到半个文件；落库 sha 写回后全错；报告 JSON 也被改写 | 存档一律走 `_write_json_atomic`（同目录临时文件 + fsync + 替换），刷新后更新 size / sha，`report_*` 不刷新；`tests/test_memory_durability.py` |
@@ -176,6 +177,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 文本检索只看最近 400 条，而且不说
+
+- **症状**：架构审计：3000 条更新的 run 之后，最老那条的问题含「苍穹之眼」，`query_runs(text=…)` 回 0 条，同库的 FTS 表直接查能命中。用户得到的是「没有这条记录」。
+- **根因**：候选来自按时间倒序的 `LIMIT`（`limit=20` 时 400 条），FTS 命中只用来放行窗口内的行，从不把窗口外的行带进来。工具说明的例子 `{"text": "事业"}` 是两字词，trigram 要 ≥3 码点，连 FTS 都不走。
+- **修复**：`_indexed_text_rows` 用同一组过滤查问题与答案（≥3 码点走 FTS 子查询，短查询与缺 FTS5 走 LIKE 并转义 `%` `_`），命中并进候选后按新到旧排序。用子查询而不是把 id 列表拼进 `IN`，避开 SQL 变量上限。盘面正文（工具调用、产物文件）不进索引，仍只深扫窗口；`scan_report` 给出窗口外多少条的产物没搜过，`query_memory` 回 `not_scanned`，大于 0 时 summary 多一句怎么缩小范围。
+- **没动的**：`memory_query` 工具说明的「question / answer / snapshot」在 `surfaces/mcp_server.py`（另一条线的文件），CLI 的 `memory query` 直接打印列表，拿不到 `not_scanned`。读文件的双读（`store.py` 的 `_artifact_record_to_dict` 与 `_path_contains_text`）没改。
+- **守卫**：`tests/test_memory_search.py`。负向对照：去掉合并红五条，去掉 LIKE 转义、索引查询丢过滤各红。`not_scanned` 忽略过滤时第一版测试没红（过滤后不足一个窗口，根本走不到 COUNT），改成过滤后仍超窗口才红。
+- **法则**：加速路径只能让结果更快，不能决定结果有哪些；搜不全时要说搜了多少。
 
 ### v0.47.2-dev / 2026-11-06 — 记忆库出问题拖垮整个服务：构造抛错、写时坏页不自愈、日志承诺不存在的工具
 

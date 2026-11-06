@@ -62,6 +62,10 @@ full. Both stay inside one MCP message: past about 900 KB the largest raw engine
 `export_snapshot` are kept, so the sections you read are still there; the full copy stays on disk
 (`horosa-skill memory show <run_id>`).
 
+`text` searches questions and answers across all runs, but the chart text inside artifacts only in the newest
+runs (400 at the default `limit`). When the result says `not_scanned: N`, N older runs were not searched for chart
+text. Before saying a run does not exist, narrow with `after` / `before` / `tool` / `entity` and search again.
+
 **Cite the chart by section number.** Every exported section has a `cite_id` (`E1`, `E2`, …) in the
 template's `source_export_sections`; the report prints it in front of that section's heading, and in the
 PDF a `[E3]` in your text is a link to it. End each judgement with the section it rests on
