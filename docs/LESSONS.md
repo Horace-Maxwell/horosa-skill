@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 存档只增不减且看不见：产物带 `indent=2`，答过没回读的 run 会被 `memory prune` 选中，`doctor` 只报磁盘余量不报自己用了多少 | 产物不带缩进；写回答案算点用，prune 也跳过升级前写回的；`doctor.memory_db.usage`；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-06) | install 不防并发也不防崩溃：别的会话在 stop 与换目录之间从旧树起启动器（install 仍报成功）；被杀的 install 留下 `.hi-*` 约 2 GB，卸载也不清；崩在两次改名之间只剩 `previous/`，离线装不回来；完整的 `.part` 每次重试都 416；镜像回 200 + 错误页时回退不生效 | 换目录全程持启动锁；`.hi-*` 记属主 pid，install 一进来就清、进卸载清单；启动路径与 install 恢复完整的 `previous/`；416 看 Content-Range；逐候选校验内容；`tests/test_runtime_recovery.py` |
 | v0.47.2-dev (2026-11-06) | 启动锁撞上回收的 PID：hand-off 给启动器的锁没人释放，下次启动时那个 pid 若已被无关进程占用，「活持有者不回收」让每次调用都回 `runtime.starting`，启动脚本一次不跑 | 启动器锁按时长封顶（960 s，大于一次启动的上限），上限内才信「活着」；服务都起来 / 停掉时收回；`tests/test_runtime_recovery.py` |
 | v0.47.2-dev (2026-11-06) | `memory_query` 的 `text` 只看最近 400 条：FTS 查得到，`query_runs` 却回 0 条，且不告诉调用方；两字词根本不走 FTS | 问题与答案走索引全库可搜（FTS，短查询 / 缺 FTS5 用 LIKE），并进候选；盘面正文深扫仍有窗口，结果带 `not_scanned`；`tests/test_memory_search.py` |
@@ -179,6 +180,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 存档增长的三个便宜修法（不做自动保留）
+
+- **症状**：架构审计估算：每天 20 次星盘一年约 540 MB，八字形状（单份约 2 MB，读代码与 LESSONS v0.46.1 推算）一年约 14.6 GB。没有自动保留，`memory prune` 要手动跑，`doctor` 看不到存档占了多少。`attach_ai_response` 不记点用：写回了解读但没回读的 run 会被 prune 选中，而 `is_memory_worthy` 明明说有答案就值得留。
+- **修复**：`_write_json_atomic` 改紧凑 JSON。实测一份星盘产物 62,951 → 50,365 字节（省 20%），录制的引擎 JSON 结构更多，`indent=2` 在上面是 1.66–2.48 倍。写回答案算一次点用；prune 另判 `ai_answer_text`，覆盖升级之前写回、没有 usage 记录的行。`MemoryStore.storage_usage()` 进 `doctor.memory_db.usage`，库打不开时 `runs` 是 `null`，不写 0。
+- **没做的**：按范围不做自动保留、`VACUUM`、gzip 老产物。将来加 `VACUUM` 要注意：`runs` 是隐式 rowid，`VACUUM` 可能重排，外部内容 FTS 必须随后 `rebuild`。
+- **旧断言为何没抓到**：prune 的测试只造了「点用过 / 没点用过」两种 run，没有「答过但没回读」这一类。
+- **守卫**：`tests/test_memory_durability.py`。负向对照：去掉点用记账、去掉答案判断、库打不开时报 0，各红一条。
+- **法则**：先省不需要的（排版），再谈要不要删；删之前，「用过」的定义要和「值得留」的定义是同一个。
 
 ### v0.47.2-dev / 2026-11-06 — install 不防并发也不防崩溃：五个要人动手才能恢复的现场
 

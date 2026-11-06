@@ -284,3 +284,96 @@ def test_the_quarantine_notice_promises_no_tool_that_does_not_exist(tmp_path: Pa
     assert store.corruption_recovery is not None
     assert "已隔离" in caplog.text
     assert "重建索引" not in caplog.text.replace("没有重建索引", "")
+
+
+# ── 增长：省得下的先省，答过的不算没用过，用了多少看得见 ──────────────────────────────────
+
+
+def _backdate(store: MemoryStore) -> None:
+    with store.connect() as conn:
+        conn.execute("UPDATE runs SET created_at = '2020-01-01T00:00:00+00:00'")
+        conn.commit()
+
+
+def test_stored_artifacts_carry_no_pretty_printing(tmp_path: Path) -> None:
+    """没有人读这些文件的排版，读的都是 json.loads。一份星盘产物因此省 20%，结构多的引擎 JSON 省得更多。"""
+    store, run_id, artifact = _stored_run(tmp_path)
+    manifest = next(artifact.parent.glob(f"{run_id}_manifest.json"))
+    for path in (artifact, manifest):
+        raw = path.read_bytes()
+        assert b"\n" not in raw, path.name
+        assert raw == json.dumps(json.loads(raw), ensure_ascii=False, separators=(",", ":")).encode("utf-8"), path.name
+
+
+def test_an_old_indented_artifact_still_reads_and_refreshes(tmp_path: Path) -> None:
+    store, run_id, artifact = _stored_run(tmp_path)
+    artifact.write_text(json.dumps(json.loads(artifact.read_text(encoding="utf-8")), ensure_ascii=False, indent=2), encoding="utf-8")
+    store.attach_ai_response(run_id=run_id, ai_answer="解读正文")
+    payload = next(a for a in store.query_runs(run_id=run_id)[0]["artifacts"] if a["kind"] == "tool_result")["payload"]
+    assert payload["conversation"]["ai_answer_text"] == "解读正文" and payload["tool"] == "chart"
+
+
+def test_writing_an_answer_back_counts_as_use(tmp_path: Path) -> None:
+    """写回解读的 run 正是用户在乎的那些；此前只有 `memory show` 才算点用，答过没回读的会被 prune 选中。"""
+    store, run_id, _ = _stored_run(tmp_path)
+    store.attach_ai_response(run_id=run_id, ai_answer="解读正文")
+    record = store.query_runs(limit=1, include_payload=False)[0]
+    assert record["usage_count"] == 1 and record["last_used_at"]
+    _backdate(store)
+    with store.connect() as conn:
+        conn.execute("UPDATE runs SET last_used_at = '2020-01-02T00:00:00+00:00'")
+        conn.commit()
+    assert store.prune_unused(unused_days=30)["candidates"] == 0
+
+
+def test_prune_keeps_runs_answered_before_usage_was_counted(tmp_path: Path) -> None:
+    """升级之前写回的答案没有 usage 记录，同样不能删。"""
+    store, run_id, _ = _stored_run(tmp_path)
+    plain = store.create_run(entrypoint="tool", query_text="没人答过", group_id="g")
+    with store.connect() as conn:
+        conn.execute("UPDATE runs SET ai_answer_text = '旧答案' WHERE id = ?", (run_id,))
+        conn.commit()
+    _backdate(store)
+    plan = store.prune_unused(unused_days=30)
+    assert plan["candidates"] == 1 and plan["sample"] == [plain]
+
+
+def test_storage_usage_counts_what_grows(tmp_path: Path) -> None:
+    settings = _settings(tmp_path).model_copy(update={"trace_dir": tmp_path / "traces"})
+    (tmp_path / "traces").mkdir()
+    (tmp_path / "traces" / "2026-11-06.jsonl").write_bytes(b"x" * 1000)
+    store = MemoryStore(settings)
+    run_id = store.create_run(entrypoint="tool", query_text="q", group_id="g")
+    ref = store.record_tool_result(run_id=run_id, tool_name="chart", ok=True, input_normalized={}, envelope_dict={"ok": True},
+                                   summary=[], warnings=[], error=None)
+
+    usage = store.storage_usage()
+
+    assert usage["runs"] == 1
+    assert usage["artifact_files"] == 2, "盘面产物 + manifest"
+    assert usage["artifact_bytes"] >= Path(ref.artifact_path).stat().st_size
+    assert usage["trace_bytes"] == 1000
+    assert usage["database_bytes"] >= store.db_path.stat().st_size
+    assert usage["total_bytes"] == usage["artifact_bytes"] + usage["trace_bytes"] + usage["database_bytes"]
+
+
+def test_storage_usage_is_honest_when_the_store_is_down(tmp_path: Path) -> None:
+    blocker = tmp_path / "a-file"
+    blocker.write_text("not a directory", encoding="utf-8")
+    store = MemoryStore(Settings(server_root="http://127.0.0.1:9", db_path=blocker / "memory.db", output_dir=blocker / "runs"))
+    usage = store.storage_usage()
+    assert usage["runs"] is None and usage["total_bytes"] == 0
+
+
+def test_doctor_shows_how_much_the_store_uses(tmp_path: Path) -> None:
+    from horosa_skill.runtime import HorosaRuntimeManager
+    from horosa_skill.surfaces import doctor as doctor_checks
+
+    settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", runtime_root=tmp_path / "rt",
+                        db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs", data_dir=tmp_path / "data")
+    MemoryStore(settings).create_run(entrypoint="tool", query_text="q", group_id="g")
+
+    report = doctor_checks._doctor_report(settings, HorosaRuntimeManager(settings))
+
+    assert report["memory_db"]["usage"]["runs"] == 1
+    assert report["memory_db"]["ok"] is True, "新增字段不影响原有判定"

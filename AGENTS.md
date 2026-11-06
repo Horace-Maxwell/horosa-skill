@@ -1336,6 +1336,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **记忆库出问题不拖垮计算（v0.47.2-dev）。** `MemoryStore()` 不因存储问题抛错：`OSError` / `sqlite3.Error` 记进 `init_error`，`connect()` 每次重试以便自愈，`integrity_check` 报 `ok: false`。写库一律用 `_writer()`：malformed 且 `PRAGMA integrity_check(1)` 确认后才隔离重建（别的进程刚隔离时报错文字一样），本次写照常抛错；读路径不隔离；锁占用绝不隔离。隔离后旧记录不再出现在检索里，日志不许承诺没有的恢复手段。
 - **记忆门面也受 MCP 线上预算约束（v0.47.2-dev）。** `MemoryQueryInput.include_payload` 缺省 false：`horosa_memory_query` 只回摘要；`horosa_memory_show` 回全量。超 `MCP_RESULT_WIRE_BUDGET` 时 `_fit_result_budget` 裁 `results[].artifacts[].payload` 与 `result.artifacts[].payload`：先裁 `payload.data` 的原始子树（`_PROTECTED_DATA_KEYS` 不动），不够再整份换占位。CLI 的 `memory query` 不走 MCP，仍缺省带载荷。新增任何不带顶层 `data` 的大结果都要接进 `_fit_result_budget`，否则预算管不到。
 - **记忆检索分两层（v0.47.2-dev）。** `text` 对问题与答案走索引、全库可搜（`_indexed_text_rows`：≥3 码点 FTS，短查询与缺 FTS5 用 LIKE）；工具调用与产物文件只深扫最新的候选窗口（`max(limit * 20, 200)`）。窗口外没搜过的条数经 `scan_report` → `not_scanned` 告诉调用方。加新的检索来源时，索引命中必须能带进窗口外的行，不能只当窗口内的放行条件。
+- **存档增长（v0.47.2-dev）。** 产物是紧凑 JSON（`_write_json_atomic`）。写回答案算点用，`prune_unused` 另判 `ai_answer_text` 以覆盖旧行：「用过」与 `is_memory_worthy` 的「值得留」要一致。`doctor.memory_db.usage` 报 run 数与各部分字节数，库打不开时 `runs` 是 `null`。没有自动保留也没有 `VACUUM`；要加 `VACUUM` 必须随后 `INSERT INTO runs_fts(runs_fts) VALUES('rebuild')`：`runs` 是隐式 rowid，`VACUUM` 可能重排，外部内容 FTS 会对不上。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 

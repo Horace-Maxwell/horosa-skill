@@ -541,7 +541,8 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     try:
         from horosa_skill.memory.store import MemoryStore as _MemoryStore
 
-        report["memory_db"] = {"path": str(settings.db_path), **_MemoryStore(settings).integrity_check()}
+        _store = _MemoryStore(settings)
+        report["memory_db"] = {"path": str(settings.db_path), **_store.integrity_check(), "usage": _store.storage_usage()}
     except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
         report["memory_db"] = {"path": str(settings.db_path), "ok": False, "detail": [f"{exc}"]}
     # 可选向量检索：依赖看的是**跑 doctor 的这个环境**，客户端的 server 可能在另一个环境里（setup 的探针查的才是那边）。

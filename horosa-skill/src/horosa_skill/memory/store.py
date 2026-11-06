@@ -37,7 +37,8 @@ def _write_json_atomic(path: Path, payload: Any) -> tuple[int, str]:
     并发读者还会读到半个文件。这里写同目录临时文件（`os.replace` 同卷才原子）、落盘后再替换。
     用 `os.open` 而不是 mkstemp：后者固定 0600，会改掉产物一直以来按 umask 建的权限；改写时沿用原文件的权限。
     """
-    data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    # 不带缩进：没人读这些文件的排版。实测一份星盘产物省 20%（62.9 → 50.4 KB），结构多的引擎 JSON 省得更多（录制件最多 2.48 倍）。
+    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
     fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
     try:
@@ -611,7 +612,8 @@ class MemoryStore:
             conn.execute(
                 """
                 UPDATE runs
-                SET user_question_text = ?, ai_answer_text = ?, ai_answer_json = ?, answer_meta_json = ?, updated_at = ?
+                SET user_question_text = ?, ai_answer_text = ?, ai_answer_json = ?, answer_meta_json = ?, updated_at = ?,
+                    usage_count = COALESCE(usage_count, 0) + 1, last_used_at = ?
                 WHERE id = ?
                 """,
                 (
@@ -620,6 +622,7 @@ class MemoryStore:
                     json.dumps(ai_answer_structured, ensure_ascii=False) if ai_answer_structured is not None else None,
                     json.dumps(answer_meta or {}, ensure_ascii=False),
                     now,
+                    now,  # 写回解读就是用过：答过的 run 不该被 prune 选中
                     run_id,
                 ),
             )
@@ -803,8 +806,8 @@ class MemoryStore:
 
     def prune_unused(self, *, unused_days: int, yes: bool = False) -> dict[str, Any]:
         """清理长期未点用的 run（默认 dry-run）：判据 = COALESCE(last_used_at, created_at) 早于
-        cutoff **且** usage_count 为空/0。删除级联 tool_calls/artifacts/entities 行 + 磁盘产物文件。
-        点用过的 run 永不入选（哪怕很老）——「用过」就是价值证明。"""
+        cutoff **且** usage_count 为空/0 **且**没有写回过答案。删除级联 tool_calls/artifacts/entities 行 + 磁盘产物文件。
+        点用过的 run 永不入选（哪怕很老）——「用过」就是价值证明；写回答案现在算点用，判答案列是给升级之前写回的那些。"""
         from datetime import timedelta
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max(1, unused_days))).replace(microsecond=0).isoformat()
@@ -813,6 +816,7 @@ class MemoryStore:
                 """
                 SELECT id, created_at, last_used_at, usage_count FROM runs
                 WHERE COALESCE(last_used_at, created_at) < ? AND COALESCE(usage_count, 0) = 0
+                    AND COALESCE(ai_answer_text, '') = ''
                 ORDER BY created_at ASC
                 """,
                 (cutoff,),
@@ -848,6 +852,42 @@ class MemoryStore:
             report["deleted"] = len(ids)
             report["files_removed"] = files_removed
             return report
+
+    def storage_usage(self) -> dict[str, Any]:
+        """本机存档占了多少盘（doctor 用）。只算随使用增长的三样，不含 runtime；清理走 `memory prune`，这里只报数。"""
+
+        def tree_size(root: Path | None) -> tuple[int, int]:
+            size = files = 0
+            for folder, _, names in os.walk(root) if root is not None else ():
+                for name in names:
+                    try:
+                        size += os.stat(os.path.join(folder, name)).st_size
+                        files += 1
+                    except OSError:
+                        continue  # 遍历途中被删 / 替换的文件
+            return size, files
+
+        artifact_bytes, artifact_files = tree_size(self.output_dir)
+        trace_bytes, _ = tree_size(self.settings.trace_dir)
+        database_bytes = 0
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                database_bytes += os.stat(f"{self.db_path}{suffix}").st_size
+            except OSError:
+                continue
+        try:
+            with self._open() as conn:
+                runs: int | None = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        except sqlite3.Error:
+            runs = None  # 库打不开 / 表坏了：没有数就说没有，不写 0
+        return {
+            "runs": runs,
+            "artifact_files": artifact_files,
+            "artifact_bytes": artifact_bytes,
+            "database_bytes": database_bytes,
+            "trace_bytes": trace_bytes,
+            "total_bytes": artifact_bytes + database_bytes + trace_bytes,
+        }
 
     def _write_artifact(
         self,
