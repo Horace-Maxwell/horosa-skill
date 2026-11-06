@@ -432,7 +432,7 @@ def _run_setup(
     skill_dir: Path | None = None,
     vectors: bool | None = None,
 ) -> dict[str, Any]:
-    from horosa_skill.runtime.manager import _platform_key
+    from horosa_skill.runtime.manager import host_platform_key
 
     client_key = client.strip().lower()
     if client_key not in _CLIENT_NAMES:
@@ -493,7 +493,7 @@ def _run_setup(
         steps["install"] = {
             "ok": True, "skipped": True, "reason": "dry-run" if dry_run else "--skip-install",
             "would_install_from": archive or manifest_location,
-            "platform": settings.runtime_platform or _platform_key(), "runtime_root": str(settings.runtime_root),
+            "platform": settings.runtime_platform or host_platform_key(), "runtime_root": str(settings.runtime_root),
         }
     else:
         announce("install", "安装 / 校验离线 runtime（已是最新版则秒退；约 730MB 下载、解压后约 2GB）…")

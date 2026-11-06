@@ -401,10 +401,10 @@ def _platform_supported(report: dict[str, Any]) -> bool:
     from horosa_skill.runtime.manager import (
         PLATFORM_FALLBACKS,
         SUPPORTED_PAYLOAD_PLATFORMS,
-        _platform_key,
+        host_platform_key,
     )
 
-    host = _platform_key()
+    host = host_platform_key()
     return host in SUPPORTED_PAYLOAD_PLATFORMS or host in PLATFORM_FALLBACKS
 
 

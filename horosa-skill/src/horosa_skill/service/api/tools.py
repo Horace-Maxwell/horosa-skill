@@ -1,6 +1,9 @@
 """工具 API（ToolsAPI）：list_tools、本地工具分派表、run_tool（闸门、富化、存档、信封）。"""
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 from pydantic import ValidationError
@@ -53,6 +56,76 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
     return envelope
 
 
+@dataclass
+class _ToolCall:
+    """一次 run_tool 的现场。`input_normalized` 放这里而不是局部变量：计算途中它会被重新绑定（上游推运缺省、印度流派预设），
+    而后端失败时的信封与存档读的都是最新值。写成计算函数的返回值，失败路径就把它丢了（tests/test_run_tool_phases.py）。"""
+
+    definition: ToolDefinition
+    input_normalized: dict[str, Any]
+    knowledge_selection: Any
+    trace: dict[str, Any]
+    degrade_notes: list[str]
+
+    @property
+    def tool_name(self) -> str:
+        return self.definition.name
+
+
+def _failure_envelope(call: _ToolCall, *, summary: str, code: str, message: str, details: dict[str, Any]) -> ToolEnvelope:
+    return ToolEnvelope(
+        ok=False,
+        tool=call.tool_name,
+        version=__version__,
+        input_normalized=call.input_normalized,
+        data={},
+        summary=[summary],
+        warnings=list(call.degrade_notes),
+        memory_ref=None,
+        error=ErrorInfo(code=code, message=message, details=details),
+        code=code,
+        message=message,
+        details=details,
+        trace_id=call.trace["trace_id"],
+        group_id=call.trace["group_id"],
+    )
+
+
+def _shenshu_runner(api: Any, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return api._run_shenshu_tool(payload, name)
+
+
+def _by_name(method: str) -> Callable[[Any, str, dict[str, Any]], dict[str, Any]]:
+    """一个 runner 服务一族技法，第一个参数是技法名。"""
+    return lambda api, name, payload: getattr(api, method)(name, payload)
+
+
+def _payload_only(method: str) -> Callable[[Any, str, dict[str, Any]], dict[str, Any]]:
+    return lambda api, _name, payload: getattr(api, method)(payload)
+
+
+def _progextra(api: Any, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return api._run_progextra_js_tool(payload, name)
+
+
+# 不走命名约定的本地工具（技法名 → (api, 技法名, 载荷) → 结果）。一批共用 runner 的技法表（神数、择日）在 `_local_runner` 里按表判。
+_LOCAL_RUNNER_OVERRIDES: dict[str, Callable[[Any, str, dict[str, Any]], dict[str, Any]]] = {
+    "export_registry": _payload_only("_local_export_registry"),
+    "export_parse": _payload_only("_local_export_parse"),
+    "knowledge_registry": _payload_only("_local_knowledge_registry"),
+    "knowledge_read": _payload_only("_local_knowledge_read"),
+    "qizhengelection": _payload_only("_run_qizheng_election_tool"),
+    "ziwei_birth": _payload_only("_run_ziwei_tool"),
+    "liureng_gods": _by_name("_run_liureng_tool"),
+    "liureng_runyear": _by_name("_run_liureng_tool"),
+    "bazi_birth": _by_name("_run_bazi_tool"),
+    "bazi_direct": _by_name("_run_bazi_tool"),
+    "triplicityrulers": _progextra,
+    "keypoints": _progextra,
+    "lunationphase": _progextra,
+}
+
+
 class ToolsAPI:
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -97,181 +170,225 @@ class ToolsAPI:
     def _search_knowledge(self, payload: dict[str, Any]) -> dict[str, Any]:
         return knowledge_search.search_all(self.settings, payload)
 
-    def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
-        if definition.name == "export_registry":
-            return build_export_registry(technique=payload.get("technique"))
-        if definition.name == "export_parse":
-            try:
-                return parse_export_content(
-                    technique=payload["technique"],
-                    content=payload["content"],
-                    selected_sections=payload.get("selected_sections"),
-                    planet_info=payload.get("planet_info"),
-                    astro_meaning=payload.get("astro_meaning"),
-                )
-            except ValueError as exc:
-                raise ToolValidationError(
-                    str(exc),
-                    code="tool.invalid_export_technique",
-                    details={"tool_name": definition.name, "technique": payload.get("technique")},
-                ) from exc
-        if definition.name == "knowledge_registry":
-            if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
-                return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
-            registry = build_knowledge_registry(domain=payload.get("domain"))
-            if not payload.get("domain"):
-                registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
-            return registry
-        if definition.name == "knowledge_read" and f"{payload.get('query') or ''}".strip():
+    def _local_export_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return build_export_registry(technique=payload.get("technique"))
+
+    def _local_export_parse(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return parse_export_content(
+                technique=payload["technique"],
+                content=payload["content"],
+                selected_sections=payload.get("selected_sections"),
+                planet_info=payload.get("planet_info"),
+                astro_meaning=payload.get("astro_meaning"),
+            )
+        except ValueError as exc:
+            raise ToolValidationError(
+                str(exc),
+                code="tool.invalid_export_technique",
+                details={"tool_name": "export_parse", "technique": payload.get("technique")},
+            ) from exc
+
+    def _local_knowledge_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
+            return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
+        registry = build_knowledge_registry(domain=payload.get("domain"))
+        if not payload.get("domain"):
+            registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
+        return registry
+
+    def _local_knowledge_read(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if f"{payload.get('query') or ''}".strip():
             # 检索已有专门的门面 horosa_knowledge_search（v0.45.0）；knowledge_read 带 query 的老用法照旧可用。
             return self._search_knowledge(payload)
-        if definition.name == "knowledge_read":
-            domain = f"{payload.get('domain') or ''}".strip()
-            if domain == user_knowledge.USER_DOMAIN:
-                return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
-                                                 from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))
-            return read_knowledge_entry(payload)
-        if definition.name == "qimen":
-            return self._run_qimen_tool(payload)
-        if definition.name == "qimenzeri":
-            return self._run_qimenzeri_tool(payload)
-        if definition.name in self._ZERI_SCAN_TOOLS:
-            return self._run_zeri_scan_tool(definition.name, payload)
-        if definition.name in self._ZERI_BACKEND_TOOLS:
-            return self._run_zeri_backend_tool(definition.name, payload)
-        if definition.name == "tianxing":
-            return self._run_tianxing_tool(payload)
-        if definition.name == "qizhengelection":
-            return self._run_qizheng_election_tool(payload)
-        if definition.name == "india_rectify":
-            return self._run_india_rectify_tool(payload)
-        if definition.name == "planet_cycles":
-            return self._run_planet_cycles_tool(payload)
-        if definition.name == "jieqi_birth":
-            return self._run_jieqi_birth_tool(payload)
-        if definition.name == "taiyi":
-            return self._run_taiyi_tool(payload)
-        if definition.name == "jinkou":
-            return self._run_jinkou_tool(payload)
-        if definition.name in {"liureng_gods", "liureng_runyear"}:
-            return self._run_liureng_tool(definition.name, payload)
-        if definition.name in {"bazi_birth", "bazi_direct"}:
-            return self._run_bazi_tool(definition.name, payload)
-        if definition.name == "ziwei_birth":
-            return self._run_ziwei_tool(payload)
-        if definition.name == "suzhan":
-            return self._run_suzhan_tool(payload)
-        if definition.name == "sixyao":
-            return self._run_sixyao_tool(payload)
-        if definition.name == "geomancy":
-            return self._run_geomancy_tool(payload)
-        if definition.name == "tarot":
-            return self._run_tarot_tool(payload)
-        if definition.name == "lingqi":
-            return self._run_lingqi_tool(payload)
-        if definition.name == "tongshefa":
-            return self._run_tongshefa_tool(payload)
-        if definition.name == "canping":
-            return self._run_canping_tool(payload)
-        if definition.name == "heluo":
-            return self._run_heluo_tool(payload)
-        if definition.name == "yizhangjing":
-            return self._run_yizhangjing_tool(payload)
-        if definition.name == "xiaoliuren":
-            return self._run_xiaoliuren_tool(payload)
-        if definition.name == "feigong":
-            return self._run_feigong_tool(payload)
-        if definition.name == "xiaochengtu":
-            return self._run_xiaochengtu_tool(payload)
-        if definition.name == "guice":
-            return self._run_guice_tool(payload)
-        if definition.name == "zhengchuan":
-            return self._run_zhengchuan_tool(payload)
-        if definition.name == "acg":
-            return self._run_acg_tool(payload)
-        if definition.name == "astrodata":
-            return self._run_astrodata_tool(payload)
-        if definition.name == "bazi_inverse":
-            return self._run_bazi_inverse_tool(payload)
-        if definition.name == "sanshiunited":
-            return self._run_sanshiunited_tool(payload)
-        if definition.name == "huangli":
-            return self._run_huangli_tool(payload)
-        if definition.name == "tongshu":
-            return self._run_tongshu_tool(payload)
-        if definition.name == "xuanshi":
-            return self._run_xuanshi_tool(payload)
-        if definition.name == "babylon":
-            return self._run_babylon_tool(payload)
-        if definition.name == "draconic":
-            return self._run_draconic_tool(payload)
-        if definition.name == "relocation":
-            return self._run_relocation_tool(payload)
-        if definition.name == "hellen_chart":
-            return self._run_hellen_chart_tool(payload)
-        if definition.name == "guolao_chart":
-            return self._run_guolao_chart_tool(payload)
-        if definition.name == "germany":
-            return self._run_germany_tool(payload)
-        if definition.name == "harmonic":
-            return self._run_harmonic_tool(payload)
-        if definition.name == "agepoint":
-            return self._run_agepoint_tool(payload)
-        if definition.name == "distributions":
-            return self._run_distributions_tool(payload)
-        if definition.name == "jaynesprog":
-            return self._run_jaynesprog_tool(payload)
-        if definition.name == "neroman":
-            return self._run_neroman_tool(payload)
-        if definition.name == "bezzafigure":
-            return self._run_bezzafigure_tool(payload)
-        if definition.name == "jayprofection":
-            return self._run_jayprofection_tool(payload)
-        if definition.name == "michon":
-            return self._run_michon_tool(payload)
-        if definition.name == "vedicprog":
-            return self._run_vedicprog_tool(payload)
-        if definition.name == "ephemeris":
-            return self._run_ephemeris_tool(payload)
-        if definition.name == "returntimeline":
-            return self._run_returntimeline_tool(payload)
-        if definition.name == "prenatalsyzygy":
-            return self._run_prenatalsyzygy_tool(payload)
-        if definition.name == "prog":
-            return self._run_prog_tool(payload)
-        if definition.name == "planetaryarc":
-            return self._run_planetaryarc_tool(payload)
-        if definition.name == "planetaryages":
-            return self._run_planetaryages_tool(payload)
-        if definition.name == "balbillus":
-            return self._run_balbillus_tool(payload)
-        if definition.name == "yearsystem129":
-            return self._run_yearsystem129_tool(payload)
-        if definition.name == "persiandirected":
-            return self._run_persiandirected_tool(payload)
-        if definition.name in {"triplicityrulers", "keypoints", "lunationphase"}:
-            return self._run_progextra_js_tool(payload, definition.name)
-        if definition.name == "extrareturns":
-            return self._run_extrareturns_tool(payload)
-        if definition.name == "horary":
-            return self._run_horary_tool(payload)
-        if definition.name == "election":
-            return self._run_election_tool(payload)
-        if definition.name in _SHENSHU_ENDPOINTS:
-            return self._run_shenshu_tool(payload, definition.name)
-        if definition.name == "mundane":
-            return self._run_mundane_tool(payload)
-        if definition.name == "firdaria":
-            return self._run_firdaria_tool(payload)
-        if definition.name == "decennials":
-            return self._run_decennials_tool(payload)
-        if definition.name == "otherbu":
-            return self._run_otherbu_tool(payload)
-        raise ToolValidationError(
-            f"Unsupported local tool: {definition.name}",
-            code="tool.unsupported_local_tool",
-            details={"tool_name": definition.name},
+        domain = f"{payload.get('domain') or ''}".strip()
+        if domain == user_knowledge.USER_DOMAIN:
+            return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
+                                             from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))
+        return read_knowledge_entry(payload)
+
+    def _local_runner(self, name: str) -> Callable[[dict[str, Any]], dict[str, Any]] | None:
+        """本地工具 → runner。缺省 `_run_<技法名>_tool(payload)`：加技法写好 runner 就够。认不出返回 None。"""
+        override = _LOCAL_RUNNER_OVERRIDES.get(name)
+        if override is not None:
+            return partial(override, self, name)
+        if name in self._ZERI_SCAN_TOOLS:
+            return partial(self._run_zeri_scan_tool, name)
+        if name in self._ZERI_BACKEND_TOOLS:
+            return partial(self._run_zeri_backend_tool, name)
+        if name in _SHENSHU_ENDPOINTS:
+            return partial(_shenshu_runner, self, name)
+        return getattr(self, f"_run_{name}_tool", None)
+
+    def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
+        runner = self._local_runner(definition.name)
+        if runner is None:
+            raise ToolValidationError(
+                f"Unsupported local tool: {definition.name}",
+                code="tool.unsupported_local_tool",
+                details={"tool_name": definition.name},
+            )
+        return runner(payload)
+
+    def _validated_tool_input(self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+        """(规范化入参, 自备知识库点名)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。"""
+        tool_name = definition.name
+        try:
+            payload = normalize_request_payload(payload)
+            # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
+            knowledge_selection = None
+            if isinstance(payload, dict) and "knowledge" in payload:
+                payload = dict(payload)
+                knowledge_selection = payload.pop("knowledge")
+            validated = definition.input_model.model_validate(payload)
+        except ValidationError as exc:
+            trace["error_code"] = "tool.invalid_payload"
+            errors = validation_errors(exc)
+            raise ToolValidationError(
+                f"Invalid payload for tool `{tool_name}`.",
+                code="tool.invalid_payload",
+                details={
+                    "errors": errors,
+                    "agent_recovery": build_validation_recovery(
+                        operation_name=f"tool.{tool_name}",
+                        tool_name=tool_name,
+                        errors=errors,
+                    ),
+                },
+            ) from exc
+        return _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)), knowledge_selection
+
+    def _compute_tool_result(self, call: _ToolCall) -> dict[str, Any]:
+        """起盘 + 富化 + 导出契约 + 技法卡。"""
+        tool_name, definition = call.tool_name, call.definition
+        if definition.execution == "local":
+            response_data = self._run_local_tool(definition, call.input_normalized)
+        else:
+            assert definition.endpoint is not None
+            call.input_normalized = self._apply_upstream_predictive_defaults(tool_name, call.input_normalized)
+            if tool_name == "india_chart":
+                # 流派预设（岁差/宫制）先落进规范化输入：请求体与快照口径行同源（否则盘按 KP 岁差算、
+                # [起盘信息] 却按缺省写 Lahiri）。
+                call.input_normalized = _india_apply_school_presets(call.input_normalized)
+            remote_input = (
+                _india_chart_remote_payload(call.input_normalized) if tool_name == "india_chart" else call.input_normalized
+            )
+            response_data = self._call_remote(definition.endpoint, remote_input)
+            response_data = self._attach_predictive_chart_context(tool_name, call.input_normalized, response_data)
+        input_normalized = call.input_normalized
+        response_data = self._attach_natal_extras(tool_name, response_data, input_normalized)
+        response_data = self._attach_classical_derived(tool_name, response_data, input_normalized)
+        response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
+        response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
+        response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
+        response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
+        response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
+        response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
+        response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
+        response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+        # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
+        # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
+        return self._attach_technique_card(tool_name, input_normalized, response_data)
+
+    def _with_user_knowledge(self, call: _ToolCall, response_data: dict[str, Any]) -> tuple[dict[str, Any], Any, str | None]:
+        """把自备知识库的选中条目挂上去：(结果, 知识上下文, 失败说明)。附加资料出错绝不该让一张算好的盘作废。"""
+        if call.knowledge_selection in (None, "", []) or not isinstance(response_data, dict):
+            return response_data, None, None
+        card = response_data.get("technique_card") if isinstance(response_data.get("technique_card"), dict) else {}
+        snapshot = response_data.get("export_snapshot") if isinstance(response_data.get("export_snapshot"), dict) else {}
+        try:
+            knowledge_context = build_user_knowledge_context(
+                self.settings, call.knowledge_selection, tool_name=call.tool_name,
+                technique=TOOL_EXPORT_TECHNIQUE_MAP.get(call.tool_name), domain=call.definition.domain,
+                technique_label=str((card.get("technique") or {}).get("label") or "") or None,
+                # 长条目按「与这张盘相关」挑段落：拿本次导出正文当检索依据。
+                focus=str(snapshot.get("export_text") or ""),
+            )
+        except Exception as exc:  # noqa: BLE001 - 附加资料出错绝不该让一张算好的盘作废
+            return response_data, None, bilingual(
+                f"自备知识库这次没能带入（{type(exc).__name__}: {exc}）；盘面结果不受影响。",
+                f"Your knowledge entries could not be attached ({type(exc).__name__}: {exc}); the chart is unaffected.",
+            )
+        return {**response_data, "knowledge_context": knowledge_context}, knowledge_context, None
+
+    def _success_envelope(self, call: _ToolCall, response_data: dict[str, Any]) -> ToolEnvelope:
+        response_data, knowledge_context, knowledge_failure = self._with_user_knowledge(call, response_data)
+        summary = _generic_summary(call.tool_name, response_data)
+        # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
+        # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
+        warnings: list[str] = []
+        if isinstance(response_data, dict):
+            raised = response_data.pop("_warnings", None)
+            if isinstance(raised, list):
+                warnings.extend(str(item) for item in raised if f"{item}".strip())
+        warnings.extend(note for note in call.degrade_notes if note not in warnings)
+        zone_note = _cn_unified_zone_note(call.input_normalized)
+        if zone_note and zone_note not in warnings:
+            warnings.append(zone_note)
+        # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
+        if knowledge_context is not None:
+            warnings.extend(user_knowledge.context_warnings(knowledge_context))
+        if knowledge_failure:
+            warnings.append(knowledge_failure)
+        missing_note = _missing_sections_warning(response_data)
+        if missing_note:
+            warnings.append(missing_note)
+            summary = [*summary, missing_note]
+        return ToolEnvelope(
+            ok=True,
+            tool=call.tool_name,
+            version=__version__,
+            input_normalized=call.input_normalized,
+            data=response_data,
+            summary=summary,
+            warnings=warnings,
+            memory_ref=None,
+            error=None,
+            trace_id=call.trace["trace_id"],
+            group_id=call.trace["group_id"],
         )
+
+    def _persist_tool_result(
+        self, call: _ToolCall, envelope: ToolEnvelope, *, run_id: str | None, query_text: str | None, evaluation_case_id: str | None
+    ) -> None:
+        """写进本地记忆，补 `memory_ref` 与技法卡的 refs。存档是旁路：写不进去不许丢掉已经算好的结果。"""
+        trace = call.trace
+        try:
+            effective_run_id = run_id or self.store.create_run(
+                entrypoint="tool",
+                query_text=query_text,
+                subject=call.input_normalized,
+                group_id=trace["group_id"],
+            )
+            self.store.record_entities(effective_run_id, _extract_entities(call.input_normalized, query_text))
+            memory_ref = self.store.record_tool_result(
+                run_id=effective_run_id,
+                tool_name=call.tool_name,
+                ok=envelope.ok,
+                input_normalized=call.input_normalized,
+                envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
+                summary=envelope.summary,
+                warnings=envelope.warnings,
+                error=envelope.error.model_dump(mode="json") if envelope.error else None,
+                trace_id=trace["trace_id"],
+                group_id=trace["group_id"],
+                evaluation_case_id=evaluation_case_id,
+            )
+            envelope.memory_ref = memory_ref
+            trace["run_id"] = effective_run_id
+            trace["artifact_path"] = memory_ref.artifact_path
+            # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
+            # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
+            card = envelope.data.get("technique_card")
+            if isinstance(card, dict):
+                card["refs"] = {
+                    "run_id": effective_run_id,
+                    "trace_id": trace["trace_id"],
+                    "group_id": trace["group_id"],
+                }
+        except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
+            envelope.memory_ref = None
+            envelope.warnings.append(_memory_save_failed(exc))
 
     def run_tool(
         self,
@@ -309,136 +426,21 @@ class ToolsAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
+            input_normalized, knowledge_selection = self._validated_tool_input(definition, payload, trace)
+            call = _ToolCall(definition, input_normalized, knowledge_selection, trace, degrade_notes)
             try:
-                payload = normalize_request_payload(payload)
-                # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
-                knowledge_selection = None
-                if isinstance(payload, dict) and "knowledge" in payload:
-                    payload = dict(payload)
-                    knowledge_selection = payload.pop("knowledge")
-                validated = definition.input_model.model_validate(payload)
-            except ValidationError as exc:
-                trace["error_code"] = "tool.invalid_payload"
-                errors = validation_errors(exc)
-                raise ToolValidationError(
-                    f"Invalid payload for tool `{tool_name}`.",
-                    code="tool.invalid_payload",
-                    details={
-                        "errors": errors,
-                        "agent_recovery": build_validation_recovery(
-                            operation_name=f"tool.{tool_name}",
-                            tool_name=tool_name,
-                            errors=errors,
-                        ),
-                    },
-                ) from exc
-
-            input_normalized = validated.model_dump(exclude_none=True)
-            input_normalized = _apply_chart_request_defaults(tool_name, input_normalized)
-            memory_ref = None
-
-            try:
-                if definition.execution == "local":
-                    response_data = self._run_local_tool(definition, input_normalized)
-                else:
-                    assert definition.endpoint is not None
-                    input_normalized = self._apply_upstream_predictive_defaults(tool_name, input_normalized)
-                    if tool_name == "india_chart":
-                        # 流派预设（岁差/宫制）先落进规范化输入：请求体与快照口径行同源（否则盘按 KP 岁差算、
-                        # [起盘信息] 却按缺省写 Lahiri）。
-                        input_normalized = _india_apply_school_presets(input_normalized)
-                    remote_input = (
-                        _india_chart_remote_payload(input_normalized) if tool_name == "india_chart" else input_normalized
-                    )
-                    response_data = self._call_remote(definition.endpoint, remote_input)
-                    response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
-                response_data = self._attach_natal_extras(tool_name, response_data, input_normalized)
-                response_data = self._attach_classical_derived(tool_name, response_data, input_normalized)
-                response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
-                response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
-                response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
-                response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
-                response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
-                response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
-                response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
-                response_data = _attach_export_contract(tool_name, input_normalized, response_data)
-                # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
-                # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
-                response_data = self._attach_technique_card(tool_name, input_normalized, response_data)
-                knowledge_context = None
-                knowledge_failure: str | None = None
-                if knowledge_selection not in (None, "", []) and isinstance(response_data, dict):
-                    card = response_data.get("technique_card") if isinstance(response_data.get("technique_card"), dict) else {}
-                    snapshot = response_data.get("export_snapshot") if isinstance(response_data.get("export_snapshot"), dict) else {}
-                    try:
-                        knowledge_context = build_user_knowledge_context(
-                            self.settings, knowledge_selection, tool_name=tool_name,
-                            technique=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name), domain=definition.domain,
-                            technique_label=str((card.get("technique") or {}).get("label") or "") or None,
-                            # 长条目按「与这张盘相关」挑段落：拿本次导出正文当检索依据。
-                            focus=str(snapshot.get("export_text") or ""),
-                        )
-                        response_data = {**response_data, "knowledge_context": knowledge_context}
-                    except Exception as exc:  # noqa: BLE001 - 附加资料出错绝不该让一张算好的盘作废
-                        knowledge_failure = bilingual(
-                            f"自备知识库这次没能带入（{type(exc).__name__}: {exc}）；盘面结果不受影响。",
-                            f"Your knowledge entries could not be attached ({type(exc).__name__}: {exc}); the chart is unaffected.",
-                        )
-                summary = _generic_summary(tool_name, response_data)
-                # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
-                # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
-                warnings: list[str] = []
-                if isinstance(response_data, dict):
-                    raised = response_data.pop("_warnings", None)
-                    if isinstance(raised, list):
-                        warnings.extend(str(item) for item in raised if f"{item}".strip())
-                warnings.extend(note for note in degrade_notes if note not in warnings)
-                zone_note = _cn_unified_zone_note(input_normalized)
-                if zone_note and zone_note not in warnings:
-                    warnings.append(zone_note)
-                # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
-                if knowledge_context is not None:
-                    warnings.extend(user_knowledge.context_warnings(knowledge_context))
-                if knowledge_failure:
-                    warnings.append(knowledge_failure)
-                missing_note = _missing_sections_warning(response_data)
-                if missing_note:
-                    warnings.append(missing_note)
-                    summary = [*summary, missing_note]
-                envelope = ToolEnvelope(
-                    ok=True,
-                    tool=tool_name,
-                    version=__version__,
-                    input_normalized=input_normalized,
-                    data=response_data,
-                    summary=summary,
-                    warnings=warnings,
-                    memory_ref=None,
-                    error=None,
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
-                )
+                envelope = self._success_envelope(call, self._compute_tool_result(call))
             except HorosaSkillError as exc:
                 trace["error_code"] = exc.code
-                error_details = _with_operational_recovery(exc.code, exc.details)
-                envelope = ToolEnvelope(
-                    ok=False,
-                    tool=tool_name,
-                    version=__version__,
-                    input_normalized=input_normalized,
-                    data={},
-                    summary=[f"工具 `{tool_name}` 调用失败（{exc.code}）。"],
-                    warnings=list(degrade_notes),
-                    memory_ref=None,
-                    error=ErrorInfo(code=exc.code, message=str(exc), details=error_details),
+                envelope = _failure_envelope(
+                    call,
                     # 顶层镜像三键（见 schemas/common.py）：MCP 面的闸门/校验错误一直镜像，工具自身的
                     # 错误（runtime.not_installed / tool.ken_compute_failed / transport.*）却没有，
                     # 按顶层 `code` 读的调用方在最常见的失败上读到 None。两条路径口径必须一致。
+                    summary=f"工具 `{tool_name}` 调用失败（{exc.code}）。",
                     code=exc.code,
                     message=str(exc),
-                    details=error_details,
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
+                    details=_with_operational_recovery(exc.code, exc.details),
                 )
             except Exception as exc:  # noqa: BLE001 - last-resort guard: a surface/dispatch must never crash
                 # Tool execution and the snapshot/summary/export post-processing touch backend-shaped
@@ -447,69 +449,21 @@ class ToolsAPI:
                 # break the MCP session / abort a whole dispatch. (Bad-payload ValidationError is handled
                 # separately above and intentionally still raises.)
                 trace["error_code"] = "tool.internal_error"
-                envelope = ToolEnvelope(
-                    ok=False,
-                    tool=tool_name,
-                    version=__version__,
-                    input_normalized=input_normalized,
-                    data={},
-                    summary=[f"工具 `{tool_name}` 调用时发生内部错误。"],
-                    warnings=list(degrade_notes),
-                    memory_ref=None,
-                    error=ErrorInfo(
-                        code="tool.internal_error",
-                        message=str(exc),
-                        details={"exception_type": type(exc).__name__},
-                    ),
+                envelope = _failure_envelope(
+                    call,
+                    summary=f"工具 `{tool_name}` 调用时发生内部错误。",
                     code="tool.internal_error",
                     message=str(exc),
                     details={"exception_type": type(exc).__name__},
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
                 )
 
             if save_result:
-                try:
-                    effective_run_id = run_id or self.store.create_run(
-                        entrypoint="tool",
-                        query_text=query_text,
-                        subject=input_normalized,
-                        group_id=trace["group_id"],
-                    )
-                    self.store.record_entities(effective_run_id, _extract_entities(input_normalized, query_text))
-                    memory_ref = self.store.record_tool_result(
-                        run_id=effective_run_id,
-                        tool_name=tool_name,
-                        ok=envelope.ok,
-                        input_normalized=input_normalized,
-                        envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
-                        summary=envelope.summary,
-                        warnings=envelope.warnings,
-                        error=envelope.error.model_dump(mode="json") if envelope.error else None,
-                        trace_id=trace["trace_id"],
-                        group_id=trace["group_id"],
-                        evaluation_case_id=evaluation_case_id,
-                    )
-                    envelope.memory_ref = memory_ref
-                    trace["run_id"] = effective_run_id
-                    trace["artifact_path"] = memory_ref.artifact_path
-                    # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
-                    # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
-                    card = envelope.data.get("technique_card")
-                    if isinstance(card, dict):
-                        card["refs"] = {
-                            "run_id": effective_run_id,
-                            "trace_id": trace["trace_id"],
-                            "group_id": trace["group_id"],
-                        }
-                except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
-                    envelope.memory_ref = None
-                    envelope.warnings.append(_memory_save_failed(exc))
+                self._persist_tool_result(call, envelope, run_id=run_id, query_text=query_text, evaluation_case_id=evaluation_case_id)
 
             # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。
-            envelope = _apply_response_view(envelope, input_normalized)
+            envelope = _apply_response_view(envelope, call.input_normalized)
             trace["success"] = envelope.ok
-            trace["input_normalized"] = input_normalized
+            trace["input_normalized"] = call.input_normalized
             trace["summary"] = envelope.summary
             trace["warnings"] = envelope.warnings
             return envelope

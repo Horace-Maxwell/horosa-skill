@@ -71,7 +71,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
      **复核 = 重读 source_url，事实没变也要更新日期**——「上次核对是什么时候」本身就是事实。
      对**真台账**的断言一律拿真实日期判（`dt.date.today()`，与 CLI 同）：测试把「今天」冻结在写测试那天，任何一次复核（`verified_on` 往后挪）都会被判「in the future」（v0.40.0 加第一条新事实时撞上）；固定日期只给合成样本用。
    - 数字（版本 / 工具 / 测试 / 知识 / 镜像份数）永远只写一次真值来源，其余由 `verify_docs_sync.py` 锁定：改数字先改真值。
-     版本号用 `horosa-skill/scripts/bump_version.py <new>`（站点一处清单 `SITES`）。
+     版本号用 `horosa-skill/scripts/bump_version.py <new>`（站点一处清单 `SITES`）；工具数用 `bump_version.py --tool-counts`，它只改判官（`verify_docs_sync.COUNT_DOCS`）读得到的形状。
    - 会话交接：多会话 / 多模型接力的工作，用 [`docs/templates/HANDOFF_TEMPLATE.md`](./docs/templates/HANDOFF_TEMPLATE.md)
      生成 `HANDOFF-<主题>.local.md`（gitignored），会话开始先读、结束前更新；本机 memory 的索引行同步。
 
@@ -349,7 +349,7 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
 
 ### 4.4 MCP 面、决策层与错误信封
 
-**MCP 服务器面法则**（`surfaces/mcp_server.py` 注册工具；注解 / 工具集在 `mcp_surface.py`、入参归一在 `mcp_requests.py`、错误信封在 `mcp_errors.py`、并发与兜底在 `mcp_runner.py`、elicitation 在 `mcp_elicitation.py`）：全部工具带 **tool annotations**（口径：openWorldHint
+**MCP 服务器面法则**（`surfaces/mcp_server.py` 注册工具；注解 / 工具集在 `mcp_surface.py`、入参归一在 `mcp_requests.py`、错误信封在 `mcp_errors.py`、并发与兜底在 `mcp_runner.py`、elicitation 在 `mcp_elicitation.py`、资源与提示词在 `mcp_catalog.py`）：全部工具带 **tool annotations**（口径：openWorldHint
 一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、
 idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核）；澄清闸走 **elicitation 双轨**
 （客户端声明能力→原生表单，「按星阙默认」一跳闭环、「补充设置」只回带备注**绝不代答术数参数**；
@@ -551,7 +551,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 
 1. `schemas/tools/<族>.py` 输入模型（v0.41.1 起按技法族分模块，`__init__` 显式 re-export；神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
    `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
-2. `service/runners/<族>.py` 里加 `_run_*_tool` runner（mixin 方法；跨族只经 `self.` 调）；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
+2. `service/runners/<族>.py` 里加 `_run_<技法名>_tool(payload)`（mixin 方法；跨族只经 `self.` 调）。按这个名字写就会被 `_run_local_tool` 分派，不用改 `api/tools.py`；只有方法名或参数不同才进 `_LOCAL_RUNNER_OVERRIDES`（`tests/test_local_tool_dispatch.py` 把全部本地工具解析一遍）。远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
    分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理；「周日小限」含「小限」
    要从 profection 排除、`jay` 是 `jayne` 的前缀不能单列、「推运图」这类字面泛化的名字只在没有更具体命中时兜底，v0.47.0）。
@@ -570,7 +570,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 7. 测试三层：离线契约（全技法可调、export clean）+ live `@requires_chart`/`@requires_runtime` + golden/
    export-fixture。kinastro-9 无 live 测试 → 离线 + in-process srv（**中立 CWD** 跑，别 `cd $HW`——
    本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
-8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
+8. 版本与文档：工具数跑 `scripts/bump_version.py --tool-counts`（改写全部声明并重渲镜像），再 `verify_mcp_list_budget.py --update-baseline`；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
 9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混（`zone` 认不出 = `tool.invalid_zone`，曾回落 +08:00）；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
@@ -581,10 +581,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
     `verify_technique_provenance.py` 不声明即红；ken-backed 必须真调 `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
     共享 runner 表 `SHARED_RUNNER` 写错名字 = 扫不到证据 = 被兜底成 `local_data`「不起盘」（v0.41.1 前 keypoints / lunationphase /
     triplicityrulers 就这样挂了两个月）；生成器现在对非空值断言存在，一行转发的 runner（如 balbillus）也要映射到真正干活的那个。
-11. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
-    runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
-    `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；
-    新工具照样入表，别等守卫红。
+11. **导出键**：`TOOL_EXPORT_TECHNIQUE_MAP` 由注册表派生，导出键缺省就是工具名，新工具自动进 bench。只有导出键与工具名不同才进 `_EXPORT_TECHNIQUE_OVERRIDES`：漏写时键不在 `AI_EXPORT_TECHNIQUES`，解析抛 Unknown 被吞成 `export_snapshot=None`，`test_every_business_tool_is_in_export_technique_map` 守这一条。
 
 12. **值级金标 + 边界纪律**（v0.33.1 · issue #15 家族，原文见 LESSONS）：**跨边界不改键**（原样透传是
     唯一被证明安全的形状；改键必在 `contracts/js_boundary_contracts.json` 留豁免与理由）。**每个本地 JS
@@ -1180,7 +1177,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
   （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
   断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
-- **CLI 的拒绝只有一个写入点（v0.47.2-dev）。** stderr 上的 JSON 只由 `cli._write_refusal` 写（`default=str`，AST 守卫 `tests/test_cli_refusals.py`）；带码的拒绝走 `_emit_refusal` / `_refuse`（过 `recovery_for`，与 MCP 同一套恢复说明）。pydantic 错误一律经 `errors.validation_errors`：`exc.errors()` 的 `ctx` 里是异常对象，进 details 就出不了进程。
+- **CLI 的拒绝只有一个写入点（v0.47.2-dev）。** stderr 上的 JSON 只由 `surfaces/refusals.py::_write_refusal` 写（`default=str`，AST 守卫 `tests/test_cli_refusals.py` 扫全部 surfaces）；带码的拒绝走 `_emit_refusal` / `_refuse`（过 `recovery_for`，与 MCP 同一套恢复说明）。pydantic 错误一律经 `errors.validation_errors`：`exc.errors()` 的 `ctx` 里是异常对象，进 details 就出不了进程。
 - **`dispatch` / `hecan` 的入参（v0.47.2-dev）。** `DispatchAPI._validated`：严格校验不过（数字经纬度、数字时区）才 `normalize_request_payload` 重来，否则同一份载荷在 MCP 能跑、在 CLI 被拒。别改成入口全量归一化：每个技法在 `run_tool` 里本来就归一化，全量归一化不改结果，只改成功命令回显的 `normalized_inputs`。`_load_payload` 按字节读、解 utf-8-sig，读取失败是 `tool.invalid_payload` 的 JSON 拒绝。
 - **错误码是接口。** 每个 `code="…"` 必须经 `errors.classify_code` 落到恢复规则（精确表 → 基础设施前缀 →
   `*_missing_*`/`*invalid*`（修入参）/`*_failed`/`*_unavailable`（重试再体检）后缀），`verify_error_recovery.py`
@@ -1194,6 +1191,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   `test_mcp_contract.py::test_error_paths_return_a_conformant_envelope` 同时覆盖闸门与闸门之后的失败。
 - **MCP 工具体只有一份：`mcp_server._gated_run`（v0.47.2-dev）。** 澄清闸 → elicit → 执行 → 三分支兜底都在这里，`_agent_preflight_error` 只有这一个调用点（AST 守卫）。新工具传 `gate` 与 `refuse`（错误 dict → 返回形状），别抄函数体：抄出来的 except 分支曾各不相同。
 - **存档是旁路：写不进去不许丢结果（v0.47.2-dev）。** `run_tool` 与 `dispatch` 的存档块各自 `except Exception`：结果照回、`memory_ref=None`、`warnings` 带 `memory.save_failed`（`service._context._memory_save_failed`）。别把存档挪回闸外或挪进别的 `try`。守卫 `tests/test_memory_save_failure.py`。
+- **`run_tool` 分段（v0.47.2-dev）：校验 → `_compute_tool_result` → `_success_envelope` / `_failure_envelope` → `_persist_tool_result`。** `input_normalized` 在计算段里会被重新绑定（上游推运缺省、印度流派预设），失败信封与存档读最新值，所以它住在 `_ToolCall` 上，别改成计算段的返回值（`tests/test_run_tool_phases.py`）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
@@ -1430,7 +1428,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   CliRunner 换掉真流抓不到这类问题：测输出编码一律起真子进程 + `PYTHONIOENCODING=cp1252`（三平台都复现），见 `tests/test_cli_stdio_encoding.py`；断言帮助文字要设 `_TYPER_FORCE_DISABLE_TERMINAL=1`，否则 Linux runner 上 `GITHUB_ACTIONS` 让 rich 把选项名拆进 ANSI 色码（Windows 本机复现不了）。
 - **Windows 上别的进程开着文件是常态（v0.47.2-dev，`fsretry`）。** Python 的 `open()` 不带 FILE_SHARE_DELETE，有读者时 `os.replace` / `unlink` 抛 PermissionError：src 里禁裸 `os.replace`（`test_no_raw_os_replace_in_the_package`），
   多个会话共读的状态文件读也走 `fsretry.read_text`；放锁（`pidlock.release`）绝不抛——从 finally 冒出去会盖掉调用方结果并把锁留在盘上。判共享冲突注意 `open()` 的 PermissionError 只带 errno 13、winerror 是 None。
-- **模块级读环境变量只走 `config._env_int` / `_env_float`（v0.47.2-dev）。** `surfaces/cli.py` 顶层 import MCP server，import 时抛错 = 全部命令（含 `--version`、`doctor`）起不来。测这类问题起真子进程（`tests/test_mcp_env_import.py`）。
+- **模块级读环境变量只走 `config._env_int` / `_env_float`（v0.47.2-dev）。** import 时抛错 = 载入它的入口全部起不来。测这类问题起真子进程（`tests/test_mcp_env_import.py`）。
+- **分层：下层不 import 上层，函数体里的也算（v0.47.2-dev）。** `surfaces` 之下的模块不 import `surfaces`，只有 `surfaces` 与 `benchmark` import `service`（`reports/builder.py`、`knowledge/user.py` 在豁免名单里，名单只许缩短）；工具数常量与工具族集合在 `engine/registry.py`，`advertise_hidden_fields` 在 `schemas/tools/base.py`。`surfaces/cli.py` 不许在模块顶层 import MCP server：MCP SDK 占 CLI 启动的三成，只有 `serve` 用得到。守卫 `tests/test_layering.py` 扫 AST，子进程核对 `sys.modules`。
 - **树里出现的每个 `HOROSA_*` 名字都要进 `config.ENV_FLAG_REGISTRY`（v0.47.2-dev）。** skill 不读的（测试开关、启动器交给上游引擎的旋钮、
   星阙桌面端构建脚本的变量）登记为 `internal`，否则维护机 / 用户 shell 里合法的变量每次启动都报「未知环境变量」，告警沦为噪音。
   不是环境变量的名字写进 `tests/test_config.py::_NOT_ENV_FLAGS` 并给理由。守卫 `test_every_horosa_name_in_the_tree_is_registered`。

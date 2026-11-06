@@ -3,7 +3,7 @@
 依赖单向（上层只依赖下层）：
   base        共用常量 + 敏感设置表（data/sensitive_settings.json）+ HOROSA_CLARIFY 逃生舱
   policies    各族澄清策略（神数 / 本命 / 推运 / 择日 / 奇门…）
-  tool_table  TOOL_GUIDANCE：114 个技法逐工具的指引表 + options_keys 注入 + 记忆 / 报告指引
+  tool_table  TOOL_GUIDANCE：逐工具的指引表 + options_keys 注入 + 记忆 / 报告指引
   contracts   输入契约 / 工具 docstring / 已验证示例（推运族输入契约也在这里）
   catalog     技法索引与目录、build_agent_guidance
   preflight   闸门判定 validate_agent_preflight、校验失败的 agent_recovery、敏感设置自测

@@ -227,7 +227,14 @@ def test_read_and_search_user_entries(tmp_path: Path) -> None:
 # ── 接进计算 ───────────────────────────────────────────────────────────────
 
 
-def test_run_tool_attaches_selected_knowledge_without_touching_the_chart(tmp_path: Path) -> None:
+def test_run_tool_attaches_selected_knowledge_without_touching_the_chart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 两次起盘的快照要逐字相等，而 provenance.build_timestamp 精确到秒：跨秒就假红（三次门禁红一次）。冻结时钟，断言不放松。
+    from datetime import datetime, timezone
+
+    from horosa_skill.service import _clock
+
+    frozen = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(_clock, "now", lambda tz=None: frozen.astimezone(tz) if tz else frozen)
     _seed(tmp_path / "kb")
     service = _service(tmp_path)
     payload = build_sample_payloads()["xiaoliuren"]

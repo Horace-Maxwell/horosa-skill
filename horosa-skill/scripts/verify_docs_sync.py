@@ -282,7 +282,7 @@ def check_test_count_consistency() -> None:
 
 COUNT_BADGE = re.compile(r"badge/(tools|技法|工具)-(\d+)-")
 COUNT_ALT = re.compile(r'alt="(\d+)\s*tools?"')
-COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(技法|工具|tools\b|techniques\b)")
+COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(?:真实)?(技法|工具|tools\b|techniques\b)")
 # manifest.json phrases it as "83 real technique tools" / "83 real 术数/占星 techniques" — a bounded
 # lazy filler catches those without the tight form's false-positive risk.
 # marketplace.json phrased it "97 local Horosa (星阙) technique tools" — `local` instead of `real`, and the
@@ -290,10 +290,11 @@ COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(技法|工具|tools\b|techniques\
 # The reach of a count guard must not depend on which adjective a sentence happens to use.
 # server.json phrased it "106 technique tools" — the noun doubles as the adjective — and sat at 106 through 110 because
 # server.json was not in COUNT_DOCS and this pattern needed `real|local` (2026-10 surface audit).
-COUNT_PROSE_EN = re.compile(r"(\d+)\s+(?:real|local|technique)\s+[^,.;]{0,40}?\b(tools?|techniques?)\b")
+COUNT_PROSE_EN = re.compile(r"(\d+)\s+(?:real|local|technique|callable)\s+[^,.;]{0,40}?\b(tools?|techniques?)\b")
 # 「N 个术数/占星技法」逐字出现在 CLAUDE.md / AGENTS.md / banner.svg 三处 —— 用精确短语而不是放宽
 # 通用正则，否则「约 9 个门面工具」这类真·小数字会被误报。
-COUNT_PHRASE_ZH = re.compile(r"(\d+)\s*个术数\s*/?\s*占星技法")
+# 🔴 README 横幅的 alt 里也有这句，而 EMPHASIS 连标签一起剥掉：这条要读原始行，不是剥过的行。
+COUNT_PHRASE_ZH = re.compile(r"(\d+)\s*个(?:真实)?术数\s*/?\s*占星技法")
 # README 自检表的「N / N ok=true」「N / N 写入」行 —— 描述的是本次发布的构建，必须跟注册表同步。
 COUNT_SELFCHECK = re.compile(r"(\d+)\s*/\s*(\d+)\s*`?\s*(?:ok=true|写入|writes)")
 # 行内先剥掉强调/标签，`<strong>83</strong> real techniques`、`**83 个**` 才能被上面的模式看到。
@@ -370,7 +371,7 @@ def check_tool_counts() -> None:
             for a, b in COUNT_SELFCHECK.findall(line):
                 if int(a) != expected or int(b) != expected:
                     err(f"{rel}:{lineno}: self-check row says {a} / {b}, registry has {expected}")
-            phrase = [(c, "技法") for c in COUNT_PHRASE_ZH.findall(line)]
+            phrase = [(c, "技法") for c in {*COUNT_PHRASE_ZH.findall(line), *COUNT_PHRASE_ZH.findall(raw_line)}]
             line_is_about_a_third_party_cap = any(word in line.lower() or word in line for word in CAP_WORDS)
             for count, _noun in COUNT_PROSE.findall(line) + COUNT_PROSE_EN.findall(line) + phrase:
                 if line_is_about_a_third_party_cap and int(count) != expected:
@@ -383,7 +384,19 @@ def check_tool_counts() -> None:
     check_server_instructions()
 
 
-FULL_SURFACE_ROW = re.compile(r"(?:全量 |full \()(\d+)")
+FULL_SURFACE_ROW = re.compile(r"(?:全量面? |full \()(\d+)")
+# 「连接器里看到 125 个 `horosa_*` 工具」：EMPHASIS 剥掉反引号之后的形状。
+FULL_SURFACE_NAMED = re.compile(r"(\d+) 个 horosa_\* 工具")
+FULL_SURFACE_DOCS = (
+    "README.md",
+    "README_EN.md",
+    "horosa-skill/examples/clients/README.md",
+    "horosa-skill/examples/clients/codex.md",
+    "horosa-skill/examples/clients/remote-connectors-oauth-gateway.md",
+    "horosa-skill/examples/clients/codex-config.toml",
+    "skills/horosa-agent/SKILL.md",
+    "CLAUDE.md",
+)
 _PROBE_LITERAL = re.compile(r"\['tools'\] -ne \d+|probe\[\"tools\"\] == \d+")
 
 
@@ -398,11 +411,11 @@ def check_full_surface_counts() -> None:
     except Exception as exc:  # noqa: BLE001
         err(f"contracts/mcp_list_budget.json unreadable: {exc}")
         return
-    for rel in ("README.md", "README_EN.md"):
+    for rel in FULL_SURFACE_DOCS:
         if not (ROOT / rel).exists():
             continue
         for lineno, line in enumerate(read(ROOT / rel).splitlines(), 1):
-            for got in FULL_SURFACE_ROW.findall(line):
+            for got in FULL_SURFACE_ROW.findall(line) + FULL_SURFACE_NAMED.findall(EMPHASIS.sub("", line)):
                 if int(got) != full:
                     err(f"{rel}:{lineno}: full-surface row says {got} tools, contracts/mcp_list_budget.json full_tools is {full}")
     workflow = ROOT / ".github" / "workflows" / "ci.yml"
@@ -413,6 +426,56 @@ def check_full_surface_counts() -> None:
             err(f".github/workflows/ci.yml:{lineno}: stdio probe asserts a literal tool count `{match.group(0)}` — read full_tools/compact_tools from contracts/mcp_list_budget.json instead")
         if "mcp_list_budget.json" not in text:
             err(".github/workflows/ci.yml: stdio probes no longer read contracts/mcp_list_budget.json")
+
+
+def stated_counts(raw_line: str) -> tuple[set[int], set[int]]:
+    """这一行声明的 (总数, 闸门数)：`check_tool_counts` 与 `check_full_surface_counts` 读的形状，写手改的也只是这些。
+
+    只认形状、不认「行里有个相同的数字」：把写手放回 v0.47.0 那次 110→114 重放时，「106 条基准用例」就因为恰好等于旧闸门数被改了。
+    """
+    line = EMPHASIS.sub("", raw_line)
+    gated = GATED_PROSE.search(line)
+    if gated:
+        return set(), {int(gated.group(1) or gated.group(2))}
+    totals = {int(match.group(2)) for match in COUNT_BADGE.finditer(raw_line)}
+    totals |= {int(count) for count in COUNT_ALT.findall(raw_line)}
+    totals |= {int(count) for pair in COUNT_SELFCHECK.findall(line) for count in pair}
+    totals |= {int(count) for count, _noun in COUNT_PROSE.findall(line) + COUNT_PROSE_EN.findall(line)}
+    totals |= {int(count) for regex in (FULL_SURFACE_ROW, FULL_SURFACE_NAMED) for count in regex.findall(line)}
+    totals |= {int(count) for text in (line, raw_line) for count in COUNT_PHRASE_ZH.findall(text)}
+    return totals, set()
+
+
+def rewrite_tool_counts(text: str, *, totals: dict[int, int], gated: dict[int, int]) -> tuple[str, int]:
+    """把声明里的旧数字换成新数字，一行内同时换：110→114 与 106→110 不能串起来。冻结成历史的行带 IGNORE_COUNT，不动。"""
+    lines = text.split("\n")
+    changed = 0
+    for index, raw in enumerate(lines):
+        if IGNORE_COUNT in raw:
+            continue
+        stated_totals, stated_gated = stated_counts(raw)
+        moved = {old: new for old, new in totals.items() if old in stated_totals and old != new}
+        moved.update({old: new for old, new in gated.items() if old in stated_gated and old != new})
+        if not moved:
+            continue
+        token = re.compile(r"(?<![\d.,])(" + "|".join(str(old) for old in sorted(moved, reverse=True)) + r")(?!\d|[.,]\d)")
+        lines[index] = token.sub(lambda match: str(moved[int(match.group(1))]), raw)
+        changed += 1
+    return "\n".join(lines), changed
+
+
+def sync_tool_counts(root: Path, *, totals: dict[int, int], gated: dict[int, int]) -> list[tuple[str, int]]:
+    """写手：把 COUNT_DOCS 里的工具数改成注册表的真值（`bump_version.py --tool-counts`）。"""
+    touched: list[tuple[str, int]] = []
+    for rel in COUNT_DOCS:
+        path = root / rel
+        if not path.is_file():
+            continue
+        out, changed = rewrite_tool_counts(read(path), totals=totals, gated=gated)
+        if changed:
+            path.write_text(out, encoding="utf-8", newline="\n")
+            touched.append((rel, changed))
+    return touched
 
 
 def expected_gated() -> int:

@@ -83,7 +83,7 @@ schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性�
 `shenshu` / `other` / `export` / `knowledge`，别名 `western` / `chinese` / `reference` / `all` / `none`；认不出的词会被丢掉并进 warning。
 
 **精简面（`HOROSA_MCP_COMPACT=1`，12 个门面级工具 = 11 门面 + `horosa_tool_run`）**：Cursor / VS Code / Codex / Gemini / Devin Desktop（原 Windsurf）/
-Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Code / Claude Desktop 默认全量 120）。`horosa_tool_run(tool_name=<注册键>, …)`
+Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Code / Claude Desktop 默认全量 125）。`horosa_tool_run(tool_name=<注册键>, …)`
 接受与平铺工具**完全相同**的载荷与闸门字段；`tool_name` 不认识时返回按域分组的 `details.catalog`，不要据此说「没有这个技法」。
 
 tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）

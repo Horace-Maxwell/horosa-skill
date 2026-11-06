@@ -7,7 +7,7 @@ from typing import Any
 from horosa_skill import __version__
 from horosa_skill import predictive_text as _ptext
 from horosa_skill.decisions.layer import current_decision_records
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import CLASSICAL_ANALYSIS_TOOLS, EGYPT_AXIS_KEYS, TOOL_DEFINITIONS
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.reports.technique_card import build_technique_card
 from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
@@ -449,15 +449,8 @@ class EnrichMixin:
         )
         return enriched
 
-    # 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
-    # (护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/行星时/埃及历/巴比伦/格局/分布/气质/almutem/吉化-extraLots)。
-    # 与前端同源:按需 fetch、优雅降级(失败→不挂载→该段不出)。[古典](逐曜状态/围攻/围绕)直接读 /chart 响应,无需此 fetch。
-    # 调波盘同属上游 ASTRO_LIKE_EXPORT_KEYS 族，盘面形状与本命盘一致 → 同样吃得下派生分析。
-    # （上游把 harmonic 放在 skipClassical 名单里是 UI 侧的性能取舍，headless 无此顾虑，多出的
-    # [古典格局] 是 skill 相对上游的 extra，不是漂移。）
-    # mundane 也纳入：它已走 `_build_astro_snapshot_text`，开门控即得 [埃及历]。但**不要**因此
-    # 给 mundane 登记 [古典格局]——世俗盘无该段是既定结论（docs/LESSONS.md）。
-    _CLASSICAL_ANALYSIS_TOOLS = {"chart", "chart13", "chart12", "hellen_chart", "harmonic", "mundane", "draconic", "relocation"}
+    # 哪些工具吃古典派生分析，见 engine.registry.CLASSICAL_ANALYSIS_TOOLS。
+    _CLASSICAL_ANALYSIS_TOOLS = CLASSICAL_ANALYSIS_TOOLS
 
     def _attach_classical_analysis(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
@@ -505,11 +498,7 @@ class EnrichMixin:
             _degrade("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
         return response_data
 
-    # 埃及历七轴（上游随盘键 egypt_<axis>，egyptianSchools.EGYPT_RECORD_KEYS；挂载齿轮 techniqueMountSettings.js:965-980）。
-    _EGYPT_AXIS_KEYS = (
-        "egypt_decanRuler", "egypt_decanAnchor", "egypt_decanNaming", "egypt_starClock",
-        "egypt_calendarAnchor", "egypt_petosirisMod", "egypt_godEdition",
-    )
+    _EGYPT_AXIS_KEYS = EGYPT_AXIS_KEYS
 
     def _build_egypt_section(self, chart: dict[str, Any], payload: dict[str, Any] | None = None) -> str:
         """[埃及历] 独立段：各点落旬 / 上升旬详情 / 埃及民用历 + Sothic。

@@ -23,10 +23,10 @@ from horosa_skill.client_tools import (
     wheel_asset_name,
     zero_install_wheel_url,
 )
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
-from horosa_skill.surfaces.mcp_server import (
+from horosa_skill.engine.registry import (
     COMPACT_SURFACE_TOOL_COUNT,
     FACADE_TOOL_COUNT,
+    TOOL_DEFINITIONS,
 )
 
 

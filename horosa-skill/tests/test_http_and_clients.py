@@ -17,6 +17,7 @@ import typer
 
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
+from horosa_skill.surfaces import serve_flow
 from horosa_skill.client_config import audit as client_audit
 from horosa_skill.client_config import locations as client_locations
 from horosa_skill.surfaces.mcp_auth import StaticTokenVerifier, build_auth_settings, build_transport_security
@@ -46,12 +47,12 @@ def test_opt_unwraps_typer_option_defaults() -> None:
     ("sse", "sse"),
 ])
 def test_transport_aliases_are_accepted(given, expected) -> None:
-    assert cli._normalized_transport(given) == expected
+    assert serve_flow._normalized_transport(given) == expected
 
 
 def test_unknown_transport_is_a_clear_parameter_error() -> None:
     with pytest.raises(typer.BadParameter) as excinfo:
-        cli._normalized_transport("websocket")
+        serve_flow._normalized_transport("websocket")
     assert "streamable-http" in str(excinfo.value)
 
 
@@ -104,7 +105,7 @@ def test_serve_refuses_public_binding_without_a_token(monkeypatch, tmp_path, cap
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.delenv("HOROSA_MCP_TOKEN", raising=False)
     ran: list[str] = []
-    monkeypatch.setattr(cli, "run_mcp_server", lambda *a, **k: ran.append("served"))
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda *a, **k: ran.append("served"))
 
     with pytest.raises(typer.Exit) as excinfo:
         cli.serve(transport="streamable-http", host="0.0.0.0", port=8765, skip_runtime_start=True)
@@ -123,7 +124,7 @@ def test_serve_allows_public_binding_when_explicitly_accepted(monkeypatch, tmp_p
     monkeypatch.delenv("HOROSA_MCP_TOKEN", raising=False)
     monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
     ran: list[str] = []
-    monkeypatch.setattr(cli, "run_mcp_server", lambda *a, **k: ran.append("served"))
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda *a, **k: ran.append("served"))
 
     cli.serve(transport="streamable-http", host="0.0.0.0", port=8765,
               skip_runtime_start=True, allow_unauthenticated=True)
@@ -131,9 +132,9 @@ def test_serve_allows_public_binding_when_explicitly_accepted(monkeypatch, tmp_p
 
 
 def test_masked_token_never_shows_the_whole_secret() -> None:
-    assert cli._mask_token("s3cr3t-probe-value") == "s3cr…ue"
-    assert cli._mask_token("short") == "****"
-    assert cli._mask_token(None) == ""
+    assert serve_flow._mask_token("s3cr3t-probe-value") == "s3cr…ue"
+    assert serve_flow._mask_token("short") == "****"
+    assert serve_flow._mask_token(None) == ""
 
 
 # ---------------------------------------------------------------- serverInfo 版本

@@ -15,6 +15,14 @@ from __future__ import annotations
 from typing import Any
 
 from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
+from horosa_skill.engine.registry import (
+    CLASSICAL_ANALYSIS_TOOLS,
+    EGYPT_AXIS_KEYS,
+    STRONG_RECEPTION_DEFAULT_TOOLS,
+    TOOL_DEFINITIONS,
+)
+from horosa_skill.schemas.tools import BirthInput
+from horosa_skill.schemas.tools.base import advertise_hidden_fields
 
 # 上游 significators.js CATEGORY_DEF（20 类）：(键, quesitedLabel, 事项宫；None = 综合取月亮下一入相/相关宫主)。
 HORARY_CATEGORIES: tuple[tuple[str, str, int | None], ...] = (
@@ -96,7 +104,7 @@ JUDGE_GLOBAL_KEYS = (
 )
 
 # BirthInput 上只作用于快照的口径键（send:'never'）按工具挂文档：[埃及历]/[信息] 随 service._CLASSICAL_ANALYSIS_TOOLS
-# （键表 service._EGYPT_AXIS_KEYS），[古典·显赫计分] 主宰光体四个全局判定键只 chart。
+# （键表 engine.registry.EGYPT_AXIS_KEYS），[古典·显赫计分] 主宰光体四个全局判定键只 chart。
 _EMINENCE_KEYS = ("busyPlaces", "dynamicalDivisions", "domicileMasterMethod", "rayWeighting")
 
 
@@ -165,10 +173,6 @@ def _static_doc(tool_name: str) -> dict[str, str]:
 
 def western_options_doc(tool_name: str) -> dict[str, str]:
     """{键: 说明}；无文档返回 {}。键名即请求键（顶层按名传，或走 request 整包）。"""
-    from horosa_skill.engine.registry import TOOL_DEFINITIONS
-    from horosa_skill.schemas.tools import BirthInput
-    from horosa_skill.surfaces.mcp_schema import advertise_hidden_fields
-
     definition = TOOL_DEFINITIONS.get(tool_name)
     if definition is None:
         return {}
@@ -183,11 +187,9 @@ def western_options_doc(tool_name: str) -> dict[str, str]:
         if field is not None and field.description:
             doc[name] = field.description
     if isinstance(model, type) and issubclass(model, BirthInput):
-        from horosa_skill.service import HorosaSkillService
-
-        if tool_name in HorosaSkillService._CLASSICAL_ANALYSIS_TOOLS:
+        if tool_name in CLASSICAL_ANALYSIS_TOOLS:
             doc["showOnlyRulExaltReception"] = str(BirthInput.model_fields["showOnlyRulExaltReception"].description)
-            for name in HorosaSkillService._EGYPT_AXIS_KEYS:
+            for name in EGYPT_AXIS_KEYS:
                 doc[name] = str(BirthInput.model_fields[name].description)
         if tool_name == "chart":
             for name in _EMINENCE_KEYS:
@@ -198,9 +200,7 @@ def western_options_doc(tool_name: str) -> dict[str, str]:
             doc["sunriseMode"] = str(BirthInput.model_fields["sunriseMode"].description)
         # wave 3b：本命四盘的严格接纳缺省 0（BirthInput 字段不进 tools/list 广告层，说明只在这里出；日界两键是各家族模型的
         # ADVERTISE_HIDDEN 字段，上面的隐藏旋钮循环已自动带出）。service 侧消费点：`_apply_chart_request_defaults` / `_chart_family_snapshot_fields`。
-        from horosa_skill.service import _STRONG_RECEPTION_DEFAULT_TOOLS
-
-        if tool_name in _STRONG_RECEPTION_DEFAULT_TOOLS:
+        if tool_name in STRONG_RECEPTION_DEFAULT_TOOLS:
             doc["strongRecption"] = str(BirthInput.model_fields["strongRecption"].description)
     doc.update(_static_doc(tool_name))
     return doc

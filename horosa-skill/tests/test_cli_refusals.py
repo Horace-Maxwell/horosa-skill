@@ -183,7 +183,9 @@ def _hand_rolled_refusals(source: str) -> list[int]:
 
 
 def test_the_cli_has_one_refusal_writer() -> None:
-    assert _hand_rolled_refusals(Path(C.__file__).read_text(encoding="utf-8")) == []
+    # 流程模块也算：命令挪出 cli.py 之后，守卫要跟着它们走。
+    offenders = {path.name: _hand_rolled_refusals(path.read_text(encoding="utf-8")) for path in Path(C.__file__).parent.glob("*.py")}
+    assert {name: lines for name, lines in offenders.items() if lines} == {}
 
 
 def test_the_refusal_scan_catches_a_hand_rolled_copy() -> None:

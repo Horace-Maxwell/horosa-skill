@@ -104,7 +104,7 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   tool docstrings, verified examples) → `catalog.py` (`build_agent_guidance`) → `preflight.py` (`validate_agent_preflight`,
   `build_validation_recovery`).
 - `engine/`
-  - `registry.py` — `TOOL_DEFINITIONS` (name → domain/action/endpoint/`execution`/input model).
+  - `registry.py` — `TOOL_DEFINITIONS` (name → domain/action/endpoint/`execution`/input model), the facade / compact tool counts, and the tool-family sets guidance and the service both read.
   - `client.py` — HTTP clients (`HorosaApiClient`, `HorosaPlainJsonClient`) for `:9999` / `:8899`.
   - `js_client.py` — `HorosaJsEngineClient`: runs `horosa-core-js` via the bundled Node; raises on JS failure.
   - `router.py` / `synonyms.py` — natural-language dispatch across tools (shared group/trace ids); corpus in `contracts/router_corpus.json`.
@@ -123,9 +123,9 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 - `reports/` — JSON / DOCX / PDF reports. `builder.py` orders the document; `source.py` reads the stored run; `question.py`, `default_report.py`, `gates.py`, `search_index.py` and `template.py` each own one part; `layout.py` sets the printed order; `renderers.py`, `figures.py` and `pdf_tagging.py` draw it.
 - `surfaces/` — `mcp_server.py` (`create_mcp_server`: registers the tools / resources / prompts; server instructions;
   split in v0.41.1 into `mcp_surface.py` annotations + toolsets, `mcp_requests.py` argument normalization + signatures,
-  `mcp_errors.py` envelopes, `mcp_runner.py` concurrency limit + blocking runs, `mcp_elicitation.py`, `mcp_auth.py`),
+  `mcp_errors.py` envelopes, `mcp_runner.py` concurrency limit + blocking runs, `mcp_elicitation.py`, `mcp_auth.py`, `mcp_catalog.py` resources + prompts),
   `mcp_schema.py` (advertised-schema
-  slimming), `cli.py` (JSON CLI: the Typer command tree — setup / client / doctor / runtime / jev / …), `doctor.py`
+  slimming), `cli.py` (JSON CLI: the Typer command tree — setup / client / doctor / runtime / jev / …; long flows live next to it: commands print and pick the exit code, `serve_flow.py` and `openclaw_flow.py` do the work, `refusals.py` is the one stderr JSON writer), `doctor.py`
   (the doctor / `runtime status` checks, `_DOCTOR_ADVICE`, budgeted report), `openclaw_smoke.py` (the OpenClaw smoke check
   through mcporter), `setup_flow.py` (the `setup` steps: network probe → install → config → skill → doctor → stdio probe),
   `runtime_helpers.py` (runtime-manager factory, package root, download progress — the one patch point for tests).
@@ -193,7 +193,7 @@ debt ratchets `export_section_debt.json` / `error_recovery_debt.json` / `schema_
   `runtime_seed.py`, `scaffold_windows_runtime.py`. (The historical local builders and the Linux experimental builder were
   removed in v0.41.1; they are in git history.)
 - **Docs institution** — `verify_docs_sync.py` (versions, counts, links, DOC_MAP, lessons distillation, generated mirrors,
-  third-party facts ledger), `gen_agent_mirrors.py`, `bump_version.py` (the `SITES` version checklist, `--check`), `verify_readme_links.py`.
+  third-party facts ledger), `gen_agent_mirrors.py`, `bump_version.py` (the `SITES` version checklist, `--check`; `--tool-counts` rewrites every prose tool count), `verify_readme_links.py`.
 - **Other verifiers** — `verify_vendor_runtime_sources.py`, `verify_server_json.py`, `verify_builder_parity.py`,
   `verify_client_configs.py`, `verify_error_recovery.py`, `verify_mcp_list_budget.py`, `verify_mcp_client_compat.py`,
   `verify_mcpb_manifest.py`, `verify_schema_knob_wiring.py`, `verify_silent_degrades.py`, `verify_silent_returns.py`,

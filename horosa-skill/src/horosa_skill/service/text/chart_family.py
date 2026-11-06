@@ -8,6 +8,7 @@ from typing import Any
 from horosa_skill.engine import astro_snapshot as _astro_snap
 from horosa_skill.engine.astroextra_snapshots import _UNDEFINED as _ASTRO_UNDEF
 from horosa_skill.engine.astroextra_snapshots import _js_number as _astro_snap_js_number
+from horosa_skill.engine.registry import STRONG_RECEPTION_DEFAULT_TOOLS
 from horosa_skill.service import _clock
 from horosa_skill.service._common import _render_snapshot_text
 from horosa_skill.service._context import _degrade
@@ -550,7 +551,7 @@ _CHART_FAMILY_SNAPSHOT_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen
 # 不补即 [信息] 接纳/互容（perchart.py:2152 `len(list) > 1 and strongRecption == False` 那支）与上游缺省盘不同。
 # 调波/龙盘/重置盘（AuxLab）走 AstroExtraCommon.chartParams（:126-150），**不带**该键 → 后端缺省 True，本仓同样不补。
 # 显式传值（true/false/0/1）照原样透传，永远优先。
-_STRONG_RECEPTION_DEFAULT_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart"})
+_STRONG_RECEPTION_DEFAULT_TOOLS = STRONG_RECEPTION_DEFAULT_TOOLS
 
 
 def _apply_chart_request_defaults(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:

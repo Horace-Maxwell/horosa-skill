@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import timezone
 from typing import Any
 
+from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.exports import (
     build_export_registry,
     get_technique_info,
@@ -64,35 +65,20 @@ from horosa_skill.service.text.western import (
     _build_relative_snapshot_text,
 )
 
-TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
+# 不起盘的门面，没有导出契约。
+_NO_EXPORT_TECHNIQUE = frozenset({"export_parse", "export_registry", "knowledge_read", "knowledge_registry"})
+# 导出键与工具名不同的工具；其余工具的导出键就是工具名，加技法不用动这里。
+# 上游把出盘页面一族按页拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）：希腊盘与调波盘各有自己的导出键，
+# 不再共用 astrochart_like，否则两者的导出勾选会互相串。
+_EXPORT_TECHNIQUE_OVERRIDES: dict[str, str] = {
     "chart": "astrochart",
     "chart13": "astrochart_like",
     "chart12": "dwadasamsa",
-    "draconic": "draconic",
-    "babylon": "babylon",
-    "xuanshi": "xuanshi",
-    # v0.33.0 主线 I 新工具（bench 生成 case 与导出契约挂接都吃本表——漏登记有锁步测试守）。
-    "qizhengelection": "qizhengelection",
-    "india_rectify": "india_rectify",
-    "planet_cycles": "planet_cycles",
-    "jieqi_birth": "jieqi_birth",
-    "huangli": "huangli",
-    "tongshu": "tongshu",
-    "relocation": "relocation",
-    # 上游把这一族按出盘页面拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）；希腊盘与调波盘各有自己的
-    # 导出键，不再共用 astrochart_like，否则两者的导出勾选会互相串。
     "hellen_chart": "hellenastro",
-    "harmonic": "harmonic",
     "guolao_chart": "guolao",
-    "solarreturn": "solarreturn",
-    "lunarreturn": "lunarreturn",
-    "solararc": "solararc",
-    "givenyear": "givenyear",
-    "profection": "profection",
     "pd": "primarydirect",
     "pdchart": "primarydirchart",
     "zr": "zodialrelease",
-    "relative": "relative",
     "india_chart": "indiachart",
     "ziwei_birth": "ziwei",
     "ziwei_rules": "ziwei",
@@ -105,83 +91,15 @@ TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = {
     "calendar_month": "calendar",
     "gua_desc": "sixyao",
     "gua_meiyi": "sixyao",
-    "qimen": "qimen",
-    "taiyi": "taiyi",
-    "jinkou": "jinkou",
-    "suzhan": "suzhan",
-    "sixyao": "sixyao",
-    "tongshefa": "tongshefa",
-    "canping": "canping",
-    "heluo": "heluo",
-    "yizhangjing": "yizhangjing",
-    "xiaoliuren": "xiaoliuren",
-    "feigong": "feigong",
-    "xiaochengtu": "xiaochengtu",
-    "guice": "guice",
-    "zhengchuan": "zhengchuan",
-    "acg": "acg",
-    "astrodata": "astrodata",
-    "bazi_inverse": "bazi_inverse",
-    "sanshiunited": "sanshiunited",
-    "germany": "germany",
-    "agepoint": "agepoint",
-    "distributions": "distributions",
-    "jaynesprog": "jaynesprog",
-    "vedicprog": "vedicprog",
-    # 上游 v3.11 星运四键（[Q-106/T-10] 三页 + [#80] 回归黄道二次推运）：工具名与导出技法键同名。
-    "ephemeris": "ephemeris",
-    "returntimeline": "returntimeline",
-    "prenatalsyzygy": "prenatalsyzygy",
-    "prog": "prog",
-    "planetaryarc": "planetaryarc",
-    "planetaryages": "planetaryages",
-    "balbillus": "balbillus",
-    "yearsystem129": "yearsystem129",
-    "persiandirected": "persiandirected",
-    "triplicityrulers": "triplicityrulers",
-    "keypoints": "keypoints",
-    "lunationphase": "lunationphase",
-    "extrareturns": "extrareturns",
-    "neroman": "neroman",
-    "bezzafigure": "bezzafigure",
-    "jayprofection": "jayprofection",
-    "michon": "michon",
-    "horary": "horary",
-    "election": "election",
-    "tianxing": "tianxing",
-    "qimenzeri": "qimenzeri",
-    # 择日十技法（v3.10.0）：工具名与导出技法键同名，逐个入表 —— bench 的「新增技法自动获得
-    # 用例」只覆盖这张表（v0.33.0 教训）。
-    "huanglizeri": "huanglizeri",
-    "bazizeri": "bazizeri",
-    "taiyizeri": "taiyizeri",
-    "ziweizeri": "ziweizeri",
-    "liurengzeri": "liurengzeri",
-    "sanshizeri": "sanshizeri",
-    "qizhengzeri": "qizhengzeri",
-    "indiazeri": "indiazeri",
-    "geomancy": "geomancy",
-    "tarot": "tarot",
-    "lingqi": "lingqi",
-    "wangji": "wangji",
-    "wuzhao": "wuzhao",
-    "taixuan": "taixuan",
-    "jingjue": "jingjue",
-    "shenyishu": "shenyishu",
-    "shaozi": "shaozi",
-    "tieban": "tieban",
-    "fendjing": "fendjing",
-    "beiji": "beiji",
-    "nanji": "nanji",
-    "chunzi": "chunzi",
-    "xianqin": "xianqin",
-    "cetian": "cetian",
-    "qizhengkin": "qizhengkin",
-    "mundane": "mundane",
-    "firdaria": "firdaria",
-    "decennials": "decennials",
-    "otherbu": "otherbu",
 }
+
+
+def _derive_export_technique_map(tool_names: Any, *, overrides: dict[str, str]) -> dict[str, str]:
+    return {name: overrides.get(name, name) for name in tool_names if name not in _NO_EXPORT_TECHNIQUE}
+
+
+# bench 生成 case 与导出契约挂接都吃这张表（tests/test_benchmark.py 核对每个键都在导出注册表里）。
+TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = _derive_export_technique_map(TOOL_DEFINITIONS, overrides=_EXPORT_TECHNIQUE_OVERRIDES)
 
 
 def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[str, Any]:
