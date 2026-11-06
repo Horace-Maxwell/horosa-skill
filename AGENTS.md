@@ -1190,6 +1190,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   `test_mcp_contract.py::test_error_paths_return_a_conformant_envelope` 同时覆盖闸门与闸门之后的失败。
 - **MCP 工具体只有一份：`mcp_server._gated_run`（v0.47.2-dev）。** 澄清闸 → elicit → 执行 → 三分支兜底都在这里，`_agent_preflight_error` 只有这一个调用点（AST 守卫）。新工具传 `gate` 与 `refuse`（错误 dict → 返回形状），别抄函数体：抄出来的 except 分支曾各不相同。
 - **存档是旁路：写不进去不许丢结果（v0.47.2-dev）。** `run_tool` 与 `dispatch` 的存档块各自 `except Exception`：结果照回、`memory_ref=None`、`warnings` 带 `memory.save_failed`（`service._context._memory_save_failed`）。别把存档挪回闸外或挪进别的 `try`。守卫 `tests/test_memory_save_failure.py`。
+- **`run_tool` 分段（v0.47.2-dev）：校验 → `_compute_tool_result` → `_success_envelope` / `_failure_envelope` → `_persist_tool_result`。** `input_normalized` 在计算段里会被重新绑定（上游推运缺省、印度流派预设），失败信封与存档读最新值，所以它住在 `_ToolCall` 上，别改成计算段的返回值（`tests/test_run_tool_phases.py`）。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload

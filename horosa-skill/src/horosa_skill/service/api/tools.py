@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
@@ -53,6 +54,41 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
     if isinstance(data, dict) and isinstance(data.get("knowledge_context"), dict):
         envelope = {**envelope, "data": {**data, "knowledge_context": user_knowledge.redact_for_storage(data["knowledge_context"])}}
     return envelope
+
+
+@dataclass
+class _ToolCall:
+    """一次 run_tool 的现场。`input_normalized` 放这里而不是局部变量：计算途中它会被重新绑定（上游推运缺省、印度流派预设），
+    而后端失败时的信封与存档读的都是最新值。写成计算函数的返回值，失败路径就把它丢了（tests/test_run_tool_phases.py）。"""
+
+    definition: ToolDefinition
+    input_normalized: dict[str, Any]
+    knowledge_selection: Any
+    trace: dict[str, Any]
+    degrade_notes: list[str]
+
+    @property
+    def tool_name(self) -> str:
+        return self.definition.name
+
+
+def _failure_envelope(call: _ToolCall, *, summary: str, code: str, message: str, details: dict[str, Any]) -> ToolEnvelope:
+    return ToolEnvelope(
+        ok=False,
+        tool=call.tool_name,
+        version=__version__,
+        input_normalized=call.input_normalized,
+        data={},
+        summary=[summary],
+        warnings=list(call.degrade_notes),
+        memory_ref=None,
+        error=ErrorInfo(code=code, message=message, details=details),
+        code=code,
+        message=message,
+        details=details,
+        trace_id=call.trace["trace_id"],
+        group_id=call.trace["group_id"],
+    )
 
 
 def _shenshu_runner(api: Any, name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -194,6 +230,166 @@ class ToolsAPI:
             )
         return runner(payload)
 
+    def _validated_tool_input(self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+        """(规范化入参, 自备知识库点名)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。"""
+        tool_name = definition.name
+        try:
+            payload = normalize_request_payload(payload)
+            # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
+            knowledge_selection = None
+            if isinstance(payload, dict) and "knowledge" in payload:
+                payload = dict(payload)
+                knowledge_selection = payload.pop("knowledge")
+            validated = definition.input_model.model_validate(payload)
+        except ValidationError as exc:
+            trace["error_code"] = "tool.invalid_payload"
+            errors = validation_errors(exc)
+            raise ToolValidationError(
+                f"Invalid payload for tool `{tool_name}`.",
+                code="tool.invalid_payload",
+                details={
+                    "errors": errors,
+                    "agent_recovery": build_validation_recovery(
+                        operation_name=f"tool.{tool_name}",
+                        tool_name=tool_name,
+                        errors=errors,
+                    ),
+                },
+            ) from exc
+        return _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)), knowledge_selection
+
+    def _compute_tool_result(self, call: _ToolCall) -> dict[str, Any]:
+        """起盘 + 富化 + 导出契约 + 技法卡。"""
+        tool_name, definition = call.tool_name, call.definition
+        if definition.execution == "local":
+            response_data = self._run_local_tool(definition, call.input_normalized)
+        else:
+            assert definition.endpoint is not None
+            call.input_normalized = self._apply_upstream_predictive_defaults(tool_name, call.input_normalized)
+            if tool_name == "india_chart":
+                # 流派预设（岁差/宫制）先落进规范化输入：请求体与快照口径行同源（否则盘按 KP 岁差算、
+                # [起盘信息] 却按缺省写 Lahiri）。
+                call.input_normalized = _india_apply_school_presets(call.input_normalized)
+            remote_input = (
+                _india_chart_remote_payload(call.input_normalized) if tool_name == "india_chart" else call.input_normalized
+            )
+            response_data = self._call_remote(definition.endpoint, remote_input)
+            response_data = self._attach_predictive_chart_context(tool_name, call.input_normalized, response_data)
+        input_normalized = call.input_normalized
+        response_data = self._attach_natal_extras(tool_name, response_data, input_normalized)
+        response_data = self._attach_classical_derived(tool_name, response_data, input_normalized)
+        response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
+        response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
+        response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
+        response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
+        response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
+        response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
+        response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
+        response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+        # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
+        # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
+        return self._attach_technique_card(tool_name, input_normalized, response_data)
+
+    def _with_user_knowledge(self, call: _ToolCall, response_data: dict[str, Any]) -> tuple[dict[str, Any], Any, str | None]:
+        """把自备知识库的选中条目挂上去：(结果, 知识上下文, 失败说明)。附加资料出错绝不该让一张算好的盘作废。"""
+        if call.knowledge_selection in (None, "", []) or not isinstance(response_data, dict):
+            return response_data, None, None
+        card = response_data.get("technique_card") if isinstance(response_data.get("technique_card"), dict) else {}
+        snapshot = response_data.get("export_snapshot") if isinstance(response_data.get("export_snapshot"), dict) else {}
+        try:
+            knowledge_context = build_user_knowledge_context(
+                self.settings, call.knowledge_selection, tool_name=call.tool_name,
+                technique=TOOL_EXPORT_TECHNIQUE_MAP.get(call.tool_name), domain=call.definition.domain,
+                technique_label=str((card.get("technique") or {}).get("label") or "") or None,
+                # 长条目按「与这张盘相关」挑段落：拿本次导出正文当检索依据。
+                focus=str(snapshot.get("export_text") or ""),
+            )
+        except Exception as exc:  # noqa: BLE001 - 附加资料出错绝不该让一张算好的盘作废
+            return response_data, None, bilingual(
+                f"自备知识库这次没能带入（{type(exc).__name__}: {exc}）；盘面结果不受影响。",
+                f"Your knowledge entries could not be attached ({type(exc).__name__}: {exc}); the chart is unaffected.",
+            )
+        return {**response_data, "knowledge_context": knowledge_context}, knowledge_context, None
+
+    def _success_envelope(self, call: _ToolCall, response_data: dict[str, Any]) -> ToolEnvelope:
+        response_data, knowledge_context, knowledge_failure = self._with_user_knowledge(call, response_data)
+        summary = _generic_summary(call.tool_name, response_data)
+        # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
+        # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
+        warnings: list[str] = []
+        if isinstance(response_data, dict):
+            raised = response_data.pop("_warnings", None)
+            if isinstance(raised, list):
+                warnings.extend(str(item) for item in raised if f"{item}".strip())
+        warnings.extend(note for note in call.degrade_notes if note not in warnings)
+        zone_note = _cn_unified_zone_note(call.input_normalized)
+        if zone_note and zone_note not in warnings:
+            warnings.append(zone_note)
+        # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
+        if knowledge_context is not None:
+            warnings.extend(user_knowledge.context_warnings(knowledge_context))
+        if knowledge_failure:
+            warnings.append(knowledge_failure)
+        missing_note = _missing_sections_warning(response_data)
+        if missing_note:
+            warnings.append(missing_note)
+            summary = [*summary, missing_note]
+        return ToolEnvelope(
+            ok=True,
+            tool=call.tool_name,
+            version=__version__,
+            input_normalized=call.input_normalized,
+            data=response_data,
+            summary=summary,
+            warnings=warnings,
+            memory_ref=None,
+            error=None,
+            trace_id=call.trace["trace_id"],
+            group_id=call.trace["group_id"],
+        )
+
+    def _persist_tool_result(
+        self, call: _ToolCall, envelope: ToolEnvelope, *, run_id: str | None, query_text: str | None, evaluation_case_id: str | None
+    ) -> None:
+        """写进本地记忆，补 `memory_ref` 与技法卡的 refs。存档是旁路：写不进去不许丢掉已经算好的结果。"""
+        trace = call.trace
+        try:
+            effective_run_id = run_id or self.store.create_run(
+                entrypoint="tool",
+                query_text=query_text,
+                subject=call.input_normalized,
+                group_id=trace["group_id"],
+            )
+            self.store.record_entities(effective_run_id, _extract_entities(call.input_normalized, query_text))
+            memory_ref = self.store.record_tool_result(
+                run_id=effective_run_id,
+                tool_name=call.tool_name,
+                ok=envelope.ok,
+                input_normalized=call.input_normalized,
+                envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
+                summary=envelope.summary,
+                warnings=envelope.warnings,
+                error=envelope.error.model_dump(mode="json") if envelope.error else None,
+                trace_id=trace["trace_id"],
+                group_id=trace["group_id"],
+                evaluation_case_id=evaluation_case_id,
+            )
+            envelope.memory_ref = memory_ref
+            trace["run_id"] = effective_run_id
+            trace["artifact_path"] = memory_ref.artifact_path
+            # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
+            # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
+            card = envelope.data.get("technique_card")
+            if isinstance(card, dict):
+                card["refs"] = {
+                    "run_id": effective_run_id,
+                    "trace_id": trace["trace_id"],
+                    "group_id": trace["group_id"],
+                }
+        except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
+            envelope.memory_ref = None
+            envelope.warnings.append(_memory_save_failed(exc))
+
     def run_tool(
         self,
         tool_name: str,
@@ -230,136 +426,21 @@ class ToolsAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
+            input_normalized, knowledge_selection = self._validated_tool_input(definition, payload, trace)
+            call = _ToolCall(definition, input_normalized, knowledge_selection, trace, degrade_notes)
             try:
-                payload = normalize_request_payload(payload)
-                # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
-                knowledge_selection = None
-                if isinstance(payload, dict) and "knowledge" in payload:
-                    payload = dict(payload)
-                    knowledge_selection = payload.pop("knowledge")
-                validated = definition.input_model.model_validate(payload)
-            except ValidationError as exc:
-                trace["error_code"] = "tool.invalid_payload"
-                errors = validation_errors(exc)
-                raise ToolValidationError(
-                    f"Invalid payload for tool `{tool_name}`.",
-                    code="tool.invalid_payload",
-                    details={
-                        "errors": errors,
-                        "agent_recovery": build_validation_recovery(
-                            operation_name=f"tool.{tool_name}",
-                            tool_name=tool_name,
-                            errors=errors,
-                        ),
-                    },
-                ) from exc
-
-            input_normalized = validated.model_dump(exclude_none=True)
-            input_normalized = _apply_chart_request_defaults(tool_name, input_normalized)
-            memory_ref = None
-
-            try:
-                if definition.execution == "local":
-                    response_data = self._run_local_tool(definition, input_normalized)
-                else:
-                    assert definition.endpoint is not None
-                    input_normalized = self._apply_upstream_predictive_defaults(tool_name, input_normalized)
-                    if tool_name == "india_chart":
-                        # 流派预设（岁差/宫制）先落进规范化输入：请求体与快照口径行同源（否则盘按 KP 岁差算、
-                        # [起盘信息] 却按缺省写 Lahiri）。
-                        input_normalized = _india_apply_school_presets(input_normalized)
-                    remote_input = (
-                        _india_chart_remote_payload(input_normalized) if tool_name == "india_chart" else input_normalized
-                    )
-                    response_data = self._call_remote(definition.endpoint, remote_input)
-                    response_data = self._attach_predictive_chart_context(tool_name, input_normalized, response_data)
-                response_data = self._attach_natal_extras(tool_name, response_data, input_normalized)
-                response_data = self._attach_classical_derived(tool_name, response_data, input_normalized)
-                response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
-                response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
-                response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
-                response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
-                response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
-                response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
-                response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
-                response_data = _attach_export_contract(tool_name, input_normalized, response_data)
-                # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
-                # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
-                response_data = self._attach_technique_card(tool_name, input_normalized, response_data)
-                knowledge_context = None
-                knowledge_failure: str | None = None
-                if knowledge_selection not in (None, "", []) and isinstance(response_data, dict):
-                    card = response_data.get("technique_card") if isinstance(response_data.get("technique_card"), dict) else {}
-                    snapshot = response_data.get("export_snapshot") if isinstance(response_data.get("export_snapshot"), dict) else {}
-                    try:
-                        knowledge_context = build_user_knowledge_context(
-                            self.settings, knowledge_selection, tool_name=tool_name,
-                            technique=TOOL_EXPORT_TECHNIQUE_MAP.get(tool_name), domain=definition.domain,
-                            technique_label=str((card.get("technique") or {}).get("label") or "") or None,
-                            # 长条目按「与这张盘相关」挑段落：拿本次导出正文当检索依据。
-                            focus=str(snapshot.get("export_text") or ""),
-                        )
-                        response_data = {**response_data, "knowledge_context": knowledge_context}
-                    except Exception as exc:  # noqa: BLE001 - 附加资料出错绝不该让一张算好的盘作废
-                        knowledge_failure = bilingual(
-                            f"自备知识库这次没能带入（{type(exc).__name__}: {exc}）；盘面结果不受影响。",
-                            f"Your knowledge entries could not be attached ({type(exc).__name__}: {exc}); the chart is unaffected.",
-                        )
-                summary = _generic_summary(tool_name, response_data)
-                # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
-                # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
-                warnings: list[str] = []
-                if isinstance(response_data, dict):
-                    raised = response_data.pop("_warnings", None)
-                    if isinstance(raised, list):
-                        warnings.extend(str(item) for item in raised if f"{item}".strip())
-                warnings.extend(note for note in degrade_notes if note not in warnings)
-                zone_note = _cn_unified_zone_note(input_normalized)
-                if zone_note and zone_note not in warnings:
-                    warnings.append(zone_note)
-                # 预设段缺席 → warnings + summary 各一条：agent 不翻 export_snapshot 也知道结果不完整。
-                if knowledge_context is not None:
-                    warnings.extend(user_knowledge.context_warnings(knowledge_context))
-                if knowledge_failure:
-                    warnings.append(knowledge_failure)
-                missing_note = _missing_sections_warning(response_data)
-                if missing_note:
-                    warnings.append(missing_note)
-                    summary = [*summary, missing_note]
-                envelope = ToolEnvelope(
-                    ok=True,
-                    tool=tool_name,
-                    version=__version__,
-                    input_normalized=input_normalized,
-                    data=response_data,
-                    summary=summary,
-                    warnings=warnings,
-                    memory_ref=None,
-                    error=None,
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
-                )
+                envelope = self._success_envelope(call, self._compute_tool_result(call))
             except HorosaSkillError as exc:
                 trace["error_code"] = exc.code
-                error_details = _with_operational_recovery(exc.code, exc.details)
-                envelope = ToolEnvelope(
-                    ok=False,
-                    tool=tool_name,
-                    version=__version__,
-                    input_normalized=input_normalized,
-                    data={},
-                    summary=[f"工具 `{tool_name}` 调用失败（{exc.code}）。"],
-                    warnings=list(degrade_notes),
-                    memory_ref=None,
-                    error=ErrorInfo(code=exc.code, message=str(exc), details=error_details),
+                envelope = _failure_envelope(
+                    call,
                     # 顶层镜像三键（见 schemas/common.py）：MCP 面的闸门/校验错误一直镜像，工具自身的
                     # 错误（runtime.not_installed / tool.ken_compute_failed / transport.*）却没有，
                     # 按顶层 `code` 读的调用方在最常见的失败上读到 None。两条路径口径必须一致。
+                    summary=f"工具 `{tool_name}` 调用失败（{exc.code}）。",
                     code=exc.code,
                     message=str(exc),
-                    details=error_details,
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
+                    details=_with_operational_recovery(exc.code, exc.details),
                 )
             except Exception as exc:  # noqa: BLE001 - last-resort guard: a surface/dispatch must never crash
                 # Tool execution and the snapshot/summary/export post-processing touch backend-shaped
@@ -368,69 +449,21 @@ class ToolsAPI:
                 # break the MCP session / abort a whole dispatch. (Bad-payload ValidationError is handled
                 # separately above and intentionally still raises.)
                 trace["error_code"] = "tool.internal_error"
-                envelope = ToolEnvelope(
-                    ok=False,
-                    tool=tool_name,
-                    version=__version__,
-                    input_normalized=input_normalized,
-                    data={},
-                    summary=[f"工具 `{tool_name}` 调用时发生内部错误。"],
-                    warnings=list(degrade_notes),
-                    memory_ref=None,
-                    error=ErrorInfo(
-                        code="tool.internal_error",
-                        message=str(exc),
-                        details={"exception_type": type(exc).__name__},
-                    ),
+                envelope = _failure_envelope(
+                    call,
+                    summary=f"工具 `{tool_name}` 调用时发生内部错误。",
                     code="tool.internal_error",
                     message=str(exc),
                     details={"exception_type": type(exc).__name__},
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
                 )
 
             if save_result:
-                try:
-                    effective_run_id = run_id or self.store.create_run(
-                        entrypoint="tool",
-                        query_text=query_text,
-                        subject=input_normalized,
-                        group_id=trace["group_id"],
-                    )
-                    self.store.record_entities(effective_run_id, _extract_entities(input_normalized, query_text))
-                    memory_ref = self.store.record_tool_result(
-                        run_id=effective_run_id,
-                        tool_name=tool_name,
-                        ok=envelope.ok,
-                        input_normalized=input_normalized,
-                        envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
-                        summary=envelope.summary,
-                        warnings=envelope.warnings,
-                        error=envelope.error.model_dump(mode="json") if envelope.error else None,
-                        trace_id=trace["trace_id"],
-                        group_id=trace["group_id"],
-                        evaluation_case_id=evaluation_case_id,
-                    )
-                    envelope.memory_ref = memory_ref
-                    trace["run_id"] = effective_run_id
-                    trace["artifact_path"] = memory_ref.artifact_path
-                    # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
-                    # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
-                    card = envelope.data.get("technique_card")
-                    if isinstance(card, dict):
-                        card["refs"] = {
-                            "run_id": effective_run_id,
-                            "trace_id": trace["trace_id"],
-                            "group_id": trace["group_id"],
-                        }
-                except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
-                    envelope.memory_ref = None
-                    envelope.warnings.append(_memory_save_failed(exc))
+                self._persist_tool_result(call, envelope, run_id=run_id, query_text=query_text, evaluation_case_id=evaluation_case_id)
 
             # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。
-            envelope = _apply_response_view(envelope, input_normalized)
+            envelope = _apply_response_view(envelope, call.input_normalized)
             trace["success"] = envelope.ok
-            trace["input_normalized"] = input_normalized
+            trace["input_normalized"] = call.input_normalized
             trace["summary"] = envelope.summary
             trace["warnings"] = envelope.warnings
             return envelope
