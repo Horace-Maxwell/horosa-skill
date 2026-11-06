@@ -328,8 +328,9 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
   - 工具：`horosa_knowledge_search`（门面，常驻）检索 → `horosa_knowledge_read(domain="user", key, from_line, max_lines)` 按行翻页；
     内置与自备结果用 RRF（k=60）合并，不比分数。CLI `knowledge search`（兼检索测试）/ `knowledge index [--rebuild]`。
   - 守卫：`tests/test_user_knowledge_index.py`（每条都有负向对照；其中四条第一版「因为错误的原因通过」，见 LESSONS）。
-  - **可选向量（v0.45.1，`knowledge/vectors.py`）**：`[vectors]` 额外依赖 + `knowledge index --vectors` 下载（钉提交号 + sha256）才开；
-    任何一环缺了就是纯 BM25、不报错。RRF 同分按 BM25 名次定序。测试用概念替身，dev 组带 numpy（别让守卫在 CI 里 skip）。
+  - **可选向量（v0.45.1，`knowledge/vectors.py`）**：依赖要进**客户端起 server 的那个环境**，唯一开启入口 = `setup --client <客户端> --vectors`（v0.47.2，§9.4）；
+    模型钉提交号 + sha256，`HF_ENDPOINT` 指镜像时先试镜像（官方垫底，sha 把关）。任何一环缺了就是纯 BM25、不报错。RRF 同分按 BM25 名次定序。
+    测试用概念替身，dev 组带 numpy（别让守卫在 CI 里 skip）。`.mcpb` 不带这些依赖（manifest 的启动命令是固定的）。
   - 内置知识检索（`knowledge/store.py`）与自备同一套归一 + BM25；正文分封顶 60，精确键（100）永远在前。
 
 ### 4.4 MCP 面、决策层与错误信封
@@ -1019,6 +1020,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 | Windows 装到 OneDrive / 长用户名下 `runtime.install_long_path` | 最深载荷条目近 200 字符 + 安装临时目录 | `doctor.windows.headroom_chars`（按 `.hi-XXXXXXXX/x/` 前缀估，v0.38.0 起比旧 `.horosa-install-…/extract/` 多约 20 字符）为负即会拒：`HOROSA_RUNTIME_ROOT=C:\horosa` 或 `LongPathsEnabled=1` |
 | 慢网 / 企业代理下 `runtime.install_download_failed` | 每块 1 MiB 之间的读超时 120 s、每镜像 3 次 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS`；`doctor --probe-network` 看哪个镜像通（默认 doctor 零外网请求） |
 | `setup` 在第 1 步 `network_probe` 就失败（5 s 内，`setup.network_unreachable`） | 清单 URL 经所有镜像都取不到（github.com:443 不通 / 代理拦 HEAD） | 失败包 `details.next_action` 给三条路：`HOROSA_RUNTIME_MIRROR=<前缀>`、`--archive <本地归档>`、`--no-probe-network` 跳过预检；`retry_command` 已带后者（v0.38.0 B4） |
+| `setup --vectors` 在 `vectors` 步失败（`setup.vectors_failed`） | `steps.vectors.failure`：`deps`（依赖进不了启动器环境：没有轮子 / 连不上 PyPI）/ `download`（模型下不来）/ `disabled`（`HOROSA_KNOWLEDGE_VECTORS=0`）/ `timeout` / `unreadable` | 配置没动。`download` 设 `HF_ENDPOINT=<镜像>` 或把两份文件放进 `HOROSA_EMBED_MODEL_DIR`；不要向量就 `--no-vectors`，搜索照常（BM25） |
 | `setup` 在 `stdio_probe` 失败（`setup.stdio_probe_failed`） | 客户端将要执行的那条命令起不来 server：命令路径不对、uvx 首跑下载失败、工具数与工具面不符 | 看失败包 `details.command` 与 `details.stderr_tail`；uvx 形态可先手跑 `uvx --refresh --from <wheel URL> horosa-skill --version`；checkout 内改 `--launcher uv`（v0.38.0 B4） |
 | 自备知识库里明明有文件，计算时告警「没能带入」/ `knowledge mine` 里没有它 | 文件读不了（非 UTF-8 / UTF-16 / GB18030、> 2 MB、空、与别的文件同名、链到文件夹外）或同名多条有歧义 | 看 `knowledge mine` 的 `problems`（逐个文件写了原因）；歧义时用完整 id（相对路径去扩展名）；误删的从 `knowledge trash` → `knowledge restore <trash_id>` 放回（v0.43.1-dev） |
 | 只有 Windows：太乙 / 三式合一报 `runtime.*` 或空的 `taiyi` 段，chart 服务 stderr 是 `DLL load failed while importing _parse_times: An Application Control policy has blocked this file` | Smart App Control 拒绝加载载荷里的 `astropy/time/_parse_times.pyd`（无签名、流行度不够；同一文件在旧根放行、新装 / 升级后被拦） | v0.43.1-dev 起 manager 每次 start 把应用控制替身拷进随包 Python（astropy 落回纯 Python 解析器，结果不变）：升级 skill 后 `runtime restart`；stderr 应改见 `horosa: Windows Application Control blocked … using the pure-Python fallback` |
@@ -1334,13 +1336,20 @@ A global stability pass hardened these; keep them true when you touch the releva
   `--entry script|module` 显式压过。`setup` 探针认 `(os error 4551)`（只锚这段不本地化的尾巴）→ `windows_app_control_blocked`，给改写后的命令。
   新增任何「客户端照抄执行」的命令形态，都要能套 `module_entry_command`（只换 `serve` 前一位）。守卫 `tests/test_windows_app_control.py`。
 
-- **`setup` 的步骤顺序与失败包是契约（v0.38.0 B4；v0.41.0 加 `skill` → 八步）。** `network_probe → install → config → skill → doctor →
+- **`setup` 的步骤顺序与失败包是契约（v0.38.0 B4；v0.41.0 加 `skill`；v0.47.2 加 `vectors` → 九步）。** `network_probe → install → vectors → config → skill → doctor →
   client_check → stdio_probe → next_steps`，顺序冻结在 `tests/test_cli_output_contract.py::test_setup_public_keys`；失败包只走 stderr、退出码 2，键
-  `step / code / config_untouched / backup_path / retry_command / steps`，**第 3 步之前失败保证 `config_untouched: true`**
+  `step / code / config_untouched / backup_path / retry_command / steps`，**`config` 步之前失败保证 `config_untouched: true`**
   （`tests/test_setup_command.py` 负向：装失败时预置配置逐字节相等）。`doctor` / `client check` 与 `setup` 永远共用
   `_doctor_report` / `_client_check_report`（不许各写一套判定）；`stdio_probe` 必须真 spawn 配置里那条命令（进程内
   `create_mcp_server` 证明不了客户端能起它）；`_build_client_config_payload` 只在 `uv` 启动器与 mcporter/openclaw 形态下解析
   checkout——wheel 装出来的包旁边没有 pyproject.toml，uvx 形态必须能在没有 checkout 的机器上生成配置（ci.yml wheel 步骤锁）。
+- **`setup --vectors`（v0.47.2）：先验证、后写配置，再由 server 自己确认。** 配置写上 `[vectors]` 而依赖装不上（没有 onnxruntime 轮子的平台），server 就起不来了，
+  比没有向量糟得多——所以 `vectors` 步在 `config` 之前，用**客户端那条启动命令**把 `serve` 换成 `knowledge index --vectors` 真跑一遍（`_knowledge_index_command`），
+  失败 `config_untouched: true`、`retry_command` 带 `--no-vectors`。准备跑在全环境里（要走代理 / `HF_ENDPOINT`），所以 `stdio_probe` 还要读 `horosa://runtime/status`
+  的 `knowledge_vectors.ready`，这才是客户端形状环境里的结论（`setup.stdio_probe_vectors_not_ready`）。`--vectors/--no-vectors` 是三态：没给时模型在就沿用（升级靠重跑 setup，
+  丢开关搜索会悄悄变差）；`client config --vectors` 是纯生成器，不看磁盘。`--from` 写 PEP 508 直接引用 `horosa-skill[vectors]@<URL>`，**不留空格**（有的客户端按空格拆命令；本地 wheel
+  转百分号编码的 file URI）；读 `--from` 的检查一律先过 `_launcher_source`，否则 `://` 会让「本地 wheel 没了」静默跳过。`_quote_cli_arg` 引方括号（zsh 不引就 `no matches found`）。
+  守卫 `tests/test_setup_vectors.py`。
 - **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
   按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit；v0.41.0 起新格式由产物显式声明 `root_key`，Goose 的 YAML 走
   `yaml_block`）只 upsert `<root>[<server_name>]`，写前 `.horosa-bak`；**保注释写入按原文件的换行、按原字节写**（文本模式在 Windows 上会把 CRLF

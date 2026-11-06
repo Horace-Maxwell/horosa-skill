@@ -652,6 +652,17 @@
       ]
     },
     {
+      "id": "uv.extras-launchers",
+      "subject": "uv",
+      "fact": "uv 0.10.7: `uvx --from 'horosa-skill[vectors]@file:///…/x.whl' <cmd>` and the spaced form both install the extra; a percent-encoded path resolves; `uv run --directory D --extra vectors` works and a later plain `uv run` keeps the extra's packages (inexact sync). zsh treats an unquoted `name[extra]@url` as a glob: `no matches found`.",
+      "source_url": "https://docs.astral.sh/uv/concepts/tools/",
+      "verified_on": "2026-11-06",
+      "affects": [
+        "horosa-skill/src/horosa_skill/client_config/payload.py",
+        "horosa-skill/src/horosa_skill/surfaces/setup_flow.py"
+      ]
+    },
+    {
       "id": "typer.click-85",
       "subject": "typer",
       "fact": "click 8.5.0 (2026-08-26) with typer 0.24.x drops positional-argument help from `--help`; typer 0.27.3 vendors its own click (typer._click) and renders it correctly — its command objects are no longer instances of the installed click.Group, so walk command trees by duck typing (`hasattr(cmd, 'commands')`).",

@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=for-the-badge&color=1d4ed8&label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1d4ed8?style=for-the-badge" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-2654_passed-16a34a?style=for-the-badge" alt="2654 passed" />
+  <img src="https://img.shields.io/badge/测试-2697_passed-16a34a?style=for-the-badge" alt="2697 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-0f766e?style=for-the-badge" alt="offline" />
 </p>
 
@@ -153,7 +153,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 🚀 给客户端直
 
 ## 🔌 接入 AI 客户端
 
-`setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime → 写配置（自动定位、
+`setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime →（`--vectors` 时）准备向量检索 → 写配置（自动定位、
 只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.47.1；
 多数客户端读共享的 `~/.agents/skills`；`--no-skill` 跳过、`--skill-dir` 指定）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
 stdio server 并数工具** → 打印下一步。失败时 stderr 给出结构化失败包（`step` / `code` / `config_untouched` /
@@ -528,7 +528,7 @@ TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，�
 - 📄 `report_render` 生成 DOCX / PDF / JSON：Markdown 表格渲染为真 Word 表格（跨页重复表头）、导航大纲、目录、页码、中文字体，异常自动降级保全文。
 - 🧾 `report technique` 生成技法依据报告（机器元数据），与咨询报告（AI 终稿）分轨，互不混入。
 - 🗂️ **完整排盘报告**：`report render --style chart`（或 `report_render {style:"chart"}`）不经 AI 解读，直接把该技法的全部盘面段落排成 PDF / DOCX——封面、基本信息、盘图（星盘轮 / 合盘双圈 / 紫微十二宫 / 奇门九宫 / 六壬天地盘 / 六爻卦图 / 太乙十六宫 / 七政四余方盘 / 南印方盘 / 量化盘 90° 度盘；择日结果画选中时刻的盘；全部取自引擎数据）、可点击目录与书签、「第 N 页 / 共 M 页」、技法依据附录。
-- 📚 **自备知识库**：把自己的笔记（`.md` / `.txt`）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。GBK / UTF-16 文件也能读，读不了的在 `knowledge mine` 的 `problems` 里写明原因；删除与覆盖先进回收站（`knowledge trash` / `knowledge restore`）；运行存档只记引用、不存笔记正文；`runtime uninstall --purge-data` 默认保留知识库。检索：`horosa_knowledge_search` / `horosa-skill knowledge search "词"`（两字词即可、繁简互通，标出处行号）；长笔记计算时只带与本盘相关的段落。可选向量检索（换了说法也能找到）：装 `horosa-skill[vectors]` 后运行 `horosa-skill knowledge index --vectors`（下载并校验 24 MB 的 bge-small-zh 模型）。
+- 📚 **自备知识库**：把自己的笔记（`.md` / `.txt`）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。GBK / UTF-16 文件也能读，读不了的在 `knowledge mine` 的 `problems` 里写明原因；删除与覆盖先进回收站（`knowledge trash` / `knowledge restore`）；运行存档只记引用、不存笔记正文；`runtime uninstall --purge-data` 默认保留知识库。检索：`horosa_knowledge_search` / `horosa-skill knowledge search "词"`（两字词即可、繁简互通，标出处行号）；长笔记计算时只带与本盘相关的段落。可选向量检索（换了说法也能找到）：`setup --client <客户端> --vectors`——把依赖（约 128 MB）装进客户端起 server 的环境、下载并校验 24 MB 的 bge-small-zh 模型、向量化笔记，全部验证通过才写配置；连不上 Hugging Face 时设 `HF_ENDPOINT=<镜像>`（内容有 sha256 把关）。之后重跑 `setup` 会沿用，`--no-vectors` 关闭。`.mcpb` 一键包不带这些依赖，要用向量请走 `setup --client claude-desktop --vectors`。
 
 ```bash
 uv run horosa-skill knowledge add 八字/滴天髓笔记 --file ./notes.md --techniques bazi_birth --tags 古籍
@@ -558,7 +558,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 🧰 可调用工具 | 114 / 114 `ok=true` |
-| 🧪 工程测试 | **2654 / 2654 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 121 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 🧪 工程测试 | **2697 / 2697 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 121 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 🛡️ 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 🔓 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 📐 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -574,7 +574,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 2654 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 2697 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

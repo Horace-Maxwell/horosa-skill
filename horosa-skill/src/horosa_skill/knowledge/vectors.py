@@ -6,8 +6,10 @@
 - 依赖重：onnxruntime + tokenizers + numpy 装好约 128 MB，模型另 24 MB——放在 `horosa-skill[vectors]` 里，
   默认安装不变。三个包在 macOS arm64 / Windows x64 / Windows ARM64 都有 cp312 轮子；fastembed 不用（它的
   py-rust-stemmers 没有 win_arm64 轮子）。
-- 模型只在用户明确要时才下（`horosa-skill knowledge index --vectors`）：钉 Hugging Face 的提交号 + sha256，
-  校验不过不用。也可以把两份文件放进 `HOROSA_EMBED_MODEL_DIR` 指的目录（离线机器）。
+- 依赖要装在**客户端起 server 的那个环境**里，所以开启入口是 `horosa-skill setup --client <客户端> --vectors`：
+  启动器带上 extra、在写配置之前验证、stdio 探针确认 server 自己报 ready（surfaces/setup_flow.py）。
+- 模型只在用户明确要时才下：钉 Hugging Face 的提交号 + sha256，校验不过不用。`HF_ENDPOINT` 指镜像时先试镜像
+  （内容被 sha256 钉住，镜像改不了用的是什么）；也可以把两份文件放进 `HOROSA_EMBED_MODEL_DIR` 指的目录（离线机器）。
 
 任何一环缺了（没装依赖、没下模型、`HOROSA_KNOWLEDGE_VECTORS=0`）都只是退回纯 BM25，不报错。
 """
@@ -23,6 +25,7 @@ from typing import Any
 from horosa_skill import fsretry
 
 MODEL_NAME = "bge-small-zh-v1.5-int8"
+HUB_ROOT = "https://huggingface.co"
 MODEL_REPO = "Xenova/bge-small-zh-v1.5"
 MODEL_COMMIT = "75c43b069aac4d136ba6bc1122f995fedcfd2781"
 MODEL_FILES = {
@@ -45,7 +48,7 @@ def deps_available() -> bool:
         import numpy  # noqa: F401
         import onnxruntime  # noqa: F401
         import tokenizers  # noqa: F401
-    except ImportError:
+    except (ImportError, OSError):  # Windows 上原生库载不进来可能是 OSError：退回 BM25，不能把 server 带崩
         return False
     return True
 
@@ -94,45 +97,67 @@ def ready(settings: Any) -> bool:
 
 def status(settings: Any) -> dict[str, Any]:
     folder = model_dir(settings)
+    switched_on, deps, model = enabled_by_env(), deps_available(), model_ready(settings)
     return {
         "model": MODEL_NAME,
-        "enabled_by_env": enabled_by_env(),
-        "deps_installed": deps_available(),
-        "model_present": model_ready(settings),
+        "ready": switched_on and deps and model,
+        "enabled_by_env": switched_on,
+        "deps_installed": deps,
+        "model_present": model,
         "model_dir": str(folder),
-        "how_to_enable": "uv tool install 'horosa-skill[vectors]'（或 pip install onnxruntime tokenizers numpy），"
-                         "再运行 `horosa-skill knowledge index --vectors` 下载并校验模型（24 MB）。",
+        "how_to_enable": "`horosa-skill setup --client <客户端> --vectors`：把依赖（约 128 MB）装进客户端起 server 的环境，"
+                         "下载并校验模型（24 MB），向量化笔记。源码 checkout 里只在终端用：`uv run --extra vectors horosa-skill knowledge index --vectors`。",
     }
 
 
-def download(settings: Any, *, timeout: float = 120.0) -> dict[str, Any]:
-    """按钉死的提交号下载两份文件，sha256 对上才落盘（临时文件 → 原子替换）。已就绪就不下。"""
+def _hub_roots() -> list[str]:
+    """下载来源：`HF_ENDPOINT`（huggingface_hub 的标准开关，如 https://hf-mirror.com）优先，官方地址垫底。"""
+    mirror = os.environ.get("HF_ENDPOINT", "").strip().rstrip("/")
+    return [mirror, HUB_ROOT] if mirror and mirror != HUB_ROOT else [HUB_ROOT]
+
+
+def _fetch(url: str, target: Path, sha: str, *, timeout: float) -> None:
+    """下载到同目录临时文件，sha256 对上才原子替换；任何失败都不留临时文件。"""
     import httpx
 
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".horosa-", suffix=".part")
+    digest = hashlib.sha256()
+    try:
+        with os.fdopen(fd, "wb") as handle, httpx.stream("GET", url, follow_redirects=True, timeout=timeout) as response:
+            response.raise_for_status()
+            for block in response.iter_bytes(1 << 20):
+                handle.write(block)
+                digest.update(block)
+        if digest.hexdigest() != sha:
+            raise ValueError(f"sha256 对不上（{digest.hexdigest()} ≠ {sha}），已丢弃")
+        fsretry.replace(tmp, target)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def download(settings: Any, *, timeout: float = 120.0) -> dict[str, Any]:
+    """按钉死的提交号下载两份文件，逐个来源试到 sha256 对上为止。已就绪就不下。"""
     folder = model_dir(settings)
     fetched = []
     for name, sha in MODEL_FILES.items():
         target = folder / name
         if _file_ok(target, sha):
             continue
-        url = f"https://huggingface.co/{MODEL_REPO}/resolve/{MODEL_COMMIT}/{name}"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".horosa-", suffix=".part")
-        digest = hashlib.sha256()
-        try:
-            with os.fdopen(fd, "wb") as handle, httpx.stream("GET", url, follow_redirects=True, timeout=timeout) as response:
-                response.raise_for_status()
-                for block in response.iter_bytes(1 << 20):
-                    handle.write(block)
-                    digest.update(block)
-            if digest.hexdigest() != sha:
-                raise ValueError(f"{name} 的 sha256 对不上（{digest.hexdigest()} ≠ {sha}），已丢弃")
-            fsretry.replace(tmp, target)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
-        fetched.append(name)
+        errors = []
+        for root in _hub_roots():
+            url = f"{root}/{MODEL_REPO}/resolve/{MODEL_COMMIT}/{name}"
+            try:
+                _fetch(url, target, sha, timeout=timeout)
+            except Exception as exc:  # noqa: BLE001 - 换下一个来源；全失败时一起报
+                errors.append(f"{root}: {type(exc).__name__}: {exc}")
+                continue
+            fetched.append(name)
+            break
+        else:
+            raise OSError(f"{name} 下载失败：" + "；".join(errors))
     return {"downloaded": fetched, **status(settings)}
 
 

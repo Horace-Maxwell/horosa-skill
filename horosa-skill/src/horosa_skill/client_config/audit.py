@@ -7,6 +7,8 @@ import re
 import shutil
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 import typer
 
@@ -112,6 +114,14 @@ def _expand_client_placeholders(text: str, *, client: str, config_dir: Path | No
     return _PLACEHOLDER_RE.sub(repl, text)
 
 
+def _launcher_source(spec: str) -> str:
+    """`--from` 的实际来源：`horosa-skill[vectors]@<来源>` 去掉名字；`file://` 还原成本地路径（下面的检查按路径判）。"""
+    source = spec.split("@", 1)[1] if spec.startswith("horosa-skill[") and "@" in spec else spec
+    if source.startswith("file://"):
+        return url2pathname(urlsplit(source).path)
+    return source
+
+
 def _audit_client_entry(
     name: str, entry: dict[str, Any], *, client: str, config_dir: Path | None = None
 ) -> list[dict[str, str]]:
@@ -171,7 +181,7 @@ def _audit_client_entry(
         })
     # 钉版本的零安装源（wheel 资产 URL / git tag）与本包版本不一致 → 客户端跑的是别的版本（v0.38.0 B3）。
     if "--from" in args:
-        source = args[args.index("--from") + 1] if args.index("--from") + 1 < len(args) else ""
+        source = _launcher_source(args[args.index("--from") + 1]) if args.index("--from") + 1 < len(args) else ""
         # v0.38.1 C15：`--from` 可以是 setup 预下载的本地 wheel；文件没了（清过缓存 / 换了机器）客户端就起不来。
         if source.endswith(".whl") and "://" not in source and not Path(source).expanduser().is_file():
             problems.append({
@@ -186,7 +196,7 @@ def _audit_client_entry(
                 "detail": f"配置钉的是 v{pinned.group(1)}，本机 horosa-skill 是 v{__version__}。",
                 "fix": "重跑 `horosa-skill client config --format <client> --launcher uvx-wheel --write <配置>`（或 `setup`）让 URL 跟上版本。",
             })
-    if command.endswith("uvx") and "--from" not in args:
+    if command.endswith("uvx") and ("--from" not in args or "horosa-skill[vectors]" in args):
         problems.append({
             "code": "pypi_not_published",
             "detail": "`uvx horosa-skill` 依赖 PyPI，而本项目的 PyPI 通道尚未开通。",

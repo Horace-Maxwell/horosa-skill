@@ -17,6 +17,7 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
+| v0.47.2-dev (2026-11-06) | `[vectors]` 从 v0.45.1 起到不了 MCP server：依赖要装在客户端起 server 的环境里，配置里的启动器却不带 extra，server 永远是纯 BM25 且不报错；`how_to_enable` 还教了 PyPI 上不存在的 `pip install` | `setup --vectors`：写配置之前用客户端那条命令真跑一遍，stdio 探针再要 server 自己报 ready；三态沿用；`--from` 无空格 PEP 508；audit 看穿新写法 |
 | v0.47.2-dev (2026-11-04) | 上游 v3.13.2 只改桌面端就绪门 + 版本号，skill 结果不变；`--depth` 克隆让 `bazi_pithy` 的 `generated_at` 静默写错；公开克隆缺 dist-file 与 @babel/parser | 生成脚本拒绝浅克隆（先红后绿）；Runbook 写明本地上游 == 公开远端时同步 / `--scan` 用本地、门禁用非浅公开克隆；0 hit 先跑上一区间对照 |
 | v0.47.2-dev (2026-11-04) | Windows 维护机补 veraPDF 后把 `HOROSA_VERAPDF` 设成用户级变量，skill 每次启动多报一行「未知环境变量」；同一台机器上`HOROSA_JAVA_HOME`（星阙桌面端构建脚本的 JDK 路径）一直在误报。扫全树：代码里 12 个 HOROSA_* 名字没进注册表（7 个真变量：测试开关 + 启动器交给上游引擎的旋钮；5 个不是环境变量） | 登记为 internal；`test_every_horosa_name_in_the_tree_is_registered` 扫 src / tests / scripts，新名字不登记即红，不是环境变量的写进 `_NOT_ENV_FLAGS` 并给理由 |
 | v0.47.1-dev (2026-11-03) | v0.47.0 收尾项：宿占整张死键表、七政显示偏好、玄史天象记录字段、繁体古籍档漏多行原文、年龄行日期解析、127 处过期上游行号 | 古籍档 span 对整库 33 117 条记录逐条钉；年龄行在 node 里对上游 210 例对拍；死键 / 偏好表逐值对上游 |
@@ -200,6 +201,29 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `tests/test_lunar_year_cache.py`（按真实横扫长度断言命中，不比耗时）、`tests/test_js_client.py`。负向对照 13 条全红；其中「存档记真实格式」第一次没红，查出测试没断言它，已补。
 - **法则**：威胁模型写「可被注入调用」的闸，字符串判断必须在第一次文件系统访问之前——resolve 不是纯函数。Windows 上别的进程开着文件是常态，不是异常；多个会话共写的文件一律走 `fsretry`。
   降级信息只有传到调用方才算没静默。给缓存定容量要看访问模式：顺序横扫下容量小于横扫长度等于没有缓存，「加了缓存」要靠 profile 验证，不是靠读代码。
+
+### v0.47.2-dev / 2026-11-06 — `[vectors]` 装在哪个环境才算数：setup 的进程不是 server 的进程
+
+- **现象**：v0.45.1 起文档写「装 `horosa-skill[vectors]`，再跑 `knowledge index --vectors`」。用户照做后 MCP 里的检索仍是 `fts5-bm25`，不报错、没有任何提示。
+  而且 PyPI 没开通，`status.how_to_enable` 里的 `uv tool install 'horosa-skill[vectors]'` 根本跑不通。
+- **根因**：server 跑在客户端配置里那条启动命令的环境里（uvx 的工具环境 / `uv run` 的 venv），和用户敲命令的环境是两个东西。启动器不带 extra，依赖就进不去；缺依赖按设计静默退回 BM25，于是这个失败永远不可见。
+- **修**：`setup --vectors/--no-vectors`，新增 `vectors` 步（放在 `config` 之前）。
+  1. 启动器带 extra：`uv run --extra vectors` / `uvx --from 'horosa-skill[vectors]@<URL>'`。
+  2. 用客户端那条命令把 `serve` 换成 `knowledge index --vectors` 真跑一遍。**先验证再写配置**：配置写上 `[vectors]` 而依赖装不上，server 就起不来，比没有向量糟得多。
+  3. `stdio_probe` 读 `horosa://runtime/status` 的 `knowledge_vectors.ready`：准备步骤跑在全环境里，客户端给 server 的环境可能更窄。
+  4. 三态：没给参数时模型在就沿用。升级靠重跑 setup，丢开关的话搜索质量悄悄变差，这正是这次要消灭的那种失败。
+- **顺带抓到的**：
+  - `audit._audit_client_entry` 用 `"://" not in source` 判本地 wheel，`file://` 形式会让 `wheel_cache_missing` 静默跳过 → 读 `--from` 一律先过 `_launcher_source`。
+  - 未加引号的 `horosa-skill[vectors]@…` 粘进 zsh 是 `no matches found` → `_quote_cli_arg` 引方括号。
+  - `deps_available` 只接 `ImportError`：Windows 上原生库载不进来可能是 `OSError`，会把 server 带崩。
+  - 模型下载没有镜像开关，连不上 Hugging Face 的机器走不通 → 认 `HF_ENDPOINT`，官方垫底，sha256 把关。
+- **测试本身的坑**：`test_a_lying_mirror_cannot_land_a_file` 在实现前就是绿的（旧代码不看 `HF_ENDPOINT`，直接走官方地址），属于「因为错误的原因通过」→ 加断言确认镜像确实被试过。
+  第一版真机负向也测错了：脚本把 `UV_OFFLINE` 设成空串，`uvx` 在 `setup` 启动前就报错退出，「配置字节没变」等于没测。改成 `setup` 正常跑、只让它派生的子进程失败。
+- **真机验证（2026-11-06，macOS arm64，uv 0.10.7，隔离 HOME / 缓存，真模型，真 stdio MCP 客户端）**：查询「日主衰弱钱守不住」对笔记「财多身弱，富屋贫人」没有一个双字相同。
+  `setup --vectors` 后经配置里的命令 `engine=fts5-bm25+vectors`、命中；`--no-vectors` 后 `engine=fts5-bm25`、0 命中。uv 启动器 ready=True。
+  负向：离线空缓存 → `failure=deps`；Hugging Face 不通 → `failure=download`；两次配置都逐字节不变，`--no-vectors` 重试成功。
+  **没验**：Windows 的 file URI 只有单测（`PureWindowsPath`），没在真 Windows 上跑过；`.mcpb` 不带这些依赖（manifest 的启动命令是固定的）。
+- **法则**：可选能力「缺了就静默退回」时，开启路径必须端到端验证到**真正使用它的那个进程**；否则退回逻辑会把开启失败藏起来。
 
 ### v0.47.2-dev / 2026-11-04 — 上游 v3.13.2 再同步：结果不变的版本也要走全流程，公开克隆的三个坑
 

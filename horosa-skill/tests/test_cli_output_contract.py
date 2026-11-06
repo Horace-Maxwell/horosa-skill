@@ -54,7 +54,7 @@ def test_setup_public_keys(tmp_path, monkeypatch) -> None:
     missing = sorted(required - set(report))
     assert missing == [], f"setup 公开键缺失（破坏脚本用户）：{missing}"
     assert list(report["steps"]) == list(_SETUP_STEPS) == [
-        "network_probe", "install", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps",
+        "network_probe", "install", "vectors", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps",
     ]
     assert all("ok" in step for step in report["steps"].values())
     assert {"kind"} <= set(report["launcher"])

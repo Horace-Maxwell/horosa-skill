@@ -544,6 +544,10 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
         report["memory_db"] = {"path": str(settings.db_path), **_MemoryStore(settings).integrity_check()}
     except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
         report["memory_db"] = {"path": str(settings.db_path), "ok": False, "detail": [f"{exc}"]}
+    # 可选向量检索：依赖看的是**跑 doctor 的这个环境**，客户端的 server 可能在另一个环境里（setup 的探针查的才是那边）。
+    from horosa_skill.knowledge import vectors as _vectors
+
+    report["knowledge_vectors"] = {**_vectors.status(settings), "scope": "this process; the client's server may run in another environment"}
     # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果 + 已设旗标的生命周期档。
     from horosa_skill.config import ENV_FLAG_REGISTRY as _ENV_REGISTRY
     from horosa_skill.config import audit_env_flags as _audit_env_flags

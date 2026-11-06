@@ -449,6 +449,12 @@ def setup(
     skill_dir: Path | None = typer.Option(
         None, "--skill-dir", help="Install the skill into this skills folder instead (the skill lands in <dir>/horosa-agent).",
     ),
+    vectors: bool | None = typer.Option(
+        None, "--vectors/--no-vectors",
+        help="Optional vector search over your notes: install onnxruntime + tokenizers + numpy (~128 MB) into the environment "
+             "the client starts the server in, download + verify the bge-small-zh model (24 MB) and embed the notes, all before "
+             "the config is written. Omitted: kept on if the model is already on this machine. 可选向量检索（换了说法也能搜到）。",
+    ),
 ) -> None:
     try:
         report = _run_setup(
@@ -456,7 +462,7 @@ def setup(
             output_script=str(_opt(output_script, "zh-Hans")), entry=str(_opt(entry, "auto")),
             skill_root=skill_root, dry_run=dry_run, skip_install=skip_install, archive=archive, manifest_url=manifest_url,
             probe_network=probe_network, stdio_probe=stdio_probe, write=write, cache_wheel=cache_wheel,
-            skill=skill, skill_dir=skill_dir,
+            skill=skill, skill_dir=skill_dir, vectors=vectors,
         )
     except _SetupFailure as failure:
         typer.echo(json.dumps(failure.payload, ensure_ascii=False, indent=2), err=True)
@@ -956,7 +962,7 @@ def knowledge_search(
 @knowledge_app.command("index", help="Show (or --rebuild) the search index of your own notes: entries, passages, engine. 自备知识库检索索引的状态 / 重建。")
 def knowledge_index(
     rebuild: bool = typer.Option(False, "--rebuild", help="Throw the index away and rebuild it from the notes folder (the notes are never touched)."),
-    vectors_on: bool = typer.Option(False, "--vectors", help="Turn on optional vector search: download + verify the bge-small-zh model (24 MB, pinned sha256) and embed every passage. Needs the [vectors] extra (onnxruntime, tokenizers, numpy)."),
+    vectors_on: bool = typer.Option(False, "--vectors", help="Download + verify the bge-small-zh model (24 MB, pinned sha256) and embed every passage. Needs the [vectors] extra in THIS environment; to turn vector search on for an MCP client use `setup --client <client> --vectors`."),
 ) -> None:
     from horosa_skill.knowledge import index as kindex
     from horosa_skill.knowledge import user as user_knowledge
@@ -1274,11 +1280,15 @@ def client_config(
         help="结果文字：zh-Hans（简体，缺省）/ zh-Hant（繁体·台湾字形）/ zh-Hant-HK（繁体·香港字形）。写进客户端配置的 HOROSA_OUTPUT_SCRIPT；重跑 setup 不带它就回到简体。",
     ),
     entry: str = typer.Option("auto", "--entry", help=_ENTRY_HELP),
+    vectors: bool = typer.Option(
+        False, "--vectors",
+        help="Add the [vectors] extra to the launcher. Only generates the config: nothing is installed or verified — `setup --vectors` does that.",
+    ),
 ) -> None:
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
     payload, _stdio_command, _surface_env = _build_client_config_payload(
         format_name=format_name, skill_root=skill_root, server_name=server_name, launcher=launcher, surface=surface,
-        output_script=str(_opt(output_script, "zh-Hans")), entry=str(_opt(entry, "auto")),
+        output_script=str(_opt(output_script, "zh-Hans")), entry=str(_opt(entry, "auto")), vectors=bool(_opt(vectors, False)),
     )
     if write is not None:
         payload["written"] = _merge_client_config(write, payload)

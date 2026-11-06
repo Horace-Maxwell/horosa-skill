@@ -33,6 +33,7 @@ from horosa_skill.client_config.payload import (
 from horosa_skill.client_tools import zero_install_wheel_url
 from horosa_skill.config import Settings
 from horosa_skill.errors import RuntimeError, bilingual
+from horosa_skill.knowledge import vectors as knowledge_vectors
 from horosa_skill.surfaces import doctor as doctor_checks
 from horosa_skill.surfaces import runtime_helpers
 from horosa_skill.surfaces.doctor import _SETUP_NETWORK_TIMEOUT_SECONDS, _doctor_report
@@ -41,15 +42,17 @@ from horosa_skill.surfaces.runtime_helpers import _install_progress_printer
 
 # ---------------------------------------------------------------------------
 # `horosa-skill setup --client <target>`（v0.38.0 B4）：一条命令接入任意 MCP 客户端。
-# 步骤固定、逐步记录、失败包结构化：network_probe → install → config → skill → doctor → client_check → stdio_probe → next_steps。
-# 🔴 第 3 步（config）之前失败保证 `config_untouched: true`；写过配置的失败包带 `backup_path`。
+# 步骤固定、逐步记录、失败包结构化：network_probe → install → vectors → config → skill → doctor → client_check → stdio_probe → next_steps。
+# 🔴 config 步之前失败保证 `config_untouched: true`；写过配置的失败包带 `backup_path`。
 # v0.41.0 第 4 步 skill：把 horosa-agent skill 装进该客户端读的 skills 目录（只建议性：装不上不让 setup 失败，next_steps 说清楚）。
 # 输出契约冻结在 tests/test_cli_output_contract.py；行为在 tests/test_setup_command.py。
 # ---------------------------------------------------------------------------
 
-_SETUP_STEPS = ("network_probe", "install", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps")
+_SETUP_STEPS = ("network_probe", "install", "vectors", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps")
 # uvx-wheel 首跑要下载 wheel 与依赖（顺带焐热 uvx 缓存，客户端首次启动就快了）；uv 形态通常 5–10 s。
 _SETUP_STDIO_TIMEOUT_SECONDS = 300.0
+# 首次：uv 装 onnxruntime（约 128 MB）、下模型 24 MB、向量化全部笔记（CPU，几千段要几分钟）。
+_SETUP_VECTORS_TIMEOUT_SECONDS = 1800.0
 _SETUP_TRY_PROMPT = (
     "在客户端里试一句：「用八字看看 1990-01-01 12:00 北京出生的人」——Horosa 会先追问缺失的设置"
     "（时区 / 性别 / 流派），确认后才起盘。"
@@ -101,6 +104,18 @@ def _probe_runtime_mismatch(probe: dict[str, Any], settings: Settings) -> str | 
             " 写进该客户端配置的 env 表，或统一用默认目录。"
         )
     return None
+
+
+def _configured_client_env(client_key: str, payload: dict[str, Any], surface_env: dict[str, str], *, root_key: str | None, server_name: str) -> dict[str, str]:
+    """配置条目里**实际写着**的 env：这才是客户端会交给 server 的（Copilot CLI 的 HOME 与两个 runtime 根、TRAE 的超时变量）。
+
+    只给 Codex 补根的旧写法，在 Copilot CLI 上把「配置写对了」测成 runtime_mismatch（v0.41.0 首次真探针实跑抓到）。
+    """
+    configured = {**surface_env, **(_codex_env_roots() if client_key == "codex" else {})}
+    written = (payload.get(root_key) or {}).get(server_name) if root_key and root_key != "toml_stdio" else None
+    if isinstance(written, dict):
+        configured.update({str(k): str(v) for k, v in (_normalize_client_entry(written).get("env") or {}).items()})
+    return configured
 
 
 def _stdio_probe(*, command: str, args: list[str], env: dict[str, str], timeout: float, cwd: str | None = None) -> dict[str, Any]:
@@ -240,6 +255,64 @@ def _diagnose_probe_stderr(stderr_tail: str, command: list[str] | None = None) -
     }
 
 
+def _vectors_choice(flag: bool | None, settings: Settings) -> tuple[bool, str]:
+    """要不要开向量：显式参数优先；没给时沿用——模型只在用户要过时才下，它在就说明开过。
+
+    升级靠重跑 setup：不带参数就把开关丢了的话，搜索质量会悄悄变差，还没有任何报错。
+    """
+    if flag is not None:
+        return flag, "--vectors" if flag else "--no-vectors"
+    if knowledge_vectors.enabled_by_env() and knowledge_vectors.model_ready(settings):
+        return True, "模型已在本机（之前开过），沿用；--no-vectors 关闭"
+    return False, "未开启（--vectors 开启）"
+
+
+_VECTORS_FIX = {
+    "deps": "依赖没能装进客户端起 server 的环境（常见原因：这个平台没有 onnxruntime 的轮子、连不上 PyPI）。",
+    "download": "模型下载失败：设 HF_ENDPOINT=<镜像>（内容有 sha256 把关）重跑；或把两份文件放进 HOROSA_EMBED_MODEL_DIR 指的目录。",
+    "disabled": "HOROSA_KNOWLEDGE_VECTORS 把向量关掉了：去掉这个变量再重跑。",
+    "timeout": "准备超时（30 分钟）：网络太慢或笔记太多。可以重跑，已下载和已向量化的部分不会重做。",
+    "unreadable": "准备命令的输出不是预期的 JSON（客户端启动器跑的可能是旧版本）。",
+}
+
+
+def _vectors_prepare(*, command: list[str], env: dict[str, str] | None, cwd: str | None, timeout: float) -> dict[str, Any]:
+    """跑一次 `<客户端启动器> knowledge index --vectors`，把结果归成 ok / failure（deps·download·disabled·timeout·unreadable）。
+
+    用的就是客户端起 server 的那个环境：`uvx` / `uv run` 在这里把依赖真装上，模型真下来，笔记真向量化。
+    """
+    def failed(kind: str, message: str, **extra: Any) -> dict[str, Any]:
+        return {"ok": False, "failure": kind, "message": message, **extra}
+
+    try:
+        completed = subprocess.run(command, env=env, cwd=cwd, capture_output=True, timeout=timeout, check=False,
+                                   text=True, encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired:
+        return failed("timeout", _VECTORS_FIX["timeout"])
+    except OSError as exc:
+        return failed("deps", f"启动器起不来：{type(exc).__name__}: {exc}")
+    stderr_tail = (completed.stderr or "")[-2000:]
+    try:
+        report = json.loads(completed.stdout)
+    except ValueError:
+        report = None
+    if not isinstance(report, dict):
+        kind = "deps" if completed.returncode != 0 else "unreadable"
+        return failed(kind, _VECTORS_FIX[kind], stderr_tail=stderr_tail, returncode=completed.returncode)
+    status = report.get("vectors") if isinstance(report.get("vectors"), dict) else {}
+    if report.get("code") == "knowledge.vectors_download_failed":
+        return failed("download", f"{_VECTORS_FIX['download']}（{report.get('message')}）", vectors=status, stderr_tail=stderr_tail)
+    if report.get("ok") and status.get("ready"):
+        return report
+    kind = "disabled" if report.get("ok") and status.get("enabled_by_env") is False else "deps"
+    return failed(kind, _VECTORS_FIX[kind], vectors=status, stderr_tail=stderr_tail, returncode=completed.returncode)
+
+
+def _knowledge_index_command(stdio_command: list[str]) -> list[str]:
+    """客户端启动命令 → 同一个环境里的 `knowledge index --vectors`：只换 `serve` 及其参数。"""
+    return [*stdio_command[:stdio_command.index("serve")], "knowledge", "index", "--vectors"]
+
+
 def _claude_mcp_add(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行 `claude mcp add …`（单独成函数：测试用替身，不真调 claude）。"""
     return subprocess.run(
@@ -357,6 +430,7 @@ def _run_setup(
     cache_wheel: bool = True,
     skill: bool = True,
     skill_dir: Path | None = None,
+    vectors: bool | None = None,
 ) -> dict[str, Any]:
     from horosa_skill.runtime.manager import _platform_key
 
@@ -372,6 +446,7 @@ def _run_setup(
     steps: dict[str, dict[str, Any]] = {}
     state: dict[str, Any] = {"config_untouched": True, "backup_path": None}
     total = len(_SETUP_STEPS)
+    vectors_on, vectors_reason = _vectors_choice(vectors, settings)
 
     def fail(step: str, code: str, message: str, details: dict[str, Any] | None = None, *, retry_extra: tuple[str, ...] = ()) -> None:
         raise _SetupFailure({
@@ -387,8 +462,8 @@ def _run_setup(
             "steps": steps,
         })
 
-    def announce(index: int, name: str, text: str) -> None:
-        typer.echo(f"[{index}/{total}] {name}: {text}", err=True)
+    def announce(name: str, text: str) -> None:
+        typer.echo(f"[{_SETUP_STEPS.index(name) + 1}/{total}] {name}: {text}", err=True)
 
     # ---- 1 network_probe
     manifest_location = manifest_url or settings.runtime_manifest_url or settings.default_runtime_manifest_url
@@ -396,7 +471,7 @@ def _run_setup(
         reason = "dry-run" if dry_run else "--skip-install" if skip_install else "--archive（离线安装）" if archive else "--no-probe-network"
         steps["network_probe"] = {"ok": True, "skipped": True, "reason": reason, "manifest_url": manifest_location}
     else:
-        announce(1, "network_probe", f"HEAD {manifest_location}（{_SETUP_NETWORK_TIMEOUT_SECONDS:.0f} s，镜像优先）")
+        announce("network_probe", f"HEAD {manifest_location}（{_SETUP_NETWORK_TIMEOUT_SECONDS:.0f} s，镜像优先）")
         probe, seconds = _timed_call(lambda: doctor_checks._probe_manifest_url(manifest_location))
         steps["network_probe"] = {"seconds": seconds, **probe}
         if not probe["ok"]:
@@ -421,7 +496,7 @@ def _run_setup(
             "platform": settings.runtime_platform or _platform_key(), "runtime_root": str(settings.runtime_root),
         }
     else:
-        announce(2, "install", "安装 / 校验离线 runtime（已是最新版则秒退；约 730MB 下载、解压后约 2GB）…")
+        announce("install", "安装 / 校验离线 runtime（已是最新版则秒退；约 730MB 下载、解压后约 2GB）…")
         try:
             result, seconds = _timed_call(
                 lambda: manager.install(archive=archive, manifest_url=manifest_url, progress=_install_progress_printer())
@@ -437,8 +512,8 @@ def _run_setup(
             "version": (result.get("manifest") or {}).get("version"), "runtime_root": result.get("runtime_root"),
         }
 
-    # ---- 3 config
-    announce(3, "config", f"生成 {client_key} 配置（launcher={launcher_key}）…")
+    # ---- 3 vectors / 4 config：先生成配置（不落盘），向量验证过了才写——写上 `[vectors]` 而依赖装不上，server 就起不来了。
+    announce("config", f"生成 {client_key} 配置（launcher={launcher_key}）…")
     try:
         wheel_source: str | None = None
         wheel_cache_note: str | None = None
@@ -446,17 +521,52 @@ def _run_setup(
             # v0.38.1 C15：先把 wheel 落到 ~/.horosa/wheels/，配置里写本地路径 → 客户端冷启动零网络、离线可起。
             from horosa_skill.runtime.mirrors import preferred_mirror_url
 
-            announce(3, "config", "预下载 wheel 到 ~/.horosa/wheels/（配置里写本地路径；--no-cache-wheel 可跳过）…")
+            announce("config", "预下载 wheel 到 ~/.horosa/wheels/（配置里写本地路径；--no-cache-wheel 可跳过）…")
             cached, wheel_cache_note = _cache_wheel(preferred_mirror_url(zero_install_wheel_url()))
             wheel_source = str(cached) if cached else None
         payload, stdio_command, surface_env = _build_client_config_payload(
             format_name=client_key, skill_root=root, server_name=server_name, launcher=launcher_key, surface=surface,
-            wheel_source=wheel_source, output_script=output_script, entry=entry,
+            wheel_source=wheel_source, output_script=output_script, entry=entry, vectors=vectors_on,
         )
         if wheel_cache_note:
             payload.setdefault("warnings", []).append(wheel_cache_note)
     except typer.BadParameter as exc:
         fail("config", "setup.config_build_failed", str(exc), {"launcher": launcher_key, "skill_root": str(root)})
+    declared_root = payload.get("root_key")
+    root_key = "toml_stdio" if client_key == "codex" else (
+        declared_root if isinstance(declared_root, str) and isinstance(payload.get(declared_root), dict)
+        else next((key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None)
+    )
+    configured_env = _configured_client_env(client_key, payload, surface_env, root_key=root_key, server_name=server_name)
+    probe_cwd = str(root) if (launcher_key == "uv" and root is not None) else str(_project_root())
+
+    vectors_step: dict[str, Any] = {"requested": vectors_on, "reason": vectors_reason}
+    if vectors_on and not (dry_run or not write):
+        prepare_command = _knowledge_index_command(stdio_command)
+        announce("vectors", "把依赖装进客户端起 server 的环境（首次约 128 MB）、下载并校验模型（24 MB）、向量化笔记…")
+        # 全环境 ∪ 配置里的 env：这一步要能走用户的代理 / HF_ENDPOINT；「Codex 只给最小环境也够用」由 stdio 探针证明。
+        prepared, seconds = _timed_call(lambda: _vectors_prepare(
+            command=prepare_command, env={**os.environ, **configured_env}, cwd=probe_cwd, timeout=_SETUP_VECTORS_TIMEOUT_SECONDS,
+        ))
+        vectors_step.update({"ok": prepared.get("ok") is True, "seconds": seconds, "command": _format_cli_command(prepare_command)})
+        if not prepared.get("ok"):
+            diagnosis = _diagnose_probe_stderr(str(prepared.get("stderr_tail") or ""), command=prepare_command)
+            vectors_step.update({key: prepared[key] for key in ("failure", "message", "stderr_tail", "vectors") if key in prepared})
+            if diagnosis:
+                vectors_step["diagnosis"] = diagnosis
+            steps["vectors"] = vectors_step
+            fail("vectors", "setup.vectors_failed",
+                 f"{diagnosis['explanation'] if diagnosis else prepared.get('message')} 配置一个字没动；不要向量就加 --no-vectors，搜索照常（BM25）。",
+                 {key: value for key, value in vectors_step.items() if key != "ok"}, retry_extra=("--no-vectors",))
+        vectors_step.update({"engine": prepared.get("engine"), "embedded": (prepared.get("sync") or {}).get("vectors", 0),
+                             "entries": prepared.get("entries"), "model": (prepared.get("vectors") or {}).get("model")})
+    else:
+        vectors_step.update({"ok": True, "skipped": True})
+        if vectors_on:
+            vectors_step.update({"reason": "dry-run" if dry_run else "--no-write",
+                                 "would_run": _format_cli_command(_knowledge_index_command(stdio_command))})
+    steps["vectors"] = vectors_step
+
     target: Path | None = config.expanduser().resolve() if config is not None else None
     mode = "merge"
     add_command: list[str] | None = None
@@ -475,11 +585,6 @@ def _run_setup(
         mode = "printed"
     elif target is None:
         target = _preferred_config_path(client_key)
-    declared_root = payload.get("root_key")
-    root_key = "toml_stdio" if client_key == "codex" else (
-        declared_root if isinstance(declared_root, str) and isinstance(payload.get(declared_root), dict)
-        else next((key for key in _MERGEABLE_ROOT_KEYS if isinstance(payload.get(key), dict)), None)
-    )
     config_step: dict[str, Any] = {
         "mode": mode, "path": str(target) if target is not None else None,
         "server_block": payload.get(root_key) if root_key else None,
@@ -531,10 +636,10 @@ def _run_setup(
 
     # ---- 4 skill
     steps["skill"] = _setup_skill_step(client_key, enabled=skill, skill_dir=skill_dir, plan_only=dry_run or not write,
-                                       announce=lambda text: announce(4, "skill", text))
+                                       announce=lambda text: announce("skill", text))
 
     # ---- 5 doctor
-    announce(5, "doctor", "体检…")
+    announce("doctor", "体检…")
     report, seconds = _timed_call(lambda: _doctor_report(settings, manager))
     issues = [str(item) for item in report.get("issues") or []]
     installed = report.get("installed") is True
@@ -567,7 +672,7 @@ def _run_setup(
         )
         steps["client_check"] = {"ok": True, "skipped": True, "reason": reason}
     else:
-        announce(6, "client_check", "回读磁盘上的配置…")
+        announce("client_check", "回读磁盘上的配置…")
         check_path = target if mode == "merge" else None
         check, seconds = _timed_call(lambda: _client_check_report([client_key], check_path))
         findings = [f for r in check["clients"] for f in r["findings"] if f.get("entry")]
@@ -583,19 +688,12 @@ def _run_setup(
     if dry_run or not stdio_probe:
         steps["stdio_probe"] = {"ok": True, "skipped": True, "reason": "dry-run" if dry_run else "--no-stdio-probe"}
     else:
-        announce(7, "stdio_probe", "用客户端将要执行的命令真起一次 MCP server（stdio，不起离线 runtime）…")
+        announce("stdio_probe", "用客户端将要执行的命令真起一次 MCP server（stdio，不起离线 runtime）…")
         expected = int(payload["tool_surface"]["tools"])
         probe_args = [*stdio_command[1:], "--skip-runtime-start"]
         # 🔴 v0.38.1 C14：按**客户端的形状**起——Codex 只给最小环境（∪ 配置里的 env 表），其余客户端继承整个环境；
         # cwd = 项目根（uv 形态 = Codex 的 cwd）。再读 horosa://runtime/status，抓「server 算出的 runtime 根 ≠ 终端里的」。
-        configured_env = {**surface_env, **(_codex_env_roots() if client_key == "codex" else {})}
-        # v0.41.0：条目里**实际写着**的 env 才是客户端会交给 server 的（Copilot CLI 的 HOME 与两个 runtime 根、TRAE 的超时变量）。
-        # 只给 Codex 补根的旧写法，在 Copilot CLI 上把「配置写对了」测成 runtime_mismatch（首次真探针实跑抓到）。
-        written = (payload.get(root_key) or {}).get(server_name) if root_key and root_key != "toml_stdio" else None
-        if isinstance(written, dict):
-            configured_env.update({str(k): str(v) for k, v in (_normalize_client_entry(written).get("env") or {}).items()})
         probe_env = _client_probe_env(client_key, configured_env)
-        probe_cwd = str(root) if (launcher_key == "uv" and root is not None) else str(_project_root())
         probe, seconds = _timed_call(
             lambda: _stdio_probe(command=stdio_command[0], args=probe_args, env=probe_env,
                                  timeout=_SETUP_STDIO_TIMEOUT_SECONDS, cwd=probe_cwd)
@@ -608,6 +706,15 @@ def _run_setup(
             steps["stdio_probe"]["runtime_mismatch"] = mismatch
             fail("stdio_probe", "setup.stdio_probe_runtime_mismatch", mismatch,
                  {**probe, "host_runtime_root": str(settings.runtime_root), "command": steps["stdio_probe"]["command"]})
+        if probe_ok and vectors_on and not steps["vectors"].get("skipped"):
+            # 准备步骤跑在全环境里；客户端给 server 的环境可能更窄（Codex）。server 自己报 ready 才算开着。
+            served = (probe.get("runtime_status") or {}).get("knowledge_vectors")
+            steps["stdio_probe"]["knowledge_vectors"] = served
+            if not (isinstance(served, dict) and served.get("ready") is True):
+                fail("stdio_probe", "setup.stdio_probe_vectors_not_ready",
+                     "server 起来了，但它自己报向量没就绪：客户端给 server 的环境和准备时不一样。搜索照常可用（BM25）。",
+                     {"knowledge_vectors": served, "command": steps["stdio_probe"]["command"],
+                      "next_action": "看 knowledge_vectors 哪一项是 false；重跑 setup，或加 --no-vectors 回到纯 BM25。"})
         if not probe_ok:
             # 起不来时先认环境性原因（Windows 文件锁），认出来就给人话 + 可执行的下一步，而不是一屏 uv 构建噪声。
             diagnosis = None if probe.get("ok") else _diagnose_probe_stderr(
@@ -629,6 +736,11 @@ def _run_setup(
     if client_key in clients_extra.EXTRA_CLIENTS:
         next_steps.extend(clients_extra.EXTRA_CLIENTS[client_key].notes)
     next_steps.extend(steps["skill"].get("notes") or [])
+    if vectors_on and not steps["vectors"].get("skipped"):
+        next_steps.append(
+            f"向量检索已开（{steps['vectors'].get('model')}）：本次向量化 {steps['vectors'].get('embedded')} 段，之后新增 / 改动的笔记自动补上。"
+            "换了说法也能搜到；关闭：重跑 setup 加 --no-vectors。"
+        )
     if issues == ["services:not_running"]:
         next_steps.append(f"离线 runtime 已装好，客户端首次调用时自动启动（冷启动 10–45 s）；想现在就起：`{prefix} runtime start`。")
     elif not installed:
@@ -663,6 +775,8 @@ def _run_setup(
         else "stdio 探测已跳过"
     )
     skill_text = steps["skill"].get("summary") or "skill 未处理"
+    if vectors_on:
+        skill_text += "；向量检索计划开启" if steps["vectors"].get("skipped") else "；向量检索已开"
     ok = all(step.get("ok") for step in steps.values())
     return {
         "ok": ok,

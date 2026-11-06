@@ -474,7 +474,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         title="Horosa 本机 runtime 状态 / local runtime status",
         description=(
             "Where THIS server process looks for the offline runtime and local data (installed / runtime_root / "
-            "data_dir / mode / version). Read-only, never starts the runtime; `setup` compares it with the host."
+            "data_dir / mode / version / knowledge_vectors). Read-only, never starts the runtime; `setup` compares it with the host."
         ),
         mime_type="application/json",
     )
@@ -482,6 +482,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         # 🔴 只读文件系统，绝不 start_local_services：这是 setup 的 stdio 探针在「客户端形状的环境」里读的第一样东西，
         # 用来抓「server 算出的 runtime 根 ≠ 终端里装的」（Codex 不转发 shell 环境 / GUI 客户端不读 shell 配置）。
         from horosa_skill import __version__ as _pkg_version
+        from horosa_skill.knowledge import vectors as _vectors
         from horosa_skill.runtime.manager import HorosaRuntimeManager as _Manager
 
         manager = _Manager(settings)
@@ -494,6 +495,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 "package_version": _pkg_version,
                 "server_root": settings.server_root,
                 "chart_server_root": settings.chart_server_root,
+                # `setup --vectors` 的探针读这一项：依赖在不在这个 server 的环境里，只有这个进程自己知道。
+                "knowledge_vectors": _vectors.status(settings),
             },
             ensure_ascii=False,
             indent=2,

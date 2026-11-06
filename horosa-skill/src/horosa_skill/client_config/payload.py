@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import re
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import typer
@@ -40,7 +41,8 @@ def _resolve_skill_root(path: Path) -> Path:
 
 
 def _quote_cli_arg(value: str) -> str:
-    return f'"{value}"' if any(char.isspace() for char in value) else value
+    # 方括号要引：zsh 把未加引号的 `horosa-skill[vectors]@…` 当通配符，直接 `no matches found`。
+    return f'"{value}"' if any(char.isspace() or char in "[]*?" for char in value) else value
 
 
 def _format_cli_command(parts: list[str]) -> str:
@@ -103,6 +105,21 @@ def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None 
         return None, f"wheel 预下载失败（{type(exc).__name__}: {exc}）；配置里保留 URL，客户端冷启动时再取。"
 
 
+VECTORS_EXTRA = "vectors"
+_WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def vectors_source(source: str) -> str:
+    """`uvx --from` 的值带上 `[vectors]`：PEP 508 直接引用 `horosa-skill[vectors]@<URL>`（2026-11-06 用 uv 0.10.7 实测）。
+
+    整段没有空格：本地 wheel 转成百分号编码的 file URI。`@` 两边的空格可写可不写，不写才经得起按空格拆命令的客户端、
+    和 home 目录带空格的机器（`C:\\Users\\John Doe`）。
+    """
+    if "://" not in source and not source.startswith("git+"):
+        source = (PureWindowsPath(source) if _WINDOWS_DRIVE_PATH.match(source) else Path(source)).as_uri()
+    return f"horosa-skill[{VECTORS_EXTRA}]@{source}"
+
+
 ENTRY_CHOICES = ("auto", "script", "module")
 
 
@@ -146,13 +163,15 @@ def module_entry_command(command: list[str]) -> list[str]:
 
 def _build_client_config_payload(
     *, format_name: str, skill_root: Path, server_name: str, launcher: str, surface: str,
-    wheel_source: str | None = None, output_script: str = "zh-Hans", entry: str = "auto",
+    wheel_source: str | None = None, output_script: str = "zh-Hans", entry: str = "auto", vectors: bool = False,
 ) -> tuple[dict[str, Any], list[str], dict[str, str]]:
     """`client config` 的产物，也是 `setup` 第 3 步（v0.38.0 B4）。返回 (payload, stdio 命令, 工具面 env)。
 
     源码 checkout 只在 `uv` 启动器与 mcporter/openclaw 形态下才需要：uvx 形态是给**没有 checkout** 的机器
     用的（wheel 装出来的包旁边没有 pyproject.toml），此前一律先 `_resolve_skill_root` → 零安装用户跑
     `client config --launcher uvx-wheel` 直接 BadParameter。
+
+    `vectors=True`：启动器带上 `[vectors]` extra——依赖必须进**客户端起 server 的那个环境**，跑 setup 的进程装没装都没用。
     """
     launcher_key = launcher.strip().lower()
     if launcher_key not in {"uv", "uvx", "uvx-git", "uvx-wheel"}:
@@ -178,7 +197,8 @@ def _build_client_config_payload(
         wheel_url = zero_install_wheel_url()
         # `wheel_source`（setup 预下载到 ~/.horosa/wheels 的本地文件）优先：冷启动零网络、离线可用。
         from_value = wheel_source or preferred_mirror_url(wheel_url)
-        stdio_command = [*uvx_command, "--from", from_value, "horosa-skill", "serve", "--transport", "stdio"]
+        stdio_command = [*uvx_command, "--from", vectors_source(from_value) if vectors else from_value,
+                         "horosa-skill", "serve", "--transport", "stdio"]
         launcher_info.update({
             "wheel_url": preferred_mirror_url(wheel_url),
             **({"wheel_cached_path": wheel_source} if wheel_source else {}),
@@ -190,13 +210,14 @@ def _build_client_config_payload(
         })
     elif launcher_key == "uvx":
         # PyPI 分发（v0.36.0 C4）：不需要源码 checkout；离线 runtime 仍由 `uvx horosa-skill install` 装到默认目录。
-        stdio_command = [*uvx_command, "horosa-skill", "serve", "--transport", "stdio"]
+        stdio_command = [*uvx_command, *(("--from", f"horosa-skill[{VECTORS_EXTRA}]") if vectors else ()),
+                         "horosa-skill", "serve", "--transport", "stdio"]
     elif launcher_key == "uvx-git":
         # 🔴 PyPI 尚未开通（`pip install horosa-skill` 现在是 404），所以 `uvx` 那条今天还跑不通。
         # 直接从 Git 装是**当下唯一可用的零安装路径**；钉当前版本 tag 让配置可复现。
+        git_source = f"git+https://github.com/Horace-Maxwell/horosa-skill@v{__version__}#subdirectory=horosa-skill"
         stdio_command = [
-            *uvx_command, "--from",
-            f"git+https://github.com/Horace-Maxwell/horosa-skill@v{__version__}#subdirectory=horosa-skill",
+            *uvx_command, "--from", vectors_source(git_source) if vectors else git_source,
             "horosa-skill", "serve", "--transport", "stdio",
         ]
     else:
@@ -206,6 +227,7 @@ def _build_client_config_payload(
             "run",
             "--directory",
             str(resolved_skill_root),
+            *(("--extra", VECTORS_EXTRA) if vectors else ()),
             "horosa-skill",
             "serve",
             "--transport",
@@ -215,6 +237,8 @@ def _build_client_config_payload(
     if entry_key == "module":
         stdio_command = module_entry_command(stdio_command)
     launcher_info["entry"] = {"mode": entry_key, "reason": entry_reason, "override": "--entry script / --entry module"}
+    if vectors:
+        launcher_info["vectors"] = True
     key = format_name.strip().lower()
     surface_key = surface.strip().lower()
     if surface_key not in {"auto", "full", "compact"}:
@@ -424,6 +448,8 @@ def _build_client_config_payload(
     payload["launcher"] = launcher_info
     if script != SIMPLIFIED and key in {"mcporter", "openclaw"}:
         warnings.append(f"{key} 的配置不带 env：繁体输出请在启动 serve 的环境里设 HOROSA_OUTPUT_SCRIPT={script}。")
+    if vectors and key in {"mcporter", "openclaw"}:
+        warnings.append(f"{key} 的配置走源码 checkout，不带 [vectors]：在该 checkout 里跑 `uv sync --extra vectors` 后依赖才在。")
     if warnings:
         payload["warnings"] = warnings
     return payload, stdio_command, surface_env
