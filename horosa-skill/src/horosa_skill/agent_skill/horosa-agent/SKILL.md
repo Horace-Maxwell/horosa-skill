@@ -286,7 +286,7 @@ Fengshui is intentionally excluded from this public skill surface (not headless-
 
 **长词表不在 tools/list**：西占宫制 0–24、卜卦 20 类 / 7 流派、择日 37 用事、七政宿度制 0–8、印占大运 15 体系 / 6 流派、
 世运规则集、紫微传本键、八字盘法键、三式起局 / 起课法、神数逐技法 options——查 `horosa_agent_guidance(tool_name=…)` 的
-`options_keys`；隐藏旋钮照样在顶层按名传（或走 `request` 整包）。
+`options_keys`；隐藏旋钮照样在顶层按名传（或走 `request`）。`request` 与顶层参数合并：两边都算数，同名不同值时以 `request` 为准并回一条 warning。
 
 Payload shapes and defaults: [`references/payloads.md`](./references/payloads.md). 中式技法 specifics
 (大六壬 guirengType, current-time casting, 法奇门 sections):

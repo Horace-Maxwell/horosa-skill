@@ -568,10 +568,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证全部技法（len(TOOL_DEFINITIONS)）可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
-            # tool_name 必须在合并之前取走：它是 `request` 的**兄弟**参数，而 `_merge_mcp_arguments`
-            # 在 request 存在时会整体改用 request 作为载荷（否则 `{tool_name, request}` 这种最常见的
-            # 调法会把 tool_name 丢掉）。未显式给出的公共字段是 None，由 `_merge_mcp_arguments` 剔除，
-            # 避免 None 被当作「用户已提供该设置」而影响澄清闸的追问过滤。
+            # tool_name 是路由参数、不是载荷：合并之前取走。未显式给出的公共字段是 None，由 `_merge_mcp_arguments`
+            # 剔除，避免 None 被当作「用户已提供该设置」而影响澄清闸的追问过滤。
             tool_name = str(kwargs.pop("tool_name", "") or "")
             raw_payload = _merge_mcp_arguments(kwargs)
             resolved = resolve_tool_name(tool_name)

@@ -1139,6 +1139,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
   ③ Codex 0.158 的 `tool_input_schema_max_bytes` 缺省值，超出即静默剥说明。`verify_mcp_list_budget.py`
   对全量 / 精简两面逐工具硬顶（今日最大 3843 B）；tools/list 总量棘轮照旧。
+- **`request` 与顶层参数合并（v0.47.2-dev）。** `_merge_mcp_arguments` = `{**flat, **request}`：两边都算数，同名不同值时 `request` 优先，说明经 `request_conflict_scope` 进 `warnings`。
+  调用点在各工具的 `try` 之外，所以合并本身不抛：坏 `request` 原样往下走，由 `_normalize_mcp_request` 报 `tool.invalid_payload`。闸门读合并后的载荷（确认位放哪边都算）。守卫 `tests/test_mcp_request_merge.py`。
 - **有档位的旋钮按枚举声明；隐藏字段的两种声明法取并集（v0.40.0）。** 七政 `doubingSu28` 曾声明成 bool：`True` 被后端读成 1（斗柄定房法），
   上游缺省 2，2–8 七档根本传不进——有档位就 `Literal`/enum + 上游缺省，描述与表锁步。长尾旋钮用模型级 `ADVERTISE_HIDDEN` 或字段级
   `x-horosa-hidden` 声明不广告（校验照收、tools/list 零字节），`mcp_schema` 的 `unadvertised` 必须是**两者并集**（git 自动合并曾让后一行覆盖

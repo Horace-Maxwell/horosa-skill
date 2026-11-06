@@ -21,6 +21,7 @@ from horosa_skill.surfaces.mcp_errors import (
     _mcp_internal_error_payload,
     _mcp_validation_error_payload,
 )
+from horosa_skill.surfaces.mcp_requests import request_conflict_scope
 
 # 工作线程并发上限：每个在跑的工具会持有一个 JS 子进程或一条后端 HTTP 连接，无限并发会
 # 把本机 CPU 与后端连接池打满。4 是「几个客户端同时问一句」的常见峰值。
@@ -142,11 +143,13 @@ class HorosaMCPServer(MCPServer):
             return await super().call_tool(name, arguments, context)
         token = _CURRENT_CONTEXT.set(context)
         try:
-            raw = await self._tool_manager.call_tool(name, arguments, context, convert_result=False)
+            with request_conflict_scope() as request_notes:
+                raw = await self._tool_manager.call_tool(name, arguments, context, convert_result=False)
         finally:
             _CURRENT_CONTEXT.reset(token)
         if isinstance(raw, mcp_types.InputRequiredResult):
             return raw
+        raw = _with_request_notes(raw, request_notes)
         if self.output_script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS:
             # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
             raw = await anyio.to_thread.run_sync(localize, raw, self.output_script)
@@ -167,6 +170,17 @@ MCP_RESULT_WIRE_BUDGET = 900_000
 _PROTECTED_DATA_KEYS = frozenset({
     "snapshot_text", "export_snapshot", "technique_card", "compute_sources", "route", "knowledge_context", "file",
 })
+
+
+def _with_request_notes(raw: Any, notes: list[str]) -> Any:
+    """把入参合并的说明并进结果的 warnings：信封（pydantic）与门面（dict）两种形状；没有说明就原样返回，不碰字节。"""
+    if not notes:
+        return raw
+    if isinstance(raw, dict):
+        return {**raw, "warnings": [*(raw.get("warnings") or []), *notes]}
+    if hasattr(raw, "warnings"):
+        return raw.model_copy(update={"warnings": [*raw.warnings, *notes]})
+    return raw
 
 
 def _wire_bytes(converted: Any) -> int:

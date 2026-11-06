@@ -2,13 +2,30 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from inspect import Parameter, Signature
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, WithJsonSchema
 
-from horosa_skill.errors import ToolValidationError
+from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.input_normalization import normalize_request_payload
+
+# 一次工具调用里 `request` 与顶层参数的冲突说明：合并发生在工具函数体里，警告要等结果出门时才有地方放，
+# 所以由 `HorosaMCPServer.call_tool` 开作用域、把这张表并进 warnings。
+_REQUEST_NOTES: ContextVar[list[str] | None] = ContextVar("horosa_mcp_request_notes", default=None)
+
+
+@contextmanager
+def request_conflict_scope() -> Iterator[list[str]]:
+    notes: list[str] = []
+    token = _REQUEST_NOTES.set(notes)
+    try:
+        yield notes
+    finally:
+        _REQUEST_NOTES.reset(token)
 
 
 def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
@@ -179,12 +196,31 @@ def _signature_for_input_model(model: type[BaseModel], *, return_type: Any = Sig
 
 
 def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:
+    """顶层参数 + `request` → 一份载荷：`{**flat, **request}`，同名不同值时 `request` 优先并留一条警告。
+
+    `horosa_tool_run` 的描述就教这种写法（公共字段放顶层、技法专属字段进 `request`）。曾经 `request` 一出现就整体替换，
+    `horosa_astro_chart(hsys=3, request={…})` 回 ok=True 而盘按 hsys=1 起，没有一句话。
+    """
     request = kwargs.pop("request", None)
-    if request is not None:
-        return request
     # 每个参数现在都以 None 为默认值出现在 kwargs 里；把它们喂进 extra="allow" 的模型会凭空造出
     # 几十个 None 字段，也会让澄清闸误判「用户已提供该设置」。未显式给出的一律剔除。
-    return {key: value for key, value in kwargs.items() if value is not None}
+    flat = {key: value for key, value in kwargs.items() if value is not None}
+    if request is None:
+        return flat
+    if not flat:
+        return request
+    try:
+        body = _request_object(request)
+    except ToolValidationError:
+        # 调用点都在各工具的 try 之外：这里不抛，坏 request 原样往下走，由 _normalize_mcp_request 报 tool.invalid_payload。
+        return request
+    conflicts = sorted(key for key, value in flat.items() if key in body and body[key] != value)
+    notes = _REQUEST_NOTES.get()
+    if conflicts and notes is not None:
+        names = "、".join(conflicts)
+        notes.append(bilingual(f"`request` 与顶层参数同名不同值（{names}），已按 `request` 的值起盘。",
+                               f"`request` and top-level arguments disagree on {', '.join(conflicts)}; the `request` value was used."))
+    return {**flat, **body}
 
 
 # `horosa_tool_run` 的公共字段：覆盖绝大多数技法的起盘输入 + 闸门确认位。
