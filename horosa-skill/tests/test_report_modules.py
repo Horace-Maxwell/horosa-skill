@@ -116,3 +116,54 @@ def test_index_checks_can_say_no() -> None:
 
 def test_the_document_is_still_json(tmp_path: Path) -> None:
     assert json.dumps(_document(tmp_path), ensure_ascii=False, default=str)
+
+
+# ── 技法措辞表是数据：顺序有含义，字段齐，随 wheel 走 ─────────────────────────────────────
+
+
+def _profile_table() -> dict:
+    from horosa_skill.reports import default_report
+
+    return json.loads(default_report._TECHNIQUE_PROFILES_PATH.read_text(encoding="utf-8"))
+
+
+def test_every_profile_has_its_markers_and_all_four_phrases() -> None:
+    table = _profile_table()
+    phrases = {"basis", "decision_style", "evidence_name", "recommended_followup"}
+    assert len(table["profiles"]) >= 15
+    for entry in table["profiles"]:
+        assert entry["markers"] and all(isinstance(marker, str) and marker for marker in entry["markers"])
+        assert phrases <= set(entry) and all(entry[key] for key in phrases), entry["markers"]
+    assert phrases == set(table["default"])
+
+
+def test_the_first_matching_profile_wins() -> None:
+    """`pdchart` 同时命中两条，表里靠前的那条算数：挪动顺序会静默改掉这个工具的措辞。"""
+    from horosa_skill.reports.default_report import _technique_report_profile
+
+    table = _profile_table()
+    hits = [entry for entry in table["profiles"] if any(marker in "pdchart" for marker in entry["markers"])]
+    assert len(hits) == 2, "这条用例靠 pdchart 同时命中两条才有意义"
+    assert _technique_report_profile({"tool_name": "pdchart"})["basis"] == hits[0]["basis"]
+
+
+def test_an_unknown_technique_falls_back_to_the_default_profile() -> None:
+    from horosa_skill.reports.default_report import _technique_report_profile
+
+    assert _technique_report_profile({"tool_name": "不存在的技法"})["basis"] == _profile_table()["default"]["basis"]
+    assert _technique_report_profile({})["basis"] == _profile_table()["default"]["basis"]
+
+
+def test_a_label_in_chinese_reaches_the_same_profile_as_the_tool_name() -> None:
+    from horosa_skill.reports.default_report import _technique_report_profile
+
+    assert _technique_report_profile({"technique_label": "奇门遁甲"}) == _technique_report_profile({"tool_name": "qimen"})
+
+
+def test_the_profile_table_ships_in_the_wheel() -> None:
+    """AGENTS §6：运行期要读的数据文件必须随 wheel 走，别假定源码树布局。"""
+    from horosa_skill.reports import default_report
+
+    guard = (Path(reports.__file__).parents[3] / "scripts" / "verify_wheel_contents.py").read_text(encoding="utf-8")
+    relative = default_report._TECHNIQUE_PROFILES_PATH.relative_to(Path(reports.__file__).parents[2]).as_posix()
+    assert f'"{relative}"' in guard

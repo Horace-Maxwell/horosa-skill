@@ -1,14 +1,27 @@
-"""确定性默认解读：调用方没写到的字段由这里补齐，只进机器 JSON。人读版只用调用方自己写的内容（见 `merge_ai_report`）。"""
+"""确定性默认解读：调用方没写到的字段由这里补齐。这里的文字都是机器写的，不是 AI 解读。
+
+去向看 `merge_ai_report`：机器 JSON 的 `ai_report` 总是带着；`human_*`（人读版 PDF / DOCX）只在调用方给了一段
+`answer_text` 且没写对应字段时才不带。调用方写了 `analysis_sections`，或没有 `answer_text` 时，补齐的段落会印在「AI 解读」下面。
+"""
 
 from __future__ import annotations
 
 import copy
+import functools
+import json
 import re
-
+from pathlib import Path
 from typing import Any
 
 from horosa_skill.reports.question import analyze_question
 from horosa_skill.reports.source import analysis_section_matches_source, read_caller_answer, read_user_question
+
+_TECHNIQUE_PROFILES_PATH = Path(__file__).parents[1] / "data" / "report_technique_profiles.json"
+
+
+@functools.lru_cache(maxsize=1)
+def _technique_profiles() -> dict[str, Any]:
+    return json.loads(_TECHNIQUE_PROFILES_PATH.read_text(encoding="utf-8"))
 
 
 def merge_ai_report(
@@ -250,6 +263,7 @@ def _default_bazi_report(
     export_sections: list[dict[str, Any]],
     export_text: str,
 ) -> dict[str, Any]:
+    """机器写的八字默认解读：按明面干支数五行、套固定句式。不是星阙引擎的结果，也不是 AI 写的。"""
     question = _consultation_question(question)
     pillars = _extract_bazi_pillars(export_text)
     day_master = _day_master_text(pillars.get("日柱"))
@@ -525,156 +539,12 @@ def _generic_decision_hint(question: str) -> str:
 
 
 def _technique_report_profile(source: dict[str, Any]) -> dict[str, str]:
-    tool = str(source.get("tool_name") or "")
-    technique = str(source.get("technique") or "")
-    label = str(source.get("technique_label") or "")
-    key = f"{tool} {technique} {label}"
-    profiles: list[tuple[tuple[str, ...], dict[str, str]]] = [
-        (
-            ("qimen", "奇门"),
-            {
-                "basis": "起局时间、值符值使、门星神仪、宫位关系和演卦变化",
-                "decision_style": "当下局势、可用路径、行动窗口与避险方向",
-                "evidence_name": "门、星、神、宫与演卦",
-                "recommended_followup": "用神、宫位、门星组合、时间窗口或行动方案",
-            },
-        ),
-        (
-            ("liureng", "六壬"),
-            {
-                "basis": "课传、四课三传、天将神煞、日辰关系和发用线索",
-                "decision_style": "事情来龙去脉、应期倾向、成败条件和风险点",
-                "evidence_name": "课传、天将、日辰与神煞",
-                "recommended_followup": "发用、三传、应期、关系人或具体事件路径",
-            },
-        ),
-        (
-            ("jinkou", "金口诀"),
-            {
-                "basis": "地分、贵神、将神、人元、旺衰与五动关系",
-                "decision_style": "事件吉凶、主动/被动关系、资源阻力和行动取舍",
-                "evidence_name": "地分、贵神、将神、人元与旺衰",
-                "recommended_followup": "用神、旺衰、五动、成败条件或应期",
-            },
-        ),
-        (
-            ("taiyi", "太乙"),
-            {
-                "basis": "太乙局数、主客算、宫神分布和局势攻守",
-                "decision_style": "大势判断、攻守策略、风险等级和时局取向",
-                "evidence_name": "局数、主客算、宫位和神将",
-                "recommended_followup": "主客、局数、宫位、时局趋势或策略建议",
-            },
-        ),
-        (
-            ("sixyao", "gua", "易卦", "六爻"),
-            {
-                "basis": "本卦、变卦、动爻、六亲六神和卦辞爻辞",
-                "decision_style": "问题成败、关系结构、变化方向和可执行建议",
-                "evidence_name": "卦象、动爻、六亲、六神和卦辞",
-                "recommended_followup": "用神、世应、动爻、变卦或具体选择",
-            },
-        ),
-        (
-            ("ziwei", "紫微"),
-            {
-                "basis": "命身宫、十二宫、主星辅曜、四化和大限流年",
-                "decision_style": "性格结构、人生主题、阶段运势和现实选择",
-                "evidence_name": "命宫、身宫、十二宫、星曜和四化",
-                "recommended_followup": "命宫、事业宫、财帛宫、夫妻宫、大限或流年",
-            },
-        ),
-        (
-            ("chart", "astro", "星盘", "hellen", "india", "guolao", "relative", "germany"),
-            {
-                "basis": "行星落座落宫、宫主关系、相位、接纳和关键虚点",
-                "decision_style": "性格动力、事件主题、关系结构、资源压力与时间线索",
-                "evidence_name": "星体、宫位、相位、宫主和接纳",
-                "recommended_followup": "事业、关系、财务、推运时间点或某个宫位主题",
-            },
-        ),
-        (
-            ("solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "primarydirect", "pd", "zr", "firdaria", "decennials", "推运"),
-            {
-                "basis": "本命基础与推运盘、返照盘、年限、主限或阶段主星之间的对应",
-                "decision_style": "阶段主题、时间窗口、事件触发点和行动优先级",
-                "evidence_name": "推运参数、时限、主星、宫位和触发相位",
-                "recommended_followup": "具体年份、月份、事业/关系/财务主题或关键触发点",
-            },
-        ),
-        (
-            ("suzhan", "宿占"),
-            {
-                "basis": "宿度、值宿、形局、斗柄和宿曜关系",
-                "decision_style": "当下气象、人物倾向、事件性质和趋避建议",
-                "evidence_name": "宿度、值宿、形局和宿曜关系",
-                "recommended_followup": "值宿、形局、人物关系或事件吉凶",
-            },
-        ),
-        (
-            ("tongshefa", "统摄"),
-            {
-                "basis": "阴阳四象、左右卦、潜藏、亲和与主关系",
-                "decision_style": "内外关系、主客力量、变化方向和统摄策略",
-                "evidence_name": "左右卦、潜藏、亲和和主关系",
-                "recommended_followup": "本卦、变卦、潜藏、亲和或主客策略",
-            },
-        ),
-        (
-            ("canping", "参评", "金锁银匙"),
-            {
-                "basis": "年纳音定部、四柱起数、本命/大运/流年的顺逆歲運条文",
-                "decision_style": "命格定位、运势节律、各运吉凶倾向和趋避建议",
-                "evidence_name": "年纳音部、日宫支命宫、本命与大运/流年歲運条文",
-                "recommended_followup": "本命条文、某段大运、流年走势或趋避策略",
-            },
-        ),
-        (
-            ("heluo", "河洛"),
-            {
-                "basis": "天地数起先天/后天卦与元堂、命运篇判断、大限·岁运与元堂爻辞",
-                "decision_style": "命卦定位、卦气化工、各大限吉凶节律和趋避建议",
-                "evidence_name": "先天/后天卦、元堂爻辞、命运篇判格和大限岁运",
-                "recommended_followup": "先天/后天爻辞、命运篇判格、某段大限或岁运走势",
-            },
-        ),
-        (
-            ("harmonic", "调波"),
-            {
-                "basis": "本命各点黄经×调波数得调波位置、同频(合相)关系",
-                "decision_style": "调波主题、同频聚合、强调点和共振议题",
-                "evidence_name": "调波数、各点调波位置和同频合相",
-                "recommended_followup": "某调波数主题、同频组合或某点调波落点",
-            },
-        ),
-        (
-            ("sanshi", "三式"),
-            {
-                "basis": "奇门、六壬、太乙三式之间的交叉验证",
-                "decision_style": "多体系共振、分歧点、主线结论和稳健建议",
-                "evidence_name": "三式子结果、共振点和分歧点",
-                "recommended_followup": "三式共振、某一式细节、时间窗口或行动方案",
-            },
-        ),
-        (
-            ("jieqi", "节气", "nongli", "农历"),
-            {
-                "basis": "节气时间、农历转换、太阳节点和年度节律",
-                "decision_style": "时间校准、节律判断、起盘边界和后续排盘依据",
-                "evidence_name": "节气、农历、时间和地点参数",
-                "recommended_followup": "节气节点、农历时间、起盘校准或年度节律",
-            },
-        ),
-    ]
-    for markers, profile in profiles:
-        if any(marker in key for marker in markers):
-            return profile
-    return {
-        "basis": "起盘输入、工具摘要、导出章节和关键字段之间的关系",
-        "decision_style": "整体判断、风险提示、机会线索和后续追问方向",
-        "evidence_name": "导出章节和关键字段",
-        "recommended_followup": "事业、关系、财务、时间窗口或具体行动方案",
-    }
+    key = f"{source.get('tool_name') or ''} {source.get('technique') or ''} {source.get('technique_label') or ''}"
+    table = _technique_profiles()
+    for entry in table["profiles"]:
+        if any(marker in key for marker in entry["markers"]):
+            return entry
+    return table["default"]
 
 
 def _section_reading_body(section: dict[str, Any], *, profile: dict[str, str] | None = None) -> str:

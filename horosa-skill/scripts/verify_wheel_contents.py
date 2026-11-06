@@ -31,6 +31,7 @@ REQUIRED_ENTRIES = (
     "horosa_skill/knowledge/data/helpdocs/bazi_pithy.json",
     "horosa_skill/benchmark/data/horosa_bench.json",
     "horosa_skill/data/sensitive_settings.json",
+    "horosa_skill/data/report_technique_profiles.json",
     "horosa_skill/runtime/templates/windows/start_horosa_local.ps1",
     "horosa_skill/runtime/templates/windows/stop_horosa_local.ps1",
     "horosa_skill/surfaces/mcp_server.py",
