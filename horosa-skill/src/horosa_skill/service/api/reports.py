@@ -204,7 +204,7 @@ class ReportsAPI:
 
     def _report_language(self, request: Any) -> str:
         """报告语言：调用方写了就用它，没写跟全局输出文字走（繁体时是 zh-TW / zh-HK，模板据此让 AI 用繁体写）。"""
-        if "language" in request.model_fields_set and request.language:
+        if request.language:
             return str(request.language)
         return REPORT_LANGUAGE[self.settings.output_script]
 
@@ -498,7 +498,7 @@ class ReportsAPI:
                     "format": normalized_format,
                     "style": self._report_style(request),
                     # 只转发调用方真写了的 language：缺省值转过去会被当成「显式 zh-CN」，盖掉全局的繁体设置。
-                    **({"language": request.language} if "language" in request.model_fields_set else {}),
+                    **({"language": request.language} if request.language else {}),
                     "title": request.title,
                     "ai_report": normalized_ai_report,
                     "include_raw_json": request.include_raw_json,

@@ -208,7 +208,7 @@ class MemoryShowInput(FlexibleModel):
 class ReportTemplateInput(FlexibleModel):
     run_id: str
     tool_name: str | None = None
-    language: str = "zh-CN"
+    language: str | None = None
 
 
 class ReportRenderInput(FlexibleModel):
@@ -219,7 +219,7 @@ class ReportRenderInput(FlexibleModel):
         default="analysis",
         description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
     )
-    language: str = "zh-CN"
+    language: str | None = None
     title: str | None = None
     ai_report: dict[str, Any] = Field(default_factory=dict)
     ai_answer_text: str | None = None
@@ -235,7 +235,7 @@ class ReportFromToolInput(FlexibleModel):
         default="analysis",
         description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
     )
-    language: str = "zh-CN"
+    language: str | None = None
     title: str | None = None
     question: str | None = None
     ai_report: dict[str, Any] = Field(default_factory=dict)

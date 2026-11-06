@@ -1328,7 +1328,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
     段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
-- **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
+- **报告 `language` 缺省 `None`：没写就跟 `HOROSA_OUTPUT_SCRIPT`（v0.47.2-dev）。** 入参模型里别放「看起来像缺省」的具体值，也别用 `model_fields_set` 判调用方写没写：MCP 的 `_normalize_mcp_request` 走 `model_dump`，缺省值到 service 时已经是显式入参。测这类行为要走 `call_tool`，只调帮手函数绕过了 `model_dump`（`tests/test_report_language_surfaces.py`）。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
