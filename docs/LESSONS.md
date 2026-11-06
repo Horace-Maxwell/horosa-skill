@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 答案写回把唯一一份盘面写成 0 字节：`_refresh_run_artifacts` 原地 `write_text`，真卷写满时重试 `ok: true` 也救不回来，`report_render` 只剩 `report.source_not_found`；并发读者 26/1851 读到半个文件；落库 sha 写回后全错；报告 JSON 也被改写 | 存档一律走 `_write_json_atomic`（同目录临时文件 + fsync + 替换），刷新后更新 size / sha，`report_*` 不刷新；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
 | v0.47.2-dev (2026-11-06) | `[vectors]` 从 v0.45.1 起到不了 MCP server：依赖要装在客户端起 server 的环境里，配置里的启动器却不带 extra，server 永远是纯 BM25 且不报错；`how_to_enable` 还教了 PyPI 上不存在的 `pip install` | `setup --vectors`：写配置之前用客户端那条命令真跑一遍，stdio 探针再要 server 自己报 ready；三态沿用；`--from` 无空格 PEP 508；audit 看穿新写法 |
 | v0.47.2-dev (2026-11-04) | 上游 v3.13.2 只改桌面端就绪门 + 版本号，skill 结果不变；`--depth` 克隆让 `bazi_pithy` 的 `generated_at` 静默写错；公开克隆缺 dist-file 与 @babel/parser | 生成脚本拒绝浅克隆（先红后绿）；Runbook 写明本地上游 == 公开远端时同步 / `--scan` 用本地、门禁用非浅公开克隆；0 hit 先跑上一区间对照 |
@@ -173,6 +174,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 答案写回把唯一一份盘面写成 0 字节
+
+- **症状**：架构审计在 12 MB 真卷（HFS+）上复现：剩 900 KB 时 `record_ai_answer` 抛 `OSError 28`，盘面产物变成 0 字节；腾出空间后重试返回 `ok: true`，产物仍是 0 字节（不是 JSON 的文件 refresh 直接跳过），`report_render` 报 `report.source_not_found`。tight loop 下 SIGKILL 第 22 次就撞上（只证明窗口存在，不代表概率）。并发读者 26/1851 次拿到 `payload_error`。另外写回后库与 manifest 里的 sha 还是写入时的值（`ed49c6…` vs 磁盘 `266fc5…`）。
+- **根因**：`Path.write_text` 先截断再写；`runs/` 产物又是这次起盘**唯一**的完整副本（`initialize` 的说明正是这么定义的），带 AI 正文的每次报告都经 `_record_report_ai_if_present` → `attach_ai_response` → `_refresh_run_artifacts` 走这条路。v0.33.0「写时落列」把 size / sha 存进库以消 O(n²)，但改写路径没跟上。`kind != 'run_manifest'` 还把 `report_json` 也算进来：交付出去的报告（可能在 `HOROSA_REPORT_OUTPUT_ROOTS` 的用户目录里）被塞进 `record_meta` / `conversation`。
+- **修复**：`store._write_json_atomic`（同目录临时文件 + fsync + `fsretry.replace`，失败清临时文件）用在全部三处；用 `os.open(…, 0o666)` 而不是 mkstemp，产物权限照旧按 umask，改写沿用原文件权限。`_refresh_run_artifacts` 排除 `report_*`，写完更新 `file_size` / `sha256`。fsync 实测无感（本机每次存档 3.6 ms vs 4.3 ms，差在噪声内）。
+- **旧断言为何没抓到**：`test_memory_store_attach_ai_response_updates_artifacts_and_manifest` 只断言 sha **非空**，没和磁盘比；没有任何测试让写入中途失败。
+- **守卫**：`tests/test_memory_durability.py`（真实写失败用 `RLIMIT_FSIZE`，效果同磁盘写满；`test_the_store_has_no_in_place_writes` AST 扫 `store.py` 的 `write_text` / `write_bytes`）。负向对照：改回 `write_text` 六条红；`0o666` 改 `0o600`、去掉 `copymode` 各红一条。Windows 上 RLIMIT 那条 skip，`test_a_failed_replace_cleans_up_and_keeps_the_original` 全平台跑。
+- **法则**：只有一份的数据，写它的每一步都要假设下一个字节写不进去。
 
 ### v0.47.2-dev / 2026-11-05 — Windows 面没测过的形状：管道编码、路径闸先 resolve、共享冲突、报告目标开着、择时百年表
 

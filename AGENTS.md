@@ -1325,6 +1325,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
 - **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
 
+### 9.3.2 记忆存档（memory store / artifacts）
+
+- **`runs/` 的产物是一次起盘唯一的完整副本，写它绝不原地（v0.47.2-dev）。** `memory/store.py` 里写文件只有 `_write_json_atomic`（同目录临时文件 + fsync + `fsretry.replace`，失败清临时文件、不动原文件）；`write_text` / `write_bytes` 回潮即红（`test_the_store_has_no_in_place_writes`）。权限按 umask，改写沿用原文件的。
+  改写产物后同步落库的 `file_size` / `sha256`（manifest 与检索取落库值，不现算）；`report_*` 是交付物，写回答案不刷新。
+
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
 - **随包 Python 的应用控制替身（v0.43.1-dev，`manager._install_app_control_shims`）。** Smart App Control 可能拒绝加载载荷里流行度不够的原生扩展，

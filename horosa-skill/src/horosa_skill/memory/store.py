@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -9,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from horosa_skill import fsretry
 from horosa_skill.config import Settings
 from horosa_skill.schemas.common import MemoryRef
 
@@ -24,6 +27,30 @@ def _file_hash_info(path: Path) -> tuple[int, str | None]:
         return len(data), hashlib.sha256(data).hexdigest()
     except OSError:
         return 0, None
+
+
+def _write_json_atomic(path: Path, payload: Any) -> tuple[int, str]:
+    """把 JSON 写到 `path`，返回 (字节数, sha256)。要么换成完整的新文件，要么原文件一字不动。
+
+    `runs/` 下的产物是一次起盘唯一的完整副本。`write_text` 先截断再写：磁盘写满 / 进程被杀时留下 0 字节，已有内容再也救不回来，
+    并发读者还会读到半个文件。这里写同目录临时文件（`os.replace` 同卷才原子）、落盘后再替换。
+    用 `os.open` 而不是 mkstemp：后者固定 0600，会改掉产物一直以来按 umask 建的权限；改写时沿用原文件的权限。
+    """
+    data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+    fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.exists():
+            shutil.copymode(path, tmp_path)
+        fsretry.replace(tmp_path, path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    return len(data), hashlib.sha256(data).hexdigest()
 
 
 def _safe_file_component(name: str) -> str:
@@ -761,7 +788,7 @@ class MemoryStore:
             group_id=group_id,
             evaluation_case_id=evaluation_case_id,
         )
-        target_path.write_text(json.dumps(artifact_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_json_atomic(target_path, artifact_payload)
         return target_path
 
     def _get_run_row(self, run_id: str) -> sqlite3.Row | None:
@@ -815,9 +842,13 @@ class MemoryStore:
         return artifact_payload
 
     def _refresh_run_artifacts(self, run_id: str) -> None:
+        # 只刷新盘面 / 调度产物：报告是交付好的文件（可能在用户的目录里），写回答案不许改写它；manifest 由调用方随后重建。
         with self.connect() as conn:
             rows = conn.execute(
-                "SELECT tool_name, kind, path, tool_call_id FROM artifacts WHERE run_id = ? AND kind != 'run_manifest'",
+                r"""
+                SELECT id, tool_name, kind, path, tool_call_id FROM artifacts
+                WHERE run_id = ? AND kind != 'run_manifest' AND kind NOT LIKE 'report\_%' ESCAPE '\'
+                """,
                 (run_id,),
             ).fetchall()
         for row in rows:
@@ -845,7 +876,11 @@ class MemoryStore:
                 group_id=record_meta.get("group_id"),
                 evaluation_case_id=record_meta.get("evaluation_case_id"),
             )
-            path.write_text(json.dumps(updated_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            file_size, sha256 = _write_json_atomic(path, updated_payload)
+            # 文件变了，落库的 size / sha 必须跟上：manifest 与检索都优先取落库值，不再现算。
+            with self.connect() as conn:
+                conn.execute("UPDATE artifacts SET file_size = ?, sha256 = ? WHERE id = ?", (file_size, sha256, row["id"]))
+                conn.commit()
 
     def _build_run_manifest_payload(self, run_id: str) -> dict[str, Any]:
         with self.connect() as conn:
@@ -928,7 +963,7 @@ class MemoryStore:
         target_dir = self.output_dir / created.strftime("%Y") / created.strftime("%m") / created.strftime("%d")
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / f"{run_id}_manifest.json"
-        target_path.write_text(json.dumps(manifest_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_json_atomic(target_path, manifest_payload)
         now = utc_now_iso()
         with self.connect() as conn:
             existing = conn.execute(
