@@ -1150,6 +1150,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   `engine/router.py` 一条规则（或进 `ROUTING_EXEMPT`）、`contracts/router_corpus.json` 至少一句语料
   （`verify_router_corpus.py` 的 `min_pass` 只升不降）。择日搜索族词面含基底技法名，基底规则一律
   `and not is_zeri`。`HOROSA_TOOLSETS` 未知 token 告警丢弃、全空回落全量，过滤生效即注册 `horosa_tool_run`。
+- **每个能走到 `run_tool` 的表面入口都必须先过闸（v0.47.2-dev）。** 闸门在表面入口，不在 service：`service.run_tool` / `dispatch` / `hecan` 本身不拦，新入口就是新的绕闸路。
+  `hecan` 与 `dispatch` 同闸（`validate_agent_preflight`；一次确认覆盖选中的全部技法，显式 `tools` 时不问用哪种技法）。守卫 `tests/test_gate_coverage.py` **枚举而不点名**：
+  MCP 侧 `list_tools()` 全部工具 + 正向对照，CLI 侧 AST 扫全部 Typer 命令。要豁免就进闸表 `exempt_tools`；内部探针（`selfcheck`）在载荷字面量里写确认位。
 - **工具自有的结果敏感项，闸门必须点名问到。** 族策略（ASTRO_BIRTH/SHENSHU/PREDICTIVE）只是底座；有自有旋钮
   的工具用工厂出专属策略（`_progression_target_policy`）。闸问题要么带 `options`（可枚举者并行 `values`，
   表单答案只写回这些值），要么字段进 `FREE_TEXT_GATE_FIELDS`；`tests/test_gate_policies.py` 守。

@@ -127,7 +127,9 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
     override = _clarify_override(tool_name)
     if override is not None:
         return {"ok": True, "tool_name": tool_name, "enforced": False, "mode": override}
-    is_dispatch = tool_name in {"dispatch", "horosa_dispatch"}
+    is_hecan = tool_name in {"hecan", "horosa_hecan"}
+    # 合参逐技法起盘，走的是 dispatch 同一道闸：一次确认覆盖这次选中的全部技法。
+    is_dispatch = is_hecan or tool_name in {"dispatch", "horosa_dispatch"}
     if tool_name not in TOOL_GUIDANCE and not is_dispatch:
         return {"ok": True, "tool_name": tool_name, "enforced": False}
 
@@ -148,6 +150,8 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
             {"field": "location", "question": "地点、经纬度、时区用哪里？"},
             {"field": "question", "question": "这次要问的具体事情是什么？"},
         ]
+        if is_hecan and payload.get("tools"):
+            ask_if_missing = ask_if_missing[1:]  # 显式 `tools` 已经答了「用哪种技法」
         safe_defaults = [{"field": "routing", "value": "dispatch selection", "meaning": "仅在用户确认目标和默认设置后自动选择工具"}]
         do_not_assume = ["Do not dispatch to a calculation tool before confirming result-changing settings."]
     else:

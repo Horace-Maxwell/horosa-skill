@@ -231,15 +231,28 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     )(horosa_dispatch)
 
     def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str,
-                                 meta: dict[str, Any] | None = None) -> None:
+                                 meta: dict[str, Any] | None = None, gate: str | None = None) -> None:
         """门面工具 = 归一化入参 → service.<method>(payload)，统一兜底、签名、注解（v0.41.1 起表驱动）。
 
         method 按名在**调用时**取（`getattr(service, method)`）：测试会在建好 server 之后替换实例上的方法。
+        会起盘的门面传 `gate`：闸门在表面入口，不在 service 里（tests/test_gate_coverage.py 枚举全部工具守这一条）。
         """
 
         async def facade(**kwargs: Any) -> dict[str, Any]:
+            raw_payload = _merge_mcp_arguments(kwargs)
+            if gate is not None and isinstance(raw_payload, dict):
+                error = _agent_preflight_error(gate, raw_payload)
+                if error is not None:
+                    updated = await _maybe_elicit_gate(mcp, gate, raw_payload, error)
+                    if isinstance(updated, mcp_types.InputRequiredResult):
+                        return updated  # MRTR：客户端问完用户带 inputResponses 重发
+                    if updated is None:
+                        return error
+                    raw_payload = updated
+            payload_for_run = raw_payload
+
             def _run() -> dict[str, Any]:
-                return getattr(service, method)(_normalize_mcp_request(_merge_mcp_arguments(kwargs), model))
+                return getattr(service, method)(_normalize_mcp_request(payload_for_run, model))
 
             return await _guarded_facade(mcp, name, _run)
 
@@ -375,6 +388,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         model=HecanInput,
         title="合参 / cross-technique synthesis",
         annotations=_ANN_CALC,
+        gate="hecan",
         doc=(
             "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
             "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "

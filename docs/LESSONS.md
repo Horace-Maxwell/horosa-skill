@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 核心调用链审计：闸门、入参、错误路径在表面层手抄多份且已漂开——`horosa_hecan` / `hecan` 从 v0.28.0 起绕过澄清闸 | 每条一个修复 + 负向对照；覆盖面守卫改成枚举全部入口，不点名 |
 | v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
 | v0.47.2-dev (2026-11-06) | `[vectors]` 从 v0.45.1 起到不了 MCP server：依赖要装在客户端起 server 的环境里，配置里的启动器却不带 extra，server 永远是纯 BM25 且不报错；`how_to_enable` 还教了 PyPI 上不存在的 `pip install` | `setup --vectors`：写配置之前用客户端那条命令真跑一遍，stdio 探针再要 server 自己报 ready；三态沿用；`--from` 无空格 PEP 508；audit 看穿新写法 |
 | v0.47.2-dev (2026-11-04) | 上游 v3.13.2 只改桌面端就绪门 + 版本号，skill 结果不变；`--depth` 克隆让 `bazi_pithy` 的 `generated_at` 静默写错；公开克隆缺 dist-file 与 @babel/parser | 生成脚本拒绝浅克隆（先红后绿）；Runbook 写明本地上游 == 公开远端时同步 / `--scan` 用本地、门禁用非浅公开克隆；0 hit 先跑上一区间对照 |
@@ -173,6 +174,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 核心调用链审计：表面层手抄的闸门、入参、错误路径各走各的
+
+- **起因**：只读审计从表面往下追调用链，每条都在进程内真跑复现（`tests/fakes.py`，后端钉 `:9`）。分层本身没问题：无顶层 import 环、service 内部严格按文档分层、114 个样例经 CLI / MCP 两条路 `input_normalized` 0 差异。问题集中在表面层：同一件事每个入口手写一份，抄的时候漏一处，守卫又是逐个点名入口，没点到的就没人管。
+- **坑 1 · 合参绕过澄清闸**：闸门在表面入口，不在 service；`service.dispatch` / `run_tool` 本身不拦。MCP 四个函数体与 CLI 三条命令各调一次闸，`horosa_hecan` 走表驱动门面、CLI `hecan` 直调 service，都没这一步。同一份缺性别的出生信息，`horosa_cn_bazi_birth` 与 `horosa_dispatch` 回 `agent_guidance.required`，`horosa_hecan(tools=["bazi_birth"])` 回 `ok=True`，违反铁律 2；docstring 还写着「复用……澄清闸」。修：hecan 与 dispatch 同闸（显式 `tools` 时不再问用哪种技法），一次确认覆盖选中的全部技法。**守卫 `tests/test_gate_coverage.py` 不点名**：MCP 侧枚举 `list_tools()`，CLI 侧 AST 扫每个 Typer 命令；附正向对照（同一份入参带确认就到得了 `run_tool`），否则「没到」可能只是入参不合法。负向对照 4 条全红，其中一条摘掉与本修复无关的 `horosa_report_from_tool` 的闸，证明抓的是「任何入口」而不只是 hecan。`test_facades_resolve_the_service_method_at_call_time` 补了确认位：它考的是按名取方法，断言不变；它从前用未确认载荷跑通 hecan，却只断言方法解析，所以没抓到这条。
+- **法则**：一条跨入口的不变量，守卫要枚举入口，不能点名入口——点名只保护已知的，漏掉的正是没人想到的那个。
 
 ### v0.47.2-dev / 2026-11-05 — Windows 面没测过的形状：管道编码、路径闸先 resolve、共享冲突、报告目标开着、择时百年表
 

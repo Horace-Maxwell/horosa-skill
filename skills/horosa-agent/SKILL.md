@@ -170,7 +170,8 @@ Allowed shortcuts:
 
 Runtime enforcement (the gate is in code, not just policy):
 
-- Calculation tools and `horosa_dispatch` reject unconfirmed calls with `agent_guidance.required`.
+- Calculation tools, `horosa_dispatch` and `horosa_hecan` reject unconfirmed calls with `agent_guidance.required`
+  (one confirmation covers every technique a `dispatch` / `hecan` call selects).
 - After the user answers, include `agent_confirmed_settings: true`. If the user explicitly accepts
   defaults, include `defaults_accepted: true`. Add `clarification_notes` summarizing what was confirmed
   (e.g. `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`).

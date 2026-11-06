@@ -447,7 +447,8 @@ def test_facades_resolve_the_service_method_at_call_time(tmp_path, tool_name, me
     setattr(svc, method, _replacement)
 
     async def _call():
-        return await mcp.call_tool(tool_name, {"run_id": "r", "query": "q", "limit": 1})
+        # horosa_hecan 要过澄清闸（v0.47.2-dev）；这里考的是「按名在调用时取方法」，所以带上确认位。
+        return await mcp.call_tool(tool_name, {"run_id": "r", "query": "q", "limit": 1, "agent_confirmed_settings": True})
 
     payload = json.loads(_text(anyio.run(_call)))
     assert seen == [method] and payload.get("replaced") == method, payload

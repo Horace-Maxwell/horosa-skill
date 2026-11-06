@@ -1138,6 +1138,7 @@ def hecan(
         payload["tools"] = list(tool)
     service = _service()
     try:
+        _enforce_agent_preflight("hecan", payload)
         result = service.hecan(payload)
     except ToolValidationError as exc:
         typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
