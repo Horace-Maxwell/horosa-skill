@@ -14,8 +14,9 @@ _SPEC = importlib.util.spec_from_file_location("eval_knowledge_search", Path(__f
 _EVAL = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_EVAL)
 
-# 2026-11-06 实测：dev 0.919 / 0.986；heldout 0.821 / 0.923（改检索之前 0.474 / 0.526）；唯一名自检索 0.945；问句模板 0.882。
-FLOORS = {"dev": {"hit1": 0.90, "hit5": 0.97}, "heldout": {"hit1": 0.80, "hit5": 0.90}}
+# 2026-11-06 实测（hit@1 / hit@5）：dev 0.932 / 1.0；第一批 heldout（已看过，改作 dev）0.846 / 0.974；
+# 现行 heldout（偏难：复合词 + 问句）0.714 / 0.918；唯一名自检索 0.945；问句模板 0.883。
+FLOORS = {"dev": {"hit1": 0.92, "hit5": 0.98}, "seen_2026_11_06": {"hit1": 0.83, "hit5": 0.95}, "heldout": {"hit1": 0.70, "hit5": 0.90}}
 SELF_UNIQUE_HIT1_FLOOR = 0.93
 SELF_QUESTION_HIT5_FLOOR = 0.87
 

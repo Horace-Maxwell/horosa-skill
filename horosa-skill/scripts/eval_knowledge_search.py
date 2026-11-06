@@ -96,16 +96,16 @@ def evaluate_self_unique() -> float:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--set", default="dev", choices=("dev", "heldout"))
-    parser.add_argument("--misses", action="store_true", help="dev only: list the queries that missed the top 5")
+    parser.add_argument("--set", default="dev", choices=("dev", "seen_2026_11_06", "heldout"))
+    parser.add_argument("--misses", action="store_true", help="list the queries that missed the top 5 (not for heldout)")
     args = parser.parse_args()
     result = evaluate_set(args.set)
     misses = result.pop("misses")
     print(json.dumps({"set": args.set, **result}, ensure_ascii=False))
     if args.set == "dev":
         print(json.dumps({"self": evaluate_self(), "self_unique_hit1": evaluate_self_unique()}, ensure_ascii=False))
-        if args.misses:
-            print(json.dumps(misses, ensure_ascii=False, indent=1))
+    if args.misses and args.set != "heldout":
+        print(json.dumps(misses, ensure_ascii=False, indent=1))
     return 0
 
 

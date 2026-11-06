@@ -1,5 +1,5 @@
 {
- "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调；heldout 在改检索之前（2026-11-06）写好、写的时候没看过任何检索结果，只许用来报数，不许按它调。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。",
+ "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调。heldout 在改检索之前写好、写的时候没看过任何检索结果，只许用来报数，不许按它调；看过就挪走，换一批新的。seen_2026_11_06 是第一批 heldout（0.474 / 0.526 → 0.821 / 0.923），未命中清单看过之后改作 dev 用。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。",
  "sets": {
   "dev": [
    {
@@ -819,7 +819,7 @@
     ]
    }
   ],
-  "heldout": [
+  "seen_2026_11_06": [
    {
     "q": "立春",
     "class": "term",
@@ -1665,6 +1665,542 @@
      [
       "bazi_pithy",
       "@纳音断运"
+     ]
+    ]
+   }
+  ],
+  "heldout": [
+   {
+    "q": "比肩劫财",
+    "class": "compound",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "七杀制化",
+    "class": "compound",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "奇门三奇",
+    "class": "compound",
+    "want": [
+     [
+      "dunjia",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "奇门八门",
+    "class": "compound",
+    "want": [
+     [
+      "dunjia",
+      null
+     ],
+     [
+      "qimen",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "六壬课传",
+    "class": "compound",
+    "want": [
+     [
+      "liureng_manual",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "六壬三传",
+    "class": "compound",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ]
+   },
+   {
+    "q": "紫微四化",
+    "class": "compound",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ]
+   },
+   {
+    "q": "紫微三方四正",
+    "class": "compound",
+    "want": [
+     [
+      "ziwei",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "八字大运",
+    "class": "compound",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ]
+    ]
+   },
+   {
+    "q": "八字神煞",
+    "class": "compound",
+    "want": [
+     [
+      "bazi",
+      "神煞·显示"
+     ]
+    ]
+   },
+   {
+    "q": "太乙命法",
+    "class": "compound",
+    "want": [
+     [
+      "taiyi",
+      "命法盘"
+     ]
+    ]
+   },
+   {
+    "q": "六爻用神",
+    "class": "compound",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ]
+    ]
+   },
+   {
+    "q": "六爻起卦",
+    "class": "compound",
+    "want": [
+     [
+      "guazhan",
+      "起卦装卦"
+     ]
+    ]
+   },
+   {
+    "q": "塔罗逆位",
+    "class": "compound",
+    "want": [
+     [
+      "tarot",
+      "牌面与判读"
+     ]
+    ]
+   },
+   {
+    "q": "印度分盘",
+    "class": "compound",
+    "want": [
+     [
+      "india",
+      "分盘 Varga"
+     ]
+    ]
+   },
+   {
+    "q": "印度占星六力",
+    "class": "compound",
+    "want": [
+     [
+      "india",
+      "六力·格局"
+     ]
+    ]
+   },
+   {
+    "q": "择日黄历",
+    "class": "compound",
+    "want": [
+     [
+      "zeri",
+      "黄历择日"
+     ]
+    ]
+   },
+   {
+    "q": "合盘比较",
+    "class": "compound",
+    "want": [
+     [
+      "relative",
+      "比较盘"
+     ]
+    ]
+   },
+   {
+    "q": "什么是三方四正",
+    "class": "question",
+    "want": [
+     [
+      "ziwei",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "三奇怎么看",
+    "class": "question",
+    "want": [
+     [
+      "dunjia",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "用神怎么取",
+    "class": "question",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ],
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ]
+   },
+   {
+    "q": "大运怎么排",
+    "class": "question",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ],
+     [
+      "india",
+      "大运体系"
+     ]
+    ]
+   },
+   {
+    "q": "如何看行运",
+    "class": "question",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ]
+    ]
+   },
+   {
+    "q": "什么是十三分盘",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Harmonicdiv"
+     ]
+    ]
+   },
+   {
+    "q": "重置盘是什么",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Reloc"
+     ]
+    ]
+   },
+   {
+    "q": "占星骰子怎么用",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Dice"
+     ]
+    ]
+   },
+   {
+    "q": "调波盘是什么",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Harmonicdraconic"
+     ]
+    ]
+   },
+   {
+    "q": "量化盘怎么看",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Germany"
+     ]
+    ]
+   },
+   {
+    "q": "灵棋经是什么",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Lingqi"
+     ]
+    ]
+   },
+   {
+    "q": "皇极轨策怎么用",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Guice"
+     ]
+    ]
+   },
+   {
+    "q": "小成图是什么",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Xiaochengtu"
+     ]
+    ]
+   },
+   {
+    "q": "统摄法怎么起",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Tongshefa"
+     ]
+    ]
+   },
+   {
+    "q": "演禽怎么起",
+    "class": "question",
+    "want": [
+     [
+      "yanqin",
+      null
+     ],
+     [
+      "yizhangjing",
+      "Yanqin"
+     ]
+    ]
+   },
+   {
+    "q": "策天飞星是什么",
+    "class": "question",
+    "want": [
+     [
+      "yizhangjing",
+      "Cetian"
+     ]
+    ]
+   },
+   {
+    "q": "太阳弧怎么算",
+    "class": "question",
+    "want": [
+     [
+      "germany",
+      "太阳弧 · 校时"
+     ]
+    ]
+   },
+   {
+    "q": "奇门怎么看格局",
+    "class": "question",
+    "want": [
+     [
+      "dunjia",
+      "格局断法"
+     ]
+    ]
+   },
+   {
+    "q": "流派有什么分歧",
+    "class": "question",
+    "want": [
+     [
+      "bazi",
+      "流派分歧"
+     ],
+     [
+      "ziwei",
+      "流派分歧"
+     ],
+     [
+      "dunjia",
+      "流派分歧"
+     ],
+     [
+      "guazhan",
+      "流派分歧"
+     ],
+     [
+      "liureng_manual",
+      "流派分歧"
+     ],
+     [
+      "india",
+      "流派分歧"
+     ]
+    ]
+   },
+   {
+    "q": "怎么挂载技法",
+    "class": "question",
+    "want": [
+     [
+      "aianalysis",
+      "技法挂载设置"
+     ]
+    ]
+   },
+   {
+    "q": "合盘怎么排",
+    "class": "question",
+    "want": [
+     [
+      "relative",
+      "排盘设置"
+     ]
+    ]
+   },
+   {
+    "q": "怎么看比较盘",
+    "class": "question",
+    "want": [
+     [
+      "relative",
+      "比较盘"
+     ]
+    ]
+   },
+   {
+    "q": "男命喜用",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@喜用两伤男命"
+     ]
+    ]
+   },
+   {
+    "q": "女命喜用",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@喜用两伤女命"
+     ]
+    ]
+   },
+   {
+    "q": "五行颠倒",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@五行颠倒"
+     ]
+    ]
+   },
+   {
+    "q": "从儿格",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@从儿格"
+     ]
+    ]
+   },
+   {
+    "q": "四字诀",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@四字诀"
+     ]
+    ]
+   },
+   {
+    "q": "顺逆",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@顺逆"
+     ]
+    ]
+   },
+   {
+    "q": "去官杀",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@去寡（去官杀）"
+     ]
+    ]
+   },
+   {
+    "q": "流年断语",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@流年"
+     ]
+    ]
+   },
+   {
+    "q": "兄弟",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@兄弟"
      ]
     ]
    }

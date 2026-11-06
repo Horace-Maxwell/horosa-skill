@@ -114,6 +114,7 @@ def test_pithy_categories_are_searchable() -> None:
 
 def test_spelling_variants_search_both_ways() -> None:
     assert retrieval.parse_query("阳刃").terms == ("阳刃", "羊刃")
+    assert search_knowledge({"query": "调候"})["total_matched"] > 0 and retrieval.parse_query("调候").terms == ("调候", "调侯")
     assert search_knowledge({"query": "阳刃"})["total_matched"] > 0
 
 
@@ -204,6 +205,29 @@ def test_questions_and_compounds_are_rewritten(query: str, term: str) -> None:
 def test_unrelated_queries_stay_empty_instead_of_returning_noise(query: str) -> None:
     result = search_knowledge({"query": query})
     assert result["total_matched"] == 0 and "expanded_query" not in result
+
+
+def test_function_words_never_end_up_inside_a_term() -> None:
+    """「斗数的四化」在语料里连着出现过，曾被当成一个词。"""
+    assert search_knowledge({"query": "紫微斗数的四化是什么"})["expanded_query"] == "紫微斗数 四化"
+
+
+def test_a_question_wrapper_is_evidence_enough_for_half_coverage() -> None:
+    result = search_knowledge({"query": "塔罗怎么读牌"})
+    assert result["expanded_query"] == "塔罗 读 牌" and {m["domain"] for m in result["matches"][:3]} == {"tarot"}
+    assert search_knowledge({"query": "量子计算机是什么"})["total_matched"] == 0
+
+
+def test_a_thin_result_is_topped_up_with_the_pieces() -> None:
+    """整串碰巧在一本手册里连着出现过一次：原命中留在前面，再补上切开后的结果。"""
+    result = search_knowledge({"query": "紫微流派"})
+    assert result["matches"][0]["key"] == "Ziwei" and "紫微 流派" == result["expanded_query"]
+    assert any((m["domain"], m["key"]) == ("ziwei", "流派分歧") for m in result["matches"])
+
+
+def test_a_named_domain_outranks_passing_mentions_elsewhere() -> None:
+    assert search_knowledge({"query": "六爻 起卦"})["matches"][0]["domain"] == "guazhan"
+    assert search_knowledge({"query": "紫微 四化"})["matches"][0]["domain"] == "ziwei"
 
 
 def test_a_query_that_already_hits_is_not_rewritten() -> None:

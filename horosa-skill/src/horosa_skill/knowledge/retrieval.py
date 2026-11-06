@@ -23,7 +23,7 @@ BM25_K1, BM25_B = 1.2, 0.75
 RRF_K = 60  # Cormack, Clarke & Büttcher 2009；Elasticsearch / FastGPT / Cherry Studio 同值
 FIELD_WEIGHTS = {"title": 4.0, "heading": 3.0, "tags": 3.0, "body": 1.0}
 # 同一个术语的不同写法。查询时两边都搜：改的是查询，不是索引（改 normalize 要重建全部用户索引，也会动摘要定位）。
-SPELLING_VARIANTS = (("羊刃", "阳刃"), ("螣蛇", "腾蛇"), ("玄武", "元武"), ("七杀", "七煞"))
+SPELLING_VARIANTS = (("羊刃", "阳刃"), ("螣蛇", "腾蛇"), ("玄武", "元武"), ("七杀", "七煞"), ("调候", "调侯"))
 _VARIANT_OF = {spelling: other for pair in SPELLING_VARIANTS for spelling, other in (pair, pair[::-1])}
 
 
@@ -143,7 +143,8 @@ _QUESTION_WORDS = (
     "为什么", "为何", "有什么", "有哪些", "哪些", "哪个", "能不能", "可不可以", "有没有", "代表什么", "代表", "意味着",
     "的意思", "的含义", "含义", "意思", "请问", "请解释", "解释一下", "解释", "帮我看看", "帮我看", "看看", "区别",
 )
-_PARTICLES = frozenset("的和与及或跟吗呢吧啊呀了是在有要会能")
+_PARTICLES = frozenset("的和与及或跟吗呢吧啊呀了是在有要会能我你他她它")
+_NEVER_INSIDE_A_TERM = frozenset("的吗呢吧啊呀了")  # 「斗数的四化」在语料里连着出现过，但它不是一个词
 _MAX_SEGMENT = 6
 _MAX_RUN = 48
 _COMMON_SHARE = 0.4  # 语料里四成以上的文档都有的词，不算线索
@@ -167,7 +168,7 @@ def _segment(run: str, attested: Callable[[str], bool]) -> list[str]:
             best[i + 1] = (skipped, path)
         for size in range(min(_MAX_SEGMENT, n - i), 1, -1):
             piece = run[i : i + size]
-            if cost + 1 < best[i + size][0] and attested(piece):
+            if _NEVER_INSIDE_A_TERM.isdisjoint(piece) and cost + 1 < best[i + size][0] and attested(piece):
                 best[i + size] = (cost + 1, [*path, piece])
     return best[n][1]
 
@@ -188,16 +189,20 @@ def expand_query(query: str, df: Callable[[str], int], n_docs: int) -> str | Non
 
     「什么是空亡」→「空亡」，「太阳天蝎」→「太阳 天蝎」。`df(词)` = 语料里有几个文档含这个词。
 
-    可靠 = 查询几乎每个字都落在语料里出现过的词上（最多剩一个字，长句剩四分之一）。语料有十几万字，
-    「今天天气真好」里总能凑出「今天」「天气」；没有这条线，胡乱的查询会换来一堆看着像答案的噪音，比零命中更糟。
+    可靠 = 查询几乎每个字都落在语料里出现过的词上（最多剩一个字，长句剩四分之一；带问句外壳时剩一半：
+    「塔罗怎么读牌」明确在问塔罗，「读牌」没出现过不妨碍）。语料有十几万字，「今天天气真好」里总能凑出「今天」「天气」；
+    没有这条线，胡乱的查询会换来一堆看着像答案的噪音，比零命中更糟。
     """
     text = normalize(query)
+    stripped = text
     for word in _QUESTION_WORDS:
-        text = text.replace(word, " ")
+        stripped = stripped.replace(word, " ")
+    asked = stripped != text
     pieces: list[str] = []
+    loose: list[str] = []
     wanted = covered = 0
     common = _COMMON_SHARE * n_docs if n_docs >= _MIN_DOCS_FOR_COMMON else math.inf
-    for token in TOKEN.findall(text):
+    for token in TOKEN.findall(stripped):
         if not CJK_RUN.fullmatch(token):
             wanted += len(token)
             if df(token) > 0:
@@ -205,12 +210,17 @@ def expand_query(query: str, df: Callable[[str], int], n_docs: int) -> str | Non
                 covered += len(token)
             continue
         wanted += sum(1 for char in token if char not in _PARTICLES)
-        for piece in _segment(token[:_MAX_RUN], lambda term: df(term) > 0):
-            covered += sum(1 for char in piece if char not in _PARTICLES)
-            if df(piece) <= common and piece not in pieces:
+        found = _segment(token[:_MAX_RUN], lambda term: df(term) > 0)
+        for piece in found:
+            solid = sum(1 for char in piece if char not in _PARTICLES)
+            covered += solid
+            if solid and df(piece) <= common and piece not in pieces:
                 pieces.append(piece)
-    if not pieces or wanted - covered > max(1, wanted // 4):
+        if asked:  # 问句里没落在词上的单字留作弱线索：「塔罗怎么读牌」的「读」「牌」能把读牌那一节带上来
+            loose.extend(char for char in token if char not in _PARTICLES and not any(char in piece for piece in found))
+    if not pieces or wanted - covered > max(1, wanted // (2 if asked else 4)):
         return None
+    pieces.extend(char for char in dict.fromkeys(loose) if df(char) > 0)
     rewritten = " ".join(pieces)
     return rewritten if rewritten != normalize(query).strip() else None
 

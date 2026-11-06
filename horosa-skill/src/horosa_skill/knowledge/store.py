@@ -689,6 +689,15 @@ _MANUAL_HOME_KEYS = frozenset({"总览", "Overview", "Page"})
 _SHEN_SUFFIX = re.compile(r"[子丑寅卯辰巳午未申酉戌亥]神$")
 _PARENTHETICAL = re.compile(r"[（(].*?[）)]$")
 _CJK_TEXT = re.compile(r"[㐀-鿿]")
+# 查询里点名的领域：「六爻起卦」的「六爻」是在说去哪本手册找，别的手册提到「起卦」不该排到前面。
+_DOMAIN_WORDS = {
+    "八字": ("bazi", "bazi_pithy"), "紫微": ("ziwei",), "紫微斗数": ("ziwei",), "奇门": ("dunjia", "qimen"), "奇门遁甲": ("dunjia", "qimen"),
+    "遁甲": ("dunjia", "qimen"), "六壬": ("liureng_manual", "liureng"), "大六壬": ("liureng_manual", "liureng"), "太乙": ("taiyi",),
+    "六爻": ("guazhan",), "塔罗": ("tarot",), "印度": ("india",), "印度占星": ("india",), "合盘": ("relative",), "择日": ("zeri",),
+    "节气": ("jieqi",), "三式": ("sanshi",), "玄史": ("xuanshi",), "演禽": ("yanqin",), "一掌经": ("yizhangjing",), "占星": ("astro_manual", "astro"),
+}
+_NAMED_DOMAIN_BOOST = 2.0
+_THIN_RESULT = 3  # 比这还少又没有点名命中：多半是整串碰巧在哪儿连着出现过一次，补上切开后的结果
 _TIER_SCORE = {3: 100.0, 2: 60.0, 1: 30.0, 0: 0.0}  # 全等 > 名字里含 > 标题里含 > 只在正文
 _RELEVANCE_SPAN = 30.0  # 相关度压进 [0, 30)：档内按相关度排，永远越不过上一档
 
@@ -807,11 +816,16 @@ def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int]) -
         if term not in df:
             df[term] = sum(1 for doc in corpus if retrieval.term_count(doc.haystack, term))
     ranked: list[tuple[float, bool, SearchDoc]] = []
+    named = {term: _DOMAIN_WORDS["".join(term)] for term in parsed.scored if "".join(term) in _DOMAIN_WORDS}
     for doc in corpus:
-        relevance = sum(
-            retrieval.bm25(sum(weight * retrieval.term_count(text, term) for text, weight in doc.fields),
-                           df[term], n_docs, len(doc.haystack), avg_len)
-            for term in parsed.scored)
+        by_term = {
+            term: retrieval.bm25(sum(weight * retrieval.term_count(text, term) for text, weight in doc.fields),
+                                 df[term], n_docs, len(doc.haystack), avg_len)
+            for term in parsed.scored}
+        relevance = sum(by_term.values())
+        topic = sum(score for term, score in by_term.items() if term not in named)
+        if topic and any(doc.domain in domains for domains in named.values()):
+            relevance *= _NAMED_DOMAIN_BOOST
         tier = _tier(doc, exact, whole)
         if tier == 0 and relevance <= 0:
             continue
@@ -850,10 +864,14 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
     df: dict[tuple[str, ...], int] = {}
     ranked = _rank(corpus, query, df)
     expanded = None
-    if not ranked:
+    if len(ranked) < _THIN_RESULT and " " not in query and not any(row[1] for row in ranked):
+        whole_query = retrieval.normalize(query)
         expanded = retrieval.expand_query(
-            query, retrieval.cached(lambda term: sum(1 for doc in corpus if term in doc.haystack)), len(corpus))
-        ranked = _rank(corpus, expanded, df) if expanded else []
+            query, retrieval.cached(lambda term: 0 if term == whole_query else sum(1 for doc in corpus if term in doc.haystack)),
+            len(corpus))
+        if expanded:
+            found = {id(row[2]) for row in ranked}  # 原查询的命中留在前面：改写只补不换
+            ranked = [*ranked, *(row for row in _rank(corpus, expanded, df) if id(row[2]) not in found)]
     terms = [term for term in retrieval.parse_query(expanded or query).terms if term]
     matches = [
         {
