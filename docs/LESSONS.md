@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 启动锁撞上回收的 PID：hand-off 给启动器的锁没人释放，下次启动时那个 pid 若已被无关进程占用，「活持有者不回收」让每次调用都回 `runtime.starting`，启动脚本一次不跑 | 启动器锁按时长封顶（960 s，大于一次启动的上限），上限内才信「活着」；服务都起来 / 停掉时收回；`tests/test_runtime_recovery.py` |
 | v0.47.2-dev (2026-11-06) | `memory_query` 的 `text` 只看最近 400 条：FTS 查得到，`query_runs` 却回 0 条，且不告诉调用方；两字词根本不走 FTS | 问题与答案走索引全库可搜（FTS，短查询 / 缺 FTS5 用 LIKE），并进候选；盘面正文深扫仍有窗口，结果带 `not_scanned`；`tests/test_memory_search.py` |
 | v0.47.2-dev (2026-11-06) | 记忆库出问题拖垮整个服务：只读库 / 路径不可用让 `MemoryStore()` 抛错、服务建不起来；只坏中间页的库构造时看不出来，每次存档都 malformed，重启也不隔离；隔离日志承诺的「memory 工具重建索引」不存在 | 构造不抛（`init_error`，下次操作自愈）；写路径 `_writer` 遇 malformed 且 `integrity_check` 确认后隔离重建；删掉那句承诺；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-06) | `horosa_memory_query` 说明写「run summaries」，缺省却带全量产物：20 份 63 KB 的星盘线上 1.8 MB，超 1 MiB SSE 上限；2 MB 的八字 42.5 MB。v0.46.1 的预算只认顶层 `data`，记忆结果没有，`horosa_memory_show` 2.1 MB 同样绕过 | `include_payload` 缺省 false；`_fit_result_budget` 按形状裁，记忆产物先裁原始子树、再整份占位；`tests/test_memory_mcp_budget.py` |
@@ -177,6 +178,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 启动锁撞上回收的 PID：永远 `starting`
+
+- **症状**：架构审计用一个无关的活进程冒充锁里的 pid（锁已 30 天）：连续三次 `start_local_services` 都回 `starting: true`，启动脚本一次没跑，那个进程一退出才恢复。agent 只会按 `retry_after_seconds` 一直重试。
+- **根因**：工具调用路径的预算只有 5 秒，冷启动都走 `_hand_lock_to` 把锁交给启动器；启动器退出后没有人释放它（重试走 `probe`，不再进 `start_local_services`），锁文件留在盘上。下次重启后若那个 pid 被回收，`pid_alive` 说「活着」，`reclaim_if_stale` 又规定活持有者永不回收。`start_horosa_local.ps1` 自己的注释就写着 Windows 回收 PID 很快。
+- **修复**：`pidlock._AGE_CAPPED_OWNERS`：只有交给启动器的锁（`LAUNCHER_OWNER`）按 `stale_after_seconds` 封顶，上限内照旧相信存活判定。960 s 大于首次 CDS 训练的 15 分钟，所以「合法的长启动必须被尊重」这条理由仍成立。别的持有者（`runtime-start` / `evaluation` / `runtime-state`）的 pid 就是持锁进程自己，规则不变，`test_second_process_does_not_launch_while_a_start_is_in_flight` 用 300 天前的 `runtime-start` 锁锁着这一点。`release_launcher` 在发现服务全起来、等到别人起好、停服务成功时收回，只动启动器的锁。
+- **边界**：工具调用的重试走 `probe` 不进 `start_local_services`，那条路上锁留到下一次启动，由时长封顶兜底，最坏挡 16 分钟。没有加看门狗线程（manager 的设计说明明确不要）。macOS 启动器 pid 文件的同类问题（`start_horosa_local.sh` 对被回收的 pid exit 1，manager 因为没有可达服务不跑停脚本）不在这条里，是读代码得出的，没有复现。
+- **守卫**：`tests/test_runtime_recovery.py`。负向对照：封顶对所有持有者生效时 `test_other_live_holders_are_never_reclaimed_by_age` 红；`release_launcher` 不看持有者时 `test_services_up_leaves_a_live_start_in_another_process_alone` 红。
+- **法则**：记下来的 pid 只是线索，不是身份；凡是记别的进程 pid 的锁都要有时长上限。
 
 ### v0.47.2-dev / 2026-11-06 — 文本检索只看最近 400 条，而且不说
 

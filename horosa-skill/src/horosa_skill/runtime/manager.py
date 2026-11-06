@@ -30,7 +30,7 @@ from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, holders_outside_runtime_root, trust_unknown_ports
-from horosa_skill.runtime.pidlock import describe_lock, release as release_lock, try_pid_lock
+from horosa_skill.runtime.pidlock import LAUNCHER_OWNER, describe_lock, release as release_lock, release_launcher, try_pid_lock
 from horosa_skill.runtime.ports import port_holders
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.runtime.windows_jar_patch import WindowsBootJarPatchMixin
@@ -461,7 +461,7 @@ def _hand_lock_to(lock_path: Path, pid: Any) -> None:
         release_lock(lock_path)
         return
     payload["pid"] = pid
-    payload["owner"] = "runtime-launcher"
+    payload["owner"] = LAUNCHER_OWNER
     try:
         lock_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     except OSError:
@@ -1215,7 +1215,9 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 initial_status = self.endpoint_identities()
                 # 可达但不是我们的 → 报冲突并退出；绝不采用、绝不代为终止。
                 self._require_no_foreign_holders(initial_status)
+                lock_path = self.runtime_root / ".runtime-start.lock"
                 if self._all_services_reachable(initial_status):
+                    release_launcher(lock_path)  # 上一次启动的 hand-off 没人释放；服务都在，它的活儿已经干完了
                     if self.load_runtime_state() is None:
                         self._write_runtime_state(
                             {
@@ -1272,13 +1274,13 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     if wait_seconds is None
                     else max(0.0, float(wait_seconds))
                 )
-                lock_path = self.runtime_root / ".runtime-start.lock"
                 if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner="runtime-start"):
                     holder = describe_lock(lock_path)
                     waited = self._wait_for_service_state(
                         expected_reachable=True, timeout_seconds=budget
                     )
                     if waited["ready"]:
+                        release_launcher(lock_path)
                         return {
                             "ok": True, "already_running": True, "started_by_other_process": True,
                             "command": None, "stdout": "", "stderr": "", "endpoints": waited["endpoints"],
@@ -1621,6 +1623,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             )
             if completed.returncode == 0 and shutdown["ready"]:
                 self._clear_runtime_state()
+                release_launcher(self.runtime_root / ".runtime-start.lock")
             else:
                 self._write_runtime_state(
                     {

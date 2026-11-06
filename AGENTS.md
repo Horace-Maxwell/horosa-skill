@@ -1066,8 +1066,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   生命周期操作只在 stub 上绿过不算数，矩阵 lane 的 stop 步骤要求端口真释放。
 - **启动是异步、幂等、跨进程互斥的。** `start_local_services(wait_seconds=)` 最多阻塞预算秒，
   超出即 `{"starting": True, retry_after_seconds}` → 工具层的 `runtime.starting`。跨进程锁
-  （`runtime/pidlock.py`）的持有者写成**启动器自己的 pid**，锁的寿命恰等于一次启动；加锁后的每一条
+  （`runtime/pidlock.py`）超预算时交给**启动器自己的 pid**（`LAUNCHER_OWNER`）；加锁后的每一条
   出口都在 `finally` 里释放（不释放会让一个长命的 serve 把后续所有启动永久挡死）。
+  记着别的进程 pid 的锁按时长封顶（`_AGE_CAPPED_OWNERS`，960 s，大于一次启动的上限）：pid 会被回收，「活着」不等于还是它；
+  持锁进程自己的 pid 不封顶，活着就不回收。服务全起来、等到别人起好、停服务成功时 `release_launcher` 收回，只动启动器的锁（v0.47.2-dev）。
 - **绝不采用身份不符的服务栈，也绝不终止不属于自己的进程。** 「HTTP 200」不是身份证明：
   归属判定走 `runtime/identity.py` 的三级证据（`/horosaIdentity` 的 app 标记 + 启动 nonce → 监听
   进程命令行含 runtime 根 → 我方注册表 pid 存活）。`ours` 才用它，**强证据**才允许停/重启它
