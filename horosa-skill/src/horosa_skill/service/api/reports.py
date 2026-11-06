@@ -454,6 +454,22 @@ class ReportsAPI:
                 query_text=request.question,
                 group_id=trace["group_id"],
             )
+            if not result.ok:
+                # 起盘失败就报起盘失败。往下走只会在「导出契约缺失」上再失败一次，真正的错误码与恢复说明全丢。
+                trace["error_code"] = result.code
+                return {
+                    "ok": False,
+                    "tool": result.tool,
+                    "code": result.code,
+                    "message": result.message,
+                    "details": result.details,
+                    "error": result.error.model_dump(mode="json") if result.error else None,
+                    "summary": result.summary,
+                    "warnings": result.warnings,
+                    "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
+                    "trace_id": result.trace_id,
+                    "group_id": result.group_id,
+                }
             if not result.memory_ref:
                 raise ToolValidationError(
                     "Tool result was not saved and cannot be rendered as a report.",

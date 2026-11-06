@@ -558,7 +558,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
 8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
-9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混；快照失败 log + `snapshot_error`，
+9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混（`zone` 认不出 = `tool.invalid_zone`，曾回落 +08:00）；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
    先判空再格式化，`f"{... or ''}"` 只有显式 `or ''` 才安全。
 10. **算源声明**：`contracts/technique_provenance.json` **只由** `scripts/gen_technique_provenance.py` 生成
@@ -1185,6 +1185,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
   clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
   `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.
+- **失败要走到 `warnings` 或错误码（v0.47.2-dev）。** `verify_silent_degrades` 的宽 except 规则含项目错误基类（`HorosaSkillError` / `ToolTransportError`）：吞后端失败要 `_degrade`，只写进 `data` 不算告诉调用方。`report_from_tool` 先看 `result.ok`：失败的 run 也会存档，查 `memory_ref` 挡不住，回 `ok:false` + 原错误码。
 - **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
   month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
   `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/

@@ -355,7 +355,8 @@ platform and code page — decode them as UTF-8.
 - Envelope keys: `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
   object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`; `null` with a `memory.save_failed` warning means the
   result is complete but was not stored, so there is no `run_id` to report on — relay it and suggest `doctor`),
-  `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`.
+  `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`. An unrecognized `zone` is refused with
+  `tool.invalid_zone`: ask the user for an offset (`+08:00`) or an IANA name, never guess one.
 - Everything above still holds: never hand-calculate, explain only from `export_snapshot.export_text`, quote
   `data.technique_card` after the answer.
 

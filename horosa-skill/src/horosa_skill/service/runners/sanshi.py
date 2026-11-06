@@ -35,6 +35,13 @@ from horosa_skill.service.options_cn import (
 )
 
 
+# 同时刻的星盘只是大六壬的上下文：取不到不拖累课传，但依赖它的段落会缺席，调用方要知道原因。
+_LIURENG_NO_CHART = bilingual(
+    "大六壬：这次没取到同时刻的星盘，依赖星盘的段落缺席；四课三传不受影响。",
+    "Liu Ren: the same-moment chart could not be fetched, so sections that depend on it are absent; the lessons and transmissions are unaffected.",
+)
+
+
 class SanshiRunners:
     _TIAN_GAN = ("甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸")
 
@@ -391,8 +398,10 @@ class SanshiRunners:
             chart = self._call_remote("/chart", _liureng_chart_payload(payload))
         except HorosaSkillError as exc:
             chart_error = {"code": exc.code, "message": str(exc), "details": exc.details}
+            _degrade("liureng chart context fetch failed: %s", exc, note=_LIURENG_NO_CHART)
         except Exception as exc:
             chart_error = {"code": "liureng.chart_context_unavailable", "message": str(exc), "details": {}}
+            _degrade("liureng chart context failed: %s", exc, note=_LIURENG_NO_CHART)
 
         # 决策层 S3（可选，缺省关）：没给 zhanCategory 时按问题文本分门类，驱动 [占断向导] 段。
         payload = self._decide_zhan_category(payload)
