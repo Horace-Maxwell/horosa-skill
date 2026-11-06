@@ -7,6 +7,8 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
+from horosa_skill.errors import bilingual
+
 logger = logging.getLogger("horosa_skill.service")  # 显式名：模块拆进子包后日志名不变
 
 # ---- 降级说明收集器（v0.36.0 A2）----
@@ -37,6 +39,20 @@ def _degrade(fmt: str, *args: Any, note: str | None = None) -> str:
     if notes is not None and text not in notes:
         notes.append(text)
     return text
+
+
+# 存档是旁路：写不进本地记忆不许丢掉已经算好的结果。run_tool 与 dispatch 的存档块都走这里，warnings 带这个码。
+MEMORY_SAVE_FAILED = "memory.save_failed"
+
+
+def _memory_save_failed(exc: Exception) -> str:
+    """记一次存档失败，返回要放进 warnings 的那句话（结果照回，memory_ref=None）。"""
+    reason = f"{type(exc).__name__}: {exc}"
+    note = f"{MEMORY_SAVE_FAILED}: " + bilingual(
+        f"这次结果没写进本地记忆（{reason}），所以没有 run_id；结果本身完整可用。",
+        f"this result was not saved to local memory ({reason}), so there is no run_id; the result itself is complete.",
+    )
+    return _degrade("memory save failed: %s", reason, note=note)
 
 
 # ---- 进度上报与取消检查点（v0.37.0 C6）----

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Awaitable, Callable
+from functools import partial
 from typing import Any
 
 from mcp import types as mcp_types
@@ -166,6 +168,47 @@ def _server_instructions(*, decision_layer_on: bool, compact: bool = False) -> s
     return text
 
 
+def _as_is(error: dict[str, Any]) -> dict[str, Any]:
+    """门面的返回就是 dict：闸门错误原样交回。"""
+    return error
+
+
+async def _gated_run(
+    mcp: MCPServer,
+    *,
+    gate: str | None,
+    payload: Any,
+    run: Callable[[Any], Awaitable[Any]],
+    refuse: Callable[[dict[str, Any]], Any],
+    operation: str,
+    tool_name: str | None = None,
+) -> Any:
+    """澄清闸 → 执行 → 兜底：所有工具体都走这一处（v0.47.2-dev）。
+
+    🔴 这段曾在四个工具体里各抄一份，except 分支还不一样：技法工具与 horosa_tool_run 没有 `except Exception`，
+    存档一出错就成了裸 `UnexpectedToolError`，合参干脆没有闸门。`gate=None` 的门面不过闸；`refuse` 把错误 dict 转成
+    这个工具的返回形状（信封或 dict）；闸门放行或用户在表单里答完之后，`run` 收到的是最终载荷。
+    elicit 必须在任何副作用之前：MRTR 的重试会重放整个工具函数。
+    """
+    if gate is not None and isinstance(payload, dict):
+        error = _agent_preflight_error(gate, payload)
+        if error is not None:
+            updated = await _maybe_elicit_gate(mcp, gate, payload, error)
+            if isinstance(updated, mcp_types.InputRequiredResult):
+                return updated  # MRTR：客户端问完用户带 inputResponses 重发
+            if updated is None:
+                return refuse(error)
+            payload = updated
+    try:
+        return await run(payload)
+    except ToolValidationError as exc:
+        return refuse(_mcp_error_payload(exc))
+    except ValidationError as exc:
+        return refuse(_mcp_error_payload(_validation_error(operation, tool_name, exc)))
+    except Exception as exc:  # noqa: BLE001 - 兜底也必须是信封，不能变 isError 裸文本
+        return refuse(_mcp_internal_error_payload(exc))
+
+
 def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPServer:
     token = (os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
     # SDK 2.x：全部按关键字传（位置参数里插进了 title / description——位置传的 instructions 会落成 serverInfo.title，
@@ -186,28 +229,11 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     mcp.output_script = settings.output_script
 
     async def horosa_dispatch(**kwargs: Any) -> DispatchEnvelope:
-        raw_payload = _merge_mcp_arguments(kwargs)
-        if isinstance(raw_payload, dict):
-            error = _agent_preflight_error("dispatch", raw_payload)
-            if error is not None:
-                updated = await _maybe_elicit_gate(mcp, "dispatch", raw_payload, error)
-                if isinstance(updated, mcp_types.InputRequiredResult):
-                    return updated  # MRTR：客户端问完用户带 inputResponses 重发
-                if updated is None:
-                    return _gate_to_dispatch_envelope(error)
-                raw_payload = updated
-        try:
-            return await _run_tool_blocking(
-                mcp, service.dispatch, _normalize_mcp_request(raw_payload, DispatchInput)
-            )
-        except ToolValidationError as exc:
-            return _gate_to_dispatch_envelope(_mcp_error_payload(exc))
-        except ValidationError as exc:
-            return _gate_to_dispatch_envelope(
-                _mcp_error_payload(_validation_error("horosa_dispatch", "dispatch", exc))
-            )
-        except Exception as exc:  # noqa: BLE001 - 兜底也必须是 envelope，不能变 isError 裸文本
-            return _gate_to_dispatch_envelope(_mcp_internal_error_payload(exc))
+        async def _run(payload: Any) -> Any:
+            return await _run_tool_blocking(mcp, service.dispatch, _normalize_mcp_request(payload, DispatchInput))
+
+        return await _gated_run(mcp, gate="dispatch", payload=_merge_mcp_arguments(kwargs), run=_run,
+                                refuse=_gate_to_dispatch_envelope, operation="horosa_dispatch", tool_name="dispatch")
     dispatch_doc = (
         "Route a natural-language 术数/占星 request to the right Horosa technique tools and run them. "
         "Results are saved to local memory by default (save_result=false to disable)."
@@ -239,22 +265,11 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         """
 
         async def facade(**kwargs: Any) -> dict[str, Any]:
-            raw_payload = _merge_mcp_arguments(kwargs)
-            if gate is not None and isinstance(raw_payload, dict):
-                error = _agent_preflight_error(gate, raw_payload)
-                if error is not None:
-                    updated = await _maybe_elicit_gate(mcp, gate, raw_payload, error)
-                    if isinstance(updated, mcp_types.InputRequiredResult):
-                        return updated  # MRTR：客户端问完用户带 inputResponses 重发
-                    if updated is None:
-                        return error
-                    raw_payload = updated
-            payload_for_run = raw_payload
+            async def _run(payload: Any) -> dict[str, Any]:
+                # 归一化放进工作线程：抛出的校验错误一样落进 _guarded_facade 的护栏。
+                return await _guarded_facade(mcp, name, lambda: getattr(service, method)(_normalize_mcp_request(payload, model)))
 
-            def _run() -> dict[str, Any]:
-                return getattr(service, method)(_normalize_mcp_request(payload_for_run, model))
-
-            return await _guarded_facade(mcp, name, _run)
+            return await _gated_run(mcp, gate=gate, payload=_merge_mcp_arguments(kwargs), run=_run, refuse=_as_is, operation=name)
 
         facade.__name__ = facade.__qualname__ = name
         facade.__doc__ = doc
@@ -424,27 +439,19 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
     async def horosa_report_from_tool(**kwargs: Any) -> dict[str, Any]:
         raw_payload = _merge_mcp_arguments(kwargs)
-        if isinstance(raw_payload, dict):
-            tool_name = raw_payload.get("tool_name")
-            payload = raw_payload.get("payload")
-            if isinstance(tool_name, str) and isinstance(payload, dict):
-                error = _agent_preflight_error(tool_name, payload)
-                if error is not None:
-                    updated = await _maybe_elicit_gate(mcp, tool_name, payload, error)
-                    if isinstance(updated, mcp_types.InputRequiredResult):
-                        return updated  # MRTR：客户端问完用户带 inputResponses 重发
-                    if updated is None:
-                        return error
-                    raw_payload = dict(raw_payload)
-                    raw_payload["payload"] = updated
-        payload_for_run = raw_payload
+        tool_name = raw_payload.get("tool_name") if isinstance(raw_payload, dict) else None
+        technique_payload = raw_payload.get("payload") if isinstance(raw_payload, dict) else None
+        gated = isinstance(tool_name, str) and isinstance(technique_payload, dict)
 
-        def _run() -> dict[str, Any]:
-            return service.report_from_tool(
-                _normalize_mcp_request(payload_for_run, ReportFromToolInput)
+        async def _run(payload: Any) -> dict[str, Any]:
+            # 闸门看的是技法载荷；放行（或表单答完）之后把最终载荷放回 ReportFromToolInput 的 payload 位。
+            body = {**raw_payload, "payload": payload} if gated else raw_payload
+            return await _guarded_facade(
+                mcp, "horosa_report_from_tool", lambda: service.report_from_tool(_normalize_mcp_request(body, ReportFromToolInput))
             )
 
-        return await _guarded_facade(mcp, "horosa_report_from_tool", _run)
+        return await _gated_run(mcp, gate=tool_name if gated else None, payload=technique_payload, run=_run, refuse=_as_is,
+                                operation="horosa_report_from_tool")
     horosa_report_from_tool.__doc__ = (
         "One-shot: run a technique tool AND prepare its report. NOTE this re-casts the chart — if you "
         "already called the tool and hold a run_id, use horosa_report_render instead (avoids a duplicate "
@@ -594,27 +601,14 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             except ToolValidationError as exc:
                 return _mcp_error_envelope(exc, tool_name=tool_name)
             payload.pop("tool_name", None)
-            error = _agent_preflight_error(tool_name, payload)
-            if error is not None:
-                updated = await _maybe_elicit_gate(mcp, tool_name, payload, error)
-                if isinstance(updated, mcp_types.InputRequiredResult):
-                    return updated  # MRTR：客户端问完用户带 inputResponses 重发
-                if updated is None:
-                    return _gate_to_envelope(error, tool_name=tool_name)
-                payload = updated
-            try:
-                return await _run_tool_blocking(
-                    mcp,
-                    service.run_tool,
-                    tool_name,
-                    _normalize_mcp_request(payload, TOOL_DEFINITIONS[tool_name].input_model),
-                )
-            except ToolValidationError as exc:
-                return _mcp_error_envelope(exc, tool_name=tool_name)
-            except ValidationError as exc:
-                return _mcp_error_envelope(
-                    _validation_error("horosa_tool_run", tool_name, exc), tool_name=tool_name
-                )
+
+            async def _run(body: Any) -> Any:
+                model = TOOL_DEFINITIONS[tool_name].input_model
+                return await _run_tool_blocking(mcp, service.run_tool, tool_name, _normalize_mcp_request(body, model))
+
+            return await _gated_run(mcp, gate=tool_name, payload=payload, run=_run,
+                                    refuse=partial(_gate_to_envelope, tool_name=tool_name),
+                                    operation="horosa_tool_run", tool_name=tool_name)
 
         horosa_tool_run.__doc__ = (
             "Run any Horosa technique tool by name. Pass `tool_name` plus the tool's input fields: "
@@ -650,29 +644,12 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
         def _factory(tool_name: str, model: Any) -> Any:
             async def _tool(**kwargs: Any) -> ToolEnvelope:
-                raw_payload = _merge_mcp_arguments(kwargs)
-                if isinstance(raw_payload, dict):
-                    error = _agent_preflight_error(tool_name, raw_payload)
-                    if error is not None:
-                        updated = await _maybe_elicit_gate(mcp, tool_name, raw_payload, error)
-                        if isinstance(updated, mcp_types.InputRequiredResult):
-                            return updated  # MRTR：客户端问完用户带 inputResponses 重发
-                        if updated is None:
-                            return _gate_to_envelope(error, tool_name=tool_name)
-                        raw_payload = updated
-                try:
-                    return await _run_tool_blocking(
-                        mcp,
-                        service.run_tool,
-                        tool_name,
-                        _normalize_mcp_request(raw_payload, model),
-                    )
-                except ToolValidationError as exc:
-                    return _mcp_error_envelope(exc, tool_name=tool_name)
-                except ValidationError as exc:
-                    return _mcp_error_envelope(
-                        _validation_error(tool_name, tool_name, exc), tool_name=tool_name
-                    )
+                async def _run(payload: Any) -> Any:
+                    return await _run_tool_blocking(mcp, service.run_tool, tool_name, _normalize_mcp_request(payload, model))
+
+                return await _gated_run(mcp, gate=tool_name, payload=_merge_mcp_arguments(kwargs), run=_run,
+                                        refuse=partial(_gate_to_envelope, tool_name=tool_name),
+                                        operation=tool_name, tool_name=tool_name)
 
             _tool.__name__ = TOOL_DEFINITIONS[tool_name].mcp_name
             _tool.__doc__ = build_tool_docstring(tool_name)

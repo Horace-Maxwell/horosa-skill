@@ -458,7 +458,7 @@ class ReportsAPI:
                 raise ToolValidationError(
                     "Tool result was not saved and cannot be rendered as a report.",
                     code="report.from_tool.unsaved_result",
-                    details={"tool_name": request.tool_name},
+                    details={"tool_name": request.tool_name, "warnings": list(result.warnings)},
                 )
             normalized_ai_report = self._normalize_report_ai_payload(
                 ai_report=request.ai_report,

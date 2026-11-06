@@ -353,7 +353,8 @@ platform and code page — decode them as UTF-8.
   then rerun with `agent_confirmed_settings: true` + `clarification_notes` (or `defaults_accepted: true` only when
   the user explicitly accepts defaults) added to the payload. Never set the flag without a real answer.
 - Envelope keys: `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
-  object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`),
+  object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`; `null` with a `memory.save_failed` warning means the
+  result is complete but was not stored, so there is no `run_id` to report on — relay it and suggest `doctor`),
   `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`.
 - Everything above still holds: never hand-calculate, explain only from `export_snapshot.export_text`, quote
   `data.technique_card` after the answer.

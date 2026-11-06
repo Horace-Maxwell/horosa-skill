@@ -34,6 +34,7 @@ from horosa_skill.schemas.tools import DispatchInput, HecanInput
 from horosa_skill.service._context import (
     _RUN_QUERY_TEXT,
     _degrade,
+    _memory_save_failed,
     _progress_tick,
     logger,
 )
@@ -422,12 +423,17 @@ class DispatchAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace:
-            run_id = self.store.create_run(
-                entrypoint="dispatch",
-                query_text=request.query,
-                subject=request.model_dump(exclude_none=True),
-                group_id=trace["group_id"],
-            ) if request.save_result else None
+            run_id: str | None = None
+            if request.save_result:
+                try:
+                    run_id = self.store.create_run(
+                        entrypoint="dispatch",
+                        query_text=request.query,
+                        subject=request.model_dump(exclude_none=True),
+                        group_id=trace["group_id"],
+                    )
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路：开不了 run 也要把技法算完
+                    dispatch_warnings.append(_memory_save_failed(exc))
 
             def birth_payload() -> dict[str, Any]:
                 if request.birth is not None:
@@ -541,15 +547,19 @@ class DispatchAPI:
             )
 
             if request.save_result and run_id is not None:
-                self.store.record_entities(run_id, _extract_entities(request.model_dump(exclude_none=True), request.query))
-                envelope.memory_ref = self.store.record_dispatch_result(
-                    run_id=run_id,
-                    payload=envelope.model_dump(mode="json"),
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
-                )
-                trace["run_id"] = run_id
-                trace["artifact_path"] = envelope.memory_ref.artifact_path if envelope.memory_ref else None
+                try:
+                    self.store.record_entities(run_id, _extract_entities(request.model_dump(exclude_none=True), request.query))
+                    envelope.memory_ref = self.store.record_dispatch_result(
+                        run_id=run_id,
+                        payload=envelope.model_dump(mode="json"),
+                        trace_id=trace["trace_id"],
+                        group_id=trace["group_id"],
+                    )
+                    trace["run_id"] = run_id
+                    trace["artifact_path"] = envelope.memory_ref.artifact_path if envelope.memory_ref else None
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
+                    envelope.memory_ref = None
+                    envelope.warnings.append(_memory_save_failed(exc))
 
             trace["success"] = envelope.ok
             return envelope
