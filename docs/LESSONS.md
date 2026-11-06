@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | JSON 报告的闸永远是绿的：AI 只写「好。」时覆盖率 1.0、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`、`ai_analysis_complete: True`，量的都是机器回填 | 闸改量调用方自己写的答案；逐章覆盖如实报但不拦交付（定向解读是有意设计）；chart 不要 AI；`tests/test_report_gates.py` |
 | v0.47.2-dev (2026-11-06) | 存档只增不减且看不见：产物带 `indent=2`，答过没回读的 run 会被 `memory prune` 选中，`doctor` 只报磁盘余量不报自己用了多少 | 产物不带缩进；写回答案算点用，prune 也跳过升级前写回的；`doctor.memory_db.usage`；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-06) | install 不防并发也不防崩溃：别的会话在 stop 与换目录之间从旧树起启动器（install 仍报成功）；被杀的 install 留下 `.hi-*` 约 2 GB，卸载也不清；崩在两次改名之间只剩 `previous/`，离线装不回来；完整的 `.part` 每次重试都 416；镜像回 200 + 错误页时回退不生效 | 换目录全程持启动锁；`.hi-*` 记属主 pid，install 一进来就清、进卸载清单；启动路径与 install 恢复完整的 `previous/`；416 看 Content-Range；逐候选校验内容；`tests/test_runtime_recovery.py` |
 | v0.47.2-dev (2026-11-06) | 启动锁撞上回收的 PID：hand-off 给启动器的锁没人释放，下次启动时那个 pid 若已被无关进程占用，「活持有者不回收」让每次调用都回 `runtime.starting`，启动脚本一次不跑 | 启动器锁按时长封顶（960 s，大于一次启动的上限），上限内才信「活着」；服务都起来 / 停掉时收回；`tests/test_runtime_recovery.py` |
@@ -180,6 +181,17 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — JSON 报告的闸永远是绿的
+
+- **症状**：架构审计：`answer_text: "好。"` 时 JSON 里有 16 段分析、`coverage_ratio: 1.0`、`ai_analysis_complete: True`、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`，`completion_hint` 说报告含「AI analysis」。
+- **根因**：`_ai_coverage_status`、`_section_coverage_matrix`、`_report_quality`、`_delivery_checklist` 都拿 `merged_ai_report` 量，而它含 `_default_ai_report` 的确定性回填。回填本身是有意的（`builder.py`：Machine JSON keeps deterministic coverage backfills），问题在于闸把回填算成了 AI 写的。测试里 `ready_to_deliver` 全是 `is True`，从没有人写过它该是 False 的情形。
+- **修复**：`_caller_answer` 取调用方自己写的答案（run 里写回的 + 这次传的），闸全部改量它（`_caller_answer_view`），`report_index.has_ai_answer` 同样。`ai_report` 里的回填不动，PDF / DOCX 不动。
+- **设计判断（与原任务的差异）**：严格按「每章都要 AI 答」判 `ready_to_deliver` 时，`test_targeted_consultation_report_roundtrip_persists_and_retrieves_ai_analysis` 红：那份报告有直接结论、证据、建议和三段定向分析，只没有逐章解释。`_complete_analysis_sections` 写明「Preserve the AI's targeted answer while backfilling source-section coverage」，定向解读可交付是有意设计，所以**没有改这条断言**，改的是闸的语义：`ready_to_deliver` 要的是调用方写了结论、摘要、分析段、建议、证据；逐章覆盖照实写进 `section_coverage_matrix` / `coverage_status` / `checks.source_sections_covered`，但不拦交付（`not_blocking`）。`ai_analysis_complete` 仍要求全覆盖。`style:"chart"` 本来就不要 AI，AI 类检查不算缺。
+- **后果**：只写一段 `answer_text`（没有结构化字段）的 JSON 报告现在是 `ready_to_deliver: False`，`missing` 列出缺什么。这与模板要求的字段一致，但是行为变化。
+- **核对**：新旧 `ReportBuilder` 跑全部样例工具共 228 份文档：人读章节、`ai_report`、`figures` 零差异；变的只有这些闸字段与由它们派生的 `plain_text` / `search_text` / `content_outline.body_chars`。`ready_to_deliver` 只在 4 份上翻转（解析 / 注册表 / 知识类工具的 chart 样式，渲染时本来就被 `report.no_chart_content` 拒绝）。
+- **守卫**：`tests/test_report_gates.py`。五组负向对照：闸改回量 merged、逐章覆盖拦交付、chart 要 AI、`has_ai_answer` 读 merged、提示语恒说逐章覆盖，各自变红。
+- **法则**：闸要量被检查的东西本身；一个永远为真的字段比没有这个字段更糟。写 `is True` 的测试时，同时写一条它该是 False 的。
 
 ### v0.47.2-dev / 2026-11-06 — 存档增长的三个便宜修法（不做自动保留）
 

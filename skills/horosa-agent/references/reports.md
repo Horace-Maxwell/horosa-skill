@@ -55,6 +55,12 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 6. Confirm the returned artifact exists and is retrievable via `horosa_memory_show` /
    `horosa_memory_query`.
 
+**Checking a JSON report.** `report_index.ready_to_deliver` is measured on what you wrote, not on the deterministic
+text the report fills in. It is `false` until you supply `direct_answer` (or `answer_text`), `executive_summary`,
+`analysis_sections`, `recommendations` and `evidence`; `delivery_checklist.missing` names what is absent.
+`section_coverage_matrix` shows which chart sections you actually explained. A targeted answer that skips sections
+is still deliverable, so report those gaps rather than padding them.
+
 **Reading runs back.** `horosa_memory_query` returns summaries (`run_id`, question, tools, artifact paths); pass
 `include_payload: true` only when you need stored payloads in the result. `horosa_memory_show` returns the run in
 full. Both stay inside one MCP message: past about 900 KB the largest raw engine subtrees become

@@ -1327,6 +1327,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
     段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
+- **JSON 报告的闸量调用方自己写的答案（v0.47.2-dev）。** `_ai_coverage_status` / `_section_coverage_matrix` / `_report_quality` / `_delivery_checklist` / `report_index.has_ai_answer` 读 `_caller_answer_view`，不读 `merged_ai_report`：后者含确定性回填，量它永远是绿的。回填本身保留（`ai_report.analysis_sections`），人读版不用。`ready_to_deliver` 要结论、摘要、分析段、建议、证据；逐章覆盖如实报但不拦交付（定向解读可交付，见 `_complete_analysis_sections`）；`style:"chart"` 不要 AI。新增闸时写一条它该是 False 的测试。
 - **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
 
 ### 9.3.2 记忆存档（memory store / artifacts）
