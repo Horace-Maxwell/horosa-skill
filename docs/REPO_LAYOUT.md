@@ -120,7 +120,7 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   `registry.py` (atomic state file), `ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`.
 - `memory/store.py` — SQLite + JSON artifacts + run manifests + AI-answer write-back.
 - `knowledge/` — bundled Xingque knowledge (`store.py` + `data/`), the user's own notes (`user.py`, indexed by `index.py`, optional `vectors.py`), the shared retrieval rules (`retrieval.py`), and the cross-corpus search (`search.py`).
-- `reports/` — JSON / DOCX / PDF report builder + renderers.
+- `reports/` — JSON / DOCX / PDF reports. `builder.py` orders the document; `source.py` reads the stored run; `question.py`, `default_report.py`, `gates.py`, `search_index.py` and `template.py` each own one part; `layout.py` sets the printed order; `renderers.py`, `figures.py` and `pdf_tagging.py` draw it.
 - `surfaces/` — `mcp_server.py` (`create_mcp_server`: registers the tools / resources / prompts; server instructions;
   split in v0.41.1 into `mcp_surface.py` annotations + toolsets, `mcp_requests.py` argument normalization + signatures,
   `mcp_errors.py` envelopes, `mcp_runner.py` concurrency limit + blocking runs, `mcp_elicitation.py`, `mcp_auth.py`),

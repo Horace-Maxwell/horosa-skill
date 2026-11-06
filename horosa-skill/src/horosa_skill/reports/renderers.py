@@ -11,24 +11,14 @@ from typing import Any
 
 from horosa_skill import fsretry
 from horosa_skill.errors import bilingual
+from horosa_skill.reports.layout import _human_sections, body_blocks
 from horosa_skill.textscript import SIMPLIFIED, TRADITIONAL_HK
 
 
-HUMAN_RENDER_HIDDEN_SECTION_IDS = {
-    "report_metadata",
-    "report_quality",
-    "delivery_checklist",
-    "coverage_contract",
-    "section_coverage_matrix",
-    "targeted_analysis_contract",
-    "question_analysis",
-    "input_overview",
-    "technique_summary",
-    "ai_interpretation",
-    "recommendations_limitations",
-    "xingque_export_text",
-    "provenance",
-}
+# 版面块的用途 → 各格式的画法（layout.py 只说用途）。
+_DOCX_HEADING_LEVELS = {"summary": 1, "ai_topic": 2, "ai_section": 2, "figures": 2}
+_DOCX_ACCENTS = {"green": "0F766E", "blue": "2563EB", "amber": "B7791F"}
+_PDF_HEADING_LEVELS = {"summary": 0, "ai_topic": 0, "ai_section": 1, "figures": 1}
 
 
 def _labeler(script: str) -> Any:
@@ -552,12 +542,6 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
 
     ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
     display_question = str(document.get("intro_text") or "") or _display_question(document, ai_report, t)
-    human_executive_summary = _human_ai_value(ai_report, "executive_summary")
-    human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
-    human_reading_steps = _human_ai_list(ai_report, "reading_steps")
-    human_analysis_sections = _human_ai_list(ai_report, "analysis_sections")
-    human_recommendations = _human_ai_list(ai_report, "recommendations")
-    human_limitations = _human_ai_list(ai_report, "limitations")
     cover = doc.add_table(rows=3, cols=1)
     cover.autofit = False
     set_table_full_width(cover)
@@ -623,74 +607,25 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         if section.get("group") == "basis":
             add_heading_block(str(section.get("title") or t("基本信息")))
             add_text(str(section.get("body") or ""))
-    show_ai = document.get("show_ai", True) is not False
-
-    # 骨架与 PDF 同（v0.45.0，数据在前）：结论摘要 → 完整盘面（E 段号）→ AI 分节解读 → 附录。
-    if show_ai and (ai_report.get("analysis_focus") or ai_report.get("direct_answer")):
-        add_card(
-            t("核心结论"),
-            str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
-        )
-    if show_ai and human_executive_summary:
-        add_heading_block(t("总览摘要"))
-        add_text(str(human_executive_summary or ""))
-    answer_text = str(ai_report.get("answer_text") or "")
-    has_ai_body = show_ai and bool(
-        human_consultation_basis or human_reading_steps or human_analysis_sections or human_recommendations
-        or human_limitations or (answer_text and answer_text != str(human_executive_summary or ""))
-    )
-
-    def add_ai_body() -> None:
-        doc.add_page_break()
-        add_heading_block(t("AI 解读"))
-        note = doc.add_paragraph()
-        style_run(note.add_run(t("以下是 AI 依据上方盘面所作的解读，不是排盘引擎的输出；方括号里的 E 段号指向盘面原文。")),
-                  size=9, color="66706D")
-        if human_consultation_basis:
-            add_card(t("起盘依据"), str(human_consultation_basis or ""), accent="0F766E")
-        if human_reading_steps:
-            add_card(t("解盘步骤"), _steps_text(human_reading_steps), accent="2563EB")
-        if answer_text and answer_text != str(human_executive_summary or ""):
-            add_heading_block(t("完整解盘正文"), level=2)
-            add_text(answer_text)
-        if human_analysis_sections:
-            add_heading_block(t("正文解读"), level=2)
-            for section in human_analysis_sections:
-                if isinstance(section, dict):
-                    add_heading_block(str(section.get("title") or t("分析")), level=2)
-                    add_text(str(section.get("body") or section.get("content") or ""))
-                else:
-                    add_text(str(section))
-        if human_recommendations:
-            add_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent="B7791F")
-        if human_limitations:
-            add_heading_block(t("不确定处与限制"), level=2)
-            add_text("\n".join(f"- {item}" for item in human_limitations))
-
-    parts = {"chart": t("完整盘面"), "appendix": t("附录")}
-    current_group: str | None = None
-    ai_body_done = not has_ai_body
-    for section in human_sections:
-        group = section.get("group")
-        if group == "basis":
-            continue
-        if group == "appendix" and not ai_body_done:
-            add_ai_body()
-            ai_body_done = True
-        if group in parts and group != current_group:
+    figures = [f for f in document.get("figures") or [] if isinstance(f, dict)]
+    for block in body_blocks(document, t):
+        if block.kind == "card":
+            add_card(block.text, block.body, accent=_DOCX_ACCENTS[block.role])
+        elif block.kind == "heading":
+            add_heading_block(block.text, level=_DOCX_HEADING_LEVELS[block.role])
+        elif block.kind == "body":
+            add_text(block.body)
+        elif block.kind == "part":
             doc.add_page_break()
-            add_heading_block(parts[group])
-            figures = [f for f in document.get("figures") or [] if isinstance(f, dict)]
-            if group == "chart" and figures:
-                add_heading_block(t("盘图"), level=2)
-                add_figures(figures)
-        current_group = group
-        cite = str(section.get("cite_id") or "") if group == "chart" else ""
-        title = str(section.get("title") or t("章节"))
-        add_heading_block(f"{cite} · {title}" if cite else title, level=2 if group in parts else 1)
-        add_text(str(section.get("body") or ""))
-    if not ai_body_done:
-        add_ai_body()
+            add_heading_block(block.text)
+        elif block.kind == "note":
+            style_run(doc.add_paragraph().add_run(block.text), size=9, color="66706D")
+        elif block.kind == "figures":
+            add_figures(figures)
+        elif block.kind == "section":
+            add_heading_block(f"{block.cite} · {block.text}" if block.cite else block.text, level=2 if block.in_part else 1)
+            add_text(block.body)
+        # orphan_figures：DOCX 一直不补印（盘图只跟着「完整盘面」走）
 
     # 文档元数据：文件属性可检索/归档（标题/作者/主题/关键词/创建时间）。
     # OOXML core property 单项硬限 255 字符；search_index 里可能混入整段长文本，先滤短词再截断。
@@ -1488,14 +1423,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             story.append(Spacer(1, 9))
 
         ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
-        show_ai = document.get("show_ai", True) is not False
         display_question = str(document.get("intro_text") or "") or _display_question(document, ai_report, t)
-        human_executive_summary = _human_ai_value(ai_report, "executive_summary")
-        human_consultation_basis = _human_ai_value(ai_report, "consultation_basis")
-        human_reading_steps = _human_ai_list(ai_report, "reading_steps")
-        human_analysis_sections = _human_ai_list(ai_report, "analysis_sections")
-        human_recommendations = _human_ai_list(ai_report, "recommendations")
-        human_limitations = _human_ai_list(ai_report, "limitations")
         chart_style = document.get("style") == "chart"
         human_sections = [s for s in _human_sections(document) if isinstance(s, dict)]
         basis_sections = [s for s in human_sections if s.get("group") == "basis"]
@@ -1570,76 +1498,32 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             story.append(PageBreak())
             add_heading(str(document.get("intro_heading") or t("解读目标")))
             add_body(display_question)
-        # 报告骨架（v0.45.0，数据在前）：结论摘要 → 完整盘面（盘图 + E 段号原文）→ AI 分节解读 → 附录。
         # 摘要照 STORM 的 lead：能单独读、句句带段号；细读放在盘面之后，读者先看到「算出了什么」再看「怎么解」。
-        if show_ai and (ai_report.get("analysis_focus") or ai_report.get("direct_answer")):
-            add_note_card(
-                t("核心结论"),
-                str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""),
-                accent=green,
-            )
-        if show_ai and human_executive_summary:
-            add_heading(t("总览摘要"))
-            add_body(str(human_executive_summary or ""))
-        has_ai_body = show_ai and bool(
-            human_consultation_basis or human_reading_steps or human_analysis_sections or human_recommendations
-            or human_limitations
-            or (ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""))
-        )
-
-        def add_ai_body() -> None:
-            add_part(t("AI 解读"))
-            story.append(Paragraph(_esc(t("以下是 AI 依据上方盘面所作的解读，不是排盘引擎的输出；方括号里的 E 段号指向盘面原文。")), muted_note))
-            story.append(Spacer(1, 4))
-            if human_consultation_basis:
-                add_note_card(t("起盘依据"), str(human_consultation_basis or ""), accent=green)
-            if human_reading_steps:
-                add_note_card(t("解盘步骤"), _steps_text(human_reading_steps), accent=colors.HexColor("#2563eb"))
-            if ai_report.get("answer_text") and str(ai_report.get("answer_text")) != str(human_executive_summary or ""):
-                add_heading(t("完整解盘正文"))
-                add_body(str(ai_report.get("answer_text") or ""))
-            if human_analysis_sections:
-                add_heading(t("正文解读"))
-                for section in human_analysis_sections:
-                    if isinstance(section, dict):
-                        add_heading(str(section.get("title") or t("分析")), subheading, level=1)
-                        add_body(str(section.get("body") or section.get("content") or ""))
-                    else:
-                        add_body(str(section))
-            if human_recommendations:
-                add_note_card(t("建议"), "\n".join(f"- {item}" for item in human_recommendations), accent=amber)
-            if human_limitations:
-                add_heading(t("不确定处与限制"))
-                add_body("\n".join(f"- {item}" for item in human_limitations))
-
-        parts = {"chart": t("完整盘面"), "appendix": t("附录")}
-        current_group: str | None = None
-        ai_body_done = not has_ai_body
-        for section in human_sections:
-            group = section.get("group")
-            if group == "basis":
-                continue
-            if group == "appendix" and not ai_body_done:
-                add_ai_body()
-                ai_body_done = True
-            if group in parts and group != current_group:
-                add_part(parts[group], new_page=group != "appendix")
-                if group == "chart" and figures:
-                    add_heading(t("盘图"), level=1)
-                    story.extend(figure_flowables())
-            current_group = group
-            if group == "appendix":
-                story.append(CondPageBreak(70 * mm))  # 附录小表（技法依据 ~10 行）不被拆成「标题 + 两行」留在页底
-            cite = str(section.get("cite_id") or "") if group == "chart" else ""
-            title = str(section.get("title") or t("章节"))
-            add_heading(f"{cite} · {title}" if cite else title, level=1 if group in parts else 0, anchor=cite)
-            add_body(str(section.get("body") or ""))
-        if not ai_body_done:
-            add_ai_body()
-        if figures and current_group is None:  # 没有盘面段（极少数工具）：盘图跟在封面后
-            add_part(parts["chart"])
-            add_heading(t("盘图"), level=1)
-            story.extend(figure_flowables())
+        accents = {"green": green, "blue": colors.HexColor("#2563eb"), "amber": amber}
+        for block in body_blocks(document, t):
+            if block.kind == "card":
+                add_note_card(block.text, block.body, accent=accents[block.role])
+            elif block.kind == "heading":
+                add_heading(block.text, level=_PDF_HEADING_LEVELS[block.role])
+            elif block.kind == "body":
+                add_body(block.body)
+            elif block.kind == "part":
+                # 「完整盘面」另起一页；「附录」通常只有几行，够地方就接着排。
+                add_part(block.text, new_page=block.role != "appendix")
+            elif block.kind == "note":
+                story.append(Paragraph(_esc(block.text), muted_note))
+                story.append(Spacer(1, 4))
+            elif block.kind == "figures":
+                story.extend(figure_flowables())
+            elif block.kind == "section":
+                if block.role == "appendix":
+                    story.append(CondPageBreak(70 * mm))  # 附录小表（技法依据 ~10 行）不被拆成「标题 + 两行」留在页底
+                add_heading(f"{block.cite} · {block.text}" if block.cite else block.text, level=1 if block.in_part else 0, anchor=block.cite)
+                add_body(block.body)
+            elif block.kind == "orphan_figures":  # 没有盘面段（极少数工具）：盘图跟在封面后
+                add_part(block.text)
+                add_heading(t("盘图"), level=1)
+                story.extend(figure_flowables())
         if toc_at is not None:
             story.insert(toc_at, toc_table(entries, pages))
         return story
@@ -2001,41 +1885,9 @@ def _core_prop_text(value: Any, limit: int = 255) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _human_sections(document: dict[str, Any]) -> list[dict[str, Any]]:
-    sections = document.get("sections") if isinstance(document.get("sections"), list) else []
-    output: list[dict[str, Any]] = []
-    for section in sections:
-        if not isinstance(section, dict):
-            continue
-        if section.get("human_visible") is not True:
-            continue
-        if str(section.get("id") or "") in HUMAN_RENDER_HIDDEN_SECTION_IDS:
-            continue
-        output.append(section)
-    return output
-
-
-def _human_ai_value(ai_report: dict[str, Any], key: str) -> Any:
-    human_key = f"human_{key}"
-    if human_key in ai_report:
-        return ai_report.get(human_key)
-    return ai_report.get(key)
-
-
-def _human_ai_list(ai_report: dict[str, Any], key: str) -> list[Any]:
-    value = _human_ai_value(ai_report, key)
-    return value if isinstance(value, list) else []
-
-
 def _display_question(document: dict[str, Any], ai_report: dict[str, Any], t: Any = str) -> str:
     raw_question = str(document.get("user_question") or "").strip()
     if raw_question:
         return raw_question
     focus = str(ai_report.get("analysis_focus") or "").strip()
     return focus or t("整体综合解盘")
-
-
-def _steps_text(value: Any) -> str:
-    if isinstance(value, list):
-        return "\n".join(f"{index}. {item}" for index, item in enumerate(value, start=1) if str(item).strip())
-    return str(value or "")

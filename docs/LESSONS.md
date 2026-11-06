@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 拆报告模块时踩的两处：方法改函数后局部变量遮住同名函数（`payload = payload(...)`，`UnboundLocalError`）；验证比对工具时两个负向对照看着没红，其实是对照本身没改动输出（8.6 → 8.7 pt 在 OOXML 里取整相同，`bool(ai_report)` 恒真） | 函数用动词命名；对照先确认真的改了输出 |
+| v0.47.2-dev (2026-11-06) | 「回填只进机器 JSON」这句话是错的：`ai_report` 带 `analysis_sections` 时，PDF / DOCX 的「AI 解读」里印着机器写的段落（八字 16 段 3084 字，AI 写的 2 段 69 字）；上一轮审计只试了四种形状就下了结论，还写进了 AGENTS | 文档改回实情，输出未动，待决；下结论前逐字段试完，不凭几个样例 |
 | v0.47.2-dev (2026-11-06) | 每出一份 PDF 都把系统字体集重新解析一遍：`_face_index` 枚举 .ttc 占渲染约七成，长命的 MCP server 也不例外 | 「字面名 → 序号」表按文件缓存，键带 mtime 与大小；同一份 PDF 从 0.96 s 到 0.29 s，嵌入字体不变；`tests/test_pdf_font_cache.py` |
 | v0.47.2-dev (2026-11-06) | JSON 报告的闸永远是绿的：AI 只写「好。」时覆盖率 1.0、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`、`ai_analysis_complete: True`，量的都是机器回填 | 闸改量调用方自己写的答案；逐章覆盖如实报但不拦交付（定向解读是有意设计）；chart 不要 AI；`tests/test_report_gates.py` |
 | v0.47.2-dev (2026-11-06) | 存档只增不减且看不见：产物带 `indent=2`，答过没回读的 run 会被 `memory prune` 选中，`doctor` 只报磁盘余量不报自己用了多少 | 产物不带缩进；写回答案算点用，prune 也跳过升级前写回的；`doctor.memory_db.usage`；`tests/test_memory_durability.py` |
@@ -184,6 +186,20 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 拆报告模块时踩的两处
+
+- **方法改函数，局部变量遮住同名函数**：`self._payload(...)` 机械改成 `payload(...)` 后，`payload = payload(source_artifact)` 抛 `UnboundLocalError`（同函数里只要有赋值，这个名字就是局部的）。`export_format`、`report_quality`、`search_index` 都是这个形状。快照第一次就全红，语法检查和未定义名检查都看不出来。修：函数用动词（`read_payload`、`build_report_quality`），重新从原文件生成，不逐处打补丁。
+- **负向对照自己也可能是假的**：拆分前要证明比对工具能抓到改动，三处小改只有 PDF 那处报了差异。不是工具漏了：DOCX 的 8.6 → 8.7 pt 经 `w:sz` 取整后相同，`ready_for_ai_review` 里的 `bool(ai_report)` 恒真，两处都根本没改动输出。换成确实改输出的对照后 DOCX 114 份、JSON 298 份都红。
+- **法则**：负向对照没红时，先确认它真的改了行为，再去怀疑守卫。
+
+### v0.47.2-dev / 2026-11-06 — 「回填只进机器 JSON」这句话是错的
+
+- **症状**：拆 `default_report.py` 时要决定八字机器文字要不要标注，先核对它的去向，发现架构审计的结论不成立。按模板写的完整 `ai_report`（含 `analysis_sections`）渲染 PDF，「AI 解读」部分（页面写着「以下是 AI 依据上方盘面所作的解读」）印 18 段，其中 16 段是机器写的：八字 3084 字对 AI 自己的 69 字，奇门 19 段、星盘 21 段同理。只给 `recommendations` / `limitations` / `evidence` / `analysis_focus` / `reading_steps` / `consultation_basis` / `follow_up_questions` 其中一项时同样如此，`style:"chart"` 也一样。
+- **根因**：`merge_ai_report` 只在「调用方给了 `answer_text` 且没写对应字段」时清空 `human_*`。`builder.py` 那句注释（Human DOCX/PDF should not turn those backfills into "AI-written" prose）说的只是这一条路；一旦调用方自己写了 `analysis_sections`，`human_analysis_sections` 取的就是 `_complete_analysis_sections` 补全后的列表。守卫 `test_report_from_tool_accepts_freeform_ai_answer_text`（`"可读解读" not in docx_text`）也只盖这一条路。
+- **我们错在哪**：审计时只试了 `direct_answer` / `executive_summary` / `answer_text` / 空，四种都走到清空分支，就写下「PDF 与 DOCX 不受影响」，随后又写进 AGENTS 9.3.1 与模块说明。结论的范围比证据大。
+- **处理**：这一轮要求输出不变，所以**没有改行为**，只把 AGENTS 与 `default_report.py` 的说明改回实情。要不要改由人定：改了是用户可见变化（人读报告变短，或这些段落换标题）。
+- **法则**：说「只进 X」之前，把每条进入路径都走一遍；证据只覆盖几个样例时，结论也只能说到那几个样例。
 
 ### v0.47.2-dev / 2026-11-06 — 每出一份 PDF 都把系统字体集重新解析一遍
 

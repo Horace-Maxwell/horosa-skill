@@ -1304,6 +1304,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.3.1 报告 · 盘图 · PDF（reports / figures）
 
+- **模块分层（v0.47.2-dev）。** `builder.py` 只管顺序与章节清单。`source.py` 读存档、出人读章节；`question.py` 拆用户问题；`default_report.py` 是确定性回填（机器写的；何时进人读版见 `merge_ai_report`）；`gates.py` 是质量闸（量调用方自己写的答案）；`search_index.py` 建大纲、纯文本、检索键；`template.py` 是给 AI 的模板；`layout.py` 定正文印什么、按什么顺序。依赖单向（`tests/test_report_modules.py`）：`source` / `question` / `search_index` 不依赖别的报告模块，闸碰不到 `default_report`。
+  渲染：DOCX 与 PDF 都按 `layout.body_blocks` 的同一串块画，新增正文内容改 `layout.py`，渲染器只加画法（`tests/test_report_layout.py`）。块带用途不带样式。封面、目录、报告说明不进这串块：PDF 把基本信息画在封面、说明只给解读报告，DOCX 排在正文、两种报告都有。
+  索引只建一次：要等全部章节定稿，所以交付清单排在索引之前，清单里关于索引的三项由 `index_checks` 从输入判断。章节用 `[*head, 清单, *tail]` 拼，不按位置回填。
 - **`output_path` 的字符串闸在第一次文件系统访问之前（v0.47.2-dev，`winpaths`）。** `resolve()` 不是纯函数：对 UNC 路径它会向对方发起 SMB 连接并送出 NTLM 认证（实测卡 21 秒才拒绝）。Windows 上网络 / 设备路径、保留设备名（含 `NUL.pdf`、`COM¹`）、
   NTFS 备用数据流、非法字符一律先拦；`HOROSA_REPORT_OUTPUT_ROOTS` 配过的共享按字符串放行。新增任何接收路径的工具走同一道闸（`test_guard_refuses_before_touching_the_filesystem`）。
 - **`render_report` 的结果要原样传到调用方（v0.47.2-dev）。** `format` 记真实格式，`degraded_from` / `degrade_reason` / `requested_output_path` 进结果与摘要（`_render_outcome_fields` / `_render_outcome_notes`）——此前退化成 TXT 仍报「已生成 PDF」。
@@ -1321,7 +1324,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     （每屏按剩余高度现切，保证「先左栏后右栏」的读序——Table 跨页只会竖着断）。
   - 引擎没给内容的段（正文是 `_missing_detail_text` 的护栏话）：builder 标 `placeholder` + `human_visible: False`，人读版只在技法依据表
     「本次未产出」一行列名——那句话是写给 AI 的，不给人看。规则库查询（`_RULE_LOOKUP_TOOLS`）同样拒绝出 chart 报告。
-  - 附录只放人读口径：设置值经 `builder._setting_text`（布尔 → 是 / 否、有码表的 → 文字；宫制 / 黄道 / 岁差 / 性别不列——技法卡是请求口径，
+  - 附录只放人读口径：设置值经 `source._setting_text`（布尔 → 是 / 否、有码表的 → 文字；宫制 / 黄道 / 岁差 / 性别不列——技法卡是请求口径，
     实际值看正文；没码表的枚举不列），不放引擎内部名 / 导出设置版本 / aiExport 来源串（它们留在 JSON）；基本信息里经纬度写「东经 121°28′」、`gender` 布尔写男 / 女、非字符串的 `name` 不列。
   - 盘图在 `reports/figures.py`：**只取**引擎数据（宫头、经度、lonspeed 正负、`aspects.normalAsp`、紫微 houses、奇门 cells、六壬
     layout / ke / sanChuan），绝不自己算位置或量相位（铁律 1）。七政 / 印度 / 宿占不套西洋轮；任何一种取不全就整张不画。
@@ -1352,7 +1355,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
     段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
-- **JSON 报告的闸量调用方自己写的答案（v0.47.2-dev）。** `_ai_coverage_status` / `_section_coverage_matrix` / `_report_quality` / `_delivery_checklist` / `report_index.has_ai_answer` 读 `_caller_answer_view`，不读 `merged_ai_report`：后者含确定性回填，量它永远是绿的。回填本身保留（`ai_report.analysis_sections`），人读版不用。`ready_to_deliver` 要结论、摘要、分析段、建议、证据；逐章覆盖如实报但不拦交付（定向解读可交付，见 `_complete_analysis_sections`）；`style:"chart"` 不要 AI。新增闸时写一条它该是 False 的测试。
+- **JSON 报告的闸量调用方自己写的答案（v0.47.2-dev）。** `_ai_coverage_status` / `_section_coverage_matrix` / `_report_quality` / `_delivery_checklist` / `report_index.has_ai_answer` 读 `_caller_answer_view`，不读 `merged_ai_report`：后者含确定性回填，量它永远是绿的。回填本身保留（`ai_report.analysis_sections`）。只有调用方给了一段 `answer_text` 且没写 `analysis_sections` 时人读版才不带它；否则 `human_analysis_sections` 含回填，印在「AI 解读」下面（现状如此，待决，见 LESSONS）。`ready_to_deliver` 要结论、摘要、分析段、建议、证据；逐章覆盖如实报但不拦交付（定向解读可交付，见 `_complete_analysis_sections`）；`style:"chart"` 不要 AI。新增闸时写一条它该是 False 的测试。
 - **报告 `language` 缺省 `None`：没写就跟 `HOROSA_OUTPUT_SCRIPT`（v0.47.2-dev）。** 入参模型里别放「看起来像缺省」的具体值，也别用 `model_fields_set` 判调用方写没写：MCP 的 `_normalize_mcp_request` 走 `model_dump`，缺省值到 service 时已经是显式入参。测这类行为要走 `call_tool`，只调帮手函数绕过了 `model_dump`（`tests/test_report_language_surfaces.py`）。
 
 ### 9.3.2 记忆存档（memory store / artifacts）
