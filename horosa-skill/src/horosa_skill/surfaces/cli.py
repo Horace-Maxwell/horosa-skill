@@ -17,12 +17,15 @@ from horosa_skill import clients_extra
 from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_preflight
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
-from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+from horosa_skill.engine.registry import (
+    COMPACT_SURFACE_TOOL_COUNT,
+    FACADE_TOOL_COUNT,
+    TOOL_DEFINITIONS,
+    resolve_tool_name,
+)
 from horosa_skill.errors import HorosaSkillError, RuntimeError, ToolValidationError, bilingual, recovery_for
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
-from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT
-from horosa_skill.surfaces.mcp_server import run_mcp_server
 from horosa_skill.textscript.localize import PROTOCOL_OPERATIONS
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.client_config.audit import (
@@ -822,6 +825,9 @@ def serve(
     except OSError:
         pass
     try:
+        # 只有 serve 用得到 MCP SDK，而它占 CLI 启动的三成：放在这里 import（tests/test_layering.py 锁）。
+        from horosa_skill.surfaces.mcp_server import run_mcp_server
+
         run_mcp_server(settings, transport=transport, service=service)
     finally:
         try:

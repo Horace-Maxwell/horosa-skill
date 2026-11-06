@@ -1423,7 +1423,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   CliRunner 换掉真流抓不到这类问题：测输出编码一律起真子进程 + `PYTHONIOENCODING=cp1252`（三平台都复现），见 `tests/test_cli_stdio_encoding.py`；断言帮助文字要设 `_TYPER_FORCE_DISABLE_TERMINAL=1`，否则 Linux runner 上 `GITHUB_ACTIONS` 让 rich 把选项名拆进 ANSI 色码（Windows 本机复现不了）。
 - **Windows 上别的进程开着文件是常态（v0.47.2-dev，`fsretry`）。** Python 的 `open()` 不带 FILE_SHARE_DELETE，有读者时 `os.replace` / `unlink` 抛 PermissionError：src 里禁裸 `os.replace`（`test_no_raw_os_replace_in_the_package`），
   多个会话共读的状态文件读也走 `fsretry.read_text`；放锁（`pidlock.release`）绝不抛——从 finally 冒出去会盖掉调用方结果并把锁留在盘上。判共享冲突注意 `open()` 的 PermissionError 只带 errno 13、winerror 是 None。
-- **模块级读环境变量只走 `config._env_int` / `_env_float`（v0.47.2-dev）。** `surfaces/cli.py` 顶层 import MCP server，import 时抛错 = 全部命令（含 `--version`、`doctor`）起不来。测这类问题起真子进程（`tests/test_mcp_env_import.py`）。
+- **模块级读环境变量只走 `config._env_int` / `_env_float`（v0.47.2-dev）。** import 时抛错 = 载入它的入口全部起不来。测这类问题起真子进程（`tests/test_mcp_env_import.py`）。
+- **分层：下层不 import 上层，函数体里的也算（v0.47.2-dev）。** `surfaces` 之下的模块不 import `surfaces`，只有 `surfaces` 与 `benchmark` import `service`（`reports/builder.py`、`knowledge/user.py` 在豁免名单里，名单只许缩短）；工具数常量与工具族集合在 `engine/registry.py`，`advertise_hidden_fields` 在 `schemas/tools/base.py`。`surfaces/cli.py` 不许在模块顶层 import MCP server：MCP SDK 占 CLI 启动的三成，只有 `serve` 用得到。守卫 `tests/test_layering.py` 扫 AST，子进程核对 `sys.modules`。
 - **树里出现的每个 `HOROSA_*` 名字都要进 `config.ENV_FLAG_REGISTRY`（v0.47.2-dev）。** skill 不读的（测试开关、启动器交给上游引擎的旋钮、
   星阙桌面端构建脚本的变量）登记为 `internal`，否则维护机 / 用户 shell 里合法的变量每次启动都报「未知环境变量」，告警沦为噪音。
   不是环境变量的名字写进 `tests/test_config.py::_NOT_ENV_FLAGS` 并给理由。守卫 `test_every_horosa_name_in_the_tree_is_registered`。

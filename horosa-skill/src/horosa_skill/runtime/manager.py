@@ -121,6 +121,11 @@ def arch_report() -> dict[str, Any]:
     return {"process": process, "native": native, "emulated": bool(process and native and process != native)}
 
 
+def host_platform_key() -> str:
+    """本机的载荷平台键，给 runtime 包以外的模块用。"""
+    return _platform_key()
+
+
 def _platform_key() -> str:
     # 架构精确匹配：只有确知的 64 位架构映射到发布键；其余（i386/i686/armv7l 等）保留原始
     # machine 名 —— 让 install 的 `runtime.install_missing_platform` 错误如实报出真实架构，

@@ -1,7 +1,7 @@
 """坏的 HOROSA_MCP_MAX_CONCURRENT_TOOLS 不许在 import 时打死整个 CLI（v0.47.2-dev）。
 
-`mcp_runner` 模块级 `int(os.environ…)`，而 `surfaces/cli.py` 顶层 import 了 MCP server：一个写错的值让 `--version`、`--help`、`doctor`
-全部 ValueError 退出，连能帮你查环境变量的命令都起不来。只有真子进程抓得到——CliRunner 进来时模块早就 import 完了。"""
+`mcp_runner` 模块级 `int(os.environ…)`：当时 `surfaces/cli.py` 顶层 import MCP server，一个写错的值让 `--version`、`--help`、`doctor` 全部
+ValueError 退出。CLI 现在只在 `serve` 里载入 MCP，这里两条一起看：入口不死，`mcp_runner` 本身也不死。只有真子进程抓得到。"""
 from __future__ import annotations
 
 import os

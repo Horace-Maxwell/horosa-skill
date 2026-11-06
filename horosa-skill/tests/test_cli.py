@@ -50,7 +50,7 @@ def test_stdio_serve_skips_eager_runtime_start(monkeypatch) -> None:
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
     monkeypatch.setattr(cli, "_start_stdio_runtime_warmup", lambda manager_arg: warmups.append(manager_arg))
-    monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda settings_arg, transport, service=None: None)
 
     cli.serve(transport="stdio", host="127.0.0.1", port=8765, skip_runtime_start=False)
 
@@ -76,7 +76,7 @@ def test_streamable_http_serve_keeps_the_runtime_warm_by_default(monkeypatch, tm
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
-    monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda settings_arg, transport, service=None: None)
     monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
 
     cli.serve(transport="streamable-http", host="127.0.0.1", port=8765,
@@ -93,7 +93,7 @@ def test_streamable_http_serve_stops_runtime_when_asked(monkeypatch, tmp_path) -
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
-    monkeypatch.setattr(cli, "run_mcp_server", lambda settings_arg, transport, service=None: None)
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda settings_arg, transport, service=None: None)
     monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
 
     cli.serve(transport="streamable-http", host="127.0.0.1", port=8765,
@@ -112,7 +112,7 @@ def test_serve_refuses_a_port_already_in_use(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("horosa_skill.runtime.ports.port_holders",
                         lambda port: [{"pid": 1234, "command": "python -m http.server 8765"}])
     ran: list[str] = []
-    monkeypatch.setattr(cli, "run_mcp_server", lambda *a, **k: ran.append("served"))
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda *a, **k: ran.append("served"))
 
     with pytest.raises(typer.Exit) as excinfo:
         cli.serve(transport="streamable-http", host="127.0.0.1", port=8765,

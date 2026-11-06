@@ -18,7 +18,12 @@ from horosa_skill.agent_guidance import (
     unknown_tool_details,
 )
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+from horosa_skill.engine.registry import (
+    COMPACT_SURFACE_TOOL_COUNT,  # noqa: F401 - 脚本与测试从这里读
+    FACADE_TOOL_COUNT,
+    TOOL_DEFINITIONS,
+    resolve_tool_name,
+)
 from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.exports.registry import build_export_registry
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
@@ -82,15 +87,6 @@ from horosa_skill.surfaces.mcp_surface import (
 )
 
 # Server instructions：客户端把它当「这台服务器是干什么的」说明书常驻上下文。自 Claude Code 起
-# 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
-# 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
-# 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
-FACADE_TOOL_COUNT = 11
-
-# 精简面工具数 = 11 门面 + horosa_tool_run。README×2 的「11 个门面/11 facades」由 verify_docs_sync 锁步到此常量。
-COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
-
-
 # MCP 工具默认 deferred（工具搜索按需加载），instructions 就成了模型决定「要不要来搜我」的唯一依据
 # ——它的作用更接近一份 skill 而非一句简介。上限约 2KB，超出截断，故关键信息前置。
 _SERVER_INSTRUCTIONS = f"""Horosa (星阙) — local-first 术数/占星 computation. All engines run on this

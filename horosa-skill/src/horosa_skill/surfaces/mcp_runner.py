@@ -25,7 +25,7 @@ from horosa_skill.surfaces.mcp_requests import request_conflict_scope
 
 # 工作线程并发上限：每个在跑的工具会持有一个 JS 子进程或一条后端 HTTP 连接，无限并发会
 # 把本机 CPU 与后端连接池打满。4 是「几个客户端同时问一句」的常见峰值。
-# 模块级读环境变量要走 config 的容错解析：cli.py 顶层 import 这里，一个写错的值曾让 --version、--help、doctor 全部 ValueError 退出。
+# 模块级读环境变量要走 config 的容错解析：写错的值曾在 import 时 ValueError，当时连 --version 都起不来。
 _MAX_CONCURRENT_TOOLS = max(1, _env_int("HOROSA_MCP_MAX_CONCURRENT_TOOLS", 4))
 _TOOL_LIMITER: Any = None
 

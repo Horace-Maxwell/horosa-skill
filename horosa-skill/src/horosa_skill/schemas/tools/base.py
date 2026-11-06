@@ -13,6 +13,18 @@ from horosa_skill.astro_rulers import (
 from horosa_skill.errors import bilingual
 
 
+def advertise_hidden_fields(model: type[Any]) -> frozenset[str]:
+    """输入模型可声明 `ADVERTISE_HIDDEN: ClassVar[frozenset[str]]`：这些字段**照常声明**（校验层照收、MCP 扁平签名
+    照收顶层键——未声明的键会被 FastMCP 的 arg model 静默丢掉，见 test_mcp_flat_surface_keys），只是不进广告层，
+    计入 `request` 描述里的「另 N 个高级旋钮」、全表与词表见 horosa_agent_guidance。
+    为什么（v0.40.0 tools/list 预算）：长尾口径旋钮每个广告出去 ~100 B，一个技法补齐上游几十个就是几 KB，
+    而全量面硬顶 256 KB 已近满；声明而不广告 = 零字节、功能与类型校验全保留。"""
+    hidden: set[str] = set()
+    for cls in getattr(model, "__mro__", ()):
+        hidden |= set(vars(cls).get("ADVERTISE_HIDDEN", ()) or ())
+    return frozenset(hidden)
+
+
 class FlexibleModel(BaseModel):
     model_config = ConfigDict(extra="allow")
     agent_confirmed_settings: bool | None = None

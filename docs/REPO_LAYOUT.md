@@ -104,7 +104,7 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   tool docstrings, verified examples) → `catalog.py` (`build_agent_guidance`) → `preflight.py` (`validate_agent_preflight`,
   `build_validation_recovery`).
 - `engine/`
-  - `registry.py` — `TOOL_DEFINITIONS` (name → domain/action/endpoint/`execution`/input model).
+  - `registry.py` — `TOOL_DEFINITIONS` (name → domain/action/endpoint/`execution`/input model), the facade / compact tool counts, and the tool-family sets guidance and the service both read.
   - `client.py` — HTTP clients (`HorosaApiClient`, `HorosaPlainJsonClient`) for `:9999` / `:8899`.
   - `js_client.py` — `HorosaJsEngineClient`: runs `horosa-core-js` via the bundled Node; raises on JS failure.
   - `router.py` / `synonyms.py` — natural-language dispatch across tools (shared group/trace ids); corpus in `contracts/router_corpus.json`.

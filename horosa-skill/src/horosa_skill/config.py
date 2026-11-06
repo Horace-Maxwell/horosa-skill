@@ -171,7 +171,7 @@ def _host_runs_emulated() -> bool:
 
         if _manager.arch_report().get("emulated") is True:
             return True
-        return _manager._platform_key() in _manager.PLATFORM_FALLBACKS
+        return _manager.host_platform_key() in _manager.PLATFORM_FALLBACKS
     except Exception:  # noqa: BLE001 - 探测失败就按原生算，绝不让配置加载失败
         return False
 

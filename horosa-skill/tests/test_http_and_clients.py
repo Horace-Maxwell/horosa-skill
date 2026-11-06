@@ -104,7 +104,7 @@ def test_serve_refuses_public_binding_without_a_token(monkeypatch, tmp_path, cap
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.delenv("HOROSA_MCP_TOKEN", raising=False)
     ran: list[str] = []
-    monkeypatch.setattr(cli, "run_mcp_server", lambda *a, **k: ran.append("served"))
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda *a, **k: ran.append("served"))
 
     with pytest.raises(typer.Exit) as excinfo:
         cli.serve(transport="streamable-http", host="0.0.0.0", port=8765, skip_runtime_start=True)
@@ -123,7 +123,7 @@ def test_serve_allows_public_binding_when_explicitly_accepted(monkeypatch, tmp_p
     monkeypatch.delenv("HOROSA_MCP_TOKEN", raising=False)
     monkeypatch.setattr("horosa_skill.runtime.ports.port_bindable", lambda *a, **k: True)
     ran: list[str] = []
-    monkeypatch.setattr(cli, "run_mcp_server", lambda *a, **k: ran.append("served"))
+    monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda *a, **k: ran.append("served"))
 
     cli.serve(transport="streamable-http", host="0.0.0.0", port=8765,
               skip_runtime_start=True, allow_unauthenticated=True)
