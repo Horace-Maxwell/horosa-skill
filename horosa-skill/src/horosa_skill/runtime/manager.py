@@ -30,7 +30,15 @@ from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, holders_outside_runtime_root, trust_unknown_ports
-from horosa_skill.runtime.pidlock import LAUNCHER_OWNER, describe_lock, release as release_lock, release_launcher, try_pid_lock
+from horosa_skill.runtime.pidlock import (
+    INSTALL_OWNER,
+    LAUNCHER_OWNER,
+    describe_lock,
+    release as release_lock,
+    release_launcher,
+    try_pid_lock,
+)
+from horosa_skill.runtime.procs import pid_alive
 from horosa_skill.runtime.ports import port_holders
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.runtime.windows_jar_patch import WindowsBootJarPatchMixin
@@ -269,6 +277,9 @@ def smart_app_control_label(value: Any) -> str | None:
 # v0.38.0 B6：安装临时目录与 doctor 的长路径余量估算共用这几个常量（tests/test_doctor_machine_conditions.py 锁步）。
 _INSTALL_TEMP_PREFIX = ".hi-"
 _INSTALL_EXTRACT_DIRNAME = "x"
+INSTALL_TEMP_OWNER = ".owner"  # `.hi-*` 里记属主 pid：被杀的 install 留下的目录要能和正在跑的分开
+_INSTALL_TEMP_MAX_AGE_SECONDS = 6 * 3600.0  # 属主「活着」但目录这么老：pid 被回收了（解压只要分钟级，下载不在这个目录里）
+_INSTALL_TEMP_UNMARKED_AGE_SECONDS = 3600.0  # 没有属主标记：老版本留下的，或刚建还没写
 # `<root>/.hi-XXXXXXXX/x/` — tempfile 随机后缀 8 个字符
 _INSTALL_TEMP_OVERHEAD = len(_INSTALL_TEMP_PREFIX) + 8 + 1 + len(_INSTALL_EXTRACT_DIRNAME) + 1
 # 载荷里最深的条目（含 `runtime-payload/` 前缀）。v0.38.0 darwin 载荷**实测** 179
@@ -446,6 +457,12 @@ def platform_has_payload(platform_name: str | None = None) -> bool:
     return key in SUPPORTED_PAYLOAD_PLATFORMS or key in PLATFORM_FALLBACKS
 
 
+def _content_range_total(value: str | None) -> int | None:
+    """`Content-Range: bytes */5000` 里的总长；没有或是 `*` 时 None。"""
+    match = re.search(r"/\s*(\d+)\s*$", value or "")
+    return int(match.group(1)) if match else None
+
+
 def _hand_lock_to(lock_path: Path, pid: Any) -> None:
     """把启动锁的持有者改写成启动器自己的 pid（锁的寿命 = 一次启动的寿命）。
 
@@ -551,6 +568,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             self._last_download = None
             # 下载 730 MB 之前就拒：装进去 Java 也起不来（只剩 chart），而修法只是换个路径。
             self._require_ascii_runtime_root()
+            self._sweep_install_temps()
             source = archive
             expected_sha256: str | None = None
             asset_meta: dict[str, Any] | None = None
@@ -639,8 +657,10 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             # 字符就是「装得上 / 装不上」的差别（最深载荷条目本身已近 200）。doctor.windows.headroom_chars 按同一常量估。
             with tempfile.TemporaryDirectory(prefix=_INSTALL_TEMP_PREFIX, dir=self.runtime_root) as temp_dir_raw:
                 temp_dir = Path(temp_dir_raw)
-                archive_path = self._materialize_archive(source, temp_dir, progress=progress)
-                if expected_sha256 and _sha256_file(archive_path).lower() != expected_sha256.lower():
+                (temp_dir / INSTALL_TEMP_OWNER).write_text(str(os.getpid()), encoding="utf-8")
+                archive_path = self._materialize_archive(source, temp_dir, progress=progress, expected_sha256=expected_sha256)
+                already_verified = bool((self._last_download or {}).get("sha256_verified"))
+                if expected_sha256 and not already_verified and _sha256_file(archive_path).lower() != expected_sha256.lower():
                     raise RuntimeValidationError(
                         "Runtime archive checksum mismatch.",
                         code="runtime.install_sha256_mismatch",
@@ -680,51 +700,23 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 )
 
                 previous_dir = self.runtime_root / "previous"
-                was_running = False
-                if self.current_dir.exists():
-                    if not force:
-                        current_manifest = self.load_installed_manifest()
-                        if current_manifest == manifest:
-                            return {
-                                "ok": True,
-                                "installed": True,
-                                "changed": False,
-                                "platform": platform_name,
-                                "platform_fallback": fallback_note,
-                                "warnings": install_warnings,
-                                "runtime_root": str(self.runtime_root),
-                                "current_dir": str(self.current_dir),
-                                "manifest": manifest,
-                                "trace_id": trace["trace_id"],
-                                "group_id": trace["group_id"],
-                            }
-                    # 🔴 v0.38.1 R3：换目录之前先停**自己起的**服务。此前直接 replace + rmtree：Windows 上正在跑的
-                    # java.exe / python.exe 锁着文件 → WinError 32/5；macOS 上旧进程继续从已删路径服务、新载荷永远
-                    # 不启动（本机就是活例：已装 0.3.0、doctor 说 ready、从不提示过期）。不是我们起的服务一律拒绝，
-                    # `--force` 也不例外 ——「不杀陌生人」是不变量。
-                    was_running = self._stop_own_services_before_swap(warnings=install_warnings)
-                self._remove_previous_dir(previous_dir)
-                if self.current_dir.exists():
-                    self.current_dir.replace(previous_dir)
-
-                target_parent = self.current_dir.parent
-                target_parent.mkdir(parents=True, exist_ok=True)
-                # 原子换入 + 失败回滚：move/overrides 任一失败即把旧运行时从 previous 还原回 current，
-                # 绝不留下缺失/半装的 current（否则下次 install 会先 rmtree previous 毁掉唯一好副本）。
-                # 注意 overrides 失败时 move 已成功 → current 存在但半装，必须先清掉再从 previous 还原
-                # （不能只在 current 缺失时才回滚）。
-                try:
-                    shutil.move(str(payload_root), str(self.current_dir))
-                    self._apply_runtime_overrides(manifest)
-                except Exception:
-                    if previous_dir.exists():
-                        try:
-                            if self.current_dir.exists():
-                                shutil.rmtree(self.current_dir, ignore_errors=True)
-                            previous_dir.replace(self.current_dir)
-                        except Exception:  # noqa: BLE001 - best-effort restore; surface original error
-                            logger.exception("runtime install rollback failed")
-                    raise
+                if self.current_dir.exists() and not force:
+                    current_manifest = self.load_installed_manifest()
+                    if current_manifest == manifest:
+                        return {
+                            "ok": True,
+                            "installed": True,
+                            "changed": False,
+                            "platform": platform_name,
+                            "platform_fallback": fallback_note,
+                            "warnings": install_warnings,
+                            "runtime_root": str(self.runtime_root),
+                            "current_dir": str(self.current_dir),
+                            "manifest": manifest,
+                            "trace_id": trace["trace_id"],
+                            "group_id": trace["group_id"],
+                        }
+                was_running = self._swap_in_payload(payload_root, manifest, previous_dir, warnings=install_warnings)
                 cleanup_warning = self._remove_previous_dir_best_effort(previous_dir)
                 if cleanup_warning:
                     install_warnings.append(cleanup_warning)
@@ -775,6 +767,125 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             }
 
     # ---- v0.38.1 R3：升级就地（先停自己的服务，再换目录，再拉起） --------------------------------
+
+    def _swap_in_payload(
+        self, payload_root: Path, manifest: dict[str, Any], previous_dir: Path, *, warnings: list[dict[str, Any]]
+    ) -> bool:
+        """停自己的服务 → 换目录，全程持启动锁。返回换之前服务是否在跑（换完要重新拉起，所以这里放锁）。
+
+        没有这把锁时，别的会话的调用在 stop 之后发现连不上，会从旧树起启动器；旧树随后被删，新载荷永远不启动，
+        install 还报成功。持锁期间它们只看到一次 `runtime.starting`。
+        """
+        lock_path = self.runtime_root / ".runtime-start.lock"
+        self._acquire_swap_lock(lock_path)
+        try:
+            # 上次崩在两次改名之间：先把好副本挪回来，下面的回滚才有东西可回滚（否则 _remove_previous_dir 会先删掉它）。
+            self._restore_previous_locked()
+            was_running = False
+            if self.current_dir.exists():
+                # 🔴 v0.38.1 R3：换目录之前先停**自己起的**服务。此前直接 replace + rmtree：Windows 上正在跑的
+                # java.exe / python.exe 锁着文件 → WinError 32/5；macOS 上旧进程继续从已删路径服务、新载荷永远
+                # 不启动（本机就是活例：已装 0.3.0、doctor 说 ready、从不提示过期）。不是我们起的服务一律拒绝，
+                # `--force` 也不例外 ——「不杀陌生人」是不变量。
+                was_running = self._stop_own_services_before_swap(warnings=warnings)
+            self._remove_previous_dir(previous_dir)
+            if self.current_dir.exists():
+                self.current_dir.replace(previous_dir)
+
+            target_parent = self.current_dir.parent
+            target_parent.mkdir(parents=True, exist_ok=True)
+            # 原子换入 + 失败回滚：move/overrides 任一失败即把旧运行时从 previous 还原回 current，
+            # 绝不留下缺失/半装的 current（否则下次 install 会先 rmtree previous 毁掉唯一好副本）。
+            # 注意 overrides 失败时 move 已成功 → current 存在但半装，必须先清掉再从 previous 还原
+            # （不能只在 current 缺失时才回滚）。
+            try:
+                shutil.move(str(payload_root), str(self.current_dir))
+                self._apply_runtime_overrides(manifest)
+            except Exception:
+                if previous_dir.exists():
+                    try:
+                        if self.current_dir.exists():
+                            shutil.rmtree(self.current_dir, ignore_errors=True)
+                        previous_dir.replace(self.current_dir)
+                    except Exception:  # noqa: BLE001 - best-effort restore; surface original error
+                        logger.exception("runtime install rollback failed")
+                raise
+            return was_running
+        finally:
+            release_lock(lock_path)
+
+    def _acquire_swap_lock(self, lock_path: Path) -> None:
+        """等正在进行的启动结束，等不到就拒绝：启动器正从 current/ 起服务时换目录，等于把文件从它脚下搬走。"""
+        deadline = time.monotonic() + float(self.settings.runtime_start_timeout_seconds)
+        while not try_pid_lock(lock_path, stale_after_seconds=960.0, owner=INSTALL_OWNER):
+            if time.monotonic() >= deadline:
+                raise RuntimeInstallError(
+                    bilingual("runtime 正在启动，安装未动 current/。", "The runtime is starting; current/ was left untouched."),
+                    code="runtime.install_start_in_progress",
+                    details={
+                        "holder": describe_lock(lock_path),
+                        "next_action": "等启动结束（`horosa-skill runtime status` 看进度）后重试 install / upgrade。",
+                    },
+                )
+            time.sleep(0.25)
+
+    def _payload_is_complete(self, root: Path) -> bool:
+        try:
+            manifest = self._validate_payload_root(root)
+        except (OSError, ValueError, RuntimeValidationError):
+            return False
+        return all(
+            (root / relative).is_dir() if kind == "dir" else (root / relative).is_file()
+            for _, relative, kind in self._required_paths(manifest)
+        )
+
+    def _restore_previous_locked(self) -> bool:
+        """调用方须持启动锁。current/ 缺失且 previous/ 完整时把它挪回去（崩在两次改名之间的现场）。"""
+        previous_dir = self.runtime_root / "previous"
+        if self.current_dir.exists() or not self._payload_is_complete(previous_dir):
+            return False
+        previous_dir.replace(self.current_dir)
+        # 启动 / 安装路径上的恢复通知：结果照常，不是降级点（verify_silent_degrades 只盯 logger.warning）。
+        logger.log(logging.WARNING, "current/ was missing; restored the complete previous/ runtime left by an interrupted install")
+        return True
+
+    def _restore_previous_after_crash(self) -> None:
+        """启动路径的自愈。只在这里做，不放进 `_require_runtime`：卸载的停服务路径也调它，会把要删的东西挪回 current/。
+
+        要拿启动锁：install 两次改名之间同样只有 previous/，这时挪回去，新载荷会被 `shutil.move` 搬进 current/ 里面。"""
+        if self.current_dir.exists() or not (self.runtime_root / "previous").is_dir():
+            return
+        lock_path = self.runtime_root / ".runtime-start.lock"
+        if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner=INSTALL_OWNER):
+            return
+        try:
+            self._restore_previous_locked()
+        finally:
+            release_lock(lock_path)
+
+    def _install_temp_in_use(self, path: Path) -> bool:
+        marker = path / INSTALL_TEMP_OWNER
+        now = time.time()
+        try:
+            pid = int(marker.read_text(encoding="utf-8").strip())
+            age = now - marker.stat().st_mtime
+        except (OSError, ValueError):
+            try:
+                return now - path.stat().st_mtime < _INSTALL_TEMP_UNMARKED_AGE_SECONDS
+            except OSError:
+                return False
+        return pid_alive(pid) != "dead" and age < _INSTALL_TEMP_MAX_AGE_SECONDS
+
+    def _sweep_install_temps(self) -> None:
+        """清掉被杀的 install 留下的 `.hi-*`（归档 + 解开的树，真载荷约 2 GB）。SIGTERM / 断电时 TemporaryDirectory 来不及清。
+
+        在 install 一进来就做：磁盘预检要 4 倍归档大小，留着它重试可能直接被拦。清不掉（Windows 文件占用）留给下一次。"""
+        for path in self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*"):
+            if path.is_dir() and not self._install_temp_in_use(path):
+                try:
+                    _rmtree_force(path)
+                except OSError as exc:
+                    logger.debug("could not sweep %s: %s", path, exc)
 
     def _stop_own_services_before_swap(
         self, *, warnings: list[dict[str, Any]] | None = None
@@ -978,6 +1089,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads"):
             if path.exists():
                 removal_plan.append(str(path))
+        removal_plan.extend(str(path) for path in sorted(self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*")) if path.is_dir())
         state_path = self.settings.runtime_state_path
         if state_path.exists():
             removal_plan.append(str(state_path))
@@ -1194,6 +1306,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             }
         with self._service_lock:
             with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
+                self._restore_previous_after_crash()
                 self._require_runtime()
                 manifest = self.load_installed_manifest(strict=True)
                 # 🔴 macOS：带 com.apple.quarantine 的 python/java 一被启动器 exec 就被 Gatekeeper SIGKILL，
@@ -1691,12 +1804,14 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             details={"current_dir": str(self.current_dir), **install_commands_for_error()},
         )
 
-    def _materialize_archive(self, source: str, temp_dir: Path, *, progress: Any | None = None) -> Path:
+    def _materialize_archive(
+        self, source: str, temp_dir: Path, *, progress: Any | None = None, expected_sha256: str | None = None
+    ) -> Path:
         if _is_url(source):
             parsed = urlparse(source)
             if parsed.scheme == "file":
                 return self._file_url_to_path(source)
-            return self._download_with_resume(source, temp_dir, progress=progress)
+            return self._download_with_resume(source, temp_dir, progress=progress, expected_sha256=expected_sha256)
         local_path = Path(source).expanduser().resolve()
         if not local_path.is_file():
             # 结构化错误（CLI 的 except RuntimeInstallError/RuntimeValidationError 能干净接住并出
@@ -1724,11 +1839,13 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         *,
         attempts: int | None = None,
         progress: Any | None = None,
+        expected_sha256: str | None = None,
     ) -> Path:
         """流式下载 + HTTP Range 断点续传 + 有限退避重试 + 多镜像回退。
 
-        .part 分块存 runtime_root/downloads（跨 install 调用可续传）；206 续写、200 重下兜底；
-        最终 sha256 校验（install 主流程）兜住续传坏块。progress(done, total|None) 供 CLI 回调。
+        .part 分块存 runtime_root/downloads（跨 install 调用可续传）；206 续写、200 重下兜底；416 看 Content-Range：
+        分块已到头就直接用，否则丢掉从头下。给了 `expected_sha256` 就逐候选校验：镜像回 200 + 错误页时丢掉分块换下一个，
+        回退才覆盖「内容不对」，不只是 HTTP 报错。progress(done, total|None) 供 CLI 回调。
         """
         filename = Path(urlparse(source).path).name or "runtime-archive"
         downloads_dir = self.runtime_root / "downloads"
@@ -1742,35 +1859,53 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         connect_timeout = min(60.0, read_timeout)
         failures: list[str] = []
         download_started = time.monotonic()
+        checksum_failed = False
         for candidate in candidates:
+            checksum_failed = False
             for attempt in range(attempts):
                 try:
                     offset = part_path.stat().st_size if part_path.exists() else 0
                     headers = {"Range": f"bytes={offset}-"} if offset else {}
+                    done = offset
+                    stale_part = False
                     with httpx.Client(timeout=httpx.Timeout(connect_timeout, read=read_timeout), follow_redirects=True) as client:
                         with client.stream("GET", candidate, headers=headers) as response:
-                            response.raise_for_status()
-                            if response.status_code == 206:
-                                mode = "ab"
-                                total = offset + int(response.headers.get("Content-Length") or 0) or None
-                                done = offset
+                            if response.status_code == 416 and offset:
+                                # 分块已到头（崩在挪走之前），或比对方的文件还长（同名资产重新打包变小）。
+                                stale_part = _content_range_total(response.headers.get("Content-Range")) != offset
                             else:
-                                # 服务器不支持 Range（或无 .part）→ 从头重下。
-                                mode = "wb"
-                                total = int(response.headers.get("Content-Length") or 0) or None
-                                done = 0
-                            with open(part_path, mode) as handle:
-                                for chunk in response.iter_bytes(chunk_size=1024 * 1024):
-                                    handle.write(chunk)
-                                    done += len(chunk)
-                                    if progress is not None:
-                                        progress(done, total)
+                                response.raise_for_status()
+                                if response.status_code == 206:
+                                    mode = "ab"
+                                    total = offset + int(response.headers.get("Content-Length") or 0) or None
+                                    done = offset
+                                else:
+                                    # 服务器不支持 Range（或无 .part）→ 从头重下。
+                                    mode = "wb"
+                                    total = int(response.headers.get("Content-Length") or 0) or None
+                                    done = 0
+                                with open(part_path, mode) as handle:
+                                    for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                                        handle.write(chunk)
+                                        done += len(chunk)
+                                        if progress is not None:
+                                            progress(done, total)
+                    if stale_part:
+                        part_path.unlink(missing_ok=True)
+                        failures.append(f"{candidate}: HTTP 416, dropped a stale partial of {offset} bytes")
+                        continue
+                    if expected_sha256 and _sha256_file(part_path).lower() != expected_sha256.lower():
+                        part_path.unlink(missing_ok=True)  # 坏字节不能留给下一个候选当断点续传的前半截
+                        failures.append(f"{candidate}: sha256 mismatch")
+                        checksum_failed = True
+                        break
                     target = temp_dir / filename
                     shutil.move(str(part_path), str(target))
                     # v0.38.1 R1：真机矩阵要证明「真的下载过」——把这次传输的事实带回 install 结果。
                     self._last_download = {
                         "url": candidate, "mirror_used": candidate != source, "bytes": done, "resumed_from": offset,
                         "seconds": round(time.monotonic() - download_started, 1), "attempts": len(failures) + 1,
+                        "sha256_verified": bool(expected_sha256),
                     }
                     return target
                 except httpx.HTTPStatusError as exc:
@@ -1787,6 +1922,12 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     ) from exc
                 if attempt < attempts - 1:
                     time.sleep((3 ** attempt))  # 1s/3s 退避（最后一次不等）
+        if checksum_failed:
+            raise RuntimeValidationError(
+                bilingual("所有下载地址给的归档都与清单的 sha256 不符。", "Every source served an archive that fails the manifest sha256."),
+                code="runtime.install_sha256_mismatch",
+                details={"archive": source, "expected_sha256": expected_sha256, "failures": failures[-6:]},
+            )
         raise RuntimeInstallError(
             "Failed to download runtime archive from all sources.",
             code="runtime.install_download_failed",
@@ -1809,8 +1950,12 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                         response = client.get(candidate)
                         response.raise_for_status()
-                        return response.json()
-                except httpx.HTTPError as exc:
+                        payload = response.json()
+                    # 镜像常回 200 + 错误页（HTML，或 {"message": …}）：内容不对同样换下一个候选，原始 URL 永远是最后一个。
+                    if not isinstance(payload, dict) or "platforms" not in payload:
+                        raise ValueError(bilingual(f"{candidate} 返回的不是 runtime 清单", f"{candidate} did not return a runtime manifest"))
+                    return payload
+                except (httpx.HTTPError, ValueError) as exc:
                     last_error = exc
             raise RuntimeInstallError(
                 f"Failed to fetch runtime manifest: {last_error}",

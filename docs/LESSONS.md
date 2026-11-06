@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | install 不防并发也不防崩溃：别的会话在 stop 与换目录之间从旧树起启动器（install 仍报成功）；被杀的 install 留下 `.hi-*` 约 2 GB，卸载也不清；崩在两次改名之间只剩 `previous/`，离线装不回来；完整的 `.part` 每次重试都 416；镜像回 200 + 错误页时回退不生效 | 换目录全程持启动锁；`.hi-*` 记属主 pid，install 一进来就清、进卸载清单；启动路径与 install 恢复完整的 `previous/`；416 看 Content-Range；逐候选校验内容；`tests/test_runtime_recovery.py` |
 | v0.47.2-dev (2026-11-06) | 启动锁撞上回收的 PID：hand-off 给启动器的锁没人释放，下次启动时那个 pid 若已被无关进程占用，「活持有者不回收」让每次调用都回 `runtime.starting`，启动脚本一次不跑 | 启动器锁按时长封顶（960 s，大于一次启动的上限），上限内才信「活着」；服务都起来 / 停掉时收回；`tests/test_runtime_recovery.py` |
 | v0.47.2-dev (2026-11-06) | `memory_query` 的 `text` 只看最近 400 条：FTS 查得到，`query_runs` 却回 0 条，且不告诉调用方；两字词根本不走 FTS | 问题与答案走索引全库可搜（FTS，短查询 / 缺 FTS5 用 LIKE），并进候选；盘面正文深扫仍有窗口，结果带 `not_scanned`；`tests/test_memory_search.py` |
 | v0.47.2-dev (2026-11-06) | 记忆库出问题拖垮整个服务：只读库 / 路径不可用让 `MemoryStore()` 抛错、服务建不起来；只坏中间页的库构造时看不出来，每次存档都 malformed，重启也不隔离；隔离日志承诺的「memory 工具重建索引」不存在 | 构造不抛（`init_error`，下次操作自愈）；写路径 `_writer` 遇 malformed 且 `integrity_check` 确认后隔离重建；删掉那句承诺；`tests/test_memory_durability.py` |
@@ -178,6 +179,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — install 不防并发也不防崩溃：五个要人动手才能恢复的现场
+
+- **症状（架构审计，假载荷复现）**：① 强制交错：stop 与换目录之间另一个会话的调用从旧树起了启动器，旧树随后被删，启动器脚下的文件没了，`install` 仍报 `ok: true`、`warnings: []`。② 被杀的 install 留下 `.hi-*`（真载荷约 730 MB 归档 + 1.2 GB 树），下次安装不清，`uninstall` 清单里也没有。③ 崩在 `current → previous` 与换入之间：工具一律 `runtime.not_installed`，离线重装失败，好副本就在旁边。④ `.part` 已完整时每次重试都 HTTP 416，错误还写着「重试会续传」，只能手删 `downloads/`。⑤ 镜像回 200 + HTML：清单 `JSONDecodeError` 冒出去，原始 URL 没试；归档被当成下载成功，install 校验失败，回退不生效。
+- **根因**：`install` 从不碰 `.runtime-start.lock`，R3 只保证了顺序，没保证中间没人插进来。清理全靠 `TemporaryDirectory.__exit__`，SIGTERM / 断电走不到。回滚只处理异常，不处理进程没了。`_download_with_resume` 把 416 当 4xx 换 URL。回退只看 HTTP 状态，不看内容。
+- **修复**：`_swap_in_payload` 从 stop 到换入全程持启动锁（`INSTALL_OWNER`，按时长封顶），换完放锁再重启；别的会话只见 `runtime.starting`。锁被占时等 `runtime_start_timeout_seconds`，等不到报新码 `runtime.install_start_in_progress`，current/ 不动（启动器正从那里起服务）。`.hi-*` 写 `.owner` 记 pid，install 一进来就清（磁盘预检要 4 倍归档大小，留着它重试会被拦）：属主死了、属主活着但超过 6 小时（pid 回收）、无标记且超过 1 小时才清。`_restore_previous_after_crash` 在 `previous/` 完整（清单有效 + 必需路径都在）时挪回 current/。416：`Content-Range` 总长等于分块就直接用，否则丢掉从头下。`expected_sha256` 传进下载循环逐候选校验，坏字节不留给下一个候选续传；全部失败仍是 `runtime.install_sha256_mismatch`。清单要是含 `platforms` 的对象才算数。
+- **设计取舍**：恢复只放在 `start_local_services` 与 `_swap_in_payload`，**不放** `_require_runtime`：卸载的停服务路径也调它，会把要删的东西挪回 current/（`test_uninstall_does_not_bring_previous_back`）。恢复要拿启动锁：install 两次改名之间同样只有 previous/，这时挪回去，新载荷会被 `shutil.move` 搬进 current/ 里面（`test_a_previous_is_left_alone_while_a_swap_holds_the_lock`）。`doctor` 保持只读，不自愈。
+- **边界**：坏了的 `.hi-*` 里完整的归档没有回收成 `.part`，被杀在解压阶段仍要重新下载。两次改名之间的窗口是微秒级，现场③少见；①②④⑤才是平常会碰到的。没有在真 runtime 与 Windows 上跑过。
+- **守卫**：`tests/test_runtime_recovery.py`。七组负向对照全红：扫目录不看属主、恢复不拿锁、恢复挪进 `_require_runtime`、不查完整性、换目录不放锁、坏字节留给下一个候选、install 不先恢复。R3 的 `["stop","swap","start"]` 顺序测试未改动，照常绿。
+- **法则**：顺序保证不了互斥；崩溃恢复不能靠 `finally`，要靠下一次进来的人能看懂现场。
 
 ### v0.47.2-dev / 2026-11-06 — 启动锁撞上回收的 PID：永远 `starting`
 

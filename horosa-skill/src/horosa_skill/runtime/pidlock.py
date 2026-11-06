@@ -24,10 +24,11 @@ from typing import Any, Iterator
 from horosa_skill import fsretry
 from horosa_skill.runtime.procs import pid_alive
 
-# 锁交给启动器之后，里面记的 pid 是别的进程：我们不知道它还是不是启动器（Windows 回收 PID 很快）。
-# 这类锁按时长封顶，上限内才相信「活着」；自己拿着的锁（pid 是持锁进程本身）不受影响。
+# 锁交给启动器之后，里面记的 pid 是别的进程：我们不知道它还是不是启动器（Windows 回收 PID 很快）。install 换目录只持锁几分钟，
+# 崩溃后留下的 pid 同样会被回收。这两类按时长封顶，上限内才相信「活着」；别的锁（长命的持锁进程本身）不受影响。
 LAUNCHER_OWNER = "runtime-launcher"
-_AGE_CAPPED_OWNERS = frozenset({LAUNCHER_OWNER})
+INSTALL_OWNER = "runtime-install"
+_AGE_CAPPED_OWNERS = frozenset({LAUNCHER_OWNER, INSTALL_OWNER})
 
 
 @contextmanager

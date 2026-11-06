@@ -1102,6 +1102,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   （**永远不把「查不到」当「在别处」**）。原因：旧清单钉着默认端口 + 桌面端占着它们是最常见形状，原来的
   拒绝把用户卡死，且提示的 `HOROSA_PORTS=auto` 对它无效（闸探的是旧清单的端口）——见台账 v0.38.1 / 2026-09-15。
   `tests/test_runtime_manager.py` 锁顺序 `["stop", "swap", "start"]`，并锁「别处 → 放行不 stop」与「部分证明不了 → 仍拒」。
+  换目录全程（stop → 换入）持 `.runtime-start.lock`（`_swap_in_payload`），换完放锁再重启：别的会话只见 `runtime.starting`，不会从旧树起启动器；锁被占等不到报 `runtime.install_start_in_progress`，current/ 不动（v0.47.2-dev）。
+- **崩溃后不用人动手（v0.47.2-dev）。** `.hi-*` 写 `.owner` 记 pid，install 一进来就清（属主死了 / 活着但超 6 小时 / 无标记超 1 小时），也在卸载清单里。current/ 缺失且 `previous/` 完整（`_payload_is_complete`）时恢复，只在 `start_local_services` 与 `_swap_in_payload` 做且要持启动锁：放进 `_require_runtime` 会让卸载把要删的东西挪回来，不持锁会撞上 install 的两次改名之间。下载的 416 看 `Content-Range`（总长等于分块 = 已完整），否则丢分块从头下；镜像回退看内容不只看 HTTP：清单要是含 `platforms` 的对象，归档逐候选校验 sha，坏字节不留给下一个候选续传。原始 URL 永远是最后一个候选。`doctor` 只读，不自愈。
 - **`runtime stop` 不在别的 MCP 客户端脚下抽走服务（v0.38.1 R14）。** 登记表里仍存活的客户端 → `runtime.stop_refused_clients_attached`；
   `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
 - **stdio server 在客户端关掉 stdin 后 15 s 内退出（v0.38.1 发布后）。** 退出路径上不留非 daemon 线程、不阻塞（runtime 预热线程是 daemon）；

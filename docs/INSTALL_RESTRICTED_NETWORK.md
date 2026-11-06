@@ -72,7 +72,8 @@ uvx --from ./horosa_skill-0.47.1-py3-none-any.whl horosa-skill client config --f
 | --- | --- | --- |
 | `runtime.install_manifest_fetch_failed` | 清单 URL 经所有镜像都取不到 | 路径 1 换镜像 / 路径 2 直链 |
 | `runtime.install_download_failed` | 归档下载失败（`resume_note` 说明 `.part` 是否保留） | 重跑 `install` 续传；或路径 2/3 |
-| `runtime.install_sha256_mismatch` | 归档内容与清单 sha256 不符（镜像给了别的文件） | 换镜像或走直链；别 `--force` 跳过校验 |
+| `runtime.install_sha256_mismatch` | 所有地址给的归档都与清单 sha256 不符（单个镜像给错文件时会自动换下一个） | 换镜像或走直链；别 `--force` 跳过校验 |
+| `runtime.install_start_in_progress` | runtime 正在启动，这时换目录会把启动器脚下的文件搬走；已装的 runtime 没动 | 等启动结束（`horosa-skill runtime status`）后重跑 `install` |
 | `runtime.install_long_path` | Windows 路径超 260 且未开长路径 | 设 `HOROSA_RUNTIME_ROOT=C:\horosa` 或开注册表 `LongPathsEnabled` |
 | `runtime.path_not_ascii` | Windows 上 runtime 根含非 ASCII 字符（随包 java.exe / Swiss Ephemeris 按 ANSI 读路径，装了也起不来） | `HOROSA_RUNTIME_ROOT=C:\horosa`（纯 ASCII）后重跑 `install` |
 | `runtime.install_missing_platform` | 清单里没有本机平台 | Intel Mac / Linux 走网关模式（`HOROSA_SERVER_ROOT` 指向装了 runtime 的机器）；Windows ARM 不会走到这里——它自动装 win32-x64 载荷走仿真（结果里 `warnings[].code == runtime.platform_emulated`），走到这里说明清单连 win32-x64 都缺 |
@@ -109,8 +110,10 @@ local services never go through a proxy. Set `SSL_CERT_FILE` for a private CA an
 trusts the system store. On Windows PowerShell 5.1 pass JSON via `--input`/`--output` files, not pipes.
 
 Error codes: `runtime.install_manifest_fetch_failed` (try a mirror / the API path), `runtime.install_download_failed`
-(re-run to resume), `runtime.install_sha256_mismatch` (the mirror served a different file — switch mirrors, never
-skip verification), `runtime.install_long_path` (`HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled`),
+(re-run to resume), `runtime.install_sha256_mismatch` (every address served a different file; one bad mirror just moves on to the next
+candidate — switch mirrors, never skip verification), `runtime.install_start_in_progress` (the runtime is starting and
+swapping now would pull files out from under the launcher; the installed runtime is untouched — wait for
+`horosa-skill runtime status`, then re-run), `runtime.install_long_path` (`HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled`),
 `runtime.install_missing_platform` (gateway mode via `HOROSA_SERVER_ROOT`; Windows on ARM never lands here — it installs the
 win32-x64 payload under emulation and reports `runtime.platform_emulated` in `warnings`), `runtime.install_os_too_old` (the
 host is older than the payload's `min_os` — upgrade the OS or use gateway mode). Slow or proxied networks: raise
