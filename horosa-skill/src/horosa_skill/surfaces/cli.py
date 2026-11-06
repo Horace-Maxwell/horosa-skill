@@ -3,11 +3,8 @@ from __future__ import annotations
 import json
 import re
 import os
-import subprocess
 import sys
-import threading
 from importlib.metadata import PackageNotFoundError, version as package_version
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NoReturn, Optional
 
@@ -23,8 +20,7 @@ from horosa_skill.engine.registry import (
     TOOL_DEFINITIONS,
     resolve_tool_name,
 )
-from horosa_skill.errors import HorosaSkillError, RuntimeError, ToolValidationError, bilingual, recovery_for
-from horosa_skill.runtime import HorosaRuntimeManager
+from horosa_skill.errors import RuntimeError, ToolValidationError, bilingual
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.textscript.localize import PROTOCOL_OPERATIONS
 from horosa_skill.tracing import TraceRecorder
@@ -38,12 +34,7 @@ from horosa_skill.client_config.merge import (
     _merge_client_config,
     _write_json_file,
 )
-from horosa_skill.client_config.openclaw import (
-    _build_openclaw_config,
-    _default_openclaw_native_config_path,
-    _isolated_env_vars,
-    _write_openclaw_native_config,
-)
+from horosa_skill.client_config.openclaw import _build_openclaw_config
 from horosa_skill.client_config.payload import (
     _build_client_config_payload,
     _resolve_skill_root,
@@ -53,13 +44,8 @@ from horosa_skill.surfaces.doctor import (
     _doctor_report,
     _explain_lines,
 )
-from horosa_skill.surfaces.openclaw_smoke import (
-    _friendly_runtime_error_payload,
-    _openclaw_setup_command,
-    _setup_summary,
-    _timed_call,
-)
-from horosa_skill.surfaces import openclaw_smoke
+from horosa_skill.surfaces import openclaw_flow, serve_flow
+from horosa_skill.surfaces.refusals import _emit_refusal, _refuse, _write_refusal
 from horosa_skill.surfaces.runtime_helpers import (
     _install_progress_printer,
 )
@@ -179,39 +165,8 @@ def _service() -> HorosaSkillService:
     return HorosaSkillService(Settings.from_env())
 
 
-def _start_stdio_runtime_warmup(manager: HorosaRuntimeManager) -> None:
-    def _warmup() -> None:
-        try:
-            manager.start_local_services()
-        except RuntimeError as exc:
-            # 预热失败推迟不了问题只会掩盖它：stderr 一行警告（stdio 协议流在 stdout，不受影响）。
-            sys.stderr.write(f"[horosa] runtime 预热失败（首次调用时会重试）：{exc.code} {exc}\n")
-            sys.stderr.flush()
-
-    threading.Thread(target=_warmup, name="horosa-stdio-runtime-warmup", daemon=True).start()
-
-
 def _tracer(settings: Settings | None = None) -> TraceRecorder:
     return TraceRecorder(settings or Settings.from_env())
-
-
-def _write_refusal(body: dict[str, Any]) -> NoReturn:
-    """命令拒绝执行的唯一出口：exit 2 + stderr 一份 JSON（SKILL.md 的契约）。
-
-    `default=str`：body 来自各层，一个 json 编码不了的值不该把拒绝变成 traceback——v0.47.2-dev 之前 22 处手写，
-    pydantic 的 ValueError 就是这样把 exit 2 打成 exit 1 的。
-    """
-    typer.echo(json.dumps(body, ensure_ascii=False, indent=2, default=str), err=True)
-    raise typer.Exit(code=2)
-
-
-def _emit_refusal(code: str, message: str, details: dict[str, Any] | None = None, **extra: Any) -> NoReturn:
-    """带错误码的拒绝：details 补上与 MCP 面同一套恢复说明；`extra` 是个别命令约定的顶层键。"""
-    _write_refusal({"ok": False, **extra, "code": code, "message": message, "details": recovery_for(code, details)})
-
-
-def _refuse(exc: HorosaSkillError) -> NoReturn:
-    _emit_refusal(exc.code, str(exc), exc.details)
 
 
 def _refuse_payload(source: str, zh: str, en: str, **details: Any) -> NoReturn:
@@ -303,20 +258,6 @@ def _enforce_agent_preflight(tool_name: str, payload: dict[str, Any]) -> None:
     raise ToolValidationError(preflight["message"], code=preflight["code"], details=preflight)
 
 
-@contextmanager
-def _temporary_env(overrides: dict[str, str]):
-    previous = {key: os.environ.get(key) for key in overrides}
-    os.environ.update(overrides)
-    try:
-        yield
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-
-
 def _opt(value: Any, default: Any = None) -> Any:
     """把 typer 的 `OptionInfo` 还原成它承载的默认值。
 
@@ -334,35 +275,11 @@ def _opt(value: Any, default: Any = None) -> Any:
     return value
 
 
-_TRANSPORT_ALIASES = {
-    "http": "streamable-http",
-    "streamable_http": "streamable-http",
-    "streamablehttp": "streamable-http",
-    "shttp": "streamable-http",
-}
-_TRANSPORTS = {"streamable-http", "stdio", "sse"}
 _ENTRY_HELP = (
     "How the config starts the server: auto（缺省：Windows 开着 Smart App Control 时用 module，否则 script）/ "
     "script（`horosa-skill serve`）/ module（`python -m horosa_skill serve`——uv 现生成的 horosa-skill.exe 被应用控制拦下"
     "（os error 4551）时用它，功能相同）。"
 )
-
-
-def _normalized_transport(value: str) -> str:
-    text = (value or "").strip().lower()
-    text = _TRANSPORT_ALIASES.get(text, text)
-    if text not in _TRANSPORTS:
-        raise typer.BadParameter(
-            f"未知传输 `{value}`。可选：streamable-http（默认）、stdio、sse（legacy）。"
-            "注意 `http` 是 Claude Code 注册命令里的说法，这里请写 streamable-http。"
-        )
-    return text
-
-
-def _mask_token(token: str | None) -> str:
-    if not token:
-        return ""
-    return f"{token[:4]}…{token[-2:]}" if len(token) > 8 else "****"
 
 
 def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str) -> None:
@@ -729,126 +646,15 @@ def serve(
     ),
 ) -> None:
     # 直接函数调用时 typer 不做默认值解析，见 _opt 的说明。
-    transport = _opt(transport, "streamable-http")
-    host = _opt(host)
-    port = _opt(port)
-    token = _opt(token)
-    allow_unauthenticated = bool(_opt(allow_unauthenticated, False))
-    skip_runtime_start = bool(_opt(skip_runtime_start, False))
-    stop_runtime_on_exit = bool(_opt(stop_runtime_on_exit, False))
-    settings = Settings.from_env()
-    # 🔴 `--transport http` 是最常见的手误（Claude Code 的 `claude mcp add --transport http` 用的
-    # 就是这个词）。旧实现把未知值原样传给 SDK，得到的是一句不知所云的内部报错。
-    transport = _normalized_transport(transport)
-    # host/port 缺省来自 env（旧实现把 typer 的字面默认写死，于是 docker-compose 里设的
-    # HOROSA_SKILL_HOST/PORT 永远不生效 —— 容器只监听 127.0.0.1，宿主怎么连都连不上）。
-    if host is not None:
-        settings.host = host
-    if port is not None:
-        settings.port = port
-    host, port = settings.host, settings.port
-    token = (token or os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
-    if token:
-        os.environ["HOROSA_MCP_TOKEN"] = token
-    if transport != "stdio" and host not in {"127.0.0.1", "localhost", "::1"}:
-        if not token and not allow_unauthenticated:
-            _emit_refusal(
-                "serve.token_required",
-                f"绑定到非回环地址 {host} 而没有设置访问令牌 —— 已拒绝启动。",
-                {
-                    "host": host,
-                    "next_action": (
-                        "设 --token <随机串>（或 HOROSA_MCP_TOKEN），客户端在 Authorization: Bearer "
-                        "头里带上它；确实想裸奔请显式加 --allow-unauthenticated。"
-                    ),
-                    "why": (
-                        "本 server 能读写本机记忆库、生成文件、驱动本地 runtime。"
-                        "对外绑定且无鉴权 = 同网段任何人都能做这些事。"
-                    ),
-                },
-            )
-        if not token:
-            typer.echo(
-                f"⚠️  正在以**无鉴权**方式绑定 {host}:{port}，且没有 TLS。"
-                "同网段的任何人都能调用本机的 Horosa 工具、读你的记忆库。仅在可信网络里这么做。",
-                err=True,
-            )
-    manager = runtime_helpers._runtime_manager(settings)
-    # 🔴 端口先探再起：8765 被占时旧实现让 uvicorn 抛裸 traceback（OSError: [Errno 48]），
-    # 而这是**最常见**的一次失败 —— 用户在两个终端里各起一个 serve。
-    if transport != "stdio":
-        from horosa_skill.runtime.ports import port_bindable, port_holders
-
-        if not port_bindable(port, host if host not in {"0.0.0.0", "::"} else "127.0.0.1"):
-            holders = port_holders(port)
-            _emit_refusal(
-                "serve.port_in_use",
-                f"端口 {port} 已被占用，MCP server 无法监听。",
-                {
-                    "host": host,
-                    "port": port,
-                    "holders": holders,
-                    "next_action": (
-                        f"换端口：`--port <其它端口>` 或设 HOROSA_SKILL_PORT；"
-                        "或关掉上面点名的进程（本工具不会代为终止）。"
-                    ),
-                },
-            )
-    service = HorosaSkillService(settings, runtime_manager=manager)
-    # 🔴 横幅必须在启动 runtime **之前**打印：start_local_services 可以阻塞到 45 秒
-    # （首次更久），期间用户盯着一个没有任何输出的终端，无从判断是卡住了还是在装。
-    if transport != "stdio":
-        path = "/sse" if transport == "sse" else "/mcp"
-        typer.echo(
-            f"Horosa Skill MCP 正在 http://{host}:{port}{path} 监听"
-            f"（{transport}{'（legacy）' if transport == 'sse' else ''}，{len(TOOL_DEFINITIONS)} 个技法工具）。\n"
-            + (f"访问令牌：已启用（Authorization: Bearer {_mask_token(token)}）。\n" if token else "")
-            + f"接入 Claude Code：claude mcp add horosa --transport http http://{host}:{port}{path}\n"
-            f"其他客户端：uv run horosa-skill client config --format <client>（见 README「接入 AI 客户端」）。\n"
-            + ("正在启动本机 runtime（首次可能要几分钟）……" if not skip_runtime_start else ""),
-            err=True,
-        )
-    started_now = False
-    if not skip_runtime_start:
-        if transport == "stdio":
-            _start_stdio_runtime_warmup(manager)
-        else:
-            try:
-                start_result = manager.start_local_services()
-                started_now = not start_result.get("already_running", False)
-            except RuntimeError as exc:
-                _refuse(exc)
-    from horosa_skill.runtime import registry as _registry
-
-    try:
-        _registry.attach_client(settings.runtime_state_path, pid=os.getpid(), transport=transport)
-    except OSError:
-        pass
-    try:
-        # 只有 serve 用得到 MCP SDK，而它占 CLI 启动的三成：放在这里 import（tests/test_layering.py 锁）。
-        from horosa_skill.surfaces.mcp_server import run_mcp_server
-
-        run_mcp_server(settings, transport=transport, service=service)
-    finally:
-        try:
-            _registry.detach_client(settings.runtime_state_path, pid=os.getpid())
-        except OSError:
-            pass
-        # 🔴 默认**保温**。旧行为是「这次 serve 起的就在退出时停掉」——而 runtime 是**共享**的：
-        # Claude Desktop 与 Cursor 同时挂着时，关掉其中一个会把另一个的后端一起停掉；
-        # 而重启一次要几十秒到几分钟。要恢复旧行为请显式加 --stop-runtime-on-exit。
-        if stop_runtime_on_exit and started_now and transport != "stdio":
-            others = _registry.live_clients(manager.load_runtime_state(), exclude_pid=os.getpid())
-            if others:
-                typer.echo(
-                    f"还有 {len(others)} 个客户端挂在这份 runtime 上，未停止（--stop-runtime-on-exit 让位于它们）。",
-                    err=True,
-                )
-            else:
-                try:
-                    manager.stop_local_services()
-                except RuntimeError:
-                    pass
+    serve_flow._run_serve(
+        transport=_opt(transport, "streamable-http"),
+        host=_opt(host),
+        port=_opt(port),
+        token=_opt(token),
+        allow_unauthenticated=bool(_opt(allow_unauthenticated, False)),
+        skip_runtime_start=bool(_opt(skip_runtime_start, False)),
+        stop_runtime_on_exit=bool(_opt(stop_runtime_on_exit, False)),
+    )
 
 
 @tool_app.command("list", help='List all techniques as JSON: registry name, MCP name, description, input contract with an example payload. 列出全部技法。')
@@ -1368,147 +1174,16 @@ def client_openclaw_setup(
         help="Optional runtime manifest URL. Defaults to the public GitHub Release manifest for the installed package version.",
     ),
 ) -> None:
-    resolved_skill_root = _resolve_skill_root(skill_root)
-    workspace_root = workspace.expanduser().resolve()
-    workspace_root.mkdir(parents=True, exist_ok=True)
-    config_path = (config.expanduser().resolve() if config is not None else workspace_root / "config" / "mcporter.json")
-    native_config_path = (
-        native_config.expanduser().resolve()
-        if native_config is not None
-        else _default_openclaw_native_config_path().expanduser().resolve()
-    )
-    home_dir = (isolate_home.expanduser().resolve() if isolate_home is not None else workspace_root / ".horosa-home")
-    env_overrides = _isolated_env_vars(home_dir)
-
-    payload = _build_openclaw_config(
-        skill_root=resolved_skill_root,
+    report = openclaw_flow._run_openclaw_setup(
+        workspace=workspace,
+        skill_root=skill_root,
         server_name=server_name,
-        format_name="mcporter",
-        isolate_home=home_dir,
-    )
-    _write_json_file(config_path, payload)
-    native_config_written_to: Path | None = None
-    if write_native_config:
-        native_config_written_to = _write_openclaw_native_config(
-            path=native_config_path,
-            server_name=server_name,
-            server_block=payload["mcpServers"][server_name],
-        )
-
-    with _temporary_env(env_overrides):
-        settings = Settings.from_env()
-        manager = runtime_helpers._runtime_manager(settings)
-        try:
-            install_result, install_seconds = _timed_call(lambda: manager.install(manifest_url=manifest_url))
-            start_result, start_seconds = _timed_call(lambda: manager.start_local_services())
-            doctor_result, doctor_seconds = _timed_call(manager.doctor)
-            smoke_report: dict[str, Any] | None = None
-            smoke_seconds: float | None = None
-            if not skip_smoke:
-                smoke_output = settings.data_dir / "openclaw_setup_smoke_check.json"
-                smoke_report, smoke_seconds = _timed_call(
-                    lambda: openclaw_smoke._run_openclaw_smoke_check(
-                        workspace_root=workspace_root,
-                        config_path=config_path,
-                        output_path=smoke_output,
-                        include_list=False,
-                    )
-                )
-        except RuntimeError as exc:
-            _write_refusal(
-                _friendly_runtime_error_payload(
-                    exc,
-                    action_label="OpenClaw setup",
-                    workspace_root=workspace_root,
-                    config_path=config_path,
-                )
-            )
-
-    doctor_issues = doctor_result.get("issues", [])
-    install_summary = {
-        "ok": install_result.get("ok"),
-        "changed": install_result.get("changed"),
-        "platform": install_result.get("platform"),
-        "runtime_root": install_result.get("runtime_root"),
-        "version": ((install_result.get("manifest") or {}).get("version")),
-        "runtime_payload_version": ((install_result.get("manifest") or {}).get("runtime_payload_version")),
-    }
-    runtime_summary = {
-        "ok": start_result.get("ok"),
-        "already_running": start_result.get("already_running"),
-        "reachable_endpoints": [
-            endpoint.get("label")
-            for endpoint in start_result.get("endpoints", [])
-            if endpoint.get("reachable") is True
-        ],
-    }
-    doctor_summary = {
-        "issues": doctor_issues,
-        "manifest_version": doctor_result.get("manifest_version"),
-        "runtime_payload_version": doctor_result.get("runtime_payload_version"),
-        "reachable_endpoints": [
-            endpoint.get("label")
-            for endpoint in doctor_result.get("endpoints", [])
-            if endpoint.get("reachable") is True
-        ],
-    }
-    report = {
-        "ok": (not doctor_issues) and (skip_smoke or (smoke_report or {}).get("ok") is True),
-        "workspace": str(workspace_root),
-        "config": str(config_path),
-        "config_written_to": str(config_path),
-        "native_config": str(native_config_written_to) if native_config_written_to is not None else None,
-        "native_config_written_to": str(native_config_written_to) if native_config_written_to is not None else None,
-        "native_config_note": (
-            "Horosa was merged into OpenClaw native mcp.servers. Restart OpenClaw or start a new agent session "
-            "if an existing session still reports clientToolCount: 0."
-            if native_config_written_to is not None
-            else "Skipped native OpenClaw config write. mcporter checks may pass, but agent sessions may not see horosa_* tools until mcp.servers is configured."
-        ),
-        "isolate_home": str(home_dir),
-        "local_home": str(home_dir),
-        "runtime_root": env_overrides["HOROSA_RUNTIME_ROOT"],
-        "data_dir": env_overrides["HOROSA_SKILL_DATA_DIR"],
-        "timings": {
-            "install_seconds": install_seconds,
-            "runtime_start_seconds": start_seconds,
-            "doctor_seconds": doctor_seconds,
-            "smoke_seconds": smoke_seconds,
-        },
-        "install": install_summary,
-        "runtime_start": runtime_summary,
-        "doctor": doctor_summary,
-        "smoke": smoke_report,
-        "next_steps": (
-            [
-                (
-                    f"Restart OpenClaw or start a new agent session so it reloads native MCP config at {native_config_written_to}."
-                    if native_config_written_to is not None
-                    else f"Open OpenClaw and use the generated mcporter config at {config_path}."
-                ),
-                f"Re-run `uv run horosa-skill client openclaw-check --workspace {workspace_root} --config {config_path}` whenever you want a fresh smoke report.",
-            ]
-            if not skip_smoke
-            else [
-                (
-                    f"Restart OpenClaw or start a new agent session so it reloads native MCP config at {native_config_written_to}."
-                    if native_config_written_to is not None
-                    else f"Open OpenClaw and use the generated mcporter config at {config_path}."
-                ),
-                f"Run `uv run horosa-skill client openclaw-check --workspace {workspace_root} --config {config_path}` to verify the setup when convenient.",
-            ]
-        ),
-    }
-    report.update(
-        _setup_summary(
-            workspace_root=workspace_root,
-            config_path=config_path,
-            native_config_path=native_config_written_to,
-            home_dir=home_dir,
-            doctor_issues=doctor_issues,
-            smoke_report=smoke_report,
-            skip_smoke=skip_smoke,
-        )
+        isolate_home=isolate_home,
+        config=config,
+        native_config=native_config,
+        write_native_config=write_native_config,
+        skip_smoke=skip_smoke,
+        manifest_url=manifest_url,
     )
     _print_json(report)
     if not report["ok"]:
@@ -1534,84 +1209,10 @@ def client_openclaw_check(
         help="Optional report path. Defaults to a JSON file in the Horosa data directory.",
     ),
 ) -> None:
-    settings = Settings.from_env()
-    workspace_root = workspace.expanduser().resolve()
-    config_path = (config.expanduser().resolve() if config is not None else workspace_root / "config" / "mcporter.json")
-    if not config_path.exists():
-        _emit_refusal(
-            "client.config_missing",
-            f"mcporter config not found: {config_path}",
-            {"config": str(config_path), "workspace": str(workspace_root)},
-            status="needs_attention",
-            ready_for_openclaw=False,
-            user_summary="OpenClaw config not found yet.",
-            next_action=f"Run `{_openclaw_setup_command(workspace_root)}` to create a ready-to-use config and smoke test it.",
-        )
-
-    default_output = settings.data_dir / ("openclaw_full_check.json" if full else "openclaw_smoke_check.json")
-    output_path = (output.expanduser().resolve() if output is not None else default_output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if full:
-        script_path = runtime_helpers._package_root() / "scripts" / "run_openclaw_full_self_check.py"
-        if not script_path.is_file():
-            # 全量自检脚本只在源码仓里（不进 wheel）：uvx / pip 装的包跑 --full 以前只回一句 Python 的
-            # "can't open file"。现在说清楚为什么、下一步怎么走；快速体检（不带 --full）照常可用。
-            _emit_refusal(
-                "openclaw_check.full_unavailable",
-                bilingual(
-                    "全量自检脚本只随源码仓分发，当前安装（wheel / uvx）里没有它。",
-                    "The exhaustive self-check script ships with the source checkout only, not with this install.",
-                ),
-                {"expected_script": str(script_path)},
-                next_action=(
-                    "Run the quick check without --full, or clone "
-                    "https://github.com/Horace-Maxwell/horosa-skill and run "
-                    "`uv run horosa-skill client openclaw-check --full` from its horosa-skill/ directory."
-                ),
-            )
-        command = [
-            sys.executable,
-            str(script_path),
-            "--workspace",
-            str(workspace_root),
-            "--config",
-            str(config_path),
-            "--output",
-            str(output_path),
-        ]
-        try:
-            result = subprocess.run(
-                command, capture_output=True, text=True, check=False, timeout=900, encoding="utf-8", errors="replace",
-            )
-        except subprocess.TimeoutExpired:
-            _emit_refusal("openclaw_check.timeout", "openclaw-check --full exceeded 900s and was aborted (a child MCP/runtime process is likely wedged).")
-        if output_path.exists():
-            report = json.loads(output_path.read_text(encoding="utf-8"))
-            _print_json(report)
-        else:
-            typer.echo(result.stderr or result.stdout, err=True)
-        if result.returncode != 0:
-            raise typer.Exit(code=2)
-        return
-
-    try:
-        report = openclaw_smoke._run_openclaw_smoke_check(
-            workspace_root=workspace_root,
-            config_path=config_path,
-            output_path=output_path,
-        )
-    except RuntimeError as exc:
-        _write_refusal(
-            _friendly_runtime_error_payload(
-                exc,
-                action_label="OpenClaw smoke check",
-                workspace_root=workspace_root,
-                config_path=config_path,
-            )
-        )
-    _print_json(report)
-    if not report["ok"]:
+    report, failed = openclaw_flow._run_openclaw_check(workspace=workspace, config=config, full=full, output=output)
+    if report is not None:
+        _print_json(report)
+    if failed:
         raise typer.Exit(code=2)
 
 

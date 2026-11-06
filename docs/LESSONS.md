@@ -192,7 +192,8 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **工具数写手差点改错别的数**：`bump_version.py --tool-counts` 第一版见到「工具」这类词的行就替换同值数字。放回 v0.47.0 那次 110→114 的父提交重放，它把「106 条基准用例」改了：用例数恰好等于旧闸门数。改成只动判官读的形状（`stated_counts`，与判官放在一起）。**重放还照出判官的盲区**：「114 个真实技法」「114 callable tools」「全量面 125」不在任何正则里；README 横幅的 alt 被 `EMPHASIS` 连标签一起剥掉，判官从没读到过。放宽形状后判官立刻红了两处陈旧声明：`SKILL.md`、`codex-config.toml` 一直写「全量 120」，手工那次也漏了。守卫 `tests/test_tool_count_sync.py`：在全部 COUNT_DOCS 的副本上模拟多四个技法，写手跑完判官必须没有意见，不跑必须有意见。一条负向对照起初是绿的（摘掉徽章形状，同一行的 alt 替它过了关），加了只有徽章的样例才红。
 - **派生之后旧测试会变空**：导出键表从注册表派生后，`test_every_business_tool_is_in_export_technique_map` 永远为真。真正的新风险是缺省键不存在（导出键与工具名不同却忘了写覆盖，解析抛 Unknown 被吞成 `export_snapshot=None`），所以断言改成「每个键都在 `AI_EXPORT_TECHNIQUES`、非业务工具集合相等、覆盖项无死条目」。负向对照 4 条全红。本地分派改写前后逐工具记录实参，114 个工具路由完全相同。
 - **没做**：`schemas/tools/__init__.py` 的再导出不派生。要派生只能运行时注入 `globals()`，`__all__` 对 F822 就不可见了，等于削弱 `verify_undefined_names`；每模块写 `__all__` 只是把清单挪个地方。`FAMILIES` 未动。
-- **法则**：写手要用判官读的形状，并把写手放回一次真实历史变更里重放：它该改的、不该改的、判官漏看的，三样都会现形。一条规则同时有判官和写手时，它们必须共用一份形状。
+- **命令挪出 cli.py，测试的隐含假设跟着暴露**：`serve` 与 `client openclaw-*` 进流程模块（`serve_flow.py`、`openclaw_flow.py`，共用 `refusals.py`）。命令函数只管打印与退出码，所以 `_print_json` 仍可替换，AST 守卫也还看得见它。两处意外：① 8 处测试写的是 `monkeypatch.setattr(cli.subprocess, "run", …)`，借 cli 模块的属性去改全局 `subprocess.run`；cli 不再 import 它就 AttributeError。只改路径，断言不动。② 摘掉 `openclaw-check` 的退出码、摘掉 `serve` 的传输校验，**全仓照绿**：这两条路径从没有端到端测试，旧测试只测单个函数。挪动之前先给要挪的路径做字节快照（拒绝路径前后逐字节相同），再补 `tests/test_cli_flows.py`，这两条负向对照才红。
+- **法则**：写手要用判官读的形状，并把写手放回一次真实历史变更里重放：它该改的、不该改的、判官漏看的，三样都会现形。一条规则同时有判官和写手时，它们必须共用一份形状。重构前先问这段代码删掉谁会红：没人红就是没人守，挪之前先补上。
 
 ### v0.47.2-dev / 2026-11-06 — 每出一份 PDF 都把系统字体集重新解析一遍
 

@@ -125,7 +125,7 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   split in v0.41.1 into `mcp_surface.py` annotations + toolsets, `mcp_requests.py` argument normalization + signatures,
   `mcp_errors.py` envelopes, `mcp_runner.py` concurrency limit + blocking runs, `mcp_elicitation.py`, `mcp_auth.py`),
   `mcp_schema.py` (advertised-schema
-  slimming), `cli.py` (JSON CLI: the Typer command tree — setup / client / doctor / runtime / jev / …), `doctor.py`
+  slimming), `cli.py` (JSON CLI: the Typer command tree — setup / client / doctor / runtime / jev / …; long flows live next to it: commands print and pick the exit code, `serve_flow.py` and `openclaw_flow.py` do the work, `refusals.py` is the one stderr JSON writer), `doctor.py`
   (the doctor / `runtime status` checks, `_DOCTOR_ADVICE`, budgeted report), `openclaw_smoke.py` (the OpenClaw smoke check
   through mcporter), `setup_flow.py` (the `setup` steps: network probe → install → config → skill → doctor → stdio probe),
   `runtime_helpers.py` (runtime-manager factory, package root, download progress — the one patch point for tests).

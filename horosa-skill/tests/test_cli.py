@@ -12,7 +12,7 @@ import typer
 from horosa_skill.config import Settings
 from horosa_skill.surfaces import cli
 from horosa_skill.surfaces import runtime_helpers as runtime_helpers
-from horosa_skill.surfaces import openclaw_smoke
+from horosa_skill.surfaces import openclaw_smoke, serve_flow
 from horosa_skill.client_config import openclaw as client_openclaw
 from horosa_skill.client_config import payload as client_payload
 
@@ -49,7 +49,7 @@ def test_stdio_serve_skips_eager_runtime_start(monkeypatch) -> None:
 
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda cls: settings))
     monkeypatch.setattr(runtime_helpers, "_runtime_manager", lambda settings_arg: manager)
-    monkeypatch.setattr(cli, "_start_stdio_runtime_warmup", lambda manager_arg: warmups.append(manager_arg))
+    monkeypatch.setattr(serve_flow, "_start_stdio_runtime_warmup", lambda manager_arg: warmups.append(manager_arg))
     monkeypatch.setattr("horosa_skill.surfaces.mcp_server.run_mcp_server", lambda settings_arg, transport, service=None: None)
 
     cli.serve(transport="stdio", host="127.0.0.1", port=8765, skip_runtime_start=False)
@@ -494,7 +494,7 @@ def test_run_subprocess_json_accepts_diagnostic_prefix(monkeypatch, tmp_path: Pa
             stderr="",
         )
 
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     payload = openclaw_smoke._run_subprocess_json(["mcporter", "list"], cwd=tmp_path)
 
@@ -609,7 +609,7 @@ def test_run_subprocess_json_times_out_cleanly(monkeypatch, tmp_path: Path) -> N
     def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=["mcporter"], timeout=1, output="warming", stderr="stuck")
 
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(cli.RuntimeError) as exc_info:
         openclaw_smoke._run_subprocess_json(["mcporter", "list"], cwd=tmp_path, timeout_seconds=1)
@@ -656,7 +656,7 @@ def test_openclaw_full_check_from_a_wheel_install_explains_instead_of_a_python_t
         calls.append(" ".join(map(str, command)))
         return real_run(command, *args, **kwargs)
 
-    monkeypatch.setattr(cli.subprocess, "run", spy_run)
+    monkeypatch.setattr(subprocess, "run", spy_run)
 
     result = CliRunner().invoke(cli.app, ["client", "openclaw-check", "--workspace", str(workspace), "--full"])
 
@@ -689,7 +689,7 @@ def test_openclaw_smoke_fetches_npx_mcporter_before_the_first_timed_call(monkeyp
 
     npx = str(tmp_path / "bin" / ("npx.cmd" if os.name == "nt" else "npx"))
     monkeypatch.setattr(openclaw_smoke, "resolve_mcporter_command", lambda: [npx, "mcporter"])
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(openclaw_smoke, "_run_subprocess_json", fake_run_subprocess_json)
 
     report = openclaw_smoke._run_openclaw_smoke_check(
@@ -714,7 +714,7 @@ def test_openclaw_smoke_skips_the_warmup_for_an_installed_mcporter(monkeypatch, 
         raise AssertionError("an installed mcporter needs no npx warm-up")
 
     monkeypatch.setattr(openclaw_smoke, "resolve_mcporter_command", lambda: [str(tmp_path / "mcporter")])
-    monkeypatch.setattr(cli.subprocess, "run", forbidden_run)
+    monkeypatch.setattr(subprocess, "run", forbidden_run)
     monkeypatch.setattr(
         openclaw_smoke,
         "_run_subprocess_json",
@@ -734,7 +734,7 @@ def test_npx_warmup_timeout_names_the_install_phase(monkeypatch, tmp_path: Path)
     def slow_run(command, **kwargs):
         raise subprocess.TimeoutExpired(cmd=command, timeout=kwargs["timeout"], output=b"", stderr=b"npm warn exec ... will be installed")
 
-    monkeypatch.setattr(cli.subprocess, "run", slow_run)
+    monkeypatch.setattr(subprocess, "run", slow_run)
     with pytest.raises(cli.RuntimeError) as exc_info:
         openclaw_smoke._warm_npx_mcporter(["npx", "mcporter"], cwd=tmp_path)
     assert exc_info.value.code == "client.command_timeout"
@@ -752,7 +752,7 @@ def test_run_subprocess_json_timeout_reports_a_complete_result_that_did_not_exit
     def hung_after_output(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=["mcporter"], timeout=1, output=complete, stderr=b"")
 
-    monkeypatch.setattr(cli.subprocess, "run", hung_after_output)
+    monkeypatch.setattr(subprocess, "run", hung_after_output)
     with pytest.raises(cli.RuntimeError) as exc_info:
         openclaw_smoke._run_subprocess_json(["mcporter", "call", "horosa.horosa_knowledge_registry"], cwd=tmp_path, timeout_seconds=1)
     details = exc_info.value.details
@@ -765,7 +765,7 @@ def test_run_subprocess_json_timeout_reports_a_complete_result_that_did_not_exit
     def never_finished(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=["mcporter"], timeout=1, output=b'{"ok": tr', stderr=None)
 
-    monkeypatch.setattr(cli.subprocess, "run", never_finished)
+    monkeypatch.setattr(subprocess, "run", never_finished)
     with pytest.raises(cli.RuntimeError) as partial:
         openclaw_smoke._run_subprocess_json(["mcporter", "call", "x"], cwd=tmp_path, timeout_seconds=1)
     assert partial.value.details["output_complete"] is False
