@@ -199,7 +199,10 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **症状**：拆 `default_report.py` 时要决定八字机器文字要不要标注，先核对它的去向，发现架构审计的结论不成立。按模板写的完整 `ai_report`（含 `analysis_sections`）渲染 PDF，「AI 解读」部分（页面写着「以下是 AI 依据上方盘面所作的解读」）印 18 段，其中 16 段是机器写的：八字 3084 字对 AI 自己的 69 字，奇门 19 段、星盘 21 段同理。只给 `recommendations` / `limitations` / `evidence` / `analysis_focus` / `reading_steps` / `consultation_basis` / `follow_up_questions` 其中一项时同样如此，`style:"chart"` 也一样。
 - **根因**：`merge_ai_report` 只在「调用方给了 `answer_text` 且没写对应字段」时清空 `human_*`。`builder.py` 那句注释（Human DOCX/PDF should not turn those backfills into "AI-written" prose）说的只是这一条路；一旦调用方自己写了 `analysis_sections`，`human_analysis_sections` 取的就是 `_complete_analysis_sections` 补全后的列表。守卫 `test_report_from_tool_accepts_freeform_ai_answer_text`（`"可读解读" not in docx_text`）也只盖这一条路。
 - **我们错在哪**：审计时只试了 `direct_answer` / `executive_summary` / `answer_text` / 空，四种都走到清空分支，就写下「PDF 与 DOCX 不受影响」，随后又写进 AGENTS 9.3.1 与模块说明。结论的范围比证据大。
-- **处理**：这一轮要求输出不变，所以**没有改行为**，只把 AGENTS 与 `default_report.py` 的说明改回实情。要不要改由人定：改了是用户可见变化（人读报告变短，或这些段落换标题）。
+- **处理**：结构重构那一轮要求输出不变，所以先只把说明改回实情，把选择交给维护者：a 只印调用方写的、b 另起标题标明机器生成、c 不动。维护者选 a。
+  `human_*` 一律取自 `read_caller_answer`，「核心结论」卡片也改读 `human_*`（它此前绕过这层，直接读回填后的 `direct_answer`，答案没写结论时印的是机器结论，再不然是用户的问题）。机器版 JSON 的回填不动。
+  `test_service` 里两条断言机器段落「大运流年与阶段判断」要进人读版，是这个旧行为本身，改成断言它不出现；年份断言留着，确认流年数据仍在「完整盘面」里，读者没丢信息。
+  分析报告没有任何 AI 内容时服务本来就拒绝出文件，所以「没有答案」只有 `style:"chart"` 这一条路，测试按真实路径写。负向对照 9 条全红（每个 `human_*` 换回回填 + layout 绕过 + 调用方文字被丢）。
 - **法则**：说「只进 X」之前，把每条进入路径都走一遍；证据只覆盖几个样例时，结论也只能说到那几个样例。
 
 ### v0.47.2-dev / 2026-11-06 — 结构整理：派生清单、分层、CLI 流程、run_tool 分段（行为不变）

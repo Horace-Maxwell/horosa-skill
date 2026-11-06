@@ -119,8 +119,9 @@ def body_blocks(document: dict[str, Any], t: Any = str) -> list[Block]:
     show_ai = document.get("show_ai", True) is not False
     figures = any(isinstance(figure, dict) for figure in document.get("figures") or [])
     blocks: list[Block] = []
-    if show_ai and (ai_report.get("analysis_focus") or ai_report.get("direct_answer")):
-        blocks.append(Block("card", t("核心结论"), str(ai_report.get("direct_answer") or ai_report.get("analysis_focus") or ""), role="green"))
+    conclusion = _human_ai_value(ai_report, "direct_answer") or _human_ai_value(ai_report, "analysis_focus")
+    if show_ai and conclusion:
+        blocks.append(Block("card", t("核心结论"), str(conclusion), role="green"))
     summary = _human_ai_value(ai_report, "executive_summary")
     if show_ai and summary:
         blocks += [Block("heading", t("总览摘要"), role="summary"), Block("body", body=str(summary or ""))]

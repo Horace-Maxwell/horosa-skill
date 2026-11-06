@@ -1,7 +1,6 @@
 """确定性默认解读：调用方没写到的字段由这里补齐。这里的文字都是机器写的，不是 AI 解读。
 
-去向看 `merge_ai_report`：机器 JSON 的 `ai_report` 总是带着；`human_*`（人读版 PDF / DOCX）只在调用方给了一段
-`answer_text` 且没写对应字段时才不带。调用方写了 `analysis_sections`，或没有 `answer_text` 时，补齐的段落会印在「AI 解读」下面。
+去向看 `merge_ai_report`：只进机器 JSON 的 `ai_report`（要覆盖全部章节）。人读版 PDF / DOCX 读 `human_*`，那里只有调用方自己写的。
 """
 
 from __future__ import annotations
@@ -35,13 +34,6 @@ def merge_ai_report(
     export_text: str,
 ) -> dict[str, Any]:
     base = read_caller_answer(run=run, ai_report=ai_report)
-    base_has_answer_text = bool(str(base.get("answer_text") or "").strip())
-    base_has_executive_summary = bool(str(base.get("executive_summary") or base.get("summary") or "").strip())
-    base_has_consultation_basis = bool(base.get("consultation_basis"))
-    base_has_reading_steps = bool(base.get("reading_steps"))
-    base_has_analysis_sections = isinstance(base.get("analysis_sections"), list) and bool(base.get("analysis_sections"))
-    base_has_recommendations = isinstance(base.get("recommendations"), list) and bool(base.get("recommendations"))
-    base_has_limitations = isinstance(base.get("limitations"), list) and bool(base.get("limitations"))
     default_report = _default_ai_report(
         run=run,
         source=source,
@@ -59,32 +51,12 @@ def merge_ai_report(
         default_sections=default_report.get("analysis_sections") if isinstance(default_report.get("analysis_sections"), list) else [],
         export_sections=export_sections,
     )
-    # Machine JSON keeps deterministic coverage backfills. Human DOCX/PDF should not
-    # turn those backfills into "AI-written" prose when the client supplied a single
-    # natural-language answer_text, which is the common path for Cursor/OpenClaw/etc.
-    if base_has_answer_text and not base_has_analysis_sections:
-        human_analysis_sections: list[Any] = []
-    else:
-        human_analysis_sections = merged.get("analysis_sections") if isinstance(merged.get("analysis_sections"), list) else []
-    if base_has_answer_text and not base_has_recommendations:
-        human_recommendations: list[Any] = []
-    else:
-        human_recommendations = merged.get("recommendations") if isinstance(merged.get("recommendations"), list) else []
-    if base_has_answer_text and not base_has_limitations:
-        human_limitations: list[Any] = []
-    else:
-        human_limitations = merged.get("limitations") if isinstance(merged.get("limitations"), list) else []
-    human_executive_summary = (
-        merged.get("executive_summary") or merged.get("summary") or ""
-        if base_has_executive_summary or not base_has_answer_text
-        else ""
-    )
-    human_consultation_basis = merged.get("consultation_basis") or "" if base_has_consultation_basis or not base_has_answer_text else ""
-    human_reading_steps = (
-        merged.get("reading_steps")
-        if isinstance(merged.get("reading_steps"), list) and (base_has_reading_steps or not base_has_answer_text)
-        else []
-    )
+    # 人读版（PDF / DOCX）只印调用方自己写的：页面写着「以下是 AI 依据上方盘面所作的解读」，机器回填不能站在这个标题下。
+    # 机器版 JSON 留着回填，它要覆盖全部章节。此前只有「调用方写了 answer_text」这一条路清空，其余路径把回填印了出来。
+    def caller_list(key: str) -> list[Any]:
+        value = base.get(key)
+        return copy.deepcopy(value) if isinstance(value, list) else []
+
     return {
         "analysis_focus": merged.get("analysis_focus") or "",
         "direct_answer": merged.get("direct_answer") or merged.get("answer") or "",
@@ -97,12 +69,14 @@ def merge_ai_report(
         "evidence": merged.get("evidence") if isinstance(merged.get("evidence"), list) else [],
         "follow_up_questions": merged.get("follow_up_questions") if isinstance(merged.get("follow_up_questions"), list) else [],
         "answer_text": merged.get("answer_text") or "",
-        "human_executive_summary": human_executive_summary,
-        "human_consultation_basis": human_consultation_basis,
-        "human_reading_steps": human_reading_steps,
-        "human_analysis_sections": human_analysis_sections,
-        "human_recommendations": human_recommendations,
-        "human_limitations": human_limitations,
+        "human_direct_answer": base.get("direct_answer") or base.get("answer") or "",
+        "human_analysis_focus": base.get("analysis_focus") or "",
+        "human_executive_summary": base.get("executive_summary") or base.get("summary") or "",
+        "human_consultation_basis": base.get("consultation_basis") or "",
+        "human_reading_steps": caller_list("reading_steps"),
+        "human_analysis_sections": caller_list("analysis_sections"),
+        "human_recommendations": caller_list("recommendations"),
+        "human_limitations": caller_list("limitations"),
         "raw": merged,
     }
 

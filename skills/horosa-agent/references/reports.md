@@ -61,6 +61,10 @@ text the report fills in. It is `false` until you supply `direct_answer` (or `an
 `section_coverage_matrix` shows which chart sections you actually explained. A targeted answer that skips sections
 is still deliverable, so report those gaps rather than padding them.
 
+**PDF and DOCX print only what you wrote.** Nothing is filled in for you: a section you leave out does not appear under
+「AI 解读」. The chart data is always there under 完整盘面, so write the reading itself and do not restate the chart. Only the
+JSON report carries deterministic text, for section coverage.
+
 **Reading runs back.** `horosa_memory_query` returns summaries (`run_id`, question, tools, artifact paths); pass
 `include_payload: true` only when you need stored payloads in the result. `horosa_memory_show` returns the run in
 full. Both stay inside one MCP message: past about 900 KB the largest raw engine subtrees become

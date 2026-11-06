@@ -1473,8 +1473,7 @@ def test_all_callable_techniques_can_generate_human_readable_pdf_and_docx(tmp_pa
         assert "起盘依据" in docx_text, tool_name
         assert "解盘步骤" in docx_text, tool_name
         assert not any(term in docx_text for term in ["Run ID", "来源追溯", "report_metadata", "Horosa Skill"]), tool_name
-        if tool_name in {"bazi_birth", "bazi_direct"}:
-            assert "大运流年与阶段判断" in docx_text, tool_name
+        assert "大运流年与阶段判断" not in docx_text, tool_name  # 这是机器段落的标题：人读版只印调用方写的
 
 
 def test_all_callable_techniques_without_question_generate_overall_reading_docx(tmp_path) -> None:
@@ -1509,7 +1508,7 @@ def test_all_callable_techniques_without_question_generate_overall_reading_docx(
         assert not any(term in docx_text for term in ["Run ID", "来源追溯", "report_metadata", "Horosa Skill"]), tool_name
 
 
-def test_bazi_report_promotes_liunian_output_into_human_reading(tmp_path) -> None:
+def test_bazi_report_keeps_the_liunian_data_in_human_reading_without_machine_prose(tmp_path) -> None:
     class BaziFlowClient(FakeClient):
         def call(self, endpoint: str, payload: dict) -> dict:
             def column(ganzi: str) -> dict:
@@ -1596,12 +1595,13 @@ def test_bazi_report_promotes_liunian_output_into_human_reading(tmp_path) -> Non
     )
     with zipfile.ZipFile(Path(rendered["artifact_path"])) as archive:
         docx_text = re.sub("<[^>]+>", "", archive.read("word/document.xml").decode("utf-8"))
-    assert "大运流年与阶段判断" in docx_text
+    # 流年数据在「完整盘面」里，读者照样看得到；此前靠机器段落「大运流年与阶段判断」转述，那段不是 AI 写的，不能印在「AI 解读」下。
     assert "2026" in docx_text
     assert "2027" in docx_text
     assert "2028" in docx_text
-    assert "事业判断上" in docx_text
-    assert "财务判断上" in docx_text
+    assert "大运流年与阶段判断" not in docx_text
+    assert "事业判断上" not in docx_text
+    assert "财务判断上" not in docx_text
 
 
 def test_all_callable_techniques_final_export_text_matches_max_section_contract(tmp_path) -> None:
