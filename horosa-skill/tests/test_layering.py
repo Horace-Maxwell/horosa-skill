@@ -14,8 +14,8 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "horosa_skill"
 
 # 入口：`python -m horosa_skill` 本来就从这里进 CLI。
 SURFACE_IMPORT_ALLOWED = frozenset({"__main__.py"})
-# 还没收拾的向上依赖，名单只许缩短：reports/ 与 knowledge/ 在别的工作线上，这一轮不动。
-SERVICE_IMPORT_ALLOWED = frozenset({"reports/builder.py", "knowledge/user.py"})
+# 向上依赖已经清零（v0.47.2）：名单只许缩短，也就是说它现在只能是空的。
+SERVICE_IMPORT_ALLOWED: frozenset[str] = frozenset()
 
 
 def imported_modules(path: Path) -> list[tuple[int, str, str | None]]:

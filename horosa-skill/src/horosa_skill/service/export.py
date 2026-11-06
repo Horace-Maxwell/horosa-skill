@@ -5,6 +5,11 @@ from datetime import timezone
 from typing import Any
 
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.exports.contract import (  # noqa: F401 - 这里是这几个名字的历史出处
+    _EXPORT_TECHNIQUE_OVERRIDES,
+    TOOL_EXPORT_TECHNIQUE_MAP,
+    _derive_export_technique_map,
+)
 from horosa_skill.exports import (
     build_export_registry,
     get_technique_info,
@@ -65,41 +70,7 @@ from horosa_skill.service.text.western import (
     _build_relative_snapshot_text,
 )
 
-# 不起盘的门面，没有导出契约。
-_NO_EXPORT_TECHNIQUE = frozenset({"export_parse", "export_registry", "knowledge_read", "knowledge_registry"})
-# 导出键与工具名不同的工具；其余工具的导出键就是工具名，加技法不用动这里。
-# 上游把出盘页面一族按页拆键（aiExport.js 的 ASTRO_LIKE_EXPORT_KEYS）：希腊盘与调波盘各有自己的导出键，
-# 不再共用 astrochart_like，否则两者的导出勾选会互相串。
-_EXPORT_TECHNIQUE_OVERRIDES: dict[str, str] = {
-    "chart": "astrochart",
-    "chart13": "astrochart_like",
-    "chart12": "dwadasamsa",
-    "hellen_chart": "hellenastro",
-    "guolao_chart": "guolao",
-    "pd": "primarydirect",
-    "pdchart": "primarydirchart",
-    "zr": "zodialrelease",
-    "india_chart": "indiachart",
-    "ziwei_birth": "ziwei",
-    "ziwei_rules": "ziwei",
-    "bazi_birth": "bazi",
-    "bazi_direct": "bazi",
-    "liureng_gods": "liureng",
-    "liureng_runyear": "liureng",
-    "jieqi_year": "jieqi",
-    "nongli_time": "generic",
-    "calendar_month": "calendar",
-    "gua_desc": "sixyao",
-    "gua_meiyi": "sixyao",
-}
-
-
-def _derive_export_technique_map(tool_names: Any, *, overrides: dict[str, str]) -> dict[str, str]:
-    return {name: overrides.get(name, name) for name in tool_names if name not in _NO_EXPORT_TECHNIQUE}
-
-
-# bench 生成 case 与导出契约挂接都吃这张表（tests/test_benchmark.py 核对每个键都在导出注册表里）。
-TOOL_EXPORT_TECHNIQUE_MAP: dict[str, str] = _derive_export_technique_map(TOOL_DEFINITIONS, overrides=_EXPORT_TECHNIQUE_OVERRIDES)
+# 工具 → 导出键的表搬到了 exports/contract.py（knowledge 也要用）；名字留在这里，调用方不用改。
 
 
 def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[str, Any]:

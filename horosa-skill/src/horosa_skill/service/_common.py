@@ -33,6 +33,7 @@ from horosa_skill.civil_calendar import (  # noqa: F401 — 民用历口径单�
     _shift_moment,
 )
 from horosa_skill.errors import ToolValidationError
+from horosa_skill.exports.contract import missing_detail_text as _missing_detail_text
 from horosa_skill.input_normalization import _GENDER_FEMALE_LABELS, _GENDER_MALE_LABELS
 
 # 源码树布局下的仓根：service/<模块>.py → [0] service [1] horosa_skill [2] src [3] horosa-skill [4] 仓根
@@ -79,13 +80,6 @@ def _stringify_export_body(value: Any) -> str:
                 lines.append(f"{key}: {item_text}")
         return "\n".join(lines).strip()
     return str(value).strip()
-
-
-def _missing_detail_text(title: str) -> str:
-    return (
-        f"本次本地计算结果未返回「{title}」细项；"
-        "报告只能基于已返回盘面判断，不能臆造外部依赖、桌面端服务或不存在的数据。"
-    )
 
 
 def _render_snapshot_text(sections: list[tuple[str, str]]) -> str:

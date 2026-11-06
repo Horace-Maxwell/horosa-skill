@@ -135,7 +135,7 @@ def document_sections_from_export_format(export_format: dict[str, Any]) -> list[
     if not isinstance(sections, list):
         return []
     # 局部导入：service 包导入时会回头导入 reports（顶层导入会循环）
-    from horosa_skill.service._common import _missing_detail_text
+    from horosa_skill.exports.contract import missing_detail_text
 
 
     result: list[dict[str, Any]] = []
@@ -149,7 +149,7 @@ def document_sections_from_export_format(export_format: dict[str, Any]) -> list[
         title = str(section.get("title") or f"导出章节 {index}")
         # 引擎这次没给内容的段，导出层填的是一句写给 AI 的护栏话（service/_common._missing_detail_text）。
         # 机读版照留（AI 要知道缺了什么）；人读版不给它一个标题加一段护栏话，统一记进附录「本次未产出」。
-        placeholder = str(body or "").strip() in ("", _missing_detail_text(title))
+        placeholder = str(body or "").strip() in ("", missing_detail_text(title))
         result.append(
             {
                 "id": section.get("id") or f"export_section_{index}",

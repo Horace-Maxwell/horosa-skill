@@ -517,7 +517,7 @@ def _known_technique_names() -> frozenset[str]:
     names: set[str] = {"*", "all"}
     try:
         from horosa_skill.engine.registry import TOOL_DEFINITIONS
-        from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP
+        from horosa_skill.exports.contract import TOOL_EXPORT_TECHNIQUE_MAP
     except ImportError:  # 注册表导入失败就不校验技法名（不该让知识库因此不可用）
         return frozenset()
     for name, definition in TOOL_DEFINITIONS.items():
@@ -534,7 +534,7 @@ def technique_labels() -> dict[str, str]:
     """工具名 → 技法中文名（导出注册表的 label），供 `auto` 认中文写法（techniques: 八字, 紫微斗数）。"""
     try:
         from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES
-        from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP
+        from horosa_skill.exports.contract import TOOL_EXPORT_TECHNIQUE_MAP
     except ImportError:  # 注册表导入失败就不认中文名
         return {}
     labels = {str(item.get("key")): str(item.get("label") or "") for item in AI_EXPORT_TECHNIQUES if isinstance(item, dict)}
