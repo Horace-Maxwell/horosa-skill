@@ -55,6 +55,13 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 6. Confirm the returned artifact exists and is retrievable via `horosa_memory_show` /
    `horosa_memory_query`.
 
+**Reading runs back.** `horosa_memory_query` returns summaries (`run_id`, question, tools, artifact paths); pass
+`include_payload: true` only when you need stored payloads in the result. `horosa_memory_show` returns the run in
+full. Both stay inside one MCP message: past about 900 KB the largest raw engine subtrees become
+`{"omitted": "too_large_for_mcp", ...}` placeholders and a line appears in `warnings`. `snapshot_text` and
+`export_snapshot` are kept, so the sections you read are still there; the full copy stays on disk
+(`horosa-skill memory show <run_id>`).
+
 **Cite the chart by section number.** Every exported section has a `cite_id` (`E1`, `E2`, …) in the
 template's `source_export_sections`; the report prints it in front of that section's heading, and in the
 PDF a `[E3]` in your text is a link to it. End each judgement with the section it rests on

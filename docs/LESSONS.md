@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | `horosa_memory_query` 说明写「run summaries」，缺省却带全量产物：20 份 63 KB 的星盘线上 1.8 MB，超 1 MiB SSE 上限；2 MB 的八字 42.5 MB。v0.46.1 的预算只认顶层 `data`，记忆结果没有，`horosa_memory_show` 2.1 MB 同样绕过 | `include_payload` 缺省 false；`_fit_result_budget` 按形状裁，记忆产物先裁原始子树、再整份占位；`tests/test_memory_mcp_budget.py` |
 | v0.47.2-dev (2026-11-06) | 答案写回把唯一一份盘面写成 0 字节：`_refresh_run_artifacts` 原地 `write_text`，真卷写满时重试 `ok: true` 也救不回来，`report_render` 只剩 `report.source_not_found`；并发读者 26/1851 读到半个文件；落库 sha 写回后全错；报告 JSON 也被改写 | 存档一律走 `_write_json_atomic`（同目录临时文件 + fsync + 替换），刷新后更新 size / sha，`report_*` 不刷新；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
 | v0.47.2-dev (2026-11-06) | `[vectors]` 从 v0.45.1 起到不了 MCP server：依赖要装在客户端起 server 的环境里，配置里的启动器却不带 extra，server 永远是纯 BM25 且不报错；`how_to_enable` 还教了 PyPI 上不存在的 `pip install` | `setup --vectors`：写配置之前用客户端那条命令真跑一遍，stdio 探针再要 server 自己报 ready；三态沿用；`--from` 无空格 PEP 508；audit 看穿新写法 |
@@ -174,6 +175,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — memory_query 缺省把 20 份全量产物塞进一条消息
+
+- **症状**：架构审计用进程内 MCP 客户端实测（`limit:20`）：63 KB 的星盘 1,799,838 字节，2 MB 的八字形状 42,515,038 字节；`include_payload:false` 只有 89,107 字节。`horosa_memory_show` 读回大八字 2,110,245 字节。上限是 900 KB 预算与 v0.46.1 记下的 1 MiB SSE 单事件。
+- **根因**：`MemoryQueryInput.include_payload` 缺省 true，而工具说明写的是「Returns run summaries」。`_fit_result_budget` 第一行就要求顶层 `data` 是 dict，记忆结果形状是 `results[]` / `result`，整条跳过。references/reports.md 又教 agent 用 `horosa_memory_show` 读全量段落。
+- **修复**：`MemoryQueryInput.include_payload` 缺省 false（`MemoryShowInput` 仍是 true：说明写的就是取全量）。`_fit_result_budget` 按形状分派，信封走原逻辑（`_fit_envelope`），记忆走 `_fit_memory_records`：先把各产物 `payload.data` 下 ≥ 50 KB 的原始子树换占位（`_PROTECTED_DATA_KEYS` 不进候选），还超才整份换占位，路径与 sha 留着。不每裁一块重新序列化：一次 42 MB 要秒级，所以按字节估、估够再量。CLI 的 `memory query` 走 `store.query_runs`，缺省不变。
+- **旧断言为何没抓到**：`test_normalize_mcp_request_accepts_flattened_memory_query_fields` 测的是入参拍平，把当时的缺省值顺手写进了期望字典，不是在说缺省必须带载荷；预算测试只有技法信封一种形状。该断言随缺省改成 false。
+- **守卫**：`tests/test_memory_mcp_budget.py`。负向对照：缺省改回 true、去掉 `_fit_memory_records` 分支各红；去掉受保护键判断时，只有「快照比原始明细大」的那条红（快照小的用例因大小排序照样过，因为要裁的本来就不是它，所以单写了这条）。
+- **法则**：线上预算加在门面出口，不要假定结果形状；新增大结果先问它走不走这道闸。
 
 ### v0.47.2-dev / 2026-11-06 — 答案写回把唯一一份盘面写成 0 字节
 

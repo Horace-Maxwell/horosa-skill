@@ -197,7 +197,8 @@ class MemoryQueryInput(FlexibleModel):
     limit: int = 20
     # 分页偏移：跳过前 N 条命中（与 limit 搭配翻页）。
     offset: int = 0
-    include_payload: bool = True
+    # 缺省只回摘要（run_id、问题、技法、产物路径）；要全量用 horosa_memory_show，或显式传 true。
+    include_payload: bool = False
 
 
 class MemoryShowInput(FlexibleModel):

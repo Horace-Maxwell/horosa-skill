@@ -167,6 +167,7 @@ MCP_RESULT_WIRE_BUDGET = 900_000
 _PROTECTED_DATA_KEYS = frozenset({
     "snapshot_text", "export_snapshot", "technique_card", "compute_sources", "route", "knowledge_context", "file",
 })
+_MIN_OMITTED_SUBTREE_BYTES = 50_000
 
 
 def _wire_bytes(converted: Any) -> int:
@@ -183,13 +184,22 @@ def _json_bytes(value: Any) -> int:
 
 
 def _fit_result_budget(raw: Any, convert: Any) -> Any:
+    """超预算的结果按形状裁：技法信封裁 `data`，记忆门面（`results[]` / `result`）裁各产物的 `payload`。别的形状原样返回。"""
+    if hasattr(raw, "model_dump"):   # 工具回的是 ToolEnvelope（pydantic）：按 JSON 形状拿出来再裁
+        raw = raw.model_dump(mode="json")
+    if not isinstance(raw, dict):
+        return raw
+    if isinstance(raw.get("data"), dict):
+        return _fit_envelope(raw, convert)
+    if isinstance(raw.get("result"), dict) or isinstance(raw.get("results"), list):
+        return _fit_memory_records(raw, convert)
+    return raw
+
+
+def _fit_envelope(raw: dict[str, Any], convert: Any) -> dict[str, Any]:
     """把超预算结果里 `data` 下最大的原始子树（深度 ≤ 2、不含受保护键）逐个换成说明占位，直到线上体积放得下。
 
     不改入参（逐层浅拷贝）；放不下（受保护的部分本身就超）时原样返回已裁的那份——宁可交出能用的部分，也不让客户端整条报错。"""
-    if hasattr(raw, "model_dump"):   # 工具回的是 ToolEnvelope（pydantic）：按 JSON 形状拿出来再裁
-        raw = raw.model_dump(mode="json")
-    if not isinstance(raw, dict) or not isinstance(raw.get("data"), dict):
-        return raw
     result = dict(raw)
     data = dict(result["data"])
     result["data"] = data
@@ -204,17 +214,12 @@ def _fit_result_budget(raw: Any, convert: Any) -> Any:
                 candidates.extend((_json_bytes(sub), (key, sub_key)) for sub_key, sub in value.items() if not _is_placeholder(sub))
             candidates.append((_json_bytes(value), (key,)))
         # 先拿最大的二级子树（八字 = bazi.smallDirection / bazi.direction，四柱等小块留着）；只剩一级可拿时才整键拿掉。
-        deep = [c for c in candidates if len(c[1]) == 2 and c[0] >= 50_000]
+        deep = [c for c in candidates if len(c[1]) == 2 and c[0] >= _MIN_OMITTED_SUBTREE_BYTES]
         pick = max(deep or candidates, default=None)
         if pick is None:
             break
         size, path = pick
-        placeholder = {
-            "omitted": "too_large_for_mcp",
-            "bytes": size,
-            "note": (f"原始引擎明细过大（约 {size // 1024} KB），MCP 返回体略去；snapshot_text / export_snapshot 已含其要点。"
-                     f"完整结果在本机存档：`horosa-skill memory show {run_id or '<run_id>'}`。"),
-        }
+        placeholder = _omitted_placeholder(size, run_id)
         if len(path) == 2:
             parent = dict(data[path[0]])
             parent[path[1]] = placeholder
@@ -229,8 +234,98 @@ def _fit_result_budget(raw: Any, convert: Any) -> Any:
     return result
 
 
+def _omitted_placeholder(size: int, run_id: Any) -> dict[str, Any]:
+    return {
+        "omitted": "too_large_for_mcp",
+        "bytes": size,
+        "note": (f"原始引擎明细过大（约 {size // 1024} KB），MCP 返回体略去；snapshot_text / export_snapshot 已含其要点。"
+                 f"完整结果在本机存档：`horosa-skill memory show {run_id or '<run_id>'}`。"),
+    }
+
+
 def _is_placeholder(value: Any) -> bool:
     return isinstance(value, dict) and value.get("omitted") == "too_large_for_mcp"
+
+
+def _fit_memory_records(raw: dict[str, Any], convert: Any) -> dict[str, Any]:
+    """记忆门面的结果放不下时，先照技法结果的规矩裁产物 `payload.data` 里的原始子树，还放不下再整份换成占位（路径、sha 留着）。
+
+    记忆结果没有顶层 `data`，v0.46.1 的预算一直管不到它：`horosa_memory_show` 读回一份大八字 2.1 MB，带载荷的 `horosa_memory_query`
+    能到几十 MB。这里每裁一块不重新量全量（一次 42 MB 的序列化要秒级），按字节估算，估够了再量一次。不改入参。"""
+    result = dict(raw)
+    records: list[dict[str, Any]] = []
+    if isinstance(result.get("result"), dict):
+        result["result"] = dict(result["result"])
+        records.append(result["result"])
+    if isinstance(result.get("results"), list):
+        result["results"] = [dict(item) if isinstance(item, dict) else item for item in result["results"]]
+        records.extend(item for item in result["results"] if isinstance(item, dict))
+    holders: list[tuple[dict[str, Any], Any]] = []
+    for record in records:
+        if isinstance(record.get("artifacts"), list):
+            record["artifacts"] = [dict(item) if isinstance(item, dict) else item for item in record["artifacts"]]
+            holders.extend((item, record.get("run_id")) for item in record["artifacts"]
+                           if isinstance(item, dict) and isinstance(item.get("payload"), (dict, list)))
+    omitted: list[str] = []
+
+    def over_budget() -> int:
+        return _wire_bytes(convert(result)) - MCP_RESULT_WIRE_BUDGET
+
+    excess = over_budget()
+    if excess > 0:
+        excess = _omit_raw_subtrees(holders, excess, omitted, over_budget)
+    if excess > 0:
+        # 裁完原始子树还超：整份载荷换占位，最大的先走。manifest 是别的产物的索引，同样大小时先让它走。
+        for artifact, run_id in sorted(holders, key=lambda h: (_json_bytes(h[0]["payload"]), h[0].get("kind") == "run_manifest"), reverse=True):
+            if excess <= 0:
+                break
+            if _is_placeholder(artifact["payload"]):
+                continue
+            size = _json_bytes(artifact["payload"])
+            artifact["payload"] = _omitted_placeholder(size, run_id)
+            omitted.append(f"{artifact.get('kind')}.payload")
+            excess -= size
+            if excess <= 0:
+                excess = over_budget()
+    if omitted:
+        warnings = list(result.get("warnings") or [])
+        warnings.append(f"返回体超过 MCP 单条消息上限，已略去原始明细：{'、'.join(sorted(set(omitted)))}（本机存档为全量）。")
+        result["warnings"] = warnings
+    return result
+
+
+def _omit_raw_subtrees(holders: list[tuple[dict[str, Any], Any]], excess: int, omitted: list[str], measure: Any) -> int:
+    """按从大到小把各产物 `payload.data` 下的原始子树换成占位（受保护键不动），返回还超出多少。"""
+    candidates: list[tuple[int, int, dict[str, Any], tuple[str, ...], Any]] = []
+    for order, (artifact, run_id) in enumerate(holders):
+        payload = artifact["payload"]
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            continue
+        data = dict(payload["data"])
+        artifact["payload"] = {**payload, "data": data}
+        for key, value in data.items():
+            if key in _PROTECTED_DATA_KEYS or _is_placeholder(value):
+                continue
+            subtrees = value.items() if isinstance(value, dict) and value else ()
+            sized = [(_json_bytes(sub), (key, sub_key)) for sub_key, sub in subtrees]
+            big = [item for item in sized if item[0] >= _MIN_OMITTED_SUBTREE_BYTES]
+            for size, path in big or [(_json_bytes(value), (key,))]:
+                if size >= _MIN_OMITTED_SUBTREE_BYTES:
+                    candidates.append((size, order, data, path, run_id))
+    candidates.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    for size, _, data, path, run_id in candidates:
+        if excess <= 0:
+            break
+        placeholder = _omitted_placeholder(size, run_id)
+        if len(path) == 2:
+            data[path[0]] = {**data[path[0]], path[1]: placeholder}
+        else:
+            data[path[0]] = placeholder
+        omitted.append(".".join(path))
+        excess -= size
+        if excess <= 0:
+            excess = measure()
+    return excess
 
 
 # resource_link 内容块随 MCP 2025-06-18 修订进入规范。只给协商到该修订或更新的客户端：更早的客户端按旧联合类型
