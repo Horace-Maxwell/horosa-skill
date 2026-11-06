@@ -16,17 +16,32 @@ FTS5 不可用（极少见的自编 SQLite）时自动退回逐条子串计分�
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import math
 import re
 import sqlite3
 import threading
-import unicodedata
+import time
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+from horosa_skill.knowledge import retrieval
+from horosa_skill.knowledge.retrieval import (
+    BM25_B,  # noqa: F401 - 对外常量，历史上就从这里取
+    BM25_K1,  # noqa: F401
+    FIELD_WEIGHTS,
+    RRF_K,  # noqa: F401
+    Query,
+    grams,
+    normalize,
+    parse_query,  # noqa: F401
+    snippet,  # noqa: F401
+)
 
 SCHEMA_VERSION = "1"  # 分块 / 切词规则一变就加一：旧索引自动整库重建
 TARGET_CHARS = 600
@@ -36,73 +51,11 @@ OVERLAP_MAX = 150  # 重叠的那一句最长多少字；更长就不重叠
 SNIPPET_CHARS = 160
 PER_ENTRY_HITS = 2  # 检索结果里同一条目最多出几块（多了就是一个长文件刷屏）
 
-_HAN = r"㐀-䶿一-鿿豈-﫿\U00020000-\U0003134f"
-_CJK_RUN = re.compile(f"[{_HAN}]+")
-_TOKEN = re.compile(f"[{_HAN}]+|[0-9a-z_]+")
 HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t#]*$")
 _FENCE = re.compile(r"^\s*(```|~~~)")
 _SENTENCE_END = "。！？；!?;…"
-
-
-# ───────────────────────────── 归一与切词 ─────────────────────────────
-
-
-def normalize(text: str) -> str:
-    """建索引与查询共用：NFKC（全角→半角）→ 繁→简 → casefold。"""
-    from horosa_skill.textscript import fold_to_simplified
-
-    return fold_to_simplified(unicodedata.normalize("NFKC", text)).casefold()
-
-
-def _run_grams(run: str) -> list[str]:
-    return [run] if len(run) == 1 else [run[i : i + 2] for i in range(len(run) - 1)]
-
-
-def grams(text: str) -> list[str]:
-    """归一后的切词：汉字段 → 相邻双字（单字段保留单字），西文 / 数字 → 整词。"""
-    out: list[str] = []
-    for match in _TOKEN.finditer(normalize(text)):
-        token = match.group(0)
-        out.extend(_run_grams(token) if _CJK_RUN.fullmatch(token) else [token])
-    return out
-
-
-@dataclass(frozen=True)
-class Query:
-    phrases: tuple[tuple[str, ...], ...]  # 每个词的双字序列
-    singles: tuple[str, ...]  # 单个汉字的词：FTS 里没有对应的双字，走子串回退
-    terms: tuple[str, ...]  # 归一后的原词（做摘要定位、子串回退用）
-
-    @property
-    def empty(self) -> bool:
-        return not (self.phrases or self.singles)
-
-    def fts(self) -> str:
-        # 只有引号里的双字 / [0-9a-z_] 词进 MATCH：查询文本里的 FTS 语法字符（* ^ : NEAR）一律到不了解析器。
-        return " OR ".join('"' + " ".join(phrase) + '"' for phrase in self.phrases)
-
-
-def parse_query(query: str) -> Query:
-    phrases: list[tuple[str, ...]] = []
-    singles: list[str] = []
-    terms: list[str] = []
-    for raw in re.split(r"[\s,，、;；|/]+", str(query or "")):
-        term = normalize(raw)
-        tokens = _TOKEN.findall(term)
-        if not tokens:
-            continue
-        joined = "".join(tokens)
-        if joined in terms:
-            continue
-        terms.append(joined)
-        if len(tokens) == 1 and _CJK_RUN.fullmatch(tokens[0]) and len(tokens[0]) == 1:
-            singles.append(tokens[0])
-            continue
-        phrase: list[str] = []
-        for token in tokens:
-            phrase.extend(_run_grams(token) if _CJK_RUN.fullmatch(token) else [token])
-        phrases.append(tuple(phrase))
-    return Query(tuple(phrases), tuple(singles), tuple(terms))
+EMBED_BUDGET = 64  # 一次检索顺手补算的向量块数上限：大批新笔记分几次补完，别让某一次检索卡几分钟（全量用 `knowledge index --vectors`）
+SEARCH_LOCK_WAIT = 2.0  # 检索时遇到别的会话正在写索引：等这么久就退回逐条匹配，不让用户干等
 
 
 # ───────────────────────────── 分块 ─────────────────────────────
@@ -237,11 +190,16 @@ _LOCK = threading.RLock()
 
 
 def index_path(settings: Any) -> Path:
-    from horosa_skill.knowledge.user import state_dir
+    """每个笔记文件夹一份索引。共用一份的话，两个客户端指向不同文件夹时每次同步都把对方整库删掉，开了向量还要重算。"""
+    from horosa_skill.knowledge.user import knowledge_dir, state_dir
 
-    return state_dir(settings) / "index.sqlite"
+    root = knowledge_dir(settings)
+    if root == Path(settings.data_dir) / "knowledge":
+        return state_dir(settings) / "index.sqlite"
+    return state_dir(settings) / f"index-{hashlib.sha256(str(root).encode()).hexdigest()[:12]}.sqlite"
 
 
+@lru_cache(maxsize=1)
 def fts5_available() -> bool:
     try:
         with contextlib.closing(sqlite3.connect(":memory:")) as conn:
@@ -251,9 +209,9 @@ def fts5_available() -> bool:
         return False
 
 
-def _connect(path: Path) -> sqlite3.Connection:
+def _connect(path: Path, *, timeout: float = 15.0) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=15, isolation_level=None)
+    conn = sqlite3.connect(path, timeout=timeout, isolation_level=None)
     # 隐私：删掉的条目尽量不在库文件里留残页（secure_delete 把释放的页清零；FTS5 段合并前的旧词条不保证）。
     # 用回滚日志而非 WAL：读写都很短，WAL 的并发优势用不上，少一个常驻的 -wal 文件。
     conn.execute("PRAGMA secure_delete=ON")
@@ -301,25 +259,70 @@ class SyncReport:
     chunks: int = 0
     engine: str = "fts5"
     vectors: int = 0  # 本次新算了多少块的向量（可选向量检索就绪时，knowledge/vectors.py）
+    vectors_pending: int = 0  # 还没算的块：检索路径每次只补 EMBED_BUDGET 块
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
 
 
-def sync(settings: Any, entries: Iterable[Any], *, rebuild: bool = False) -> SyncReport:
-    """把索引对齐到当前条目：sha256 变了的重建，没了的删掉。返回本次改了多少。"""
+def _in_sync(settings: Any, entries: list[Any]) -> SyncReport | None:
+    """只读比对：索引已经和这批条目一致就返回报告，不拿写锁。
+
+    每次检索、每次带 knowledge= 的计算都走 sync；此前一律 `BEGIN IMMEDIATE`，别的会话在写索引时连读都要排队
+    （2026-11-06 量到：一万条重建期间另一个会话的检索 25.6 s）。块数对不上也算不一致：表被清空后 entries 还在的话，
+    旧逻辑判「没变」，检索静默返回 0 条还报 fts5-bm25。
+    """
+    path = index_path(settings)
+    if not path.exists():
+        return None
+    with contextlib.closing(sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=SEARCH_LOCK_WAIT)) as conn:
+        try:
+            row = conn.execute("SELECT value FROM meta WHERE key='schema'").fetchone()
+            if row is None or row[0] != SCHEMA_VERSION:
+                return None
+            known = {eid: (sha, title, tags, chunks) for eid, sha, title, tags, chunks in
+                     conn.execute("SELECT entry_id, sha256, title, tags, chunks FROM entries")}
+            stored = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                return None
+            raise
+    if len(known) != len(entries) or stored != sum(item[3] for item in known.values()):
+        return None
+    for entry in entries:
+        state = known.get(entry.id)
+        if state is None or state[:3] != (entry.sha256, entry.title, json.dumps(sorted(entry.tags), ensure_ascii=False)):
+            return None
+    return SyncReport(unchanged=len(entries), chunks=stored)
+
+
+def sync(settings: Any, entries: Iterable[Any], *, rebuild: bool = False, embed_all: bool = False) -> SyncReport:
+    """把索引对齐到当前条目：sha256 变了的重建，没了的删掉。返回本次改了多少。
+
+    `embed_all=False`（检索路径）：缺的向量最多补 EMBED_BUDGET 块；`knowledge index --vectors` 才一次补完。
+    """
     report = SyncReport()
     entries = list(entries)
     if not fts5_available():
         report.engine = "substring"
         report.unchanged = len(entries)
         return report
+    from horosa_skill.knowledge import vectors
+
+    current = None if rebuild else _in_sync(settings, entries)
+    if current is not None:
+        if vectors.ready(settings):
+            with _LOCK, contextlib.closing(_connect(index_path(settings))) as conn:
+                current.vectors, current.vectors_pending = _sync_vectors(settings, conn, {e.id: e for e in entries}, embed_all=embed_all)
+        return current
     with _LOCK, contextlib.closing(_connect(index_path(settings))) as conn:
         conn.execute("BEGIN IMMEDIATE")
         try:
             _create(conn)
             row = conn.execute("SELECT value FROM meta WHERE key='schema'").fetchone()
-            if rebuild or row is None or row[0] != SCHEMA_VERSION:
+            declared = conn.execute("SELECT COALESCE(SUM(chunks), 0) FROM entries").fetchone()[0]
+            stored = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            if rebuild or row is None or row[0] != SCHEMA_VERSION or declared != stored:
                 _reset(conn)
             known = {eid: (sha, title, tags) for eid, sha, title, tags in
                      conn.execute("SELECT entry_id, sha256, title, tags FROM entries")}
@@ -360,29 +363,33 @@ def sync(settings: Any, entries: Iterable[Any], *, rebuild: bool = False) -> Syn
             conn.execute("ROLLBACK")
             raise
         report.chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        from horosa_skill.knowledge import vectors
-
         if vectors.ready(settings):
-            report.vectors = _sync_vectors(settings, conn, {entry.id: entry for entry in entries})
+            report.vectors, report.vectors_pending = _sync_vectors(settings, conn, {entry.id: entry for entry in entries}, embed_all=embed_all)
     return report
 
 
-def _sync_vectors(settings: Any, conn: sqlite3.Connection, entries: dict[str, Any]) -> int:
-    """给还没有向量的块补算（在 FTS 事务提交之后、分批提交：算向量慢，别占着写锁）。
+def _sync_vectors(settings: Any, conn: sqlite3.Connection, entries: dict[str, Any], *, embed_all: bool = False) -> tuple[int, int]:
+    """给还没有向量的块补算，返回 (本次算了几块, 还剩几块)。在 FTS 事务提交之后、分批提交：算向量慢，别占着写锁。
 
     嵌入文本 = 「条目标题 › 标题路径」+ 块正文：块前加上下文是 Anthropic Contextual Retrieval 的省钱版
     （不用 LLM 生成，直接用标题路径）。换了模型的旧向量整表作废。"""
     from horosa_skill.knowledge import vectors
 
-    conn.execute("CREATE TABLE IF NOT EXISTS chunk_vec(rowid INTEGER PRIMARY KEY, model TEXT NOT NULL, vec BLOB NOT NULL)")
-    conn.execute("DELETE FROM chunk_vec WHERE model != ? OR rowid NOT IN (SELECT rowid FROM chunks)", (vectors.MODEL_NAME,))
+    # 这个函数每次检索都走：没活干时不许写库，否则开了向量后每次检索又要拿写锁。
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='chunk_vec'").fetchone():
+        conn.execute("CREATE TABLE IF NOT EXISTS chunk_vec(rowid INTEGER PRIMARY KEY, model TEXT NOT NULL, vec BLOB NOT NULL)")
+    stale = "FROM chunk_vec WHERE model != ? OR rowid NOT IN (SELECT rowid FROM chunks)"
+    if conn.execute(f"SELECT 1 {stale} LIMIT 1", (vectors.MODEL_NAME,)).fetchone():
+        conn.execute(f"DELETE {stale}", (vectors.MODEL_NAME,))
     missing = conn.execute(
         "SELECT c.rowid, c.entry_id, c.char_start, c.char_end, c.heading FROM chunks c "
         "LEFT JOIN chunk_vec v ON v.rowid = c.rowid WHERE v.rowid IS NULL ORDER BY c.rowid"
     ).fetchall()
     rows = [(rowid, entries[eid], a, b, json.loads(h)) for rowid, eid, a, b, h in missing if eid in entries]
     if not rows:
-        return 0
+        return 0, 0
+    pending = 0 if embed_all else max(len(rows) - EMBED_BUDGET, 0)
+    rows = rows if embed_all else rows[:EMBED_BUDGET]
     model = vectors.embedder(settings)
     done = 0
     for start in range(0, len(rows), 64):
@@ -394,20 +401,19 @@ def _sync_vectors(settings: Any, conn: sqlite3.Connection, entries: dict[str, An
                          [(rowid, vectors.MODEL_NAME, matrix[i].tobytes()) for i, (rowid, *_rest) in enumerate(batch)])
         conn.execute("COMMIT")
         done += len(batch)
-    return done
+    return done, pending
 
 
-def _vector_rank(settings: Any, query: Query, raw_query: str) -> list[tuple[str, int, float]]:
+def _vector_rank(settings: Any, conn: sqlite3.Connection, raw_query: str) -> list[tuple[str, int, float]]:
     """查询向量与全部块向量的余弦（暴力算：几千块、512 维，毫秒级），过 MIN_COSINE 的前 50 个。"""
     import numpy as np
 
     from horosa_skill.knowledge import vectors
 
-    with contextlib.closing(_connect(index_path(settings))) as conn:
-        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='chunk_vec'").fetchone():
-            return []
-        rows = conn.execute("SELECT c.entry_id, c.ordinal, v.vec FROM chunk_vec v JOIN chunks c ON c.rowid = v.rowid "
-                            "WHERE v.model = ?", (vectors.MODEL_NAME,)).fetchall()
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='chunk_vec'").fetchone():
+        return []
+    rows = conn.execute("SELECT c.entry_id, c.ordinal, v.vec FROM chunk_vec v JOIN chunks c ON c.rowid = v.rowid "
+                        "WHERE v.model = ?", (vectors.MODEL_NAME,)).fetchall()
     if not rows:
         return []
     matrix = np.frombuffer(b"".join(r[2] for r in rows), dtype=np.float32).reshape(len(rows), -1)
@@ -417,23 +423,13 @@ def _vector_rank(settings: Any, query: Query, raw_query: str) -> list[tuple[str,
     return [(rows[i][0], rows[i][1], float(sims[i])) for i in order if sims[i] >= vectors.MIN_COSINE]
 
 
-RRF_K = 60  # Cormack, Clarke & Büttcher 2009；Elasticsearch / FastGPT / Cherry Studio 同值
-
-
 def _fuse(lexical: list[tuple[str, int, float]], semantic: list[tuple[str, int, float]]) -> list[tuple[str, int, float]]:
-    """倒数排名融合：只看名次不看分数（BM25 与余弦不同尺度）。同分按 BM25 名次、再按向量名次、再按 (条目, 块) 定序——
-    调研里同分靠插入顺序决胜就排错过一次。返回分数归一到 0–1（最高者为 1）。"""
-    fused: dict[tuple[str, int], list[float]] = {}
-    for weight_list, position in ((lexical, 0), (semantic, 1)):
-        for rank, (eid, ordinal, _) in enumerate(weight_list):
-            slot = fused.setdefault((eid, ordinal), [0.0, float("inf"), float("inf")])
-            slot[0] += 1 / (RRF_K + rank + 1)
-            slot[1 + position] = min(slot[1 + position], rank)
+    """BM25 与向量做 RRF。同分按 BM25 名次、再按向量名次。返回分数归一到 0–1（最高者为 1）。"""
+    fused = retrieval.rrf([lexical, semantic], key=lambda hit: (hit[0], hit[1]))
     if not fused:
         return []
-    best = max(v[0] for v in fused.values())
-    ordered = sorted(fused.items(), key=lambda kv: (-kv[1][0], kv[1][1], kv[1][2], kv[0]))
-    return [(eid, ordinal, slot[0] / best) for (eid, ordinal), slot in ordered]
+    best = fused[0][1]
+    return [(hit[0], hit[1], score / best) for hit, score in fused]
 
 
 def _drop_entry(conn: sqlite3.Connection, entry_id: str) -> None:
@@ -464,65 +460,115 @@ class Hit:
     score: float  # 0–1（BM25 / (1 + BM25)；开了向量检索时是 RRF 融合分，最高者为 1），只在同一次检索里可比
 
 
-def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int = 8, offset: int = 0,
-           per_entry: int = PER_ENTRY_HITS, use_index: bool = True, raw_query: str = "") -> tuple[list[Hit], int]:
-    """块级检索：返回 (这一页的命中, 总命中数)。同一条目最多 per_entry 块。entries = {id: UserKnowledgeEntry}。
+@dataclass
+class SearchResult:
+    hits: list[Hit] = field(default_factory=list)
+    total: int = 0
+    problems: list[str] = field(default_factory=list)  # 降级了什么：向量算不出来等。检索照常返回
+    used_index: bool = True  # 这次结果真的来自索引；退回逐条匹配时报 substring，不能照旧写 fts5-bm25
 
-    use_index=False（索引没对齐）时逐条子串计分；块从正文现切，不读索引里可能过期的区间。"""
+
+def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int = 8, offset: int = 0,
+           per_entry: int = PER_ENTRY_HITS, use_index: bool = True, raw_query: str = "") -> SearchResult:
+    """块级检索。同一条目最多 per_entry 块。entries = {id: UserKnowledgeEntry}。
+
+    use_index=False（索引没对齐）时逐条子串计分；块从正文现切，不读索引里可能过期的区间。
+    索引本身读不了（sqlite3.Error）由调用方决定怎么恢复（user.search_user 隔离重建一次）。"""
+    result = SearchResult()
     if query.empty or not entries:
-        return [], 0
-    ranked: list[tuple[str, int, float]] = []  # (entry_id, ordinal, score)
+        return result
     use_index = use_index and fts5_available() and index_path(settings).exists()
-    if query.phrases and use_index:
-        with contextlib.closing(_connect(index_path(settings))) as conn:
-            rows = conn.execute(
-                "SELECT c.entry_id, c.ordinal, c.char_start, c.char_end, c.heading FROM chunk_fts f "
+    result.used_index = use_index
+    connection = _connect(index_path(settings), timeout=SEARCH_LOCK_WAIT) if use_index else None
+    try:
+        known: dict[tuple[str, int], Chunk] = {}
+        ranked: list[tuple[str, int, float]] = []  # (entry_id, ordinal, score)
+        if query.phrases and connection is not None:
+            rows = connection.execute(
+                "SELECT c.entry_id, c.ordinal, c.char_start, c.char_end, c.line_start, c.line_end, c.heading FROM chunk_fts f "
                 "JOIN chunks c ON c.rowid = f.rowid WHERE chunk_fts MATCH ? ORDER BY f.rank LIMIT 500", (query.fts(),),
             ).fetchall()
-            n_chunks, avg_len = conn.execute("SELECT COUNT(*), AVG(char_end - char_start) FROM chunks").fetchone()
-            df = {phrase: conn.execute("SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH ?",
-                                       ('"' + " ".join(phrase) + '"',)).fetchone()[0] for phrase in query.phrases}
-        ranked = _bm25(entries, rows, query, df, n_chunks or 1, avg_len or 1.0)
-    elif query.phrases:
-        ranked = _substring_rank(settings, entries, query.terms, use_index=use_index)
-    if query.singles:
-        seen = {(eid, o) for eid, o, _ in ranked}
-        extra = [hit for hit in _substring_rank(settings, entries, query.singles, use_index=use_index)
-                 if (hit[0], hit[1]) not in seen]
-        ranked.extend((eid, o, score * 0.5) for eid, o, score in extra)  # 单字命中排在词命中之后
-        ranked.sort(key=lambda r: -r[2])
-    from horosa_skill.knowledge import vectors
+            n_chunks, avg_len = connection.execute("SELECT COUNT(*), AVG(char_end - char_start) FROM chunks").fetchone()
+            df = {phrase: connection.execute("SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH ?",
+                                             ('"' + " ".join(phrase) + '"',)).fetchone()[0] for phrase in query.phrases}
+            known = {(r[0], r[1]): Chunk(r[1], r[2], r[3], r[4], r[5], tuple(json.loads(r[6]))) for r in rows}
+            ranked = _bm25(entries, rows, query, df, n_chunks or 1, avg_len or 1.0)
+        elif query.phrases:
+            ranked = _substring_rank(settings, entries, query.terms, conn=None)
+        if query.singles:
+            seen = {(eid, o) for eid, o, _ in ranked}
+            extra = [hit for hit in _substring_rank(settings, entries, query.singles, conn=connection)
+                     if (hit[0], hit[1]) not in seen]
+            ranked.extend((eid, o, score * 0.5) for eid, o, score in extra)  # 单字命中排在词命中之后
+            ranked.sort(key=lambda r: -r[2])
+        from horosa_skill.knowledge import vectors
 
-    if use_index and raw_query.strip() and vectors.ready(settings):
-        # 可选向量检索：与 BM25 做 RRF；只靠向量进来的候选已过 MIN_COSINE（换了说法的查询靠它补回来）。
-        ranked = _fuse(ranked, _vector_rank(settings, query, raw_query))
-    chunk_cache: dict[str, list[Chunk]] = {}
-    hits: list[Hit] = []
-    per: Counter[str] = Counter()
-    for eid, ordinal, score in ranked:
-        if eid not in entries or per[eid] >= per_entry:
-            continue
-        chunks = chunk_cache.setdefault(eid, chunks_for(settings, entries[eid], use_index))
-        if ordinal >= len(chunks):
-            continue
-        per[eid] += 1
-        hits.append(Hit(eid, chunks[ordinal], round(score, 4)))
-    return hits[offset : offset + limit], len(hits)
+        if connection is not None and raw_query.strip() and vectors.ready(settings):
+            # 可选向量检索：与 BM25 做 RRF；只靠向量进来的候选已过 MIN_COSINE（换了说法的查询靠它补回来）。
+            # 向量这一路出任何问题都只是少了换说法的召回：退回 BM25，记一条，检索照常。
+            try:
+                ranked = _fuse(ranked, _vector_rank(settings, connection, raw_query))
+            except (sqlite3.Error, ValueError, RuntimeError, OSError) as exc:
+                result.problems.append(f"向量检索这次没用上（{type(exc).__name__}: {exc}），结果来自 BM25。")
+        chunk_cache: dict[str, list[Chunk]] = {}
+        per: Counter[str] = Counter()
+        hits: list[Hit] = []
+        for eid, ordinal, score in ranked:
+            if eid not in entries or per[eid] >= per_entry:
+                continue
+            chunk = known.get((eid, ordinal))
+            if chunk is None:
+                chunks = chunk_cache.setdefault(eid, _chunks_on(connection, entries[eid]))
+                if ordinal >= len(chunks):
+                    continue
+                chunk = chunks[ordinal]
+            per[eid] += 1
+            hits.append(Hit(eid, chunk, round(score, 4)))
+    finally:
+        if connection is not None:
+            connection.close()
+    result.hits, result.total = hits[offset : offset + limit], len(hits)
+    return result
 
 
-BM25_K1, BM25_B = 1.2, 0.75
-FIELD_WEIGHTS = {"title": 4.0, "heading": 3.0, "tags": 3.0, "body": 1.0}  # 与 FTS5 rank 的列权重一致
+def term_df(settings: Any, entries: dict[str, Any], term: str, *, use_index: bool = True) -> int:
+    """这个词在几块里出现（零命中改写用）。两字以上走 FTS；索引不可用时数条目。"""
+    if use_index and fts5_available() and index_path(settings).exists():
+        phrase = '"' + " ".join(retrieval.run_grams(term)) + '"'
+        with contextlib.closing(_connect(index_path(settings), timeout=SEARCH_LOCK_WAIT)) as conn:
+            return conn.execute("SELECT COUNT(*) FROM chunk_fts WHERE chunk_fts MATCH ?", (phrase,)).fetchone()[0]
+    return sum(1 for entry in entries.values() if term in normalize(f"{entry.title}\n{entry.text}"))
+
+
+def is_corrupt(exc: sqlite3.Error) -> bool:
+    """库文件坏了（SQLITE_CORRUPT / NOTADB 是 DatabaseError）；被占着、磁盘满是 OperationalError，重建解决不了。"""
+    return isinstance(exc, sqlite3.DatabaseError) and not isinstance(exc, sqlite3.OperationalError)
+
+
+def quarantine(settings: Any) -> Path | None:
+    """把读不了的索引挪开（索引是派生数据，下次同步照笔记重建；笔记文件夹不动）。"""
+    path = index_path(settings)
+    if not path.exists():
+        return None
+    target = path.with_name(f"{path.name}.corrupt-{time.time_ns()}")
+    with _LOCK:
+        path.replace(target)
+        with contextlib.suppress(OSError):
+            path.with_name(path.name + "-journal").unlink()
+    for stale in sorted(path.parent.glob(f"{path.name}.corrupt-*"))[:-1]:  # 只留最新一份给排查用
+        with contextlib.suppress(OSError):
+            stale.unlink()
+    return target
 
 
 def _bm25(entries: dict[str, Any], rows: list[tuple[Any, ...]], query: Query, df: dict[tuple[str, ...], int],
           n_chunks: int, avg_len: float) -> list[tuple[str, int, float]]:
-    """FTS5 只负责找候选（倒排、持久化）；分数自己算 BM25（字段加权，Lucene 的 IDF = ln(1 + (N-n+0.5)/(n+0.5))，恒为正）。
+    """FTS5 只负责找候选（倒排、持久化）；分数自己算 BM25（字段加权，retrieval.bm25）。
 
     不直接用 FTS5 的 bm25()：它对出现在过半块里的词把 IDF 压到 1e-6（fts5_aux.c），小知识库里「命宫」这种
     人人都写的词就成了 0 分——排序虽还对，分数却像没命中。"""
     out: list[tuple[str, int, float]] = []
-    terms = ["".join(p) if all(_CJK_RUN.fullmatch(g) for g in p) else " ".join(p) for p in query.phrases]
-    for eid, ordinal, start, end, heading in rows:
+    for eid, ordinal, start, end, _line_start, _line_end, heading in rows:
         entry = entries.get(eid)
         if entry is None:
             continue
@@ -530,34 +576,37 @@ def _bm25(entries: dict[str, Any], rows: list[tuple[Any, ...]], query: Query, df
                   "heading": normalize(" ".join(json.loads(heading))), "tags": normalize(" ".join(sorted(entry.tags)))}
         length = max(end - start, 1)
         score = 0.0
-        for phrase, term in zip(query.phrases, terms):
-            n = df.get(phrase, 0)
-            idf = math.log(1 + (n_chunks - n + 0.5) / (n + 0.5))
-            tf = sum(weight * _count(fields[name], phrase, term) for name, weight in FIELD_WEIGHTS.items())
-            score += idf * tf * (BM25_K1 + 1) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * length / avg_len)) if tf else 0.0
+        for phrase, tokens in zip(query.phrases, query.phrase_tokens):
+            tf = sum(weight * retrieval.term_count(fields[name], tokens) for name, weight in FIELD_WEIGHTS.items())
+            score += retrieval.bm25(tf, df.get(phrase, 0), n_chunks, length, avg_len)
         out.append((eid, ordinal, score / (1 + score)))
     out.sort(key=lambda r: -r[2])  # 稳定排序：同分保持 FTS5 的先后
     return out
-
-
-def _count(text: str, phrase: tuple[str, ...], term: str) -> int:
-    if all(_CJK_RUN.fullmatch(g) for g in phrase):
-        return text.count(term)
-    return len(re.findall(r"(?<![0-9a-z_])" + r"\W*".join(map(re.escape, phrase)) + r"(?![0-9a-z_])", text))
 
 
 def chunks_for(settings: Any, entry: Any, use_index: bool = True) -> list[Chunk]:
     return (stored_chunks(settings, entry.id) if use_index else []) or chunk_body(entry.text)
 
 
+def _chunks_on(conn: sqlite3.Connection | None, entry: Any) -> list[Chunk]:
+    """同一次检索共用一个连接（此前每个命中条目开一个，单次检索约 500 个，占到一半耗时）。"""
+    if conn is None:
+        return chunk_body(entry.text)
+    rows = conn.execute("SELECT ordinal, char_start, char_end, line_start, line_end, heading FROM chunks "
+                        "WHERE entry_id=? ORDER BY ordinal", (entry.id,)).fetchall()
+    return [Chunk(o, a, b, ls, le, tuple(json.loads(h))) for o, a, b, ls, le, h in rows] or chunk_body(entry.text)
+
+
 def _substring_rank(settings: Any, entries: dict[str, Any], terms: Iterable[str], *,
-                    use_index: bool = True) -> list[tuple[str, int, float]]:
+                    conn: sqlite3.Connection | None) -> list[tuple[str, int, float]]:
     """FTS5 不可用 / 单字查询：逐块数子串（归一后），命中次数 + 命中的词数计分。"""
     terms = [t for t in terms if t]
     out: list[tuple[str, int, float]] = []
     for eid, entry in entries.items():
-        chunks = chunks_for(settings, entry, use_index)
-        for chunk in chunks:
+        folded = normalize(entry.text)
+        if not any(term in folded for term in terms):  # 先看整条：一万条笔记时单字查询从 7.8 s 降下来的主因
+            continue
+        for chunk in _chunks_on(conn, entry):
             text = normalize(entry.text[chunk.start:chunk.end])
             counts = [text.count(t) for t in terms]
             if not any(counts):
@@ -566,19 +615,6 @@ def _substring_rank(settings: Any, entries: dict[str, Any], terms: Iterable[str]
             out.append((eid, chunk.ordinal, raw / (1 + raw)))
     out.sort(key=lambda r: -r[2])
     return out
-
-
-def snippet(text: str, terms: Iterable[str], width: int = SNIPPET_CHARS) -> str:
-    """命中词附近的一段原文（不是归一后的文本）。"""
-    folded = normalize(text)
-    position = -1
-    for term in terms:
-        position = folded.find(term)
-        if position >= 0:
-            break
-    start = max(position - width // 4, 0) if position >= 0 else 0
-    piece = text[start:start + width].replace("\n", " ").strip()
-    return ("…" if start else "") + piece + ("…" if start + width < len(text) else "")
 
 
 # ───────────────────────────── 计算时挑相关段落 ─────────────────────────────

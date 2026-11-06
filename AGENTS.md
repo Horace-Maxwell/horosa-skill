@@ -316,22 +316,35 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
     覆盖与删除先进回收站（`knowledge trash` / `restore`）；文件锁 + mkstemp + fsync + 原子替换。
   - `runtime uninstall --purge-data` **默认保留知识库与回收站**，`--purge-knowledge` 才连它们删。
   - 守卫：`tests/test_user_knowledge_store.py`、`tests/test_user_knowledge_and_chart_report.py`（负向对照见 LESSONS v0.43.1-dev / 2026-10-24）。
+### 4.3.1 知识检索（内置 + 自备）
+
 - **自备知识库的检索（v0.45.0，`knowledge/index.py`，照搬 qmd / basic-memory / FastGPT / RAGFlow，调研见 LESSONS v0.45.0-dev）。**
   - 分块：先按 Markdown 标题分节、不跨标题；节超 1000 字在 空行 > 。！？； > 换行 处挑断点切成约 600 字，同节相邻块重叠一句；
     只有标题的上级节并进**下级**节（不并平级）。每块记正文字符区间 + 行号；对外的行号一律是**原文件**行号（`line_offset`）。
   - 中文检索：归一（NFKC → 繁→简 → casefold）后汉字切相邻双字，查询每个词 = 双字短语、词间 OR；单字走子串回退。不用 jieba
     （现代汉语词典切错古籍），不用 trigram（两字词查不到）。FTS5 只找候选，分数自己算 BM25（Lucene IDF）——FTS5 的 bm25()
     对过半块都有的词给 0 分。
-  - 索引在 `<data_dir>/knowledge-state/index.sqlite`，contentless（不存正文、只存区间）+ secure_delete + 回滚日志；按条目 sha256 增量同步，
-    文件没了整条删；刚改过 2 秒内的文件不进扫描缓存（racy-clean）。索引坏 / FTS5 不可用 → 记 `problems`、退回逐条子串，不报错。
+  - 索引在 `<data_dir>/knowledge-state/index.sqlite`（改过笔记目录的是 `index-<hash>.sqlite`：每个文件夹一份，共用会互相整库删除），contentless（不存正文、只存区间）+ secure_delete + 回滚日志；
+    按条目 sha256 增量同步，文件没了整条删；刚改过 2 秒内的文件不进扫描缓存（racy-clean）。
+  - **读路径不拿写锁（v0.47.2）**：`sync` 先只读比对（`_in_sync`，连块数一起对：表被清空时旧逻辑判「没变」，搜出 0 条还报 fts5-bm25），对得上就不写库；开了向量也一样，没活干不许写。
+    检索顺手补向量最多 `EMBED_BUDGET` 块，`knowledge index --vectors` 才一次补完。同一次检索共用一个连接。
+  - **故障隔离（v0.47.2）**：索引是派生数据。库坏了（`is_corrupt`：DatabaseError 且非 OperationalError）挪到 `index.sqlite.corrupt-*` 按笔记重建一次并记 `problems`；被占着 / 磁盘满重建解决不了，退回逐条匹配，
+    `engine` 如实写 `substring`、带 `warnings`。向量这一路出错只退回 BM25。自备这一路的任何异常都不能带累内置结果（`search.py::_user_side`）。
   - 计算时：装得下整条就整条；装不下**只带与本盘导出正文相关的块**（零分块不凑数），每段【标题 · 第几行】；`?检索词` 跨库带最相关几段。
   - 工具：`horosa_knowledge_search`（门面，常驻）检索 → `horosa_knowledge_read(domain="user", key, from_line, max_lines)` 按行翻页；
-    内置与自备结果用 RRF（k=60）合并，不比分数。CLI `knowledge search`（兼检索测试）/ `knowledge index [--rebuild]`。
+    内置与自备结果用 RRF（k=60）合并，不比分数，**精确命中（键 / 中文名 / 笔记标题全等，`exact: true`）排在融合结果之前**；融合、翻页在 `knowledge/search.py`，service 只转发。
+    `total_matched` 就是翻得到的条数。CLI `knowledge search`（兼检索测试）/ `knowledge index [--rebuild]`。
   - 守卫：`tests/test_user_knowledge_index.py`（每条都有负向对照；其中四条第一版「因为错误的原因通过」，见 LESSONS）。
   - **可选向量（v0.45.1，`knowledge/vectors.py`）**：依赖要进**客户端起 server 的那个环境**，唯一开启入口 = `setup --client <客户端> --vectors`（v0.47.2，§9.4）；
     模型钉提交号 + sha256，`HF_ENDPOINT` 指镜像时先试镜像（官方垫底，sha 把关）。任何一环缺了就是纯 BM25、不报错。RRF 同分按 BM25 名次定序。
     测试用概念替身，dev 组带 numpy（别让守卫在 CI 里 skip）。`.mcpb` 不带这些依赖（manifest 的启动命令是固定的）。
-  - 内置知识检索（`knowledge/store.py`）与自备同一套归一 + BM25；正文分封顶 60，精确键（100）永远在前。
+  - **检索只有一份规则（v0.47.2，`knowledge/retrieval.py`）**：归一、切词、`term_count`、BM25、RRF、零命中改写都在这里，内置（store）与自备（index）是两个语料源，依赖方向指向它，store 不依赖 index。
+    别再在某一边单独写打分：此前两边漂移（西文一边按词一边按子串），`term_count` 也不许把双字序列拼起来数（「紫微微斗斗数」永远 0 次，三字以上的中文词全是 0 分）。
+  - **内置语料 = `knowledge_read` 的返回（v0.47.2）**：`store.search_docs()` 逐坐标调 read，正文取 `rendered_text`，所以「搜到的就是读到的」「每个坐标都能读回」由构造保证，不要再另写一份取文本的逻辑。
+    别名复用 read 的表（`_entry_names`）。排序 = 档位（全等 100 > 名字里含 60 > 标题里含 30 > 只在正文）+ 相关度压进 [0, 30)，档内不会再一片同分。手册条目键保持稳定（`Suzhan`），中文名在 `label`（`gen_knowledge_packs.py` 从导航表收）。
+  - **零命中改写（v0.47.2）**：整句零命中才去问句外壳、按语料切词（`expand_query`，段数最少者胜，不用 jieba），结果带 `expanded_query`。改写必须查询几乎每个字都落在语料里的词上（最多剩一个字、长句剩四分之一），否则返回空：胡乱的查询换来一堆看着像答案的噪音比零命中更糟。
+  - **检索质量有下限（v0.47.2）**：`tests/test_knowledge_eval.py` + `contracts/knowledge_eval.json`。dev 集可以看失败、可以调；**heldout 只报数，不许按它调**（写的时候没看过结果）。自检索不靠人挑；唯一名字才算 hit@1（「总览」27 本手册共用，没有唯一答案）。
+    2026-11-06：heldout hit@1 0.474 → 0.821、hit@5 0.526 → 0.923。改排序先跑 `scripts/eval_knowledge_search.py`。
 
 ### 4.4 MCP 面、决策层与错误信封
 

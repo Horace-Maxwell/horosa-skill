@@ -22,7 +22,6 @@ from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import (
     build_knowledge_registry,
     read_knowledge_entry,
-    search_knowledge,
 )
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
 from horosa_skill.service._context import _degrade_collector, _run_query_scope
@@ -36,6 +35,7 @@ from horosa_skill.service.envelope import (
     _with_operational_recovery,
 )
 from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP, _attach_export_contract
+from horosa_skill.knowledge import search as knowledge_search
 from horosa_skill.knowledge import user as user_knowledge
 from horosa_skill.knowledge.user import build_context as build_user_knowledge_context
 from horosa_skill.service.text.chart_family import (
@@ -95,37 +95,7 @@ class ToolsAPI:
         return result
 
     def _search_knowledge(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """内置知识 + 自备知识库一起检索。两边分数不同尺度（内置是命中计分、自备是 bm25），按名次做倒数排名融合
-        （RRF，k=60：Cormack 2009；Elasticsearch / FastGPT / Cherry Studio 同值），不拿分数直接比。"""
-        query = f"{payload.get('query') or ''}".strip()
-        domain = f"{payload.get('domain') or ''}".strip()
-        try:
-            limit = max(1, min(int(payload.get("limit") or 8), 20))
-            offset = max(0, int(payload.get("offset") or 0))
-        except (TypeError, ValueError):
-            limit, offset = 8, 0
-        if not query:
-            raise ToolValidationError(bilingual("检索词是空的：给 query 一个词。", "knowledge search requires a non-empty `query`"),
-                                      code="knowledge.search.empty_query", details={})
-        if domain == user_knowledge.USER_DOMAIN:
-            mine = user_knowledge.search_user(self.settings, query, limit=limit, offset=offset)
-            return {"mode": "search", "query": query, "domain": domain, "limit": limit, "offset": offset,
-                    "total_matched": mine["total_matched"], "next_offset": mine["next_offset"],
-                    "engine": mine["engine"], "matches": mine["matches"]}
-        builtin = search_knowledge({**payload, "query": query, "limit": 20})
-        mine = user_knowledge.search_user(self.settings, query, limit=20) if not domain else {"matches": [], "total_matched": 0}
-        fused: dict[tuple[str, str, str, str], tuple[float, dict[str, Any]]] = {}
-        for ranked in (builtin.get("matches") or [], mine["matches"]):
-            for rank, match in enumerate(ranked):
-                key = (str(match.get("domain")), str(match.get("category")), str(match.get("key")), str(match.get("lines") or ""))
-                previous = fused.get(key, (0.0, match))[0]
-                fused[key] = (previous + 1 / (60 + rank + 1), match)
-        ordered = [m for _, m in sorted(fused.values(), key=lambda pair: (-pair[0], str(pair[1].get("domain")), str(pair[1].get("key"))))]
-        total = int(builtin.get("total_matched") or 0) + int(mine.get("total_matched") or 0)
-        page = ordered[offset: offset + limit]
-        return {**{k: v for k, v in builtin.items() if k not in ("matches", "total_matched", "limit")},
-                "mode": "search", "query": query, "limit": limit, "offset": offset, "total_matched": total,
-                "next_offset": offset + len(page) if offset + len(page) < len(ordered) else None, "matches": page}
+        return knowledge_search.search_all(self.settings, payload)
 
     def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
         if definition.name == "export_registry":

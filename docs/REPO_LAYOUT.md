@@ -119,7 +119,7 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   `windows_jar_patch.py` and `mac_launcher_patch.py`, mixed into `HorosaRuntimeManager`), `identity.py` (endpoint ownership evidence),
   `registry.py` (atomic state file), `ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`.
 - `memory/store.py` — SQLite + JSON artifacts + run manifests + AI-answer write-back.
-- `knowledge/` — bundled Xingque hover knowledge (`store.py` + `data/`).
+- `knowledge/` — bundled Xingque knowledge (`store.py` + `data/`), the user's own notes (`user.py`, indexed by `index.py`, optional `vectors.py`), the shared retrieval rules (`retrieval.py`), and the cross-corpus search (`search.py`).
 - `reports/` — JSON / DOCX / PDF report builder + renderers.
 - `surfaces/` — `mcp_server.py` (`create_mcp_server`: registers the tools / resources / prompts; server instructions;
   split in v0.41.1 into `mcp_surface.py` annotations + toolsets, `mcp_requests.py` argument normalization + signatures,

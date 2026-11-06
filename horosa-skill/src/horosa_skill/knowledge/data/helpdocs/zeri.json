@@ -95,7 +95,7 @@
     },
     {
      "key": "印度择日",
-     "text": "**印度择日·择时(Muhurta)**用来按候选时刻的吠陀天象分钟级筛选(本机星历计算)。\n\n能设的条件:Panchanga 五肢(Tithi 月相日/Vara 曜日·当地日出换日/Nakshatra 月宿 27/Yoga 日月合行/Karana 半日)、Lagna 上升星座(恒星制)、曜落星座与顺逆、日凶段(Rahu Kalam·Yama Ganda·Gulika,日出~日落八分随曜日,真日出制)。\n\n本命可选:设了本命月宿与月座即解锁 Tara Bala 宿力 / Chandra Bala 月力两类条件。Dasha 大运属本命推演,不入候选时刻扫描(到印度页查)。\n\n### 择时工作台\n\n时间与口径：起止时刻(≤5 年,按月自动分段扫描)+地点;岁差制(Lahiri/Raman/KP)+罗计交点(平/真),与印度页同名选项算法相同(其余岁差制暂不支持)\n\n用事人本命：直选本命月宿(1-27)与本命月座(印度页本命盘面可查);设定后 Tara/Chandra 本命组条件生效,未设时该组条件报错提示\n\n构造条件：五组 18 类:五肢(Tithi/Vara/Nakshatra/Yoga/Karana/Panchaka/宿分足)·上升(Lagna)·曜位(落座/顺逆/自 Lagna 落宫)·日段(三凶段/三十须臾 Abhijit/Choghadia/行星时/昼夜)·本命(Tara/Chandra)\n\n### 结果·起盘与挂载\n\n结果行：分钟级连续区间;点开始/结束时刻即起盘,内嵌印度盘随之重排\n\n详情：逐条列设定与实际(Tithi/Vara/月宿/Yoga/Lagna),按该时刻重新判定,与搜索结果一致\n\nAI 挂载：挂载的是择时三段,自成一份(要连同整张印度盘交给 AI,请在印度页挂载)\n\n);\n}\n}\n\nexport default ZeriHelpDoc;",
+     "text": "**印度择日·择时(Muhurta)**用来按候选时刻的吠陀天象分钟级筛选(本机星历计算)。\n\n能设的条件:Panchanga 五肢(Tithi 月相日/Vara 曜日·当地日出换日/Nakshatra 月宿 27/Yoga 日月合行/Karana 半日)、Lagna 上升星座(恒星制)、曜落星座与顺逆、日凶段(Rahu Kalam·Yama Ganda·Gulika,日出~日落八分随曜日,真日出制)。\n\n本命可选:设了本命月宿与月座即解锁 Tara Bala 宿力 / Chandra Bala 月力两类条件。Dasha 大运属本命推演,不入候选时刻扫描(到印度页查)。\n\n### 择时工作台\n\n时间与口径：起止时刻(≤5 年,按月自动分段扫描)+地点;岁差制(Lahiri/Raman/KP)+罗计交点(平/真),与印度页同名选项算法相同(其余岁差制暂不支持)\n\n用事人本命：直选本命月宿(1-27)与本命月座(印度页本命盘面可查);设定后 Tara/Chandra 本命组条件生效,未设时该组条件报错提示\n\n构造条件：五组 18 类:五肢(Tithi/Vara/Nakshatra/Yoga/Karana/Panchaka/宿分足)·上升(Lagna)·曜位(落座/顺逆/自 Lagna 落宫)·日段(三凶段/三十须臾 Abhijit/Choghadia/行星时/昼夜)·本命(Tara/Chandra)\n\n### 结果·起盘与挂载\n\n结果行：分钟级连续区间;点开始/结束时刻即起盘,内嵌印度盘随之重排\n\n详情：逐条列设定与实际(Tithi/Vara/月宿/Yoga/Lagna),按该时刻重新判定,与搜索结果一致\n\nAI 挂载：挂载的是择时三段,自成一份(要连同整张印度盘交给 AI,请在印度页挂载)",
      "source": {
       "file": "components/help/ZeriHelpDoc.js",
       "tab": "印度择日"

@@ -53,6 +53,8 @@ flowchart TD
 - `src/horosa_skill/contracts_locator.py`
   - 运行期契约定位：源码树 `contracts/` → wheel / MCPB 内副本（`jev_thresholds.json`、`technique_provenance.json`）
 - `src/horosa_skill/knowledge/store.py`
+- `src/horosa_skill/knowledge/retrieval.py`（归一、切词、BM25、RRF、零命中改写：内置与自备共用）
+- `src/horosa_skill/knowledge/search.py`（跨语料融合与翻页）
   - 本地悬浮知识读取
 - `src/horosa_skill/memory/store.py`
   - SQLite + JSON artifact + run manifest

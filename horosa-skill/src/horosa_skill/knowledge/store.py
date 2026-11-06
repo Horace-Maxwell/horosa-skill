@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
-import math
 import re
+from collections.abc import Iterator
+from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
 from horosa_skill.errors import ToolValidationError
+from horosa_skill.knowledge import retrieval
 from horosa_skill.textscript import fold_to_simplified, looks_traditional
 
 
@@ -283,6 +285,29 @@ def _render_qimen_blocks(title: str, blocks: list[dict[str, Any]]) -> tuple[list
     return normalized_lines, rendered
 
 
+def _liureng_jiang_overview(bundle: dict[str, Any], jiang_name: str, normalized_name: str, info: dict[str, Any]) -> dict[str, Any]:
+    """没给天盘 / 地盘地支：读这一将本身，十二支下的注语逐支列出（检索结果给的 read 就是这个形状）。"""
+    notes = bundle.get("jiang_branch_note", {}).get(normalized_name, {})
+    tips = [*info.get("intros", []), *(f"**{line}**" for line in info.get("verses", [])), *info.get("extra", [])]
+    if notes:
+        tips.append("==")
+        tips.extend(f"{branch}——{note}。" for branch, note in notes.items())
+    return {
+        "domain": "liureng",
+        "category": "house",
+        "key": normalized_name,
+        "query_normalized": {"jiang_name": normalized_name, "tian_branch": "", "di_branch": ""},
+        "title": f"十二天将 · {normalized_name}",
+        "tips": tips,
+        "lines": [line for line in tips if line and line != "=="],
+        "rendered_text": _tips_to_rendered_text(jiang_name or normalized_name, tips),
+        "source": "xingque_hover_docs",
+        "bundle_version": load_knowledge_index().get("bundle_version"),
+        "provenance": _knowledge_provenance(domain="liureng", category="house", key=normalized_name),
+        "citation": f"Xingque hover knowledge · liureng/house/{normalized_name}",
+    }
+
+
 def _build_liureng_house_entry(bundle: dict[str, Any], jiang_name: str, tian_branch: str, di_branch: str) -> dict[str, Any]:
     aliases = bundle.get("jiang_aliases", {})
     jiang_info = bundle.get("jiang_info", {})
@@ -297,6 +322,8 @@ def _build_liureng_house_entry(bundle: dict[str, Any], jiang_name: str, tian_bra
         )
     tian = _normalize_liureng_branch(tian_branch)
     di = _normalize_liureng_branch(di_branch)
+    if not (tian_branch or di_branch):
+        return _liureng_jiang_overview(bundle, jiang_name, normalized_name, info)
     if not tian or not di:
         raise ToolValidationError(
             "六壬将盘悬浮知识需要有效的天盘地支与地盘地支。",
@@ -632,7 +659,7 @@ def _read_helpdoc_entry(bundle: dict[str, Any], *, domain: str, category: str, k
         "category": cat.get("name"),
         "key": entry.get("key"),
         "query_normalized": {"key": entry.get("key")},
-        "title": f"{bundle.get('label')} · {entry.get('key')}",
+        "title": f"{bundle.get('label')} · {entry.get('label') or entry.get('key')}",
         "rendered_text": entry.get("text", ""),
         "source": "xingque_help_docs",
         "bundle_version": src.get("upstream_app_version"),
@@ -644,98 +671,161 @@ def _read_helpdoc_entry(bundle: dict[str, Any], *, domain: str, category: str, k
     }
 
 
-# --- 全文检索（v0.30.0）：query 模式 —— 跨 24 域一把搜，命中带出处、可直接回读 -----------------
+# --- 全文检索：跨全部知识域；检索的文本就是 knowledge_read 返回的文本 ----------------------------
+
+# 星座的通行异名。read 的键是英文、标签各家译法不同；搜索要让用户说哪个都能到。
+_SIGN_VARIANTS = {
+    "Aries": ("白羊", "牡羊"), "Virgo": ("处女", "室女"), "Libra": ("天秤", "天平"), "Sagittarius": ("射手", "人马"),
+    "Capricorn": ("摩羯", "魔羯", "山羊"), "Aquarius": ("水瓶", "宝瓶"),
+}
+_NODE_NAMES = {"North Node": ("北交点",), "South Node": ("南交点",)}
+_ASPECT_NAMES = {
+    "0": ("合相", "合"), "60": ("六分相", "六合相"), "90": ("四分相", "刑相"), "120": ("三分相", "拱相", "三合相"),
+    "180": ("对分相", "冲相", "对冲"),
+}
+_MANUAL_ALIASES = {"Suzhan": ("宿占",)}  # 上游页面叫「宿盘」，技法与工具都叫宿占
+_CN_NUMERALS = ("一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二")
+_MANUAL_HOME_KEYS = frozenset({"总览", "Overview", "Page"})
+_SHEN_SUFFIX = re.compile(r"[子丑寅卯辰巳午未申酉戌亥]神$")
+_PARENTHETICAL = re.compile(r"[（(].*?[）)]$")
+_CJK_TEXT = re.compile(r"[㐀-鿿]")
+_TIER_SCORE = {3: 100.0, 2: 60.0, 1: 30.0, 0: 0.0}  # 全等 > 名字里含 > 标题里含 > 只在正文
+_RELEVANCE_SPAN = 30.0  # 相关度压进 [0, 30)：档内按相关度排，永远越不过上一档
 
 
-def _flat_strings(value: Any) -> list[str]:
-    """递归收集条目里所有字符串值（tips/blocks/verse… 各域形状不一，搜索只关心文本本体）。"""
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        return [s for v in value.values() for s in _flat_strings(v)]
-    if isinstance(value, list):
-        return [s for v in value for s in _flat_strings(v)]
-    return []
+@dataclass(frozen=True)
+class SearchDoc:
+    domain: str
+    category: str
+    key: str
+    title: str
+    body: str
+    citation: str
+    names: frozenset[str]  # 归一后的「这一条叫什么」：键、中文标签、别名
+    fields: tuple[tuple[str, float], ...]  # (归一文本, 权重)
+
+    @property
+    def haystack(self) -> str:
+        return "\n".join(text for text, _ in self.fields)
+
+    def read(self) -> dict[str, str]:
+        return {"domain": self.domain, "category": self.category, "key": self.key}
 
 
-def _iter_search_entries():
-    """产出 (domain, category, key, title, body_text, citation)——覆盖全部四种 bundle 形状，
-    且 (domain, category, key) 恒可直接喂回 `knowledge_read` 精读。"""
+def _coordinates() -> Iterator[tuple[str, str, str]]:
+    """全部 (domain, category, key)：四种 bundle 形状都在这一处。"""
     bundles = load_knowledge_bundles()
     for domain in sorted(bundles):
         bundle = bundles[domain]
         if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
-            src = bundle.get("source") or {}
-            label = bundle.get("label")
             for cat in bundle.get("categories") or []:
-                for entry in cat.get("entries") or []:
-                    key = f"{entry.get('key')}"
-                    citation = (
-                        f"星阙操作手册 · {label} · {key}"
-                        f"（{src.get('file')} @ 星阙 {src.get('upstream_app_version')}）"
-                    )
-                    yield domain, f"{cat.get('name')}", key, f"{label} · {key}", f"{entry.get('text') or ''}", citation
-            continue
-        if domain == "liureng":
-            for key, entry in (bundle.get("shen_entries") or {}).items():
-                yield (
-                    domain, "shen", key, entry.get("title", key),
-                    "\n".join(_flat_strings(entry)),
-                    f"Xingque hover knowledge · liureng/shen/{key}",
-                )
-            notes = bundle.get("jiang_branch_note") or {}
-            for key, entry in (bundle.get("jiang_info") or {}).items():
-                body = "\n".join(_flat_strings(entry) + _flat_strings(notes.get(key)))
-                yield (
-                    domain, "house", key, f"十二天将 · {key}", body,
-                    f"Xingque hover knowledge · liureng/house/{key}",
-                )
-            continue
-        for category, entries in (bundle.get("categories") or {}).items():
-            if not isinstance(entries, dict):
-                continue
-            for key, entry in entries.items():
-                title = entry.get("title", key) if isinstance(entry, dict) else key
-                yield (
-                    domain, category, f"{key}", f"{title}",
-                    "\n".join(_flat_strings(entry)),
-                    f"Xingque hover knowledge · {domain}/{category}/{key}",
-                )
+                yield from ((domain, f"{cat.get('name')}", f"{entry.get('key')}") for entry in cat.get("entries") or [])
+        elif domain == "liureng":
+            yield from ((domain, "shen", key) for key in bundle.get("shen_entries") or {})
+            yield from ((domain, "house", key) for key in bundle.get("jiang_info") or {})
+        else:
+            for category, entries in (bundle.get("categories") or {}).items():
+                if isinstance(entries, dict):
+                    yield from ((domain, category, f"{key}") for key in entries)
+
+
+def _helpdoc_label(bundle: dict[str, Any], category: str, key: str) -> str | None:
+    for cat in bundle.get("categories") or []:
+        if cat.get("name") == category:
+            return next((entry.get("label") for entry in cat.get("entries") or [] if entry.get("key") == key), None)
+    return None
+
+
+def _entry_names(domain: str, category: str, key: str, title: str) -> set[str]:
+    """这一条的所有叫法，用的是 knowledge_read 认的同一批表。检索此前完全不看这些表：read 查得到的 40 个星体标签，搜索有 18 个搜不到。"""
+    bundles = load_knowledge_bundles()
+    bundle = bundles[domain]
+    names = {key, title}
+    if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
+        label = _helpdoc_label(bundle, category, key)
+        names |= {label or "", *_MANUAL_ALIASES.get(key, ())}
+        if key in _MANUAL_HOME_KEYS:  # 「奇门遁甲」这种查询，到这本手册的总览
+            names.add(f"{bundle.get('label') or ''}".split(" · ")[0])
+    elif domain == "astro":
+        labels = {*(value for value in (ASTRO_LABELS.get(key), (bundle.get("labels") or {}).get(key)) if value)}
+        names |= labels | {_PARENTHETICAL.sub("", label) for label in labels} | set(_NODE_NAMES.get(key, ()))
+        if category == "sign":
+            spoken = labels | set(_SIGN_VARIANTS.get(key, ()))
+            names |= spoken | {f"{name}座" for name in spoken}
+        elif category == "aspect":
+            names |= set(_ASPECT_NAMES.get(key, ())) | {f"{key}度", f"{key}°"}
+        elif category == "house" and key.removeprefix("House").isdigit():
+            number = int(key.removeprefix("House"))
+            names |= {f"第{_CN_NUMERALS[number - 1]}宫", f"第{number}宫", f"{_CN_NUMERALS[number - 1]}宫"}
+    elif domain == "qimen":
+        names |= {alias for table in (QIMEN_GOD_ALIASES, QIMEN_STAR_ALIASES) for alias, target in table.items()
+                  if target == key and len(alias) > 1}
+    elif domain == "liureng":
+        names.add(_SHEN_SUFFIX.sub("", title))
+        names |= {alias for alias, target in (bundle.get("jiang_aliases") or {}).items() if target == key}
+    return {retrieval.normalize(name) for name in names if name}
+
+
+def _search_doc(domain: str, category: str, key: str) -> SearchDoc:
+    """一条检索文档。正文取 knowledge_read 的 rendered_text：搜到的就是读到的，每个坐标都能读回由这里保证。
+
+    此前递归收集条目里所有字符串，奇门条目的 `text` / `blank` 块类型标记占了 31% 的「正文」，摘要里全是这些词。
+    """
+    read = read_knowledge_entry({"domain": domain, "category": category, "key": key})
+    title, body = f"{read.get('title') or key}", f"{read.get('rendered_text') or ''}"
+    named_category = category if _CJK_TEXT.search(category) and category != "手册" else ""
+    names = _entry_names(domain, category, key, title)
+    fields = ((retrieval.normalize(title) + "\n" + "\n".join(sorted(names)), retrieval.FIELD_WEIGHTS["title"]),
+              (retrieval.normalize(named_category), retrieval.FIELD_WEIGHTS["heading"]),
+              (retrieval.normalize(body), retrieval.FIELD_WEIGHTS["body"]))
+    return SearchDoc(domain, category, key, title, body, f"{read.get('citation') or ''}", frozenset(names), fields)
 
 
 @lru_cache(maxsize=1)
-def _normalized_entries() -> tuple[tuple[str, str, str, str, str, str, str], ...]:
-    """检索语料：(domain, category, key, title, body, citation, 归一后的「标题 + 正文」)。bundle 是只读打包数据，进程内算一次。"""
-    from horosa_skill.knowledge import index as kindex
-
-    return tuple((*row, kindex.normalize(f"{row[3]}\n{row[4]}")) for row in _iter_search_entries())
+def search_docs() -> tuple[SearchDoc, ...]:
+    """检索语料。bundle 是只读打包数据，进程内建一次。"""
+    return tuple(_search_doc(*coordinate) for coordinate in _coordinates())
 
 
-def _search_snippet(body: str, query: str, width: int = 45) -> str:
-    pos = body.find(query)
-    if pos < 0:
-        return " ".join(body[: width * 2].split())
-    start, end = max(0, pos - width), pos + len(query) + width
-    prefix = "…" if start > 0 else ""
-    suffix = "…" if end < len(body) else ""
-    return prefix + " ".join(body[start:end].split()) + suffix
+def _tier(doc: SearchDoc, exact: str, tokens: tuple[str, ...]) -> int:
+    if exact in doc.names:
+        return 3
+    if tokens and len(exact) > 1 and any(retrieval.term_count(name, tokens) for name in doc.names):
+        return 2
+    return 1 if tokens and retrieval.term_count(doc.fields[0][0], tokens) else 0
 
 
-def search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
-    """全文检索。繁体写的检索词折成简体再搜（正文以简体为主；key / 标题的精确匹配与摘要定位也要用简体），
-    结果里 `query` 留原词、`query_folded` 写折后的词。正文计分本身已繁简互通（knowledge/index.normalize）。"""
-    query = f"{payload.get('query') or ''}".strip()
-    if looks_traditional(query):
-        folded = _search_knowledge({**payload, "query": fold_to_simplified(query)})
-        return {**folded, "query": query, "query_folded": folded.get("query")}
-    return _search_knowledge(payload)
+def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int]) -> list[tuple[float, bool, SearchDoc]]:
+    """(分数, 是否全等, 文档)，分数降序。分数 = 档位底分 + 相关度：同一档内按相关度排，不会再一片同分。"""
+    parsed = retrieval.parse_query(query)
+    exact = retrieval.normalize(query).strip()
+    tokens = retrieval.TOKEN.findall(exact)
+    whole = tuple(tokens) if " " not in exact else ()
+    n_docs = max(len(corpus), 1)
+    avg_len = sum(len(doc.haystack) for doc in corpus) / n_docs if corpus else 1.0
+    for term in parsed.scored:
+        if term not in df:
+            df[term] = sum(1 for doc in corpus if retrieval.term_count(doc.haystack, term))
+    ranked: list[tuple[float, bool, SearchDoc]] = []
+    for doc in corpus:
+        relevance = sum(
+            retrieval.bm25(sum(weight * retrieval.term_count(text, term) for text, weight in doc.fields),
+                           df[term], n_docs, len(doc.haystack), avg_len)
+            for term in parsed.scored)
+        tier = _tier(doc, exact, whole)
+        if tier == 0 and relevance <= 0:
+            continue
+        ranked.append((round(_TIER_SCORE[tier] + _RELEVANCE_SPAN * relevance / (1 + relevance), 4), tier == 3, doc))
+    ranked.sort(key=lambda row: (-row[0], row[2].domain, row[2].category, row[2].key))
+    return ranked
 
 
-def _search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
+def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> dict[str, Any]:
     """`knowledge_read` 的 query 模式：跨全部知识域全文检索。
 
-    排序确定性：得分（key 全等 100 > key 含 40 > 标题含 30 > 正文 BM25×5 封顶 60）降序，
-    同分按 (domain, category, key) 字典序——同一 query 永远同一结果，评测可 golden。
+    排序：全等（键 / 中文名 / 别名）> 名字里含 > 标题里含 > 只在正文；档内按 BM25，同分按 (domain, category, key)，
+    同一 query 永远同一结果。整句零命中时改写一次（去问句外壳、切开连写的词），结果带 `expanded_query`。
+    `depth`：内部翻页用，一次取够这么多条。
     """
     query = f"{payload.get('query') or ''}".strip()
     if not query:
@@ -756,58 +846,41 @@ def _search_knowledge(payload: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         limit = 8
     limit = max(1, min(limit, 20))
-
-    # v0.45.1：正文改用与自备知识库同一套归一 + BM25（knowledge/index.py）——多词查询（「伤官 配印」）按词计分、
-    # 繁简互通、按正文长度归一，不再「出现次数封顶 10」；key / 标题全等仍压过一切（精确键查找是主用法）。
-    from horosa_skill.knowledge import index as kindex
-
-    parsed = kindex.parse_query(query)
-    terms = [t for t in parsed.terms if t]
-    corpus = [row for row in _normalized_entries() if not domain_filter or row[0] == domain_filter]
-    scanned = len(corpus)
-    n_docs = max(scanned, 1)
-    avg_len = (sum(len(row[6]) for row in corpus) / n_docs) if corpus else 1.0
-    df = {term: sum(1 for row in corpus if term in row[6]) for term in terms}
-    scored: list[tuple[float, str, str, str, dict[str, Any]]] = []
-    for domain, category, key, title, body, citation, folded in corpus:
-        score = 0.0
-        if key == query:
-            score += 100
-        elif query in key:
-            score += 40
-        if query in title:
-            score += 30
-        relevance = 0.0
-        length = max(len(folded), 1)
-        for term in terms:
-            tf = folded.count(term)
-            if not tf:
-                continue
-            idf = math.log(1 + (n_docs - df[term] + 0.5) / (df[term] + 0.5))
-            relevance += idf * tf * (kindex.BM25_K1 + 1) / (tf + kindex.BM25_K1 * (1 - kindex.BM25_B + kindex.BM25_B * length / avg_len))
-        score += min(round(relevance * 5, 2), 60.0)  # 正文分封顶 60：全文再相关也排在精确键（100）之后
-        if score <= 0:
-            continue
-        scored.append((
-            score, domain, category, key,
-            {
-                "domain": domain,
-                "category": category,
-                "key": key,
-                "title": title,
-                "score": score,
-                "snippet": _search_snippet(body, query) if query in body else kindex.snippet(body, terms, 120),
-                "citation": citation,
-            },
-        ))
-    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
-    return {
+    corpus = [doc for doc in search_docs() if not domain_filter or doc.domain == domain_filter]
+    df: dict[tuple[str, ...], int] = {}
+    ranked = _rank(corpus, query, df)
+    expanded = None
+    if not ranked:
+        expanded = retrieval.expand_query(
+            query, retrieval.cached(lambda term: sum(1 for doc in corpus if term in doc.haystack)), len(corpus))
+        ranked = _rank(corpus, expanded, df) if expanded else []
+    terms = [term for term in retrieval.parse_query(expanded or query).terms if term]
+    matches = [
+        {
+            "domain": doc.domain,
+            "category": doc.category,
+            "key": doc.key,
+            "title": doc.title,
+            "score": score,
+            "snippet": retrieval.snippet(doc.body, terms),
+            "citation": doc.citation,
+            "read": doc.read(),
+            **({"exact": True} if exact else {}),
+        }
+        for score, exact, doc in ranked[: depth or limit]
+    ]
+    result = {
         "mode": "search",
         "query": query,
         "domain": domain_filter,
         "limit": limit,
-        "total_scanned": scanned,
-        "total_matched": len(scored),
-        "matches": [row[4] for row in scored[:limit]],
+        "total_scanned": len(corpus),
+        "total_matched": len(ranked),
+        "matches": matches,
         "bundle_version": load_knowledge_index().get("bundle_version"),
     }
+    if expanded:
+        result["expanded_query"] = expanded
+    if looks_traditional(query):
+        result["query_folded"] = fold_to_simplified(query)
+    return result

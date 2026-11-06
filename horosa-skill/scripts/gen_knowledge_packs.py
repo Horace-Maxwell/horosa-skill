@@ -97,8 +97,25 @@ def unlisted_helpdocs(present: Iterable[str]) -> list[str]:
     return sorted(names - set(HELPDOC_DOMAINS) - set(EXCLUDED_HELPDOCS))
 
 
+_COMPONENT_TAIL = re.compile(r"\)\s*;?\s*\}\s*(?:render\(\)\s*\{|\}\s*export default)[\s\S]*$")
+_MAP_EXPRESSION = re.compile(r"\{[^{}]*?\.map\(")
+
+
+def _drop_map_expressions(text: str) -> str:
+    """去掉 `{LIST.map((e) => (...))}`：括号成对找到收尾。里面的文字来自运行时变量，手册收割拿不到。"""
+    while (match := _MAP_EXPRESSION.search(text)):
+        depth, index = 0, match.start()
+        while index < len(text):
+            depth += {"{": 1, "}": -1}.get(text[index], 0)
+            index += 1
+            if depth == 0:
+                break
+        text = text[: match.start()] + text[index:]
+    return text
+
+
 def _jsx_to_markdown(fragment: str) -> str:
-    text = fragment
+    text = _drop_map_expressions(_COMPONENT_TAIL.sub("", fragment))
     # 结构标记（先做，标签还在时才知道语义）
     text = re.sub(r"\{kv\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*'((?:[^'\\]|\\.)*)'\s*\)\}", r"\n\1：\2", text)
     text = re.sub(r'\{kv\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)\}', r"\n\1：\2", text)
@@ -132,25 +149,40 @@ def _jsx_to_markdown(fragment: str) -> str:
 
 
 _RENDER_METHOD = re.compile(r"\n\trender([A-Z]\w*)\(\)\{")
+_NEXT_METHOD = re.compile(r"\n\t\w+\([^)\n]*\)\s*\{")  # 类里的下一个方法，含收尾的主 render()
+_METHOD_RETURN = re.compile(r"^\s*return\s*\(\s*")
+_METHOD_TAIL = re.compile(r"\)\s*;?\s*\}\s*$")
+# 导航表：{ key:'suzhan', label:'宿盘', render:()=>this.renderSuzhan() }——条目的中文名只在这里
+_NAV_LABEL = re.compile(r"label:\s*'([^']+)'[^{}]*?render:\s*\(\)\s*=>\s*this\.render([A-Z]\w*)\(\)")
 
 
-def _split_tabs(source: str) -> list[tuple[str, str]]:
+def _method_body(source: str, start: int) -> str:
+    """render<Name>() 的方法体：到下一个方法为止，去掉 `return (` 外壳。
+
+    此前切到下一个 render<Name>()，所以最后一节把主 render() 的导航表（`const groups = [...]`）也收进了正文，
+    每节开头留着 `return (`（2026-11-06 审计抓到）。
+    """
+    following = _NEXT_METHOD.search(source, start)
+    body = source[start : following.start() if following else len(source)]
+    return _METHOD_TAIL.sub("", _METHOD_RETURN.sub("", body, count=1))
+
+
+def _split_tabs(source: str) -> list[tuple[str, str, str | None]]:
+    """[(键, JSX 片段, 中文名)]。TabPane 的键本身就是中文，中文名是 None。"""
     matches = list(_TABPANE.finditer(source))
-    tabs: list[tuple[str, str]] = []
+    tabs: list[tuple[str, str, str | None]] = []
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(source)
-        tabs.append((m.group(1), source[m.end():end]))
+        tabs.append((m.group(1), source[m.end():end], None))
     if tabs:
         return tabs
     # 无 TabPane 的手册（Tarot/Cnyibu/Auxchart 用平铺 + render<Name>() 分节）：按 render 方法切条目，
-    # 条目键取方法名（renderTarot → Tarot）；只有 render() 主方法时整册一条（键=总览）。
-    methods = list(_RENDER_METHOD.finditer(source))
-    if methods:
-        for i, m in enumerate(methods):
-            end = methods[i + 1].start() if i + 1 < len(methods) else len(source)
-            tabs.append((m.group(1), source[m.end():end]))
+    # 条目键取方法名（renderTarot → Tarot，键保持稳定）；只有 render() 主方法时整册一条（键=总览）。
+    labels = {name: label for label, name in _NAV_LABEL.findall(source)}
+    for m in _RENDER_METHOD.finditer(source):
+        tabs.append((m.group(1), _method_body(source, m.end()), labels.get(m.group(1))))
     if not tabs:
-        tabs.append(("总览", source))
+        tabs.append(("总览", source, None))
     return tabs
 
 
@@ -231,12 +263,13 @@ def main() -> int:
             continue
         title_match = _TITLE.search(text_source)
         entries = []
-        for tab_name, fragment in _split_tabs(text_source):
+        for tab_name, fragment, tab_label in _split_tabs(text_source):
             text = _jsx_to_markdown(fragment)
-            if len(text) < 40:  # 空 tab / 纯组件引用 tab 不入库
+            if len(text) < 20:  # 空 tab / 纯组件引用 tab 不入库。「演禽详见演禽手册…」这种一句话指引要留：键是对外契约
                 continue
             entries.append({
                 "key": tab_name,
+                **({"label": tab_label} if tab_label else {}),
                 "text": text,
                 "source": {"file": f"components/help/{component}.js", "tab": tab_name},
             })

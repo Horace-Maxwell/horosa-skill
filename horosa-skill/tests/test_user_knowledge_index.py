@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import time
 from pathlib import Path
 
@@ -147,15 +148,29 @@ def test_without_fts5_search_falls_back_to_substrings(tmp_path: Path, monkeypatc
     assert result["engine"] == "substring" and result["matches"][0]["heading"] == "总论 › 伤官格"
 
 
-def test_a_broken_index_degrades_to_substring_search_and_is_reported(tmp_path: Path) -> None:
+def test_a_broken_index_is_set_aside_and_rebuilt_and_reported(tmp_path: Path) -> None:
     _put(tmp_path, "八字.md", LONG_NOTE)
     settings = _settings(tmp_path)
     path = kindex.index_path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"not a database" * 100)
     catalog = uk.indexed_catalog(settings)
+    assert catalog.index_ok and any(p.kind == "index" and "重建" in p.message for p in catalog.problems)
+    assert list(path.parent.glob("index.sqlite.corrupt-*")), "坏文件留一份给排查用"
+    assert uk.search_user(settings, "伤官")["engine"] == "fts5-bm25"
+
+
+def test_when_the_index_cannot_be_rebuilt_search_degrades_to_substring(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _put(tmp_path, "八字.md", LONG_NOTE)
+    settings = _settings(tmp_path)
+
+    def refuse(*_args, **_kwargs):
+        raise sqlite3.OperationalError("disk I/O error")
+    monkeypatch.setattr(kindex, "sync", refuse)
+    catalog = uk.indexed_catalog(settings)
     assert not catalog.index_ok and any(p.kind == "index" for p in catalog.problems)
-    assert uk.search_user(settings, "伤官")["matches"]
+    found = uk.search_user(settings, "伤官")
+    assert found["matches"] and found["engine"] == "substring"
 
 
 # ── 计算时：长条目挑相关段落，`?检索词` ──────────────────────────────────────

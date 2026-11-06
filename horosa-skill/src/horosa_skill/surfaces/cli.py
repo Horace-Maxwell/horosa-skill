@@ -982,7 +982,7 @@ def knowledge_index(
             raise typer.Exit(code=2) from exc
     if rebuild and path.exists():
         path.unlink()  # 索引是派生数据，删了照笔记重建；笔记文件夹从不动
-    catalog = user_knowledge.indexed_catalog(settings, rebuild=rebuild)
+    catalog = user_knowledge.indexed_catalog(settings, rebuild=rebuild, embed_all=vectors_on)
     _print_json({
         "ok": True, "dir": str(catalog.root), "index": str(path), "entries": len(catalog.entries),
         "engine": user_knowledge._engine(settings, catalog), "sync": catalog.index_report,

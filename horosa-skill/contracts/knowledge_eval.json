@@ -1,0 +1,1673 @@
+{
+ "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调；heldout 在改检索之前（2026-11-06）写好、写的时候没看过任何检索结果，只许用来报数，不许按它调。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。",
+ "sets": {
+  "dev": [
+   {
+    "q": "休门",
+    "class": "canonical",
+    "want": [
+     [
+      "qimen",
+      "休门"
+     ]
+    ]
+   },
+   {
+    "q": "值符",
+    "class": "canonical",
+    "want": [
+     [
+      "qimen",
+      "值符"
+     ]
+    ]
+   },
+   {
+    "q": "天蓬",
+    "class": "canonical",
+    "want": [
+     [
+      "qimen",
+      "天蓬"
+     ]
+    ]
+   },
+   {
+    "q": "太阳",
+    "class": "canonical",
+    "want": [
+     [
+      "astro",
+      "Sun"
+     ]
+    ]
+   },
+   {
+    "q": "火星",
+    "class": "canonical",
+    "want": [
+     [
+      "astro",
+      "Mars"
+     ]
+    ]
+   },
+   {
+    "q": "天蝎座",
+    "class": "canonical",
+    "want": [
+     [
+      "astro",
+      "Scorpio"
+     ]
+    ]
+   },
+   {
+    "q": "北交点",
+    "class": "canonical",
+    "want": [
+     [
+      "astro",
+      "North Node"
+     ]
+    ]
+   },
+   {
+    "q": "四化",
+    "class": "canonical",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ]
+   },
+   {
+    "q": "三传",
+    "class": "canonical",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ]
+   },
+   {
+    "q": "天乙贵人",
+    "class": "canonical",
+    "want": [
+     [
+      "liureng",
+      "天乙"
+     ]
+    ]
+   },
+   {
+    "q": "神后",
+    "class": "canonical",
+    "want": [
+     [
+      "liureng",
+      "子"
+     ]
+    ]
+   },
+   {
+    "q": "主限法",
+    "class": "canonical",
+    "want": [
+     [
+      "direction",
+      "主限法"
+     ]
+    ]
+   },
+   {
+    "q": "飞宫小奇门",
+    "class": "canonical",
+    "want": [
+     [
+      "cnyibu",
+      "Feigong"
+     ]
+    ]
+   },
+   {
+    "q": "金口诀",
+    "class": "canonical",
+    "want": [
+     [
+      "cnyibu",
+      "Jinkou"
+     ]
+    ]
+   },
+   {
+    "q": "神易数",
+    "class": "canonical",
+    "want": [
+     [
+      "cnyibu",
+      "Shenyishu"
+     ]
+    ]
+   },
+   {
+    "q": "小六壬",
+    "class": "canonical",
+    "want": [
+     [
+      "cnyibu",
+      "Xiaoliuren"
+     ]
+    ]
+   },
+   {
+    "q": "宿占",
+    "class": "canonical",
+    "want": [
+     [
+      "cnyibu",
+      "Suzhan"
+     ]
+    ]
+   },
+   {
+    "q": "占星择日",
+    "class": "canonical",
+    "want": [
+     [
+      "auxchart",
+      "Election"
+     ]
+    ]
+   },
+   {
+    "q": "福点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Fortuna"
+     ]
+    ]
+   },
+   {
+    "q": "灵点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Spirit"
+     ]
+    ]
+   },
+   {
+    "q": "勇点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Mars"
+     ]
+    ]
+   },
+   {
+    "q": "罪点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Saturn"
+     ]
+    ]
+   },
+   {
+    "q": "赢点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Jupiter"
+     ]
+    ]
+   },
+   {
+    "q": "牡羊",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Aries"
+     ]
+    ]
+   },
+   {
+    "q": "室女",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Virgo"
+     ]
+    ]
+   },
+   {
+    "q": "北交",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "North Node"
+     ]
+    ]
+   },
+   {
+    "q": "子嗣点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Sons"
+     ]
+    ]
+   },
+   {
+    "q": "灾厄点",
+    "class": "engine-label",
+    "want": [
+     [
+      "astro",
+      "Pars Diseases"
+     ]
+    ]
+   },
+   {
+    "q": "腾蛇",
+    "class": "variant",
+    "want": [
+     [
+      "qimen",
+      "螣蛇"
+     ]
+    ]
+   },
+   {
+    "q": "玄武",
+    "class": "variant",
+    "want": [
+     [
+      "liureng",
+      "元武"
+     ],
+     [
+      "qimen",
+      "玄武"
+     ]
+    ]
+   },
+   {
+    "q": "贵人",
+    "class": "variant",
+    "want": [
+     [
+      "liureng",
+      "天乙"
+     ]
+    ]
+   },
+   {
+    "q": "白羊",
+    "class": "variant",
+    "want": [
+     [
+      "astro",
+      "Aries"
+     ]
+    ]
+   },
+   {
+    "q": "人马座",
+    "class": "variant",
+    "want": [
+     [
+      "astro",
+      "Sagittarius"
+     ]
+    ]
+   },
+   {
+    "q": "魔羯座",
+    "class": "variant",
+    "want": [
+     [
+      "astro",
+      "Capricorn"
+     ]
+    ]
+   },
+   {
+    "q": "天平座",
+    "class": "variant",
+    "want": [
+     [
+      "astro",
+      "Libra"
+     ]
+    ]
+   },
+   {
+    "q": "幸运点",
+    "class": "variant",
+    "want": [
+     [
+      "astro",
+      "Pars Fortuna"
+     ]
+    ]
+   },
+   {
+    "q": "阳刃",
+    "class": "variant",
+    "want": [
+     [
+      "guazhan",
+      "算法与口径"
+     ],
+     [
+      "bazi",
+      "排盘设置"
+     ],
+     [
+      "liureng_manual",
+      "神煞断法"
+     ]
+    ]
+   },
+   {
+    "q": "sun",
+    "class": "english-lower",
+    "want": [
+     [
+      "astro",
+      "Sun"
+     ]
+    ]
+   },
+   {
+    "q": "moon",
+    "class": "english-lower",
+    "want": [
+     [
+      "astro",
+      "Moon"
+     ]
+    ]
+   },
+   {
+    "q": "mars",
+    "class": "english-lower",
+    "want": [
+     [
+      "astro",
+      "Mars"
+     ]
+    ]
+   },
+   {
+    "q": "saturn",
+    "class": "english-lower",
+    "want": [
+     [
+      "astro",
+      "Saturn"
+     ]
+    ]
+   },
+   {
+    "q": "scorpio",
+    "class": "english-lower",
+    "want": [
+     [
+      "astro",
+      "Scorpio"
+     ]
+    ]
+   },
+   {
+    "q": "sagittarius",
+    "class": "english-lower",
+    "want": [
+     [
+      "astro",
+      "Sagittarius"
+     ]
+    ]
+   },
+   {
+    "q": "七殺",
+    "class": "traditional",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ]
+   },
+   {
+    "q": "太歲",
+    "class": "traditional",
+    "want": [
+     [
+      "cntradition",
+      "十二串宫"
+     ]
+    ]
+   },
+   {
+    "q": "紫微斗數",
+    "class": "traditional",
+    "want": [
+     [
+      "ziwei",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "奇門遁甲",
+    "class": "traditional",
+    "want": [
+     [
+      "dunjia",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "三傳",
+    "class": "traditional",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ]
+   },
+   {
+    "q": "天乙貴人",
+    "class": "traditional",
+    "want": [
+     [
+      "liureng",
+      "天乙"
+     ]
+    ]
+   },
+   {
+    "q": "休門",
+    "class": "traditional",
+    "want": [
+     [
+      "qimen",
+      "休门"
+     ]
+    ]
+   },
+   {
+    "q": "陽遁",
+    "class": "traditional",
+    "want": [
+     [
+      "dunjia",
+      null
+     ],
+     [
+      "taiyi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "伤官 配印",
+    "class": "multiword",
+    "want": [
+     [
+      "bazi_pithy",
+      "17"
+     ]
+    ]
+   },
+   {
+    "q": "值符 值使",
+    "class": "multiword",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "右栏标签"
+     ]
+    ]
+   },
+   {
+    "q": "火星 白羊",
+    "class": "multiword",
+    "want": [
+     [
+      "astro",
+      "Mars"
+     ],
+     [
+      "astro",
+      "Aries"
+     ]
+    ]
+   },
+   {
+    "q": "紫微 化忌",
+    "class": "multiword",
+    "want": [
+     [
+      "ziwei",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "日主 身强 身弱",
+    "class": "multiword",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ]
+   },
+   {
+    "q": "伤官见官是什么意思",
+    "class": "natural",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "怎么看大运",
+    "class": "natural",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ],
+     [
+      "india",
+      "大运体系"
+     ]
+    ]
+   },
+   {
+    "q": "如何判断用神",
+    "class": "natural",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ],
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ]
+   },
+   {
+    "q": "什么是空亡",
+    "class": "natural",
+    "want": [
+     [
+      "dunjia",
+      null
+     ],
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "liureng_manual",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "太阳在天蝎座代表什么",
+    "class": "natural",
+    "want": [
+     [
+      "astro",
+      "Scorpio"
+     ],
+     [
+      "astro",
+      "Sun"
+     ]
+    ]
+   },
+   {
+    "q": "奇门八门吉凶怎么判断",
+    "class": "natural",
+    "want": [
+     [
+      "qimen",
+      null
+     ],
+     [
+      "dunjia",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "身弱能不能担财",
+    "class": "natural",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "飞星四化怎么看",
+    "class": "natural",
+    "want": [
+     [
+      "ziwei",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "食神生财",
+    "class": "compound",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "七杀羊刃",
+    "class": "compound",
+    "want": [
+     [
+      "bazi",
+      null
+     ],
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "guazhan",
+      null
+     ],
+     [
+      "liureng_manual",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "太阳天蝎",
+    "class": "compound",
+    "want": [
+     [
+      "astro",
+      "Scorpio"
+     ],
+     [
+      "astro",
+      "Sun"
+     ]
+    ]
+   },
+   {
+    "q": "奇门休门",
+    "class": "compound",
+    "want": [
+     [
+      "qimen",
+      "休门"
+     ]
+    ]
+   },
+   {
+    "q": "三字诀",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@三字诀"
+     ]
+    ]
+   },
+   {
+    "q": "子息",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@子息"
+     ]
+    ]
+   },
+   {
+    "q": "婚姻 断语",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@婚姻"
+     ]
+    ]
+   },
+   {
+    "q": "兵卒",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@兵卒"
+     ]
+    ]
+   },
+   {
+    "q": "清浊",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@清浊"
+     ]
+    ]
+   },
+   {
+    "q": "流年 断语",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@流年"
+     ]
+    ]
+   }
+  ],
+  "heldout": [
+   {
+    "q": "立春",
+    "class": "term",
+    "want": [
+     [
+      "jieqi",
+      "二十四节气"
+     ]
+    ]
+   },
+   {
+    "q": "岁差",
+    "class": "term",
+    "want": [
+     [
+      "india",
+      "岁差·分宫"
+     ],
+     [
+      "astro_manual",
+      "黄道与分宫"
+     ]
+    ]
+   },
+   {
+    "q": "界与尊贵",
+    "class": "term",
+    "want": [
+     [
+      "astro_manual",
+      "界与尊贵"
+     ]
+    ]
+   },
+   {
+    "q": "中点",
+    "class": "term",
+    "want": [
+     [
+      "germany",
+      "行星中点 · 图形星历"
+     ],
+     [
+      "germany",
+      "90°中点盘"
+     ]
+    ]
+   },
+   {
+    "q": "马克斯盘",
+    "class": "term",
+    "want": [
+     [
+      "relative",
+      "马克斯盘 · 关系量化"
+     ]
+    ]
+   },
+   {
+    "q": "比较盘",
+    "class": "term",
+    "want": [
+     [
+      "relative",
+      "比较盘"
+     ]
+    ]
+   },
+   {
+    "q": "三传",
+    "class": "term",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ]
+   },
+   {
+    "q": "用神",
+    "class": "term",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ],
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ]
+   },
+   {
+    "q": "开门",
+    "class": "term",
+    "want": [
+     [
+      "qimen",
+      "开门"
+     ]
+    ]
+   },
+   {
+    "q": "天禽",
+    "class": "term",
+    "want": [
+     [
+      "qimen",
+      "天禽"
+     ]
+    ]
+   },
+   {
+    "q": "朱雀",
+    "class": "term",
+    "want": [
+     [
+      "qimen",
+      "朱雀"
+     ],
+     [
+      "liureng",
+      "朱雀"
+     ]
+    ]
+   },
+   {
+    "q": "勾陈",
+    "class": "term",
+    "want": [
+     [
+      "qimen",
+      "勾陈"
+     ],
+     [
+      "liureng",
+      "勾陈"
+     ]
+    ]
+   },
+   {
+    "q": "白虎",
+    "class": "term",
+    "want": [
+     [
+      "qimen",
+      "白虎"
+     ],
+     [
+      "liureng",
+      "白虎"
+     ]
+    ]
+   },
+   {
+    "q": "河魁",
+    "class": "term",
+    "want": [
+     [
+      "liureng",
+      "戌"
+     ]
+    ]
+   },
+   {
+    "q": "登明",
+    "class": "term",
+    "want": [
+     [
+      "liureng",
+      "亥"
+     ]
+    ]
+   },
+   {
+    "q": "太乙十六神",
+    "class": "term",
+    "want": [
+     [
+      "taiyi",
+      "十六神 · 生成"
+     ]
+    ]
+   },
+   {
+    "q": "KP",
+    "class": "term",
+    "want": [
+     [
+      "india",
+      "KP 系统"
+     ]
+    ]
+   },
+   {
+    "q": "Varga",
+    "class": "term",
+    "want": [
+     [
+      "india",
+      "分盘 Varga"
+     ]
+    ]
+   },
+   {
+    "q": "塔罗牌阵",
+    "class": "term",
+    "want": [
+     [
+      "tarot",
+      "流派与牌阵"
+     ]
+    ]
+   },
+   {
+    "q": "星象大典",
+    "class": "term",
+    "want": [
+     [
+      "xuanshi",
+      "星象大典"
+     ]
+    ]
+   },
+   {
+    "q": "老黄历",
+    "class": "term",
+    "want": [
+     [
+      "calendar",
+      "老黄历"
+     ]
+    ]
+   },
+   {
+    "q": "二十四节气",
+    "class": "term",
+    "want": [
+     [
+      "jieqi",
+      "二十四节气"
+     ]
+    ]
+   },
+   {
+    "q": "月亮",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Moon"
+     ]
+    ]
+   },
+   {
+    "q": "水星",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Mercury"
+     ]
+    ]
+   },
+   {
+    "q": "天王星",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Uranus"
+     ]
+    ]
+   },
+   {
+    "q": "南交",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "South Node"
+     ]
+    ]
+   },
+   {
+    "q": "金牛",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Taurus"
+     ]
+    ]
+   },
+   {
+    "q": "巨蟹",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Cancer"
+     ]
+    ]
+   },
+   {
+    "q": "摩羯",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Capricorn"
+     ]
+    ]
+   },
+   {
+    "q": "婚姻点",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Pars Wedding [Male]"
+     ],
+     [
+      "astro",
+      "Pars Wedding [Female]"
+     ]
+    ]
+   },
+   {
+    "q": "生命点",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Pars Life"
+     ]
+    ]
+   },
+   {
+    "q": "灾厄点",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "Pars Diseases"
+     ]
+    ]
+   },
+   {
+    "q": "第一宫",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "House1"
+     ]
+    ]
+   },
+   {
+    "q": "第十宫",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "House10"
+     ]
+    ]
+   },
+   {
+    "q": "四分相",
+    "class": "chart-label",
+    "want": [
+     [
+      "astro",
+      "90"
+     ]
+    ]
+   },
+   {
+    "q": "六壬怎么起课",
+    "class": "question",
+    "want": [
+     [
+      "liureng_manual",
+      "起课设置"
+     ]
+    ]
+   },
+   {
+    "q": "奇门遁甲怎么定局",
+    "class": "question",
+    "want": [
+     [
+      "dunjia",
+      "定局设置"
+     ]
+    ]
+   },
+   {
+    "q": "紫微斗数的四化是什么",
+    "class": "question",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ]
+   },
+   {
+    "q": "八字怎么看格局",
+    "class": "question",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ],
+     [
+      "bazi_pithy",
+      "@格局"
+     ]
+    ]
+   },
+   {
+    "q": "什么是主限法",
+    "class": "question",
+    "want": [
+     [
+      "direction",
+      "主限法"
+     ]
+    ]
+   },
+   {
+    "q": "太乙怎么看胜负",
+    "class": "question",
+    "want": [
+     [
+      "taiyi",
+      "胜负分野"
+     ]
+    ]
+   },
+   {
+    "q": "六爻怎么断应期",
+    "class": "question",
+    "want": [
+     [
+      "guazhan",
+      "断诀与应期"
+     ]
+    ]
+   },
+   {
+    "q": "比较盘和组合盘有什么区别",
+    "class": "question",
+    "want": [
+     [
+      "relative",
+      "比较盘"
+     ],
+     [
+      "relative",
+      "组合盘"
+     ]
+    ]
+   },
+   {
+    "q": "怎么看子女运",
+    "class": "question",
+    "want": [
+     [
+      "bazi_pithy",
+      "@子息"
+     ]
+    ]
+   },
+   {
+    "q": "塔罗怎么读牌",
+    "class": "question",
+    "want": [
+     [
+      "tarot",
+      "读法体系"
+     ],
+     [
+      "tarot",
+      "牌面与判读"
+     ]
+    ]
+   },
+   {
+    "q": "世俗盘是什么",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Mundane"
+     ]
+    ]
+   },
+   {
+    "q": "什么是地占",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Geomancy"
+     ]
+    ]
+   },
+   {
+    "q": "五兆怎么起",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Wuzhao"
+     ]
+    ]
+   },
+   {
+    "q": "巴比伦占星是什么",
+    "class": "question",
+    "want": [
+     [
+      "auxchart",
+      "Babylon"
+     ]
+    ]
+   },
+   {
+    "q": "太玄是什么",
+    "class": "question",
+    "want": [
+     [
+      "cnyibu",
+      "Taixuan"
+     ]
+    ]
+   },
+   {
+    "q": "一掌经怎么推运",
+    "class": "question",
+    "want": [
+     [
+      "yizhangjing",
+      "Tuiyun"
+     ]
+    ]
+   },
+   {
+    "q": "伤官配印",
+    "class": "compound",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "财多身弱",
+    "class": "compound",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "官杀混杂",
+    "class": "compound",
+    "want": [
+     [
+      "bazi_pithy",
+      null
+     ],
+     [
+      "bazi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "奇门格局",
+    "class": "compound",
+    "want": [
+     [
+      "dunjia",
+      "格局断法"
+     ]
+    ]
+   },
+   {
+    "q": "紫微流派",
+    "class": "compound",
+    "want": [
+     [
+      "ziwei",
+      "流派分歧"
+     ],
+     [
+      "ziwei",
+      "流派叠层"
+     ]
+    ]
+   },
+   {
+    "q": "六壬神煞",
+    "class": "compound",
+    "want": [
+     [
+      "liureng_manual",
+      "神煞断法"
+     ]
+    ]
+   },
+   {
+    "q": "八字排盘设置",
+    "class": "compound",
+    "want": [
+     [
+      "bazi",
+      "排盘设置"
+     ]
+    ]
+   },
+   {
+    "q": "印度占星大运",
+    "class": "compound",
+    "want": [
+     [
+      "india",
+      "大运体系"
+     ]
+    ]
+   },
+   {
+    "q": "紫微鬥數",
+    "class": "traditional",
+    "want": [
+     [
+      "ziwei",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "奇門遁甲",
+    "class": "traditional",
+    "want": [
+     [
+      "dunjia",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "大運",
+    "class": "traditional",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ],
+     [
+      "india",
+      "大运体系"
+     ]
+    ]
+   },
+   {
+    "q": "節氣",
+    "class": "traditional",
+    "want": [
+     [
+      "jieqi",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "擇日",
+    "class": "traditional",
+    "want": [
+     [
+      "zeri",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "塔羅",
+    "class": "traditional",
+    "want": [
+     [
+      "tarot",
+      null
+     ]
+    ]
+   },
+   {
+    "q": "Jupiter",
+    "class": "latin",
+    "want": [
+     [
+      "astro",
+      "Jupiter"
+     ]
+    ]
+   },
+   {
+    "q": "leo",
+    "class": "latin",
+    "want": [
+     [
+      "astro",
+      "Leo"
+     ]
+    ]
+   },
+   {
+    "q": "capricorn",
+    "class": "latin",
+    "want": [
+     [
+      "astro",
+      "Capricorn"
+     ]
+    ]
+   },
+   {
+    "q": "acg",
+    "class": "latin",
+    "want": [
+     [
+      "auxchart",
+      "Acg"
+     ],
+     [
+      "astro_manual",
+      "占星地图"
+     ]
+    ]
+   },
+   {
+    "q": "mundane",
+    "class": "latin",
+    "want": [
+     [
+      "auxchart",
+      "Mundane"
+     ]
+    ]
+   },
+   {
+    "q": "house 7",
+    "class": "latin",
+    "want": [
+     [
+      "astro",
+      "House7"
+     ]
+    ]
+   },
+   {
+    "q": "牢狱",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@牢狱"
+     ]
+    ]
+   },
+   {
+    "q": "兵卒",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@兵卒"
+     ]
+    ]
+   },
+   {
+    "q": "清浊",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@清浊"
+     ],
+     [
+      "bazi_pithy",
+      "@清浊层次"
+     ]
+    ]
+   },
+   {
+    "q": "从格",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@从格"
+     ]
+    ]
+   },
+   {
+    "q": "调候",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@寒暖调侯"
+     ]
+    ]
+   },
+   {
+    "q": "父母",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@父母(出生层次)"
+     ]
+    ]
+   },
+   {
+    "q": "纳音",
+    "class": "category",
+    "want": [
+     [
+      "bazi_pithy",
+      "@纳音断运"
+     ]
+    ]
+   }
+  ]
+ }
+}

@@ -476,7 +476,7 @@ def list_entries(settings: Any) -> list[UserKnowledgeEntry]:
     return scan(settings).entries
 
 
-def indexed_catalog(settings: Any, *, rebuild: bool = False) -> Catalog:
+def indexed_catalog(settings: Any, *, rebuild: bool = False, embed_all: bool = False) -> Catalog:
     """扫一遍 + 把检索索引对齐到这次扫描（只重建 sha256 变了的条目）。索引写不了（只读盘、库坏了）不报错：
     记进 problems，检索退回逐条子串——少了排序，不少结果。"""
     import sqlite3
@@ -487,7 +487,15 @@ def indexed_catalog(settings: Any, *, rebuild: bool = False) -> Catalog:
     if not catalog.exists:
         return catalog
     try:
-        report = kindex.sync(settings, catalog.entries, rebuild=rebuild)
+        try:
+            report = kindex.sync(settings, catalog.entries, rebuild=rebuild, embed_all=embed_all)
+        except sqlite3.DatabaseError as exc:
+            if not kindex.is_corrupt(exc):
+                raise
+            moved = kindex.quarantine(settings)  # 索引是派生数据：坏了就挪开，照笔记重建一次
+            report = kindex.sync(settings, catalog.entries, embed_all=embed_all)
+            catalog.problems.append(Problem(kindex.index_path(settings).name, "index",
+                                            f"检索索引损坏（{exc}），已挪到 {moved.name if moved else '别处'} 并按笔记重建；笔记没有受影响"))
     except (sqlite3.Error, OSError) as exc:
         catalog.problems.append(Problem(kindex.index_path(settings).name, "index",
                                         f"检索索引没能更新（{type(exc).__name__}: {exc}），检索暂时退回逐条匹配；"
@@ -715,8 +723,8 @@ def build_context(
         if _is_search(token):
             query = kindex.parse_query(token[1:])
             search_terms.extend(query.terms)
-            hits, _ = kindex.search(settings, {e.id: e for e in catalog.entries}, query, limit=SEARCH_PASSAGES,
-                                    use_index=catalog.index_ok, raw_query=token[1:])
+            hits = _guarded_search(settings, catalog, {e.id: e for e in catalog.entries}, query, limit=SEARCH_PASSAGES,
+                                   raw_query=token[1:]).hits
             if not hits:
                 missing.append(token)
             for hit in hits:
@@ -1134,17 +1142,64 @@ def read_entry(settings: Any, key: str, *, from_line: Any = None, max_lines: Any
     return result
 
 
-def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -> dict[str, Any]:
-    """块级检索（BM25，中文双字切分）：每条命中带标题路径、原文件行号、摘要、引用串，同一条目最多两段。"""
+def _guarded_search(settings: Any, catalog: Catalog, by_id: dict[str, Any], parsed: Any, *, limit: int, offset: int = 0,
+                    raw_query: str = "") -> Any:
+    """索引读不了时的恢复：库坏了隔离重建一次，还不行（或只是被占着）就退回逐条匹配。
+
+    此前只有同步一步有保护，读路径的 DatabaseError 直接穿到检索外面，连内置知识一起没了（2026-11-06：随机损坏 8 页、180 次检索里 83 次抛异常）。
+    """
+    import sqlite3
+
     from horosa_skill.knowledge import index as kindex
+
+    options = {"limit": limit, "offset": offset, "raw_query": raw_query}
+    try:
+        return kindex.search(settings, by_id, parsed, use_index=catalog.index_ok, **options)
+    except sqlite3.Error as exc:
+        failure = exc
+    if kindex.is_corrupt(failure):
+        kindex.quarantine(settings)
+        rebuilt = indexed_catalog(settings)
+        if rebuilt.index_ok:
+            try:
+                return kindex.search(settings, by_id, parsed, use_index=True, **options)
+            except sqlite3.Error as exc:
+                failure = exc
+    result = kindex.search(settings, by_id, parsed, use_index=False, **options)
+    result.problems.append(f"检索索引这次读不了（{type(failure).__name__}: {failure}），结果来自逐条匹配；"
+                           "`horosa-skill knowledge index --rebuild` 可重建。")
+    return result
+
+
+def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -> dict[str, Any]:
+    """块级检索（BM25，中文双字切分）：每条命中带标题路径、原文件行号、摘要、引用串，同一条目最多两块。
+
+    整句零命中时改写一次（去问句外壳、切开连写的词），结果带 `expanded_query`。"""
+    import sqlite3
+
+    from horosa_skill.knowledge import index as kindex
+    from horosa_skill.knowledge import retrieval
 
     catalog = indexed_catalog(settings)
     parsed = kindex.parse_query(query)
     by_id = {e.id: e for e in catalog.entries}
-    hits, total = kindex.search(settings, by_id, parsed, limit=limit, offset=offset, use_index=catalog.index_ok,
-                                raw_query=query)
+    found = _guarded_search(settings, catalog, by_id, parsed, limit=limit, offset=offset, raw_query=query)
+    expanded = None
+    if not found.total and by_id:
+        def df(term: str) -> int:
+            try:
+                return kindex.term_df(settings, by_id, term, use_index=catalog.index_ok)
+            except sqlite3.Error:
+                return kindex.term_df(settings, by_id, term, use_index=False)
+
+        n_docs = int(catalog.index_report.get("chunks") or len(by_id))
+        expanded = retrieval.expand_query(query, retrieval.cached(df), n_docs)
+        if expanded:
+            parsed = kindex.parse_query(expanded)
+            found = _guarded_search(settings, catalog, by_id, parsed, limit=limit, offset=offset, raw_query=query)
+    folded = retrieval.normalize(query).strip()
     matches = []
-    for hit in hits:
+    for hit in found.hits:
         entry = by_id[hit.entry_id]
         lines = _lines_label(entry, hit.chunk.line_start, hit.chunk.line_end)
         first_line = lines.split("-")[0]
@@ -1155,10 +1210,13 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
             "snippet": kindex.snippet(entry.text[hit.chunk.start:hit.chunk.end], parsed.terms),
             "citation": _citation(entry) + (f" · {heading}" if heading else "") + f" · 第{lines}行",
             "read": {"domain": USER_DOMAIN, "key": entry.id, "from_line": int(first_line)},
+            **({"exact": True} if retrieval.normalize(entry.title) == folded else {}),
         })
-    return {"matches": matches, "total_matched": total, "offset": offset, "limit": limit,
-            "next_offset": offset + len(matches) if offset + len(matches) < total else None,
-            "engine": _engine(settings, catalog)}
+    return {"matches": matches, "total_matched": found.total, "offset": offset, "limit": limit,
+            "next_offset": offset + len(matches) if offset + len(matches) < found.total else None,
+            "engine": _engine(settings, catalog) if found.used_index else "substring",
+            **({"expanded_query": expanded} if expanded else {}),
+            **({"warnings": found.problems} if found.problems else {})}
 
 
 def _engine(settings: Any, catalog: Catalog) -> str:
