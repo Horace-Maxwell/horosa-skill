@@ -1079,8 +1079,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   生命周期操作只在 stub 上绿过不算数，矩阵 lane 的 stop 步骤要求端口真释放。
 - **启动是异步、幂等、跨进程互斥的。** `start_local_services(wait_seconds=)` 最多阻塞预算秒，
   超出即 `{"starting": True, retry_after_seconds}` → 工具层的 `runtime.starting`。跨进程锁
-  （`runtime/pidlock.py`）的持有者写成**启动器自己的 pid**，锁的寿命恰等于一次启动；加锁后的每一条
+  （`runtime/pidlock.py`）超预算时交给**启动器自己的 pid**（`LAUNCHER_OWNER`）；加锁后的每一条
   出口都在 `finally` 里释放（不释放会让一个长命的 serve 把后续所有启动永久挡死）。
+  记着别的进程 pid 的锁按时长封顶（`_AGE_CAPPED_OWNERS`，960 s，大于一次启动的上限）：pid 会被回收，「活着」不等于还是它；
+  持锁进程自己的 pid 不封顶，活着就不回收。服务全起来、等到别人起好、停服务成功时 `release_launcher` 收回，只动启动器的锁（v0.47.2-dev）。
 - **绝不采用身份不符的服务栈，也绝不终止不属于自己的进程。** 「HTTP 200」不是身份证明：
   归属判定走 `runtime/identity.py` 的三级证据（`/horosaIdentity` 的 app 标记 + 启动 nonce → 监听
   进程命令行含 runtime 根 → 我方注册表 pid 存活）。`ours` 才用它，**强证据**才允许停/重启它
@@ -1113,6 +1115,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   （**永远不把「查不到」当「在别处」**）。原因：旧清单钉着默认端口 + 桌面端占着它们是最常见形状，原来的
   拒绝把用户卡死，且提示的 `HOROSA_PORTS=auto` 对它无效（闸探的是旧清单的端口）——见台账 v0.38.1 / 2026-09-15。
   `tests/test_runtime_manager.py` 锁顺序 `["stop", "swap", "start"]`，并锁「别处 → 放行不 stop」与「部分证明不了 → 仍拒」。
+  换目录全程（stop → 换入）持 `.runtime-start.lock`（`_swap_in_payload`），换完放锁再重启：别的会话只见 `runtime.starting`，不会从旧树起启动器；锁被占等不到报 `runtime.install_start_in_progress`，current/ 不动（v0.47.2-dev）。
+- **崩溃后不用人动手（v0.47.2-dev）。** `.hi-*` 写 `.owner` 记 pid，install 一进来就清（属主死了 / 活着但超 6 小时 / 无标记超 1 小时），也在卸载清单里。current/ 缺失且 `previous/` 完整（`_payload_is_complete`）时恢复，只在 `start_local_services` 与 `_swap_in_payload` 做且要持启动锁：放进 `_require_runtime` 会让卸载把要删的东西挪回来，不持锁会撞上 install 的两次改名之间。下载的 416 看 `Content-Range`（总长等于分块 = 已完整），否则丢分块从头下；镜像回退看内容不只看 HTTP：清单要是含 `platforms` 的对象，归档逐候选校验 sha，坏字节不留给下一个候选续传。原始 URL 永远是最后一个候选。`doctor` 只读，不自愈。
 - **`runtime stop` 不在别的 MCP 客户端脚下抽走服务（v0.38.1 R14）。** 登记表里仍存活的客户端 → `runtime.stop_refused_clients_attached`；
   `--force` 才停；`restart` / 升级换目录 / `uninstall` 走 `ignore_clients=True`（服务马上回来或本来就要删）。死掉的登记不拦。
 - **stdio server 在客户端关掉 stdin 后 15 s 内退出（v0.38.1 发布后）。** 退出路径上不留非 daemon 线程、不阻塞（runtime 预热线程是 daemon）；
@@ -1293,6 +1297,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   NTFS 备用数据流、非法字符一律先拦；`HOROSA_REPORT_OUTPUT_ROOTS` 配过的共享按字符串放行。新增任何接收路径的工具走同一道闸（`test_guard_refuses_before_touching_the_filesystem`）。
 - **`render_report` 的结果要原样传到调用方（v0.47.2-dev）。** `format` 记真实格式，`degraded_from` / `degrade_reason` / `requested_output_path` 进结果与摘要（`_render_outcome_fields` / `_render_outcome_notes`）——此前退化成 TXT 仍报「已生成 PDF」。
   目标被占用（开在 Acrobat / Word 里）不算渲染失败：`_place_rendered` 另存 `名字 (1).pdf`，旧文件不动。
+- **字体集枚举按文件缓存（v0.47.2-dev）。** `_face_names` 的「字面名 → 序号」表键是路径 + mtime + 大小，系统更新字体后自动重新枚举；只缓存序号，`TTFont` 对象每次新建（带每份文档的子集状态）。
 - **PDF 按字补字形（v0.43.1-dev）。** 主字体（Songti / 雅黑）缺的字逐字走补字链 `_PDF_GLYPH_FALLBACK_CANDIDATES`：扩展 B 古籍字
   （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
   阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
@@ -1336,7 +1341,17 @@ A global stability pass hardened these; keep them true when you touch the releva
     连续「键：值」行成对照表（冒号前是时刻的不算）；长小数人读版四舍五入到 4 位；全角标点不落行首（`_extend_kinsoku` + `wordWrap="CJK"`）；
     段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
+- **JSON 报告的闸量调用方自己写的答案（v0.47.2-dev）。** `_ai_coverage_status` / `_section_coverage_matrix` / `_report_quality` / `_delivery_checklist` / `report_index.has_ai_answer` 读 `_caller_answer_view`，不读 `merged_ai_report`：后者含确定性回填，量它永远是绿的。回填本身保留（`ai_report.analysis_sections`），人读版不用。`ready_to_deliver` 要结论、摘要、分析段、建议、证据；逐章覆盖如实报但不拦交付（定向解读可交付，见 `_complete_analysis_sections`）；`style:"chart"` 不要 AI。新增闸时写一条它该是 False 的测试。
 - **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
+
+### 9.3.2 记忆存档（memory store / artifacts）
+
+- **`runs/` 的产物是一次起盘唯一的完整副本，写它绝不原地（v0.47.2-dev）。** `memory/store.py` 里写文件只有 `_write_json_atomic`（同目录临时文件 + fsync + `fsretry.replace`，失败清临时文件、不动原文件）；`write_text` / `write_bytes` 回潮即红（`test_the_store_has_no_in_place_writes`）。权限按 umask，改写沿用原文件的。
+  改写产物后同步落库的 `file_size` / `sha256`（manifest 与检索取落库值，不现算）；`report_*` 是交付物，写回答案不刷新。
+- **记忆库出问题不拖垮计算（v0.47.2-dev）。** `MemoryStore()` 不因存储问题抛错：`OSError` / `sqlite3.Error` 记进 `init_error`，`connect()` 每次重试以便自愈，`integrity_check` 报 `ok: false`。写库一律用 `_writer()`：malformed 且 `PRAGMA integrity_check(1)` 确认后才隔离重建（别的进程刚隔离时报错文字一样），本次写照常抛错；读路径不隔离；锁占用绝不隔离。隔离后旧记录不再出现在检索里，日志不许承诺没有的恢复手段。
+- **记忆门面也受 MCP 线上预算约束（v0.47.2-dev）。** `MemoryQueryInput.include_payload` 缺省 false：`horosa_memory_query` 只回摘要；`horosa_memory_show` 回全量。超 `MCP_RESULT_WIRE_BUDGET` 时 `_fit_result_budget` 裁 `results[].artifacts[].payload` 与 `result.artifacts[].payload`：先裁 `payload.data` 的原始子树（`_PROTECTED_DATA_KEYS` 不动），不够再整份换占位。CLI 的 `memory query` 不走 MCP，仍缺省带载荷。新增任何不带顶层 `data` 的大结果都要接进 `_fit_result_budget`，否则预算管不到。
+- **记忆检索分两层（v0.47.2-dev）。** `text` 对问题与答案走索引、全库可搜（`_indexed_text_rows`：≥3 码点 FTS，短查询与缺 FTS5 用 LIKE）；工具调用与产物文件只深扫最新的候选窗口（`max(limit * 20, 200)`）。窗口外没搜过的条数经 `scan_report` → `not_scanned` 告诉调用方。加新的检索来源时，索引命中必须能带进窗口外的行，不能只当窗口内的放行条件。
+- **存档增长（v0.47.2-dev）。** 产物是紧凑 JSON（`_write_json_atomic`）。写回答案算点用，`prune_unused` 另判 `ai_answer_text` 以覆盖旧行：「用过」与 `is_memory_worthy` 的「值得留」要一致。`doctor.memory_db.usage` 报 run 数与各部分字节数，库打不开时 `runs` 是 `null`。没有自动保留也没有 `VACUUM`；要加 `VACUUM` 必须随后 `INSERT INTO runs_fts(runs_fts) VALUES('rebuild')`：`runs` 是隐式 rowid，`VACUUM` 可能重排，外部内容 FTS 会对不上。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 

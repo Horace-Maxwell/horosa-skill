@@ -62,7 +62,7 @@ def test_normalize_mcp_request_accepts_flattened_memory_query_fields() -> None:
         "artifact_kind": "report_pdf",
         "limit": 5,
         "offset": 0,
-        "include_payload": True,
+        "include_payload": False,
     }
 
 

@@ -24,6 +24,12 @@ from typing import Any, Iterator
 from horosa_skill import fsretry
 from horosa_skill.runtime.procs import pid_alive
 
+# 锁交给启动器之后，里面记的 pid 是别的进程：我们不知道它还是不是启动器（Windows 回收 PID 很快）。install 换目录只持锁几分钟，
+# 崩溃后留下的 pid 同样会被回收。这两类按时长封顶，上限内才相信「活着」；别的锁（长命的持锁进程本身）不受影响。
+LAUNCHER_OWNER = "runtime-launcher"
+INSTALL_OWNER = "runtime-install"
+_AGE_CAPPED_OWNERS = frozenset({LAUNCHER_OWNER, INSTALL_OWNER})
+
 
 @contextmanager
 def pid_lock(
@@ -72,6 +78,13 @@ def release(lock_path: Path) -> None:
         pass
 
 
+def release_launcher(lock_path: Path) -> None:
+    """启动已有结果（服务都起来了 / 刚被停掉）时收回交给启动器的锁。别的持有者（正拿着锁的进程）一律不动。"""
+    info = _read_lock(lock_path)
+    if info is not None and info.get("owner") == LAUNCHER_OWNER:
+        release(lock_path)
+
+
 def _try_create(lock_path: Path, *, owner: str) -> bool:
     try:
         fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -110,18 +123,19 @@ def describe_lock(lock_path: Path) -> dict[str, Any] | None:
 def reclaim_if_stale(lock_path: Path, *, stale_after_seconds: float) -> bool:
     """持有者已死或锁太老就删掉它。True = 已删/本就不存在，调用方可以重试创建。
 
-    **活着的持有者永远不回收**，不论多老 —— 一次合法的长启动（首次 CDS 训练可达 15 分钟）
-    必须被尊重。
+    **活着的持有者不回收**，不论多老 —— 一次合法的长启动（首次 CDS 训练可达 15 分钟）必须被尊重。
+    唯一的例外是交给启动器的锁（`_AGE_CAPPED_OWNERS`）：`stale_after_seconds` 已大于一次启动的上限，
+    超过它还「活着」只可能是 pid 被回收给了无关进程，否则那个进程在就一直挡住所有启动。
     """
     info = _read_lock(lock_path)
     if info is None:
         return not lock_path.exists()
     liveness = pid_alive(info.get("pid"))
-    if liveness == "alive":
+    if liveness == "alive" and info.get("owner") not in _AGE_CAPPED_OWNERS:
         return False
     if liveness == "dead":
         stale = True
-    else:  # unknown：无法断言存活 → 退回按时长
+    else:  # unknown，或启动器的 pid：无法断言存活 → 退回按时长
         age = _age_seconds(info.get("created_at"), lock_path)
         stale = age is not None and age >= stale_after_seconds
     if not stale:

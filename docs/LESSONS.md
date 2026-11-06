@@ -16,6 +16,15 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 每出一份 PDF 都把系统字体集重新解析一遍：`_face_index` 枚举 .ttc 占渲染约七成，长命的 MCP server 也不例外 | 「字面名 → 序号」表按文件缓存，键带 mtime 与大小；同一份 PDF 从 0.96 s 到 0.29 s，嵌入字体不变；`tests/test_pdf_font_cache.py` |
+| v0.47.2-dev (2026-11-06) | JSON 报告的闸永远是绿的：AI 只写「好。」时覆盖率 1.0、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`、`ai_analysis_complete: True`，量的都是机器回填 | 闸改量调用方自己写的答案；逐章覆盖如实报但不拦交付（定向解读是有意设计）；chart 不要 AI；`tests/test_report_gates.py` |
+| v0.47.2-dev (2026-11-06) | 存档只增不减且看不见：产物带 `indent=2`，答过没回读的 run 会被 `memory prune` 选中，`doctor` 只报磁盘余量不报自己用了多少 | 产物不带缩进；写回答案算点用，prune 也跳过升级前写回的；`doctor.memory_db.usage`；`tests/test_memory_durability.py` |
+| v0.47.2-dev (2026-11-06) | install 不防并发也不防崩溃：别的会话在 stop 与换目录之间从旧树起启动器（install 仍报成功）；被杀的 install 留下 `.hi-*` 约 2 GB，卸载也不清；崩在两次改名之间只剩 `previous/`，离线装不回来；完整的 `.part` 每次重试都 416；镜像回 200 + 错误页时回退不生效 | 换目录全程持启动锁；`.hi-*` 记属主 pid，install 一进来就清、进卸载清单；启动路径与 install 恢复完整的 `previous/`；416 看 Content-Range；逐候选校验内容；`tests/test_runtime_recovery.py` |
+| v0.47.2-dev (2026-11-06) | 启动锁撞上回收的 PID：hand-off 给启动器的锁没人释放，下次启动时那个 pid 若已被无关进程占用，「活持有者不回收」让每次调用都回 `runtime.starting`，启动脚本一次不跑 | 启动器锁按时长封顶（960 s，大于一次启动的上限），上限内才信「活着」；服务都起来 / 停掉时收回；`tests/test_runtime_recovery.py` |
+| v0.47.2-dev (2026-11-06) | `memory_query` 的 `text` 只看最近 400 条：FTS 查得到，`query_runs` 却回 0 条，且不告诉调用方；两字词根本不走 FTS | 问题与答案走索引全库可搜（FTS，短查询 / 缺 FTS5 用 LIKE），并进候选；盘面正文深扫仍有窗口，结果带 `not_scanned`；`tests/test_memory_search.py` |
+| v0.47.2-dev (2026-11-06) | 记忆库出问题拖垮整个服务：只读库 / 路径不可用让 `MemoryStore()` 抛错、服务建不起来；只坏中间页的库构造时看不出来，每次存档都 malformed，重启也不隔离；隔离日志承诺的「memory 工具重建索引」不存在 | 构造不抛（`init_error`，下次操作自愈）；写路径 `_writer` 遇 malformed 且 `integrity_check` 确认后隔离重建；删掉那句承诺；`tests/test_memory_durability.py` |
+| v0.47.2-dev (2026-11-06) | `horosa_memory_query` 说明写「run summaries」，缺省却带全量产物：20 份 63 KB 的星盘线上 1.8 MB，超 1 MiB SSE 上限；2 MB 的八字 42.5 MB。v0.46.1 的预算只认顶层 `data`，记忆结果没有，`horosa_memory_show` 2.1 MB 同样绕过 | `include_payload` 缺省 false；`_fit_result_budget` 按形状裁，记忆产物先裁原始子树、再整份占位；`tests/test_memory_mcp_budget.py` |
+| v0.47.2-dev (2026-11-06) | 答案写回把唯一一份盘面写成 0 字节：`_refresh_run_artifacts` 原地 `write_text`，真卷写满时重试 `ok: true` 也救不回来，`report_render` 只剩 `report.source_not_found`；并发读者 26/1851 读到半个文件；落库 sha 写回后全错；报告 JSON 也被改写 | 存档一律走 `_write_json_atomic`（同目录临时文件 + fsync + 替换），刷新后更新 size / sha，`report_*` 不刷新；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
 | v0.47.2-dev (2026-11-06) | 知识检索的真问题在词法：系统自己印的标签搜不到（hit@1 0.474），「X 是什么」全库 0.016，用户笔记三字以上的词一律 0 分（双字序列拼成「紫微微斗斗数」去数），坏索引带累内置结果 | 一份 `retrieval.py`；语料 = read 的返回；别名、档位排序、零命中改写；故障隔离；读路径不拿写锁；dev / heldout / 自检索三种评测加下限（heldout 0.821 / 0.923）|
 | v0.47.2-dev (2026-11-06) | `[vectors]` 从 v0.45.1 起到不了 MCP server：依赖要装在客户端起 server 的环境里，配置里的启动器却不带 extra，server 永远是纯 BM25 且不报错；`how_to_enable` 还教了 PyPI 上不存在的 `pip install` | `setup --vectors`：写配置之前用客户端那条命令真跑一遍，stdio 探针再要 server 自己报 ready；三态沿用；`--from` 无空格 PEP 508；audit 看穿新写法 |
@@ -174,6 +183,90 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 每出一份 PDF 都把系统字体集重新解析一遍
+
+- **症状**：架构审计用 cProfile：一次 PDF 渲染里 `_register_pdf_fonts` 占七成多，其中 `_face_index` 最多；PDF 中位约 0.84 s，DOCX 0.05 s。
+- **根因**：TTC 按字面名找子字体（子字体顺序随系统版本变，不能写死序号），`_face_index` 每次都 `TTFont(...)` 逐个枚举，一份 PDF 要查好几次，没有任何缓存。
+- **修复**：`_face_names` 按文件缓存「字面名 → 序号」表，键是路径 + mtime + 大小，系统更新字体后自动重新枚举；一个子字体都读不出来时不记。只缓存序号，`TTFont` 对象仍每次新建：reportlab 的字体对象带每份文档的子集状态，复用要另外论证，不在这条里。
+- **核对**：同一张盘重复渲染，中位 0.959 s → 0.286 s（同一台机器、同样负载下测的，只看比例）；`pdffonts` 列出的嵌入字体前后相同（STSongti-SC-Regular / Bold）。
+- **守卫**：`tests/test_pdf_font_cache.py`。负向对照：缓存键去掉 mtime 与大小时「字体文件变了要重新枚举」红；失败也缓存时 `test_a_failed_enumeration_is_not_remembered` 红。
+- **法则**：长命进程里，「只是慢一点」的探测乘以调用次数就是主要开销；缓存系统文件时把文件的身份放进键里。
+
+### v0.47.2-dev / 2026-11-06 — JSON 报告的闸永远是绿的
+
+- **症状**：架构审计：`answer_text: "好。"` 时 JSON 里有 16 段分析、`coverage_ratio: 1.0`、`ai_analysis_complete: True`、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`，`completion_hint` 说报告含「AI analysis」。
+- **根因**：`_ai_coverage_status`、`_section_coverage_matrix`、`_report_quality`、`_delivery_checklist` 都拿 `merged_ai_report` 量，而它含 `_default_ai_report` 的确定性回填。回填本身是有意的（`builder.py`：Machine JSON keeps deterministic coverage backfills），问题在于闸把回填算成了 AI 写的。测试里 `ready_to_deliver` 全是 `is True`，从没有人写过它该是 False 的情形。
+- **修复**：`_caller_answer` 取调用方自己写的答案（run 里写回的 + 这次传的），闸全部改量它（`_caller_answer_view`），`report_index.has_ai_answer` 同样。`ai_report` 里的回填不动，PDF / DOCX 不动。
+- **设计判断（与原任务的差异）**：严格按「每章都要 AI 答」判 `ready_to_deliver` 时，`test_targeted_consultation_report_roundtrip_persists_and_retrieves_ai_analysis` 红：那份报告有直接结论、证据、建议和三段定向分析，只没有逐章解释。`_complete_analysis_sections` 写明「Preserve the AI's targeted answer while backfilling source-section coverage」，定向解读可交付是有意设计，所以**没有改这条断言**，改的是闸的语义：`ready_to_deliver` 要的是调用方写了结论、摘要、分析段、建议、证据；逐章覆盖照实写进 `section_coverage_matrix` / `coverage_status` / `checks.source_sections_covered`，但不拦交付（`not_blocking`）。`ai_analysis_complete` 仍要求全覆盖。`style:"chart"` 本来就不要 AI，AI 类检查不算缺。
+- **后果**：只写一段 `answer_text`（没有结构化字段）的 JSON 报告现在是 `ready_to_deliver: False`，`missing` 列出缺什么。这与模板要求的字段一致，但是行为变化。
+- **核对**：新旧 `ReportBuilder` 跑全部样例工具共 228 份文档：人读章节、`ai_report`、`figures` 零差异；变的只有这些闸字段与由它们派生的 `plain_text` / `search_text` / `content_outline.body_chars`。`ready_to_deliver` 只在 4 份上翻转（解析 / 注册表 / 知识类工具的 chart 样式，渲染时本来就被 `report.no_chart_content` 拒绝）。
+- **守卫**：`tests/test_report_gates.py`。五组负向对照：闸改回量 merged、逐章覆盖拦交付、chart 要 AI、`has_ai_answer` 读 merged、提示语恒说逐章覆盖，各自变红。
+- **法则**：闸要量被检查的东西本身；一个永远为真的字段比没有这个字段更糟。写 `is True` 的测试时，同时写一条它该是 False 的。
+
+### v0.47.2-dev / 2026-11-06 — 存档增长的三个便宜修法（不做自动保留）
+
+- **症状**：架构审计估算：每天 20 次星盘一年约 540 MB，八字形状（单份约 2 MB，读代码与 LESSONS v0.46.1 推算）一年约 14.6 GB。没有自动保留，`memory prune` 要手动跑，`doctor` 看不到存档占了多少。`attach_ai_response` 不记点用：写回了解读但没回读的 run 会被 prune 选中，而 `is_memory_worthy` 明明说有答案就值得留。
+- **修复**：`_write_json_atomic` 改紧凑 JSON。实测一份星盘产物 62,951 → 50,365 字节（省 20%），录制的引擎 JSON 结构更多，`indent=2` 在上面是 1.66–2.48 倍。写回答案算一次点用；prune 另判 `ai_answer_text`，覆盖升级之前写回、没有 usage 记录的行。`MemoryStore.storage_usage()` 进 `doctor.memory_db.usage`，库打不开时 `runs` 是 `null`，不写 0。
+- **没做的**：按范围不做自动保留、`VACUUM`、gzip 老产物。将来加 `VACUUM` 要注意：`runs` 是隐式 rowid，`VACUUM` 可能重排，外部内容 FTS 必须随后 `rebuild`。
+- **旧断言为何没抓到**：prune 的测试只造了「点用过 / 没点用过」两种 run，没有「答过但没回读」这一类。
+- **守卫**：`tests/test_memory_durability.py`。负向对照：去掉点用记账、去掉答案判断、库打不开时报 0，各红一条。
+- **法则**：先省不需要的（排版），再谈要不要删；删之前，「用过」的定义要和「值得留」的定义是同一个。
+
+### v0.47.2-dev / 2026-11-06 — install 不防并发也不防崩溃：五个要人动手才能恢复的现场
+
+- **症状（架构审计，假载荷复现）**：① 强制交错：stop 与换目录之间另一个会话的调用从旧树起了启动器，旧树随后被删，启动器脚下的文件没了，`install` 仍报 `ok: true`、`warnings: []`。② 被杀的 install 留下 `.hi-*`（真载荷约 730 MB 归档 + 1.2 GB 树），下次安装不清，`uninstall` 清单里也没有。③ 崩在 `current → previous` 与换入之间：工具一律 `runtime.not_installed`，离线重装失败，好副本就在旁边。④ `.part` 已完整时每次重试都 HTTP 416，错误还写着「重试会续传」，只能手删 `downloads/`。⑤ 镜像回 200 + HTML：清单 `JSONDecodeError` 冒出去，原始 URL 没试；归档被当成下载成功，install 校验失败，回退不生效。
+- **根因**：`install` 从不碰 `.runtime-start.lock`，R3 只保证了顺序，没保证中间没人插进来。清理全靠 `TemporaryDirectory.__exit__`，SIGTERM / 断电走不到。回滚只处理异常，不处理进程没了。`_download_with_resume` 把 416 当 4xx 换 URL。回退只看 HTTP 状态，不看内容。
+- **修复**：`_swap_in_payload` 从 stop 到换入全程持启动锁（`INSTALL_OWNER`，按时长封顶），换完放锁再重启；别的会话只见 `runtime.starting`。锁被占时等 `runtime_start_timeout_seconds`，等不到报新码 `runtime.install_start_in_progress`，current/ 不动（启动器正从那里起服务）。`.hi-*` 写 `.owner` 记 pid，install 一进来就清（磁盘预检要 4 倍归档大小，留着它重试会被拦）：属主死了、属主活着但超过 6 小时（pid 回收）、无标记且超过 1 小时才清。`_restore_previous_after_crash` 在 `previous/` 完整（清单有效 + 必需路径都在）时挪回 current/。416：`Content-Range` 总长等于分块就直接用，否则丢掉从头下。`expected_sha256` 传进下载循环逐候选校验，坏字节不留给下一个候选续传；全部失败仍是 `runtime.install_sha256_mismatch`。清单要是含 `platforms` 的对象才算数。
+- **设计取舍**：恢复只放在 `start_local_services` 与 `_swap_in_payload`，**不放** `_require_runtime`：卸载的停服务路径也调它，会把要删的东西挪回 current/（`test_uninstall_does_not_bring_previous_back`）。恢复要拿启动锁：install 两次改名之间同样只有 previous/，这时挪回去，新载荷会被 `shutil.move` 搬进 current/ 里面（`test_a_previous_is_left_alone_while_a_swap_holds_the_lock`）。`doctor` 保持只读，不自愈。
+- **边界**：坏了的 `.hi-*` 里完整的归档没有回收成 `.part`，被杀在解压阶段仍要重新下载。两次改名之间的窗口是微秒级，现场③少见；①②④⑤才是平常会碰到的。没有在真 runtime 与 Windows 上跑过。
+- **守卫**：`tests/test_runtime_recovery.py`。七组负向对照全红：扫目录不看属主、恢复不拿锁、恢复挪进 `_require_runtime`、不查完整性、换目录不放锁、坏字节留给下一个候选、install 不先恢复。R3 的 `["stop","swap","start"]` 顺序测试未改动，照常绿。
+- **法则**：顺序保证不了互斥；崩溃恢复不能靠 `finally`，要靠下一次进来的人能看懂现场。
+
+### v0.47.2-dev / 2026-11-06 — 启动锁撞上回收的 PID：永远 `starting`
+
+- **症状**：架构审计用一个无关的活进程冒充锁里的 pid（锁已 30 天）：连续三次 `start_local_services` 都回 `starting: true`，启动脚本一次没跑，那个进程一退出才恢复。agent 只会按 `retry_after_seconds` 一直重试。
+- **根因**：工具调用路径的预算只有 5 秒，冷启动都走 `_hand_lock_to` 把锁交给启动器；启动器退出后没有人释放它（重试走 `probe`，不再进 `start_local_services`），锁文件留在盘上。下次重启后若那个 pid 被回收，`pid_alive` 说「活着」，`reclaim_if_stale` 又规定活持有者永不回收。`start_horosa_local.ps1` 自己的注释就写着 Windows 回收 PID 很快。
+- **修复**：`pidlock._AGE_CAPPED_OWNERS`：只有交给启动器的锁（`LAUNCHER_OWNER`）按 `stale_after_seconds` 封顶，上限内照旧相信存活判定。960 s 大于首次 CDS 训练的 15 分钟，所以「合法的长启动必须被尊重」这条理由仍成立。别的持有者（`runtime-start` / `evaluation` / `runtime-state`）的 pid 就是持锁进程自己，规则不变，`test_second_process_does_not_launch_while_a_start_is_in_flight` 用 300 天前的 `runtime-start` 锁锁着这一点。`release_launcher` 在发现服务全起来、等到别人起好、停服务成功时收回，只动启动器的锁。
+- **边界**：工具调用的重试走 `probe` 不进 `start_local_services`，那条路上锁留到下一次启动，由时长封顶兜底，最坏挡 16 分钟。没有加看门狗线程（manager 的设计说明明确不要）。macOS 启动器 pid 文件的同类问题（`start_horosa_local.sh` 对被回收的 pid exit 1，manager 因为没有可达服务不跑停脚本）不在这条里，是读代码得出的，没有复现。
+- **守卫**：`tests/test_runtime_recovery.py`。负向对照：封顶对所有持有者生效时 `test_other_live_holders_are_never_reclaimed_by_age` 红；`release_launcher` 不看持有者时 `test_services_up_leaves_a_live_start_in_another_process_alone` 红。
+- **法则**：记下来的 pid 只是线索，不是身份；凡是记别的进程 pid 的锁都要有时长上限。
+
+### v0.47.2-dev / 2026-11-06 — 文本检索只看最近 400 条，而且不说
+
+- **症状**：架构审计：3000 条更新的 run 之后，最老那条的问题含「苍穹之眼」，`query_runs(text=…)` 回 0 条，同库的 FTS 表直接查能命中。用户得到的是「没有这条记录」。
+- **根因**：候选来自按时间倒序的 `LIMIT`（`limit=20` 时 400 条），FTS 命中只用来放行窗口内的行，从不把窗口外的行带进来。工具说明的例子 `{"text": "事业"}` 是两字词，trigram 要 ≥3 码点，连 FTS 都不走。
+- **修复**：`_indexed_text_rows` 用同一组过滤查问题与答案（≥3 码点走 FTS 子查询，短查询与缺 FTS5 走 LIKE 并转义 `%` `_`），命中并进候选后按新到旧排序。用子查询而不是把 id 列表拼进 `IN`，避开 SQL 变量上限。盘面正文（工具调用、产物文件）不进索引，仍只深扫窗口；`scan_report` 给出窗口外多少条的产物没搜过，`query_memory` 回 `not_scanned`，大于 0 时 summary 多一句怎么缩小范围。
+- **没动的**：`memory_query` 工具说明的「question / answer / snapshot」在 `surfaces/mcp_server.py`（另一条线的文件），CLI 的 `memory query` 直接打印列表，拿不到 `not_scanned`。读文件的双读（`store.py` 的 `_artifact_record_to_dict` 与 `_path_contains_text`）没改。
+- **守卫**：`tests/test_memory_search.py`。负向对照：去掉合并红五条，去掉 LIKE 转义、索引查询丢过滤各红。`not_scanned` 忽略过滤时第一版测试没红（过滤后不足一个窗口，根本走不到 COUNT），改成过滤后仍超窗口才红。
+- **法则**：加速路径只能让结果更快，不能决定结果有哪些；搜不全时要说搜了多少。
+
+### v0.47.2-dev / 2026-11-06 — 记忆库出问题拖垮整个服务：构造抛错、写时坏页不自愈、日志承诺不存在的工具
+
+- **症状**：架构审计复现：`runs` 表根页损坏（库头完好）时 `MemoryStore()` 照常构造，之后每次 `run_tool` 在 `create_run` 抛 `database disk image is malformed`，重启后 `corruption_recovery` 仍是 `None`，只能手动搬走库；只读库让 `MemoryStore()` 抛 `attempt to write a readonly database`，服务根本建不起来。隔离日志写「可用 memory 工具重建索引」，没有这样的工具。
+- **根因**：分类恢复只在 `initialize()` 里跑，而 `CREATE … IF NOT EXISTS` / `PRAGMA table_info` 只读 schema，碰不到坏的数据页。非损坏类错误（只读、路径不可用）直接冒出构造函数。可记忆库本来就是便利缓存，算盘不靠它。
+- **修复（只做存储一侧）**：① `MemoryStore()` 不再因存储问题抛错：建库的 `sqlite3.Error` / `OSError` 记进 `init_error`，`ensure_dirs` 失败不单独算数（建不出来的可能只是 runtime 根或 trace 目录），`connect()` 每次重试（连目录一起建），权限恢复或目录腾出来后自愈；`integrity_check` 如实报 `ok: false` + `init_error`（`Settings.ensure_dirs` 的 `config.unexpanded_template` 不是 OSError，照常抛）。② 写路径换 `_writer()`：malformed 时先用 `PRAGMA integrity_check(1)` 确认当前这份库真坏，才走 `_quarantine_corrupt_db` + 重建，本次写仍抛错（数据确实没进库），下一次写落在新库上。用 integrity_check 不用 quick_check：后者不比对索引与表内容，那类损坏同样报 malformed。③ 读路径不隔离：为一次查询失败搬走整个库不值得。④ 删掉重建索引的承诺，日志改说旧产物还在 `runs/`、但不再出现在检索里。`memory reindex` 要新增 CLI 命令，不在这轮。
+- **没改的**：`run_tool` / `dispatch` 的存档块由 `improve/core-call-chain` 处理（存档失败回图 + warning）。`TraceRecorder.__init__` 也调 `ensure_dirs`，数据目录建不出来且开着 trace 时服务构造仍会抛。
+- **守卫**：`tests/test_memory_durability.py`。负向对照：去掉写时恢复、`_database_is_sound` 恒判坏、读路径也走 `_writer`，各红对应一条。只读那条在 Windows 与 root 下 skip，`test_construction_survives_an_unusable_path` 全平台跑。
+- **法则**：错误文字只是线索，隔离（搬走用户的库）之前要亲自确认。
+
+### v0.47.2-dev / 2026-11-06 — memory_query 缺省把 20 份全量产物塞进一条消息
+
+- **症状**：架构审计用进程内 MCP 客户端实测（`limit:20`）：63 KB 的星盘 1,799,838 字节，2 MB 的八字形状 42,515,038 字节；`include_payload:false` 只有 89,107 字节。`horosa_memory_show` 读回大八字 2,110,245 字节。上限是 900 KB 预算与 v0.46.1 记下的 1 MiB SSE 单事件。
+- **根因**：`MemoryQueryInput.include_payload` 缺省 true，而工具说明写的是「Returns run summaries」。`_fit_result_budget` 第一行就要求顶层 `data` 是 dict，记忆结果形状是 `results[]` / `result`，整条跳过。references/reports.md 又教 agent 用 `horosa_memory_show` 读全量段落。
+- **修复**：`MemoryQueryInput.include_payload` 缺省 false（`MemoryShowInput` 仍是 true：说明写的就是取全量）。`_fit_result_budget` 按形状分派，信封走原逻辑（`_fit_envelope`），记忆走 `_fit_memory_records`：先把各产物 `payload.data` 下 ≥ 50 KB 的原始子树换占位（`_PROTECTED_DATA_KEYS` 不进候选），还超才整份换占位，路径与 sha 留着。不每裁一块重新序列化：一次 42 MB 要秒级，所以按字节估、估够再量。CLI 的 `memory query` 走 `store.query_runs`，缺省不变。
+- **旧断言为何没抓到**：`test_normalize_mcp_request_accepts_flattened_memory_query_fields` 测的是入参拍平，把当时的缺省值顺手写进了期望字典，不是在说缺省必须带载荷；预算测试只有技法信封一种形状。该断言随缺省改成 false。
+- **守卫**：`tests/test_memory_mcp_budget.py`。负向对照：缺省改回 true、去掉 `_fit_memory_records` 分支各红；去掉受保护键判断时，只有「快照比原始明细大」的那条红（快照小的用例因大小排序照样过，因为要裁的本来就不是它，所以单写了这条）。
+- **法则**：线上预算加在门面出口，不要假定结果形状；新增大结果先问它走不走这道闸。
+
+### v0.47.2-dev / 2026-11-06 — 答案写回把唯一一份盘面写成 0 字节
+
+- **症状**：架构审计在 12 MB 真卷（HFS+）上复现：剩 900 KB 时 `record_ai_answer` 抛 `OSError 28`，盘面产物变成 0 字节；腾出空间后重试返回 `ok: true`，产物仍是 0 字节（不是 JSON 的文件 refresh 直接跳过），`report_render` 报 `report.source_not_found`。tight loop 下 SIGKILL 第 22 次就撞上（只证明窗口存在，不代表概率）。并发读者 26/1851 次拿到 `payload_error`。另外写回后库与 manifest 里的 sha 还是写入时的值（`ed49c6…` vs 磁盘 `266fc5…`）。
+- **根因**：`Path.write_text` 先截断再写；`runs/` 产物又是这次起盘**唯一**的完整副本（`initialize` 的说明正是这么定义的），带 AI 正文的每次报告都经 `_record_report_ai_if_present` → `attach_ai_response` → `_refresh_run_artifacts` 走这条路。v0.33.0「写时落列」把 size / sha 存进库以消 O(n²)，但改写路径没跟上。`kind != 'run_manifest'` 还把 `report_json` 也算进来：交付出去的报告（可能在 `HOROSA_REPORT_OUTPUT_ROOTS` 的用户目录里）被塞进 `record_meta` / `conversation`。
+- **修复**：`store._write_json_atomic`（同目录临时文件 + fsync + `fsretry.replace`，失败清临时文件）用在全部三处；用 `os.open(…, 0o666)` 而不是 mkstemp，产物权限照旧按 umask，改写沿用原文件权限。`_refresh_run_artifacts` 排除 `report_*`，写完更新 `file_size` / `sha256`。fsync 实测无感（本机每次存档 3.6 ms vs 4.3 ms，差在噪声内）。
+- **旧断言为何没抓到**：`test_memory_store_attach_ai_response_updates_artifacts_and_manifest` 只断言 sha **非空**，没和磁盘比；没有任何测试让写入中途失败。
+- **守卫**：`tests/test_memory_durability.py`（真实写失败用 `RLIMIT_FSIZE`，效果同磁盘写满；`test_the_store_has_no_in_place_writes` AST 扫 `store.py` 的 `write_text` / `write_bytes`）。负向对照：改回 `write_text` 六条红；`0o666` 改 `0o600`、去掉 `copymode` 各红一条。Windows 上 RLIMIT 那条 skip，`test_a_failed_replace_cleans_up_and_keeps_the_original` 全平台跑。
+- **法则**：只有一份的数据，写它的每一步都要假设下一个字节写不进去。
 
 ### v0.47.2-dev / 2026-11-05 — Windows 面没测过的形状：管道编码、路径闸先 resolve、共享冲突、报告目标开着、择时百年表
 

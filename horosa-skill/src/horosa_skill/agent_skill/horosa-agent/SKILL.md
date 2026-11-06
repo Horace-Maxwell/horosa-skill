@@ -89,7 +89,7 @@ Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Cod
 tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）
 **顶层按名直接传即可、不会被丢**，全表用 `horosa_agent_guidance(tool_name=…)` 查（v0.36.0 两层 schema）。
 
-省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
+省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）；`horosa_memory_query` 缺省只回摘要，要载荷传 `include_payload: true`。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
 出错时看 `details.agent_recovery`：`kind` 说谁能修——`input`（问用户 / 修入参）、`retry_or_doctor`（重试一次再让用户跑
 `uv run horosa-skill doctor`）、`transport`（冷启动 ≤ ~45 s，等几秒重试一次）、`runtime` / `js_engine`（装 runtime 或设 HOROSA_NODE_BIN）、

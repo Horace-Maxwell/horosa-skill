@@ -1917,10 +1917,17 @@ _PDF_FONT_CANDIDATES: dict[str, list[tuple[str, tuple[str, ...] | None, str | No
 }
 
 
-def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | None:
-    """TTC 里按字面名（按偏好顺序）找子字体序号；names 为 None 取 0；找不到返回 None。"""
-    if names is None or not path.lower().endswith(".ttc"):
-        return 0
+# 字体集的「字面名 → 序号」表。枚举要把 .ttc 里每个子字体都解析一遍（Songti.ttc 约 0.3 秒），一份 PDF 要查好几次，
+# 长命的 MCP server 每份报告都重来，占了渲染约七成的时间。键带 mtime / 大小：系统更新字体后序号可能变，文件变了就重新枚举。
+_FACE_NAMES: dict[tuple[str, int, int], dict[str, int]] = {}
+
+
+def _face_names(TTFont: Any, path: str) -> dict[str, int]:
+    stat = os.stat(path)
+    key = (path, stat.st_mtime_ns, stat.st_size)
+    cached = _FACE_NAMES.get(key)
+    if cached is not None:
+        return cached
     found: dict[str, int] = {}
     for index in range(32):
         try:
@@ -1929,6 +1936,16 @@ def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | 
             break
         name = face.name.decode("utf-8", "replace") if isinstance(face.name, bytes) else str(face.name)
         found.setdefault(name, index)
+    if found:  # 一个子字体都读不出来时不记：可能只是这一次读失败
+        _FACE_NAMES[key] = found
+    return found
+
+
+def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | None:
+    """TTC 里按字面名（按偏好顺序）找子字体序号；names 为 None 取 0；找不到返回 None。"""
+    if names is None or not path.lower().endswith(".ttc"):
+        return 0
+    found = _face_names(TTFont, path)
     return next((found[n] for n in names if n in found), None)
 
 

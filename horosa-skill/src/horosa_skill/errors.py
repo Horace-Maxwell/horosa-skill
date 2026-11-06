@@ -359,6 +359,15 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "none_retry_cleanup_later",
     },
+    "runtime.install_start_in_progress": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "runtime 正在启动，这时换目录会把启动器脚下的文件搬走，安装未动 current/。等它起好（`horosa-skill runtime status` 看进度）后重试。",
+            "The runtime is starting; swapping directories now would pull the files out from under the launcher, so "
+            "current/ was left untouched. Wait for it to come up (`horosa-skill runtime status`), then retry.",
+        ),
+        "next_action": "wait_for_start_then_retry_install",
+    },
     "runtime.install_stop_failed": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

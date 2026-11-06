@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
+import shutil
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -9,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from horosa_skill import fsretry
 from horosa_skill.config import Settings
 from horosa_skill.schemas.common import MemoryRef
 
@@ -24,6 +28,31 @@ def _file_hash_info(path: Path) -> tuple[int, str | None]:
         return len(data), hashlib.sha256(data).hexdigest()
     except OSError:
         return 0, None
+
+
+def _write_json_atomic(path: Path, payload: Any) -> tuple[int, str]:
+    """把 JSON 写到 `path`，返回 (字节数, sha256)。要么换成完整的新文件，要么原文件一字不动。
+
+    `runs/` 下的产物是一次起盘唯一的完整副本。`write_text` 先截断再写：磁盘写满 / 进程被杀时留下 0 字节，已有内容再也救不回来，
+    并发读者还会读到半个文件。这里写同目录临时文件（`os.replace` 同卷才原子）、落盘后再替换。
+    用 `os.open` 而不是 mkstemp：后者固定 0600，会改掉产物一直以来按 umask 建的权限；改写时沿用原文件的权限。
+    """
+    # 不带缩进：没人读这些文件的排版。实测一份星盘产物省 20%（62.9 → 50.4 KB），结构多的引擎 JSON 省得更多（录制件最多 2.48 倍）。
+    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+    fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.exists():
+            shutil.copymode(path, tmp_path)
+        fsretry.replace(tmp_path, path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    return len(data), hashlib.sha256(data).hexdigest()
 
 
 def _safe_file_component(name: str) -> str:
@@ -47,17 +76,66 @@ def _is_corruption_error(exc: sqlite3.Error) -> bool:
 class MemoryStore:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.settings.ensure_dirs()
         self.db_path = self.settings.db_path
         self.output_dir = self.settings.output_dir
         assert self.db_path is not None
         assert self.output_dir is not None
-        # 损坏自愈痕迹：非 None = 本次启动时把坏库隔离到了该路径（doctor/health 面板据此告知用户）。
+        # 损坏自愈痕迹：非 None = 本进程把坏库隔离到了该路径（doctor/health 面板据此告知用户）。
         self.corruption_recovery: dict[str, str] | None = None
+        # 存储不可用的原因：非 None = 建库失败。构造绝不因此抛错：算盘不靠记忆库，存档失败由调用方转成 warning。
+        self.init_error: str | None = None
         self.initialize()
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
+        if self.init_error is not None:
+            self.initialize()  # 权限恢复 / 锁释放后自愈；还不行就让这次操作自己报错给调用方
+        with self._open() as connection:
+            yield connection
+
+    @contextmanager
+    def _writer(self) -> Iterator[sqlite3.Connection]:
+        """写路径的连接。只坏中间页的库构造时看不出来，要到写才报 malformed；这里走与建库期同一条隔离路径，下一次写落在新库上。
+
+        本次写仍然抛错：这份数据没进库，调用方要如实告知。读路径不走这里：为一次查询失败搬走整个库不值得。"""
+        try:
+            with self.connect() as connection:
+                yield connection
+        except sqlite3.DatabaseError as exc:
+            if _is_corruption_error(exc):
+                self._recover_from_write_corruption(exc)
+            raise
+
+    def _recover_from_write_corruption(self, exc: sqlite3.Error) -> None:
+        # 只凭报错文字不够：别的进程刚把库隔离走时这里也可能撞上同样的话。亲自确认**当前这份库**真坏了才动它。
+        if self._database_is_sound():
+            return
+        try:
+            backup = self._quarantine_corrupt_db(exc)
+            self._initialize_schema()
+        except (sqlite3.Error, OSError) as failure:
+            self._note_init_failure(failure)
+            return
+        self.init_error = None
+        self.corruption_recovery = {"backup": str(backup), "at": utc_now_iso(), "error": f"{exc}"}
+
+    def _database_is_sound(self) -> bool:
+        """当前库是否完好。用 integrity_check 而不是 quick_check：后者不比对索引与表内容，那类损坏同样报 malformed。"""
+        try:
+            with self._open() as conn:
+                return [str(row[0]) for row in conn.execute("PRAGMA integrity_check(1)")] == ["ok"]
+        except sqlite3.Error as exc:
+            return not _is_corruption_error(exc)  # 锁占用等：没有证据说它坏了
+
+    def _note_init_failure(self, exc: Exception) -> None:
+        message = f"{type(exc).__name__}: {exc}"
+        if message != self.init_error:  # 每次操作都会重试，同一个原因只说一遍
+            # 建库期通知，没有工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
+            logging.getLogger(__name__).log(logging.WARNING, "记忆库不可用（%s）：%s；存档会失败，计算不受影响。", self.db_path, exc)
+        self.init_error = message
+
+    @contextmanager
+    def _open(self) -> Iterator[sqlite3.Connection]:
         # WAL + busy_timeout：多进程（MCP server / CLI / dispatch 并发）读写不再 `database is locked`；
         # WAL 允许读写并行，NORMAL 同步在 WAL 下掉电最多丢最近事务、不损坏库。
         connection = sqlite3.connect(self.db_path, timeout=30.0)
@@ -77,23 +155,32 @@ class MemoryStore:
     def initialize(self) -> None:
         """建库/迁移；损坏库走分类恢复：隔离为 `<db>.corrupt-<ts>.bak`（连 -wal/-shm）后重建空库。
 
-        记忆库是**便利缓存**（完整快照另有 runs/ 磁盘产物），重建的代价是历史检索为空——
+        记忆库是**便利缓存**（完整快照另有 runs/ 磁盘产物），重建的代价是旧记录不再出现在检索里——
         远好于每次调用都因 malformed 崩死。锁占用绝不按损坏处理（_is_corruption_error）。
+        建不起来（只读、路径不可用）只记 `init_error`，不抛：计算不靠记忆库，下一次操作时再试。
         """
         try:
-            self._initialize_schema()
-        except sqlite3.Error as exc:
-            if not _is_corruption_error(exc):
-                raise
-            backup = self._quarantine_corrupt_db(exc)
-            self._initialize_schema()
-            self.corruption_recovery = {"backup": str(backup), "at": utc_now_iso(), "error": f"{exc}"}
+            self.settings.ensure_dirs()
+        except OSError as exc:
+            # 建不出来的可能只是 runtime 根或 trace 目录，与记忆库无关：是否影响存档由下面的建库说了算。
+            logging.getLogger(__name__).debug("ensure_dirs failed: %s", exc)
+        try:
+            try:
+                self._initialize_schema()
+            except sqlite3.Error as exc:
+                if not _is_corruption_error(exc):
+                    raise
+                backup = self._quarantine_corrupt_db(exc)
+                self._initialize_schema()
+                self.corruption_recovery = {"backup": str(backup), "at": utc_now_iso(), "error": f"{exc}"}
+        except (sqlite3.Error, OSError) as exc:
+            self._note_init_failure(exc)
+        else:
+            self.init_error = None
 
     def _quarantine_corrupt_db(self, exc: sqlite3.Error) -> Path:
         stamp = utc_now_iso().replace(":", "").replace("-", "").replace("+0000", "Z")
         backup = self.db_path.with_name(f"{self.db_path.name}.corrupt-{stamp}.bak")
-        import logging
-
         logger = logging.getLogger(__name__)
         for suffix in ("", "-wal", "-shm"):
             src = Path(f"{self.db_path}{suffix}")
@@ -105,7 +192,7 @@ class MemoryStore:
         # 建库期通知，没有工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
         logger.log(
             logging.WARNING,
-            "记忆库损坏（%s）——已隔离到 %s 并重建空库；历史快照仍在 runs/ 目录，可用 memory 工具重建索引。",
+            "记忆库损坏（%s）——已隔离到 %s 并重建空库。旧记录的产物文件还在 runs/ 目录，可以直接打开，但不再出现在记忆检索里。",
             exc,
             backup,
         )
@@ -119,13 +206,15 @@ class MemoryStore:
             ok = rows == ["ok"]
         except sqlite3.Error as exc:
             ok, rows = False, [f"{exc}"]
-        result: dict[str, Any] = {"ok": ok, "detail": rows[:5]}
+        result: dict[str, Any] = {"ok": ok and self.init_error is None, "detail": rows[:5]}
+        if self.init_error:
+            result["init_error"] = self.init_error
         if self.corruption_recovery:
             result["recovered_from_corruption"] = self.corruption_recovery
         return result
 
     def _initialize_schema(self) -> None:
-        with self.connect() as conn:
+        with self._open() as conn:
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS runs (
@@ -247,21 +336,29 @@ class MemoryStore:
         except sqlite3.Error:
             pass
 
-    def _fts_run_ids(self, conn: sqlite3.Connection, text: str) -> set[str]:
-        # 文本转 FTS 短语（转义引号），返回命中 run id 集；FTS 缺失/查询异常回空集（走深扫）。
-        # trigram 分词要求查询 ≥3 码点（中文两字词等短查询直接回落深扫，不发无效查询）。
+    def _indexed_text_rows(
+        self, conn: sqlite3.Connection, select: str, filters: list[str], params: list[Any], text: str, limit: int
+    ) -> list[sqlite3.Row]:
+        """问题与答案里含 `text` 的 run（新到旧，受同一组过滤），不受深扫窗口限制。
+
+        FTS trigram 要求查询 ≥3 码点；短查询（中文两字词）与缺 FTS5 的环境走 LIKE，只比这三列，万把行也是毫秒级。"""
         needle = (text or "").strip()
-        if len(needle) < 3:
-            return set()
-        try:
+        if not needle:
+            return []
+        order = "ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?"
+        if len(needle) >= 3:
             phrase = '"' + needle.replace('"', '""') + '"'
-            rows = conn.execute(
-                "SELECT runs.id FROM runs_fts JOIN runs ON runs.rowid = runs_fts.rowid WHERE runs_fts MATCH ?",
-                (phrase,),
-            ).fetchall()
-            return {row["id"] for row in rows}
-        except sqlite3.Error:
-            return set()
+            clause = "AND runs.rowid IN (SELECT rowid FROM runs_fts WHERE runs_fts MATCH ?)"
+            try:
+                return conn.execute("\n".join([select, *filters, clause, order]), [*params, phrase, limit]).fetchall()
+            except sqlite3.OperationalError:
+                pass  # 环境缺 FTS5：下面的 LIKE 兜底
+        pattern = "%" + needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        clause = (
+            r"AND (runs.query_text LIKE ? ESCAPE '\' OR runs.user_question_text LIKE ? ESCAPE '\'"
+            r" OR runs.ai_answer_text LIKE ? ESCAPE '\')"
+        )
+        return conn.execute("\n".join([select, *filters, clause, order]), [*params, pattern, pattern, pattern, limit]).fetchall()
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
         columns = {
@@ -288,7 +385,7 @@ class MemoryStore:
     ) -> str:
         run_id = uuid.uuid4().hex
         now = utc_now_iso()
-        with self.connect() as conn:
+        with self._writer() as conn:
             conn.execute(
                 """
                 INSERT INTO runs (
@@ -317,7 +414,7 @@ class MemoryStore:
         if not entities:
             return
         now = utc_now_iso()
-        with self.connect() as conn:
+        with self._writer() as conn:
             for entity in entities:
                 conn.execute(
                     """
@@ -351,7 +448,7 @@ class MemoryStore:
         evaluation_case_id: str | None = None,
     ) -> MemoryRef:
         now = utc_now_iso()
-        with self.connect() as conn:
+        with self._writer() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO tool_calls (
@@ -425,7 +522,7 @@ class MemoryStore:
             group_id=group_id,
             evaluation_case_id=None,
         )
-        with self.connect() as conn:
+        with self._writer() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at, file_size, sha256)
@@ -470,7 +567,7 @@ class MemoryStore:
         now = utc_now_iso()
         kind = f"report_{format_name.lower()}"
         payload = path.read_bytes()
-        with self.connect() as conn:
+        with self._writer() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at, file_size, sha256)
@@ -507,7 +604,7 @@ class MemoryStore:
         answer_meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = utc_now_iso()
-        with self.connect() as conn:
+        with self._writer() as conn:
             row = conn.execute("SELECT id, query_text FROM runs WHERE id = ?", (run_id,)).fetchone()
             if row is None:
                 raise ValueError(f"Unknown run_id: {run_id}")
@@ -515,7 +612,8 @@ class MemoryStore:
             conn.execute(
                 """
                 UPDATE runs
-                SET user_question_text = ?, ai_answer_text = ?, ai_answer_json = ?, answer_meta_json = ?, updated_at = ?
+                SET user_question_text = ?, ai_answer_text = ?, ai_answer_json = ?, answer_meta_json = ?, updated_at = ?,
+                    usage_count = COALESCE(usage_count, 0) + 1, last_used_at = ?
                 WHERE id = ?
                 """,
                 (
@@ -524,6 +622,7 @@ class MemoryStore:
                     json.dumps(ai_answer_structured, ensure_ascii=False) if ai_answer_structured is not None else None,
                     json.dumps(answer_meta or {}, ensure_ascii=False),
                     now,
+                    now,  # 写回解读就是用过：答过的 run 不该被 prune 选中
                     run_id,
                 ),
             )
@@ -554,19 +653,27 @@ class MemoryStore:
         limit: int = 20,
         offset: int = 0,
         include_payload: bool = True,
+        scan_report: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        sql = [
-            """
-            SELECT DISTINCT runs.id, runs.entrypoint, runs.query_text, runs.created_at, runs.updated_at
-                , runs.subject_json, runs.group_id, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
-                , runs.usage_count, runs.last_used_at
+        """`text` 分两层：问题与答案走索引，全库可搜；工具调用与产物文件（盘面正文）只深扫最新的候选窗口，读文件不便宜。
+
+        传 `scan_report` 字典会填 `deep_scan_window` 与 `not_scanned`（窗口外、产物没被搜过的 run 数），调用方据此如实告知。"""
+        joins = """
             FROM runs
             LEFT JOIN tool_calls ON tool_calls.run_id = runs.id
             LEFT JOIN entities ON entities.run_id = runs.id
             LEFT JOIN artifacts ON artifacts.run_id = runs.id
             WHERE 1=1
             """
-        ]
+        select = (
+            """
+            SELECT DISTINCT runs.id, runs.entrypoint, runs.query_text, runs.created_at, runs.updated_at
+                , runs.subject_json, runs.group_id, runs.user_question_text, runs.ai_answer_text, runs.ai_answer_json, runs.answer_meta_json
+                , runs.usage_count, runs.last_used_at, runs.rowid AS run_rowid
+            """
+            + joins
+        )
+        sql: list[str] = []
         params: list[Any] = []
         if run_id:
             sql.append("AND runs.id = ?")
@@ -598,13 +705,23 @@ class MemoryStore:
             # Text search also scans artifact file contents, so fetch a wider local candidate window
             # before applying the final in-process filter.
             candidate_limit = max(candidate_limit * 20, 200)
-        # rowid 次键：同秒创建的多个 run 顺序确定（分页/翻页稳定）。
-        sql.append("ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?")
-        params.append(candidate_limit)
-
         with self.connect() as conn:
-            rows = conn.execute("\n".join(sql), params).fetchall()
-            fts_hits: set[str] = self._fts_run_ids(conn, text) if text else set()
+            # rowid 次键：同秒创建的多个 run 顺序确定（分页/翻页稳定）。
+            order = "ORDER BY runs.created_at DESC, runs.rowid DESC LIMIT ?"
+            rows = conn.execute("\n".join([select, *sql, order]), [*params, candidate_limit]).fetchall()
+            indexed_rows = self._indexed_text_rows(conn, select, sql, params, text, target_count) if text else []
+            fts_hits = {row["id"] for row in indexed_rows}
+            if scan_report is not None:
+                scan_report["deep_scan_window"] = candidate_limit if text else 0
+                scan_report["not_scanned"] = 0
+                if text and len(rows) >= candidate_limit:
+                    total = conn.execute("\n".join(["SELECT COUNT(DISTINCT runs.id)" + joins, *sql]), params).fetchone()[0]
+                    scan_report["not_scanned"] = max(0, total - len(rows))
+            if indexed_rows:
+                # 窗口外的索引命中并进候选，仍按新到旧走下面的循环。
+                by_id = {row["id"]: row for row in rows}
+                by_id.update((row["id"], row) for row in indexed_rows)
+                rows = sorted(by_id.values(), key=lambda row: (row["created_at"], row["run_rowid"]), reverse=True)
             results = []
             for row in rows:
                 artifact_sql = """
@@ -671,7 +788,7 @@ class MemoryStore:
 
     def touch_run_usage(self, run_id: str) -> None:
         """点用记账：usage_count+1 + last_used_at=now（召回排序与 prune 的依据）。"""
-        with self.connect() as conn:
+        with self._writer() as conn:
             conn.execute(
                 "UPDATE runs SET usage_count = COALESCE(usage_count, 0) + 1, last_used_at = ? WHERE id = ?",
                 (utc_now_iso(), run_id),
@@ -689,16 +806,17 @@ class MemoryStore:
 
     def prune_unused(self, *, unused_days: int, yes: bool = False) -> dict[str, Any]:
         """清理长期未点用的 run（默认 dry-run）：判据 = COALESCE(last_used_at, created_at) 早于
-        cutoff **且** usage_count 为空/0。删除级联 tool_calls/artifacts/entities 行 + 磁盘产物文件。
-        点用过的 run 永不入选（哪怕很老）——「用过」就是价值证明。"""
+        cutoff **且** usage_count 为空/0 **且**没有写回过答案。删除级联 tool_calls/artifacts/entities 行 + 磁盘产物文件。
+        点用过的 run 永不入选（哪怕很老）——「用过」就是价值证明；写回答案现在算点用，判答案列是给升级之前写回的那些。"""
         from datetime import timedelta
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max(1, unused_days))).replace(microsecond=0).isoformat()
-        with self.connect() as conn:
+        with self._writer() as conn:
             rows = conn.execute(
                 """
                 SELECT id, created_at, last_used_at, usage_count FROM runs
                 WHERE COALESCE(last_used_at, created_at) < ? AND COALESCE(usage_count, 0) = 0
+                    AND COALESCE(ai_answer_text, '') = ''
                 ORDER BY created_at ASC
                 """,
                 (cutoff,),
@@ -735,6 +853,42 @@ class MemoryStore:
             report["files_removed"] = files_removed
             return report
 
+    def storage_usage(self) -> dict[str, Any]:
+        """本机存档占了多少盘（doctor 用）。只算随使用增长的三样，不含 runtime；清理走 `memory prune`，这里只报数。"""
+
+        def tree_size(root: Path | None) -> tuple[int, int]:
+            size = files = 0
+            for folder, _, names in os.walk(root) if root is not None else ():
+                for name in names:
+                    try:
+                        size += os.stat(os.path.join(folder, name)).st_size
+                        files += 1
+                    except OSError:
+                        continue  # 遍历途中被删 / 替换的文件
+            return size, files
+
+        artifact_bytes, artifact_files = tree_size(self.output_dir)
+        trace_bytes, _ = tree_size(self.settings.trace_dir)
+        database_bytes = 0
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                database_bytes += os.stat(f"{self.db_path}{suffix}").st_size
+            except OSError:
+                continue
+        try:
+            with self._open() as conn:
+                runs: int | None = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        except sqlite3.Error:
+            runs = None  # 库打不开 / 表坏了：没有数就说没有，不写 0
+        return {
+            "runs": runs,
+            "artifact_files": artifact_files,
+            "artifact_bytes": artifact_bytes,
+            "database_bytes": database_bytes,
+            "trace_bytes": trace_bytes,
+            "total_bytes": artifact_bytes + database_bytes + trace_bytes,
+        }
+
     def _write_artifact(
         self,
         *,
@@ -761,7 +915,7 @@ class MemoryStore:
             group_id=group_id,
             evaluation_case_id=evaluation_case_id,
         )
-        target_path.write_text(json.dumps(artifact_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_json_atomic(target_path, artifact_payload)
         return target_path
 
     def _get_run_row(self, run_id: str) -> sqlite3.Row | None:
@@ -815,9 +969,13 @@ class MemoryStore:
         return artifact_payload
 
     def _refresh_run_artifacts(self, run_id: str) -> None:
+        # 只刷新盘面 / 调度产物：报告是交付好的文件（可能在用户的目录里），写回答案不许改写它；manifest 由调用方随后重建。
         with self.connect() as conn:
             rows = conn.execute(
-                "SELECT tool_name, kind, path, tool_call_id FROM artifacts WHERE run_id = ? AND kind != 'run_manifest'",
+                r"""
+                SELECT id, tool_name, kind, path, tool_call_id FROM artifacts
+                WHERE run_id = ? AND kind != 'run_manifest' AND kind NOT LIKE 'report\_%' ESCAPE '\'
+                """,
                 (run_id,),
             ).fetchall()
         for row in rows:
@@ -845,7 +1003,11 @@ class MemoryStore:
                 group_id=record_meta.get("group_id"),
                 evaluation_case_id=record_meta.get("evaluation_case_id"),
             )
-            path.write_text(json.dumps(updated_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            file_size, sha256 = _write_json_atomic(path, updated_payload)
+            # 文件变了，落库的 size / sha 必须跟上：manifest 与检索都优先取落库值，不再现算。
+            with self._writer() as conn:
+                conn.execute("UPDATE artifacts SET file_size = ?, sha256 = ? WHERE id = ?", (file_size, sha256, row["id"]))
+                conn.commit()
 
     def _build_run_manifest_payload(self, run_id: str) -> dict[str, Any]:
         with self.connect() as conn:
@@ -928,9 +1090,9 @@ class MemoryStore:
         target_dir = self.output_dir / created.strftime("%Y") / created.strftime("%m") / created.strftime("%d")
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / f"{run_id}_manifest.json"
-        target_path.write_text(json.dumps(manifest_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_json_atomic(target_path, manifest_payload)
         now = utc_now_iso()
-        with self.connect() as conn:
+        with self._writer() as conn:
             existing = conn.execute(
                 "SELECT id FROM artifacts WHERE run_id = ? AND kind = 'run_manifest' ORDER BY id DESC LIMIT 1",
                 (run_id,),

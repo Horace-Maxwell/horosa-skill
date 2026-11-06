@@ -274,14 +274,16 @@ class ReportBuilder:
             question_analysis=question_analysis,
             coverage=coverage,
         )
-        ai_coverage = self._ai_coverage_status(coverage=coverage, ai_report=merged_ai_report)
-        coverage_matrix = self._section_coverage_matrix(export_sections=export_sections, ai_report=merged_ai_report)
+        # 下面这些闸量的是调用方自己写的答案。merged_ai_report 含确定性回填（为覆盖全部章节而补），拿它量永远是绿的。
+        caller_answer = self._caller_answer_view(run=run, ai_report=ai_report)
+        ai_coverage = self._ai_coverage_status(coverage=coverage, ai_report=caller_answer)
+        coverage_matrix = self._section_coverage_matrix(export_sections=export_sections, ai_report=caller_answer)
         provenance = self._provenance(export_snapshot=export_snapshot, export_format=export_format, source=source)
         report_quality = self._report_quality(
             input_normalized=input_normalized if isinstance(input_normalized, dict) else {},
             export_text=export_text,
             export_sections=export_sections,
-            ai_report=merged_ai_report,
+            ai_report=caller_answer,
             ai_coverage=ai_coverage,
             provenance=provenance,
         )
@@ -429,7 +431,8 @@ class ReportBuilder:
             report_quality=report_quality,
             question_analysis=question_analysis,
             targeted_contract=targeted_contract,
-            ai_report=merged_ai_report,
+            ai_report=caller_answer,
+            ai_required=style != "chart",
             provenance=provenance,
             content_outline=content_outline,
             plain_text=plain_text,
@@ -492,7 +495,7 @@ class ReportBuilder:
                 "answer_plan": targeted_contract["answer_plan"],
                 "targeted_answer_requirements": targeted_contract["targeted_answer_requirements"],
                 "analysis_focus": merged_ai_report.get("analysis_focus") or user_question,
-                "has_ai_answer": bool(merged_ai_report.get("answer_text") or merged_ai_report.get("executive_summary")),
+                "has_ai_answer": bool(caller_answer.get("answer_text") or caller_answer.get("direct_answer") or caller_answer.get("executive_summary")),
                 "coverage_status": ai_coverage["status"],
                 "ready_to_deliver": delivery_checklist.get("ready_to_deliver"),
                 "delivery_missing": delivery_checklist.get("missing", []),
@@ -729,6 +732,27 @@ class ReportBuilder:
                         "human_visible": not card, "group": "appendix"})
         return out
 
+    def _caller_answer(self, *, run: dict[str, Any], ai_report: dict[str, Any] | None) -> dict[str, Any]:
+        """调用方自己写的答案：run 里写回的加这次传的，不含任何回填。"""
+        answer_structured = run.get("ai_answer_structured")
+        base = copy.deepcopy(answer_structured) if isinstance(answer_structured, dict) else {}
+        if run.get("ai_answer_text") and "answer_text" not in base:
+            base["answer_text"] = run.get("ai_answer_text")
+        if ai_report:
+            base.update(copy.deepcopy(ai_report))
+        return base
+
+    def _caller_answer_view(self, *, run: dict[str, Any], ai_report: dict[str, Any] | None) -> dict[str, Any]:
+        """质量闸读的形状，字段名与 merged_ai_report 对齐（`answer` / `summary` 是调用方可用的别名）。"""
+        base = self._caller_answer(run=run, ai_report=ai_report)
+        lists = {key: base[key] if isinstance(base.get(key), list) else [] for key in ("analysis_sections", "recommendations", "evidence")}
+        return {
+            "answer_text": base.get("answer_text") or "",
+            "direct_answer": base.get("direct_answer") or base.get("answer") or "",
+            "executive_summary": base.get("executive_summary") or base.get("summary") or "",
+            **lists,
+        }
+
     def _merge_ai_report(
         self,
         *,
@@ -740,15 +764,7 @@ class ReportBuilder:
         export_sections: list[dict[str, Any]],
         export_text: str,
     ) -> dict[str, Any]:
-        answer_structured = run.get("ai_answer_structured")
-        if isinstance(answer_structured, dict):
-            base = copy.deepcopy(answer_structured)
-        else:
-            base = {}
-        if run.get("ai_answer_text") and "answer_text" not in base:
-            base["answer_text"] = run.get("ai_answer_text")
-        if ai_report:
-            base.update(copy.deepcopy(ai_report))
+        base = self._caller_answer(run=run, ai_report=ai_report)
         base_has_answer_text = bool(str(base.get("answer_text") or "").strip())
         base_has_executive_summary = bool(str(base.get("executive_summary") or base.get("summary") or "").strip())
         base_has_consultation_basis = bool(base.get("consultation_basis"))
@@ -2053,11 +2069,13 @@ class ReportBuilder:
         question_analysis: dict[str, Any],
         targeted_contract: dict[str, Any],
         ai_report: dict[str, Any],
+        ai_required: bool,
         provenance: dict[str, Any],
         content_outline: list[dict[str, Any]],
         plain_text: str,
         search_index: dict[str, Any],
     ) -> dict[str, Any]:
+        """`ai_report` 是调用方自己写的答案。逐章覆盖如实报，但不拦交付：定向解读不必每章都答（见 `_complete_analysis_sections`）。"""
         section_ids = {
             str(section.get("id"))
             for section in sections
@@ -2104,7 +2122,11 @@ class ReportBuilder:
             "has_plain_text": bool(plain_text.strip()),
             "has_search_index": bool(search_index.get("keywords")) and bool(search_index.get("search_text")),
             "source_quality_ready": (not source_requires_sections) or report_quality.get("source_complete") is True,
-            "ai_quality_ready": report_quality.get("ai_analysis_complete") is True
+            "ai_quality_ready": bool(
+                report_quality.get("has_ai_summary")
+                and report_quality.get("has_ai_analysis_sections")
+                and report_quality.get("has_recommendations")
+            )
             or (not source_requires_sections and bool(ai_report.get("direct_answer") or ai_report.get("executive_summary") or ai_report.get("answer_text"))),
             "human_readable_ready": report_quality.get("ready_for_human_reading") is True
             or bool(ai_report.get("direct_answer") or ai_report.get("executive_summary") or ai_report.get("answer_text")),
@@ -2115,11 +2137,18 @@ class ReportBuilder:
             "source_sections_covered",
             "has_ai_section_analysis",
         }
+        # 完整排盘报告（style=chart）本来就不要 AI 解读：没有解读不算缺。
+        ai_checks = {
+            "has_ai_direct_answer", "has_ai_summary", "has_ai_section_analysis", "has_recommendations", "has_evidence",
+            "ai_quality_ready", "human_readable_ready",
+        }
+        not_blocking = {"source_sections_covered"} | (ai_checks if not ai_required else set())
         missing = [
             name
             for name, ok in checks.items()
-            if not ok and (source_requires_sections or name not in optional_when_no_source_sections)
+            if not ok and name not in not_blocking and (source_requires_sections or name not in optional_when_no_source_sections)
         ]
+        all_covered = coverage_matrix.get("all_sections_covered") is True
         return {
             "schema": "horosa.skill.report.delivery_checklist.v1",
             "all_required_blocks_present": required_section_ids.issubset(section_ids),
@@ -2128,7 +2157,8 @@ class ReportBuilder:
             "checks": checks,
             "missing": missing,
             "completion_hint": (
-                "报告已包含源数据、逐章覆盖、AI 解盘、建议、证据、来源追溯和检索索引，可以交付。"
+                ("报告已包含源数据、逐章覆盖、AI 解盘、建议、证据、来源追溯和检索索引，可以交付。" if all_covered and ai_required
+                 else "报告可以交付；未逐章解释的章节见 section_coverage_matrix。")
                 if not missing
                 else "交付前需要补齐：" + "、".join(missing)
             ),
