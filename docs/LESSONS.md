@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 每出一份 PDF 都把系统字体集重新解析一遍：`_face_index` 枚举 .ttc 占渲染约七成，长命的 MCP server 也不例外 | 「字面名 → 序号」表按文件缓存，键带 mtime 与大小；同一份 PDF 从 0.96 s 到 0.29 s，嵌入字体不变；`tests/test_pdf_font_cache.py` |
 | v0.47.2-dev (2026-11-06) | JSON 报告的闸永远是绿的：AI 只写「好。」时覆盖率 1.0、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`、`ai_analysis_complete: True`，量的都是机器回填 | 闸改量调用方自己写的答案；逐章覆盖如实报但不拦交付（定向解读是有意设计）；chart 不要 AI；`tests/test_report_gates.py` |
 | v0.47.2-dev (2026-11-06) | 存档只增不减且看不见：产物带 `indent=2`，答过没回读的 run 会被 `memory prune` 选中，`doctor` 只报磁盘余量不报自己用了多少 | 产物不带缩进；写回答案算点用，prune 也跳过升级前写回的；`doctor.memory_db.usage`；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-06) | install 不防并发也不防崩溃：别的会话在 stop 与换目录之间从旧树起启动器（install 仍报成功）；被杀的 install 留下 `.hi-*` 约 2 GB，卸载也不清；崩在两次改名之间只剩 `previous/`，离线装不回来；完整的 `.part` 每次重试都 416；镜像回 200 + 错误页时回退不生效 | 换目录全程持启动锁；`.hi-*` 记属主 pid，install 一进来就清、进卸载清单；启动路径与 install 恢复完整的 `previous/`；416 看 Content-Range；逐候选校验内容；`tests/test_runtime_recovery.py` |
@@ -182,6 +183,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 ## 台账正文（新条目加在最上方）
 
+### v0.47.2-dev / 2026-11-06 — 每出一份 PDF 都把系统字体集重新解析一遍
+
+- **症状**：架构审计用 cProfile：一次 PDF 渲染里 `_register_pdf_fonts` 占七成多，其中 `_face_index` 最多；PDF 中位约 0.84 s，DOCX 0.05 s。
+- **根因**：TTC 按字面名找子字体（子字体顺序随系统版本变，不能写死序号），`_face_index` 每次都 `TTFont(...)` 逐个枚举，一份 PDF 要查好几次，没有任何缓存。
+- **修复**：`_face_names` 按文件缓存「字面名 → 序号」表，键是路径 + mtime + 大小，系统更新字体后自动重新枚举；一个子字体都读不出来时不记。只缓存序号，`TTFont` 对象仍每次新建：reportlab 的字体对象带每份文档的子集状态，复用要另外论证，不在这条里。
+- **核对**：同一张盘重复渲染，中位 0.959 s → 0.286 s（同一台机器、同样负载下测的，只看比例）；`pdffonts` 列出的嵌入字体前后相同（STSongti-SC-Regular / Bold）。
+- **守卫**：`tests/test_pdf_font_cache.py`。负向对照：缓存键去掉 mtime 与大小时「字体文件变了要重新枚举」红；失败也缓存时 `test_a_failed_enumeration_is_not_remembered` 红。
+- **法则**：长命进程里，「只是慢一点」的探测乘以调用次数就是主要开销；缓存系统文件时把文件的身份放进键里。
+
 ### v0.47.2-dev / 2026-11-06 — JSON 报告的闸永远是绿的
 
 - **症状**：架构审计：`answer_text: "好。"` 时 JSON 里有 16 段分析、`coverage_ratio: 1.0`、`ai_analysis_complete: True`、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`，`completion_hint` 说报告含「AI analysis」。
@@ -234,7 +244,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 
 - **症状**：架构审计复现：`runs` 表根页损坏（库头完好）时 `MemoryStore()` 照常构造，之后每次 `run_tool` 在 `create_run` 抛 `database disk image is malformed`，重启后 `corruption_recovery` 仍是 `None`，只能手动搬走库；只读库让 `MemoryStore()` 抛 `attempt to write a readonly database`，服务根本建不起来。隔离日志写「可用 memory 工具重建索引」，没有这样的工具。
 - **根因**：分类恢复只在 `initialize()` 里跑，而 `CREATE … IF NOT EXISTS` / `PRAGMA table_info` 只读 schema，碰不到坏的数据页。非损坏类错误（只读、路径不可用）直接冒出构造函数。可记忆库本来就是便利缓存，算盘不靠它。
-- **修复（只做存储一侧）**：① `MemoryStore()` 不再因存储问题抛错：`ensure_dirs` 的 `OSError` 与建库的 `sqlite3.Error` 记进 `init_error`，`connect()` 每次重试一遍，权限恢复后自愈；`integrity_check` 如实报 `ok: false` + `init_error`（`Settings.ensure_dirs` 的 `config.unexpanded_template` 不是 OSError，照常抛）。② 写路径换 `_writer()`：malformed 时先用 `PRAGMA integrity_check(1)` 确认当前这份库真坏，才走 `_quarantine_corrupt_db` + 重建，本次写仍抛错（数据确实没进库），下一次写落在新库上。用 integrity_check 不用 quick_check：后者不比对索引与表内容，那类损坏同样报 malformed。③ 读路径不隔离：为一次查询失败搬走整个库不值得。④ 删掉重建索引的承诺，日志改说旧产物还在 `runs/`、但不再出现在检索里。`memory reindex` 要新增 CLI 命令，不在这轮。
+- **修复（只做存储一侧）**：① `MemoryStore()` 不再因存储问题抛错：建库的 `sqlite3.Error` / `OSError` 记进 `init_error`，`ensure_dirs` 失败不单独算数（建不出来的可能只是 runtime 根或 trace 目录），`connect()` 每次重试（连目录一起建），权限恢复或目录腾出来后自愈；`integrity_check` 如实报 `ok: false` + `init_error`（`Settings.ensure_dirs` 的 `config.unexpanded_template` 不是 OSError，照常抛）。② 写路径换 `_writer()`：malformed 时先用 `PRAGMA integrity_check(1)` 确认当前这份库真坏，才走 `_quarantine_corrupt_db` + 重建，本次写仍抛错（数据确实没进库），下一次写落在新库上。用 integrity_check 不用 quick_check：后者不比对索引与表内容，那类损坏同样报 malformed。③ 读路径不隔离：为一次查询失败搬走整个库不值得。④ 删掉重建索引的承诺，日志改说旧产物还在 `runs/`、但不再出现在检索里。`memory reindex` 要新增 CLI 命令，不在这轮。
 - **没改的**：`run_tool` / `dispatch` 的存档块由 `improve/core-call-chain` 处理（存档失败回图 + warning）。`TraceRecorder.__init__` 也调 `ensure_dirs`，数据目录建不出来且开着 trace 时服务构造仍会抛。
 - **守卫**：`tests/test_memory_durability.py`。负向对照：去掉写时恢复、`_database_is_sound` 恒判坏、读路径也走 `_writer`，各红对应一条。只读那条在 Windows 与 root 下 skip，`test_construction_survives_an_unusable_path` 全平台跑。
 - **法则**：错误文字只是线索，隔离（搬走用户的库）之前要亲自确认。
