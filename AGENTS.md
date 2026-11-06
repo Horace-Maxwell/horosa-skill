@@ -1303,7 +1303,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.3.1 报告 · 盘图 · PDF（reports / figures）
 
-- **模块分层（v0.47.2-dev）。** `builder.py` 只管顺序与章节清单。`source.py` 读存档、出人读章节；`question.py` 拆用户问题；`default_report.py` 是确定性回填（机器写的；何时进人读版见 `merge_ai_report`）；`gates.py` 是质量闸（量调用方自己写的答案）；`search_index.py` 建大纲、纯文本、检索键；`template.py` 是给 AI 的模板。依赖单向（`tests/test_report_modules.py`）：`source` / `question` / `search_index` 不依赖别的报告模块，闸碰不到 `default_report`。
+- **模块分层（v0.47.2-dev）。** `builder.py` 只管顺序与章节清单。`source.py` 读存档、出人读章节；`question.py` 拆用户问题；`default_report.py` 是确定性回填（机器写的；何时进人读版见 `merge_ai_report`）；`gates.py` 是质量闸（量调用方自己写的答案）；`search_index.py` 建大纲、纯文本、检索键；`template.py` 是给 AI 的模板；`layout.py` 定正文印什么、按什么顺序。依赖单向（`tests/test_report_modules.py`）：`source` / `question` / `search_index` 不依赖别的报告模块，闸碰不到 `default_report`。
+  渲染：DOCX 与 PDF 都按 `layout.body_blocks` 的同一串块画，新增正文内容改 `layout.py`，渲染器只加画法（`tests/test_report_layout.py`）。块带用途不带样式。封面、目录、报告说明不进这串块：PDF 把基本信息画在封面、说明只给解读报告，DOCX 排在正文、两种报告都有。
   索引只建一次：要等全部章节定稿，所以交付清单排在索引之前，清单里关于索引的三项由 `index_checks` 从输入判断。章节用 `[*head, 清单, *tail]` 拼，不按位置回填。
 - **`output_path` 的字符串闸在第一次文件系统访问之前（v0.47.2-dev，`winpaths`）。** `resolve()` 不是纯函数：对 UNC 路径它会向对方发起 SMB 连接并送出 NTLM 认证（实测卡 21 秒才拒绝）。Windows 上网络 / 设备路径、保留设备名（含 `NUL.pdf`、`COM¹`）、
   NTFS 备用数据流、非法字符一律先拦；`HOROSA_REPORT_OUTPUT_ROOTS` 配过的共享按字符串放行。新增任何接收路径的工具走同一道闸（`test_guard_refuses_before_touching_the_filesystem`）。

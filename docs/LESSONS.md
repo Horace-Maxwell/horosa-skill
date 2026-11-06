@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 拆报告模块时踩的两处：方法改函数后局部变量遮住同名函数（`payload = payload(...)`，`UnboundLocalError`）；验证比对工具时两个负向对照看着没红，其实是对照本身没改动输出（8.6 → 8.7 pt 在 OOXML 里取整相同，`bool(ai_report)` 恒真） | 函数用动词命名；对照先确认真的改了输出 |
 | v0.47.2-dev (2026-11-06) | 「回填只进机器 JSON」这句话是错的：`ai_report` 带 `analysis_sections` 时，PDF / DOCX 的「AI 解读」里印着机器写的段落（八字 16 段 3084 字，AI 写的 2 段 69 字）；上一轮审计只试了四种形状就下了结论，还写进了 AGENTS | 文档改回实情，输出未动，待决；下结论前逐字段试完，不凭几个样例 |
 | v0.47.2-dev (2026-11-06) | 每出一份 PDF 都把系统字体集重新解析一遍：`_face_index` 枚举 .ttc 占渲染约七成，长命的 MCP server 也不例外 | 「字面名 → 序号」表按文件缓存，键带 mtime 与大小；同一份 PDF 从 0.96 s 到 0.29 s，嵌入字体不变；`tests/test_pdf_font_cache.py` |
 | v0.47.2-dev (2026-11-06) | JSON 报告的闸永远是绿的：AI 只写「好。」时覆盖率 1.0、`ready_to_deliver: True`；`style:"chart"` 完全没有 AI 也写 `has_ai_answer: True`、`ai_analysis_complete: True`，量的都是机器回填 | 闸改量调用方自己写的答案；逐章覆盖如实报但不拦交付（定向解读是有意设计）；chart 不要 AI；`tests/test_report_gates.py` |
@@ -185,6 +186,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 拆报告模块时踩的两处
+
+- **方法改函数，局部变量遮住同名函数**：`self._payload(...)` 机械改成 `payload(...)` 后，`payload = payload(source_artifact)` 抛 `UnboundLocalError`（同函数里只要有赋值，这个名字就是局部的）。`export_format`、`report_quality`、`search_index` 都是这个形状。快照第一次就全红，语法检查和未定义名检查都看不出来。修：函数用动词（`read_payload`、`build_report_quality`），重新从原文件生成，不逐处打补丁。
+- **负向对照自己也可能是假的**：拆分前要证明比对工具能抓到改动，三处小改只有 PDF 那处报了差异。不是工具漏了：DOCX 的 8.6 → 8.7 pt 经 `w:sz` 取整后相同，`ready_for_ai_review` 里的 `bool(ai_report)` 恒真，两处都根本没改动输出。换成确实改输出的对照后 DOCX 114 份、JSON 298 份都红。
+- **法则**：负向对照没红时，先确认它真的改了行为，再去怀疑守卫。
 
 ### v0.47.2-dev / 2026-11-06 — 「回填只进机器 JSON」这句话是错的
 
