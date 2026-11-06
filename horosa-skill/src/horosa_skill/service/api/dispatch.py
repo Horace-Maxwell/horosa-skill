@@ -27,7 +27,8 @@ from horosa_skill.decisions.surfaces.routing import (
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
 from horosa_skill.engine.registry import resolve_tool_name
 from horosa_skill.engine.router import select_tools
-from horosa_skill.errors import DispatchResolutionError, ToolValidationError
+from horosa_skill.errors import DispatchResolutionError, ToolValidationError, validation_errors
+from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput, HecanInput
@@ -46,6 +47,18 @@ from horosa_skill.service.envelope import (
 HECAN_SCHEMA = "horosa.skill.hecan.v1"
 
 
+def _validated(model: Any, payload: dict[str, Any]) -> Any:
+    """校验 dispatch / hecan 的入参；严格校验不过（数字经纬度、数字时区）才归一化重来。
+
+    MCP 面先归一化，CLI 直调这里，同一份载荷曾一边能跑一边被拒。合法载荷不动：每个技法在 run_tool 里本来就会归一化，
+    这里全量归一化不改结果，只会改掉成功命令回显的 `normalized_inputs`。两次都不过时抛第二次的 ValidationError。
+    """
+    try:
+        return model.model_validate(payload)
+    except ValidationError:
+        return model.model_validate(normalize_request_payload(payload))
+
+
 class DispatchAPI:
     def hecan(self, payload: dict[str, Any]) -> dict[str, Any]:
         """合参（v0.28.0 B3）：一问多技法交叉印证——全行业没有的形态，也只有 92 技法才做得起。
@@ -60,9 +73,9 @@ class DispatchAPI:
             metadata={"entrypoint": "hecan", "payload": payload},
         ) as trace:
             try:
-                request = HecanInput.model_validate(payload)
+                request = _validated(HecanInput, payload)
             except ValidationError as exc:
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for horosa_hecan.",
                     code="hecan.invalid_payload",
@@ -356,9 +369,9 @@ class DispatchAPI:
         preselected_tools: list[str] | None = None,
     ) -> DispatchEnvelope:
         try:
-            request = DispatchInput.model_validate(payload)
+            request = _validated(DispatchInput, payload)
         except ValidationError as exc:
-            errors = exc.errors()
+            errors = validation_errors(exc)
             raise ToolValidationError(
                 "Invalid payload for horosa_dispatch.",
                 code="dispatch.invalid_payload",

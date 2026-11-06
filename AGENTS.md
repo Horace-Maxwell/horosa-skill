@@ -425,7 +425,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 **新增东西时的同步义务**（每条都有测试会红）：
 1. **新输出字段**含中文 → 先归类：转（`TEXT_KEYS`）/ 保持原文（`KEEP_KEYS`）/ 协议整棵不进（`SKIP_KEYS`）。没归类
    `unclassified_text_paths` 报出路径，`test_every_chinese_string_in_real_outputs_is_classified` 红。正文直接放在 `data` 里的工具进
-   `DATA_TEXT_TOOLS`；协议类工具进 `PROTOCOL_TOOLS`（信封 `tool` 字段）与 `mcp_runner.UNLOCALIZED_TOOLS`（MCP 名）。
+   `DATA_TEXT_TOOLS`；协议类操作进 `textscript.localize.PROTOCOL_OPERATIONS`——唯一一张表，CLI 命令函数同名，`mcp_runner.UNLOCALIZED_TOOLS`（MCP 名）。
 2. **新 CLI 命令**打印结果 → 经 `_localized`，或进 `cli.UNLOCALIZED_COMMANDS` 并说明为什么（AST 守卫）。
 3. **新报告格式 / 渲染路径** → 经 `localize_document` 后再落盘；PDF 字体候选在 `renderers._PDF_FONT_CANDIDATES`（简 / 繁各一组
    常规 + 粗体，`_register_pdf_fonts` 注册），新字体必须先核字形覆盖（简体用的 Songti SC 缺 966 个繁体字，直接拿来渲染繁体会出方块）。
@@ -1162,6 +1162,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
   （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
   断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
+- **CLI 的拒绝只有一个写入点（v0.47.2-dev）。** stderr 上的 JSON 只由 `cli._write_refusal` 写（`default=str`，AST 守卫 `tests/test_cli_refusals.py`）；带码的拒绝走 `_emit_refusal` / `_refuse`（过 `recovery_for`，与 MCP 同一套恢复说明）。pydantic 错误一律经 `errors.validation_errors`：`exc.errors()` 的 `ctx` 里是异常对象，进 details 就出不了进程。
+- **`dispatch` / `hecan` 的入参（v0.47.2-dev）。** `DispatchAPI._validated`：严格校验不过（数字经纬度、数字时区）才 `normalize_request_payload` 重来，否则同一份载荷在 MCP 能跑、在 CLI 被拒。别改成入口全量归一化：每个技法在 `run_tool` 里本来就归一化，全量归一化不改结果，只改成功命令回显的 `normalized_inputs`。`_load_payload` 按字节读、解 utf-8-sig，读取失败是 `tool.invalid_payload` 的 JSON 拒绝。
 - **错误码是接口。** 每个 `code="…"` 必须经 `errors.classify_code` 落到恢复规则（精确表 → 基础设施前缀 →
   `*_missing_*`/`*invalid*`（修入参）/`*_failed`/`*_unavailable`（重试再体检）后缀），`verify_error_recovery.py`
   硬红；文案用 `errors.bilingual(zh, en)`，非双语计数只降不升。service 与 MCP 两条错误路径都走

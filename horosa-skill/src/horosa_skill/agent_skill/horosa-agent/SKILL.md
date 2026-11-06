@@ -343,7 +343,7 @@ platform and code page — decode them as UTF-8.
   valid one. `tool list` gives each technique's `input_contract.example_payload` (live-verified; replace the values).
 - `dispatch` / `hecan` take the birth data nested (`{"query": …, "birth": {"date": …}}`) or flat at the top level
   like a technique tool (`{"query": …, "date": …, "time": …}`).
-- Payload files are UTF-8 JSON objects (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
+- Payload files are UTF-8 JSON objects, BOM or not (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
   "lon": "121e28", …}`). `--stdin` also works on macOS/Linux; on **Windows PowerShell 5.1 use `--input` / `--output`
   files** — the pipe re-encodes bytes through the console code page and mangles Chinese in both directions.
 - Exit code 0 = an envelope was written: check `ok`; a failed technique is `ok: false` + `error.code`, not an

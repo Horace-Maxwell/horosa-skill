@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from horosa_skill import winpaths
 from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.engine.registry import resolve_tool_name
-from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.errors import ToolValidationError, bilingual, validation_errors
 from horosa_skill.reports import render_report
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.tools import (
@@ -84,7 +84,7 @@ class ReportsAPI:
                 request = MemoryAnswerInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.answer.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for memory answer record.",
                     code="memory.answer.invalid_payload",
@@ -116,7 +116,7 @@ class ReportsAPI:
                 request = MemoryQueryInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.query.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for memory query.",
                     code="memory.query.invalid_payload",
@@ -157,7 +157,7 @@ class ReportsAPI:
                 request = MemoryShowInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.show.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for memory show.",
                     code="memory.show.invalid_payload",
@@ -225,7 +225,7 @@ class ReportsAPI:
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
             except ValidationError as exc:
                 trace["error_code"] = "report.template.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for report template.",
                     code="report.template.invalid_payload",
@@ -391,7 +391,7 @@ class ReportsAPI:
                 )
             except ValidationError as exc:
                 trace["error_code"] = "report.render.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for report render.",
                     code="report.render.invalid_payload",
@@ -435,7 +435,7 @@ class ReportsAPI:
                 normalized_format = self._normalize_report_format(request.format)
             except ValidationError as exc:
                 trace["error_code"] = "report.from_tool.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for report from tool.",
                     code="report.from_tool.invalid_payload",
@@ -688,7 +688,7 @@ class ReportsAPI:
                 request = TechniqueReportInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "report.technique.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for technique report.",
                     code="report.technique.invalid_payload",

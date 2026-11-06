@@ -36,9 +36,10 @@ SKIP_KEYS = frozenset({
 DATA_KEYS = frozenset({"export_snapshot", "snapshot_text", "technique_card"})
 # 正文直接放在 `data` 里（没有导出快照）的工具：整份 data 按同一套键规则走。
 DATA_TEXT_TOOLS = frozenset({"knowledge_read"})
-# 给 AI 的协议 / 注册表 / 回显用户贴来的文本：整份信封不转。MCP 名单在 surfaces/mcp_runner.UNLOCALIZED_TOOLS，
-# 这里按信封的 `tool` 字段再拦一次——精简面 `horosa_tool_run(tool_name="export_parse")` 走的是同一个出口。
-PROTOCOL_TOOLS = frozenset({"export_parse", "export_registry", "knowledge_registry"})
+# 给 AI 的协议 / 注册表 / 回显用户贴来的文本：整份不转。这是唯一一张表（v0.47.2-dev）：MCP 工具名 = `horosa_<操作>`
+# （mcp_runner.UNLOCALIZED_TOOLS）、CLI 命令函数同名（cli.UNLOCALIZED_COMMANDS）、信封的 `tool` 字段也是它
+# ——精简面 `horosa_tool_run(tool_name="export_parse")` 走的是同一个出口，这里按信封再拦一次。
+PROTOCOL_OPERATIONS = frozenset({"agent_guidance", "export_parse", "export_registry", "knowledge_registry", "report_template"})
 
 
 # 古籍转换档（上游 v3.13.1 toHantClassic / CLASSIC_SCOPE_CLASS）：玄史的「原文」区段里「范 / 里」缺省保留原字
@@ -109,7 +110,7 @@ def _walk(value: Any, script: str, classic: bool = False) -> Any:
         return [_walk(item, script, classic) for item in value]
     if not isinstance(value, dict):
         return value
-    if value.get("tool") in PROTOCOL_TOOLS and "input_normalized" in value:
+    if value.get("tool") in PROTOCOL_OPERATIONS and "input_normalized" in value:
         return value
     classic = classic or value.get("tool") in CLASSIC_TOOLS
     out: dict[str, Any] = {}
@@ -211,7 +212,7 @@ def unclassified_text_paths(value: Any, path: str = "$") -> list[str]:
         return [path] if any("㐀" <= ch <= "鿿" for ch in value) else []
     if not isinstance(value, dict):
         return found
-    if value.get("tool") in PROTOCOL_TOOLS and "input_normalized" in value:
+    if value.get("tool") in PROTOCOL_OPERATIONS and "input_normalized" in value:
         return found
     for key, item in value.items():
         child = f"{path}.{key}"

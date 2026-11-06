@@ -16,7 +16,7 @@ from horosa_skill.engine.registry import (
     ToolDefinition,
     resolve_tool_name,
 )
-from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
+from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual, validation_errors
 from horosa_skill.exports import build_export_registry, parse_export_content
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import (
@@ -349,7 +349,7 @@ class ToolsAPI:
                 validated = definition.input_model.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "tool.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     f"Invalid payload for tool `{tool_name}`.",
                     code="tool.invalid_payload",

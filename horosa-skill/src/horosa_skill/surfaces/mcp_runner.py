@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.service import progress_sink
 from horosa_skill.textscript import SIMPLIFIED
-from horosa_skill.textscript.localize import localize
+from horosa_skill.textscript.localize import PROTOCOL_OPERATIONS, localize
 from horosa_skill.surfaces.mcp_errors import (
     _mcp_error_payload,
     _mcp_internal_error_payload,
@@ -117,10 +117,8 @@ async def _guarded_facade(
         return _mcp_internal_error_payload(exc)
 
 
-# 不转繁体的工具：给 AI 的协议与注册表（段名、知识库键、选项要原样送回），以及回显用户自己贴来的导出文本。
-UNLOCALIZED_TOOLS = frozenset({
-    "horosa_agent_guidance", "horosa_export_registry", "horosa_knowledge_registry", "horosa_export_parse",
-})
+# 不转文字的工具：名单只有一张，见 textscript.localize.PROTOCOL_OPERATIONS。
+UNLOCALIZED_TOOLS = frozenset(f"horosa_{name}" for name in PROTOCOL_OPERATIONS)
 
 
 class HorosaMCPServer(MCPServer):
