@@ -38,16 +38,37 @@ def test_generated_cases_stay_lockstep_with_the_tool_registry() -> None:
         assert case["requires_runtime"] is True
 
 
+def _unknown_export_keys(mapping: dict[str, str]) -> dict[str, str]:
+    from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES
+
+    known = {item["key"] for item in AI_EXPORT_TECHNIQUES}
+    return {tool: key for tool, key in mapping.items() if key not in known}
+
+
 def test_every_business_tool_is_in_export_technique_map() -> None:
     """锁步（v0.33.0 批 III-5 现场抓获的缺口）：bench 生成 case 只覆盖 TOOL_EXPORT_TECHNIQUE_MAP，
     「新增技法自动获得用例」的承诺依赖入表——批 I 的 4 个新工具全都漏了、bench 静默不覆盖。
-    非业务工具（导出/知识门面）显式列名；其余任何注册工具不在表=红。"""
+
+    表现在由注册表派生，「漏登记」不会再发生；派生带来的新错法是**缺省键不存在**：工具名默认当导出键，导出键
+    与工具名不同却没写覆盖时，parse 抛 Unknown 被吞成 export_snapshot=None，bench 照样生成用例。所以这里锁三件事：
+    非业务工具显式列名、每个键都在导出注册表里、覆盖项没有死条目。"""
     from horosa_skill.engine.registry import TOOL_DEFINITIONS
     from horosa_skill.service import TOOL_EXPORT_TECHNIQUE_MAP
+    from horosa_skill.service.export import _EXPORT_TECHNIQUE_OVERRIDES
 
     non_business = {"export_parse", "export_registry", "knowledge_read", "knowledge_registry"}
-    unmapped = sorted(set(TOOL_DEFINITIONS) - set(TOOL_EXPORT_TECHNIQUE_MAP) - non_business)
-    assert unmapped == [], f"业务工具未入 TOOL_EXPORT_TECHNIQUE_MAP（bench 不生成用例）：{unmapped}"
+    assert set(TOOL_DEFINITIONS) - set(TOOL_EXPORT_TECHNIQUE_MAP) == non_business
+    assert _unknown_export_keys(TOOL_EXPORT_TECHNIQUE_MAP) == {}, "这些工具的导出键不在 AI_EXPORT_TECHNIQUES：缺覆盖项，或导出注册表没登记"
+    dead = {k: v for k, v in _EXPORT_TECHNIQUE_OVERRIDES.items() if k == v or k not in TOOL_DEFINITIONS}
+    assert dead == {}, f"覆盖项有死条目（与工具名相同，或工具不存在）：{dead}"
+
+
+def test_a_new_tool_without_an_export_key_is_caught() -> None:
+    """负向对照：新技法没进导出注册表，或导出键与工具名不同却忘了写覆盖，上一条必须红。"""
+    from horosa_skill.service.export import _derive_export_technique_map
+
+    mapping = _derive_export_technique_map(["chart", "pd", "brand_new_tool"], overrides={"chart": "astrochart"})
+    assert _unknown_export_keys(mapping) == {"pd": "pd", "brand_new_tool": "brand_new_tool"}
 
 
 def test_faithfulness_cases_run_offline_and_adversarial_goes_red(tmp_path) -> None:

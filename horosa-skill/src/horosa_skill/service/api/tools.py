@@ -1,6 +1,8 @@
 """工具 API（ToolsAPI）：list_tools、本地工具分派表、run_tool（闸门、富化、存档、信封）。"""
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 from pydantic import ValidationError
@@ -53,6 +55,41 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
     return envelope
 
 
+def _shenshu_runner(api: Any, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return api._run_shenshu_tool(payload, name)
+
+
+def _by_name(method: str) -> Callable[[Any, str, dict[str, Any]], dict[str, Any]]:
+    """一个 runner 服务一族技法，第一个参数是技法名。"""
+    return lambda api, name, payload: getattr(api, method)(name, payload)
+
+
+def _payload_only(method: str) -> Callable[[Any, str, dict[str, Any]], dict[str, Any]]:
+    return lambda api, _name, payload: getattr(api, method)(payload)
+
+
+def _progextra(api: Any, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return api._run_progextra_js_tool(payload, name)
+
+
+# 不走命名约定的本地工具（技法名 → (api, 技法名, 载荷) → 结果）。一批共用 runner 的技法表（神数、择日）在 `_local_runner` 里按表判。
+_LOCAL_RUNNER_OVERRIDES: dict[str, Callable[[Any, str, dict[str, Any]], dict[str, Any]]] = {
+    "export_registry": _payload_only("_local_export_registry"),
+    "export_parse": _payload_only("_local_export_parse"),
+    "knowledge_registry": _payload_only("_local_knowledge_registry"),
+    "knowledge_read": _payload_only("_local_knowledge_read"),
+    "qizhengelection": _payload_only("_run_qizheng_election_tool"),
+    "ziwei_birth": _payload_only("_run_ziwei_tool"),
+    "liureng_gods": _by_name("_run_liureng_tool"),
+    "liureng_runyear": _by_name("_run_liureng_tool"),
+    "bazi_birth": _by_name("_run_bazi_tool"),
+    "bazi_direct": _by_name("_run_bazi_tool"),
+    "triplicityrulers": _progextra,
+    "keypoints": _progextra,
+    "lunationphase": _progextra,
+}
+
+
 class ToolsAPI:
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -97,181 +134,65 @@ class ToolsAPI:
     def _search_knowledge(self, payload: dict[str, Any]) -> dict[str, Any]:
         return knowledge_search.search_all(self.settings, payload)
 
-    def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
-        if definition.name == "export_registry":
-            return build_export_registry(technique=payload.get("technique"))
-        if definition.name == "export_parse":
-            try:
-                return parse_export_content(
-                    technique=payload["technique"],
-                    content=payload["content"],
-                    selected_sections=payload.get("selected_sections"),
-                    planet_info=payload.get("planet_info"),
-                    astro_meaning=payload.get("astro_meaning"),
-                )
-            except ValueError as exc:
-                raise ToolValidationError(
-                    str(exc),
-                    code="tool.invalid_export_technique",
-                    details={"tool_name": definition.name, "technique": payload.get("technique")},
-                ) from exc
-        if definition.name == "knowledge_registry":
-            if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
-                return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
-            registry = build_knowledge_registry(domain=payload.get("domain"))
-            if not payload.get("domain"):
-                registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
-            return registry
-        if definition.name == "knowledge_read" and f"{payload.get('query') or ''}".strip():
+    def _local_export_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return build_export_registry(technique=payload.get("technique"))
+
+    def _local_export_parse(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return parse_export_content(
+                technique=payload["technique"],
+                content=payload["content"],
+                selected_sections=payload.get("selected_sections"),
+                planet_info=payload.get("planet_info"),
+                astro_meaning=payload.get("astro_meaning"),
+            )
+        except ValueError as exc:
+            raise ToolValidationError(
+                str(exc),
+                code="tool.invalid_export_technique",
+                details={"tool_name": "export_parse", "technique": payload.get("technique")},
+            ) from exc
+
+    def _local_knowledge_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
+            return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
+        registry = build_knowledge_registry(domain=payload.get("domain"))
+        if not payload.get("domain"):
+            registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
+        return registry
+
+    def _local_knowledge_read(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if f"{payload.get('query') or ''}".strip():
             # 检索已有专门的门面 horosa_knowledge_search（v0.45.0）；knowledge_read 带 query 的老用法照旧可用。
             return self._search_knowledge(payload)
-        if definition.name == "knowledge_read":
-            domain = f"{payload.get('domain') or ''}".strip()
-            if domain == user_knowledge.USER_DOMAIN:
-                return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
-                                                 from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))
-            return read_knowledge_entry(payload)
-        if definition.name == "qimen":
-            return self._run_qimen_tool(payload)
-        if definition.name == "qimenzeri":
-            return self._run_qimenzeri_tool(payload)
-        if definition.name in self._ZERI_SCAN_TOOLS:
-            return self._run_zeri_scan_tool(definition.name, payload)
-        if definition.name in self._ZERI_BACKEND_TOOLS:
-            return self._run_zeri_backend_tool(definition.name, payload)
-        if definition.name == "tianxing":
-            return self._run_tianxing_tool(payload)
-        if definition.name == "qizhengelection":
-            return self._run_qizheng_election_tool(payload)
-        if definition.name == "india_rectify":
-            return self._run_india_rectify_tool(payload)
-        if definition.name == "planet_cycles":
-            return self._run_planet_cycles_tool(payload)
-        if definition.name == "jieqi_birth":
-            return self._run_jieqi_birth_tool(payload)
-        if definition.name == "taiyi":
-            return self._run_taiyi_tool(payload)
-        if definition.name == "jinkou":
-            return self._run_jinkou_tool(payload)
-        if definition.name in {"liureng_gods", "liureng_runyear"}:
-            return self._run_liureng_tool(definition.name, payload)
-        if definition.name in {"bazi_birth", "bazi_direct"}:
-            return self._run_bazi_tool(definition.name, payload)
-        if definition.name == "ziwei_birth":
-            return self._run_ziwei_tool(payload)
-        if definition.name == "suzhan":
-            return self._run_suzhan_tool(payload)
-        if definition.name == "sixyao":
-            return self._run_sixyao_tool(payload)
-        if definition.name == "geomancy":
-            return self._run_geomancy_tool(payload)
-        if definition.name == "tarot":
-            return self._run_tarot_tool(payload)
-        if definition.name == "lingqi":
-            return self._run_lingqi_tool(payload)
-        if definition.name == "tongshefa":
-            return self._run_tongshefa_tool(payload)
-        if definition.name == "canping":
-            return self._run_canping_tool(payload)
-        if definition.name == "heluo":
-            return self._run_heluo_tool(payload)
-        if definition.name == "yizhangjing":
-            return self._run_yizhangjing_tool(payload)
-        if definition.name == "xiaoliuren":
-            return self._run_xiaoliuren_tool(payload)
-        if definition.name == "feigong":
-            return self._run_feigong_tool(payload)
-        if definition.name == "xiaochengtu":
-            return self._run_xiaochengtu_tool(payload)
-        if definition.name == "guice":
-            return self._run_guice_tool(payload)
-        if definition.name == "zhengchuan":
-            return self._run_zhengchuan_tool(payload)
-        if definition.name == "acg":
-            return self._run_acg_tool(payload)
-        if definition.name == "astrodata":
-            return self._run_astrodata_tool(payload)
-        if definition.name == "bazi_inverse":
-            return self._run_bazi_inverse_tool(payload)
-        if definition.name == "sanshiunited":
-            return self._run_sanshiunited_tool(payload)
-        if definition.name == "huangli":
-            return self._run_huangli_tool(payload)
-        if definition.name == "tongshu":
-            return self._run_tongshu_tool(payload)
-        if definition.name == "xuanshi":
-            return self._run_xuanshi_tool(payload)
-        if definition.name == "babylon":
-            return self._run_babylon_tool(payload)
-        if definition.name == "draconic":
-            return self._run_draconic_tool(payload)
-        if definition.name == "relocation":
-            return self._run_relocation_tool(payload)
-        if definition.name == "hellen_chart":
-            return self._run_hellen_chart_tool(payload)
-        if definition.name == "guolao_chart":
-            return self._run_guolao_chart_tool(payload)
-        if definition.name == "germany":
-            return self._run_germany_tool(payload)
-        if definition.name == "harmonic":
-            return self._run_harmonic_tool(payload)
-        if definition.name == "agepoint":
-            return self._run_agepoint_tool(payload)
-        if definition.name == "distributions":
-            return self._run_distributions_tool(payload)
-        if definition.name == "jaynesprog":
-            return self._run_jaynesprog_tool(payload)
-        if definition.name == "neroman":
-            return self._run_neroman_tool(payload)
-        if definition.name == "bezzafigure":
-            return self._run_bezzafigure_tool(payload)
-        if definition.name == "jayprofection":
-            return self._run_jayprofection_tool(payload)
-        if definition.name == "michon":
-            return self._run_michon_tool(payload)
-        if definition.name == "vedicprog":
-            return self._run_vedicprog_tool(payload)
-        if definition.name == "ephemeris":
-            return self._run_ephemeris_tool(payload)
-        if definition.name == "returntimeline":
-            return self._run_returntimeline_tool(payload)
-        if definition.name == "prenatalsyzygy":
-            return self._run_prenatalsyzygy_tool(payload)
-        if definition.name == "prog":
-            return self._run_prog_tool(payload)
-        if definition.name == "planetaryarc":
-            return self._run_planetaryarc_tool(payload)
-        if definition.name == "planetaryages":
-            return self._run_planetaryages_tool(payload)
-        if definition.name == "balbillus":
-            return self._run_balbillus_tool(payload)
-        if definition.name == "yearsystem129":
-            return self._run_yearsystem129_tool(payload)
-        if definition.name == "persiandirected":
-            return self._run_persiandirected_tool(payload)
-        if definition.name in {"triplicityrulers", "keypoints", "lunationphase"}:
-            return self._run_progextra_js_tool(payload, definition.name)
-        if definition.name == "extrareturns":
-            return self._run_extrareturns_tool(payload)
-        if definition.name == "horary":
-            return self._run_horary_tool(payload)
-        if definition.name == "election":
-            return self._run_election_tool(payload)
-        if definition.name in _SHENSHU_ENDPOINTS:
-            return self._run_shenshu_tool(payload, definition.name)
-        if definition.name == "mundane":
-            return self._run_mundane_tool(payload)
-        if definition.name == "firdaria":
-            return self._run_firdaria_tool(payload)
-        if definition.name == "decennials":
-            return self._run_decennials_tool(payload)
-        if definition.name == "otherbu":
-            return self._run_otherbu_tool(payload)
-        raise ToolValidationError(
-            f"Unsupported local tool: {definition.name}",
-            code="tool.unsupported_local_tool",
-            details={"tool_name": definition.name},
-        )
+        domain = f"{payload.get('domain') or ''}".strip()
+        if domain == user_knowledge.USER_DOMAIN:
+            return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
+                                             from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))
+        return read_knowledge_entry(payload)
+
+    def _local_runner(self, name: str) -> Callable[[dict[str, Any]], dict[str, Any]] | None:
+        """本地工具 → runner。缺省 `_run_<技法名>_tool(payload)`：加技法写好 runner 就够。认不出返回 None。"""
+        override = _LOCAL_RUNNER_OVERRIDES.get(name)
+        if override is not None:
+            return partial(override, self, name)
+        if name in self._ZERI_SCAN_TOOLS:
+            return partial(self._run_zeri_scan_tool, name)
+        if name in self._ZERI_BACKEND_TOOLS:
+            return partial(self._run_zeri_backend_tool, name)
+        if name in _SHENSHU_ENDPOINTS:
+            return partial(_shenshu_runner, self, name)
+        return getattr(self, f"_run_{name}_tool", None)
+
+    def _run_local_tool(self, definition: ToolDefinition, payload: dict[str, Any]) -> dict[str, Any]:
+        runner = self._local_runner(definition.name)
+        if runner is None:
+            raise ToolValidationError(
+                f"Unsupported local tool: {definition.name}",
+                code="tool.unsupported_local_tool",
+                details={"tool_name": definition.name},
+            )
+        return runner(payload)
 
     def run_tool(
         self,

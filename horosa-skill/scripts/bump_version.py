@@ -7,6 +7,7 @@ each maintainer's memory. History lines ("as of v0.39.0", "v0.39.0 起", "Since 
 
     python scripts/bump_version.py 0.41.0            # rewrite every site from the current version to 0.41.0
     python scripts/bump_version.py --check           # exit 1 when any site disagrees with pyproject (no writes)
+    python scripts/bump_version.py --tool-counts     # after adding a technique: rewrite every prose tool count, re-render the mirrors
 
 After a bump: `uv lock` (refreshes uv.lock's own version line), `npm --prefix horosa-core-js install --package-lock-only`
 is NOT needed (package-lock.json is rewritten here), then `python scripts/verify_docs_sync.py`.
@@ -15,6 +16,8 @@ is NOT needed (package-lock.json is rewritten here), then `python scripts/verify
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -125,11 +128,47 @@ def disagreeing_sites(version: str) -> list[str]:
     return out
 
 
+def _load_script(name: str):
+    """verify_docs_sync / gen_agent_mirrors import the package; only --tool-counts needs them, so a plain version bump stays stdlib."""
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(f"{name}.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def count_changes(root: Path, *, techniques: int, full: int, gated: int, exempt: int) -> tuple[dict[int, int], dict[int, int]]:
+    """({old: new} for totals, {old: new} for the gated count). The stated numbers come from what the repo says today: the README badge
+    and the budget baseline, which `verify_mcp_list_budget.py --update-baseline` only moves after this step."""
+    found = re.search(r"badge/(?:tools|技法|工具)-(\d+)-", (root / "README.md").read_text(encoding="utf-8"))
+    assert found, "README.md: tools badge not found"
+    was = int(found.group(1))
+    budget = json.loads((root / "horosa-skill" / "contracts" / "mcp_list_budget.json").read_text(encoding="utf-8"))
+    return {was: techniques, int(budget["full_tools"]): full}, {was - exempt: gated}
+
+
+def run_tool_counts() -> int:
+    judge = _load_script("verify_docs_sync")
+    mirrors = _load_script("gen_agent_mirrors")
+    techniques = len(judge.TOOL_DEFINITIONS)
+    totals, gated = count_changes(ROOT, techniques=techniques, full=techniques + judge.FACADE_TOOL_COUNT, gated=judge.expected_gated(),
+                                  exempt=techniques - judge.expected_gated())
+    touched = judge.sync_tool_counts(ROOT, totals=totals, gated=gated)
+    for rel, n in touched:
+        print(f"{rel}: {n} line(s)")
+    mirrors.main([])
+    print(f"bump-version: totals {totals}, gated {gated} across {len(touched)} files; now run scripts/verify_mcp_list_budget.py "
+          "--update-baseline and scripts/verify_docs_sync.py")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("new_version", nargs="?", help="target version, e.g. 0.41.0")
     ap.add_argument("--check", action="store_true", help="only verify every site carries the pyproject version")
+    ap.add_argument("--tool-counts", action="store_true", help="rewrite the prose tool counts from the registry (no version change)")
     args = ap.parse_args(argv)
+    if args.tool_counts:
+        return run_tool_counts()
     old = current_version()
     if args.check or not args.new_version:
         bad = disagreeing_sites(old)

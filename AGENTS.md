@@ -71,7 +71,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
      **复核 = 重读 source_url，事实没变也要更新日期**——「上次核对是什么时候」本身就是事实。
      对**真台账**的断言一律拿真实日期判（`dt.date.today()`，与 CLI 同）：测试把「今天」冻结在写测试那天，任何一次复核（`verified_on` 往后挪）都会被判「in the future」（v0.40.0 加第一条新事实时撞上）；固定日期只给合成样本用。
    - 数字（版本 / 工具 / 测试 / 知识 / 镜像份数）永远只写一次真值来源，其余由 `verify_docs_sync.py` 锁定：改数字先改真值。
-     版本号用 `horosa-skill/scripts/bump_version.py <new>`（站点一处清单 `SITES`）。
+     版本号用 `horosa-skill/scripts/bump_version.py <new>`（站点一处清单 `SITES`）；工具数用 `bump_version.py --tool-counts`，它只改判官（`verify_docs_sync.COUNT_DOCS`）读得到的形状。
    - 会话交接：多会话 / 多模型接力的工作，用 [`docs/templates/HANDOFF_TEMPLATE.md`](./docs/templates/HANDOFF_TEMPLATE.md)
      生成 `HANDOFF-<主题>.local.md`（gitignored），会话开始先读、结束前更新；本机 memory 的索引行同步。
 
@@ -550,7 +550,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 
 1. `schemas/tools/<族>.py` 输入模型（v0.41.1 起按技法族分模块，`__init__` 显式 re-export；神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
    `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
-2. `service/runners/<族>.py` 里加 `_run_*_tool` runner（mixin 方法；跨族只经 `self.` 调）；远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
+2. `service/runners/<族>.py` 里加 `_run_<技法名>_tool(payload)`（mixin 方法；跨族只经 `self.` 调）。按这个名字写就会被 `_run_local_tool` 分派，不用改 `api/tools.py`；只有方法名或参数不同才进 `_LOCAL_RUNNER_OVERRIDES`（`tests/test_local_tool_dispatch.py` 把全部本地工具解析一遍）。远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
    分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理；「周日小限」含「小限」
    要从 profection 排除、`jay` 是 `jayne` 的前缀不能单列、「推运图」这类字面泛化的名字只在没有更具体命中时兜底，v0.47.0）。
@@ -569,7 +569,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 7. 测试三层：离线契约（全技法可调、export clean）+ live `@requires_chart`/`@requires_runtime` + golden/
    export-fixture。kinastro-9 无 live 测试 → 离线 + in-process srv（**中立 CWD** 跑，别 `cd $HW`——
    本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
-8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
+8. 版本与文档：工具数跑 `scripts/bump_version.py --tool-counts`（改写全部声明并重渲镜像），再 `verify_mcp_list_budget.py --update-baseline`；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
 9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混（`zone` 认不出 = `tool.invalid_zone`，曾回落 +08:00）；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
@@ -580,10 +580,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
     `verify_technique_provenance.py` 不声明即红；ken-backed 必须真调 `_require_ken_pan`。技法依据卡按它标注「这盘是谁算的」。
     共享 runner 表 `SHARED_RUNNER` 写错名字 = 扫不到证据 = 被兜底成 `local_data`「不起盘」（v0.41.1 前 keypoints / lunationphase /
     triplicityrulers 就这样挂了两个月）；生成器现在对非空值断言存在，一行转发的 runner（如 balbillus）也要映射到真正干活的那个。
-11. **入 `TOOL_EXPORT_TECHNIQUE_MAP`**（v0.33.0 教训）：bench 的「新增技法自动获得用例」只覆盖这张表，
-    runner 自己 `_augment_export_payload` 不经过它 → 功能全绿、bench 静默不覆盖。守卫
-    `test_every_business_tool_is_in_export_technique_map`（工具 − 表 = 显式非业务清单）已锁死；
-    新工具照样入表，别等守卫红。
+11. **导出键**：`TOOL_EXPORT_TECHNIQUE_MAP` 由注册表派生，导出键缺省就是工具名，新工具自动进 bench。只有导出键与工具名不同才进 `_EXPORT_TECHNIQUE_OVERRIDES`：漏写时键不在 `AI_EXPORT_TECHNIQUES`，解析抛 Unknown 被吞成 `export_snapshot=None`，`test_every_business_tool_is_in_export_technique_map` 守这一条。
 
 12. **值级金标 + 边界纪律**（v0.33.1 · issue #15 家族，原文见 LESSONS）：**跨边界不改键**（原样透传是
     唯一被证明安全的形状；改键必在 `contracts/js_boundary_contracts.json` 留豁免与理由）。**每个本地 JS

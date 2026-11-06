@@ -1,4 +1,4 @@
-"""TOOL_GUIDANCE：每个技法工具一条指引（114 条），以及注入到条目里的 options_keys 文档与记忆 / 报告门面的指引。"""
+"""TOOL_GUIDANCE：每个技法工具一条指引，以及注入到条目里的 options_keys 文档与记忆 / 报告门面的指引。"""
 from __future__ import annotations
 
 from typing import Any
