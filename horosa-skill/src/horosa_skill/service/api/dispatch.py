@@ -27,13 +27,15 @@ from horosa_skill.decisions.surfaces.routing import (
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
 from horosa_skill.engine.registry import resolve_tool_name
 from horosa_skill.engine.router import select_tools
-from horosa_skill.errors import DispatchResolutionError, ToolValidationError
+from horosa_skill.errors import DispatchResolutionError, ToolValidationError, validation_errors
+from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 from horosa_skill.schemas.tools import DispatchInput, HecanInput
 from horosa_skill.service._context import (
     _RUN_QUERY_TEXT,
     _degrade,
+    _memory_save_failed,
     _progress_tick,
     logger,
 )
@@ -45,12 +47,24 @@ from horosa_skill.service.envelope import (
 HECAN_SCHEMA = "horosa.skill.hecan.v1"
 
 
+def _validated(model: Any, payload: dict[str, Any]) -> Any:
+    """校验 dispatch / hecan 的入参；严格校验不过（数字经纬度、数字时区）才归一化重来。
+
+    MCP 面先归一化，CLI 直调这里，同一份载荷曾一边能跑一边被拒。合法载荷不动：每个技法在 run_tool 里本来就会归一化，
+    这里全量归一化不改结果，只会改掉成功命令回显的 `normalized_inputs`。两次都不过时抛第二次的 ValidationError。
+    """
+    try:
+        return model.model_validate(payload)
+    except ValidationError:
+        return model.model_validate(normalize_request_payload(payload))
+
+
 class DispatchAPI:
     def hecan(self, payload: dict[str, Any]) -> dict[str, Any]:
         """合参（v0.28.0 B3）：一问多技法交叉印证——全行业没有的形态，也只有 92 技法才做得起。
 
         传统方法论（三式互参、八字紫微互证）+ orchestrator-workers 编排：路由/显式选盘（上限
-        max_tools）→ 同一 group 逐技法起盘（复用 dispatch 全部载荷管线与澄清闸）→ 产出**合参模板**：
+        max_tools）→ 同一 group 逐技法起盘（复用 dispatch 全部载荷管线；澄清闸与 dispatch 一样在表面入口过）→ 产出**合参模板**：
         逐技法证据表（引用不复制全文）+ 口径一致性（复用技法卡冲突检测）+ ai_fillable 综合槽。
         两条铁律写进模板 instructions：**只准引用已导出段落的事实**；**分歧必须披露，不许平均**。
         """
@@ -59,9 +73,9 @@ class DispatchAPI:
             metadata={"entrypoint": "hecan", "payload": payload},
         ) as trace:
             try:
-                request = HecanInput.model_validate(payload)
+                request = _validated(HecanInput, payload)
             except ValidationError as exc:
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for horosa_hecan.",
                     code="hecan.invalid_payload",
@@ -355,9 +369,9 @@ class DispatchAPI:
         preselected_tools: list[str] | None = None,
     ) -> DispatchEnvelope:
         try:
-            request = DispatchInput.model_validate(payload)
+            request = _validated(DispatchInput, payload)
         except ValidationError as exc:
-            errors = exc.errors()
+            errors = validation_errors(exc)
             raise ToolValidationError(
                 "Invalid payload for horosa_dispatch.",
                 code="dispatch.invalid_payload",
@@ -422,12 +436,17 @@ class DispatchAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace:
-            run_id = self.store.create_run(
-                entrypoint="dispatch",
-                query_text=request.query,
-                subject=request.model_dump(exclude_none=True),
-                group_id=trace["group_id"],
-            ) if request.save_result else None
+            run_id: str | None = None
+            if request.save_result:
+                try:
+                    run_id = self.store.create_run(
+                        entrypoint="dispatch",
+                        query_text=request.query,
+                        subject=request.model_dump(exclude_none=True),
+                        group_id=trace["group_id"],
+                    )
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路：开不了 run 也要把技法算完
+                    dispatch_warnings.append(_memory_save_failed(exc))
 
             def birth_payload() -> dict[str, Any]:
                 if request.birth is not None:
@@ -541,15 +560,19 @@ class DispatchAPI:
             )
 
             if request.save_result and run_id is not None:
-                self.store.record_entities(run_id, _extract_entities(request.model_dump(exclude_none=True), request.query))
-                envelope.memory_ref = self.store.record_dispatch_result(
-                    run_id=run_id,
-                    payload=envelope.model_dump(mode="json"),
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
-                )
-                trace["run_id"] = run_id
-                trace["artifact_path"] = envelope.memory_ref.artifact_path if envelope.memory_ref else None
+                try:
+                    self.store.record_entities(run_id, _extract_entities(request.model_dump(exclude_none=True), request.query))
+                    envelope.memory_ref = self.store.record_dispatch_result(
+                        run_id=run_id,
+                        payload=envelope.model_dump(mode="json"),
+                        trace_id=trace["trace_id"],
+                        group_id=trace["group_id"],
+                    )
+                    trace["run_id"] = run_id
+                    trace["artifact_path"] = envelope.memory_ref.artifact_path if envelope.memory_ref else None
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
+                    envelope.memory_ref = None
+                    envelope.warnings.append(_memory_save_failed(exc))
 
             trace["success"] = envelope.ok
             return envelope

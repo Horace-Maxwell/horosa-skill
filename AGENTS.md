@@ -438,7 +438,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 **新增东西时的同步义务**（每条都有测试会红）：
 1. **新输出字段**含中文 → 先归类：转（`TEXT_KEYS`）/ 保持原文（`KEEP_KEYS`）/ 协议整棵不进（`SKIP_KEYS`）。没归类
    `unclassified_text_paths` 报出路径，`test_every_chinese_string_in_real_outputs_is_classified` 红。正文直接放在 `data` 里的工具进
-   `DATA_TEXT_TOOLS`；协议类工具进 `PROTOCOL_TOOLS`（信封 `tool` 字段）与 `mcp_runner.UNLOCALIZED_TOOLS`（MCP 名）。
+   `DATA_TEXT_TOOLS`；协议类操作进 `textscript.localize.PROTOCOL_OPERATIONS`——唯一一张表，CLI 命令函数同名，`mcp_runner.UNLOCALIZED_TOOLS`（MCP 名）。
 2. **新 CLI 命令**打印结果 → 经 `_localized`，或进 `cli.UNLOCALIZED_COMMANDS` 并说明为什么（AST 守卫）。
 3. **新报告格式 / 渲染路径** → 经 `localize_document` 后再落盘；PDF 字体候选在 `renderers._PDF_FONT_CANDIDATES`（简 / 繁各一组
    常规 + 粗体，`_register_pdf_fonts` 注册），新字体必须先核字形覆盖（简体用的 Songti SC 缺 966 个繁体字，直接拿来渲染繁体会出方块）。
@@ -571,7 +571,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
 8. 版本与文档：§7 版本 bump 全覆盖；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
-9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混；快照失败 log + `snapshot_error`，
+9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混（`zone` 认不出 = `tool.invalid_zone`，曾回落 +08:00）；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
    先判空再格式化，`f"{... or ''}"` 只有显式 `or ''` 才安全。
 10. **算源声明**：`contracts/technique_provenance.json` **只由** `scripts/gen_technique_provenance.py` 生成
@@ -1156,6 +1156,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
   ③ Codex 0.158 的 `tool_input_schema_max_bytes` 缺省值，超出即静默剥说明。`verify_mcp_list_budget.py`
   对全量 / 精简两面逐工具硬顶（今日最大 3843 B）；tools/list 总量棘轮照旧。
+- **`request` 与顶层参数合并（v0.47.2-dev）。** `_merge_mcp_arguments` = `{**flat, **request}`：两边都算数，同名不同值时 `request` 优先，说明经 `request_conflict_scope` 进 `warnings`。
+  调用点在各工具的 `try` 之外，所以合并本身不抛：坏 `request` 原样往下走，由 `_normalize_mcp_request` 报 `tool.invalid_payload`。闸门读合并后的载荷（确认位放哪边都算）。守卫 `tests/test_mcp_request_merge.py`。
 - **有档位的旋钮按枚举声明；隐藏字段的两种声明法取并集（v0.40.0）。** 七政 `doubingSu28` 曾声明成 bool：`True` 被后端读成 1（斗柄定房法），
   上游缺省 2，2–8 七档根本传不进——有档位就 `Literal`/enum + 上游缺省，描述与表锁步。长尾旋钮用模型级 `ADVERTISE_HIDDEN` 或字段级
   `x-horosa-hidden` 声明不广告（校验照收、tools/list 零字节），`mcp_schema` 的 `unadvertised` 必须是**两者并集**（git 自动合并曾让后一行覆盖
@@ -1167,6 +1169,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   `engine/router.py` 一条规则（或进 `ROUTING_EXEMPT`）、`contracts/router_corpus.json` 至少一句语料
   （`verify_router_corpus.py` 的 `min_pass` 只升不降）。择日搜索族词面含基底技法名，基底规则一律
   `and not is_zeri`。`HOROSA_TOOLSETS` 未知 token 告警丢弃、全空回落全量，过滤生效即注册 `horosa_tool_run`。
+- **每个能走到 `run_tool` 的表面入口都必须先过闸（v0.47.2-dev）。** 闸门在表面入口，不在 service：`service.run_tool` / `dispatch` / `hecan` 本身不拦，新入口就是新的绕闸路。
+  `hecan` 与 `dispatch` 同闸（`validate_agent_preflight`；一次确认覆盖选中的全部技法，显式 `tools` 时不问用哪种技法）。守卫 `tests/test_gate_coverage.py` **枚举而不点名**：
+  MCP 侧 `list_tools()` 全部工具 + 正向对照，CLI 侧 AST 扫全部 Typer 命令。要豁免就进闸表 `exempt_tools`；内部探针（`selfcheck`）在载荷字面量里写确认位。
 - **工具自有的结果敏感项，闸门必须点名问到。** 族策略（ASTRO_BIRTH/SHENSHU/PREDICTIVE）只是底座；有自有旋钮
   的工具用工厂出专属策略（`_progression_target_policy`）。闸问题要么带 `options`（可枚举者并行 `values`，
   表单答案只写回这些值），要么字段进 `FREE_TEXT_GATE_FIELDS`；`tests/test_gate_policies.py` 守。
@@ -1174,6 +1179,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **闸门问什么，以 live「改参数结果必变」为准，不以代码转发了什么为准。** 演禽（xianqin）转发了 lat/lon，引擎却不读
   （上海↔乌鲁木齐逐字节相同）——问地点就是假闸门。给工具挂结果敏感项前先翻转一次；不敏感的项用**反向** live
   断言钉住（`test_xianqin_ignores_place_so_its_gate_must_not_ask_for_it`），上游哪天读了它会先红（v0.36.0 收尾）。
+- **CLI 的拒绝只有一个写入点（v0.47.2-dev）。** stderr 上的 JSON 只由 `cli._write_refusal` 写（`default=str`，AST 守卫 `tests/test_cli_refusals.py`）；带码的拒绝走 `_emit_refusal` / `_refuse`（过 `recovery_for`，与 MCP 同一套恢复说明）。pydantic 错误一律经 `errors.validation_errors`：`exc.errors()` 的 `ctx` 里是异常对象，进 details 就出不了进程。
+- **`dispatch` / `hecan` 的入参（v0.47.2-dev）。** `DispatchAPI._validated`：严格校验不过（数字经纬度、数字时区）才 `normalize_request_payload` 重来，否则同一份载荷在 MCP 能跑、在 CLI 被拒。别改成入口全量归一化：每个技法在 `run_tool` 里本来就归一化，全量归一化不改结果，只改成功命令回显的 `normalized_inputs`。`_load_payload` 按字节读、解 utf-8-sig，读取失败是 `tool.invalid_payload` 的 JSON 拒绝。
 - **错误码是接口。** 每个 `code="…"` 必须经 `errors.classify_code` 落到恢复规则（精确表 → 基础设施前缀 →
   `*_missing_*`/`*invalid*`（修入参）/`*_failed`/`*_unavailable`（重试再体检）后缀），`verify_error_recovery.py`
   硬红；文案用 `errors.bilingual(zh, en)`，非双语计数只降不升。service 与 MCP 两条错误路径都走
@@ -1184,6 +1191,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   （`runtime.*` / `transport.*` / `tool.ken_compute_failed` / `tool.internal_error`）**两条路径都要填**——
   只填一边时，调用方恰恰在最常见的失败上读到 `None`。守卫：
   `test_mcp_contract.py::test_error_paths_return_a_conformant_envelope` 同时覆盖闸门与闸门之后的失败。
+- **MCP 工具体只有一份：`mcp_server._gated_run`（v0.47.2-dev）。** 澄清闸 → elicit → 执行 → 三分支兜底都在这里，`_agent_preflight_error` 只有这一个调用点（AST 守卫）。新工具传 `gate` 与 `refuse`（错误 dict → 返回形状），别抄函数体：抄出来的 except 分支曾各不相同。
+- **存档是旁路：写不进去不许丢结果（v0.47.2-dev）。** `run_tool` 与 `dispatch` 的存档块各自 `except Exception`：结果照回、`memory_ref=None`、`warnings` 带 `memory.save_failed`（`service._context._memory_save_failed`）。别把存档挪回闸外或挪进别的 `try`。守卫 `tests/test_memory_save_failure.py`。
 - **`run_tool` always returns a `ToolEnvelope`, never lets an unexpected exception escape.** Tool
   execution + snapshot/summary/export post-processing run inside a try that catches `HorosaSkillError`
   **and** a last-resort `except Exception` → `ok=False` / `tool.internal_error`. Only invalid-payload
@@ -1193,6 +1202,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **Surfaces never dump a traceback.** CLI file reads（`--ai-report-file` / `--ai-answer-file`）raise
   clean `typer.BadParameter`; the MCP `horosa_report_*` handlers wrap unexpected renderer/IO errors via
   `_mcp_internal_error_payload`; subprocess calls carry timeouts（incl. `openclaw-check --full`, 900s）.
+- **失败要走到 `warnings` 或错误码（v0.47.2-dev）。** `verify_silent_degrades` 的宽 except 规则含项目错误基类（`HorosaSkillError` / `ToolTransportError`）：吞后端失败要 `_degrade`，只写进 `data` 不算告诉调用方。`report_from_tool` 先看 `result.ok`：失败的 run 也会存档，查 `memory_ref` 挡不住，回 `ok:false` + 原错误码。
 - **`input_normalization` degrades, never crashes.** The date/time regexes are shape-only（they accept
   month `13`, day `45`）, so anything building a `datetime` from them must tolerate `ValueError`（see
   `_combine_date_time`）. IANA-zone→offset conversion uses the *chart date*, not `now()`. `Z`/`UTC`/
@@ -1342,7 +1352,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     段内小标题进书签第三级（不进目录）。报告标题经 `_report_technique_name`（去页签名 / 分组前缀）。
   - 守卫：`tests/test_report_polish.py`、`tests/test_user_knowledge_and_chart_report.py`。
 - **JSON 报告的闸量调用方自己写的答案（v0.47.2-dev）。** `_ai_coverage_status` / `_section_coverage_matrix` / `_report_quality` / `_delivery_checklist` / `report_index.has_ai_answer` 读 `_caller_answer_view`，不读 `merged_ai_report`：后者含确定性回填，量它永远是绿的。回填本身保留（`ai_report.analysis_sections`），人读版不用。`ready_to_deliver` 要结论、摘要、分析段、建议、证据；逐章覆盖如实报但不拦交付（定向解读可交付，见 `_complete_analysis_sections`）；`style:"chart"` 不要 AI。新增闸时写一条它该是 False 的测试。
-- **CLI 的报告 `--language` 只在给了时才传（v0.43.0）。** 原先缺省 `zh-CN` 总是传下去，盖掉了 `HOROSA_OUTPUT_SCRIPT` 推出的繁体报告语言。
+- **报告 `language` 缺省 `None`：没写就跟 `HOROSA_OUTPUT_SCRIPT`（v0.47.2-dev）。** 入参模型里别放「看起来像缺省」的具体值，也别用 `model_fields_set` 判调用方写没写：MCP 的 `_normalize_mcp_request` 走 `model_dump`，缺省值到 service 时已经是显式入参。测这类行为要走 `call_tool`，只调帮手函数绕过了 `model_dump`（`tests/test_report_language_surfaces.py`）。
 
 ### 9.3.2 记忆存档（memory store / artifacts）
 
@@ -1416,6 +1426,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   CliRunner 换掉真流抓不到这类问题：测输出编码一律起真子进程 + `PYTHONIOENCODING=cp1252`（三平台都复现），见 `tests/test_cli_stdio_encoding.py`；断言帮助文字要设 `_TYPER_FORCE_DISABLE_TERMINAL=1`，否则 Linux runner 上 `GITHUB_ACTIONS` 让 rich 把选项名拆进 ANSI 色码（Windows 本机复现不了）。
 - **Windows 上别的进程开着文件是常态（v0.47.2-dev，`fsretry`）。** Python 的 `open()` 不带 FILE_SHARE_DELETE，有读者时 `os.replace` / `unlink` 抛 PermissionError：src 里禁裸 `os.replace`（`test_no_raw_os_replace_in_the_package`），
   多个会话共读的状态文件读也走 `fsretry.read_text`；放锁（`pidlock.release`）绝不抛——从 finally 冒出去会盖掉调用方结果并把锁留在盘上。判共享冲突注意 `open()` 的 PermissionError 只带 errno 13、winerror 是 None。
+- **模块级读环境变量只走 `config._env_int` / `_env_float`（v0.47.2-dev）。** `surfaces/cli.py` 顶层 import MCP server，import 时抛错 = 全部命令（含 `--version`、`doctor`）起不来。测这类问题起真子进程（`tests/test_mcp_env_import.py`）。
 - **树里出现的每个 `HOROSA_*` 名字都要进 `config.ENV_FLAG_REGISTRY`（v0.47.2-dev）。** skill 不读的（测试开关、启动器交给上游引擎的旋钮、
   星阙桌面端构建脚本的变量）登记为 `internal`，否则维护机 / 用户 shell 里合法的变量每次启动都报「未知环境变量」，告警沦为噪音。
   不是环境变量的名字写进 `tests/test_config.py::_NOT_ENV_FLAGS` 并给理由。守卫 `test_every_horosa_name_in_the_tree_is_registered`。

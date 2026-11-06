@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import functools
 import json
-import os
 from contextvars import ContextVar
 from typing import Any
 
@@ -12,19 +11,22 @@ from mcp import types as mcp_types
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import ValidationError
 
+from horosa_skill.config import _env_int
 from horosa_skill.errors import ToolValidationError
 from horosa_skill.service import progress_sink
 from horosa_skill.textscript import SIMPLIFIED
-from horosa_skill.textscript.localize import localize
+from horosa_skill.textscript.localize import PROTOCOL_OPERATIONS, localize
 from horosa_skill.surfaces.mcp_errors import (
     _mcp_error_payload,
     _mcp_internal_error_payload,
     _mcp_validation_error_payload,
 )
+from horosa_skill.surfaces.mcp_requests import request_conflict_scope
 
 # 工作线程并发上限：每个在跑的工具会持有一个 JS 子进程或一条后端 HTTP 连接，无限并发会
 # 把本机 CPU 与后端连接池打满。4 是「几个客户端同时问一句」的常见峰值。
-_MAX_CONCURRENT_TOOLS = max(1, int(os.environ.get("HOROSA_MCP_MAX_CONCURRENT_TOOLS", "4") or 4))
+# 模块级读环境变量要走 config 的容错解析：cli.py 顶层 import 这里，一个写错的值曾让 --version、--help、doctor 全部 ValueError 退出。
+_MAX_CONCURRENT_TOOLS = max(1, _env_int("HOROSA_MCP_MAX_CONCURRENT_TOOLS", 4))
 _TOOL_LIMITER: Any = None
 
 
@@ -116,10 +118,8 @@ async def _guarded_facade(
         return _mcp_internal_error_payload(exc)
 
 
-# 不转繁体的工具：给 AI 的协议与注册表（段名、知识库键、选项要原样送回），以及回显用户自己贴来的导出文本。
-UNLOCALIZED_TOOLS = frozenset({
-    "horosa_agent_guidance", "horosa_export_registry", "horosa_knowledge_registry", "horosa_export_parse",
-})
+# 不转文字的工具：名单只有一张，见 textscript.localize.PROTOCOL_OPERATIONS。
+UNLOCALIZED_TOOLS = frozenset(f"horosa_{name}" for name in PROTOCOL_OPERATIONS)
 
 
 class HorosaMCPServer(MCPServer):
@@ -142,11 +142,13 @@ class HorosaMCPServer(MCPServer):
             return await super().call_tool(name, arguments, context)
         token = _CURRENT_CONTEXT.set(context)
         try:
-            raw = await self._tool_manager.call_tool(name, arguments, context, convert_result=False)
+            with request_conflict_scope() as request_notes:
+                raw = await self._tool_manager.call_tool(name, arguments, context, convert_result=False)
         finally:
             _CURRENT_CONTEXT.reset(token)
         if isinstance(raw, mcp_types.InputRequiredResult):
             return raw
+        raw = _with_request_notes(raw, request_notes)
         if self.output_script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS:
             # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
             raw = await anyio.to_thread.run_sync(localize, raw, self.output_script)
@@ -168,6 +170,17 @@ _PROTECTED_DATA_KEYS = frozenset({
     "snapshot_text", "export_snapshot", "technique_card", "compute_sources", "route", "knowledge_context", "file",
 })
 _MIN_OMITTED_SUBTREE_BYTES = 50_000
+
+
+def _with_request_notes(raw: Any, notes: list[str]) -> Any:
+    """把入参合并的说明并进结果的 warnings：信封（pydantic）与门面（dict）两种形状；没有说明就原样返回，不碰字节。"""
+    if not notes:
+        return raw
+    if isinstance(raw, dict):
+        return {**raw, "warnings": [*(raw.get("warnings") or []), *notes]}
+    if hasattr(raw, "warnings"):
+        return raw.model_copy(update={"warnings": [*raw.warnings, *notes]})
+    return raw
 
 
 def _wire_bytes(converted: Any) -> int:

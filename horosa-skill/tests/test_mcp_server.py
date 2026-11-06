@@ -45,9 +45,10 @@ def test_normalize_mcp_request_rejects_non_object_payload() -> None:
     assert "next_action" in excinfo.value.details
 
 
-def test_merge_mcp_arguments_prefers_request_when_present() -> None:
+def test_merge_mcp_arguments_keeps_siblings_of_request() -> None:
+    # 这条测试原名 prefers_request_when_present，断言的正是「兄弟参数被丢」——把缺陷写成了期望（v0.47.2-dev）。
     merged = _merge_mcp_arguments({"request": {"run_id": "abc"}, "tool": "chart"})
-    assert merged == {"run_id": "abc"}
+    assert merged == {"run_id": "abc", "tool": "chart"}
 
 
 def test_normalize_mcp_request_accepts_flattened_memory_query_fields() -> None:

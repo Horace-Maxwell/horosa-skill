@@ -18,7 +18,7 @@ not need it; the regex is deliberately literal.
 Second rule (v0.41.1): **silent broad excepts**. The `logger.warning(` regex cannot see a handler that says nothing
 at all — `except Exception: pass`, `continue`, `return ""` — and that is exactly how four enrichment paths in
 service.py stayed silent after the v0.36.0 sweep (the 2026-10 audit found 12). A broad handler (`except Exception` /
-`BaseException` / bare) whose body only passes, continues, returns a constant / empty literal or assigns one, and
+`BaseException` / bare, plus the project's `HorosaSkillError` / `ToolTransportError`) whose body only passes, continues, returns a constant / empty literal or assigns one, and
 calls nothing (no `_degrade`, no logger, no raise), is counted per file and ratcheted the same way. Probes whose
 `None` / `False` *is* the answer are in the baseline on purpose; a new one needs `--update-baseline` in the same
 change — a visible decision, not an accident.
@@ -57,7 +57,9 @@ def scan() -> dict[str, list[int]]:
     return found
 
 
-_BROAD = {"Exception", "BaseException"}
+# 本仓的错误基类同样算宽：`except HorosaSkillError: return ""` 把一次后端失败吞成空值，调用方看到 ok=True + warnings=[]。
+# 灵棋经的日干支就是这样漏过这把守卫的（v0.47.2-dev）。
+_BROAD = {"Exception", "BaseException", "HorosaSkillError", "ToolTransportError"}
 
 
 def _is_broad(handler: ast.ExceptHandler) -> bool:

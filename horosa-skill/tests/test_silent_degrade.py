@@ -102,6 +102,9 @@ def test_silent_except_rule_flags_quiet_broad_handlers_and_spares_reporting_ones
         "except Exception as exc:\n        _degrade('x failed: %s', exc)": False,
         "except Exception:\n        logger.debug('x', exc_info=True)\n        return None": False,
         "except Exception:\n        raise": False,
+        "except HorosaSkillError:\n        return ''": True,  # 项目错误基类：吞一次后端失败，与 except Exception 同形
+        "except ToolTransportError:\n        return None": True,
+        "except HorosaSkillError as exc:\n        _degrade('x: %s', exc)\n        return ''": False,
         "except ValueError:\n        pass": False,  # narrow: an expected, named failure
         "except Exception as exc:\n        return str(exc)": False,
     }

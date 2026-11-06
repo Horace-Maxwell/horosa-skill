@@ -31,7 +31,7 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 
 ## 合参（多技法交叉印证，v0.28.0）
 
-一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据，可显式 `tools`，上限 `max_tools`）。
+一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据，可显式 `tools`，上限 `max_tools`）。与 `horosa_dispatch` 同闸：先问用户，带 `agent_confirmed_settings` / `defaults_accepted` 再调。
 它返回**合参模板**，不是终稿：
 
 1. 逐技法读全量段落（`horosa_memory_show(run_id)`——响应里只有证据指针，不背全文）。

@@ -16,7 +16,7 @@ from horosa_skill.engine.registry import (
     ToolDefinition,
     resolve_tool_name,
 )
-from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
+from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual, validation_errors
 from horosa_skill.exports import build_export_registry, parse_export_content
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.knowledge import (
@@ -24,7 +24,7 @@ from horosa_skill.knowledge import (
     read_knowledge_entry,
 )
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
-from horosa_skill.service._context import _degrade_collector, _run_query_scope
+from horosa_skill.service._context import _degrade_collector, _memory_save_failed, _run_query_scope
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.envelope import (
     _apply_response_view,
@@ -319,7 +319,7 @@ class ToolsAPI:
                 validated = definition.input_model.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "tool.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     f"Invalid payload for tool `{tool_name}`.",
                     code="tool.invalid_payload",
@@ -469,38 +469,42 @@ class ToolsAPI:
                 )
 
             if save_result:
-                effective_run_id = run_id or self.store.create_run(
-                    entrypoint="tool",
-                    query_text=query_text,
-                    subject=input_normalized,
-                    group_id=trace["group_id"],
-                )
-                self.store.record_entities(effective_run_id, _extract_entities(input_normalized, query_text))
-                memory_ref = self.store.record_tool_result(
-                    run_id=effective_run_id,
-                    tool_name=tool_name,
-                    ok=envelope.ok,
-                    input_normalized=input_normalized,
-                    envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
-                    summary=envelope.summary,
-                    warnings=envelope.warnings,
-                    error=envelope.error.model_dump(mode="json") if envelope.error else None,
-                    trace_id=trace["trace_id"],
-                    group_id=trace["group_id"],
-                    evaluation_case_id=evaluation_case_id,
-                )
-                envelope.memory_ref = memory_ref
-                trace["run_id"] = effective_run_id
-                trace["artifact_path"] = memory_ref.artifact_path
-                # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
-                # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
-                card = envelope.data.get("technique_card")
-                if isinstance(card, dict):
-                    card["refs"] = {
-                        "run_id": effective_run_id,
-                        "trace_id": trace["trace_id"],
-                        "group_id": trace["group_id"],
-                    }
+                try:
+                    effective_run_id = run_id or self.store.create_run(
+                        entrypoint="tool",
+                        query_text=query_text,
+                        subject=input_normalized,
+                        group_id=trace["group_id"],
+                    )
+                    self.store.record_entities(effective_run_id, _extract_entities(input_normalized, query_text))
+                    memory_ref = self.store.record_tool_result(
+                        run_id=effective_run_id,
+                        tool_name=tool_name,
+                        ok=envelope.ok,
+                        input_normalized=input_normalized,
+                        envelope_dict=_redact_knowledge_text(envelope.model_dump(mode="json")),
+                        summary=envelope.summary,
+                        warnings=envelope.warnings,
+                        error=envelope.error.model_dump(mode="json") if envelope.error else None,
+                        trace_id=trace["trace_id"],
+                        group_id=trace["group_id"],
+                        evaluation_case_id=evaluation_case_id,
+                    )
+                    envelope.memory_ref = memory_ref
+                    trace["run_id"] = effective_run_id
+                    trace["artifact_path"] = memory_ref.artifact_path
+                    # run_id 要到存档时才存在，所以技法卡的 refs 只能在这里补。存档里的那份没有自己的
+                    # run_id（自指），这是正常的——取回时 run_id 本来就是你用来取它的那把钥匙。
+                    card = envelope.data.get("technique_card")
+                    if isinstance(card, dict):
+                        card["refs"] = {
+                            "run_id": effective_run_id,
+                            "trace_id": trace["trace_id"],
+                            "group_id": trace["group_id"],
+                        }
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路：写不进去不许丢掉已经算好的结果
+                    envelope.memory_ref = None
+                    envelope.warnings.append(_memory_save_failed(exc))
 
             # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。
             envelope = _apply_response_view(envelope, input_normalized)

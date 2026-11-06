@@ -170,7 +170,8 @@ Allowed shortcuts:
 
 Runtime enforcement (the gate is in code, not just policy):
 
-- Calculation tools and `horosa_dispatch` reject unconfirmed calls with `agent_guidance.required`.
+- Calculation tools, `horosa_dispatch` and `horosa_hecan` reject unconfirmed calls with `agent_guidance.required`
+  (one confirmation covers every technique a `dispatch` / `hecan` call selects).
 - After the user answers, include `agent_confirmed_settings: true`. If the user explicitly accepts
   defaults, include `defaults_accepted: true`. Add `clarification_notes` summarizing what was confirmed
   (e.g. `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`).
@@ -285,7 +286,7 @@ Fengshui is intentionally excluded from this public skill surface (not headless-
 
 **长词表不在 tools/list**：西占宫制 0–24、卜卦 20 类 / 7 流派、择日 37 用事、七政宿度制 0–8、印占大运 15 体系 / 6 流派、
 世运规则集、紫微传本键、八字盘法键、三式起局 / 起课法、神数逐技法 options——查 `horosa_agent_guidance(tool_name=…)` 的
-`options_keys`；隐藏旋钮照样在顶层按名传（或走 `request` 整包）。
+`options_keys`；隐藏旋钮照样在顶层按名传（或走 `request`）。`request` 与顶层参数合并：两边都算数，同名不同值时以 `request` 为准并回一条 warning。
 
 Payload shapes and defaults: [`references/payloads.md`](./references/payloads.md). 中式技法 specifics
 (大六壬 guirengType, current-time casting, 法奇门 sections):
@@ -342,7 +343,7 @@ platform and code page — decode them as UTF-8.
   valid one. `tool list` gives each technique's `input_contract.example_payload` (live-verified; replace the values).
 - `dispatch` / `hecan` take the birth data nested (`{"query": …, "birth": {"date": …}}`) or flat at the top level
   like a technique tool (`{"query": …, "date": …, "time": …}`).
-- Payload files are UTF-8 JSON objects (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
+- Payload files are UTF-8 JSON objects, BOM or not (`{"date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13",
   "lon": "121e28", …}`). `--stdin` also works on macOS/Linux; on **Windows PowerShell 5.1 use `--input` / `--output`
   files** — the pipe re-encodes bytes through the console code page and mangles Chinese in both directions.
 - Exit code 0 = an envelope was written: check `ok`; a failed technique is `ok: false` + `error.code`, not an
@@ -352,8 +353,10 @@ platform and code page — decode them as UTF-8.
   then rerun with `agent_confirmed_settings: true` + `clarification_notes` (or `defaults_accepted: true` only when
   the user explicitly accepts defaults) added to the payload. Never set the flag without a real answer.
 - Envelope keys: `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
-  object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`),
-  `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`.
+  object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`; `null` with a `memory.save_failed` warning means the
+  result is complete but was not stored, so there is no `run_id` to report on — relay it and suggest `doctor`),
+  `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`. An unrecognized `zone` is refused with
+  `tool.invalid_zone`: ask the user for an offset (`+08:00`) or an IANA name, never guess one.
 - Everything above still holds: never hand-calculate, explain only from `export_snapshot.export_text`, quote
   `data.technique_card` after the answer.
 

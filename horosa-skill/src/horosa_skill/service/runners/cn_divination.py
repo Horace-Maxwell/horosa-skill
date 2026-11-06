@@ -34,6 +34,27 @@ from horosa_skill.service.text.divination import (
 from horosa_skill.service.text.western import _build_otherbu_snapshot_text
 
 
+# 取不到日干支时不印「六戊日」提示（提示缺失好过按错口径印一行假的），但调用方要知道：没这行不等于不是戊日。
+_LINGQI_NO_DAY_STEM = bilingual(
+    "灵棋经：这次没取到日干支，判不了「六戊日不宜占卜」；没有这行提示不代表不是戊日，卦象与判词不受影响。",
+    "Lingqi: the day stem could not be fetched, so the 六戊日 caution was not evaluated; its absence does not rule it out. The cast itself is unaffected.",
+)
+
+
+def _nongli_day_stem(nongli: Any) -> str:
+    """后端两种形状都见过：顶层 dayGanZi 串，或 bazi.day.stem.cell。取到哪个用哪个，取不到就空。"""
+    if not isinstance(nongli, dict):
+        return ""
+    raw = nongli.get("dayGanZi") or nongli.get("dayGanzhi")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    bazi = nongli.get("bazi") if isinstance(nongli.get("bazi"), dict) else {}
+    day = bazi.get("day") if isinstance(bazi.get("day"), dict) else {}
+    stem = day.get("stem") if isinstance(day.get("stem"), dict) else {}
+    cell = stem.get("cell")
+    return f"{cell}".strip() if isinstance(cell, str) else ""
+
+
 class CnDivinationRunners:
     def _run_xiaoliuren_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 小六壬：三数起三传（主流六宫/道门九宫）。起课为冻结值——显式 nums 优先；缺 nums 则按占时正统起
@@ -545,19 +566,13 @@ class CnDivinationRunners:
                     **_day_boundary_switches(payload),
                 },
             )
-        except HorosaSkillError:
+        except HorosaSkillError as exc:
+            _degrade("lingqi day stem fetch failed: %s", exc, note=_LINGQI_NO_DAY_STEM)
             return ""
-        if not isinstance(nongli, dict):
-            return ""
-        # 后端两种形状都见过：顶层 dayGanZi 串，或 bazi.day.stem.cell。取到哪个用哪个，取不到就空。
-        raw = nongli.get("dayGanZi") or nongli.get("dayGanzhi")
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip()
-        bazi = nongli.get("bazi") if isinstance(nongli.get("bazi"), dict) else {}
-        day = bazi.get("day") if isinstance(bazi.get("day"), dict) else {}
-        stem = day.get("stem") if isinstance(day.get("stem"), dict) else {}
-        cell = stem.get("cell")
-        return f"{cell}".strip() if isinstance(cell, str) else ""
+        stem = _nongli_day_stem(nongli)
+        if not stem:
+            _degrade("lingqi: /nongli/time returned no day stem", note=_LINGQI_NO_DAY_STEM)
+        return stem
 
     def _run_geomancy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 天文地占：以起卦时刻确定性起卦（castMethod='time' + timeSeed 由 年月日时分 派生，同盘可复现），

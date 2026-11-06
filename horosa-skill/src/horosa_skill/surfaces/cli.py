@@ -9,7 +9,7 @@ import threading
 from importlib.metadata import PackageNotFoundError, version as package_version
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, NoReturn, Optional
 
 import typer
 
@@ -18,11 +18,12 @@ from horosa_skill.agent_guidance import build_agent_guidance, validate_agent_pre
 from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
-from horosa_skill.errors import RuntimeError, ToolValidationError, bilingual
+from horosa_skill.errors import HorosaSkillError, RuntimeError, ToolValidationError, bilingual, recovery_for
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT
 from horosa_skill.surfaces.mcp_server import run_mcp_server
+from horosa_skill.textscript.localize import PROTOCOL_OPERATIONS
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.client_config.audit import (
     _client_check_report,
@@ -191,23 +192,55 @@ def _tracer(settings: Settings | None = None) -> TraceRecorder:
     return TraceRecorder(settings or Settings.from_env())
 
 
-def _load_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
-    if stdin:
-        stream = getattr(sys.stdin, "buffer", None)
-        if stream is not None:
-            raw = stream.read().decode("utf-8-sig")
-        else:
-            raw = sys.stdin.read()
-    elif input_file is not None:
-        raw = input_file.read_text(encoding="utf-8")
-    else:
+def _write_refusal(body: dict[str, Any]) -> NoReturn:
+    """命令拒绝执行的唯一出口：exit 2 + stderr 一份 JSON（SKILL.md 的契约）。
+
+    `default=str`：body 来自各层，一个 json 编码不了的值不该把拒绝变成 traceback——v0.47.2-dev 之前 22 处手写，
+    pydantic 的 ValueError 就是这样把 exit 2 打成 exit 1 的。
+    """
+    typer.echo(json.dumps(body, ensure_ascii=False, indent=2, default=str), err=True)
+    raise typer.Exit(code=2)
+
+
+def _emit_refusal(code: str, message: str, details: dict[str, Any] | None = None, **extra: Any) -> NoReturn:
+    """带错误码的拒绝：details 补上与 MCP 面同一套恢复说明；`extra` 是个别命令约定的顶层键。"""
+    _write_refusal({"ok": False, **extra, "code": code, "message": message, "details": recovery_for(code, details)})
+
+
+def _refuse(exc: HorosaSkillError) -> NoReturn:
+    _emit_refusal(exc.code, str(exc), exc.details)
+
+
+def _refuse_payload(source: str, zh: str, en: str, **details: Any) -> NoReturn:
+    _emit_refusal("tool.invalid_payload", bilingual(zh, en), {"source": source, **details})
+
+
+def _read_payload_text(*, stdin: bool, input_file: Optional[Path]) -> tuple[str, str]:
+    """(来源, 文本)。一律按字节读再解 utf-8-sig：Windows PowerShell 5.1 的 `Out-File -Encoding utf8` 写 BOM，而 `--input` 正是给那台机器指的路。"""
+    if not stdin and input_file is None:
         raise typer.BadParameter("Provide exactly one of --stdin or --input.")
+    source = "stdin" if stdin else str(input_file)
+    stream = getattr(sys.stdin, "buffer", None) if stdin else None
+    if stdin and stream is None:
+        return source, sys.stdin.read()
     try:
-        data = json.loads(raw)
+        raw = stream.read() if stdin else input_file.read_bytes()
+    except OSError as exc:
+        _refuse_payload(source, f"读不了输入：{source}（{exc}）", f"Cannot read {source}: {exc}")
+    try:
+        return source, raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        _refuse_payload(source, f"输入不是 UTF-8：{source}（{exc}）", f"{source} is not UTF-8: {exc}")
+
+
+def _load_payload(*, stdin: bool, input_file: Optional[Path]) -> dict:
+    source, text = _read_payload_text(stdin=stdin, input_file=input_file)
+    try:
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise typer.BadParameter(f"Invalid JSON payload: {exc}") from exc
+        _refuse_payload(source, f"输入不是合法 JSON：{exc}", f"Invalid JSON payload: {exc}", json_error=str(exc))
     if not isinstance(data, dict):
-        raise typer.BadParameter("Input JSON must be an object.")
+        _refuse_payload(source, "输入的 JSON 必须是对象。", "Input JSON must be an object.", received_type=type(data).__name__)
     return data
 
 
@@ -230,14 +263,13 @@ def _emit_json(data: object, output: Optional[Path] = None) -> None:
     _print_json(data)
 
 
-# 打印 JSON 却**不**转文字的命令：诊断 / 配置 / 给 AI 的协议与注册表（段名、键、选项要原样送回）。
-# 其余打印结果的命令都必须经 `_localized`——tests/test_textscript.py 按 AST 核对，新命令不归类就红。
-UNLOCALIZED_COMMANDS = frozenset({
+# 打印 JSON 却**不**转文字的命令：给 AI 的协议与注册表（两面共用 textscript.localize.PROTOCOL_OPERATIONS），加上 CLI 独有的
+# 诊断 / 配置 / 维护命令。其余打印结果的命令都必须经 `_localized`——tests/test_textscript.py 按 AST 核对，新命令不归类就红。
+UNLOCALIZED_COMMANDS = PROTOCOL_OPERATIONS | frozenset({
     "jev_status", "jev_events", "uninstall", "doctor", "setup", "selfcheck", "runtime_status",
-    "runtime_start", "runtime_restart", "tool_list", "agent_guidance", "export_registry", "export_parse",
-    "knowledge_registry", "benchmark_run", "benchmark_faithfulness", "trace_latest", "client_check", "client_skill",
-    "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check", "report_template",
-    "memory_prune", "memory_answer", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
+    "runtime_start", "runtime_restart", "tool_list", "benchmark_run", "benchmark_faithfulness", "trace_latest",
+    "client_check", "client_skill", "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check",
+    "memory_prune", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
     "knowledge_index",
 })
 
@@ -337,12 +369,10 @@ def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, 
     try:
         result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer())
     except RuntimeError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     except OSError as exc:
         # 磁盘满 / 权限不足 / 跨卷等 IO 失败：结构化输出而非裸 traceback。
-        typer.echo(json.dumps({"ok": False, "code": "runtime.install_io_error", "message": str(exc), "details": {}}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _emit_refusal("runtime.install_io_error", str(exc))
     if mode == "upgrade":
         result["mode"] = "upgrade"
     _print_json(result)
@@ -376,8 +406,7 @@ def uninstall(
     try:
         result = manager.uninstall(purge_data=purge_data, purge_knowledge=purge_knowledge, yes=yes)
     except RuntimeError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(result)
 
 
@@ -465,8 +494,7 @@ def setup(
             skill=skill, skill_dir=skill_dir, vectors=vectors,
         )
     except _SetupFailure as failure:
-        typer.echo(json.dumps(failure.payload, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _write_refusal(failure.payload)
     _print_json(report)
     if not report["ok"]:
         raise typer.Exit(code=2)
@@ -572,8 +600,7 @@ def _runtime_stop_impl(*, force: bool) -> None:
     try:
         result = manager.stop_local_services(force=force)
     except RuntimeError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(result)
     if result.get("refused"):
         raise typer.Exit(code=2)
@@ -645,8 +672,7 @@ def runtime_start(
     try:
         result = manager.start_local_services(wait_seconds=budget)
     except RuntimeError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(result)
 
 
@@ -672,8 +698,7 @@ def runtime_restart(
             raise typer.Exit(code=2)
         started = manager.start_local_services(wait_seconds=wait)
     except RuntimeError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json({"ok": True, "stopped": stopped, "started": started})
 
 
@@ -724,30 +749,21 @@ def serve(
         os.environ["HOROSA_MCP_TOKEN"] = token
     if transport != "stdio" and host not in {"127.0.0.1", "localhost", "::1"}:
         if not token and not allow_unauthenticated:
-            typer.echo(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "code": "serve.token_required",
-                        "message": f"绑定到非回环地址 {host} 而没有设置访问令牌 —— 已拒绝启动。",
-                        "details": {
-                            "host": host,
-                            "next_action": (
-                                "设 --token <随机串>（或 HOROSA_MCP_TOKEN），客户端在 Authorization: Bearer "
-                                "头里带上它；确实想裸奔请显式加 --allow-unauthenticated。"
-                            ),
-                            "why": (
-                                "本 server 能读写本机记忆库、生成文件、驱动本地 runtime。"
-                                "对外绑定且无鉴权 = 同网段任何人都能做这些事。"
-                            ),
-                        },
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                err=True,
+            _emit_refusal(
+                "serve.token_required",
+                f"绑定到非回环地址 {host} 而没有设置访问令牌 —— 已拒绝启动。",
+                {
+                    "host": host,
+                    "next_action": (
+                        "设 --token <随机串>（或 HOROSA_MCP_TOKEN），客户端在 Authorization: Bearer "
+                        "头里带上它；确实想裸奔请显式加 --allow-unauthenticated。"
+                    ),
+                    "why": (
+                        "本 server 能读写本机记忆库、生成文件、驱动本地 runtime。"
+                        "对外绑定且无鉴权 = 同网段任何人都能做这些事。"
+                    ),
+                },
             )
-            raise typer.Exit(code=2)
         if not token:
             typer.echo(
                 f"⚠️  正在以**无鉴权**方式绑定 {host}:{port}，且没有 TLS。"
@@ -762,28 +778,19 @@ def serve(
 
         if not port_bindable(port, host if host not in {"0.0.0.0", "::"} else "127.0.0.1"):
             holders = port_holders(port)
-            typer.echo(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "code": "serve.port_in_use",
-                        "message": f"端口 {port} 已被占用，MCP server 无法监听。",
-                        "details": {
-                            "host": host,
-                            "port": port,
-                            "holders": holders,
-                            "next_action": (
-                                f"换端口：`--port <其它端口>` 或设 HOROSA_SKILL_PORT；"
-                                "或关掉上面点名的进程（本工具不会代为终止）。"
-                            ),
-                        },
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                err=True,
+            _emit_refusal(
+                "serve.port_in_use",
+                f"端口 {port} 已被占用，MCP server 无法监听。",
+                {
+                    "host": host,
+                    "port": port,
+                    "holders": holders,
+                    "next_action": (
+                        f"换端口：`--port <其它端口>` 或设 HOROSA_SKILL_PORT；"
+                        "或关掉上面点名的进程（本工具不会代为终止）。"
+                    ),
+                },
             )
-            raise typer.Exit(code=2)
     service = HorosaSkillService(settings, runtime_manager=manager)
     # 🔴 横幅必须在启动 runtime **之前**打印：start_local_services 可以阻塞到 45 秒
     # （首次更久），期间用户盯着一个没有任何输出的终端，无从判断是卡住了还是在装。
@@ -807,8 +814,7 @@ def serve(
                 start_result = manager.start_local_services()
                 started_now = not start_result.get("already_running", False)
             except RuntimeError as exc:
-                typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-                raise typer.Exit(code=2)
+                _refuse(exc)
     from horosa_skill.runtime import registry as _registry
 
     try:
@@ -872,8 +878,7 @@ def tool_run(
         _enforce_agent_preflight(resolved, payload)
         result = service.run_tool(resolved, payload, save_result=save_result, query_text=query_text)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _emit_json(_localized(result.model_dump(mode="json")), output)
 
 
@@ -909,8 +914,7 @@ def export_parse(
     try:
         result = service.run_tool("export_parse", payload, save_result=save_result)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(result.model_dump(mode="json"))
 
 
@@ -935,8 +939,7 @@ def knowledge_read(
     try:
         result = service.run_tool("knowledge_read", payload, save_result=save_result)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(_localized(result.model_dump(mode="json")))
 
 
@@ -955,7 +958,7 @@ def knowledge_search(
     try:
         result = _service().knowledge_search(payload)
     except ToolValidationError as exc:
-        _knowledge_error(exc)
+        _refuse(exc)
     _print_json(_localized({"ok": True, **result}))
 
 
@@ -1006,11 +1009,6 @@ def knowledge_mine() -> None:
     })
 
 
-def _knowledge_error(exc: ToolValidationError) -> None:
-    typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-    raise typer.Exit(code=2)
-
-
 @knowledge_app.command("add", help="Add a note to your own knowledge base (from a file or --text). 往自备知识库加一条。")
 def knowledge_add(
     entry_id: str = typer.Argument(..., help="Entry name; may contain folder levels, e.g. 八字/滴天髓笔记."),
@@ -1029,11 +1027,11 @@ def knowledge_add(
         try:
             raw = source.read_bytes()
         except OSError as exc:
-            _knowledge_error(ToolValidationError(bilingual(f"读不了文件：{source}（{exc}）", f"Cannot read {source}: {exc}"),
+            _refuse(ToolValidationError(bilingual(f"读不了文件：{source}（{exc}）", f"Cannot read {source}: {exc}"),
                                                  code="knowledge.user_unreadable", details={"file": str(source)}))
         decoded = user_knowledge.decode_bytes(raw)
         if decoded is None:
-            _knowledge_error(ToolValidationError(
+            _refuse(ToolValidationError(
                 bilingual(f"{source} 不是 UTF-8 / UTF-16 / GB18030 文本", f"{source} is not UTF-8 / UTF-16 / GB18030 text"),
                 code="knowledge.user_unreadable", details={"file": str(source)}))
         body = decoded[0]
@@ -1046,7 +1044,7 @@ def knowledge_add(
             tags=_split_option(tags) if tags is not None else None, overwrite=bool(_opt(overwrite, False)),
         )
     except ToolValidationError as exc:
-        _knowledge_error(exc)
+        _refuse(exc)
     _print_json({"ok": True, "entry": entry.summary(), "path": str(entry.path)})
 
 
@@ -1057,7 +1055,7 @@ def knowledge_remove(entry_id: str = typer.Argument(..., help="Entry id, file na
     try:
         removed = user_knowledge.remove_entry(Settings.from_env(), entry_id)
     except ToolValidationError as exc:
-        _knowledge_error(exc)
+        _refuse(exc)
     _print_json({"ok": True, "removed": removed["path"], **removed,
                  "restore": f"horosa-skill knowledge restore {removed['trash_id']}"})
 
@@ -1081,7 +1079,7 @@ def knowledge_restore(
     try:
         restored = user_knowledge.restore_entry(Settings.from_env(), trash_id, overwrite=bool(_opt(overwrite, False)))
     except ToolValidationError as exc:
-        _knowledge_error(exc)
+        _refuse(exc)
     _print_json({"ok": True, **restored})
 
 
@@ -1097,8 +1095,7 @@ def dispatch(
         _enforce_agent_preflight("dispatch", payload)
         result = service.dispatch(payload)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _emit_json(_localized(result.model_dump(mode="json")), output)
 
 
@@ -1138,10 +1135,10 @@ def hecan(
         payload["tools"] = list(tool)
     service = _service()
     try:
+        _enforce_agent_preflight("hecan", payload)
         result = service.hecan(payload)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _emit_json(_localized(result), output)
 
 
@@ -1155,8 +1152,7 @@ def benchmark_faithfulness(
     from horosa_skill.benchmark.faithfulness import extract_facts, verify_answer
 
     if not answer_file and not answer_text:
-        typer.echo(json.dumps({"ok": False, "message": "需要 --answer-file 或 --answer-text"}, ensure_ascii=False), err=True)
-        raise typer.Exit(code=2)
+        _emit_refusal("benchmark.faithfulness.answer_missing", "需要 --answer-file 或 --answer-text")
     if answer_file:
         try:
             answer = answer_file.expanduser().read_text(encoding="utf-8")
@@ -1168,8 +1164,7 @@ def benchmark_faithfulness(
     try:
         run, artifact = service._load_report_source(run_id, tool)  # noqa: SLF001 - 同包 CLI 面复用装载器
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc)}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     payload = artifact.get("payload") or {}
     facts = extract_facts(payload)
     report = verify_answer(answer, facts)
@@ -1414,20 +1409,14 @@ def client_openclaw_setup(
                     )
                 )
         except RuntimeError as exc:
-            typer.echo(
-                json.dumps(
-                    _friendly_runtime_error_payload(
-                        exc,
-                        action_label="OpenClaw setup",
-                        workspace_root=workspace_root,
-                        config_path=config_path,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                err=True,
+            _write_refusal(
+                _friendly_runtime_error_payload(
+                    exc,
+                    action_label="OpenClaw setup",
+                    workspace_root=workspace_root,
+                    config_path=config_path,
+                )
             )
-            raise typer.Exit(code=2)
 
     doctor_issues = doctor_result.get("issues", [])
     install_summary = {
@@ -1543,24 +1532,15 @@ def client_openclaw_check(
     workspace_root = workspace.expanduser().resolve()
     config_path = (config.expanduser().resolve() if config is not None else workspace_root / "config" / "mcporter.json")
     if not config_path.exists():
-        typer.echo(
-            json.dumps(
-                {
-                    "ok": False,
-                    "status": "needs_attention",
-                    "ready_for_openclaw": False,
-                    "user_summary": "OpenClaw config not found yet.",
-                    "next_action": f"Run `{_openclaw_setup_command(workspace_root)}` to create a ready-to-use config and smoke test it.",
-                    "code": "client.config_missing",
-                    "message": f"mcporter config not found: {config_path}",
-                    "details": {"config": str(config_path), "workspace": str(workspace_root)},
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            err=True,
+        _emit_refusal(
+            "client.config_missing",
+            f"mcporter config not found: {config_path}",
+            {"config": str(config_path), "workspace": str(workspace_root)},
+            status="needs_attention",
+            ready_for_openclaw=False,
+            user_summary="OpenClaw config not found yet.",
+            next_action=f"Run `{_openclaw_setup_command(workspace_root)}` to create a ready-to-use config and smoke test it.",
         )
-        raise typer.Exit(code=2)
 
     default_output = settings.data_dir / ("openclaw_full_check.json" if full else "openclaw_smoke_check.json")
     output_path = (output.expanduser().resolve() if output is not None else default_output)
@@ -1571,28 +1551,19 @@ def client_openclaw_check(
         if not script_path.is_file():
             # 全量自检脚本只在源码仓里（不进 wheel）：uvx / pip 装的包跑 --full 以前只回一句 Python 的
             # "can't open file"。现在说清楚为什么、下一步怎么走；快速体检（不带 --full）照常可用。
-            typer.echo(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "code": "openclaw_check.full_unavailable",
-                        "message": bilingual(
-                            "全量自检脚本只随源码仓分发，当前安装（wheel / uvx）里没有它。",
-                            "The exhaustive self-check script ships with the source checkout only, not with this install.",
-                        ),
-                        "next_action": (
-                            "Run the quick check without --full, or clone "
-                            "https://github.com/Horace-Maxwell/horosa-skill and run "
-                            "`uv run horosa-skill client openclaw-check --full` from its horosa-skill/ directory."
-                        ),
-                        "details": {"expected_script": str(script_path)},
-                    },
-                    ensure_ascii=False,
-                    indent=2,
+            _emit_refusal(
+                "openclaw_check.full_unavailable",
+                bilingual(
+                    "全量自检脚本只随源码仓分发，当前安装（wheel / uvx）里没有它。",
+                    "The exhaustive self-check script ships with the source checkout only, not with this install.",
                 ),
-                err=True,
+                {"expected_script": str(script_path)},
+                next_action=(
+                    "Run the quick check without --full, or clone "
+                    "https://github.com/Horace-Maxwell/horosa-skill and run "
+                    "`uv run horosa-skill client openclaw-check --full` from its horosa-skill/ directory."
+                ),
             )
-            raise typer.Exit(code=2)
         command = [
             sys.executable,
             str(script_path),
@@ -1608,15 +1579,7 @@ def client_openclaw_check(
                 command, capture_output=True, text=True, check=False, timeout=900, encoding="utf-8", errors="replace",
             )
         except subprocess.TimeoutExpired:
-            typer.echo(
-                json.dumps(
-                    {"ok": False, "code": "openclaw_check.timeout", "message": "openclaw-check --full exceeded 900s and was aborted (a child MCP/runtime process is likely wedged)."},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                err=True,
-            )
-            raise typer.Exit(code=2)
+            _emit_refusal("openclaw_check.timeout", "openclaw-check --full exceeded 900s and was aborted (a child MCP/runtime process is likely wedged).")
         if output_path.exists():
             report = json.loads(output_path.read_text(encoding="utf-8"))
             _print_json(report)
@@ -1633,20 +1596,14 @@ def client_openclaw_check(
             output_path=output_path,
         )
     except RuntimeError as exc:
-        typer.echo(
-            json.dumps(
-                _friendly_runtime_error_payload(
-                    exc,
-                    action_label="OpenClaw smoke check",
-                    workspace_root=workspace_root,
-                    config_path=config_path,
-                ),
-                ensure_ascii=False,
-                indent=2,
-            ),
-            err=True,
+        _write_refusal(
+            _friendly_runtime_error_payload(
+                exc,
+                action_label="OpenClaw smoke check",
+                workspace_root=workspace_root,
+                config_path=config_path,
+            )
         )
-        raise typer.Exit(code=2)
     _print_json(report)
     if not report["ok"]:
         raise typer.Exit(code=2)
@@ -1662,8 +1619,7 @@ def report_template(
     try:
         result = service.report_template({"run_id": run_id, "tool_name": tool, **({"language": language} if language else {})})
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(result)
 
 
@@ -1698,8 +1654,7 @@ def report_render(
             }
         )
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(_localized(result))
 
 
@@ -1725,8 +1680,7 @@ def report_technique(
             }
         )
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     # 报告正文已落盘；命令行只回摘要 + 一致性结论（把整篇 markdown 打进 stdout 会淹掉真正要看的告警）。
     _print_json(_localized({key: value for key, value in result.items() if key != "document"}))
 
@@ -1787,8 +1741,7 @@ def report_from_tool(
             }
         )
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     _print_json(_localized(result))
 
 
@@ -1830,8 +1783,7 @@ def memory_show(
     service = _service()
     data = service.store.query_runs(run_id=run_id, limit=1, include_payload=include_payload)
     if not data:
-        typer.echo(json.dumps({"ok": False, "code": "memory.run.not_found", "message": f"Run not found: {run_id}", "details": {}}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _emit_refusal("memory.run.not_found", f"Run not found: {run_id}")
     _print_json(_localized(data[0]))
 
 
@@ -1854,12 +1806,10 @@ def memory_answer(
     try:
         result = service.record_ai_answer(payload)
     except ToolValidationError as exc:
-        typer.echo(json.dumps({"ok": False, "code": exc.code, "message": str(exc), "details": exc.details}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
+        _refuse(exc)
     except ValueError as exc:
-        typer.echo(json.dumps({"ok": False, "code": "memory.answer.unknown_run", "message": str(exc), "details": {}}, ensure_ascii=False, indent=2), err=True)
-        raise typer.Exit(code=2)
-    _print_json(result)
+        _emit_refusal("memory.answer.unknown_run", str(exc))
+    _print_json(_localized(result))
 
 
 if __name__ == "__main__":

@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
-from horosa_skill.errors import ToolValidationError
+from horosa_skill.errors import ToolValidationError, bilingual
 
 # --- 天星择日 / 奇门择日 helpers ------------------------------------------------------------
 
@@ -171,17 +172,30 @@ def _zeri_explain_rows(payload: dict[str, Any]) -> int:
     return max(_ZERI_EXPLAIN_ROWS_MIN, min(_ZERI_EXPLAIN_ROWS_MAX, math.floor(value)))
 
 
+_ZONE_OFFSET_RE = re.compile(r"[+-]?\d{1,2}:\d{2}(?::\d{2})?")
+
+
 def _electionscan_zone(zone: Any) -> str:
-    """election_scan 期望 '+08:00' 形状；skill 的 zone 常是数字小时（8 / -5 / 5.5）。"""
+    """election_scan 期望 '+08:00' 形状；skill 的 zone 常是数字小时（8 / -5 / 5.5）。
+
+    认不出就拒：曾静默回落 +08:00，`zone="New York"` 按东八区搜出一整张窗口表，ok=True，回显还写着 New York。
+    IANA 名到这里已由 input_normalization 按盘面日期换成偏移，还留着名字说明它解析不了（AGENTS §5.3 第 9 条）。
+    """
     if zone is None:
         return "+08:00"
     text = str(zone).strip()
-    if ":" in text:
+    if _ZONE_OFFSET_RE.fullmatch(text):
         return text
     try:
         hours = float(text)
     except ValueError:
-        return "+08:00"
+        hours = math.nan
+    if not math.isfinite(hours):
+        raise ToolValidationError(
+            bilingual(f"认不出时区：{zone!r}。", f"Unrecognized time zone: {zone!r}."),
+            code="tool.invalid_zone",
+            details={"zone": zone, "accepted_forms": ["+08:00", "-05:00", "8", "Asia/Shanghai"]},
+        )
     sign = "-" if hours < 0 else "+"
     total = int(round(abs(hours) * 60))
     return f"{sign}{total // 60:02d}:{total % 60:02d}"

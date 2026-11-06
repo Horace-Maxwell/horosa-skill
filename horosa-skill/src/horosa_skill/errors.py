@@ -512,6 +512,15 @@ def classify_code(code: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+def validation_errors(exc: _Any) -> list[dict[str, _Any]]:
+    """pydantic ValidationError → 能进信封的错误表。
+
+    `exc.errors()` 的 `ctx.error` 是异常对象（字段校验器抛的 ValueError）：放进 details 就出不了进程，`json.dumps` 当场 TypeError，
+    CLI 契约里的 exit 2 + JSON 变成 exit 1 + traceback。说明已经在 `msg` 里，`ctx` 与 `url` 都不要。
+    """
+    return exc.errors(include_url=False, include_context=False)
+
+
 def recovery_for(code: str, details: dict[str, _Any] | None) -> dict[str, _Any]:
     """给 details 补 agent_recovery（kind/prompt_to_user/next_action[/commands]）与 hint；已带者不覆盖。"""
     result = dict(details) if isinstance(details, dict) else {}

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from horosa_skill import winpaths
 from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.engine.registry import resolve_tool_name
-from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.errors import ToolValidationError, bilingual, validation_errors
 from horosa_skill.reports import render_report
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.tools import (
@@ -84,7 +84,7 @@ class ReportsAPI:
                 request = MemoryAnswerInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.answer.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for memory answer record.",
                     code="memory.answer.invalid_payload",
@@ -116,7 +116,7 @@ class ReportsAPI:
                 request = MemoryQueryInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.query.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for memory query.",
                     code="memory.query.invalid_payload",
@@ -167,7 +167,7 @@ class ReportsAPI:
                 request = MemoryShowInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "memory.show.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for memory show.",
                     code="memory.show.invalid_payload",
@@ -214,7 +214,7 @@ class ReportsAPI:
 
     def _report_language(self, request: Any) -> str:
         """报告语言：调用方写了就用它，没写跟全局输出文字走（繁体时是 zh-TW / zh-HK，模板据此让 AI 用繁体写）。"""
-        if "language" in request.model_fields_set and request.language:
+        if request.language:
             return str(request.language)
         return REPORT_LANGUAGE[self.settings.output_script]
 
@@ -235,7 +235,7 @@ class ReportsAPI:
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
             except ValidationError as exc:
                 trace["error_code"] = "report.template.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for report template.",
                     code="report.template.invalid_payload",
@@ -401,7 +401,7 @@ class ReportsAPI:
                 )
             except ValidationError as exc:
                 trace["error_code"] = "report.render.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for report render.",
                     code="report.render.invalid_payload",
@@ -445,7 +445,7 @@ class ReportsAPI:
                 normalized_format = self._normalize_report_format(request.format)
             except ValidationError as exc:
                 trace["error_code"] = "report.from_tool.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for report from tool.",
                     code="report.from_tool.invalid_payload",
@@ -464,11 +464,27 @@ class ReportsAPI:
                 query_text=request.question,
                 group_id=trace["group_id"],
             )
+            if not result.ok:
+                # 起盘失败就报起盘失败。往下走只会在「导出契约缺失」上再失败一次，真正的错误码与恢复说明全丢。
+                trace["error_code"] = result.code
+                return {
+                    "ok": False,
+                    "tool": result.tool,
+                    "code": result.code,
+                    "message": result.message,
+                    "details": result.details,
+                    "error": result.error.model_dump(mode="json") if result.error else None,
+                    "summary": result.summary,
+                    "warnings": result.warnings,
+                    "memory_ref": result.memory_ref.model_dump(mode="json") if result.memory_ref else None,
+                    "trace_id": result.trace_id,
+                    "group_id": result.group_id,
+                }
             if not result.memory_ref:
                 raise ToolValidationError(
                     "Tool result was not saved and cannot be rendered as a report.",
                     code="report.from_tool.unsaved_result",
-                    details={"tool_name": request.tool_name},
+                    details={"tool_name": request.tool_name, "warnings": list(result.warnings)},
                 )
             normalized_ai_report = self._normalize_report_ai_payload(
                 ai_report=request.ai_report,
@@ -508,7 +524,7 @@ class ReportsAPI:
                     "format": normalized_format,
                     "style": self._report_style(request),
                     # 只转发调用方真写了的 language：缺省值转过去会被当成「显式 zh-CN」，盖掉全局的繁体设置。
-                    **({"language": request.language} if "language" in request.model_fields_set else {}),
+                    **({"language": request.language} if request.language else {}),
                     "title": request.title,
                     "ai_report": normalized_ai_report,
                     "include_raw_json": request.include_raw_json,
@@ -698,7 +714,7 @@ class ReportsAPI:
                 request = TechniqueReportInput.model_validate(payload)
             except ValidationError as exc:
                 trace["error_code"] = "report.technique.invalid_payload"
-                errors = exc.errors()
+                errors = validation_errors(exc)
                 raise ToolValidationError(
                     "Invalid payload for technique report.",
                     code="report.technique.invalid_payload",
