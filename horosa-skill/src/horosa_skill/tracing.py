@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 import uuid
@@ -54,7 +55,11 @@ class TraceRecorder:
         self.trace_dir = settings.trace_dir
         self.enabled = settings.trace_enabled and self.trace_dir is not None
         if self.enabled:
-            settings.ensure_dirs()
+            try:
+                settings.ensure_dirs()
+            except OSError as exc:  # 追踪是诊断用的：目录建不出来只是没有追踪记录，不能让服务起不来（记忆库同理）
+                logging.getLogger(__name__).debug("tracing disabled: %s", exc)
+                self.enabled = False
 
     def new_trace_id(self) -> str:
         return uuid.uuid4().hex

@@ -1759,6 +1759,7 @@ def memory_query(
     worthy_only: bool = typer.Option(False, "--worthy-only", help="只留召回语料级条目（有产物/答案/成功调用；空失败 run 滤除）。"),
 ) -> None:
     service = _service()
+    scan: dict[str, Any] = {}
     data = service.store.query_runs(
         run_id=run_id,
         tool=tool,
@@ -1769,9 +1770,12 @@ def memory_query(
         before=before,
         limit=limit,
         include_payload=include_payload,
+        scan_report=scan,
     )
     if worthy_only:
         data = [record for record in data if service.store.is_memory_worthy(record)]
+    if scan.get("not_scanned"):  # stdout 的列表形状是对外契约，说明走 stderr
+        typer.echo(f"另有 {scan['not_scanned']} 条较早的记录只按问题与答案检索过，盘面正文没有搜。", err=True)
     _print_json(_localized(data))
 
 
