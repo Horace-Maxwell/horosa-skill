@@ -1,13 +1,13 @@
 """ReportBuilder 八字默认解读：读不出四柱时不得凭全零计数下「木最旺、木最弱」的结论。"""
 from __future__ import annotations
 
-from horosa_skill.reports.builder import ReportBuilder
+from horosa_skill.reports.default_report import _default_bazi_report
 
 _PILLARS = "年柱：甲子\n月柱：丙寅\n日柱：戊辰\n时柱：庚申\n"
 
 
 def _report(export_text: str) -> dict:
-    return ReportBuilder()._default_bazi_report(
+    return _default_bazi_report(
         question="事业发展如何",
         source={"technique": "bazi", "tool_name": "bazi_birth"},
         input_normalized={},

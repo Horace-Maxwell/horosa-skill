@@ -11,7 +11,7 @@ from pathlib import Path
 
 from test_user_knowledge_and_chart_report import _chart_run, _flat, _PdfSpy, _service
 
-from horosa_skill.reports.builder import ReportBuilder
+from horosa_skill.reports.source import chart_basis_section
 from horosa_skill.service._common import _missing_detail_text
 
 
@@ -65,9 +65,9 @@ def test_analysis_pdf_is_data_first_with_clickable_section_citations(tmp_path: P
 def test_the_cover_lists_the_result_changing_settings() -> None:
     card = {"settings": {"timeAlg": {"label": "时间算法", "value": "0"}, "hsys": {"label": "分宫制", "value": 1},
                          "after23NewDay": {"label": "晚子时·日柱开关", "value": 1}}}
-    section = ReportBuilder()._chart_basis_section({"date": "1990-01-01"}, {"technique_label": "八字"}, card=card)
+    section = chart_basis_section({"date": "1990-01-01"}, {"technique_label": "八字"}, card=card)
     assert section["items"]["关键设置"] == "时间算法：真太阳时；晚子时·日柱开关：是"  # 分宫制这类码值不印（见 _setting_text）
-    assert "关键设置" not in ReportBuilder()._chart_basis_section({}, {}, card={})["items"]
+    assert "关键设置" not in chart_basis_section({}, {}, card={})["items"]
 
 
 def test_docx_numbers_sections_puts_ai_after_the_chart_and_gives_figures_alt_text(tmp_path: Path) -> None:

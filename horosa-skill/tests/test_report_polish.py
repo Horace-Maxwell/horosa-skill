@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from horosa_skill.reports import builder, figures, renderers
+from horosa_skill.reports import figures, renderers, source
 
 # ── 盘图：只取引擎给的数据，不算 ─────────────────────────────────────────
 
@@ -213,26 +213,26 @@ def test_long_listings_and_narrow_tables_flow_in_columns_with_reading_order(tmp_
 
 
 def test_settings_and_basis_read_like_text_not_machine_values() -> None:
-    assert builder._setting_text("tradition", False) == "否" and builder._setting_text("predictive", True) == "是"
-    assert builder._setting_text("after23NewDay", 1) == "是" and builder._setting_text("timeAlg", 0) == "真太阳时"
+    assert source._setting_text("tradition", False) == "否" and source._setting_text("predictive", True) == "是"
+    assert source._setting_text("after23NewDay", 1) == "是" and source._setting_text("timeAlg", 0) == "真太阳时"
     # 宫制 / 黄道 / 性别不在附录重复：技法卡是请求口径，巴比伦（恒星黄道、无宫）卡上却是回归黄道 / Alcabitus；实际值看正文。
-    assert builder._setting_text("hsys", 1) is None and builder._setting_text("zodiacal", 0) is None
-    assert builder._setting_text("gender", True) is None
+    assert source._setting_text("hsys", 1) is None and source._setting_text("zodiacal", 0) is None
+    assert source._setting_text("gender", True) is None
     # 没有人读码表的枚举不印（贵人法 2、流派 donggong、主限法 core_alchabitius）。
-    assert builder._setting_text("guirengType", 2) is None and builder._setting_text("pdMethod", "core_alchabitius") is None
-    assert builder._setting_text("school", "通行版") == "通行版"
-    assert builder._coord_text("121e28") == "东经 121°28′" and builder._coord_text("31n13") == "北纬 31°13′"
-    assert builder._coord_text("Shanghai") == "Shanghai"
-    basis = builder.ReportBuilder()._chart_basis_section({"gender": True, "name": ["111111", "000000"], "lat": "31n13"},
+    assert source._setting_text("guirengType", 2) is None and source._setting_text("pdMethod", "core_alchabitius") is None
+    assert source._setting_text("school", "通行版") == "通行版"
+    assert source._coord_text("121e28") == "东经 121°28′" and source._coord_text("31n13") == "北纬 31°13′"
+    assert source._coord_text("Shanghai") == "Shanghai"
+    basis = source.chart_basis_section({"gender": True, "name": ["111111", "000000"], "lat": "31n13"},
                                                          {"technique_label": "紫微斗数"})
     assert basis["items"]["性别"] == "男" and "姓名" not in basis["items"] and basis["items"]["纬度"] == "北纬 31°13′"
 
 
 def test_report_titles_drop_ui_tab_names_and_group_prefixes() -> None:
-    assert builder._report_technique_name("nongli_time", "其他页面") == "农历时间换算"
-    assert builder._report_technique_name("solarreturn", "推运盘-太阳返照") == "太阳返照"
-    assert builder._report_technique_name("firdaria", "星运-法达星限") == "法达星限"
-    assert builder._report_technique_name("chart", "星盘") == "星盘"
+    assert source.report_technique_name("nongli_time", "其他页面") == "农历时间换算"
+    assert source.report_technique_name("solarreturn", "推运盘-太阳返照") == "太阳返照"
+    assert source.report_technique_name("firdaria", "星运-法达星限") == "法达星限"
+    assert source.report_technique_name("chart", "星盘") == "星盘"
 
 
 def test_aspect_legend_only_under_wheels_that_have_aspect_lines() -> None:
@@ -326,13 +326,12 @@ def test_columns_are_wide_enough_for_their_longest_number() -> None:
 
 
 def test_cover_shows_who_and_when_for_synastry_ingress_and_divination() -> None:
-    b = builder.ReportBuilder()
-    pair = b._chart_basis_section({"inner": {"name": "甲", "date": "2028-04-06", "time": "09:33:00"},
+    pair = source.chart_basis_section({"inner": {"name": "甲", "date": "2028-04-06", "time": "09:33:00"},
                                    "outer": {"name": "乙", "date": "1992-03-02", "time": "08:18:00"}}, {"technique_label": "关系盘"})
     assert pair["items"]["甲方"] == "甲 2028-04-06 09:33:00" and pair["items"]["乙方"].startswith("乙 1992-03-02")
-    items = b._chart_basis_section({"year": 2025, "ingressTerm": "春分"}, {})["items"]
+    items = source.chart_basis_section({"year": 2025, "ingressTerm": "春分"}, {})["items"]
     assert items["年份"] == "2025" and items["入宫节气"] == "春分"
-    assert b._chart_basis_section({"askEvent": "求财"}, {})["items"]["所问"] == "求财"
+    assert source.chart_basis_section({"askEvent": "求财"}, {})["items"]["所问"] == "求财"
 
 
 def test_docx_cover_has_no_footer_toc_has_titles_and_key_values_are_tables(tmp_path: Path) -> None:
