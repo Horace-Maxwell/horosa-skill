@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.47.2-dev (2026-11-06) | 记忆库出问题拖垮整个服务：只读库 / 路径不可用让 `MemoryStore()` 抛错、服务建不起来；只坏中间页的库构造时看不出来，每次存档都 malformed，重启也不隔离；隔离日志承诺的「memory 工具重建索引」不存在 | 构造不抛（`init_error`，下次操作自愈）；写路径 `_writer` 遇 malformed 且 `integrity_check` 确认后隔离重建；删掉那句承诺；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-06) | `horosa_memory_query` 说明写「run summaries」，缺省却带全量产物：20 份 63 KB 的星盘线上 1.8 MB，超 1 MiB SSE 上限；2 MB 的八字 42.5 MB。v0.46.1 的预算只认顶层 `data`，记忆结果没有，`horosa_memory_show` 2.1 MB 同样绕过 | `include_payload` 缺省 false；`_fit_result_budget` 按形状裁，记忆产物先裁原始子树、再整份占位；`tests/test_memory_mcp_budget.py` |
 | v0.47.2-dev (2026-11-06) | 答案写回把唯一一份盘面写成 0 字节：`_refresh_run_artifacts` 原地 `write_text`，真卷写满时重试 `ok: true` 也救不回来，`report_render` 只剩 `report.source_not_found`；并发读者 26/1851 读到半个文件；落库 sha 写回后全错；报告 JSON 也被改写 | 存档一律走 `_write_json_atomic`（同目录临时文件 + fsync + 替换），刷新后更新 size / sha，`report_*` 不刷新；`tests/test_memory_durability.py` |
 | v0.47.2-dev (2026-11-05) | Windows 面没测过的形状：管道下 55/60 个 `--help` 崩、stderr 错误信封不是合法 UTF-8；output_path 先 resolve 再判（UNC 会向对方送 NTLM，卡 21 秒）、NUL / 备用数据流「成功」无文件；状态文件共享冲突（87% 写失败、11.5% 读成「没有状态」、锁留在盘上）；报告目标开着就退化成 TXT，且降级信息被丢、仍报「已生成 PDF」；太乙 / 三式择时一周 40–60 秒（百年流年表逐小时重算节气）| CLI 入口统一 UTF-8；`winpaths` 字符串闸在任何文件系统访问之前；`fsretry` 统一重试共享冲突、放锁绝不抛；另存 `名字 (1).pdf` 并如实回报；`lunarYearCache`（快 6 倍，320 条引擎请求修前修后逐字节相同）|
@@ -175,6 +176,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.47.2-dev / 2026-11-06 — 记忆库出问题拖垮整个服务：构造抛错、写时坏页不自愈、日志承诺不存在的工具
+
+- **症状**：架构审计复现：`runs` 表根页损坏（库头完好）时 `MemoryStore()` 照常构造，之后每次 `run_tool` 在 `create_run` 抛 `database disk image is malformed`，重启后 `corruption_recovery` 仍是 `None`，只能手动搬走库；只读库让 `MemoryStore()` 抛 `attempt to write a readonly database`，服务根本建不起来。隔离日志写「可用 memory 工具重建索引」，没有这样的工具。
+- **根因**：分类恢复只在 `initialize()` 里跑，而 `CREATE … IF NOT EXISTS` / `PRAGMA table_info` 只读 schema，碰不到坏的数据页。非损坏类错误（只读、路径不可用）直接冒出构造函数。可记忆库本来就是便利缓存，算盘不靠它。
+- **修复（只做存储一侧）**：① `MemoryStore()` 不再因存储问题抛错：`ensure_dirs` 的 `OSError` 与建库的 `sqlite3.Error` 记进 `init_error`，`connect()` 每次重试一遍，权限恢复后自愈；`integrity_check` 如实报 `ok: false` + `init_error`（`Settings.ensure_dirs` 的 `config.unexpanded_template` 不是 OSError，照常抛）。② 写路径换 `_writer()`：malformed 时先用 `PRAGMA integrity_check(1)` 确认当前这份库真坏，才走 `_quarantine_corrupt_db` + 重建，本次写仍抛错（数据确实没进库），下一次写落在新库上。用 integrity_check 不用 quick_check：后者不比对索引与表内容，那类损坏同样报 malformed。③ 读路径不隔离：为一次查询失败搬走整个库不值得。④ 删掉重建索引的承诺，日志改说旧产物还在 `runs/`、但不再出现在检索里。`memory reindex` 要新增 CLI 命令，不在这轮。
+- **没改的**：`run_tool` / `dispatch` 的存档块由 `improve/core-call-chain` 处理（存档失败回图 + warning）。`TraceRecorder.__init__` 也调 `ensure_dirs`，数据目录建不出来且开着 trace 时服务构造仍会抛。
+- **守卫**：`tests/test_memory_durability.py`。负向对照：去掉写时恢复、`_database_is_sound` 恒判坏、读路径也走 `_writer`，各红对应一条。只读那条在 Windows 与 root 下 skip，`test_construction_survives_an_unusable_path` 全平台跑。
+- **法则**：错误文字只是线索，隔离（搬走用户的库）之前要亲自确认。
 
 ### v0.47.2-dev / 2026-11-06 — memory_query 缺省把 20 份全量产物塞进一条消息
 
