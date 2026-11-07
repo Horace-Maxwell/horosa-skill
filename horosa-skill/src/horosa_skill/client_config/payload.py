@@ -106,6 +106,9 @@ def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None 
 
 
 VECTORS_EXTRA = "vectors"
+# uvx 按 requires-python 自动换解释器的那段逻辑认不出带 extra 的包：`horosa-skill[vectors]@…` 碰上 PATH 里排第一的 3.11
+# 直接报 No solution，而不带 extra 的同一个 wheel 能起（v0.47.2 公开 wheel 冒烟抓到）。所以这一支显式钉解释器。
+VECTORS_PYTHON = "3.12"
 _WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
 
@@ -188,6 +191,8 @@ def _build_client_config_payload(
         except FileNotFoundError as exc:
             uvx_command = ["uvx"]
             warnings.append(f"uvx 未找到，配置里只能写裸 `uvx`（GUI 客户端可能起不来）：{exc}")
+        if vectors:
+            uvx_command = [*uvx_command, "--python", VECTORS_PYTHON]
     if launcher_key == "uvx-wheel":
         # 🔴 免 git、免 PyPI 的零安装（v0.38.0 B3）：每个 Release 都附带纯 Python wheel，`uvx --from <URL>` 直接起；
         # URL 走 HOROSA_RUNTIME_MIRROR 的前缀改写（github.com:443 不通的机器只需一个开关，issue #14）。

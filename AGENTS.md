@@ -1390,7 +1390,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   失败 `config_untouched: true`、`retry_command` 带 `--no-vectors`。准备跑在全环境里（要走代理 / `HF_ENDPOINT`），所以 `stdio_probe` 还要读 `horosa://runtime/status`
   的 `knowledge_vectors.ready`，这才是客户端形状环境里的结论（`setup.stdio_probe_vectors_not_ready`）。`--vectors/--no-vectors` 是三态：没给时模型在就沿用（升级靠重跑 setup，
   丢开关搜索会悄悄变差）；`client config --vectors` 是纯生成器，不看磁盘。`--from` 写 PEP 508 直接引用 `horosa-skill[vectors]@<URL>`，**不留空格**（有的客户端按空格拆命令；本地 wheel
-  转百分号编码的 file URI）；读 `--from` 的检查一律先过 `_launcher_source`，否则 `://` 会让「本地 wheel 没了」静默跳过。`_quote_cli_arg` 引方括号（zsh 不引就 `no matches found`）。
+  转百分号编码的 file URI），且 uvx 带 `--python 3.12`（`VECTORS_PYTHON`，v0.47.3：uv 不为带 extra 的包按 requires-python 换解释器；真机验证要在项目目录之外跑，否则项目配置会替你选中解释器）；读 `--from` 的检查一律先过 `_launcher_source`，否则 `://` 会让「本地 wheel 没了」静默跳过。`_quote_cli_arg` 引方括号（zsh 不引就 `no matches found`）。
   守卫 `tests/test_setup_vectors.py`。
 - **写用户的客户端配置 = 只动自己的键、先备份、原子替换、认不出形状就拒绝；命令一律绝对路径。** `_merge_client_config`
   按产物根键（`mcpServers`/`servers`/`context_servers`；codex 走 tomlkit；v0.41.0 起新格式由产物显式声明 `root_key`，Goose 的 YAML 走

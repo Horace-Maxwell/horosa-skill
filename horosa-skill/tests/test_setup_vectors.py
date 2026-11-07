@@ -92,6 +92,19 @@ def test_a_windows_wheel_path_is_a_valid_file_uri_on_any_host() -> None:
     assert spec == "horosa-skill[vectors]@file:///C:/Users/John%20Doe/.horosa/wheels/x.whl"
 
 
+@pytest.mark.parametrize("launcher", ["uvx-wheel", "uvx-git", "uvx"])
+def test_uvx_launchers_pin_the_interpreter_for_the_extra(tmp_path: Path, launcher: str) -> None:
+    """uv 不会为带 extra 的包按 requires-python 换解释器：PATH 里第一个是 3.11 的机器上 `[vectors]` 直接解析失败。"""
+    command = _command(launcher, tmp_path, vectors_on=True)
+    assert command[command.index("--python") + 1] == client_payload.VECTORS_PYTHON
+    assert command.index("--python") < command.index("--from"), "--python 是 uvx 的选项，写到 --from 的包后面就成了别的东西"
+
+
+def test_the_uv_launcher_and_plain_configs_stay_unpinned(tmp_path: Path) -> None:
+    assert "--python" not in _command("uv", tmp_path, vectors_on=True)  # uv run 由项目的 requires-python 决定
+    assert "--python" not in _command("uvx-wheel", tmp_path, vectors_on=False)
+
+
 def test_module_entry_keeps_the_extra(tmp_path: Path) -> None:
     command = _command("uvx-wheel", tmp_path, vectors_on=True, entry="module")
     assert command[command.index("--from") + 1].startswith("horosa-skill[vectors]@")
