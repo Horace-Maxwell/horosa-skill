@@ -1073,6 +1073,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 - **doctor 不凭一次探测判「半边没起」（v0.47.4）。** 只有一边通、一边不通才短暂复探（`_service_status_settled`，3 次 × 0.5 秒）；全通或全不通一次定论，
   没起的 runtime 上 doctor 不变慢，一直不通照报。瞬时抖动的成因未查清（CI 里 0.374 秒的快速失败），修法不依赖它。守卫 `tests/test_doctor_partial_reprobe.py`。
+  测 doctor 某一块时只断言那一块（如 `services:*`）：`create_runtime_archive` 只造 macOS 布局，整体 `ok` 在 Linux / Windows CI 上为 False，macOS 本机绿不算数。
 - **起与停同源同环境（v0.38.0 A5 真机 lane 首跑抓到）。** 启动器与停脚本的 env 只从 `manager._launcher_env()` 出
   （`HOROSA_SERVER_PORT` / `HOROSA_CHART_PORT` / HOME 族）——上游停脚本按端口命名的 pid 文件找进程，端口不一致 =
   永远停不掉、状态卡 `stop_requested`。守卫 `test_stop_passes_the_same_ports_as_start_to_the_stop_script`；

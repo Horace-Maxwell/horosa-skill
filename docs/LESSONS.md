@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.47.4-dev (2026-11-07) | windows-smoke 偶发红：`start` 刚报两个服务都可达，紧接着 doctor 探到 chart 不通，`setup` 判 ok:false，同轮真实排盘冒烟全过；上一轮只重跑未定论 | doctor 只在「一边通一边不通」时短暂复探（3 次 × 0.5 秒），全通 / 全不通一次定论；三条负向对照 |
+| v0.47.4-dev (2026-11-07) | windows-smoke 偶发红：`start` 刚报两个服务都可达，紧接着 doctor 探到 chart 不通，`setup` 判 ok:false，同轮真实排盘冒烟全过；上一轮只重跑未定论 | doctor 只在「一边通一边不通」时短暂复探（3 次 × 0.5 秒），全通 / 全不通一次定论；三条负向对照。推上去后测试在 Linux / Windows CI 红：断言了带平台布局的整体 `ok`，改为只断言 `services:*` |
 | v0.47.3-dev (2026-11-06) | 公开 wheel 冒烟：`setup --vectors` 在默认 Python 3.11 的机器上解析失败。uv 按 requires-python 换解释器的逻辑认不出带 extra 的包；之前的端到端是在仓库目录里跑的，项目配置替它选中了 3.12，因为错误的原因通过 | uvx 启动器带 `--python 3.12`；端到端要在项目目录之外、干净环境里跑 |
 | v0.47.2-dev (2026-11-06) | 拆报告模块时踩的两处：方法改函数后局部变量遮住同名函数（`payload = payload(...)`，`UnboundLocalError`）；验证比对工具时两个负向对照看着没红，其实是对照本身没改动输出（8.6 → 8.7 pt 在 OOXML 里取整相同，`bool(ai_report)` 恒真） | 函数用动词命名；对照先确认真的改了输出 |
 | v0.47.2-dev (2026-11-06) | 「回填只进机器 JSON」这句话是错的：`ai_report` 带 `analysis_sections` 时，PDF / DOCX 的「AI 解读」里印着机器写的段落（八字 16 段 3084 字，AI 写的 2 段 69 字）；上一轮审计只试了四种形状就下了结论，还写进了 AGENTS | 文档改回实情，输出未动，待决；下结论前逐字段试完，不凭几个样例 |
@@ -204,6 +204,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 **修**：`_service_status_settled`：只有一边通、一边不通才复探（最多 3 次，间隔 0.5 秒），全通或全不通一次定论，没起的 runtime 上 doctor 不变慢；一直不通照报。
 
 **守卫**：`tests/test_doctor_partial_reprobe.py`，负向对照三条实跑：doctor 直接调 `_service_status`（3 红）、复探把一直不通吞掉（3 红）、去掉「全不通不复探」（1 红）。
+
+**推上 main 后又红了一次（52007d4 → CI 42394875676，test + windows-smoke 各 2 红）**：两条测试断言整体 `report["ok"] is True`。
+夹具 `create_runtime_archive` 只造 macOS 布局，doctor 按 `os.name` / `platform.system()` 选 Linux / Windows 路径，那里报 `missing:*`，
+`ok` 为 False。本机门禁和 live 都在 macOS 上跑，**因为错误的原因通过**——那两条断言测的是平台，不是复探。修：只断言没有 `services:*` 问题
+（同文件里其余 doctor 测试本来就不断言 `ok`）。本机复现：用一次性插件把 `platform.system` 伪装成 `"Linux"` 跑同一文件，修前 2 红、修后全绿；
+负向对照在伪装 Linux 下照样 3 红。**教训：断言只写被测的那一块；夹具带平台布局时，整体 `ok` 不是平台无关的断言。**
 
 ### v0.47.3-dev / 2026-11-06 — 端到端测试在仓库目录里跑，替 bug 选好了解释器
 

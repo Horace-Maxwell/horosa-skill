@@ -52,10 +52,16 @@ def _doctor(tmp_path: Path, script: list[list[dict[str, object]]]) -> tuple[dict
     return manager.doctor(), calls
 
 
+def _service_issues(report: dict) -> list[str]:
+    """只看服务那几条。夹具只造了 macOS 布局，Linux / Windows 上整体 `ok` 会因 missing:* 为 False——
+    52007d4 断言 `ok is True`，本机（macOS）绿、CI 两个平台红。"""
+    return [issue for issue in report["issues"] if issue.startswith("services:")]
+
+
 def test_a_blip_on_one_service_is_not_reported_as_that_service_being_down(tmp_path: Path, sleeps: list[float]) -> None:
     """负向对照：doctor 改回直接调 `_service_status` → issues 带 chart_not_running，本条红（实跑过）。"""
     report, calls = _doctor(tmp_path, [_endpoints(True, False), _endpoints(True, True)])
-    assert report["ok"] is True, report["issues"]
+    assert _service_issues(report) == [], report["issues"]
     assert calls[0] == 2 and len(sleeps) == 1
 
 
@@ -81,5 +87,5 @@ def test_nothing_running_is_answered_at_once(tmp_path: Path, sleeps: list[float]
 
 def test_all_up_is_answered_at_once(tmp_path: Path, sleeps: list[float]) -> None:
     report, calls = _doctor(tmp_path, [_endpoints(True, True)])
-    assert report["ok"] is True, report["issues"]
+    assert _service_issues(report) == [], report["issues"]
     assert calls[0] == 1 and sleeps == []
