@@ -490,6 +490,10 @@ def _hand_lock_to(lock_path: Path, pid: Any) -> None:
         release_lock(lock_path)
 
 
+_PARTIAL_REPROBE_ATTEMPTS = 3
+_PARTIAL_REPROBE_INTERVAL_SECONDS = 0.5
+
+
 class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -1189,7 +1193,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             java_path = self._relative_manifest_path(manifest, "runtimes", "java")
             start_script = self._relative_manifest_path(manifest, "services", "start_script")
             stop_script = self._relative_manifest_path(manifest, "services", "stop_script")
-            endpoints = self._service_status()
+            endpoints = self._service_status_settled()
 
             issues = []
             if manifest_issue:
@@ -2537,6 +2541,17 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     "will_not_kill": "本工具不会终止不属于自己的进程。",
                 },
             )
+
+    def _service_status_settled(self) -> list[dict[str, Any]]:
+        """doctor 用：一边通、一边不通时短暂复探，别把一次抖动报成「某服务没起」（tests/test_doctor_partial_reprobe.py）。
+        全通或全不通一次定论，所以没起的 runtime 上 doctor 不会变慢。"""
+        endpoints = self._service_status()
+        for _ in range(_PARTIAL_REPROBE_ATTEMPTS):
+            if self._all_services_reachable(endpoints) or not self._any_services_reachable(endpoints):
+                break
+            time.sleep(_PARTIAL_REPROBE_INTERVAL_SECONDS)
+            endpoints = self._service_status()
+        return endpoints
 
     def _all_services_reachable(self, endpoints: list[dict[str, Any]]) -> bool:
         return bool(endpoints) and all(bool(item.get("reachable")) for item in endpoints)
