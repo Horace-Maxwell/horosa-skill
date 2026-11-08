@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
@@ -41,6 +41,7 @@ from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP, _attach_expor
 from horosa_skill.knowledge import search as knowledge_search
 from horosa_skill.knowledge import user as user_knowledge
 from horosa_skill.knowledge.user import build_context as build_user_knowledge_context
+from horosa_skill import profiles as birth_profiles
 from horosa_skill.service.text.chart_family import (
     _apply_chart_request_defaults,
     _india_apply_school_presets,
@@ -66,6 +67,8 @@ class _ToolCall:
     knowledge_selection: Any
     trace: dict[str, Any]
     degrade_notes: list[str]
+    # 这次并进载荷的命主档案（profiles.ProfileUse）：技法卡 `profiles` 与 summary 一行读它；不带 notes。
+    profile_uses: list[Any] = field(default_factory=list)
 
     @property
     def tool_name(self) -> str:
@@ -73,13 +76,14 @@ class _ToolCall:
 
 
 def _failure_envelope(call: _ToolCall, *, summary: str, code: str, message: str, details: dict[str, Any]) -> ToolEnvelope:
+    profile_line = birth_profiles.profile_summary_line(call.profile_uses)
     return ToolEnvelope(
         ok=False,
         tool=call.tool_name,
         version=__version__,
         input_normalized=call.input_normalized,
         data={},
-        summary=[summary],
+        summary=[summary, *([profile_line] if profile_line else [])],
         warnings=list(call.degrade_notes),
         memory_ref=None,
         error=ErrorInfo(code=code, message=message, details=details),
@@ -230,9 +234,32 @@ class ToolsAPI:
             )
         return runner(payload)
 
-    def _validated_tool_input(self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]) -> tuple[dict[str, Any], Any]:
-        """(规范化入参, 自备知识库点名)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。"""
+    @property
+    def profiles(self) -> birth_profiles.ProfileStore:
+        """命主档案库（构造不碰磁盘；只有载荷带档案名或调 horosa_profile 时才读写）。"""
+        store = self.__dict__.get("_profile_store")
+        if store is None:
+            store = self.__dict__["_profile_store"] = birth_profiles.ProfileStore(self.settings)
+        return store
+
+    def profile(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """门面 horosa_profile：命主档案 save / get / list / delete（CLI `profile` 走同一个函数）。"""
+        return birth_profiles.run_action(self.profiles, payload)
+
+    def _validated_tool_input(
+        self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]
+    ) -> tuple[dict[str, Any], Any, list[Any]]:
+        """(规范化入参, 自备知识库点名, 并进来的命主档案)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。"""
         tool_name = definition.name
+        # 命主档案在归一化与校验**之前**并进来：显式字段逐键优先，模型缺省值不会冒充「显式」压掉档案里的值。
+        # 认不出 / 有歧义的档案名与坏入参同级：拒绝，不起盘（profile.not_found / profile.ambiguous）。
+        try:
+            payload, profile_uses = birth_profiles.expand_tool_payload(
+                self.profiles, payload, model=definition.input_model, domain=definition.domain
+            )
+        except ToolValidationError as exc:
+            trace["error_code"] = exc.code
+            raise
         try:
             payload = normalize_request_payload(payload)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
@@ -256,7 +283,7 @@ class ToolsAPI:
                     ),
                 },
             ) from exc
-        return _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)), knowledge_selection
+        return _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)), knowledge_selection, profile_uses
 
     def _compute_tool_result(self, call: _ToolCall) -> dict[str, Any]:
         """起盘 + 富化 + 导出契约 + 技法卡。"""
@@ -314,6 +341,12 @@ class ToolsAPI:
     def _success_envelope(self, call: _ToolCall, response_data: dict[str, Any]) -> ToolEnvelope:
         response_data, knowledge_context, knowledge_failure = self._with_user_knowledge(call, response_data)
         summary = _generic_summary(call.tool_name, response_data)
+        if call.profile_uses and isinstance(response_data, dict):
+            # 出处：哪个档案、填了哪些键、哪些被本次显式值压过。不带 notes / 别名 / 地点标签。
+            card = response_data.get("technique_card")
+            if isinstance(card, dict):
+                card["profiles"] = [use.card() for use in call.profile_uses]
+            summary = [*summary, birth_profiles.profile_summary_line(call.profile_uses)]
         # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
         warnings: list[str] = []
@@ -360,7 +393,14 @@ class ToolsAPI:
                 subject=call.input_normalized,
                 group_id=trace["group_id"],
             )
-            self.store.record_entities(effective_run_id, _extract_entities(call.input_normalized, query_text))
+            self.store.record_entities(
+                effective_run_id,
+                _extract_entities(call.input_normalized, query_text) + [
+                    # 按档案名能查回这个人的历次起盘（horosa_memory_query entity="妈妈"）。
+                    {"entity_type": "profile", "entity_key": birth_profiles.name_key(use.name), "display_name": use.name, "metadata": {"slot": use.slot}}
+                    for use in call.profile_uses
+                ],
+            )
             memory_ref = self.store.record_tool_result(
                 run_id=effective_run_id,
                 tool_name=call.tool_name,
@@ -426,8 +466,8 @@ class ToolsAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
-            input_normalized, knowledge_selection = self._validated_tool_input(definition, payload, trace)
-            call = _ToolCall(definition, input_normalized, knowledge_selection, trace, degrade_notes)
+            input_normalized, knowledge_selection, profile_uses = self._validated_tool_input(definition, payload, trace)
+            call = _ToolCall(definition, input_normalized, knowledge_selection, trace, degrade_notes, profile_uses)
             try:
                 envelope = self._success_envelope(call, self._compute_tool_result(call))
             except HorosaSkillError as exc:

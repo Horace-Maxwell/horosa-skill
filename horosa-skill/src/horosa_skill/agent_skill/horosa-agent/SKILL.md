@@ -67,6 +67,13 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 用户跑过 `horosa-skill setup --client <客户端> --vectors` 时检索结果 `engine` 是 `fts5-bm25+vectors`（换了说法也能命中）；用户问起就告诉他这条命令（依赖约 128 MB + 模型 24 MB），别替用户装或下载。用户没点名就别传 `knowledge`。
 存档只记引用（不存正文），报告附录只列用了哪些资料；删除进回收站（`horosa-skill knowledge trash` / `restore` 可恢复）。
 
+**命主档案**（`horosa_profile`，存在本机，换个对话也在）：起完一张本命盘后问用户要不要把这份出生信息存成档案（如「妈妈」），
+**用户同意才存**：`horosa_profile {action:"save", name:"妈妈", data:{date, time, zone, lat, lon, gender?, aliases?:["我妈"], place?, notes?}}`。
+以后任一技法 / `horosa_tool_run` 传 `profile:"妈妈"`（别名也认；合盘 `inner.profile` / `outer.profile`；dispatch / hecan 用 `birth.profile` 或 `subject.profile`）
+即填入出生信息，显式给的字段逐键优先。档案只存出生事实（宫制 / 流派 / 日界不存，save 会回 `ignored_fields`），**有档案不等于用户确认了口径**：
+没存的照旧被闸门问，仍要 `agent_confirmed_settings`。认不出 / 有歧义 → `profile.not_found` / `profile.ambiguous`，`details.known_profiles`
+列出已存的名字（`horosa_agent_guidance` 的 `server_profile.birth_profiles` 也有）——对不上就问用户，别挑一个最像的。`place` 只是文字标签，不换算坐标；`notes` 不进技法结果。
+
 七政四余 `guolao_chart` 可传 `guolaoLifeMode`（asc/yumao/cotrans）、`guolaoBodyMode`、`planetaryHourMethod`（行星时制式 sunrise 缺省 /
 unequal / equal24，报时星随之）、`moiraTransitDate`（[流年流曜] 的流年时刻，缺省今天）；宿度制 `doubingSu28` 缺省 0 荀爽距星（星阙 v3.13.0）；[虚实]/[本命化曜]/[流年流曜] 三段来自 Java 规则层，Java 不可用时缺席并进 `warnings`。
 七政 [相位] 是七政相位（會 0° / 衝 180° / 刑 90° / 合 120° / 半合 60°，入相 / 离相按与位置同口径的日速），不是西占通用相位（星阙 v3.13.1）。
@@ -87,7 +94,7 @@ schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性�
 `HOROSA_TOOLSETS` 有没有拼错、`horosa_tool_run` 在不在）。`HOROSA_TOOLSETS` 的合法域 = `astro` / `predict` / `chart` / `cn` /
 `shenshu` / `other` / `export` / `knowledge`，别名 `western` / `chinese` / `reference` / `all` / `none`；认不出的词会被丢掉并进 warning。
 
-**精简面（`HOROSA_MCP_COMPACT=1`，12 个门面级工具 = 11 门面 + `horosa_tool_run`）**：Cursor / VS Code / Codex / Gemini / Devin Desktop（原 Windsurf）/
+**精简面（`HOROSA_MCP_COMPACT=1`，13 个门面级工具 = 12 门面 + `horosa_tool_run`）**：Cursor / VS Code / Codex / Gemini / Devin Desktop（原 Windsurf）/
 Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Code / Claude Desktop 默认全量 125）。`horosa_tool_run(tool_name=<注册键>, …)`
 接受与平铺工具**完全相同**的载荷与闸门字段；`tool_name` 不认识时返回按域分组的 `details.catalog`，不要据此说「没有这个技法」。
 
@@ -341,6 +348,7 @@ platform and code page — decode them as UTF-8.
 | Run one technique | `horosa-skill tool run qimen --input payload.json --output result.json` |
 | Natural-language routing (several techniques) | `horosa-skill dispatch --input query.json --output result.json` |
 | Re-read a stored run | `horosa-skill memory show <run_id>` |
+| Saved birth profiles (`profile` key in payloads) | `horosa-skill profile list` · `horosa-skill profile save 妈妈 --input data.json` |
 | Health / live check | `horosa-skill doctor` · `horosa-skill selfcheck` |
 
 - Technique names: the registry key (`chart`) and the MCP name (`horosa_astro_chart`) both work — in `tool run`,

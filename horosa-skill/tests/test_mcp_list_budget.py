@@ -44,7 +44,9 @@ def full_tools(tmp_path_factory) -> dict[str, dict]:
 def test_full_surface_fits_the_budget(full_tools) -> None:
     size = len(json.dumps(list(full_tools.values()), ensure_ascii=False).encode("utf-8"))
     assert size <= FULL_CAP, f"full tools/list is {size} B (> {FULL_CAP} B)"
-    assert len(full_tools) == 11 + len(TOOL_DEFINITIONS)
+    from horosa_skill.engine.registry import FACADE_TOOL_COUNT
+
+    assert len(full_tools) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
 
 
 def test_compact_surface_fits_the_budget(tmp_path) -> None:

@@ -250,6 +250,14 @@ def render_technique_card_markdown(card: dict[str, Any]) -> str:
     if gate:
         rendered = "；".join(f"{item['label']}={item['value']}" for item in gate.values())
         lines.append(f"- 设置确认：{rendered}")
+    profiles = [item for item in card.get("profiles") or [] if isinstance(item, dict)]
+    if profiles:
+        # 出生信息出处（命主档案，horosa_skill/profiles.py）：只写档案名与填了哪些键，不写备注。
+        parts = []
+        for item in profiles:
+            slot = item.get("slot")
+            parts.append(f"「{item.get('name')}」" + ("" if slot in (None, "", "subject") else f"（{slot}）"))
+        lines.append(f"- 出生信息：取自命主档案{'；'.join(parts)}")
     health = "干净" if sections.get("contract_clean") else "有缺口"
     detail = ""
     if sections.get("missing_selected_sections"):

@@ -179,6 +179,61 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "rename_or_overwrite",
     },
+    # 命主档案（profiles.py）：档案名认不出 / 有歧义是调用方能改的入参（details.known_profiles 列出全部已存档案）；
+    # 用户说的那个人还没存过档，就问用户要出生信息（存不存由用户定），不是「重试 / 体检」。
+    "profile.not_found": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "没有这个命主档案。已存的名字在 details.known_profiles（horosa_profile action=list 也能列）；对不上就请用户给出生日期、时间、地点，"
+            "并问要不要存成档案。",
+            "No saved profile by that name. details.known_profiles lists every saved one (or horosa_profile action=list); if none fits, "
+            "ask the user for the birth date, time and place, and whether to save them as a profile.",
+        ),
+        "next_action": "pick_profile_from_list_or_ask_user",
+    },
+    "profile.ambiguous": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个名字对应多条命主档案（details.candidates）：请用户确认是哪一位，再用那条的完整档案名。",
+            "That name matches several saved profiles (details.candidates): ask the user which one, then use its full name.",
+        ),
+        "next_action": "pick_one_candidate_by_name",
+    },
+    "profile.invalid_payload": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "horosa_profile 的参数由调用方给：action = save / get / list / delete，save / get / delete 要带 name，data 是对象。",
+            "horosa_profile arguments come from the caller: action = save / get / list / delete; save / get / delete need a name; data is an object.",
+        ),
+        "next_action": "fix_payload_fields_and_retry",
+    },
+    "profile.not_applicable": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个技法的载荷顶层不收出生信息：合盘把档案名放进 inner.profile / outer.profile；不收出生信息的技法不用档案。",
+            "This tool takes no birth data at the top level: for relationship charts put profile names in inner.profile / outer.profile; "
+            "tools without birth data do not use profiles.",
+        ),
+        "next_action": "move_profile_into_person_slot",
+    },
+    "profile.store_unavailable": {
+        "kind": "retry_or_doctor",
+        "prompt_to_user": bilingual(
+            "命主档案库这次打不开（details.path / details.error：磁盘只读、权限、被别的进程长时间占用）。稍后重试；仍不行就把出生信息直接写进载荷。",
+            "The birth-profile database could not be opened (details.path / details.error: read-only disk, permissions, or held by another process). "
+            "Retry later; meanwhile pass the birth fields directly.",
+        ),
+        "next_action": "retry_or_pass_fields_directly",
+    },
+    "profile.store_corrupt": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "命主档案库文件损坏（details.path）。档案是用户数据，不会自动删除重建：请用户把这个文件改名挪开（留作备份），再重新保存档案。",
+            "The birth-profile database is corrupt (details.path). It is user data and is never rebuilt automatically: ask the user to rename "
+            "the file aside (keep it as a backup), then save the profiles again.",
+        ),
+        "next_action": "move_corrupt_file_aside_then_save_again",
+    },
     "tool.backend_param_error": {
         "kind": "input",
         "prompt_to_user": bilingual(

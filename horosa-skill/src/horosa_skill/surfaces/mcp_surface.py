@@ -51,6 +51,10 @@ _ANN_RENDER = mcp_types.ToolAnnotations(
 _ANN_REPORT_WRITE = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
 )
+# 命主档案：save 覆盖 / delete 删除用户数据 → destructive（客户端保留确认摩擦）；同参数重复调用结果相同 → idempotent。
+_ANN_PROFILE = mcp_types.ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
+)
 _ANN_REPORT_FROM_TOOL = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False
 )
@@ -168,6 +172,18 @@ def _user_knowledge_profile(settings: Settings) -> dict[str, Any]:
     }
 
 
+def _birth_profiles(settings: Settings) -> dict[str, Any]:
+    """已存的命主档案名（新对话里 AI 第一眼就知道「妈妈」存过）；只给名字与别名，不给出生信息。读不了档案库只报原因。"""
+    from horosa_skill.errors import HorosaSkillError
+    from horosa_skill.profiles import USE_HINT, ProfileStore
+
+    try:
+        items = ProfileStore(settings).all()
+    except HorosaSkillError as exc:
+        return {"count": None, "error": exc.code, "use": USE_HINT}
+    return {"count": len(items), "names": [item.summary() for item in items[:50]], "use": USE_HINT}
+
+
 def _server_profile(settings: Settings) -> dict[str, Any]:
     """本进程实际暴露了什么（经 horosa_agent_guidance 可查；_SERVER_INSTRUCTIONS 没预算放它）。"""
     resolved = _resolve_toolsets(os.environ.get("HOROSA_TOOLSETS", ""))
@@ -187,6 +203,8 @@ def _server_profile(settings: Settings) -> dict[str, Any]:
         "output_script": settings.output_script,
         # 自备知识库：有几条、在哪；计算时传 knowledge=[条目 / #标签 / auto] 才会带进结果（缺省不带）。
         "user_knowledge": _user_knowledge_profile(settings),
+        # 命主档案（horosa_profile）：技法载荷带 profile=名字 即填入出生信息。
+        "birth_profiles": _birth_profiles(settings),
         "hint": "技法工具未平铺时用 horosa_tool_run(tool_name=…) 直呼；HOROSA_TOOLSETS 合法域见 toolsets_effective。",
     }
 

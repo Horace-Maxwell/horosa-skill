@@ -252,7 +252,10 @@ def _print_json(data: object) -> None:
 
 
 def _enforce_agent_preflight(tool_name: str, payload: dict[str, Any]) -> None:
-    preflight = validate_agent_preflight(tool_name, payload)
+    from horosa_skill.profiles import gate_view
+
+    # 与 MCP 面同一口径：闸门看并进命主档案之后的载荷（档案里有的出生信息不再追问）；认不出的档案名在这里就拒。
+    preflight = validate_agent_preflight(tool_name, gate_view(Settings.from_env(), tool_name, payload))
     if preflight.get("ok"):
         return
     raise ToolValidationError(preflight["message"], code=preflight["code"], details=preflight)
@@ -317,14 +320,15 @@ def upgrade(
 
 @app.command(help="Uninstall the offline runtime (dry-run by default; --yes to execute). 卸载 runtime（默认只打印将删清单）。")
 def uninstall(
-    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given. 同时删除用户数据（不可恢复；自备知识库默认保留）。"),
+    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given; saved birth profiles are KEPT unless --purge-profiles. 同时删除用户数据（不可恢复；自备知识库与命主档案默认保留）。"),
     purge_knowledge: bool = typer.Option(False, "--purge-knowledge", help="With --purge-data: also delete your own knowledge notes and their trash. 连自备知识库一起删（不可恢复）。"),
+    purge_profiles: bool = typer.Option(False, "--purge-profiles", help="With --purge-data: also delete your saved birth profiles (horosa_profile). 连命主档案一起删（不可恢复）。"),
     yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
 ) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     try:
-        result = manager.uninstall(purge_data=purge_data, purge_knowledge=purge_knowledge, yes=yes)
+        result = manager.uninstall(purge_data=purge_data, purge_knowledge=purge_knowledge, purge_profiles=purge_profiles, yes=yes)
     except RuntimeError as exc:
         _refuse(exc)
     _print_json(result)
@@ -893,6 +897,26 @@ def knowledge_restore(
     except ToolValidationError as exc:
         _refuse(exc)
     _print_json({"ok": True, **restored})
+
+
+@app.command(help="Saved birth profiles on this machine: `profile list [--detail]` / `profile get <name>` / `profile save <name> --input data.json` / `profile delete <name>`. 命主档案（存了以后技法载荷带 profile=名字 即可）。")
+def profile(
+    action: str = typer.Argument(..., help="save | get | list | delete"),
+    name: Optional[str] = typer.Argument(None, help="Profile name or alias (save / get / delete)."),
+    stdin: bool = typer.Option(False, "--stdin", help="save: read the data object (date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes) from stdin."),
+    input_file: Optional[Path] = typer.Option(None, "--input", help="save: read the data object from a JSON file."),
+    detail: bool = typer.Option(False, "--detail", help="list: include each profile's birth fields."),
+) -> None:
+    from horosa_skill.profiles import ProfileStore, run_action
+
+    body: dict[str, Any] = {"action": action, "name": name, "detail": bool(_opt(detail, False)) or None}
+    if stdin or input_file is not None:
+        body["data"] = _load_payload(stdin=stdin, input_file=input_file)
+    try:
+        result = run_action(ProfileStore(Settings.from_env()), body)
+    except ToolValidationError as exc:
+        _refuse(exc)
+    _print_json(result)
 
 
 @app.command(help='Natural-language routing: JSON {query, birth|subject|flat birth fields, …} → picks and runs the right techniques. 自然语言路由起盘。')

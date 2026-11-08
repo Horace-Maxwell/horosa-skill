@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, WithJsonSchema
 
 from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.profiles import carries_profile
 
 # 一次工具调用里 `request` 与顶层参数的冲突说明：合并发生在工具函数体里，警告要等结果出门时才有地方放，
 # 所以由 `HorosaMCPServer.call_tool` 开作用域、把这张表并进 warnings。
@@ -31,6 +32,17 @@ def request_conflict_scope() -> Iterator[list[str]]:
 def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
     normalized = model.model_validate(normalize_request_payload(_request_object(raw_request)))
     return normalized.model_dump(exclude_none=True)
+
+
+def _mcp_payload(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
+    """MCP 参数 → 交给 service 的载荷。带命主档案名的载荷**不在这一层校验**，原样交下去：
+
+    这一层的 `model_dump` 会把模型缺省值写成显式值（ad=1、紫微 gender=true），档案里存的同名字段就被缺省值压掉了；
+    run_tool / dispatch 先并档案、再归一化与校验（错误照样是带 agent_recovery 的 tool.invalid_payload）。"""
+    body = _request_object(raw_request)
+    if carries_profile(body, model):
+        return body
+    return _normalize_mcp_request(body, model)
 
 
 def _request_object(raw_request: Any) -> dict[str, Any]:
@@ -250,6 +262,8 @@ _TOOL_RUN_COMMON_FIELDS: tuple[tuple[str, Any, str], ...] = (
     ("clarification_notes", str | None, "确认摘要"),
     # 签名上也带描述的唯一一个：它是新概念（自备知识库），在别处的门面 schema 上同样有说明。
     ("knowledge", Annotated[list[str] | str | None, Field(description="自备知识库：条目名,#标签,auto")], "自备知识库：条目名 / #标签 / auto"),
+    # 命主档案名（精简面是多数客户端的缺省面，这里是它唯一的起盘入口）：同样是新概念，带描述。
+    ("profile", Annotated[str | None, Field(description="命主档案名（horosa_profile 存的）")], "命主档案名"),
 )
 
 
