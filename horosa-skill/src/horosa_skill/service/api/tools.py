@@ -251,7 +251,42 @@ class ToolsAPI:
 
     def profile(self, payload: dict[str, Any]) -> dict[str, Any]:
         """门面 horosa_profile：命主档案 save / get / list / delete（CLI `profile` 走同一个函数）。"""
-        return birth_profiles.run_action(self.profiles, payload)
+        payload, resolution = self._profile_place_coordinates(payload)
+        result = birth_profiles.run_action(self.profiles, payload)
+        if resolution is not None:
+            # 存下的坐标 / 时区来自地名：结果里回显，让 AI 念给用户确认（与技法载荷的 place 同一条解析、同一套回显）。
+            result = {**result, "place_resolution": resolution,
+                      "warnings": [*result.get("warnings", []), place_resolution_note(resolution)]}
+        return result
+
+    def _profile_place_coordinates(self, payload: Any) -> tuple[Any, dict[str, Any] | None]:
+        """save 时只给了地名、没给经纬度：用技法载荷同一条 `resolve_place_fields` 补 lat / lon（+ 按出生日期补 zone）。
+        唯一命中才补；歧义 / 找不到 / 夏令时切换日照常拒绝（place.*，带候选）。显式经纬度永远优先；这次没给坐标、
+        库里已有坐标且地名没变（例如只改备注）就不重查——同名多地的标签不该让一次改备注被拒。"""
+        if not isinstance(payload, dict) or payload.get("action") != "save" or not isinstance(payload.get("data"), dict):
+            return payload, None
+        data = payload["data"]
+        label = data.get("place")
+        if not isinstance(label, str) or not label.strip():
+            return payload, None
+        if any(data.get(key) not in (None, "") for key in ("lat", "lon", "gpsLat", "gpsLon")):
+            return payload, None
+        previous = next(
+            (p for p in self.profiles.all() if birth_profiles.name_key(p.name) == birth_profiles.name_key(payload.get("name") or "")),
+            None,
+        )
+        if previous is not None and previous.place == label and any(k in previous.fields for k in ("lat", "gpsLat")):
+            return payload, None
+        dated = {**(previous.fields if previous is not None else {}), **{k: v for k, v in data.items() if v is not None}}
+        # 日期 / 时间可借库里已存的（只改地名时按原出生日期取偏移）；zone 只认这次给的——换了地名还沿用旧 zone 就错了。
+        spot = {key: dated[key] for key in ("date", "time") if key in dated}
+        spot.update({key: data[key] for key in ("zone", "cnUnifiedZone") if data.get(key) is not None})
+        resolved = self.resolve_place_fields({**spot, "place": label}, tool_name="horosa_profile")
+        resolution = resolved.get("placeResolution")
+        filled = {key: resolved[key] for key in ("lat", "lon", "gpsLat", "gpsLon") if key in resolved}
+        if "zone" not in data and "zone" in resolved and (resolution or {}).get("zone_source") == "place_and_date":
+            filled["zone"] = resolved["zone"]
+        return {**payload, "data": {**data, **filled}}, resolution
 
     def _validated_tool_input(
         self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]
