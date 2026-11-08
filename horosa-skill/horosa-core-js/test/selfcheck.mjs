@@ -1477,8 +1477,9 @@ try {
   const { runPlaceSearch } = await import('../src/tools/placeSearch.js');
   const sh = (await runPlaceSearch({ query: '上海', date: '1988-07-01' })).data;
   assert(sh.resolved === true && sh.confidence === 'high', JSON.stringify(sh));
-  assert(JSON.stringify([sh.match.lat, sh.match.lon, sh.match.gpsLat, sh.match.gpsLon, sh.match.zone, sh.match.iana, sh.match.dst])
-    === JSON.stringify(['31n13', '121e28', 31.2304, 121.4737, '+09:00', 'Asia/Shanghai', true]), JSON.stringify(sh.match));
+  // 罗盘串不在引擎里出（Python 与一般十进制入参共用一个换算），这里钉十进制坐标与当日时区。
+  assert(JSON.stringify([sh.match.gpsLat, sh.match.gpsLon, sh.match.zone, sh.match.iana, sh.match.dst])
+    === JSON.stringify([31.2304, 121.4737, '+09:00', 'Asia/Shanghai', true]), JSON.stringify(sh.match));
   const cy = (await runPlaceSearch({ query: '朝阳', date: '1988-07-01', limit: 3 })).data;
   assert(cy.resolved === false && cy.match === null, JSON.stringify(cy));
   assert(JSON.stringify(cy.candidates.map((c) => `${c.name}|${c.region}`)) === JSON.stringify(['朝阳区|北京城区', '朝阳区|长春市', '朝阳市|辽宁省']), JSON.stringify(cy.candidates));

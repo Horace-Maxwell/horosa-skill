@@ -205,10 +205,25 @@ def test_engine_tool_returns_upstream_candidates_in_upstream_order(tmp_path: Pat
         assert got == [[c["name"], c["region"], c["gpsLat"], c["gpsLon"]] for c in expected["candidates"]], query
         assert data["resolved"] is expected["resolved"] and data["confidence"] == expected["confidence"], query
         if expected.get("place"):
-            for key in ("name", "lat", "lon", "gpsLat", "gpsLon", "zone"):
+            for key in ("name", "gpsLat", "gpsLon", "zone"):
                 assert data["match"][key] == expected["place"][key], (query, key)
             assert data["match"]["geoZone"] == expected["place"]["iana"]
             assert data["match"]["advisory"] == expected["place"].get("advisory")
+            assert "lat" not in data["match"]  # 罗盘串只在 Python 出（一个换算）
+
+
+@requires_engine
+def test_place_text_coordinates_equal_upstream_place_output(tmp_path: Path) -> None:
+    """门面 / 自动补全的 lat / lon 罗盘串（Python _format_compact_coordinate）= 上游 resolvePlaceOffline 自己产的
+    place.lat / place.lon（上游 geoCompass.convertLatToStr），逐条对拍全部 resolve + zones 用例。"""
+    service = _service(tmp_path)
+    golden = _golden()["outputs"]
+    cases = [(q, CASES["resolveDate"], r["place"]) for q, r in golden["resolve"].items() if r.get("confidence") == "high"]
+    cases += [(z["query"], z["date"], z["place"]) for z in golden["zones"] if z["confidence"] == "high"]
+    assert len(cases) >= 15
+    for query, date, place in cases:
+        match = service.place_search({"query": query, "date": date})["match"]
+        assert (match["lat"], match["lon"]) == (place["lat"], place["lon"]), (query, date)
 
 
 @requires_engine

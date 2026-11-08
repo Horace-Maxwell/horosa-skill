@@ -1,8 +1,9 @@
 """地名 → 坐标 + 时区（PlaceAPI，v0.48.0）：门面 horosa_place_search 与技法载荷的 `place` 键共用一条管线。
 
 算法全是上游星阙的，经 horosa-core-js `place_search` 调 vendored 原件：AI 助手离线地名解析 `resolvePlaceOffline`
-（城市库 cities + citiesFull + 繁简折叠表、cityMatch 四档评分、同城去重、high / medium 置信）、`geoPairToRecordFields`
-（十进制 → 31n13 罗盘串）、`dstAwareZoneAt`（tz-lookup → IANA → 中国大陆统一北京时间 → 当日偏移 + TZ_RULE_OVERRIDES）。
+（城市库 cities + citiesFull + 繁简折叠表、cityMatch 四档评分、同城去重、high / medium 置信）、`dstAwareZoneAt`
+（tz-lookup → IANA → 中国大陆统一北京时间 → 当日偏移 + TZ_RULE_OVERRIDES）。十进制 → 31n13 罗盘串与一般十进制入参共用
+`input_normalization._format_compact_coordinate`（上游 AstroHelper.convertLatToStr 的逐步移植，tests/test_coordinate_text.py 金标）。
 本模块只管四件事：入参归一、`place` 自动补全的判定（只认上游 high）、拒绝时的澄清载荷、旧 runtime 的降级。
 
 自动补全的规矩（铁律 2：不猜）：
@@ -25,6 +26,7 @@ from horosa_skill.input_normalization import (
     _DATE_RE,
     _TIME_RE,
     _cn_unified_enabled,
+    _format_compact_coordinate,
     _normalize_date_value,
     _normalize_iana_zone_value,
     _normalize_time_value,
@@ -73,6 +75,15 @@ def _candidate_label(candidate: dict[str, Any]) -> str:
     en = f"{candidate.get('en') or ''}".strip()
     head = f"{candidate.get('name')}（{region}）" if region else f"{candidate.get('name')}"
     return f"{head} {en} {candidate.get('lat')}/{candidate.get('lon')}".replace("  ", " ").strip()
+
+
+def _with_text(candidate: dict[str, Any]) -> dict[str, Any]:
+    """引擎只回十进制；罗盘串在这里用与一般十进制入参同一个换算补上（一个实现，不是两个）。"""
+    out = dict(candidate)
+    for key, gps, axis in (("lat", "gpsLat", "lat"), ("lon", "gpsLon", "lon")):
+        value = candidate.get(gps)
+        out[key] = _format_compact_coordinate(float(value), axis=axis) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    return out
 
 
 def _compact(candidate: dict[str, Any]) -> dict[str, Any]:
@@ -238,6 +249,8 @@ class PlaceAPI:
                 code="place.engine_failed",
                 details={"received": type(data).__name__},
             )
+        data = {**data, "candidates": [_with_text(item) for item in data["candidates"] if isinstance(item, dict)],
+                "match": _with_text(data["match"]) if isinstance(data.get("match"), dict) else None}
         warnings: list[str] = []
         if time and date:
             for item in [data.get("match"), *data["candidates"]]:

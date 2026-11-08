@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime
 from typing import Any
@@ -337,11 +338,17 @@ def _format_zone_offset(offset_hours: float) -> str:
     return f"{sign}{hours:02d}:{minutes:02d}"
 
 
+# 上游 splitDegree 先把数字转成字符串再 parseInt 取度：|x| ≥ 1e21 时 JS 写成「1e+21」，度只剩首位数字（实测 convertLatToStr(1e21)
+# = '1n06'）；非有限值（NaN / ±Infinity）上游一律当 0 → '0n00'（一个真实存在的位置）。两者都不是坐标——这里不换算、原样交给校验层
+# 报 tool.invalid_payload（铁律：解析失败不许换成默认值），这是本节唯一一处有意不跟上游。
+_COORDINATE_DOMAIN = 1e21
+
+
 def _coerce_coordinate_decimal(value: Any) -> float | None:
     if value is None:
         return None
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
+        return _in_coordinate_domain(float(value))
 
     text = str(value).strip()
     if not text:
@@ -355,20 +362,36 @@ def _coerce_coordinate_decimal(value: Any) -> float | None:
         decimal = degrees + minutes / 60
         if hemisphere in {"s", "w"}:
             decimal *= -1
-        return decimal
+        return _in_coordinate_domain(decimal)
 
     if _DECIMAL_RE.match(text):
-        return float(text)
+        return _in_coordinate_domain(float(text))
     return None
 
 
+def _in_coordinate_domain(value: float) -> float | None:
+    return value if math.isfinite(value) and abs(value) < _COORDINATE_DOMAIN else None
+
+
+def _js_math_round(value: float) -> int:
+    """JS Math.round：最近的整数，恰在 .5 时向 +∞（Python round 是银行家舍入，floor(x + 0.5) 在 0.49999999999999994 上也会多进一）。"""
+    floor = math.floor(value)
+    return int(floor) + (1 if value - floor >= 0.5 else 0)
+
+
 def _format_compact_coordinate(decimal_value: float, *, axis: str) -> str:
-    hemisphere_positive = "n" if axis == "lat" else "e"
-    hemisphere_negative = "s" if axis == "lat" else "w"
-    hemisphere = hemisphere_positive if decimal_value >= 0 else hemisphere_negative
+    """十进制度 → 罗盘串（31n13 / 121e28）。上游 components/astro/AstroHelper.js 的 convertLatToStr / convertLonToStr + splitDegree
+    逐步同构（utils/aiTools/normalize/geoCompass.js 是它的逐字抄本）：方向按**原值**符号判（-0 与 0 都是北 / 东，-0.12 是南 / 西）；
+    度取整；分**向下取整**；秒按 JS Math.round 取整；秒满 60 进 1 分、分满 60 进 1 度。旧实现把分四舍五入（31.2304 → 31n14，上游
+    31n13），差 1′ 进起盘请求。地名解析（service/api/place.py）与一般十进制入参都走这一个函数；守卫：tests/test_coordinate_text.py
+    （金标 = 上游 AstroHelper 在 node 里跑出）。"""
+    hemisphere = ("s" if axis == "lat" else "w") if decimal_value < 0 else ("n" if axis == "lat" else "e")
     absolute = abs(decimal_value)
     degrees = int(absolute)
-    minutes = round((absolute - degrees) * 60)
+    minute = (absolute - degrees) * 60
+    minutes = math.floor(minute)
+    if _js_math_round((minute - minutes) * 60) == 60:
+        minutes += 1
     if minutes == 60:
         degrees += 1
         minutes = 0
