@@ -17,14 +17,18 @@
 """
 from __future__ import annotations
 
+import copy
+import re
 from typing import Any
 
 from horosa_skill.agent_guidance import PREDICTIVE_INPUT_CONTRACTS
 from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS, SIDEREAL_AYANAMSA_LABELS
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
-from horosa_skill.engine.synonyms import aka_line
+from horosa_skill.engine.synonyms import synonyms_for
 from horosa_skill.schemas.tools import BirthInput
+from horosa_skill.schemas.tools.advertised_types import UNTYPED_FIELD_TYPES
 from horosa_skill.schemas.tools.base import advertise_hidden_fields
+from horosa_skill.surfaces.mcp_requests import tool_run_field_docs
 
 GATE_KEYS: tuple[str, ...] = ("agent_confirmed_settings", "defaults_accepted", "clarification_notes")
 # name/pos（显示名）已声明、顶层照收，但不进广告层：两字段 × 80 工具 ≈ 10 KB，只是盘头文字。
@@ -40,21 +44,23 @@ DOMAIN_CORE: dict[str, tuple[str, ...]] = {
     "shenshu": CN_CORE,
 }
 # 域核心字段的短描述（广告层专用；校验层的长描述仍在模型上，guidance 可查）。
+# v0.48.0 瘦身：这些描述每份要乘 50–100 个工具，所以只写键名说不出的东西（格式 / 取值 / 口径），
+# 不再复述键名本身（date→「日期」、zone→「时区」、lat→「纬度」、gender→「性别」、response_view→「响应」）。`tests/test_mcp_list_slim.py` 锁每工具的共享开销。
 CORE_DOC: dict[str, str] = {
-    "date": "公历日期 YYYY-MM-DD",
+    "date": "公历 YYYY-MM-DD",
     "time": "HH:mm:ss",
-    "zone": "时区偏移，如 +08:00",
-    "lat": "纬度 31n13 / 31.22",
-    "lon": "经度 121e28 / 121.47",
-    "ad": "-1=公元前（缺省 1）",
+    "zone": "偏移，如 +08:00",
+    "lat": "31n13 / 31.22",
+    "lon": "121e28 / 121.47",
+    "ad": "-1=公元前",
     "hsys": "宫制索引（见 enum；1=Alcabitus，3=Placidus）",
     "zodiacal": "0=回归（默认） 1=恒星",
     "siderealAyanamsa": "恒星黄道岁差制（zodiacal=1 时）",
     "name": "当事人姓名（透传盘头）",
     "pos": "地点显示名",
-    "gender": "性别 1/男 0/女",
+    "gender": "1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
-    "response_view": "响应裁剪（全文已存档）",
+    "response_view": "裁剪（全文已存档）",
     "agent_confirmed_settings": "用户已确认设置→true",
     "defaults_accepted": "用户接受默认→true",
     "clarification_notes": "确认摘要",
@@ -87,7 +93,8 @@ def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
         # 47 制的 enum 每工具 600 B × 80 工具 = 48 KB，超预算；只给常用键，全表见 guidance。
         # 只举三制：印度标准 lahiri、西方恒星派 fagan_bradley、raman（v0.46.x 预算收紧，其余见 guidance）。
         common = [k for k in ("lahiri", "fagan_bradley", "raman") if k in SIDEREAL_AYANAMSA_LABELS]
-        return {"description": f"岁差制（zodiacal=1）：{'/'.join(common)}…共 {len(SIDEREAL_AYANAMSA_LABELS)} 制见 guidance"}
+        # 「见 guidance」不重复：工具描述末行已指 horosa_agent_guidance（v0.48.0）。
+        return {"description": f"zodiacal=1 时：{'/'.join(common)}…共 {len(SIDEREAL_AYANAMSA_LABELS)} 制"}
     return {}
 
 
@@ -106,15 +113,25 @@ def _core_property(field: str, tool_name: str, required: bool) -> dict[str, Any]
     return prop
 
 
+# `Any | None` 字段（anyOf:[{}, {"type":"null"}]）广告成什么 type：逐键登记在 schema 包里
+# （`schemas/tools/advertised_types.py`，那里写了为什么不放在这里）。
+def _collapse_types(field: str, prop: dict[str, Any]) -> None:
+    """anyOf 折叠成广告层的 type：去掉 "null"（可空只是「可不传」，不是一种可传的值）；非空支没有类型就查 UNTYPED_FIELD_TYPES。"""
+    members = [a for a in prop.pop("anyOf", None) or [] if isinstance(a, dict)]
+    types = sorted({str(a["type"]) for a in members if a.get("type") and a.get("type") != "null"})
+    if types:
+        prop["type"] = types if len(types) > 1 else types[0]
+        return
+    prop.update(copy.deepcopy(UNTYPED_FIELD_TYPES.get(field, {"type": "string"})))  # 表是共享的，别让下游改到它
+
+
 def _own_property(field: str, full_prop: dict[str, Any], required: bool) -> dict[str, Any]:
     prop = {k: v for k, v in full_prop.items() if k in {"type", "enum", "items", "anyOf", "description"}}
     desc = str(prop.get("description") or "").strip()
     if len(desc) > OWN_FIELD_DOC_LIMIT:
         prop["description"] = desc[: OWN_FIELD_DOC_LIMIT - 1] + "…"
-    if "anyOf" in prop and "type" not in prop:
-        types = sorted({str(a.get("type")) for a in prop["anyOf"] if isinstance(a, dict) and a.get("type")})
-        prop.pop("anyOf", None)
-        prop["type"] = types if len(types) > 1 else (types[0] if types else "string")
+    if "type" not in prop:
+        _collapse_types(field, prop)
     if "items" in prop and isinstance(prop["items"], dict):
         prop["items"] = {k: v for k, v in prop["items"].items() if k in {"type", "enum"}} or {}
     if required and not str(prop.get("description", "")).startswith("[required]"):
@@ -193,14 +210,39 @@ def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
     return {"type": "object", "properties": props, "additionalProperties": True}
 
 
+AKA_LIMIT = 4
+# 描述尾行不带 `(tool_name="…")`（v0.48.0，114 份 × 约 25 B）：模型手里就是本工具的名字，
+# guidance 两种写法都收（`engine/registry.resolve_tool_name`）。
+GUIDANCE_TAIL = "旋钮/输出段：horosa_agent_guidance"
+
+
+# 「整词出现」的边界：字母数字与汉字之外的任何字符（空格、标点、括号、/、·）或首尾。
+# 只认整词：「星盘」嵌在「西洋星盘」里不算出现——按空格 / 标点切词的工具搜索索引里，那只是「西洋星盘」一个词。
+_WORD_CHAR = r"0-9A-Za-z\u3400-\u9fff\uf900-\ufaff"
+
+
+def _appears_as_term(term: str, text: str) -> bool:
+    pattern = rf"(?<![{_WORD_CHAR}]){re.escape(term)}(?![{_WORD_CHAR}])"
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
+
+
+def advertised_aka(tool_name: str, head: str) -> list[str]:
+    """`aka:` 行的别名：先按 `aka_line` 的口径取前 AKA_LIMIT 个，再去掉描述首段里已作为**整词**出现的。
+
+    去掉的词仍以同一个整词留在这条描述里（工具搜索、模型都看得到），所以描述里可见的词集合不变，只省重复的字节（v0.48.0）。
+    不往后补位：补位会让某些工具的描述变长。
+    """
+    picked = [s for s in synonyms_for(tool_name) if s.lower() != tool_name.lower()][:AKA_LIMIT]
+    return [s for s in picked if not _appears_as_term(s, head)]
+
+
 def advertised_description(tool_name: str) -> str:
     definition = TOOL_DEFINITIONS[tool_name]
-    aka = aka_line(tool_name, limit=4)
-    tail = f"旋钮/输出段：horosa_agent_guidance(tool_name=\"{tool_name}\")"
     desc = definition.description.strip()
     if len(desc) > DESCRIPTION_CHAR_LIMIT:
         desc = desc[: DESCRIPTION_CHAR_LIMIT - 1] + "…"
-    return f"{desc}\n{aka + '；' if aka else ''}{tail}"
+    aka = advertised_aka(tool_name, desc)
+    return f"{desc}\n{'aka: ' + ', '.join(aka) + '；' if aka else ''}{GUIDANCE_TAIL}"
 
 
 
@@ -280,6 +322,20 @@ def portable_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _with_tool_run_docs(schema: dict[str, Any]) -> dict[str, Any]:
+    """`horosa_tool_run` 的公共字段补广告层描述（`mcp_requests.tool_run_field_docs`，只补缺；签名不动）。"""
+    docs = tool_run_field_docs()
+    props = {
+        name: (
+            {**prop, "description": docs[name]}
+            if isinstance(prop, dict) and name in docs and not str(prop.get("description") or "").strip()
+            else prop
+        )
+        for name, prop in (schema.get("properties") or {}).items()
+    }
+    return {**schema, "properties": props}
+
+
 def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
     """注册完成后重写各工具的广告层 schema/描述；返回 {mcp_name: 隐藏旋钮数}（测试/棘轮用）。"""
     manager = getattr(mcp, "_tool_manager", None)
@@ -296,6 +352,8 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
             hidden[tool.name] = int(slim.get("x-horosa-hidden-knobs", 0))
         elif tool.name in {"horosa_dispatch", "horosa_hecan"}:
             tool.parameters = advertised_dispatch_schema(hecan=tool.name == "horosa_hecan")
+        elif tool.name == "horosa_tool_run":
+            tool.parameters = _with_tool_run_docs(tool.parameters or {})
     # 🔴 最后对**全部**工具跑一遍可移植化 —— 包括 8 个门面与 horosa_tool_run。
     # 此前只有技法 + dispatch/hecan 被重写，门面直接把 pydantic 的原始 schema
     # （anyOf:[…,{null}] / default:null / title / $ref）发上线；而在精简面下门面**就是**全部工具。

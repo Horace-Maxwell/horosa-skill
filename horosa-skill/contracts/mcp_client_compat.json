@@ -5,11 +5,11 @@
     "gemini_name_limit": 63
   },
   "tools": {
-    "full": 121,
+    "full": 125,
     "compact": 12
   },
   "debt": {
     "full_properties_without_description": 485,
-    "compact_properties_without_description": 84
+    "compact_properties_without_description": 64
   }
 }
