@@ -51,6 +51,11 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 没有 AI 解读时返回 `mode:"analysis_required"`。别为了出盘面 PDF 编一份解读塞进 `ai_report`。解析 / 注册表 / 知识检索 / 紫微规则库类工具没有盘面，
 出 chart 报告会回 `report.no_chart_content`——直接读工具结果。
 
+**盘图 / 日历**（不要解读、不要 `ai_report`）：`format:"png"` = 盘图本身（一张盘一个文件，客户端能显示图片时直接内嵌；
+超出返回上限的只给文件链接，结果 `inline_images` 写明）；没有中文 TrueType 字体回 `report.png_font_unavailable`（改出 PDF）。
+`format:"ics"` = 日历：择日的命中时段 / 候选时刻、推运各期（法达 / 黄道释放 / 十年大运 / 界推运）、回归轴与星历事件，
+**只用结果里写着的日期**（不推算），时刻按结果自己的时区换成 UTC；没有可用日期回 `report.no_calendar_content`。
+
 **自备知识库**：用户可把自己的笔记（`.md` / `.txt`，可选 front matter `title` / `techniques` / `tags`）放进
 `horosa-skill knowledge mine` 列出的文件夹（缺省数据目录下 `knowledge/`，`HOROSA_USER_KNOWLEDGE_DIR` 可改）。任一技法 / `horosa_dispatch`
 传 `knowledge:["条目名", "#标签", "auto", "?检索词"]`，选中的正文挂在 `data.knowledge_context`（`auto` = front matter 的 techniques 含本技法的条目；

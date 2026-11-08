@@ -49,7 +49,8 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
    `executive_summary`, `analysis_sections`, `evidence`, `recommendations`, `limitations`.
 4. Passing `ai_report` to `report_render`/`report_from_tool` auto-writes the answer back to the run —
    only call `horosa_memory_record_answer` when you store an answer WITHOUT rendering a report.
-5. Call `horosa_report_render` with `format` = `json`, `docx`, or `pdf`. The result's `file` card has the
+5. Call `horosa_report_render` with `format` = `json`, `docx`, or `pdf` (`png` = the chart picture, `ics` = a calendar of
+   the dates stated in the result — both need no `ai_report`; see SKILL.md「盘图 / 日历」). The result's `file` card has the
    absolute path, a `file://` URI, MIME type, size and sha256; clients on MCP 2025-06-18 or newer also get a
    `resource_link` block — hand the user that link / path instead of pasting the file.
 6. Confirm the returned artifact exists and is retrievable via `horosa_memory_show` /

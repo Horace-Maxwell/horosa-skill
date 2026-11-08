@@ -115,6 +115,24 @@ class ReportBuilder:
     def build_template(self, *, run: dict[str, Any], source_artifact: dict[str, Any], language: str) -> dict[str, Any]:
         return _build_template(run=run, source_artifact=source_artifact, language=language)
 
+    def chart_source(self, *, run: dict[str, Any], source_artifact: dict[str, Any]) -> dict[str, Any]:
+        """盘图 PNG / 日历 ICS 要的那几样（只读存档，不建整份报告）：工具名、排盘报告式技法名、结果 data、入参、来源元信息。"""
+        payload = read_payload(source_artifact)
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        source = read_source_meta(run=run, source_artifact=source_artifact, payload=payload)
+        tool_name = str(source.get("tool_name") or "")
+        label = report_technique_name(tool_name, str(source.get("technique_label") or source.get("technique") or tool_name))
+        input_normalized = payload.get("input_normalized")
+        return {"tool_name": tool_name, "label": label, "data": data, "source": source,
+                "input_normalized": input_normalized if isinstance(input_normalized, dict) else {}}
+
+    def build_figures(self, *, run: dict[str, Any], source_artifact: dict[str, Any]) -> list[dict[str, Any]]:
+        """排盘报告（style=chart）里的那一组盘图规格——PNG 与 PDF 画的是同一份（测试锁同）。"""
+        from horosa_skill.reports.figures import extract_figures
+
+        chart = self.chart_source(run=run, source_artifact=source_artifact)
+        return extract_figures(chart["tool_name"], chart["data"], chart["label"])
+
     def build_document(
         self,
         *,

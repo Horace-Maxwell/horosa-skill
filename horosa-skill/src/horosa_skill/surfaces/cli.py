@@ -1230,10 +1230,10 @@ def report_template(
     _print_json(result)
 
 
-@report_app.command("render", help='Render a stored run (plus optional ai_report JSON) to JSON / DOCX / PDF. 渲染报告文件。')
+@report_app.command("render", help='Render a stored run (plus optional ai_report JSON) to JSON / DOCX / PDF, or its chart as PNG / its dates as ICS. 渲染报告文件。')
 def report_render(
     run_id: str = typer.Option(..., "--run-id", help="Run id to render."),
-    format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, or pdf."),
+    format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, pdf, png (chart image) or ics (calendar)."),
     tool: str | None = typer.Option(None, "--tool", help="Optional tool name for dispatch or multi-tool runs."),
     output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
     title: str | None = typer.Option(None, "--title", help="Optional report title."),
@@ -1295,7 +1295,7 @@ def report_technique(
 @report_app.command("from-tool", help='Run a technique and render its report in one step: `report from-tool <name> --input payload.json --format docx`. 起盘并出报告。')
 def report_from_tool(
     tool: str = typer.Argument(..., help="Tool name such as chart, qimen, liureng_gods, or sixyao."),
-    format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, or pdf."),
+    format_name: str = typer.Option("pdf", "--format", help="Output format: json, docx, pdf, png (chart image) or ics (calendar)."),
     output: Path | None = typer.Option(None, "--output", help="Optional output path. Defaults to the Horosa memory output directory."),
     question: str | None = typer.Option(None, "--question", help="Optional user question to store with this report run."),
     title: str | None = typer.Option(None, "--title", help="Optional report title."),

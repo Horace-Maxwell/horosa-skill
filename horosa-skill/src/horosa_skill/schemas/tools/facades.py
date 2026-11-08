@@ -215,7 +215,7 @@ class ReportTemplateInput(FlexibleModel):
 class ReportRenderInput(FlexibleModel):
     run_id: str
     tool_name: str | None = None
-    format: str = "pdf"
+    format: str = "pdf"  # pdf / docx / json；png = 盘图、ics = 日历（只含引擎数据，不要 ai_report）
     style: str = Field(
         default="analysis",
         description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
@@ -231,7 +231,7 @@ class ReportRenderInput(FlexibleModel):
 class ReportFromToolInput(FlexibleModel):
     tool_name: str
     payload: dict[str, Any]
-    format: str = "pdf"
+    format: str = "pdf"  # pdf / docx / json；png = 盘图、ics = 日历（只含引擎数据，不要 ai_report）
     style: str = Field(
         default="analysis",
         description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",

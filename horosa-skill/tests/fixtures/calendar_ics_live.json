@@ -1,0 +1,3201 @@
+{
+ "_comment": "Live recordings for the ICS export (reports/calendar_ics.py), trimmed to the keys the extractor reads. Recorded 2026-11-08 from the vendored runtime instance (chart :8877 / java :9977, Horosa-Public 10fb75de = v3.13.2) with testing_payloads.build_sample_payloads(); *_ny cases override zone -05:00 / New York; qizhengelection_eclipses = action eclipses, kind solar, count 3. Ephemeris/distributions keep the first rows only.",
+ "cases": {
+  "huanglizeri": {
+   "tool": "huanglizeri",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "+08:00"
+   },
+   "data": {
+    "intervals": [
+     {
+      "start": "2028-04-03",
+      "end": "2028-04-03",
+      "days": 1,
+      "pick": "2028-04-03 12:00:00",
+      "pickEnd": "2028-04-03 12:00:00",
+      "startOrd": 21277,
+      "endOrd": 21277,
+      "badge": "平日·心宿·黄道"
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "huanglizeri",
+      "label": "黄历择吉",
+      "preset_sections": [
+       "起盘信息",
+       "今日宜忌",
+       "值神值宿",
+       "彭祖百忌",
+       "吉神凶煞",
+       "冲煞·胎神·方位",
+       "时辰吉凶",
+       "物候·六曜·数九三伏",
+       "流年年神方位",
+       "年度吉日榜",
+       "方法说明",
+       "择吉搜索配置",
+       "择吉条件",
+       "命中日段"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [
+       "时辰吉凶",
+       "物候·六曜·数九三伏",
+       "流年年神方位",
+       "年度吉日榜"
+      ],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "今日宜忌",
+        "值神值宿",
+        "彭祖百忌",
+        "吉神凶煞",
+        "冲煞·胎神·方位",
+        "时辰吉凶",
+        "物候·六曜·数九三伏",
+        "流年年神方位",
+        "年度吉日榜",
+        "方法说明",
+        "择吉搜索配置",
+        "择吉条件",
+        "命中日段"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "择吉搜索配置",
+       "body": "时间范围:2028-04-01 ~ 2028-04-08(日粒度;黄历日课与地点/时刻无关)"
+      },
+      {
+       "title": "择吉条件",
+       "body": "宜含事项·宜:嫁娶"
+      },
+      {
+       "title": "命中日段",
+       "body": "1. 2028-04-03(1天) 平日·心宿·黄道\n   判读:\n     · 设定 宜含事项·宜:嫁娶 → 实际 宜:祭祀、嫁娶、纳婿、除服、成服、入殓、移柩(中:嫁娶) ✓"
+      }
+     ]
+    }
+   }
+  },
+  "qimenzeri": {
+   "tool": "qimenzeri",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "+08:00"
+   },
+   "data": {
+    "intervals": [
+     {
+      "start": "2028-04-01 18:58",
+      "end": "2028-04-01 20:58",
+      "pick": "2028-04-01 19:01:00",
+      "pickEnd": "2028-04-01 20:52:00",
+      "startMs": 1838199480000,
+      "endMs": 1838206680000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-02 18:58",
+      "end": "2028-04-02 20:58",
+      "pick": "2028-04-02 19:01:00",
+      "pickEnd": "2028-04-02 20:52:00",
+      "startMs": 1838285880000,
+      "endMs": 1838293080000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-03 00:58",
+      "end": "2028-04-03 02:58",
+      "pick": "2028-04-03 01:01:00",
+      "pickEnd": "2028-04-03 02:52:00",
+      "startMs": 1838307480000,
+      "endMs": 1838314680000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-03 08:58",
+      "end": "2028-04-03 10:58",
+      "pick": "2028-04-03 09:01:00",
+      "pickEnd": "2028-04-03 10:52:00",
+      "startMs": 1838336280000,
+      "endMs": 1838343480000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-04 02:58",
+      "end": "2028-04-04 04:58",
+      "pick": "2028-04-04 03:01:00",
+      "pickEnd": "2028-04-04 04:52:00",
+      "startMs": 1838401080000,
+      "endMs": 1838408280000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     },
+     {
+      "start": "2028-04-05 00:57",
+      "end": "2028-04-05 02:57",
+      "pick": "2028-04-05 01:00:00",
+      "pickEnd": "2028-04-05 02:51:00",
+      "startMs": 1838480220000,
+      "endMs": 1838487420000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     },
+     {
+      "start": "2028-04-05 16:57",
+      "end": "2028-04-05 18:57",
+      "pick": "2028-04-05 17:00:00",
+      "pickEnd": "2028-04-05 18:51:00",
+      "startMs": 1838537820000,
+      "endMs": 1838545020000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     },
+     {
+      "start": "2028-04-06 08:57",
+      "end": "2028-04-06 10:57",
+      "pick": "2028-04-06 09:00:00",
+      "pickEnd": "2028-04-06 10:51:00",
+      "startMs": 1838595420000,
+      "endMs": 1838602620000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     },
+     {
+      "start": "2028-04-07 02:57",
+      "end": "2028-04-07 04:57",
+      "pick": "2028-04-07 03:00:00",
+      "pickEnd": "2028-04-07 04:51:00",
+      "startMs": 1838660220000,
+      "endMs": 1838667420000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     },
+     {
+      "start": "2028-04-07 20:57",
+      "end": "2028-04-07 22:57",
+      "pick": "2028-04-07 21:00:00",
+      "pickEnd": "2028-04-07 22:51:00",
+      "startMs": 1838725020000,
+      "endMs": 1838732220000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     },
+     {
+      "start": "2028-04-08 14:56",
+      "end": "2028-04-08 16:56",
+      "pick": "2028-04-08 14:59:00",
+      "pickEnd": "2028-04-08 16:50:00",
+      "startMs": 1838789760000,
+      "endMs": 1838796960000,
+      "durationMin": 120,
+      "juText": "阳遁六局下元"
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "qimenzeri",
+      "label": "奇门择日",
+      "preset_sections": [
+       "起盘信息",
+       "盘型",
+       "全局速览",
+       "盘面要素",
+       "奇门演卦",
+       "八宫详解",
+       "八宫克应",
+       "九宫方盘",
+       "旺相休囚死·月令能量",
+       "六害总览",
+       "化解方案",
+       "八门化气大阵",
+       "用神分论",
+       "财富七要",
+       "事业七要",
+       "恋爱姻缘",
+       "孤辰寡宿",
+       "日家占方（古籍金函系）",
+       "择日搜索配置",
+       "择日条件",
+       "命中时辰"
+      ],
+      "forbidden_sections": [
+       "右侧栏目"
+      ],
+      "optional_sections": [
+       "日家占方（古籍金函系）",
+       "八宫克应"
+      ],
+      "default_off_sections": [
+       "八宫克应"
+      ],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "盘型",
+        "全局速览",
+        "盘面要素",
+        "奇门演卦",
+        "八宫详解",
+        "八宫克应",
+        "九宫方盘",
+        "旺相休囚死·月令能量",
+        "六害总览",
+        "化解方案",
+        "八门化气大阵",
+        "用神分论",
+        "财富七要",
+        "事业七要",
+        "恋爱姻缘",
+        "孤辰寡宿",
+        "日家占方（古籍金函系）",
+        "择日搜索配置",
+        "择日条件",
+        "命中时辰"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "择日搜索配置",
+       "body": "时间段：2028-04-01 00:00 → 2028-04-08 23:59\n地点：福州　时区：+08:00\n参数：·置闰··空亡·驿马·真太阳时··"
+      },
+      {
+       "title": "择日条件",
+       "body": "吉格·青龙回首"
+      },
+      {
+       "title": "命中时辰",
+       "body": "1. 2028-04-01 18:58 ~ 2028-04-01 20:58(120分)　阳遁九局中元\n   判读:\n     · 设定 吉格·青龙回首 → 实际 青龙回首@兑7宫 ✓\n2. 2028-04-02 18:58 ~ 2028-04-02 20:58(120分)　阳遁九局中元\n   判读:\n     · 设定 吉格·青龙回首 → 实际 青龙回首@兑7宫 ✓\n3. 2028-04-03 00:58 ~ 2028-04-03 02:58(120分)　阳遁九局中元\n   判读:\n     · 设定 吉格·青龙回首 → 实际 青龙回首@兑7宫 ✓\n4. 2028-04-03 08:58 ~ 2028-04-03 10:58(120分)　阳遁九局中元\n5. 2028-04-04 02:58 ~ 2028-04-04 04:58(120分)　阳遁六局下元\n6. 2028-04-05 00:57 ~ 2028-04-05 02:57(120分)　阳遁六局下元\n7. 2028-04-05 16:57 ~ 2028-04-05 18:57(120分)　阳遁六局下元\n8. 2028-04-06 08:57 ~ 2028-04-06 10:57(120分)　阳遁六局下元\n9. 2028-04-07 02:57 ~ 2028-04-07 04:57(120分)　阳遁六局下元\n10. 2028-04-07 20:57 ~ 2028-04-07 22:57(120分)　阳遁六局下元\n11. 2028-04-08 14:56 ~ 2028-04-08 16:56(120分)　阳遁六局下元"
+      }
+     ]
+    }
+   }
+  },
+  "qimenzeri_ny": {
+   "tool": "qimenzeri",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "-05:00"
+   },
+   "data": {
+    "intervals": [
+     {
+      "start": "2028-04-01 19:00",
+      "end": "2028-04-01 21:00",
+      "pick": "2028-04-01 19:03:00",
+      "pickEnd": "2028-04-01 20:54:00",
+      "startMs": 1838246400000,
+      "endMs": 1838253600000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-02 19:00",
+      "end": "2028-04-02 21:00",
+      "pick": "2028-04-02 19:03:00",
+      "pickEnd": "2028-04-02 20:54:00",
+      "startMs": 1838332800000,
+      "endMs": 1838340000000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-03 01:00",
+      "end": "2028-04-03 03:00",
+      "pick": "2028-04-03 01:03:00",
+      "pickEnd": "2028-04-03 02:54:00",
+      "startMs": 1838354400000,
+      "endMs": 1838361600000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     },
+     {
+      "start": "2028-04-03 09:00",
+      "end": "2028-04-03 11:00",
+      "pick": "2028-04-03 09:03:00",
+      "pickEnd": "2028-04-03 10:54:00",
+      "startMs": 1838383200000,
+      "endMs": 1838390400000,
+      "durationMin": 120,
+      "juText": "阳遁九局中元"
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "qimenzeri",
+      "label": "奇门择日",
+      "preset_sections": [
+       "起盘信息",
+       "盘型",
+       "全局速览",
+       "盘面要素",
+       "奇门演卦",
+       "八宫详解",
+       "八宫克应",
+       "九宫方盘",
+       "旺相休囚死·月令能量",
+       "六害总览",
+       "化解方案",
+       "八门化气大阵",
+       "用神分论",
+       "财富七要",
+       "事业七要",
+       "恋爱姻缘",
+       "孤辰寡宿",
+       "日家占方（古籍金函系）",
+       "择日搜索配置",
+       "择日条件",
+       "命中时辰"
+      ],
+      "forbidden_sections": [
+       "右侧栏目"
+      ],
+      "optional_sections": [
+       "日家占方（古籍金函系）",
+       "八宫克应"
+      ],
+      "default_off_sections": [
+       "八宫克应"
+      ],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "盘型",
+        "全局速览",
+        "盘面要素",
+        "奇门演卦",
+        "八宫详解",
+        "八宫克应",
+        "九宫方盘",
+        "旺相休囚死·月令能量",
+        "六害总览",
+        "化解方案",
+        "八门化气大阵",
+        "用神分论",
+        "财富七要",
+        "事业七要",
+        "恋爱姻缘",
+        "孤辰寡宿",
+        "日家占方（古籍金函系）",
+        "择日搜索配置",
+        "择日条件",
+        "命中时辰"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "择日搜索配置",
+       "body": "时间段：2028-04-01 00:00 → 2028-04-03 23:59\n地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·真太阳时··"
+      },
+      {
+       "title": "择日条件",
+       "body": "吉格·青龙回首"
+      },
+      {
+       "title": "命中时辰",
+       "body": "1. 2028-04-01 19:00 ~ 2028-04-01 21:00(120分)　阳遁九局中元\n   判读:\n     · 设定 吉格·青龙回首 → 实际 青龙回首@兑7宫 ✓\n2. 2028-04-02 19:00 ~ 2028-04-02 21:00(120分)　阳遁九局中元\n   判读:\n     · 设定 吉格·青龙回首 → 实际 青龙回首@兑7宫 ✓\n3. 2028-04-03 01:00 ~ 2028-04-03 03:00(120分)　阳遁九局中元\n   判读:\n     · 设定 吉格·青龙回首 → 实际 青龙回首@兑7宫 ✓\n4. 2028-04-03 09:00 ~ 2028-04-03 11:00(120分)　阳遁九局中元"
+      }
+     ]
+    }
+   }
+  },
+  "tianxing": {
+   "tool": "tianxing",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "+08:00"
+   },
+   "data": {
+    "intervals": [
+     {
+      "start": "2028-04-01 00:00",
+      "end": "2028-04-19 21:09",
+      "pick": "2028-04-01 00:01:30",
+      "pickEnd": "2028-04-19 21:07:59",
+      "startJd": 2461862.1666666665,
+      "endJd": 2461881.048255995,
+      "durationMin": 27189.5
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "tianxing",
+      "label": "天星择日",
+      "preset_sections": [
+       "起盘信息",
+       "征象搜索配置",
+       "征象条件",
+       "命中区间",
+       "选中时刻星盘",
+       "单时判读"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [
+       "选中时刻星盘",
+       "单时判读"
+      ],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "征象搜索配置",
+        "征象条件",
+        "命中区间",
+        "选中时刻星盘",
+        "单时判读"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "征象搜索配置",
+       "body": "时间段：2028-04-01 00:00 → 2028-04-20 23:59\n搜索地点：福州\n搜索盘面：回归黄道 · 宫制：Placidus"
+      },
+      {
+       "title": "征象条件",
+       "body": "查找 太阳 在 白羊"
+      },
+      {
+       "title": "命中区间",
+       "body": "共 1 个区间：\n1. 2028-04-01 00:00 ~ 2028-04-19 21:09（453.2小时）\n   判读:\n     · 设定 查找 太阳 在 白羊 → 实际 日在白羊 11°28′ ✓"
+      }
+     ]
+    }
+   }
+  },
+  "qizhengzeri": {
+   "tool": "qizhengzeri",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "+08:00"
+   },
+   "data": {
+    "intervals": [
+     {
+      "start": "2028-04-01 05:47",
+      "end": "2028-04-01 18:10",
+      "pick": "2028-04-01 05:48",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-02 05:46",
+      "end": "2028-04-02 18:11",
+      "pick": "2028-04-02 05:47",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-03 05:45",
+      "end": "2028-04-03 18:11",
+      "pick": "2028-04-03 05:46",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-04 05:44",
+      "end": "2028-04-04 18:12",
+      "pick": "2028-04-04 05:45",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-05 05:42",
+      "end": "2028-04-05 18:13",
+      "pick": "2028-04-05 05:43",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-06 05:41",
+      "end": "2028-04-06 18:13",
+      "pick": "2028-04-06 05:42",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-07 05:40",
+      "end": "2028-04-07 18:14",
+      "pick": "2028-04-07 05:41",
+      "durationMin": null
+     },
+     {
+      "start": "2028-04-08 05:39",
+      "end": "2028-04-08 18:15",
+      "pick": "2028-04-08 05:40",
+      "durationMin": null
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "qizhengzeri",
+      "label": "七政择日",
+      "preset_sections": [
+       "起盘信息",
+       "七政四余宫位与二十八宿星曜",
+       "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）",
+       "神煞",
+       "大限",
+       "三主与化曜",
+       "限法实算",
+       "虚实",
+       "本命化曜",
+       "流年流曜",
+       "政余格局",
+       "相位",
+       "择时搜索配置",
+       "择时条件",
+       "命中时段"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [
+       "政余格局",
+       "虚实",
+       "本命化曜",
+       "流年流曜",
+       "三主与化曜",
+       "限法实算"
+      ],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "七政四余宫位与二十八宿星曜",
+        "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）",
+        "神煞",
+        "大限",
+        "三主与化曜",
+        "限法实算",
+        "虚实",
+        "本命化曜",
+        "流年流曜",
+        "政余格局",
+        "相位",
+        "择时搜索配置",
+        "择时条件",
+        "命中时段"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "择时搜索配置",
+       "body": "时间范围:2028-04-01 00:00 ~ 2028-04-08 23:59\n地点:福州 时区 +08:00"
+      },
+      {
+       "title": "择时条件",
+       "body": "昼占/夜占·昼占"
+      },
+      {
+       "title": "命中时段",
+       "body": "1. 2028-04-01 05:47 ~ 2028-04-01 18:10(null分)\n   判读:\n     · 设定 昼占/夜占·昼占 → 实际 — ✓\n2. 2028-04-02 05:46 ~ 2028-04-02 18:11(null分)\n   判读:\n     · 设定 昼占/夜占·昼占 → 实际 — ✓\n3. 2028-04-03 05:45 ~ 2028-04-03 18:11(null分)\n   判读:\n     · 设定 昼占/夜占·昼占 → 实际 — ✓\n4. 2028-04-04 05:44 ~ 2028-04-04 18:12(null分)\n5. 2028-04-05 05:42 ~ 2028-04-05 18:13(null分)\n6. 2028-04-06 05:41 ~ 2028-04-06 18:13(null分)\n7. 2028-04-07 05:40 ~ 2028-04-07 18:14(null分)\n8. 2028-04-08 05:39 ~ 2028-04-08 18:15(null分)"
+      }
+     ]
+    }
+   }
+  },
+  "election": {
+   "tool": "election",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "+08:00"
+   },
+   "data": {
+    "raw": {
+     "params": {
+      "birth": "2028-04-06 09:33:00",
+      "zone": "+08:00"
+     }
+    },
+    "chart": {
+     "date": {
+      "jd": 2461867.564583333
+     }
+    },
+    "judgment": {
+     "ok": true,
+     "topic": "结婚/订婚",
+     "overall": {
+      "score": 52,
+      "gradeCn": "欠佳"
+     },
+     "hard_flags": 8,
+     "school": "modern_main",
+     "params_applied": [],
+     "params_global": [],
+     "params_ignored": [],
+     "invalid_inputs": [],
+     "crisis": null,
+     "unused_inputs": [],
+     "extra_errors": []
+    },
+    "export_snapshot": {
+     "technique": {
+      "key": "election",
+      "label": "择日盘",
+      "preset_sections": [
+       "起盘信息",
+       "流派口径",
+       "总评",
+       "红线",
+       "分项",
+       "尊贵强弱",
+       "阿拉伯点",
+       "择前考量",
+       "用事专属",
+       "危象日参照",
+       "应期",
+       "本命合参",
+       "回归与主限",
+       "时势合参",
+       "建议"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [
+       "用事专属",
+       "应期",
+       "危象日参照",
+       "本命合参",
+       "回归与主限",
+       "时势合参"
+      ],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "流派口径",
+        "总评",
+        "红线",
+        "分项",
+        "尊贵强弱",
+        "阿拉伯点",
+        "择前考量",
+        "用事专属",
+        "危象日参照",
+        "应期",
+        "本命合参",
+        "回归与主限",
+        "时势合参",
+        "建议"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "总评",
+       "body": "52/100　欠佳\n结婚/订婚择日：欠佳（52 分）。主要代价：月亮逢刑（90°）、天王星 凶星临角宫且无援。\n没有完美的择日盘：本结果是在你给定时间窗内、以消去法挑出的较优解，仅供参考。择日是助力/润滑油，能强化本命吉兆、缓和（不能完全化解）凶兆——事在人为 + 本命盘 > 择日盘。"
+      },
+      {
+       "title": "红线",
+       "body": "- [high] 月亮逢刑（90°）：不安定、缺生产力 → 应避\n- [medium] 月亮逢冲（180°）：尤不利合作\n- [low] 月在星座后段（≥28°）、变动气质\n- [low] 木星 逆行（按用事性质决定是否必避）\n- [high] 天王星 凶星临角宫且无援\n- [high] 天王星在 1 或 7 宫：分离/决裂（婚姻盘尤忌）\n- [low] 用事星 金星 游走（无尊贵），缺乏力量\n- [low] 用事星 月亮 游走（无尊贵），缺乏力量"
+      },
+      {
+       "title": "建议",
+       "body": "- 月亮逢刑是择日大忌：优先微调到月亮无 90° 的时刻。"
+      }
+     ]
+    }
+   }
+  },
+  "qizhengelection_eclipses": {
+   "tool": "qizhengelection",
+   "input_normalized": {
+    "date": "2028-04-06",
+    "time": "09:33:00",
+    "zone": "+08:00"
+   },
+   "data": {
+    "action": "eclipses",
+    "eclipses": [
+     {
+      "jd": 2461974.6218738593,
+      "date": "2028-07-22",
+      "time": "10:55:30",
+      "kindFlag": 5
+     },
+     {
+      "jd": 2462151.2171603665,
+      "date": "2029-01-15",
+      "time": "01:12:43",
+      "kindFlag": 18
+     },
+     {
+      "jd": 2462299.670110518,
+      "date": "2029-06-12",
+      "time": "12:04:58",
+      "kindFlag": 18
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "qizhengelection",
+      "label": "七政择日动盘",
+      "preset_sections": [
+       "起盘信息",
+       "择日动盘",
+       "天象要素",
+       "日月食搜索",
+       "方位搜索"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [
+       "择日动盘",
+       "天象要素",
+       "日月食搜索",
+       "方位搜索"
+      ],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "择日动盘",
+        "天象要素",
+        "日月食搜索",
+        "方位搜索"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "日月食搜索",
+       "body": "未来日食\n2028-07-22 10:55:30　全食·中心\n2029-01-15 01:12:43　偏食·非中心\n2029-06-12 12:04:58　偏食·非中心"
+      }
+     ]
+    }
+   }
+  },
+  "returntimeline": {
+   "tool": "returntimeline",
+   "input_normalized": {},
+   "data": {
+    "rows": [
+     {
+      "year": 2026,
+      "solarReturn": {
+       "jd": 2461137.0903412816,
+       "datetime": "2026-04-06 22:10:05",
+       "date": "2026-04-06",
+       "time": "22:10:05"
+      },
+      "lunarReturn": {
+       "jd": 2461047.20344706,
+       "datetime": "2026-01-07 00:52:58",
+       "date": "2026-01-07",
+       "time": "00:52:58"
+      },
+      "solarAsc": {
+       "id": "Asc",
+       "lon": 246.91597999370015,
+       "lat": 54.124119058506004,
+       "sign": "Sagittarius",
+       "signlon": 6.915979993700148,
+       "lonspeed": 0.0
+      },
+      "lunarAsc": {
+       "id": "Asc",
+       "lon": 206.61616813258976,
+       "lat": 41.44090191073524,
+       "sign": "Libra",
+       "signlon": 26.616168132589763,
+       "lonspeed": 0.0
+      }
+     },
+     {
+      "year": 2027,
+      "solarReturn": {
+       "jd": 2461502.3235558644,
+       "datetime": "2027-04-07 03:45:55",
+       "date": "2027-04-07",
+       "time": "03:45:55"
+      },
+      "lunarReturn": {
+       "jd": 2461429.862150973,
+       "datetime": "2027-01-24 16:41:30",
+       "date": "2027-01-24",
+       "time": "16:41:30"
+      },
+      "solarAsc": {
+       "id": "Asc",
+       "lon": 335.0702092364489,
+       "lat": 35.742740291463655,
+       "sign": "Pisces",
+       "signlon": 5.070209236448875,
+       "lonspeed": 0.0
+      },
+      "lunarAsc": {
+       "id": "Asc",
+       "lon": 116.60100527955788,
+       "lat": 8.368470588408565,
+       "sign": "Cancer",
+       "signlon": 26.60100527955788,
+       "lonspeed": 0.0
+      }
+     },
+     {
+      "year": 2028,
+      "solarReturn": {
+       "jd": 2461867.5645830794,
+       "datetime": "2028-04-06 09:33:00",
+       "date": "2028-04-06",
+       "time": "09:33:00"
+      },
+      "lunarReturn": {
+       "jd": 2461785.233721967,
+       "datetime": "2028-01-15 01:36:34",
+       "date": "2028-01-15",
+       "time": "01:36:34"
+      },
+      "solarAsc": {
+       "id": "Asc",
+       "lon": 85.18595413140619,
+       "lat": 8.833156127277084,
+       "sign": "Gemini",
+       "signlon": 25.18595413140619,
+       "lonspeed": 0.0
+      },
+      "lunarAsc": {
+       "id": "Asc",
+       "lon": 222.11720541805528,
+       "lat": 47.95975713866661,
+       "sign": "Scorpio",
+       "signlon": 12.117205418055278,
+       "lonspeed": 0.0
+      }
+     }
+    ],
+    "natal_params": {
+     "zone": "+08:00"
+    },
+    "export_snapshot": {
+     "technique": {
+      "key": "returntimeline",
+      "label": "星运-回归轴",
+      "preset_sections": [
+       "起盘信息",
+       "太阳/月亮返照时间轴",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "太阳/月亮返照时间轴",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "太阳/月亮返照时间轴",
+       "body": "区间：2026 年起 3 年（太阳返照 = 太阳回到本命度;首个月亮返照 = 该年首个月亮回本命度）\n| 年份 | 太阳返照 | 首个月亮返照 | 太阳返照上升 | 月亮返照上升 |\n| --- | --- | --- | --- | --- |\n| 2026 | 2026-04-06 22:10:05 | 2026-01-07 00:52:58 | 射手 6.92° | 天秤 26.62° |\n| 2027 | 2027-04-07 03:45:55 | 2027-01-24 16:41:30 | 双鱼 5.07° | 巨蟹 26.60° |\n| 2028 | 2028-04-06 09:33:00 | 2028-01-15 01:36:34 | 双子 25.19° | 天蝎 12.12° |"
+      }
+     ]
+    }
+   }
+  },
+  "returntimeline_ny": {
+   "tool": "returntimeline",
+   "input_normalized": {},
+   "data": {
+    "rows": [
+     {
+      "year": 2026,
+      "solarReturn": {
+       "jd": 2461137.6319648717,
+       "datetime": "2026-04-06 22:10:02",
+       "date": "2026-04-06",
+       "time": "22:10:02"
+      },
+      "lunarReturn": {
+       "jd": 2461047.7987364987,
+       "datetime": "2026-01-07 02:10:11",
+       "date": "2026-01-07",
+       "time": "02:10:11"
+      },
+      "solarAsc": {
+       "id": "Asc",
+       "lon": 242.14566983567832,
+       "lat": 63.53927919220353,
+       "sign": "Sagittarius",
+       "signlon": 2.1456698356783193,
+       "lonspeed": 0.0
+      },
+      "lunarAsc": {
+       "id": "Asc",
+       "lon": 219.741190380236,
+       "lat": 57.002866180682076,
+       "sign": "Scorpio",
+       "signlon": 9.741190380235992,
+       "lonspeed": 0.0
+      }
+     },
+     {
+      "year": 2027,
+      "solarReturn": {
+       "jd": 2461502.864844422,
+       "datetime": "2027-04-07 03:45:23",
+       "date": "2027-04-07",
+       "time": "03:45:23"
+      },
+      "lunarReturn": {
+       "jd": 2461430.409428278,
+       "datetime": "2027-01-24 16:49:35",
+       "date": "2027-01-24",
+       "time": "16:49:35"
+      },
+      "solarAsc": {
+       "id": "Asc",
+       "lon": 330.9549540640712,
+       "lat": 44.037366890792704,
+       "sign": "Pisces",
+       "signlon": 0.9549540640712166,
+       "lonspeed": 0.0
+      },
+      "lunarAsc": {
+       "id": "Asc",
+       "lon": 122.86305105293613,
+       "lat": 17.981412436402984,
+       "sign": "Leo",
+       "signlon": 2.863051052936129,
+       "lonspeed": 0.0
+      }
+     },
+     {
+      "year": 2028,
+      "solarReturn": {
+       "jd": 2461868.1062498055,
+       "datetime": "2028-04-06 09:33:00",
+       "date": "2028-04-06",
+       "time": "09:33:00"
+      },
+      "lunarReturn": {
+       "jd": 2461785.772051842,
+       "datetime": "2028-01-15 01:31:45",
+       "date": "2028-01-15",
+       "time": "01:31:45"
+      },
+      "solarAsc": {
+       "id": "Asc",
+       "lon": 91.42661013799149,
+       "lat": 18.24311696010508,
+       "sign": "Cancer",
+       "signlon": 1.4266101379914886,
+       "lonspeed": 0.0
+      },
+      "lunarAsc": {
+       "id": "Asc",
+       "lon": 218.00290430199598,
+       "lat": 56.25978558412039,
+       "sign": "Scorpio",
+       "signlon": 8.002904301995983,
+       "lonspeed": 0.0
+      }
+     }
+    ],
+    "natal_params": {
+     "zone": "-05:00"
+    },
+    "export_snapshot": {
+     "technique": {
+      "key": "returntimeline",
+      "label": "星运-回归轴",
+      "preset_sections": [
+       "起盘信息",
+       "太阳/月亮返照时间轴",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "太阳/月亮返照时间轴",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "太阳/月亮返照时间轴",
+       "body": "区间：2026 年起 3 年（太阳返照 = 太阳回到本命度;首个月亮返照 = 该年首个月亮回本命度）\n| 年份 | 太阳返照 | 首个月亮返照 | 太阳返照上升 | 月亮返照上升 |\n| --- | --- | --- | --- | --- |\n| 2026 | 2026-04-06 22:10:02 | 2026-01-07 02:10:11 | 射手 2.15° | 天蝎 9.74° |\n| 2027 | 2027-04-07 03:45:23 | 2027-01-24 16:49:35 | 双鱼 0.95° | 狮子 2.86° |\n| 2028 | 2028-04-06 09:33:00 | 2028-01-15 01:31:45 | 巨蟹 1.43° | 天蝎 8.00° |"
+      }
+     ]
+    }
+   }
+  },
+  "firdaria": {
+   "tool": "firdaria",
+   "input_normalized": {},
+   "data": {
+    "firdaria": [
+     {
+      "mainDirect": "Moon",
+      "subDirect": [
+       {
+        "subDirect": "Moon",
+        "date": "2028-04-06"
+       },
+       {
+        "subDirect": "Saturn",
+        "date": "2029-07-19"
+       },
+       {
+        "subDirect": "Jupiter",
+        "date": "2030-11-01"
+       },
+       {
+        "subDirect": "Mars",
+        "date": "2032-02-14"
+       },
+       {
+        "subDirect": "Sun",
+        "date": "2033-05-28"
+       },
+       {
+        "subDirect": "Venus",
+        "date": "2034-09-10"
+       },
+       {
+        "subDirect": "Mercury",
+        "date": "2035-12-23"
+       }
+      ]
+     },
+     {
+      "mainDirect": "Saturn",
+      "subDirect": [
+       {
+        "subDirect": "Saturn",
+        "date": "2037-04-06"
+       },
+       {
+        "subDirect": "Jupiter",
+        "date": "2038-11-01"
+       },
+       {
+        "subDirect": "Mars",
+        "date": "2040-05-28"
+       },
+       {
+        "subDirect": "Sun",
+        "date": "2041-12-23"
+       },
+       {
+        "subDirect": "Venus",
+        "date": "2043-07-20"
+       },
+       {
+        "subDirect": "Mercury",
+        "date": "2045-02-13"
+       },
+       {
+        "subDirect": "Moon",
+        "date": "2046-09-10"
+       }
+      ]
+     },
+     {
+      "mainDirect": "Jupiter",
+      "subDirect": [
+       {
+        "subDirect": "Jupiter",
+        "date": "2048-04-06"
+       },
+       {
+        "subDirect": "Mars",
+        "date": "2049-12-23"
+       },
+       {
+        "subDirect": "Sun",
+        "date": "2051-09-10"
+       },
+       {
+        "subDirect": "Venus",
+        "date": "2053-05-28"
+       },
+       {
+        "subDirect": "Mercury",
+        "date": "2055-02-13"
+       },
+       {
+        "subDirect": "Moon",
+        "date": "2056-10-31"
+       },
+       {
+        "subDirect": "Saturn",
+        "date": "2058-07-20"
+       }
+      ]
+     },
+     {
+      "mainDirect": "Mars",
+      "subDirect": [
+       {
+        "subDirect": "Mars",
+        "date": "2060-04-06"
+       },
+       {
+        "subDirect": "Sun",
+        "date": "2061-04-06"
+       },
+       {
+        "subDirect": "Venus",
+        "date": "2062-04-06"
+       },
+       {
+        "subDirect": "Mercury",
+        "date": "2063-04-06"
+       },
+       {
+        "subDirect": "Moon",
+        "date": "2064-04-06"
+       },
+       {
+        "subDirect": "Saturn",
+        "date": "2065-04-06"
+       },
+       {
+        "subDirect": "Jupiter",
+        "date": "2066-04-06"
+       }
+      ]
+     },
+     {
+      "mainDirect": "North Node",
+      "subDirect": [
+       {
+        "subDirect": "North Node",
+        "date": "2067-04-06"
+       }
+      ]
+     },
+     {
+      "mainDirect": "South Node",
+      "subDirect": [
+       {
+        "subDirect": "South Node",
+        "date": "2070-04-06"
+       }
+      ]
+     },
+     {
+      "mainDirect": "Sun",
+      "subDirect": [
+       {
+        "subDirect": "Sun",
+        "date": "2072-04-06"
+       },
+       {
+        "subDirect": "Venus",
+        "date": "2073-09-09"
+       },
+       {
+        "subDirect": "Mercury",
+        "date": "2075-02-13"
+       },
+       {
+        "subDirect": "Moon",
+        "date": "2076-07-19"
+       },
+       {
+        "subDirect": "Saturn",
+        "date": "2077-12-23"
+       },
+       {
+        "subDirect": "Jupiter",
+        "date": "2079-05-28"
+       },
+       {
+        "subDirect": "Mars",
+        "date": "2080-10-31"
+       }
+      ]
+     },
+     {
+      "mainDirect": "Venus",
+      "subDirect": [
+       {
+        "subDirect": "Venus",
+        "date": "2082-04-06"
+       },
+       {
+        "subDirect": "Mercury",
+        "date": "2083-05-28"
+       },
+       {
+        "subDirect": "Moon",
+        "date": "2084-07-19"
+       },
+       {
+        "subDirect": "Saturn",
+        "date": "2085-09-09"
+       },
+       {
+        "subDirect": "Jupiter",
+        "date": "2086-11-01"
+       },
+       {
+        "subDirect": "Mars",
+        "date": "2087-12-23"
+       },
+       {
+        "subDirect": "Sun",
+        "date": "2089-02-12"
+       }
+      ]
+     },
+     {
+      "mainDirect": "Mercury",
+      "subDirect": [
+       {
+        "subDirect": "Mercury",
+        "date": "2090-04-06"
+       },
+       {
+        "subDirect": "Moon",
+        "date": "2092-02-13"
+       },
+       {
+        "subDirect": "Saturn",
+        "date": "2093-12-23"
+       },
+       {
+        "subDirect": "Jupiter",
+        "date": "2095-11-01"
+       },
+       {
+        "subDirect": "Mars",
+        "date": "2097-09-09"
+       },
+       {
+        "subDirect": "Sun",
+        "date": "2099-07-19"
+       },
+       {
+        "subDirect": "Venus",
+        "date": "2101-05-29"
+       }
+      ]
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "firdaria",
+      "label": "推运盘-法达星限",
+      "preset_sections": [
+       "出生时间",
+       "星盘信息",
+       "法达星限表格",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [],
+      "default_off_sections": [],
+      "supports_planet_info": true,
+      "planet_info_default": {
+       "showHouse": 1,
+       "showRuler": 1
+      },
+      "supports_astro_meaning": true,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": {
+       "enabled": 0
+      },
+      "astro_meaning_title": "占星注释（仅AI导出）：",
+      "astro_meaning_checkbox": "在对应分段输出星/宫/座/相/希腊点释义",
+      "settings_template": {
+       "sections": [
+        "出生时间",
+        "星盘信息",
+        "法达星限表格",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": {
+        "showHouse": 1,
+        "showRuler": 1
+       },
+       "astroMeaning": {
+        "enabled": 0
+       }
+      }
+     },
+     "sections": [
+      {
+       "title": "法达星限表格",
+       "body": "| 主限 | 子限 | 日期 |\n| --- | --- | --- |\n| Moon | Moon | 2028-04-06 |\n| Moon | Saturn | 2029-07-19 |\n| Moon | Jupiter | 2030-11-01 |\n| Moon | Mars | 2032-02-14 |\n| Moon | Sun | 2033-05-28 |\n| Moon | Venus | 2034-09-10 |\n| Moon | Mercury | 2035-12-23 |\n| Saturn | Saturn | 2037-04-06 |\n| Saturn | Jupiter | 2038-11-01 |\n| Saturn | Mars | 2040-05-28 |\n| Saturn | Sun | 2041-12-23 |\n| Saturn | Venus | 2043-07-20 |\n| Saturn | Mercury | 2045-02-13 |\n| Saturn | Moon | 2046-09-10 |\n| Jupiter | Jupiter | 2048-04-06 |\n| Jupiter | Mars | 2049-12-23 |\n| Jupiter | Sun | 2051-09-10 |\n| Jupiter | Venus | 2053-05-28 |\n| Jupiter | Mercury | 2055-02-13 |\n| Jupiter | Moon | 2056-10-31 |\n| Jupiter | Saturn | 2058-07-20 |\n| Mars | Mars | 2060-04-06 |\n| Mars | Sun | 2061-04-06 |\n| Mars | Venus | 2062-04-06 |\n| Mars | Mercury | 2063-04-06 |\n| Mars | Moon | 2064-04-06 |\n| Mars | Saturn | 2065-04-06 |\n| Mars | Jupiter | 2066-04-06 |\n| North Node | North Node | 2067-04-06 |\n| South Node | South Node | 2070-04-06 |\n| Sun | Sun | 2072-04-06 |\n| Sun | Venus | 2073-09-09 |\n| Sun | Mercury | 2075-02-13 |\n| Sun | Moon | 2076-07-19 |\n| Sun | Saturn | 2077-12-23 |\n| Sun | Jupiter | 2079-05-28 |\n| Sun | Mars | 2080-10-31 |\n| Venus | Venus | 2082-04-06 |\n| Venus | Mercury | 2083-05-28 |\n| Venus | Moon | 2084-07-19 |\n| Venus | Saturn | 2085-09-09 |\n| Venus | Jupiter | 2086-11-01 |\n| Venus | Mars | 2087-12-23 |\n| Venus | Sun | 2089-02-12 |\n| Mercury | Mercury | 2090-04-06 |\n| Mercury | Moon | 2092-02-13 |\n| Mercury | Saturn | 2093-12-23 |\n| Mercury | Jupiter | 2095-11-01 |\n| Mercury | Mars | 2097-09-09 |\n| Mercury | Sun | 2099-07-19 |\n| Mercury | Venus | 2101-05-29 |"
+      }
+     ]
+    }
+   }
+  },
+  "decennials": {
+   "tool": "decennials",
+   "input_normalized": {},
+   "data": {
+    "timeline": {
+     "list": [
+      {
+       "key": "l1_0",
+       "level": 1,
+       "planet": "Moon",
+       "date": "2028-04-06 - 2038-11-10",
+       "nominal": "0个月 - 10年9个月",
+       "startText": "2028-04-06",
+       "endText": "2038-11-10",
+       "active": false,
+       "startOffsetMinutes": 0,
+       "endOffsetMinutes": 5572800,
+       "sublevel": [
+        {
+         "key": "l1_0_l2_0",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2028-04-06 - 2030-04-26",
+         "nominal": "0个月 - 2年1个月",
+         "startText": "2028-04-06",
+         "endText": "2030-04-26",
+         "active": false,
+         "startOffsetMinutes": 0,
+         "endOffsetMinutes": 1080000
+        },
+        {
+         "key": "l1_0_l2_1",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2030-04-26 - 2031-04-21",
+         "nominal": "2年1个月 - 3年1个月",
+         "startText": "2030-04-26",
+         "endText": "2031-04-21",
+         "active": false,
+         "startOffsetMinutes": 1080000,
+         "endOffsetMinutes": 1598400
+        },
+        {
+         "key": "l1_0_l2_2",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2031-04-21 - 2032-12-11",
+         "nominal": "3年1个月 - 4年9个月",
+         "startText": "2031-04-21",
+         "endText": "2032-12-11",
+         "active": false,
+         "startOffsetMinutes": 1598400,
+         "endOffsetMinutes": 2462400
+        },
+        {
+         "key": "l1_0_l2_3",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2032-12-11 - 2034-03-06",
+         "nominal": "4年9个月 - 6年",
+         "startText": "2032-12-11",
+         "endText": "2034-03-06",
+         "active": false,
+         "startOffsetMinutes": 2462400,
+         "endOffsetMinutes": 3110400
+        },
+        {
+         "key": "l1_0_l2_4",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2034-03-06 - 2035-09-27",
+         "nominal": "6年 - 7年7个月",
+         "startText": "2034-03-06",
+         "endText": "2035-09-27",
+         "active": false,
+         "startOffsetMinutes": 3110400,
+         "endOffsetMinutes": 3931200
+        },
+        {
+         "key": "l1_0_l2_5",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2035-09-27 - 2038-03-15",
+         "nominal": "7年7个月 - 10年1个月",
+         "startText": "2035-09-27",
+         "endText": "2038-03-15",
+         "active": false,
+         "startOffsetMinutes": 3931200,
+         "endOffsetMinutes": 5227200
+        },
+        {
+         "key": "l1_0_l2_6",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2038-03-15 - 2038-11-10",
+         "nominal": "10年1个月 - 10年9个月",
+         "startText": "2038-03-15",
+         "endText": "2038-11-10",
+         "active": false,
+         "startOffsetMinutes": 5227200,
+         "endOffsetMinutes": 5572800
+        }
+       ]
+      },
+      {
+       "key": "l1_1",
+       "level": 1,
+       "planet": "Jupiter",
+       "date": "2038-11-10 - 2049-06-15",
+       "nominal": "10年9个月 - 21年6个月",
+       "startText": "2038-11-10",
+       "endText": "2049-06-15",
+       "active": false,
+       "startOffsetMinutes": 5572800,
+       "endOffsetMinutes": 11145600,
+       "sublevel": [
+        {
+         "key": "l1_1_l2_0",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2038-11-10 - 2039-11-05",
+         "nominal": "10年9个月 - 11年9个月",
+         "startText": "2038-11-10",
+         "endText": "2039-11-05",
+         "active": false,
+         "startOffsetMinutes": 5572800,
+         "endOffsetMinutes": 6091200
+        },
+        {
+         "key": "l1_1_l2_1",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2039-11-05 - 2041-06-27",
+         "nominal": "11年9个月 - 13年5个月",
+         "startText": "2039-11-05",
+         "endText": "2041-06-27",
+         "active": false,
+         "startOffsetMinutes": 6091200,
+         "endOffsetMinutes": 6955200
+        },
+        {
+         "key": "l1_1_l2_2",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2041-06-27 - 2042-09-20",
+         "nominal": "13年5个月 - 14年8个月",
+         "startText": "2041-06-27",
+         "endText": "2042-09-20",
+         "active": false,
+         "startOffsetMinutes": 6955200,
+         "endOffsetMinutes": 7603200
+        },
+        {
+         "key": "l1_1_l2_3",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2042-09-20 - 2044-04-12",
+         "nominal": "14年8个月 - 16年3个月",
+         "startText": "2042-09-20",
+         "endText": "2044-04-12",
+         "active": false,
+         "startOffsetMinutes": 7603200,
+         "endOffsetMinutes": 8424000
+        },
+        {
+         "key": "l1_1_l2_4",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2044-04-12 - 2046-09-29",
+         "nominal": "16年3个月 - 18年9个月",
+         "startText": "2044-04-12",
+         "endText": "2046-09-29",
+         "active": false,
+         "startOffsetMinutes": 8424000,
+         "endOffsetMinutes": 9720000
+        },
+        {
+         "key": "l1_1_l2_5",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2046-09-29 - 2047-05-27",
+         "nominal": "18年9个月 - 19年5个月",
+         "startText": "2046-09-29",
+         "endText": "2047-05-27",
+         "active": false,
+         "startOffsetMinutes": 9720000,
+         "endOffsetMinutes": 10065600
+        },
+        {
+         "key": "l1_1_l2_6",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2047-05-27 - 2049-06-15",
+         "nominal": "19年5个月 - 21年6个月",
+         "startText": "2047-05-27",
+         "endText": "2049-06-15",
+         "active": false,
+         "startOffsetMinutes": 10065600,
+         "endOffsetMinutes": 11145600
+        }
+       ]
+      },
+      {
+       "key": "l1_2",
+       "level": 1,
+       "planet": "Mercury",
+       "date": "2049-06-15 - 2060-01-19",
+       "nominal": "21年6个月 - 32年3个月",
+       "startText": "2049-06-15",
+       "endText": "2060-01-19",
+       "active": false,
+       "startOffsetMinutes": 11145600,
+       "endOffsetMinutes": 16718400,
+       "sublevel": [
+        {
+         "key": "l1_2_l2_0",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2049-06-15 - 2051-02-05",
+         "nominal": "21年6个月 - 23年2个月",
+         "startText": "2049-06-15",
+         "endText": "2051-02-05",
+         "active": false,
+         "startOffsetMinutes": 11145600,
+         "endOffsetMinutes": 12009600
+        },
+        {
+         "key": "l1_2_l2_1",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2051-02-05 - 2052-04-30",
+         "nominal": "23年2个月 - 24年5个月",
+         "startText": "2051-02-05",
+         "endText": "2052-04-30",
+         "active": false,
+         "startOffsetMinutes": 12009600,
+         "endOffsetMinutes": 12657600
+        },
+        {
+         "key": "l1_2_l2_2",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2052-04-30 - 2053-11-21",
+         "nominal": "24年5个月 - 26年",
+         "startText": "2052-04-30",
+         "endText": "2053-11-21",
+         "active": false,
+         "startOffsetMinutes": 12657600,
+         "endOffsetMinutes": 13478400
+        },
+        {
+         "key": "l1_2_l2_3",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2053-11-21 - 2056-05-09",
+         "nominal": "26年 - 28年6个月",
+         "startText": "2053-11-21",
+         "endText": "2056-05-09",
+         "active": false,
+         "startOffsetMinutes": 13478400,
+         "endOffsetMinutes": 14774400
+        },
+        {
+         "key": "l1_2_l2_4",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2056-05-09 - 2057-01-04",
+         "nominal": "28年6个月 - 29年2个月",
+         "startText": "2056-05-09",
+         "endText": "2057-01-04",
+         "active": false,
+         "startOffsetMinutes": 14774400,
+         "endOffsetMinutes": 15120000
+        },
+        {
+         "key": "l1_2_l2_5",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2057-01-04 - 2059-01-24",
+         "nominal": "29年2个月 - 31年3个月",
+         "startText": "2057-01-04",
+         "endText": "2059-01-24",
+         "active": false,
+         "startOffsetMinutes": 15120000,
+         "endOffsetMinutes": 16200000
+        },
+        {
+         "key": "l1_2_l2_6",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2059-01-24 - 2060-01-19",
+         "nominal": "31年3个月 - 32年3个月",
+         "startText": "2059-01-24",
+         "endText": "2060-01-19",
+         "active": false,
+         "startOffsetMinutes": 16200000,
+         "endOffsetMinutes": 16718400
+        }
+       ]
+      },
+      {
+       "key": "l1_3",
+       "level": 1,
+       "planet": "Mars",
+       "date": "2060-01-19 - 2070-08-24",
+       "nominal": "32年3个月 - 43年",
+       "startText": "2060-01-19",
+       "endText": "2070-08-24",
+       "active": false,
+       "startOffsetMinutes": 16718400,
+       "endOffsetMinutes": 22291200,
+       "sublevel": [
+        {
+         "key": "l1_3_l2_0",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2060-01-19 - 2061-04-13",
+         "nominal": "32年3个月 - 33年6个月",
+         "startText": "2060-01-19",
+         "endText": "2061-04-13",
+         "active": false,
+         "startOffsetMinutes": 16718400,
+         "endOffsetMinutes": 17366400
+        },
+        {
+         "key": "l1_3_l2_1",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2061-04-13 - 2062-11-04",
+         "nominal": "33年6个月 - 35年1个月",
+         "startText": "2061-04-13",
+         "endText": "2062-11-04",
+         "active": false,
+         "startOffsetMinutes": 17366400,
+         "endOffsetMinutes": 18187200
+        },
+        {
+         "key": "l1_3_l2_2",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2062-11-04 - 2065-04-22",
+         "nominal": "35年1个月 - 37年7个月",
+         "startText": "2062-11-04",
+         "endText": "2065-04-22",
+         "active": false,
+         "startOffsetMinutes": 18187200,
+         "endOffsetMinutes": 19483200
+        },
+        {
+         "key": "l1_3_l2_3",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2065-04-22 - 2065-12-18",
+         "nominal": "37年7个月 - 38年3个月",
+         "startText": "2065-04-22",
+         "endText": "2065-12-18",
+         "active": false,
+         "startOffsetMinutes": 19483200,
+         "endOffsetMinutes": 19828800
+        },
+        {
+         "key": "l1_3_l2_4",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2065-12-18 - 2068-01-07",
+         "nominal": "38年3个月 - 40年4个月",
+         "startText": "2065-12-18",
+         "endText": "2068-01-07",
+         "active": false,
+         "startOffsetMinutes": 19828800,
+         "endOffsetMinutes": 20908800
+        },
+        {
+         "key": "l1_3_l2_5",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2068-01-07 - 2069-01-01",
+         "nominal": "40年4个月 - 41年4个月",
+         "startText": "2068-01-07",
+         "endText": "2069-01-01",
+         "active": false,
+         "startOffsetMinutes": 20908800,
+         "endOffsetMinutes": 21427200
+        },
+        {
+         "key": "l1_3_l2_6",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2069-01-01 - 2070-08-24",
+         "nominal": "41年4个月 - 43年",
+         "startText": "2069-01-01",
+         "endText": "2070-08-24",
+         "active": false,
+         "startOffsetMinutes": 21427200,
+         "endOffsetMinutes": 22291200
+        }
+       ]
+      },
+      {
+       "key": "l1_4",
+       "level": 1,
+       "planet": "Sun",
+       "date": "2070-08-24 - 2081-03-29",
+       "nominal": "43年 - 53年9个月",
+       "startText": "2070-08-24",
+       "endText": "2081-03-29",
+       "active": false,
+       "startOffsetMinutes": 22291200,
+       "endOffsetMinutes": 27864000,
+       "sublevel": [
+        {
+         "key": "l1_4_l2_0",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2070-08-24 - 2072-03-16",
+         "nominal": "43年 - 44年7个月",
+         "startText": "2070-08-24",
+         "endText": "2072-03-16",
+         "active": false,
+         "startOffsetMinutes": 22291200,
+         "endOffsetMinutes": 23112000
+        },
+        {
+         "key": "l1_4_l2_1",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2072-03-16 - 2074-09-02",
+         "nominal": "44年7个月 - 47年1个月",
+         "startText": "2072-03-16",
+         "endText": "2074-09-02",
+         "active": false,
+         "startOffsetMinutes": 23112000,
+         "endOffsetMinutes": 24408000
+        },
+        {
+         "key": "l1_4_l2_2",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2074-09-02 - 2075-04-30",
+         "nominal": "47年1个月 - 47年9个月",
+         "startText": "2074-09-02",
+         "endText": "2075-04-30",
+         "active": false,
+         "startOffsetMinutes": 24408000,
+         "endOffsetMinutes": 24753600
+        },
+        {
+         "key": "l1_4_l2_3",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2075-04-30 - 2077-05-19",
+         "nominal": "47年9个月 - 49年10个月",
+         "startText": "2075-04-30",
+         "endText": "2077-05-19",
+         "active": false,
+         "startOffsetMinutes": 24753600,
+         "endOffsetMinutes": 25833600
+        },
+        {
+         "key": "l1_4_l2_4",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2077-05-19 - 2078-05-14",
+         "nominal": "49年10个月 - 50年10个月",
+         "startText": "2077-05-19",
+         "endText": "2078-05-14",
+         "active": false,
+         "startOffsetMinutes": 25833600,
+         "endOffsetMinutes": 26352000
+        },
+        {
+         "key": "l1_4_l2_5",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2078-05-14 - 2080-01-04",
+         "nominal": "50年10个月 - 52年6个月",
+         "startText": "2078-05-14",
+         "endText": "2080-01-04",
+         "active": false,
+         "startOffsetMinutes": 26352000,
+         "endOffsetMinutes": 27216000
+        },
+        {
+         "key": "l1_4_l2_6",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2080-01-04 - 2081-03-29",
+         "nominal": "52年6个月 - 53年9个月",
+         "startText": "2080-01-04",
+         "endText": "2081-03-29",
+         "active": false,
+         "startOffsetMinutes": 27216000,
+         "endOffsetMinutes": 27864000
+        }
+       ]
+      },
+      {
+       "key": "l1_5",
+       "level": 1,
+       "planet": "Saturn",
+       "date": "2081-03-29 - 2091-11-02",
+       "nominal": "53年9个月 - 64年6个月",
+       "startText": "2081-03-29",
+       "endText": "2091-11-02",
+       "active": false,
+       "startOffsetMinutes": 27864000,
+       "endOffsetMinutes": 33436800,
+       "sublevel": [
+        {
+         "key": "l1_5_l2_0",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2081-03-29 - 2083-09-15",
+         "nominal": "53年9个月 - 56年3个月",
+         "startText": "2081-03-29",
+         "endText": "2083-09-15",
+         "active": false,
+         "startOffsetMinutes": 27864000,
+         "endOffsetMinutes": 29160000
+        },
+        {
+         "key": "l1_5_l2_1",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2083-09-15 - 2084-05-12",
+         "nominal": "56年3个月 - 56年11个月",
+         "startText": "2083-09-15",
+         "endText": "2084-05-12",
+         "active": false,
+         "startOffsetMinutes": 29160000,
+         "endOffsetMinutes": 29505600
+        },
+        {
+         "key": "l1_5_l2_2",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2084-05-12 - 2086-06-01",
+         "nominal": "56年11个月 - 59年",
+         "startText": "2084-05-12",
+         "endText": "2086-06-01",
+         "active": false,
+         "startOffsetMinutes": 29505600,
+         "endOffsetMinutes": 30585600
+        },
+        {
+         "key": "l1_5_l2_3",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2086-06-01 - 2087-05-27",
+         "nominal": "59年 - 60年",
+         "startText": "2086-06-01",
+         "endText": "2087-05-27",
+         "active": false,
+         "startOffsetMinutes": 30585600,
+         "endOffsetMinutes": 31104000
+        },
+        {
+         "key": "l1_5_l2_4",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2087-05-27 - 2089-01-16",
+         "nominal": "60年 - 61年8个月",
+         "startText": "2087-05-27",
+         "endText": "2089-01-16",
+         "active": false,
+         "startOffsetMinutes": 31104000,
+         "endOffsetMinutes": 31968000
+        },
+        {
+         "key": "l1_5_l2_5",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2089-01-16 - 2090-04-11",
+         "nominal": "61年8个月 - 62年11个月",
+         "startText": "2089-01-16",
+         "endText": "2090-04-11",
+         "active": false,
+         "startOffsetMinutes": 31968000,
+         "endOffsetMinutes": 32616000
+        },
+        {
+         "key": "l1_5_l2_6",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2090-04-11 - 2091-11-02",
+         "nominal": "62年11个月 - 64年6个月",
+         "startText": "2090-04-11",
+         "endText": "2091-11-02",
+         "active": false,
+         "startOffsetMinutes": 32616000,
+         "endOffsetMinutes": 33436800
+        }
+       ]
+      },
+      {
+       "key": "l1_6",
+       "level": 1,
+       "planet": "Venus",
+       "date": "2091-11-02 - 2102-06-08",
+       "nominal": "64年6个月 - 75年3个月",
+       "startText": "2091-11-02",
+       "endText": "2102-06-08",
+       "active": false,
+       "startOffsetMinutes": 33436800,
+       "endOffsetMinutes": 39009600,
+       "sublevel": [
+        {
+         "key": "l1_6_l2_0",
+         "level": 2,
+         "planet": "Venus",
+         "date": "2091-11-02 - 2092-06-29",
+         "nominal": "64年6个月 - 65年2个月",
+         "startText": "2091-11-02",
+         "endText": "2092-06-29",
+         "active": false,
+         "startOffsetMinutes": 33436800,
+         "endOffsetMinutes": 33782400
+        },
+        {
+         "key": "l1_6_l2_1",
+         "level": 2,
+         "planet": "Moon",
+         "date": "2092-06-29 - 2094-07-19",
+         "nominal": "65年2个月 - 67年3个月",
+         "startText": "2092-06-29",
+         "endText": "2094-07-19",
+         "active": false,
+         "startOffsetMinutes": 33782400,
+         "endOffsetMinutes": 34862400
+        },
+        {
+         "key": "l1_6_l2_2",
+         "level": 2,
+         "planet": "Jupiter",
+         "date": "2094-07-19 - 2095-07-14",
+         "nominal": "67年3个月 - 68年3个月",
+         "startText": "2094-07-19",
+         "endText": "2095-07-14",
+         "active": false,
+         "startOffsetMinutes": 34862400,
+         "endOffsetMinutes": 35380800
+        },
+        {
+         "key": "l1_6_l2_3",
+         "level": 2,
+         "planet": "Mercury",
+         "date": "2095-07-14 - 2097-03-05",
+         "nominal": "68年3个月 - 69年11个月",
+         "startText": "2095-07-14",
+         "endText": "2097-03-05",
+         "active": false,
+         "startOffsetMinutes": 35380800,
+         "endOffsetMinutes": 36244800
+        },
+        {
+         "key": "l1_6_l2_4",
+         "level": 2,
+         "planet": "Mars",
+         "date": "2097-03-05 - 2098-05-29",
+         "nominal": "69年11个月 - 71年2个月",
+         "startText": "2097-03-05",
+         "endText": "2098-05-29",
+         "active": false,
+         "startOffsetMinutes": 36244800,
+         "endOffsetMinutes": 36892800
+        },
+        {
+         "key": "l1_6_l2_5",
+         "level": 2,
+         "planet": "Sun",
+         "date": "2098-05-29 - 2099-12-20",
+         "nominal": "71年2个月 - 72年9个月",
+         "startText": "2098-05-29",
+         "endText": "2099-12-20",
+         "active": false,
+         "startOffsetMinutes": 36892800,
+         "endOffsetMinutes": 37713600
+        },
+        {
+         "key": "l1_6_l2_6",
+         "level": 2,
+         "planet": "Saturn",
+         "date": "2099-12-20 - 2102-06-08",
+         "nominal": "72年9个月 - 75年3个月",
+         "startText": "2099-12-20",
+         "endText": "2102-06-08",
+         "active": false,
+         "startOffsetMinutes": 37713600,
+         "endOffsetMinutes": 39009600
+        }
+       ]
+      }
+     ]
+    },
+    "export_snapshot": {
+     "technique": {
+      "key": "decennials",
+      "label": "推运盘-十年大运",
+      "preset_sections": [
+       "起盘信息",
+       "星盘信息",
+       "十年大运设置",
+       "基于X起运",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [],
+      "default_off_sections": [],
+      "supports_planet_info": true,
+      "planet_info_default": {
+       "showHouse": 1,
+       "showRuler": 1
+      },
+      "supports_astro_meaning": true,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": {
+       "enabled": 0
+      },
+      "astro_meaning_title": "占星注释（仅AI导出）：",
+      "astro_meaning_checkbox": "在对应分段输出星/宫/座/相/希腊点释义",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "星盘信息",
+        "十年大运设置",
+        "基于X起运",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": {
+        "showHouse": 1,
+        "showRuler": 1
+       },
+       "astroMeaning": {
+        "enabled": 0
+       }
+      }
+     },
+     "sections": [
+      {
+       "title": "基于X起运",
+       "body": "AI输出模式：l1_all\nL1-1：Moon-2028-04-06 - 2038-11-10（名义：0个月 - 10年9个月）\nL1-2：Jupiter-2038-11-10 - 2049-06-15（名义：10年9个月 - 21年6个月）\nL1-3：Mercury-2049-06-15 - 2060-01-19（名义：21年6个月 - 32年3个月）\nL1-4：Mars-2060-01-19 - 2070-08-24（名义：32年3个月 - 43年）\nL1-5：Sun-2070-08-24 - 2081-03-29（名义：43年 - 53年9个月）\nL1-6：Saturn-2081-03-29 - 2091-11-02（名义：53年9个月 - 64年6个月）\nL1-7：Venus-2091-11-02 - 2102-06-08（名义：64年6个月 - 75年3个月）"
+      }
+     ]
+    }
+   }
+  },
+  "zr": {
+   "tool": "zr",
+   "input_normalized": {},
+   "data": {
+    "zr": [
+     {
+      "sign": "Scorpio",
+      "level": 1,
+      "date": "2028-04-06",
+      "days": 5400,
+      "sublevel": [
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2028-04-06",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2029-06-30",
+        "days": 360
+       },
+       {
+        "sign": "Capricorn",
+        "level": 2,
+        "date": "2030-06-25",
+        "days": 810
+       },
+       {
+        "sign": "Aquarius",
+        "level": 2,
+        "date": "2032-09-12",
+        "days": 900
+       },
+       {
+        "sign": "Pisces",
+        "level": 2,
+        "date": "2035-03-01",
+        "days": 360
+       },
+       {
+        "sign": "Aries",
+        "level": 2,
+        "date": "2036-02-24",
+        "days": 450
+       },
+       {
+        "sign": "Taurus",
+        "level": 2,
+        "date": "2037-05-19",
+        "days": 240
+       },
+       {
+        "sign": "Gemini",
+        "level": 2,
+        "date": "2038-01-14",
+        "days": 600
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2039-09-06",
+        "days": 750
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2041-09-25",
+        "days": 480,
+        "truncated": true
+       }
+      ]
+     },
+     {
+      "sign": "Sagittarius",
+      "level": 1,
+      "date": "2043-01-18",
+      "days": 4320,
+      "sublevel": [
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2043-01-18",
+        "days": 360
+       },
+       {
+        "sign": "Capricorn",
+        "level": 2,
+        "date": "2044-01-13",
+        "days": 810
+       },
+       {
+        "sign": "Aquarius",
+        "level": 2,
+        "date": "2046-04-02",
+        "days": 900
+       },
+       {
+        "sign": "Pisces",
+        "level": 2,
+        "date": "2048-09-18",
+        "days": 360
+       },
+       {
+        "sign": "Aries",
+        "level": 2,
+        "date": "2049-09-13",
+        "days": 450
+       },
+       {
+        "sign": "Taurus",
+        "level": 2,
+        "date": "2050-12-07",
+        "days": 240
+       },
+       {
+        "sign": "Gemini",
+        "level": 2,
+        "date": "2051-08-04",
+        "days": 600
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2053-03-26",
+        "days": 600,
+        "truncated": true
+       }
+      ]
+     },
+     {
+      "sign": "Capricorn",
+      "level": 1,
+      "date": "2054-11-16",
+      "days": 9720,
+      "sublevel": [
+       {
+        "sign": "Capricorn",
+        "level": 2,
+        "date": "2054-11-16",
+        "days": 810
+       },
+       {
+        "sign": "Aquarius",
+        "level": 2,
+        "date": "2057-02-03",
+        "days": 900
+       },
+       {
+        "sign": "Pisces",
+        "level": 2,
+        "date": "2059-07-23",
+        "days": 360
+       },
+       {
+        "sign": "Aries",
+        "level": 2,
+        "date": "2060-07-17",
+        "days": 450
+       },
+       {
+        "sign": "Taurus",
+        "level": 2,
+        "date": "2061-10-10",
+        "days": 240
+       },
+       {
+        "sign": "Gemini",
+        "level": 2,
+        "date": "2062-06-07",
+        "days": 600
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2064-01-28",
+        "days": 750
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2066-02-16",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2067-09-09",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2069-05-01",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2069-12-27",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2071-03-22",
+        "days": 360
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2072-03-16",
+        "days": 750
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2074-04-05",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2075-10-27",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2077-06-18",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2078-02-13",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2079-05-09",
+        "days": 360
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2080-05-03",
+        "days": 420,
+        "truncated": true
+       }
+      ]
+     },
+     {
+      "sign": "Aquarius",
+      "level": 1,
+      "date": "2081-06-27",
+      "days": 10800,
+      "sublevel": [
+       {
+        "sign": "Aquarius",
+        "level": 2,
+        "date": "2081-06-27",
+        "days": 900
+       },
+       {
+        "sign": "Pisces",
+        "level": 2,
+        "date": "2083-12-14",
+        "days": 360
+       },
+       {
+        "sign": "Aries",
+        "level": 2,
+        "date": "2084-12-08",
+        "days": 450
+       },
+       {
+        "sign": "Taurus",
+        "level": 2,
+        "date": "2086-03-03",
+        "days": 240
+       },
+       {
+        "sign": "Gemini",
+        "level": 2,
+        "date": "2086-10-29",
+        "days": 600
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2088-06-20",
+        "days": 750
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2090-07-10",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2092-01-31",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2093-09-22",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2094-05-20",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2095-08-13",
+        "days": 360
+       },
+       {
+        "sign": "Capricorn",
+        "level": 2,
+        "date": "2096-08-07",
+        "days": 810
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2098-10-26",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2100-05-19",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2102-01-09",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2102-09-06",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2103-11-30",
+        "days": 360
+       },
+       {
+        "sign": "Capricorn",
+        "level": 2,
+        "date": "2104-11-24",
+        "days": 810
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2107-02-12",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2108-09-04",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2110-04-27",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2110-12-23",
+        "days": 30,
+        "truncated": true
+       }
+      ]
+     },
+     {
+      "sign": "Pisces",
+      "level": 1,
+      "date": "2111-01-22",
+      "days": 4320,
+      "sublevel": [
+       {
+        "sign": "Pisces",
+        "level": 2,
+        "date": "2111-01-22",
+        "days": 360
+       },
+       {
+        "sign": "Aries",
+        "level": 2,
+        "date": "2112-01-17",
+        "days": 450
+       },
+       {
+        "sign": "Taurus",
+        "level": 2,
+        "date": "2113-04-11",
+        "days": 240
+       },
+       {
+        "sign": "Gemini",
+        "level": 2,
+        "date": "2113-12-07",
+        "days": 600
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2115-07-30",
+        "days": 750
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2117-08-18",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2119-03-11",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2120-10-31",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2121-06-28",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2122-09-21",
+        "days": 60,
+        "truncated": true
+       }
+      ]
+     },
+     {
+      "sign": "Aries",
+      "level": 1,
+      "date": "2122-11-20",
+      "days": 5400,
+      "sublevel": [
+       {
+        "sign": "Aries",
+        "level": 2,
+        "date": "2122-11-20",
+        "days": 450
+       },
+       {
+        "sign": "Taurus",
+        "level": 2,
+        "date": "2124-02-13",
+        "days": 240
+       },
+       {
+        "sign": "Gemini",
+        "level": 2,
+        "date": "2124-10-10",
+        "days": 600
+       },
+       {
+        "sign": "Cancer",
+        "level": 2,
+        "date": "2126-06-02",
+        "days": 750
+       },
+       {
+        "sign": "Leo",
+        "level": 2,
+        "date": "2128-06-21",
+        "days": 570
+       },
+       {
+        "sign": "Virgo",
+        "level": 2,
+        "date": "2130-01-12",
+        "days": 600
+       },
+       {
+        "sign": "Libra",
+        "level": 2,
+        "date": "2131-09-04",
+        "days": 240
+       },
+       {
+        "sign": "Scorpio",
+        "level": 2,
+        "date": "2132-05-01",
+        "days": 450
+       },
+       {
+        "sign": "Sagittarius",
+        "level": 2,
+        "date": "2133-07-25",
+        "days": 360
+       },
+       {
+        "sign": "Capricorn",
+        "level": 2,
+        "date": "2134-07-20",
+        "days": 810
+       },
+       {
+        "sign": "Aquarius",
+        "level": 2,
+        "date": "2136-10-07",
+        "days": 330,
+        "truncated": true
+       }
+      ]
+     }
+    ],
+    "export_snapshot": {
+     "technique": {
+      "key": "zodialrelease",
+      "label": "推运盘-黄道星释",
+      "preset_sections": [
+       "起盘信息",
+       "星盘信息",
+       "基于X点推运",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [],
+      "default_off_sections": [],
+      "supports_planet_info": true,
+      "planet_info_default": {
+       "showHouse": 1,
+       "showRuler": 1
+      },
+      "supports_astro_meaning": true,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": {
+       "enabled": 0
+      },
+      "astro_meaning_title": "占星注释（仅AI导出）：",
+      "astro_meaning_checkbox": "在对应分段输出星/宫/座/相/希腊点释义",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "星盘信息",
+        "基于X点推运",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": {
+        "showHouse": 1,
+        "showRuler": 1
+       },
+       "astroMeaning": {
+        "enabled": 0
+       }
+      }
+     },
+     "sections": [
+      {
+       "title": "基于X点推运",
+       "body": "AI输出模式：输出所有L1（星座+时间）\nL1-1：天蝎-2028-04-06\nL1-2：射手-2043-01-18\nL1-3：摩羯-2054-11-16\nL1-4：宝瓶-2081-06-27\nL1-5：双鱼-2111-01-22\nL1-6：牡羊-2122-11-20"
+      }
+     ]
+    }
+   }
+  },
+  "ephemeris": {
+   "tool": "ephemeris",
+   "input_normalized": {},
+   "data": {
+    "ephemeris": {
+     "ingresses": [
+      {
+       "jd": 2461042.3824319937,
+       "datetime": "2026-01-02 05:10:42",
+       "date": "2026-01-02",
+       "time": "05:10:42",
+       "type": "ingress",
+       "body": "Mercury",
+       "toSign": "Capricorn",
+       "lon": 270.00000000981737,
+       "speed": 1.5306354558491335
+      },
+      {
+       "jd": 2461043.0479235076,
+       "datetime": "2026-01-02 21:09:01",
+       "date": "2026-01-02",
+       "time": "21:09:01",
+       "type": "ingress",
+       "body": "Moon",
+       "toSign": "Cancer",
+       "lon": 89.99999998170112,
+       "speed": 15.031627204706579
+      },
+      {
+       "jd": 2461045.071831214,
+       "datetime": "2026-01-04 21:43:26",
+       "date": "2026-01-04",
+       "time": "21:43:26",
+       "type": "ingress",
+       "body": "Moon",
+       "toSign": "Leo",
+       "lon": 120.00000009726092,
+       "speed": 14.517558883105139
+      }
+     ],
+     "stations": [
+      {
+       "jd": 2461075.606359611,
+       "datetime": "2026-02-04 10:33:09",
+       "date": "2026-02-04",
+       "time": "10:33:09",
+       "type": "station",
+       "body": "Uranus",
+       "direction": "Direct",
+       "lon": 57.459778650094414,
+       "speed": -1.4211032076512265e-08,
+       "sign": "Taurus",
+       "signlon": 27.459778650094414,
+       "directionUpstream": "Retrograde"
+      },
+      {
+       "jd": 2461097.7834490635,
+       "datetime": "2026-02-26 14:48:10",
+       "date": "2026-02-26",
+       "time": "14:48:10",
+       "type": "station",
+       "body": "Mercury",
+       "direction": "Retrograde",
+       "lon": 352.5653253654339,
+       "speed": -5.244199731742669e-09,
+       "sign": "Pisces",
+       "signlon": 22.56532536543392
+      },
+      {
+       "jd": 2461110.645729611,
+       "datetime": "2026-03-11 11:29:51",
+       "date": "2026-03-11",
+       "time": "11:29:51",
+       "type": "station",
+       "body": "Jupiter",
+       "direction": "Direct",
+       "lon": 105.08728158322204,
+       "speed": -1.4903998091935164e-09,
+       "sign": "Cancer",
+       "signlon": 15.087281583222037,
+       "directionUpstream": "Retrograde"
+      }
+     ],
+     "lunarPhases": [
+      {
+       "jd": 2461043.9186898717,
+       "datetime": "2026-01-03 18:02:55",
+       "date": "2026-01-03",
+       "time": "18:02:55",
+       "type": "lunar_phase",
+       "phase": "Full Moon",
+       "moonLon": 103.03289000170678,
+       "sunLon": 283.0328898826761,
+       "sign": "Cancer",
+       "signlon": 13.032890001706775
+      },
+      {
+       "jd": 2461051.1586093553,
+       "datetime": "2026-01-10 23:48:24",
+       "date": "2026-01-10",
+       "time": "23:48:24",
+       "type": "lunar_phase",
+       "phase": "Last Quarter",
+       "moonLon": 200.40942372443715,
+       "sunLon": 290.4094236977954,
+       "sign": "Libra",
+       "signlon": 20.409423724437147
+      },
+      {
+       "jd": 2461059.327768589,
+       "datetime": "2026-01-19 03:51:59",
+       "date": "2026-01-19",
+       "time": "03:51:59",
+       "type": "lunar_phase",
+       "phase": "New Moon",
+       "moonLon": 298.7321094248704,
+       "sunLon": 298.73210950722034,
+       "sign": "Capricorn",
+       "signlon": 28.732109424870373
+      }
+     ],
+     "eclipses": [
+      {
+       "jd": 2461089.0082554226,
+       "datetime": "2026-02-17 20:11:53",
+       "date": "2026-02-17",
+       "time": "20:11:53",
+       "type": "solar_eclipse",
+       "eclipseType": "annular",
+       "body": "Sun",
+       "lon": 328.83641152495596,
+       "sign": "Aquarius",
+       "signlon": 28.836411524955963,
+       "magnitude": 0.9797405111653726,
+       "digit": 11.8,
+       "band": "大"
+      },
+      {
+       "jd": 2461102.9817270124,
+       "datetime": "2026-03-03 19:33:41",
+       "date": "2026-03-03",
+       "time": "19:33:41",
+       "type": "lunar_eclipse",
+       "eclipseType": "total",
+       "body": "Moon",
+       "lon": 162.85924950005278,
+       "sign": "Virgo",
+       "signlon": 12.859249500052783,
+       "magnitude": 1.1506531177897765,
+       "digit": 13.8,
+       "band": "全"
+      }
+     ],
+     "transitAspects": [
+      {
+       "jd": 2461041.1788004213,
+       "datetime": "2026-01-01 00:17:28",
+       "date": "2026-01-01",
+       "time": "00:17:28",
+       "type": "transit_aspect",
+       "transitBody": "Moon",
+       "natalPoint": "Venus",
+       "aspect": 0.0,
+       "orb": 8.329365641657205e-08,
+       "lon": 61.91011598650187,
+       "speed": 14.9319168519517,
+       "sign": "Gemini",
+       "signlon": 1.9101159865018715
+      },
+      {
+       "jd": 2461041.5269341567,
+       "datetime": "2026-01-01 08:38:47",
+       "date": "2026-01-01",
+       "time": "08:38:47",
+       "type": "transit_aspect",
+       "transitBody": "Sun",
+       "natalPoint": "Mercury",
+       "aspect": 90.0,
+       "orb": 2.6277348297298886e-08,
+       "lon": 280.5960292873067,
+       "speed": 1.018868018505926,
+       "sign": "Capricorn",
+       "signlon": 10.596029287306692
+      },
+      {
+       "jd": 2461041.5806177133,
+       "datetime": "2026-01-01 09:56:05",
+       "date": "2026-01-01",
+       "time": "09:56:05",
+       "type": "transit_aspect",
+       "transitBody": "Moon",
+       "natalPoint": "MC",
+       "aspect": 90.0,
+       "orb": 1.3616272553917952e-09,
+       "lon": 67.92435738711904,
+       "speed": 14.999451576200409,
+       "sign": "Gemini",
+       "signlon": 7.924357387119045
+      }
+     ]
+    },
+    "natal_params": {
+     "zone": "+08:00"
+    },
+    "export_snapshot": {
+     "technique": {
+      "key": "ephemeris",
+      "label": "星运-星历",
+      "preset_sections": [
+       "起盘信息",
+       "星历事件（入座 · 留逆 · 朔望弦 · 食相）",
+       "行运触发本命",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "星历事件（入座 · 留逆 · 朔望弦 · 食相）",
+        "行运触发本命",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "星历事件（入座 · 留逆 · 朔望弦 · 食相）",
+       "body": "区间：2026-01-01 至 2026-03-31（以本命盘地点与时区计;各表最多列 60 行）\n\n入座：\n| 时间 | 星体 | 进入 | 位置 |\n| --- | --- | --- | --- |\n| 2026-01-02 05:10:42 | 水 | 摩羯 | 摩羯 0.00° |\n| 2026-01-02 21:09:01 | 月 | 巨蟹 | 巨蟹 0.00° |\n| 2026-01-04 21:43:26 | 月 | 狮子 | 狮子 0.00° |\n| 2026-01-07 00:56:46 | 月 | 室女 | 室女 0.00° |\n| 2026-01-09 08:05:47 | 月 | 天秤 | 天秤 0.00° |\n| 2026-01-11 18:55:20 | 月 | 天蝎 | 天蝎 0.00° |\n| 2026-01-14 07:33:49 | 月 | 射手 | 射手 0.00° |\n| 2026-01-16 19:47:09 | 月 | 摩羯 | 摩羯 0.00° |\n| 2026-01-17 20:43:24 | 金 | 宝瓶 | 宝瓶 0.00° |\n| 2026-01-19 06:17:57 | 月 | 宝瓶 | 宝瓶 0.00° |\n| 2026-01-20 09:44:56 | 日 | 宝瓶 | 宝瓶 0.00° |\n| 2026-01-21 00:41:11 | 水 | 宝瓶 | 宝瓶 0.00° |\n| 2026-01-21 14:49:40 | 月 | 双鱼 | 双鱼 0.00° |\n| 2026-01-23 17:16:45 | 火 | 宝瓶 | 宝瓶 0.00° |\n| 2026-01-23 21:25:42 | 月 | 牡羊 | 牡羊 0.00° |\n| 2026-01-26 02:05:20 | 月 | 金牛 | 金牛 0.00° |\n| 2026-01-27 01:34:38 | 海 | 牡羊 | 牡羊 0.00° |\n| 2026-01-28 04:55:01 | 月 | 双子 | 双子 0.00° |\n| 2026-01-30 06:31:40 | 月 | 巨蟹 | 巨蟹 0.00° |\n| 2026-02-01 08:08:57 | 月 | 狮子 | 狮子 0.00° |\n| 2026-02-03 11:21:14 | 月 | 室女 | 室女 0.00° |\n| 2026-02-05 17:32:33 | 月 | 天秤 | 天秤 0.00° |\n| 2026-02-07 06:48:04 | 水 | 双鱼 | 双鱼 0.00° |\n| 2026-02-08 03:13:06 | 月 | 天蝎 | 天蝎 0.00° |\n| 2026-02-10 15:21:51 | 月 | 射手 | 射手 0.00° |\n| 2026-02-10 18:18:38 | 金 | 双鱼 | 双鱼 0.00° |\n| 2026-02-13 03:44:24 | 月 | 摩羯 | 摩羯 0.00° |\n| 2026-02-14 08:11:39 | 土 | 牡羊 | 牡羊 0.00° |\n| 2026-02-15 14:16:39 | 月 | 宝瓶 | 宝瓶 0.00° |\n| 2026-02-17 22:09:06 | 月 | 双鱼 | 双鱼 0.00° |\n| 2026-02-18 23:51:56 | 日 | 双鱼 | 双鱼 0.00° |\n| 2026-02-20 03:39:04 | 月 | 牡羊 | 牡羊 0.00° |\n| 2026-02-22 07:30:56 | 月 | 金牛 | 金牛 0.00° |\n| 2026-02-24 10:28:55 | 月 | 双子 | 双子 0.00° |\n| 2026-02-26 13:11:06 | 月 | 巨蟹 | 巨蟹 0.00° |\n| 2026-02-28 16:16:42 | 月 | 狮子 | 狮子 0.00° |\n| 2026-03-02 20:33:41 | 月 | 室女 | 室女 0.00° |\n| 2026-03-02 22:15:50 | 火 | 双鱼 | 双鱼 0.00° |\n| 2026-03-05 02:55:47 | 月 | 天秤 | 天秤 0.00° |\n| 2026-03-06 18:45:46 | 金 | 牡羊 | 牡羊 0.00° |\n| 2026-03-07 12:01:28 | 月 | 天蝎 | 天蝎 0.00° |\n| 2026-03-09 23:36:32 | 月 | 射手 | 射手 0.00° |\n| 2026-03-12 12:07:08 | 月 | 摩羯 | 摩羯 0.00° |\n| 2026-03-14 23:13:30 | 月 | 宝瓶 | 宝瓶 0.00° |\n| 2026-03-17 07:15:39 | 月 | 双鱼 | 双鱼 0.00° |\n| 2026-03-19 12:02:59 | 月 | 牡羊 | 牡羊 0.00° |\n| 2026-03-20 22:45:58 | 日 | 牡羊 | 牡羊 0.00° |\n| 2026-03-21 14:35:07 | 月 | 金牛 | 金牛 0.00° |\n| 2026-03-23 16:18:40 | 月 | 双子 | 双子 0.00° |\n| 2026-03-25 18:32:56 | 月 | 巨蟹 | 巨蟹 0.00° |\n| 2026-03-27 22:10:12 | 月 | 狮子 | 狮子 0.00° |\n| 2026-03-30 03:33:20 | 月 | 室女 | 室女 0.00° |\n| 2026-03-31 00:00:52 | 金 | 金牛 | 金牛 0.00° |\n\n留与顺逆转向：\n| 时间 | 星体 | 方向 | 位置 |\n| --- | --- | --- | --- |\n| 2026-02-04 10:33:09 | 天 | Direct | 金牛 27.46° |\n| 2026-02-26 14:48:10 | 水 | Retrograde | 双鱼 22.57° |\n| 2026-03-11 11:29:51 | 木 | Direct | 巨蟹 15.09° |\n| 2026-03-21 03:32:50 | 水 | Direct | 双鱼 8.49° |\n\n朔望弦：\n| 时间 | 月相 | 月亮位置 |\n| --- | --- | --- |\n| 2026-01-03 18:02:55 | Full Moon | 巨蟹 13.03° |\n| 2026-01-10 23:48:24 | Last Quarter | 天秤 20.41° |\n| 2026-01-19 03:51:59 | New Moon | 摩羯 28.73° |\n| 2026-01-26 12:47:24 | First Quarter | 金牛 6.23° |\n| 2026-02-02 06:09:15 | Full Moon | 狮子 13.06° |\n| 2026-02-09 20:43:07 | Last Quarter | 天蝎 20.77° |\n| 2026-02-17 20:01:09 | New Moon | 宝瓶 28.83° |\n| 2026-02-24 20:27:37 | First Quarter | 双子 5.90° |\n| 2026-03-03 19:37:54 | Full Moon | 室女 12.90° |\n| 2026-03-11 17:38:31 | Last Quarter | 射手 20.82° |\n| 2026-03-19 09:23:29 | New Moon | 双鱼 28.45° |\n| 2026-03-26 03:17:43 | First Quarter | 巨蟹 5.15° |\n\n食相：\n| 时间 | 类型 | 细分 | 位置 | 食分 |\n| --- | --- | --- | --- | --- |\n| 2026-02-17 20:11:53 | solar_eclipse | annular | 宝瓶 28.84° | 11.80 大 |\n| 2026-03-03 19:33:41 | lunar_eclipse | total | 室女 12.86° | 13.80 全 |"
+      },
+      {
+       "title": "行运触发本命",
+       "body": "| 时间 | 行运 | 相位 | 本命 | 误差 |\n| --- | --- | --- | --- | --- |\n| 2026-01-01 00:17:28 | 月 | 0° | 金 | 0.000 |\n| 2026-01-01 08:38:47 | 日 | 90° | 水 | 0.000 |\n| 2026-01-01 09:56:05 | 月 | 90° | 中天 | 0.000 |\n| 2026-01-01 14:12:23 | 月 | 60° | 水 | 0.000 |\n| 2026-01-01 15:07:29 | 水 | 120° | 土 | 0.000 |\n| 2026-01-01 18:37:08 | 月 | 60° | 火 | 0.000 |\n| 2026-01-02 00:04:50 | 月 | 60° | 日 | 0.000 |\n| 2026-01-02 04:36:29 | 月 | 90° | 木 | 0.000 |\n| 2026-01-02 04:37:11 | 水 | 120° | 月 | 0.000 |\n| 2026-01-02 05:01:06 | 火 | 90° | 火 | 0.000 |\n| 2026-01-02 10:30:13 | 金 | 90° | 水 | 0.000 |\n| 2026-01-02 13:28:14 | 月 | 0° | 上升 | 0.000 |\n| 2026-01-02 19:43:16 | 月 | 60° | 土 | 0.000 |\n| 2026-01-02 21:05:36 | 月 | 60° | 月 | 0.000 |\n| 2026-01-03 09:49:53 | 月 | 120° | 中天 | 0.000 |\n| 2026-01-03 14:07:26 | 月 | 90° | 水 | 0.000 |\n| 2026-01-03 18:34:32 | 月 | 90° | 火 | 0.000 |\n| 2026-01-04 00:06:39 | 月 | 90° | 日 | 0.000 |\n| 2026-01-04 01:44:37 | 日 | 90° | 火 | 0.000 |\n| 2026-01-04 04:43:14 | 月 | 60° | 木 | 0.000 |\n| 2026-01-04 15:13:04 | 金 | 90° | 火 | 0.000 |\n| 2026-01-04 20:14:42 | 月 | 90° | 土 | 0.000 |\n| 2026-01-05 00:53:14 | 月 | 60° | 金 | 0.000 |\n| 2026-01-05 15:25:23 | 月 | 120° | 水 | 0.000 |\n| 2026-01-05 20:06:15 | 月 | 120° | 火 | 0.000 |\n| 2026-01-06 01:56:45 | 月 | 120° | 日 | 0.000 |\n| 2026-01-06 15:58:55 | 火 | 90° | 日 | 0.000 |\n| 2026-01-06 16:28:50 | 月 | 60° | 上升 | 0.000 |\n| 2026-01-06 23:21:50 | 月 | 120° | 土 | 0.000 |\n| 2026-01-07 00:52:59 | 月 | 0° | 月 | 0.000 |\n| 2026-01-07 04:20:02 | 月 | 90° | 金 | 0.000 |\n| 2026-01-07 08:11:40 | 水 | 60° | 中天 | 0.000 |\n| 2026-01-07 08:32:53 | 金 | 90° | 日 | 0.000 |\n| 2026-01-07 10:24:49 | 日 | 90° | 日 | 0.000 |\n| 2026-01-07 15:06:35 | 月 | 180° | 中天 | 0.000 |\n| 2026-01-08 12:33:21 | 月 | 0° | 木 | 0.000 |\n| 2026-01-08 22:58:13 | 月 | 90° | 上升 | 0.000 |\n| 2026-01-09 01:06:07 | 水 | 90° | 水 | 0.000 |\n| 2026-01-09 11:44:42 | 月 | 120° | 金 | 0.000 |\n| 2026-01-09 14:44:35 | 金 | 120° | 木 | 0.000 |\n| 2026-01-10 04:31:23 | 月 | 180° | 水 | 0.000 |\n| 2026-01-10 05:19:30 | 日 | 120° | 木 | 0.000 |\n| 2026-01-10 08:24:28 | 火 | 120° | 木 | 0.000 |\n| 2026-01-10 09:55:15 | 月 | 180° | 火 | 0.000 |\n| 2026-01-10 16:38:47 | 月 | 180° | 日 | 0.000 |\n| 2026-01-10 19:06:05 | 水 | 90° | 火 | 0.000 |\n| 2026-01-11 09:17:55 | 月 | 120° | 上升 | 0.000 |\n| 2026-01-11 17:07:43 | 月 | 180° | 土 | 0.000 |\n| 2026-01-11 18:51:03 | 月 | 60° | 月 | 0.000 |\n| 2026-01-12 10:51:46 | 月 | 120° | 中天 | 0.000 |\n| 2026-01-12 22:41:19 | 水 | 90° | 日 | 0.000 |\n| 2026-01-13 10:32:12 | 月 | 60° | 木 | 0.000 |\n| 2026-01-14 06:43:51 | 木 | 60° | 木 | 0.000 |\n| 2026-01-14 07:29:29 | 月 | 90° | 月 | 0.000 |\n| 2026-01-14 11:25:50 | 月 | 180° | 金 | 0.000 |\n| 2026-01-14 17:04:47 | 水 | 120° | 木 | 0.000 |\n| 2026-01-14 23:35:13 | 月 | 90° | 中天 | 0.000 |\n| 2026-01-15 04:58:31 | 月 | 120° | 水 | 0.000 |\n| 2026-01-15 10:32:22 | 月 | 120° | 火 | 0.000 |\n| 2026-01-15 17:25:10 | 月 | 120° | 日 | 0.000 |"
+      }
+     ]
+    }
+   }
+  },
+  "distributions": {
+   "tool": "distributions",
+   "input_normalized": {},
+   "data": {
+    "distributions": [
+     {
+      "startArc": 0.0,
+      "endArc": 4.78,
+      "startYears": 0.0,
+      "years": 4.7815,
+      "distributor": "Saturn",
+      "sign": "Gemini",
+      "startDate": "2028-04-06 09:33:00",
+      "endDate": "2033-01-16 18:54:05",
+      "participants": [
+       "Saturn",
+       "Moon"
+      ],
+      "partnerDetail": [
+       {
+        "planet": "Saturn",
+        "aspect": 60,
+        "side": "S"
+       },
+       {
+        "planet": "Moon",
+        "aspect": 60,
+        "side": "D"
+       }
+      ]
+     },
+     {
+      "startArc": 4.78,
+      "endArc": 12.85,
+      "startYears": 4.7815,
+      "years": 8.065,
+      "distributor": "Mars",
+      "sign": "Cancer",
+      "startDate": "2033-01-16 18:54:05",
+      "endDate": "2041-02-09 10:56:19",
+      "participants": [],
+      "partnerDetail": []
+     },
+     {
+      "startArc": 12.85,
+      "endArc": 19.76,
+      "startYears": 12.8464,
+      "years": 6.9128,
+      "distributor": "Venus",
+      "sign": "Cancer",
+      "startDate": "2041-02-09 10:56:19",
+      "endDate": "2048-01-09 07:32:31",
+      "participants": [
+       "Mercury"
+      ],
+      "partnerDetail": [
+       {
+        "planet": "Mercury",
+        "aspect": 90,
+        "side": "S"
+       }
+      ]
+     },
+     {
+      "startArc": 19.76,
+      "endArc": 26.67,
+      "startYears": 19.7593,
+      "years": 6.9128,
+      "distributor": "Mercury",
+      "sign": "Cancer",
+      "startDate": "2048-01-09 07:32:31",
+      "endDate": "2054-12-08 04:08:43",
+      "participants": [
+       "Mars",
+       "Sun"
+      ],
+      "partnerDetail": [
+       {
+        "planet": "Mars",
+        "aspect": 90,
+        "side": "S"
+       },
+       {
+        "planet": "Sun",
+        "aspect": 90,
+        "side": "S"
+       }
+      ]
+     }
+    ],
+    "partners": [
+     {
+      "planet": "Saturn",
+      "aspect": 60,
+      "side": "S",
+      "lon": 89.1047,
+      "startYears": 3.8922,
+      "years": 0.8538,
+      "startDate": "2032-02-27 00:13:07",
+      "endDate": "2033-01-03 20:41:37"
+     },
+     {
+      "planet": "Moon",
+      "aspect": 60,
+      "side": "D",
+      "lon": 89.9644,
+      "startYears": 4.7461,
+      "years": 12.2435,
+      "startDate": "2033-01-03 20:41:37",
+      "endDate": "2045-04-02 16:47:54"
+     },
+     {
+      "planet": "Mercury",
+      "aspect": 90,
+      "side": "S",
+      "lon": 100.596,
+      "startYears": 16.9896,
+      "years": 3.184,
+      "startDate": "2045-04-02 16:47:54",
+      "endDate": "2048-06-08 14:55:44"
+     }
+    ],
+    "natalHeader": {
+     "params": {
+      "birth": "2028-04-06 09:33:00",
+      "zone": "+08:00"
+     }
+    },
+    "export_snapshot": {
+     "technique": {
+      "key": "distributions",
+      "label": "星运-界推运",
+      "preset_sections": [
+       "起盘信息",
+       "界推运（分配法 / Distributions）",
+       "伙伴星期",
+       "当前时点",
+       "方法说明"
+      ],
+      "forbidden_sections": [],
+      "optional_sections": [
+       "伙伴星期"
+      ],
+      "default_off_sections": [],
+      "supports_planet_info": false,
+      "planet_info_default": null,
+      "supports_astro_meaning": false,
+      "supports_hover_meaning": false,
+      "astro_meaning_default": null,
+      "astro_meaning_title": "",
+      "astro_meaning_checkbox": "",
+      "settings_template": {
+       "sections": [
+        "起盘信息",
+        "界推运（分配法 / Distributions）",
+        "伙伴星期",
+        "当前时点",
+        "方法说明"
+       ],
+       "planetInfo": null,
+       "astroMeaning": null
+      }
+     },
+     "sections": [
+      {
+       "title": "界推运（分配法 / Distributions）",
+       "body": "发放点随周日运动顺黄道依次经过其后各界（界表用当前全局界系设置）。发放点=上升、时间算法=上升时间（星座内均匀，古典）、年长=回归年（365.2422 日）、年限=100 年（黄经 85.19°）。分配星 = 所在界的界主；伙伴星 = 发放点最近经过的行星本体或相位点（左右 60° / 90° / 120° 与 180°），各管到下一点为止。\n\n| 分配星 | 界(座) | 起始岁 | 时长(年) | 起 | 止 | 期内伙伴星 |\n| --- | --- | --- | --- | --- | --- | --- |\n| 土 | 双子 | 0.00 | 4.78 | 2028-04-06 09:33:00 | 2033-01-16 18:54:05 | 土六合·左、月六合·右 |\n| 火 | 巨蟹 | 4.78 | 8.06 | 2033-01-16 18:54:05 | 2041-02-09 10:56:19 | — |\n| 金 | 巨蟹 | 12.85 | 6.91 | 2041-02-09 10:56:19 | 2048-01-09 07:32:31 | 水四分·左 |\n| 水 | 巨蟹 | 19.76 | 6.91 | 2048-01-09 07:32:31 | 2054-12-08 04:08:43 | 火四分·左、日四分·左 |\n| 木 | 巨蟹 | 26.67 | 8.06 | 2054-12-08 04:08:43 | 2062-12-31 20:10:57 | 木六合·右 |\n| 土 | 巨蟹 | 34.74 | 4.61 | 2062-12-31 20:10:57 | 2067-08-11 01:55:05 | 土四分·左 |\n| 木 | 狮子 | 39.35 | 7.14 | 2067-08-11 01:55:05 | 2074-09-30 06:25:45 | 金六合·左 |\n| 金 | 狮子 | 46.48 | 5.95 | 2074-09-30 06:25:45 | 2080-09-10 22:11:18 | 水三分·左 |\n| 土 | 狮子 | 52.43 | 8.33 | 2080-09-10 22:11:18 | 2089-01-08 15:27:05 | 火三分·左、日三分·左 |\n| 水 | 狮子 | 60.76 | 7.14 | 2089-01-08 15:27:05 | 2096-02-28 19:57:45 | — |\n| 火 | 狮子 | 67.90 | 7.14 | 2096-02-28 19:57:45 | 2103-04-21 00:28:25 | 土三分·左、月本体 |\n| 水 | 室女 | 75.04 | 8.16 | 2103-04-21 00:28:25 | 2111-06-18 16:06:14 | 金四分·左 |\n| 金 | 室女 | 83.20 | 11.66 | 2111-06-18 16:06:14 | 2123-02-13 17:51:40 | — |\n| 木 | 室女 | 94.86 | 4.66 | 2123-02-13 17:51:40 | 2127-10-13 23:21:51 | 木本体 |\n| 火 | 室女 | 99.52 | 8.16 | 2127-10-13 23:21:51 | 2135-12-11 14:59:40 | — |"
+      },
+      {
+       "title": "伙伴星期",
+       "body": "| 伙伴星 | 相位点 | 起始岁 | 时长(年) | 起 | 止 |\n| --- | --- | --- | --- | --- | --- |\n| 土 | 六合·左（89.10°） | 3.89 | 0.85 | 2032-02-27 00:13:07 | 2033-01-03 20:41:37 |\n| 月 | 六合·右（89.96°） | 4.75 | 12.24 | 2033-01-03 20:41:37 | 2045-04-02 16:47:54 |\n| 水 | 四分·左（100.60°） | 16.99 | 3.18 | 2045-04-02 16:47:54 | 2048-06-08 14:55:44 |\n| 火 | 四分·左（103.36°） | 20.17 | 3.95 | 2048-06-08 14:55:44 | 2052-05-19 17:24:58 |\n| 日 | 四分·左（106.78°） | 24.12 | 3.27 | 2052-05-19 17:24:58 | 2055-08-28 02:09:31 |\n| 木 | 六合·右（109.62°） | 27.39 | 10.92 | 2055-08-28 02:09:31 | 2066-07-30 08:09:04 |\n| 土 | 四分·左（119.10°） | 38.31 | 3.30 | 2066-07-30 08:09:04 | 2069-11-18 02:02:40 |\n| 金 | 六合·左（121.91°） | 41.62 | 10.33 | 2069-11-18 02:02:40 | 2080-03-19 09:16:40 |\n| 水 | 三分·左（130.60°） | 51.95 | 3.29 | 2080-03-19 09:16:40 | 2083-07-03 05:29:24 |\n| 火 | 三分·左（133.36°） | 55.24 | 4.07 | 2083-07-03 05:29:24 | 2087-07-30 07:45:29 |\n| 日 | 三分·左（136.78°） | 59.31 | 14.66 | 2087-07-30 07:45:29 | 2102-03-27 23:52:36 |\n| 土 | 三分·左（149.10°） | 73.97 | 1.02 | 2102-03-27 23:52:36 | 2103-04-05 12:54:07 |\n| 月 | 本体（149.96°） | 74.99 | 2.27 | 2103-04-05 12:54:07 | 2105-07-12 08:40:03 |\n| 金 | 四分·左（151.91°） | 77.26 | 20.65 | 2105-07-12 08:40:03 | 2126-03-07 09:33:52 |\n| 木 | 本体（169.62°） | 97.92 | 14.32 | 2126-03-07 09:33:52 | 2140-07-02 13:56:23 |"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

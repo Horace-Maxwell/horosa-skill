@@ -387,7 +387,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         title="渲染报告 / render report",
         annotations=_ANN_REPORT_WRITE,
         doc=(
-            "Render a stored run into a DOCX/PDF/JSON report. Preferred when you already have a run_id "
+            "Render a stored run into a DOCX/PDF/JSON report, PNG chart or ICS calendar. Preferred when you already have a run_id "
             "(from a prior tool call): pass run_id + format + your ai_report; the ai_report is auto "
             "written back to memory (no separate memory_record_answer call needed)."
         ),

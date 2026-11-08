@@ -149,6 +149,10 @@ class HorosaMCPServer(MCPServer):
         if isinstance(raw, mcp_types.InputRequiredResult):
             return raw
         raw = _with_request_notes(raw, request_notes)
+        # 盘图 PNG 在转文字之前定好内嵌几张：没内嵌的说明进 summary，要跟着结果一起转字形。
+        images: list[mcp_types.ImageContent] = []
+        if _png_cards(raw):  # 读文件、base64 放进线程；别的结果一个字节都不碰
+            raw, images = await anyio.to_thread.run_sync(_plan_inline_images, raw, tool.fn_metadata.convert_result)
         if self.output_script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS:
             # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
             raw = await anyio.to_thread.run_sync(localize, raw, self.output_script)
@@ -157,7 +161,7 @@ class HorosaMCPServer(MCPServer):
         if _wire_bytes(converted) > MCP_RESULT_WIRE_BUDGET:
             raw = await anyio.to_thread.run_sync(_fit_result_budget, raw, tool.fn_metadata.convert_result)
             converted = tool.fn_metadata.convert_result(raw)
-        return _with_file_link(raw, converted, str(protocol or ""))
+        return _with_file_link(raw, converted, str(protocol or ""), images)
 
 
 # 一次工具结果的线上体积上限（v0.46.1）。官方 MCP SDK（mcp 2.x）客户端走 streamable HTTP 时单条 SSE 事件上限
@@ -345,15 +349,89 @@ def _omit_raw_subtrees(holders: list[tuple[dict[str, Any], Any]], excess: int, o
 # 校验整个结果，多一个不认识的块可能让整条结果作废（与 outputSchema 让 Claude Code 工具列表消失同一类风险）。
 RESOURCE_LINK_SINCE = "2025-06-18"
 
+# 盘图 PNG 内嵌（v0.48.0，report format=png）：image 内容块从 MCP 第一版就有，所有客户端都发。上限：
+# - 整条结果（JSON 正文 + 各图 base64）仍守 MCP_RESULT_WIRE_BUDGET（SDK HTTP 客户端单条 SSE 1 MiB）；
+# - 单张原始字节 ≤ PNG_INLINE_MAX_BYTES、最多 PNG_INLINE_MAX_IMAGES 张（Claude 多图请求 > 20 张时每张收紧到 3000 px；
+#   Claude Code 带图的结果仍受 MAX_MCP_OUTPUT_TOKENS 管，不让一次报告占满）。
+# 放不下的只给文件链接，结果的 `inline_images` 与 summary 写明哪几张没内嵌、为什么。
+PNG_INLINE_MAX_IMAGES = 4
+PNG_INLINE_MAX_BYTES = 512 * 1024
+_INLINE_SLACK_BYTES = 4_096  # 说明文字与 resource_link 块的余量
+_INLINE_REASONS = {
+    "result_size_cap": "超过单次返回上限",
+    "image_too_large": "单张图太大",
+    "too_many_images": "张数超过内嵌上限",
+    "file_unreadable": "文件读不到或已被改动",
+}
 
-def _with_file_link(raw: Any, converted: Any, protocol: str) -> Any:
-    """报告类工具（结果里有 `file` 文件卡）在 JSON 正文之外再附一个 resource_link，客户端可直接打开 / 附带文件。"""
-    card = raw.get("file") if isinstance(raw, dict) else None
-    if not isinstance(card, dict) or not card.get("uri") or not protocol or protocol < RESOURCE_LINK_SINCE:
+
+def _png_cards(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, dict) or raw.get("format") != "png":
+        return []
+    cards = raw.get("files") if isinstance(raw.get("files"), list) else [raw.get("file")]
+    return [card for card in cards if isinstance(card, dict) and card.get("mime") == "image/png" and card.get("path")]
+
+
+def _card_bytes(card: dict[str, Any]) -> bytes | None:
+    """按文件卡读回 PNG；读不到、或内容与卡上的 sha256 不符（落盘后被改过）→ None（不内嵌，结果里说明）。"""
+    import hashlib
+    from pathlib import Path
+
+    try:
+        data = Path(str(card["path"])).read_bytes()
+    except OSError:
+        return None
+    return data if hashlib.sha256(data).hexdigest() == card.get("sha256") else None
+
+
+def _plan_inline_images(raw: Any, convert: Any) -> tuple[Any, list[mcp_types.ImageContent]]:
+    """PNG 结果：按上限挑出能内嵌的图（按文件顺序），在结果上记 `inline_images`；其余形状原样返回、不读任何文件。"""
+    import base64
+
+    cards = _png_cards(raw)
+    if not cards:
+        return raw, []
+    used = _wire_bytes(convert(raw)) + _INLINE_SLACK_BYTES
+    images: list[mcp_types.ImageContent] = []
+    omitted: list[dict[str, Any]] = []
+    for card in cards:
+        data = _card_bytes(card)
+        reason = None
+        if data is None:
+            reason = "file_unreadable"
+        elif len(images) >= PNG_INLINE_MAX_IMAGES:
+            reason = "too_many_images"
+        elif len(data) > PNG_INLINE_MAX_BYTES:
+            reason = "image_too_large"
+        else:
+            encoded = base64.b64encode(data).decode("ascii")
+            cost = len(encoded) + 64
+            if used + cost > MCP_RESULT_WIRE_BUDGET:
+                reason = "result_size_cap"
+            else:
+                used += cost
+                images.append(mcp_types.ImageContent(type="image", data=encoded, mime_type="image/png"))
+        if reason:
+            omitted.append({"name": card.get("name"), "path": card.get("path"), "reason": reason})
+    result = {**raw, "inline_images": {"shown": len(images), "total": len(cards), **({"omitted": omitted} if omitted else {})}}
+    if omitted:
+        why = "、".join(dict.fromkeys(_INLINE_REASONS[item["reason"]] for item in omitted))
+        result["summary"] = [*(raw.get("summary") or []),
+                             f"有 {len(omitted)} 张盘图没有内嵌显示（{why}），只给了文件链接：{'、'.join(str(i['path']) for i in omitted)}"]
+    return result, images
+
+
+def _with_file_link(raw: Any, converted: Any, protocol: str, images: Any = ()) -> Any:
+    """报告类工具（结果里有 `file` 文件卡）在 JSON 正文之外再附 resource_link（多文件逐个附），客户端可直接打开 / 附带文件；
+    PNG 盘图另附 image 内容块（_plan_inline_images 已按上限挑好）。"""
+    blocks: list[Any] = list(images)
+    if isinstance(raw, dict) and protocol and protocol >= RESOURCE_LINK_SINCE:
+        cards = raw.get("files") if isinstance(raw.get("files"), list) else [raw.get("file")]
+        blocks += [mcp_types.ResourceLink(type="resource_link", uri=card["uri"], name=str(card.get("name") or "report"),
+                                          mime_type=card.get("mime"), size=card.get("bytes"))
+                   for card in cards if isinstance(card, dict) and card.get("uri")]
+    if not blocks:
         return converted
-    link = mcp_types.ResourceLink(type="resource_link", uri=card["uri"], name=str(card.get("name") or "report"),
-                                  mime_type=card.get("mime"), size=card.get("bytes"))
     if isinstance(converted, mcp_types.CallToolResult):
-        return converted.model_copy(update={"content": [*converted.content, link]})
-    return [*converted, link]
-
+        return converted.model_copy(update={"content": [*converted.content, *blocks]})
+    return [*converted, *blocks]
