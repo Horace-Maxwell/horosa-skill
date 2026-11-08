@@ -1,7 +1,7 @@
 """门面工具输入：dispatch / hecan、导出与知识库、玄史、agent 指引、记忆、报告、技法依据报告。"""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -167,6 +167,22 @@ class KnowledgeSearchInput(FlexibleModel):
     limit: int | None = Field(default=None, description="Matches per page (default 8, max 20).")
     offset: int | None = Field(default=None, description="Skip this many matches; pass the previous result's next_offset.")
     # 检索不过澄清闸：基类的三个闸门字段对它没有意义，不进广告层（照样能传，不报错）。
+    agent_confirmed_settings: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    defaults_accepted: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+
+
+class ProfileInput(FlexibleModel):
+    """horosa_profile：命主档案（profiles.py）。广告层只有四个键 + request（tools/list 余量 ~1.9 KB）。"""
+
+    action: Literal["save", "get", "list", "delete"] = Field(description="save / get / list / delete")
+    name: str | None = Field(default=None, description="档案名（save/get/delete 必填）")
+    data: dict[str, Any] | None = Field(
+        default=None,
+        description="save：date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes；按名合并，null 删字段",
+    )
+    detail: bool | None = Field(default=None, description="list 时连出生信息一起给")
+    # 档案不过澄清闸（不起盘）：基类的闸门三键不进广告层。
     agent_confirmed_settings: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
     defaults_accepted: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
     clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})

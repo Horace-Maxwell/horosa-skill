@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from horosa_skill import __version__
+from horosa_skill import profiles as birth_profiles
 from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.civil_calendar import _leading_year_of
 from horosa_skill.decisions.layer import decision_records
@@ -25,7 +26,7 @@ from horosa_skill.decisions.surfaces.routing import (
     resolve_routing,
 )
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
-from horosa_skill.engine.registry import resolve_tool_name
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
 from horosa_skill.engine.router import select_tools
 from horosa_skill.errors import DispatchResolutionError, ToolValidationError, validation_errors
 from horosa_skill.input_normalization import normalize_request_payload
@@ -72,6 +73,9 @@ class DispatchAPI:
             workflow_name="hecan.run",
             metadata={"entrypoint": "hecan", "payload": payload},
         ) as trace:
+            # 命主档案（birth.profile / subject.profile / subject.inner|outer.profile）先并进来才过得了校验；交给 dispatch 前摘回去，
+            # 由 dispatch → run_tool 按选中的技法重新并、记出处。认不出的档案名在这里就拒。
+            payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
             try:
                 request = _validated(HecanInput, payload)
             except ValidationError as exc:
@@ -89,7 +93,7 @@ class DispatchAPI:
 
             max_tools = max(1, min(int(request.max_tools or 5), 8))
             preselected = [resolve_tool_name(t) or t for t in (request.tools or []) if t][:max_tools] or None
-            dispatch_payload = request.model_dump(exclude_none=True)
+            dispatch_payload = birth_profiles.restore_dispatch_refs(request.model_dump(exclude_none=True), profile_uses)
             dispatch_payload.pop("tools", None)
             dispatch_payload.pop("max_tools", None)
             envelope = self.dispatch(dispatch_payload, preselected_tools=preselected)
@@ -225,7 +229,7 @@ class DispatchAPI:
         layer = self.decision_layer
         if layer is None or not layer.policy.surface_enabled("dispatch"):
             return deterministic
-        state, redaction = build_meta_state(request.query)
+        state, redaction = build_meta_state(request.query, private_terms=self._private_terms())
         outcome = layer.ask(
             "dispatch",
             state=state,
@@ -245,6 +249,10 @@ class DispatchAPI:
             return [decision.tool]
         layer.finalize(outcome, adopted=False, reason=("shadow" if not outcome.enforced else decision.reason), decision=info)
         return deterministic
+
+    def _private_terms(self) -> list[str]:
+        """决策层脱敏用的本机专有词：命主档案名 / 别名 / 地点标签（读不了档案库就抛，_decision_guard 关闭式回落确定性路径、不发请求）。"""
+        return self.profiles.private_terms()
 
     @staticmethod
     def _tool_asks_gender(tool_name: str) -> bool:
@@ -283,7 +291,7 @@ class DispatchAPI:
         if not candidates.any:
             return
         if "gender" not in shared:
-            state, redaction = build_meta_state(request.query)
+            state, redaction = build_meta_state(request.query, private_terms=self._private_terms())
             shared["gender"] = layer.ask(
                 "extract",
                 state=state,
@@ -344,7 +352,7 @@ class DispatchAPI:
         text = payload.get("question") or _RUN_QUERY_TEXT.get() or ""
         if not str(text).strip():
             return payload
-        state, redaction = build_meta_state(str(text))
+        state, redaction = build_meta_state(str(text), private_terms=self._private_terms())
         outcome = layer.ask(
             "zhancat",
             state=state,
@@ -368,6 +376,9 @@ class DispatchAPI:
         evaluation_case_id: str | None = None,
         preselected_tools: list[str] | None = None,
     ) -> DispatchEnvelope:
+        # 命主档案先并进来（只为过 DispatchInput 校验；认不出的档案名在这里就拒）。交给各技法前摘回去：run_tool 按那个技法重新并
+        # （性别只进读性别的技法）、在技法卡记出处。
+        payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
         try:
             request = _validated(DispatchInput, payload)
         except ValidationError as exc:
@@ -448,14 +459,21 @@ class DispatchAPI:
                 except Exception as exc:  # noqa: BLE001 - 存档是旁路：开不了 run 也要把技法算完
                     dispatch_warnings.append(_memory_save_failed(exc))
 
-            def birth_payload() -> dict[str, Any]:
+            def birth_payload() -> tuple[dict[str, Any], birth_profiles.ProfileUse | None]:
                 if request.birth is not None:
-                    return request.birth.model_dump(exclude_none=True)
+                    return request.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "birth")
                 if request.subject and request.subject.birth is not None:
-                    return request.subject.birth.model_dump(exclude_none=True)
-                return {}
+                    return request.subject.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "subject.birth")
+                return {}, None
 
-            base_birth = birth_payload()
+            expanded_birth, birth_use = birth_payload()
+            # 交给技法的是「显式字段 + 档案名」：档案字段由 run_tool 按选中的技法重新并。按出生信息自己拼载荷的分支（节气盘）读展开后的。
+            base_birth = birth_profiles.restore_refs(expanded_birth, birth_use)
+
+            def party(name: str) -> dict[str, Any]:
+                model = getattr(request.subject, name, None) if request.subject else None
+                dumped = model.model_dump(exclude_none=True) if model is not None else {}
+                return birth_profiles.restore_refs(dumped, birth_profiles.use_for(profile_uses, f"subject.{name}"))
             confirmation = {
                 key: value
                 for key, value in {
@@ -472,8 +490,8 @@ class DispatchAPI:
                 _progress_tick(tool_index - 1, total_tools, f"调度：{tool_name}（{tool_index}/{total_tools}）")
                 if tool_name == "relative":
                     payload_for_tool = {
-                        "inner": request.subject.inner.model_dump(exclude_none=True) if request.subject and request.subject.inner else {},
-                        "outer": request.subject.outer.model_dump(exclude_none=True) if request.subject and request.subject.outer else {},
+                        "inner": party("inner"),
+                        "outer": party("outer"),
                         "hsys": request.preferences.get("hsys", 1),  # 缺省随 RelativeInput（星阙 DefaultHouseSystem 1）
                         "zodiacal": request.preferences.get("zodiacal", 0),
                         "relative": request.preferences.get("relative", 0),
@@ -487,12 +505,12 @@ class DispatchAPI:
                     payload_for_tool = {"name": gua_names}
                 elif tool_name == "jieqi_year":
                     year = request.subject.year if request.subject and request.subject.year is not None else None
-                    if year is None and base_birth.get("date"):
+                    if year is None and expanded_birth.get("date"):
                         # 串首带符号年（dateStrSafe.leadingYearOf）：旧 [:4] 把公元前 '-0500-03-21' 切成 '-050'、五位年切成前四位。
-                        lead = _leading_year_of(base_birth["date"])
-                        year = str(lead) if lead is not None else str(base_birth["date"])[:4]
-                    jieqi_lat = base_birth.get("lat", request.context.get("lat"))
-                    jieqi_lon = base_birth.get("lon", request.context.get("lon"))
+                        lead = _leading_year_of(expanded_birth["date"])
+                        year = str(lead) if lead is not None else str(expanded_birth["date"])[:4]
+                    jieqi_lat = expanded_birth.get("lat", request.context.get("lat"))
+                    jieqi_lon = expanded_birth.get("lon", request.context.get("lon"))
                     if not jieqi_lat or not jieqi_lon:
                         # 兜底赤道/本初子午线坐标会改变节气盘宫位——显式告知而非静默。
                         dispatch_warnings.append(
@@ -500,17 +518,21 @@ class DispatchAPI:
                         )
                     payload_for_tool = {
                         "year": year,
-                        "zone": base_birth.get("zone", request.context.get("zone", "8")),
+                        "zone": expanded_birth.get("zone", request.context.get("zone", "8")),
                         "lat": jieqi_lat or "0n00",
                         "lon": jieqi_lon or "0e00",
                         "time": request.context.get("time"),
                     }
+                elif birth_use is not None and birth_profiles.owns_profile_key(getattr(TOOL_DEFINITIONS.get(tool_name), "input_model", None)):
+                    # 自己声明了 `profile` 的技法（天文地占的传本流派）：档案名在那里不是档案名，直接给展开后的出生信息。
+                    payload_for_tool = {k: v for k, v in expanded_birth.items() if k != birth_profiles.PROFILE_KEY}
                 else:
                     payload_for_tool = dict(base_birth)
 
                 payload_for_tool.update(confirmation)
-                # 决策层 S2（可选，缺省关）：只把原话里**明说**的性别变成「已提供」（词表 + Jev 双钥）。
-                if self.decision_layer is not None:
+                # 决策层 S2（可选，缺省关）：只把原话里**明说**的性别变成「已提供」（词表 + Jev 双钥）。档案里存了性别就不问：
+                # 那是用户存档时给的（显式），也省一次出本机的调用。
+                if self.decision_layer is not None and not (birth_use is not None and "gender" in birth_use.stored):
                     with decision_records() as extract_records:
                         self._decide_gender(request, tool_name, payload_for_tool, extraction_shared)
                     decision_records_out.extend(extract_records)

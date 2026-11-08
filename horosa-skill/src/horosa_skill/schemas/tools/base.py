@@ -34,6 +34,10 @@ class FlexibleModel(BaseModel):
     # 不进 input_normalized、不进引擎请求、不进存档的 subject；只决定 data.knowledge_context 带哪些条目。
     # 声明在这里是为了 MCP 顶层按名可传（FastMCP 丢未声明键），不进广告层（预算），用法见 SKILL.md 与 server_profile。
     knowledge: list[str] | str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    # 命主档案名 / 别名（horosa_skill/profiles.py）：run_tool 在校验**之前**把档案里存的出生字段并进载荷（显式字段逐键优先），
+    # 本键不进 input_normalized / 引擎请求。与 knowledge 同理：声明只为 MCP 顶层按名可传，不进广告层（零字节），用法见 SKILL.md。
+    # 自己声明了 `profile` 的技法模型（天文地占的传本流派）照旧按它自己的意思（profiles.owns_profile_key）。
+    profile: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
 def _unadvertised() -> Any:

@@ -1,4 +1,5 @@
-"""一档（meta）状态的本地脱敏：日期 / 时刻 / 坐标 / 地名后缀 / 号码 → 占位符，再按长度阶梯截断。
+"""一档（meta）状态的本地脱敏：本机专有词（命主档案名 / 别名 / 地点标签）/ 日期 / 时刻 / 坐标 / 地名后缀 / 号码 → 占位符，
+再按长度阶梯截断。
 
 路由、澄清抽取、门类分类只需要「说了什么」不需要「几点几分在哪」——占位符保留了「有没有给出生时刻」
 这类存在性信息，原值留在本机。已知残余风险：不带 省/市/县/区 后缀的地名、纯数字年龄等不在模式里；
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 MAX_STATE_CHARS = 1200
@@ -36,7 +38,10 @@ _PLACEHOLDER = {
     "date": "<日期>",
     "time": "<时刻>",
     "place": "<地点>",
+    "profile": "<档案>",
 }
+# 本模块自己产的占位符（再跑一次脱敏时原样跳过，保持幂等）。只认这几个：用户自己写的「<妈妈>」照样脱敏。
+_PLACEHOLDER_RE = re.compile("|".join(re.escape(token) for token in _PLACEHOLDER.values()))
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -51,12 +56,34 @@ class Redaction:
         return {"counts": dict(self.counts), "truncated": self.truncated, "original_chars": self.original_chars}
 
 
-def redact_text(text: str, *, max_chars: int = MAX_STATE_CHARS) -> Redaction:
-    """脱敏 + 截断；幂等（对已脱敏文本再跑一次不变）。"""
+def _redact_terms(text: str, terms: Iterable[str]) -> tuple[str, int]:
+    """字面词 → <档案>（长词优先、不分大小写），已有占位符原样跳过。"""
+    words = sorted({unicodedata.normalize("NFC", str(t)).strip() for t in terms if str(t or "").strip()}, key=lambda t: (-len(t), t))
+    if not words:
+        return text, 0
+    pattern = re.compile("|".join(re.escape(word) for word in words), re.IGNORECASE)
+    pieces: list[str] = []
+    hits = 0
+    last = 0
+    for match in [*_PLACEHOLDER_RE.finditer(text), None]:
+        end = match.start() if match is not None else len(text)
+        segment, n = pattern.subn(_PLACEHOLDER["profile"], text[last:end])
+        hits += n
+        pieces.append(segment)
+        if match is not None:
+            pieces.append(match.group(0))
+            last = match.end()
+    return "".join(pieces), hits
+
+
+def redact_text(text: str, *, max_chars: int = MAX_STATE_CHARS, private_terms: Iterable[str] = ()) -> Redaction:
+    """脱敏 + 截断；幂等（对已脱敏文本再跑一次不变）。`private_terms`：本机专有词（命主档案名 / 别名 / 地点标签），先于通用规则替换。"""
     raw = unicodedata.normalize("NFC", str(text or ""))
     raw = _CONTROL.sub("", raw)
     counts: dict[str, int] = {}
-    out = raw
+    out, hits = _redact_terms(raw, private_terms)
+    if hits:
+        counts["profile"] = hits
     for name, pattern in _PATTERNS:
         out, hits = pattern.subn(_PLACEHOLDER[name], out)
         if hits:
@@ -74,9 +101,10 @@ def build_meta_state(
     *,
     technique_names: list[str] | None = None,
     known_setting_keys: list[str] | None = None,
+    private_terms: Iterable[str] = (),
 ) -> tuple[dict[str, object], Redaction]:
     """一档状态：脱敏问题文本 + 技法名 + 已知设置键名（只有键名，没有值）。"""
-    redaction = redact_text(query)
+    redaction = redact_text(query, private_terms=private_terms)
     state: dict[str, object] = {"user_request": redaction.text}
     if technique_names:
         state["technique_names"] = list(technique_names)

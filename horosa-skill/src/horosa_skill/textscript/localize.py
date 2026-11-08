@@ -39,7 +39,8 @@ DATA_TEXT_TOOLS = frozenset({"knowledge_read"})
 # 给 AI 的协议 / 注册表 / 回显用户贴来的文本：整份不转。这是唯一一张表（v0.47.2-dev）：MCP 工具名 = `horosa_<操作>`
 # （mcp_runner.UNLOCALIZED_TOOLS）、CLI 命令函数同名（cli.UNLOCALIZED_COMMANDS）、信封的 `tool` 字段也是它
 # ——精简面 `horosa_tool_run(tool_name="export_parse")` 走的是同一个出口，这里按信封再拦一次。
-PROTOCOL_OPERATIONS = frozenset({"agent_guidance", "export_parse", "export_registry", "knowledge_registry", "report_template"})
+# 命主档案（`profile`）属「回显用户给的数据」：档案名 / 别名 / 备注是用户自己写的字，AI 会原样送回（转成繁体就对不上了）。
+PROTOCOL_OPERATIONS = frozenset({"agent_guidance", "export_parse", "export_registry", "knowledge_registry", "report_template", "profile"})
 
 
 # 古籍转换档（上游 v3.13.1 toHantClassic / CLASSIC_SCOPE_CLASS）：玄史的「原文」区段里「范 / 里」缺省保留原字

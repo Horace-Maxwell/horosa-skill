@@ -188,6 +188,13 @@ async def facades(report: Report, session: Any) -> None:
         rendered = await call("horosa_report_render", {"run_id": run_id, "format": "docx", "ai_report": {"title": "审计", "sections": [{"title": "结论", "content": "正文。"}]}})
         report.check(area, "report_render docx", rendered.get("ok") is not False and bool(rendered.get("artifact_path")), error_code(rendered))
         report.check(area, "technique_report", (await call("horosa_technique_report", {"run_id": run_id})).get("ok") is not False)
+    # 命主档案：存 → 技法只带档案名起盘（依据卡记出处）→ 删（临时数据目录，见 child_env）。
+    saved = await call("horosa_profile", {"action": "save", "name": "审计档案", "data": BIRTH})
+    report.check(area, "profile save", saved.get("ok") is True, error_code(saved))
+    via_profile = await call("horosa_cn_bazi_birth", {"profile": "审计档案", **CONFIRM})
+    profile_card = ((via_profile.get("data") or {}).get("technique_card") or {}).get("profiles")
+    report.check(area, "technique with only a profile", via_profile.get("ok") is True and bool(profile_card), error_code(via_profile))
+    report.check(area, "profile delete", (await call("horosa_profile", {"action": "delete", "name": "审计档案"})).get("ok") is True)
     from_tool = await call("horosa_report_from_tool", {"tool_name": "horosa_cn_nongli_time", "payload": {**BIRTH, **CONFIRM}, "format": "json"})
     report.check(area, "report_from_tool (MCP-style name)", from_tool.get("ok") is not False, error_code(from_tool))
     for uri in ("horosa://catalog/techniques", "horosa://catalog/export-registry", "horosa://runtime/status"):

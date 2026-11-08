@@ -17,12 +17,14 @@
 """
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from horosa_skill.agent_guidance import PREDICTIVE_INPUT_CONTRACTS
 from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS, SIDEREAL_AYANAMSA_LABELS
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.engine.synonyms import aka_line
+from horosa_skill.profiles import PROFILE_KEY, owns_profile_key
 from horosa_skill.schemas.tools import BirthInput
 from horosa_skill.schemas.tools.base import advertise_hidden_fields
 
@@ -130,6 +132,22 @@ def _request_property(hidden: list[str], tool_name: str) -> dict[str, Any]:
     return {"type": ["object", "string"], "description": text}
 
 
+def _own_fields(model: type[Any], unadvertised: set[str]) -> list[str]:
+    """BirthInput 子类自有的字段（广告层要列的那些），按子类里的声明顺序。
+
+    判据是「不在 BirthInput 里」；唯一例外是 `profile`：基类 FlexibleModel 声明它当命主档案名（隐藏、零字节），天文地占又把它
+    声明成传本流派旋钮——后者是地占自有字段，照旧广告。pydantic 把重声明的字段排在继承位置，这里按子类声明的位置放回去，
+    地占的广告层逐字节不变（tests/test_profiles.py）。"""
+    owned = [f for f in model.model_fields if f not in BirthInput.model_fields]
+    if owns_profile_key(model):
+        order: list[str] = []
+        for cls in reversed(model.__mro__):
+            if isinstance(cls, type) and issubclass(cls, BirthInput) and cls is not BirthInput:
+                order += [name for name in inspect.get_annotations(cls) if name not in order]
+        owned = [name for name in order if name in model.model_fields and (name not in BirthInput.model_fields or name == PROFILE_KEY)]
+    return [f for f in owned if f not in unadvertised]
+
+
 def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> dict[str, Any]:
     """技法工具的广告层 inputSchema（校验层不动）。"""
     definition = TOOL_DEFINITIONS[tool_name]
@@ -147,7 +165,7 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
     if issubclass(model, BirthInput):
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])
-        own = [f for f in model.model_fields if f not in BirthInput.model_fields and f not in unadvertised]
+        own = _own_fields(model, unadvertised)
         # 域核心也许按工具声明「不广告」（推运图族四法只按回归黄道算 → zodiacal / siderealAyanamsa 只改盘头文字）；
         # 推运目标字段与闸门三键永远广告。
         core = tuple(key for key in core if key not in unadvertised)
@@ -156,9 +174,9 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
                 keep.append(key)
     else:
         keep = [f for f in model.model_fields if f in props and f not in unadvertised]
-    # `knowledge`（自备知识库）是全技法通用的附加参数，不是本技法的旋钮：不计数，否则 44 个原本没有隐藏旋钮的技法
-    # 平白多一句「另 1 个高级旋钮」（全量面 +2.9 KB）。它在 SKILL.md、dispatch / hecan / tool_run 的 schema 与 agent_guidance 的 server_profile 里说明。
-    hidden = sorted(set(props) - set(keep) - {"request", "knowledge"})
+    # `knowledge`（自备知识库）与 `profile`（命主档案名）是全技法通用的附加参数，不是本技法的旋钮：不计数，否则 44 个原本没有
+    # 隐藏旋钮的技法平白多一句「另 1 个高级旋钮」（全量面 +2.9 KB）。它们在 SKILL.md、tool_run 的 schema 与 server_profile 里说明。
+    hidden = sorted(set(props) - set(keep) - {"request", "knowledge", PROFILE_KEY})
     out: dict[str, Any] = {}
     for key in keep:
         if key in CORE_DOC:
