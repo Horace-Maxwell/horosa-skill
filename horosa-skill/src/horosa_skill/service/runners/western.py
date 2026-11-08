@@ -11,6 +11,7 @@ from horosa_skill.astro_rulers import (
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
 from horosa_skill.engine.astroextra_snapshots import fmt_num
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
+from horosa_skill.schemas.tools.astro import INDIA_RECTIFY_DEAD_KEYS
 from horosa_skill.service._common import (
     _is_astro_chart_payload,
     _render_snapshot_text,
@@ -23,7 +24,7 @@ from horosa_skill.service.text.astro_core import (
     _round3,
     _sign_degree,
 )
-from horosa_skill.service.text.chart_family import _build_astro_snapshot_text
+from horosa_skill.service.text.chart_family import _build_astro_snapshot_text, _india_comma_lists
 from horosa_skill.service.text.predictive import _build_india_rectify_snapshot_text
 from horosa_skill.service.text.western import (
     _angle_text,
@@ -39,10 +40,14 @@ class WesternRunners:
     # ── 印度出生时间校正（批 I-2，/india/rectify）───────────────────────────────
 
     def _run_india_rectify_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        remote = {**payload}
+        # 问事 / 年盘 / 三旗 11 键对 /india/rectify 是死键（schemas/tools/astro.INDIA_RECTIFY_DEAD_KEYS 注释里逐层引了上游行号）：
+        # 照收、不下发；给了就在 warnings 说一声（它们曾在 tools/list 上广告过）。
+        dead_given = [key for key in INDIA_RECTIFY_DEAD_KEYS if payload.get(key) not in (None, "")]
+        remote = {k: v for k, v in payload.items() if k not in INDIA_RECTIFY_DEAD_KEYS}
         for key in ("rectifyWindowMinutes", "rectifyStepSeconds", "rectifyTopK", "rectifyRpSource", "rectifyEvents"):
             if remote.get(key) is None:
                 remote.pop(key, None)
+        remote = _india_comma_lists(remote)  # rectifyCustomRp：后端 str(x).split(',')，数组得先并成逗号串
         response = self._call_remote("/india/rectify", remote)
         if not isinstance(response, dict) or response.get("available") is not True:
             raise ToolTransportError(
@@ -51,11 +56,20 @@ class WesternRunners:
                 details={"endpoint": "/india/rectify", "response": response if isinstance(response, dict) else {"shape": type(response).__name__}},
             )
         snapshot_text = _build_india_rectify_snapshot_text(payload, response)
-        return {
+        result: dict[str, Any] = {
             "rectify": response,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="india_rectify", snapshot_text=snapshot_text),
         }
+        if dead_given:
+            names = "、".join(dead_given)
+            result["_warnings"] = [bilingual(
+                f"出生时间校正不读这些键，已忽略、未转发后端：{names}（上游 /india/rectify 只认校时参数与 indiaHsys / indiaAyanamsa）；"
+                "问事、年盘、三旗请用 horosa_astro_india_chart。",
+                f"Birth-time rectification ignores {', '.join(dead_given)} (upstream /india/rectify reads only the rectify* knobs "
+                "and indiaHsys / indiaAyanamsa); they were not sent. Use horosa_astro_india_chart for praśna / annual / tripatāki.",
+            )]
+        return result
 
     # ── 行星周期（批 I-3，/astroextra/planetcycles）─────────────────────────────
 

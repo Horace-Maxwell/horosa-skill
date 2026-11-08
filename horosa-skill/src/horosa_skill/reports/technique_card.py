@@ -18,6 +18,7 @@ import json
 from datetime import datetime, timezone
 from functools import lru_cache
 from horosa_skill.contracts_locator import contract_path
+from horosa_skill.schemas.tools.astro import INDIA_RECTIFY_DEAD_KEYS
 from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from typing import Any
 
@@ -68,7 +69,11 @@ _DAY_BOUNDARY_DEFAULT_TOOLS = frozenset({
 })
 # 字段在这些工具上是死键（不参与计算）→ 卡片不回显。宿占：上游 techniqueMountSettings.js:1722 SUZHAN_DEAD_CLASSICAL_KEYS
 # 整表（41 键，含 sunriseMode；宿占挂载齿轮隐去、recordPayloadKeys 不带，:1774）；runners/guolao._run_suzhan_tool 同样不下发。
-_FIELD_DEAD_FOR_TOOLS: dict[str, frozenset[str]] = {key: frozenset({"suzhan"}) for key in SUZHAN_DEAD_CLASSICAL_KEYS}
+# 印度校时：问事 / 年盘 / 三旗 11 键 /india/rectify 不读（schemas/tools/astro.INDIA_RECTIFY_DEAD_KEYS 注释引了上游行号）；runners/western 同样不下发。
+_FIELD_DEAD_FOR_TOOLS: dict[str, frozenset[str]] = {
+    key: frozenset(tool for tool, dead in (("suzhan", SUZHAN_DEAD_CLASSICAL_KEYS), ("india_rectify", INDIA_RECTIFY_DEAD_KEYS)) if key in dead)
+    for key in (*SUZHAN_DEAD_CLASSICAL_KEYS, *INDIA_RECTIFY_DEAD_KEYS)
+}
 # 闸门状态：调用方声称「设置已与用户确认」还是「接受默认」，是报告里最该留痕的一项。
 _GATE_FIELDS: tuple[tuple[str, str], ...] = (
     ("agent_confirmed_settings", "已与用户确认设置"),

@@ -17,9 +17,8 @@ from typing import Any
 UNTYPED_FIELD_TYPES: dict[str, dict[str, Any]] = {
     # 择日 / 天星条件树：vendored compile* 只收 `typeof tree === 'object'`（组节点），JSON 串会被当成缺条件。
     "conditions": {"type": "object"},
-    # 后端把它们当 lat/lon 原样起盘（build_relocation / _compute_tajaka），样例与上游页面都发 "51n30" 形的串。
+    # 后端把它们当 lat/lon 原样起盘（build_relocation），样例与上游页面都发 "51n30" 形的串。
     "relocLat": {"type": "string"}, "relocLon": {"type": "string"},
-    "varshaLat": {"type": "string"}, "varshaLon": {"type": "string"},
     # 值域闸 `_require_option(value in 字符串键表)`：只收字符串键。
     "pdMethod": {"type": "string"}, "pdTimeKey": {"type": "string"},
     # 档位键：择日流派 / 卜卦考量硬度 / 阿拉伯点集 / 四化流派，引擎都按字符串比对。
@@ -35,12 +34,5 @@ UNTYPED_FIELD_TYPES: dict[str, dict[str, Any]] = {
     "karakaScheme": {"type": "string"}, "yuddhaCriterion": {"type": "string"},
     # _normalize_india_extra_vargas 收列表或 "9,7" 串：广告整数列表。
     "indiaExtraVargas": {"type": "array", "items": {"type": "integer"}},
-    # 后端 `if data.get('tripataki')` 真值判。
-    "tripataki": {"type": "boolean"},
-    # 问事族：prashnaTime 走 str()；prashnaSchools 是 str(…).split(',')——**列表会被 str() 成 "['kp']" 而失效**，只能广告逗号串。
-    "prashnaTime": {"type": "string"}, "prashnaSchools": {"type": "string"},
-    "prashnaMatter": {"type": "string"}, "prashnaCuspMode": {"type": "string"},
-    "prashnaNumber": {"type": "integer"}, "prashnaPrimaryHouse": {"type": "integer"},
-    # Tājika 年盘：int(tajakaYear)；annualChartType 'varsha' / 'tithi'。
-    "tajakaYear": {"type": "integer"}, "annualChartType": {"type": "string"},
+    # （india_rectify 的问事 / 年盘 / 三旗 11 键 v0.48.0 起不再广告——/india/rectify 不读，见 astro.INDIA_RECTIFY_DEAD_KEYS。）
 }

@@ -662,6 +662,22 @@ def _india_chart_zone_now(zone: Any) -> datetime:
     return _clock.now(timezone(sign * offset))
 
 
+# 印度后端（webindiasrv）有两处按 `str(x).split(',')` 读的键：问事流派 prashnaSchools（_compute_prashna :946）与
+# 校时自定 RP rectifyCustomRp（rectify_core :193）。数组经 str() 成了 "['kp', 'tajika']"，切出来一个流派都对不上，
+# 整段静默不算（不报错）。上游页面自己也是数组状态、下发前 `arr.join(',')`（IndiaChartMain.js:3441）。
+# 所以在 skill 边界并成逗号串：数组 / 元组 → "a,b"（去空白、丢空项），其余原样。
+INDIA_COMMA_LIST_KEYS: tuple[str, ...] = ("prashnaSchools", "rectifyCustomRp")
+
+
+def _india_comma_lists(remote: dict[str, Any]) -> dict[str, Any]:
+    out = dict(remote)
+    for key in INDIA_COMMA_LIST_KEYS:
+        value = out.get(key)
+        if isinstance(value, (list, tuple)):
+            out[key] = ",".join(text for text in (f"{item}".strip() for item in value) if text)
+    return out
+
+
 def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """india_chart 的后端请求体：skill 侧开关 → 后端键（上游 IndiaChart.fieldsToParams 同一翻译）。
 
@@ -703,4 +719,4 @@ def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
             remote["transitDate"] = today.strftime("%Y/%m/%d")
         if remote.get("tajakaYear") in (None, ""):
             remote["tajakaYear"] = today.year
-    return remote
+    return _india_comma_lists(remote)

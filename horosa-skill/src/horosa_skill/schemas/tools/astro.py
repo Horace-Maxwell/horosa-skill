@@ -63,7 +63,9 @@ class IndiaChartInput(BirthInput):
     prashnaTime: str | None = Field(default=None, description="问事起卦时刻 YYYY/MM/DD HH:mm:ss（给了才产 [问事 Praśna]）。")
     prashnaNumber: int | None = Field(default=None, description="KP 问时数 1–249（缺省 1）。")
     prashnaMatter: str | None = Field(default=None, description="所问事项（career/marriage/…）。")
-    prashnaSchools: Any | None = Field(default=None, description="问事流派（缺省 ['kp']）。")
+    # 后端 webindiasrv._compute_prashna 读 `str(prashnaSchools).split(',')`：数组会被 str() 成 "['kp']" 而整段 KP 静默不算。
+    # 上游页面同样是数组状态、下发前 `arr.join(',')`（IndiaChartMain.js:3441）→ runner 在下发前把数组并成逗号串。
+    prashnaSchools: Any | None = Field(default=None, description="问事流派，逗号分隔：kp / parashari / tajika（缺省 kp）；数组照收、并成逗号串下发。")
     prashnaCuspMode: str | None = Field(default=None, description="问事宫始定法（缺省 asc_driven_placidus）。")
     prashnaPrimaryHouse: int | None = Field(default=None, description="问事主宫 1–12（缺省按事项）。")
 
@@ -99,17 +101,33 @@ class IndiaRectifyInput(BirthInput):
     )
     indiaHsys: Any | None = Field(default=None, description="印占分宫制 0–24（缺省 0=整宫）")
     indiaAyanamsa: Any | None = Field(default=None, description="印占岁差键（缺省 lahiri，47 套同西洋 siderealAyanamsa）")
-    tripataki: Any | None = Field(default=None, description="Tripatāki 三旗盘（opt-in，宿距三旗）。")
-    prashnaTime: Any | None = Field(default=None, description="问事(Praśna)盘时刻；不传则用主盘时刻。")
-    prashnaSchools: Any | None = Field(default=None, description="问事三派选择。")
-    prashnaMatter: Any | None = Field(default=None, description="问事事项/所问之题。")
-    prashnaNumber: Any | None = Field(default=None, description="问事数（ārūḍha 起数法用）。")
-    prashnaCuspMode: Any | None = Field(default=None, description="问事盘宫头取法。")
-    prashnaPrimaryHouse: Any | None = Field(default=None, description="问事主事宫指定。")
-    tajakaYear: Any | None = Field(default=None, description="Tājika 年盘的目标年份。")
-    annualChartType: Any | None = Field(default=None, description="年盘类型（阴历年盘 / 太阳返照年盘等）。")
-    varshaLat: Any | None = Field(default=None, description="年盘地点纬度（不传沿用本命地）。")
-    varshaLon: Any | None = Field(default=None, description="年盘地点经度（不传沿用本命地）。")
+    # ↓ INDIA_RECTIFY_DEAD_KEYS：/india/rectify 不读（见常量注释）。照收、不广告、不下发、技法卡不回显，给了就在 warnings 说一声。
+    tripataki: Any | None = Field(default=None, description="（校时不读）Tripatāki 三旗盘：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    prashnaTime: Any | None = Field(default=None, description="（校时不读）问事盘时刻：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    prashnaSchools: Any | None = Field(default=None, description="（校时不读）问事流派：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    prashnaMatter: Any | None = Field(default=None, description="（校时不读）问事事项：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    prashnaNumber: Any | None = Field(default=None, description="（校时不读）KP 问时数：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    prashnaCuspMode: Any | None = Field(default=None, description="（校时不读）问事宫始定法：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    prashnaPrimaryHouse: Any | None = Field(default=None, description="（校时不读）问事主宫：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    tajakaYear: Any | None = Field(default=None, description="（校时不读）Tājika 年盘年份：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    annualChartType: Any | None = Field(default=None, description="（校时不读）年盘口径：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    varshaLat: Any | None = Field(default=None, description="（校时不读）年盘异地纬度：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+    varshaLon: Any | None = Field(default=None, description="（校时不读）年盘异地经度：请用 india_chart。", json_schema_extra={"x-horosa-hidden": True})
+
+
+# india_rectify 的死键（上游 v3.13.2 @10fb75de 逐层核过，tests/test_india_rectify_dead_keys.py 对上游源看守）：
+# 上游校时器把整套印度盘参数随校时参数一起发（IndiaChartMain.js:3721-3727 `fieldsToParams(…)` + rectify*），
+# Java IndiaChartController.rectify（:47-75）走与 /chart 共用的 getParams（:77-244）照转这些键，
+# 但 Python webindiasrv.rectify（:457-467）→ rectify_core（:85-422）只读 indiaHsys / indiaAyanamsa（:109-110）、
+# rectify*（:113-119、:193）、zone / date / ad / time 与 IndiaChartKernel(d)（:122，内核不读这些键）。
+# 这 11 键的读取方全在 /chart 那条路上：_compute_tajaka（:1290，:585 调）/ _compute_tripataki（:819，:594 调）/
+# _compute_prashna（:917，:598 调）。→ 照收（老调用方传了不报错）、不广告（字段级 x-horosa-hidden）、
+# 不下发（runners/western._run_india_rectify_tool）、技法卡不回显（reports/technique_card._FIELD_DEAD_FOR_TOOLS），
+# 与宿占死键同一套；不同的是给了会在 envelope.warnings 说一声（它们曾在 tools/list 上广告过，调用方可能以为有效）。
+INDIA_RECTIFY_DEAD_KEYS: tuple[str, ...] = (
+    "tripataki", "prashnaTime", "prashnaSchools", "prashnaMatter", "prashnaNumber", "prashnaCuspMode",
+    "prashnaPrimaryHouse", "tajakaYear", "annualChartType", "varshaLat", "varshaLon",
+)
 
 
 class RelativePartyInput(FlexibleModel):
