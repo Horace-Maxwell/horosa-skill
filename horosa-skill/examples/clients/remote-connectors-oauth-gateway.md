@@ -61,7 +61,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer 错的" http
 curl -sS -o /dev/null -w "%{http_code}\n" -H "Host: evil.example" -H "Authorization: Bearer $HOROSA_MCP_TOKEN" http://127.0.0.1:8765/mcp  # 421（Host 不在白名单）
 ```
 
-连接器里看到 125 个 `horosa_*` 工具（114 技法 + 11 门面；精简面则是 12 个）即接通；`horosa_agent_guidance` 是第一条该调的。
+连接器里看到 127 个 `horosa_*` 工具（114 技法 + 13 门面；精简面则是 14 个）即接通；`horosa_agent_guidance` 是第一条该调的。
 
 ---
 

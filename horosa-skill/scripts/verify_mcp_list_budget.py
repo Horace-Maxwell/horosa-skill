@@ -40,7 +40,7 @@ sys.path.insert(0, str(PKG_ROOT / "src"))
 HARD_CAPS = {"full_bytes": 256 * 1024, "compact_bytes": 30 * 1024, "instructions_bytes": 2048}
 # Per-tool input schema (v0.40.0): Codex 0.158.0 (2026-09-28) added `mcp_servers.<name>.tool_input_schema_max_bytes`,
 # default 5000 B; a larger schema is "compacted" — parameter descriptions are stripped, silently. Every tool on BOTH
-# surfaces must stay under it (largest today: horosa_astro_india_rectify 3843 B). This is a hard cap, not a ratchet.
+# surfaces must stay under it (largest today: horosa_astro_indiazeri 3274 B, after the v0.48.0 slimming). This is a hard cap, not a ratchet.
 TOOL_INPUT_SCHEMA_CAP_BYTES = 5000
 TOLERANCE = 0.02
 

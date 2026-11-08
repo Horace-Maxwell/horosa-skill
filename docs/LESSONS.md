@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.48.0-dev (2026-11-08) | 四路并行功能批（地名检索 / 命主档案 / 盘图与日历 / 工具面瘦身）：坐标串分钟四舍五入与上游向下取整差 1′、本机 zoneinfo 缺上游 2026 规则覆盖、`Any | None` 广告成 `type:"null"`、错误码表重复键静默覆盖、MCP 预校验把缺省值写成显式值盖掉档案、全局替换 time.sleep 让测试偶发红、合并时两个并列块的相同结尾被当成共同后缀 | 期望值一律取自上游 / 引擎；与上游逐值对拍；断言只写被测的那块；合并后逐块复核；门禁跑着时不动工作区 |
 | v0.47.4-dev (2026-11-07) | windows-smoke 偶发红：`start` 刚报两个服务都可达，紧接着 doctor 探到 chart 不通，`setup` 判 ok:false，同轮真实排盘冒烟全过；上一轮只重跑未定论 | doctor 只在「一边通一边不通」时短暂复探（3 次 × 0.5 秒），全通 / 全不通一次定论；三条负向对照。推上去后测试在 Linux / Windows CI 红：断言了带平台布局的整体 `ok`，改为只断言 `services:*` |
 | v0.47.3-dev (2026-11-06) | 公开 wheel 冒烟：`setup --vectors` 在默认 Python 3.11 的机器上解析失败。uv 按 requires-python 换解释器的逻辑认不出带 extra 的包；之前的端到端是在仓库目录里跑的，项目配置替它选中了 3.12，因为错误的原因通过 | uvx 启动器带 `--python 3.12`；端到端要在项目目录之外、干净环境里跑 |
 | v0.47.2-dev (2026-11-06) | 拆报告模块时踩的两处：方法改函数后局部变量遮住同名函数（`payload = payload(...)`，`UnboundLocalError`）；验证比对工具时两个负向对照看着没红，其实是对照本身没改动输出（8.6 → 8.7 pt 在 OOXML 里取整相同，`bool(ai_report)` 恒真） | 函数用动词命名；对照先确认真的改了输出 |
@@ -189,6 +190,47 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.48.0-dev / 2026-11-08 — 四路并行功能批：地名检索 / 命主档案 / 盘图与日历 / 工具面瘦身
+
+四个 agent 各在一个 worktree 里做一个功能，协调者合并。功能本身见 CHANGELOG；这里只记踩到的坑。
+
+**坐标与时区（地名检索）**
+- **坐标串差 1′**：skill 的 `_format_compact_coordinate` 把分四舍五入，上游 `AstroHelper.convertLatToStr`（`splitDegree`）是秒四舍五入、分向下取整、
+  逐级进位。约一半的十进制输入差 1′（31.2304 → skill `31n14`，上游 `31n13`），后端按文字串起盘，所以盘也差。改成逐步移植（含 JS `Math.round`），
+  金样由上游源在 node 里跑出：城市库 100 154 个坐标、2 万随机值、进位边界全部逐值相同。唯一刻意偏离：NaN / Infinity / |x| ≥ 1e21 上游会写出假坐标，
+  skill 拒收（`tool.invalid_payload`）。
+- **上游自己有两套坐标串**：桌面选点 `GeoCoordSelector.applyGps` 用 GCJ-02 偏移后的点写 lat/lon 文本，AI 地名解析 `resolvePlaceOffline` 用 WGS84；
+  96 个常用城市里一半差 1′（广州 113e15 / 113e16）。skill 跟 AI 路径；只报上游，不在 skill 偏离。
+- **本机 zoneinfo 比上游晚**：上游 `timezone.js` 的 `TZ_RULE_OVERRIDES`（IANA 2026b/2026c：温哥华、埃德蒙顿永久夏令时，卡萨布兰卡永久 +00）
+  本机 tzdata 没有，未来日期差 1 小时。Python 侧加同一张覆盖表，逐条锚定到 vendored `timezone.js`（测试）。
+- **凭记忆写的期望值错了**：上海 1990-05-18 写成 +08:00，实为夏令时 +09:00。期望值一律取自上游源 / 引擎，不取自记忆。
+
+**MCP 面（瘦身 / 档案）**
+- **`Any | None` 被广告成 `type:"null"`**：pydantic 出 `anyOf:[{}, {"type":"null"}]`，`_own_property` 合并时只剩 `"null"`。42 个属性（10 个择日的
+  `conditions`、`relocLat/Lon`、印度一串……）在严格客户端眼里只能传 null。修：合并时丢掉 `"null"`，无类型字段查 `schemas/tools/advertised_types.py`
+  的表（按 runner 实际接受的形状定类型）。这张表必须放在 `schemas/tools/` 里——放到 `surfaces/` 时，`verify_schema_knob_wiring` 把表里出现的旋钮名
+  当成「有人消费」，债务数假性下降。
+- **MCP 预校验把缺省值写成显式值**：`_normalize_mcp_request` 的 `model_dump` 把紫微 `gender=true` 之类缺省值写进载荷，档案里存的女性被它盖掉。
+  带档案名的载荷改走 `_mcp_payload`，不在 MCP 层预校验，交给 run_tool 先并档案、再归一化校验。
+- **错误码表重复键**：`RECOVERY_TABLE` 里 `tool.invalid_payload` 写了两遍，后写的「参数没解析成对象」静默覆盖「按校验错误逐项改」，
+  所有字段校验错误的 hint 都指错方向。CI 不跑 ruff，F601 无人看。合成一条；新增 AST 守卫 `tests/test_no_duplicate_dict_keys.py`。
+- **印度校时的 11 个死键**：`india_rectify` 广告了 `/india/rectify` 后端根本不读的 tripataki / prashna×6 / tajakaYear / annualChartType / varshaLat/Lon
+  （上游页面照发、Java 照转、`rectify_core` 不读）。改为照收、不广告、不下发、给了就警告。`prashnaSchools` 传数组时后端 `str(x).split(',')` 得到
+  `"['kp']"`，KP 段静默跳过；改为在 skill 边界并成逗号串（上游页面同样 `join(',')`）。
+
+**存储 / 报告**
+- **新 SQLite 库的首批并发写者**：rollback-journal 模式下几个进程同时首写会死锁，SQLite 直接回 `database is locked`、不走 busy_timeout。
+  档案库加跨进程写锁，读者不改 journal 模式。竞态是概率性的（无锁约 5–9% 轮次出错），守卫跑 80 轮。
+- **ICS 金样被 `.gitattributes` 归一成 LF**：仓库 `* text=auto eol=lf`，CRLF 金样一提交就变 LF，逐字节比对每次 checkout 都红。加 `*.ics -text`。
+- **「重导出逐字节相同」因为错误的原因通过**：两次渲染落在同一秒，DTSTAMP 本来就相同。测试改为挪动 `created_at` 再比。
+
+**测试与合并**
+- **替换全局 `time.sleep` 的测试偶发红**：doctor 复探测试 `monkeypatch.setattr(manager_module.time, "sleep", …)` 替换的是全进程的 `time.sleep`，
+  别的线程（subprocess 轮询 0.001 s）的 sleep 也记进来。复探改走自己的接缝 `_reprobe_sleep`，测试只替换它。
+- **合并时并列块的相同结尾被当成共同后缀**：档案分支的 `ProfileInput` 与地名分支的 `PlaceSearchInput` 都以同样三行（隐藏闸门三键）结尾，
+  git 只留了一份给后一个类，`ProfileInput` 静默丢了这三行。两个分支各自往同一处追加结构相似的块时，合并后逐块与原分支比对。
+- **门禁跑着时在同一工作区合并**：冲突标记写进了正在被测试读的文件，那一轮结果作废。门禁跑着时不动它的工作区。
 
 ### v0.47.4-dev / 2026-11-07 — doctor 凭一次探测判「半边没起」：把瞬时抖动报成服务没起
 

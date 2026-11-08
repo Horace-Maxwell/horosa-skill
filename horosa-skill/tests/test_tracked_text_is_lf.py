@@ -73,10 +73,26 @@ def files_with_cr(paths: list[Path]) -> list[Path]:
     return [p for p in paths if p.suffix.lower() not in BINARY_SUFFIXES and p.is_file() and has_cr(p.read_bytes())]
 
 
+def explicitly_not_text(paths: list[Path]) -> set[Path]:
+    """Paths `.gitattributes` marks `-text` (attribute `text` = unset): git stores their bytes untouched, on purpose.
+
+    v0.48.0: RFC 5545 calendars must be CRLF, so the ICS goldens are `*.ics -text`; the guard follows `.gitattributes`
+    rather than growing a suffix list. A path only escapes when the attribute is explicitly unset — `text=auto`
+    (the repo default) and an unspecified attribute both stay checked."""
+    if not paths:
+        return set()
+    names = b"\0".join(p.relative_to(REPO_ROOT).as_posix().encode("utf-8") for p in paths) + b"\0"
+    out = subprocess.run(["git", "check-attr", "-z", "--stdin", "text"], cwd=REPO_ROOT, input=names,
+                         capture_output=True, check=True).stdout
+    fields = out.split(b"\0")
+    return {REPO_ROOT / fields[i].decode("utf-8") for i in range(0, len(fields) - 2, 3) if fields[i + 2] == b"unset"}
+
+
 def tracked_offenders() -> list[Path]:
     """Tracked files whose COMMITTED bytes carry a CR (index blobs, so a CRLF checkout on Windows is not an offender)."""
     candidates = [p for p in tracked_files() if p.suffix.lower() not in BINARY_SUFFIXES]
-    return [path for path, data in _index_blobs(candidates).items() if has_cr(data)]
+    exempt = explicitly_not_text(candidates)
+    return [path for path, data in _index_blobs([p for p in candidates if p not in exempt]).items() if has_cr(data)]
 
 
 def test_no_tracked_text_file_contains_a_carriage_return() -> None:
@@ -109,3 +125,13 @@ def test_index_blob_reader_returns_committed_bytes_and_skips_untracked() -> None
     assert set(blobs) == {REPO_ROOT / ".gitattributes"}
     data = blobs[REPO_ROOT / ".gitattributes"]
     assert b"eol=lf" in data and b"\r" not in data
+
+
+def test_only_explicit_minus_text_files_escape_the_guard() -> None:
+    """The ICS goldens are exempt because `.gitattributes` says `*.ics -text`, and nothing else is: a CRLF `.md` or
+    `.json` would still be caught. Negative control: drop the `*.ics -text` line and the main guard goes red."""
+    ics = sorted((REPO_ROOT / "horosa-skill" / "tests" / "fixtures" / "calendar_ics").glob("*.ics"))
+    assert ics, "ICS goldens moved — update this test"
+    assert explicitly_not_text(ics) == set(ics)
+    ordinary = [REPO_ROOT / "README.md", REPO_ROOT / "docs" / "LESSONS.md", REPO_ROOT / "horosa-skill" / "pyproject.toml"]
+    assert explicitly_not_text(ordinary) == set()

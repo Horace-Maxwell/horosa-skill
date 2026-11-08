@@ -408,6 +408,12 @@ elicit 必须在任何副作用之前（MRTR 的重试会重放整个工具函�
 runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 raw-node JSON import 继续用
 `with`（不用废弃的 `assert`）。
 
+**地名与命主档案（v0.48.0）**：载荷键 `place`（地名）与 `profile`（档案名 / 别名）都在 run_tool / dispatch / hecan 的**归一化与校验之前**处理，
+先并档案、再解析地名；MCP 层是 `_mcp_payload(_placed(payload, …), Model)`（地名在 MCP 预校验之前补上；带档案名的载荷不在 MCP 层预校验，
+否则模型缺省值会冒充显式值）。地名只认上游 `resolvePlaceOffline` 的 `confidence == "high"`，其余（歧义 / medium / 找不到 / 夏令时切换日）
+一律结构化拒绝（`place.*`，带候选与 `agent_recovery`），绝不替用户挑。显式 lat/lon/zone 永远优先；档案字段逐键让位于显式字段；
+档案只补它存了的，澄清闸照问没存的（铁律 2 不变）。档案名 / 别名 / 地名标签进决策层前脱敏成 `<档案>`。
+
 ### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
 
 **古籍档（v0.47.0 / v0.47.1）**：玄史「原文」区段走上游 toHantClassic（范 / 里缺省保留原字，只在整词表里作 範 / 裡）；span 必须覆盖**多行**原文
@@ -748,6 +754,10 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   否则镜像里 `uv pip install .` 直接失败（v0.38.0 B0 抓到 `scripts/runtime_templates/windows` 漏拷；守卫
   `tests/test_dockerfile_matches_wheel_includes.py`）。
 
+- **horosa-core-js 的 npm 依赖集 = `package.json`（v0.48.0 加 tz-lookup 6.1.25，钉上游 package-lock 的版本与 integrity）。**
+  `verify_builder_parity` 逐依赖要求两个 builder 都 `require_path`、三平台 `REQUIRED_ENTRIES` 都列出；带新依赖的 JS 工具在 `tools/index.js` 懒加载，
+  旧 runtime 缺依赖只坏这一个工具（`place.runtime_outdated`，带升级命令），其余 50 个照常加载。
+
 ## 7. 发布协议（release law）
 
 ### 7.1 版本、README 数字与构建锁步
@@ -1059,7 +1069,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 | OpenClaw smoke / `client openclaw-setup` 报 `client.command_timeout` | 看 `details`：`phase: npx_install` = npx 首次下载 mcporter 超时；`output_complete: true` = 结果已完整打印但进程没退出（进程树里有子进程拖住管道）；两者都不是 = 调用本身没回来 | `npm i -g mcporter`（或 `HOROSA_MCPORTER_BIN`）；`MCPORTER_DEBUG_HANG=1` 重跑看 mcporter 在等哪个句柄，清掉残留 `horosa-skill serve --transport stdio`；其余先 `doctor` |
 | 奇门 / 奇门择日 / 七政大限在**交节当日**与星阙不同 | v0.40.0 前 `src/shared/localNongliAdapter.js` 是近似公式（2026 立春差 6 小时），奇门本地路由 / 择日扫描 / 七政年界都吃它 | 已改为 verbatim vendor 上游 `utils/localNongliAdapter.js`（lunar-javascript 精确表 + 当地钟表折算）；selfcheck 值级金标守着 |
 | 新装的 Devin Desktop（原 Windsurf）里看不到 horosa | 2026-09-08 起 Cascade 被移除，Devin Local 只读 Devin CLI 的 `~/.config/devin/mcp_config.json`（Windows `%APPDATA%\devin\mcp_config.json`），旧 `~/.codeium/windsurf/mcp_config.json` 不再被读 | 0.40.0 起 `setup --client windsurf` 写 Devin 路径（已有旧文件者原位合并）；`client check --client windsurf` 报两处路径 |
-| Codex 里 horosa 工具的参数**没有说明**（模型乱填参数） | Codex ≥ 0.158 对每个工具的 inputSchema 有 5000 B 预算，超出即「压缩」剥掉 description | 今日最大 3843 B，`verify_mcp_list_budget` 硬顶 5000 B；若某天红了先瘦 schema，别加 `tool_input_schema_max_bytes`（老版本 Codex 对未知键整块拒收） |
+| Codex 里 horosa 工具的参数**没有说明**（模型乱填参数） | Codex ≥ 0.158 对每个工具的 inputSchema 有 5000 B 预算，超出即「压缩」剥掉 description | 今日最大 3274 B（v0.48.0），`verify_mcp_list_budget` 硬顶 5000 B；若某天红了先瘦 schema，别加 `tool_input_schema_max_bytes`（老版本 Codex 对未知键整块拒收） |
 | 周一矩阵只有 Windows lane 红、step 是 `Live verification (Windows)`、产物里没有 pytest.log | pytest 预算到顶被杀（旧版无日志） | 看 lane-report `steps.pytest.seconds` 与 `budget_seconds`；预算按主机（nt 2700）；pytest.log 现在流式落盘，超时也有尾巴 |
 | 八字快照农历行「闰闰五月」 | 上游 BaZi.js:317 对本地引擎结果重复加「闰」前缀（上游页面同样如此） | 0.40.0 起 bespoke `baziSnapshot.js` 声明式偏离：month 已带「闰」不再叠加；Java 形状仍加前缀 |
 | 星历「留与顺逆转向」的方向与星阙桌面版不同（或与天象不符） | 上游 `astroextra.calc_stations` 按留点那一刻≈0 的速度正负定 Direct / Retrograde——浮点噪声，随编译器与采样网格翻转（金标 41 个留错 19 个） | 0.40.0 起声明式偏离 `engine/ephemeris_stations.py`：按同一响应的逐日速度复核（覆盖外按交替续推），改过的留带 `directionUpstream`；判不出则沿用上游标签并 warning |
@@ -1156,7 +1166,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   字段 + 闸门三键 + `request`）。硬预算全量 ≤256 KB / 精简 ≤30 KB（`verify_mcp_list_budget.py` 棘轮只降不升）；
   加字段/加描述前先量。enum 只进广告层且与表锁步（v0.36.0）。
   ③ Codex 0.158 的 `tool_input_schema_max_bytes` 缺省值，超出即静默剥说明。`verify_mcp_list_budget.py`
-  对全量 / 精简两面逐工具硬顶（今日最大 3843 B）；tools/list 总量棘轮照旧。
+  对全量 / 精简两面逐工具硬顶（今日最大 3 274 B，horosa_astro_indiazeri，v0.48.0 瘦身后）；tools/list 总量棘轮照旧。
 - **`request` 与顶层参数合并（v0.47.2-dev）。** `_merge_mcp_arguments` = `{**flat, **request}`：两边都算数，同名不同值时 `request` 优先，说明经 `request_conflict_scope` 进 `warnings`。
   调用点在各工具的 `try` 之外，所以合并本身不抛：坏 `request` 原样往下走，由 `_normalize_mcp_request` 报 `tool.invalid_payload`。闸门读合并后的载荷（确认位放哪边都算）。守卫 `tests/test_mcp_request_merge.py`。
 - **有档位的旋钮按枚举声明；隐藏字段的两种声明法取并集（v0.40.0）。** 七政 `doubingSu28` 曾声明成 bool：`True` 被后端读成 1（斗柄定房法），
@@ -1219,6 +1229,14 @@ A global stability pass hardened these; keep them true when you touch the releva
   coerces a `null`/scalar parsed payload to `{}` so tools don't null-deref on `payload.field`.
 - **Tracing is best-effort.** `TraceRecorder._write_event` swallows local-write failures（like
   `_emit_otlp`）; a trace write must never crash or mask the traced operation.
+
+- **广告层类型（v0.48.0）。** 没有一个属性只广告 `"null"` 类型；`Any | None` 字段的广告类型来自 `schemas/tools/advertised_types.py`
+  （按 runner 实际接受的形状定，未登记即红）。这张表只能放在 `schemas/tools/` 里（放别处会骗过 `verify_schema_knob_wiring`）。守卫
+  `tests/test_mcp_advertised_types.py`。共享字段单份字节由 `tests/test_mcp_list_slim.py` 锁（+1 B ≈ 全量 +100 B）；技法描述尾行固定 `GUIDANCE_TAIL`，
+  aka 只去掉首句里已有的**整词**。今日最大单工具 schema 3 274 B（horosa_astro_indiazeri）。
+- **字典字面量不许重复键（v0.48.0）。** 后写的静默覆盖先写的，CI 也不跑 ruff：`tests/test_no_duplicate_dict_keys.py` 用 AST 扫 src/ 与 scripts/。
+- **上游后端不读的键照收、不广告、不下发、给了就警告**（v0.48.0 印度校时 11 个死键，同宿占的处理；证据逐行写在 `INDIA_RECTIFY_DEAD_KEYS` 注释里）。
+  后端 `str(x).split(',')` 的键在 skill 边界把数组并成逗号串（`prashnaSchools` / `rectifyCustomRp`）。
 
 ### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
 
@@ -1361,6 +1379,12 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **JSON 报告的闸量调用方自己写的答案（v0.47.2-dev）。** `_ai_coverage_status` / `_section_coverage_matrix` / `_report_quality` / `_delivery_checklist` / `report_index.has_ai_answer` 读 `_caller_answer_view`，不读 `merged_ai_report`：后者含确定性回填，量它永远是绿的。回填本身保留（`ai_report.analysis_sections`）。只有调用方给了一段 `answer_text` 且没写 `analysis_sections` 时人读版才不带它；否则 `human_analysis_sections` 含回填，印在「AI 解读」下面（现状如此，待决，见 LESSONS）。`ready_to_deliver` 要结论、摘要、分析段、建议、证据；逐章覆盖如实报但不拦交付（定向解读可交付，见 `_complete_analysis_sections`）；`style:"chart"` 不要 AI。新增闸时写一条它该是 False 的测试。
 - **报告 `language` 缺省 `None`：没写就跟 `HOROSA_OUTPUT_SCRIPT`（v0.47.2-dev）。** 入参模型里别放「看起来像缺省」的具体值，也别用 `model_fields_set` 判调用方写没写：MCP 的 `_normalize_mcp_request` 走 `model_dump`，缺省值到 service 时已经是显式入参。测这类行为要走 `call_tool`，只调帮手函数绕过了 `model_dump`（`tests/test_report_language_surfaces.py`）。
 
+- **盘图 PNG 与日历 ICS 只用引擎数据（v0.48.0）。** PNG 出的就是 `style:"chart"` PDF 的那几张图（`build_figures` 与 PDF 同一张清单，测试锁定）；
+  缺中文字体或缺字形就拒绝（`report.png_font_unavailable`），绝不出方块字。MCP 内联图片只在 `mcp_runner._plan_inline_images` 决定：受
+  `MCP_RESULT_WIRE_BUDGET`、单张 512 KiB、最多 4 张约束，超出只给链接并在 `inline_images` 写明。ICS 只用结果里写着的日期：结束 = 结果自带的结束或
+  下一期开始，从不「开始 + 时长」自算；本地时间按结果自带时区转 UTC，有 JD / 毫秒值就逐条交叉核对；0001–9999 以外的年份跳过并说明；
+  不支持的工具 `report.no_calendar_content`。`.ics` 一律 CRLF（`.gitattributes` `*.ics -text`）。
+
 ### 9.3.2 记忆存档（memory store / artifacts）
 
 - **`runs/` 的产物是一次起盘唯一的完整副本，写它绝不原地（v0.47.2-dev）。** `memory/store.py` 里写文件只有 `_write_json_atomic`（同目录临时文件 + fsync + `fsretry.replace`，失败清临时文件、不动原文件）；`write_text` / `write_bytes` 回潮即红（`test_the_store_has_no_in_place_writes`）。权限按 umask，改写沿用原文件的。
@@ -1369,6 +1393,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **记忆门面也受 MCP 线上预算约束（v0.47.2-dev）。** `MemoryQueryInput.include_payload` 缺省 false：`horosa_memory_query` 只回摘要；`horosa_memory_show` 回全量。超 `MCP_RESULT_WIRE_BUDGET` 时 `_fit_result_budget` 裁 `results[].artifacts[].payload` 与 `result.artifacts[].payload`：先裁 `payload.data` 的原始子树（`_PROTECTED_DATA_KEYS` 不动），不够再整份换占位。CLI 的 `memory query` 不走 MCP，仍缺省带载荷。新增任何不带顶层 `data` 的大结果都要接进 `_fit_result_budget`，否则预算管不到。
 - **记忆检索分两层（v0.47.2-dev）。** `text` 对问题与答案走索引、全库可搜（`_indexed_text_rows`：≥3 码点 FTS，短查询与缺 FTS5 用 LIKE）；工具调用与产物文件只深扫最新的候选窗口（`max(limit * 20, 200)`）。窗口外没搜过的条数经 `scan_report` → `not_scanned` 告诉调用方。加新的检索来源时，索引命中必须能带进窗口外的行，不能只当窗口内的放行条件。
 - **存档增长（v0.47.2-dev）。** 产物是紧凑 JSON（`_write_json_atomic`）。写回答案算点用，`prune_unused` 另判 `ai_answer_text` 以覆盖旧行：「用过」与 `is_memory_worthy` 的「值得留」要一致。`doctor.memory_db.usage` 报 run 数与各部分字节数，库打不开时 `runs` 是 `null`。没有自动保留也没有 `VACUUM`；要加 `VACUUM` 必须随后 `INSERT INTO runs_fts(runs_fts) VALUES('rebuild')`：`runs` 是隐式 rowid，`VACUUM` 可能重排，外部内容 FTS 会对不上。
+
+- **命主档案库（v0.48.0，`<data_dir>/profiles/profiles.db`）。** WAL + 跨进程写锁（新库首批并发写者在 rollback 模式下会死锁）；
+  损坏的库是用户数据，绝不自动隔离重建（`profile.store_corrupt`）；`--purge-data` 缺省保留档案，`--purge-profiles` 才删。存档案时只给地名，
+  走技法同一条地名解析补坐标与时区（唯一命中才补；只改备注且标签没变不重查；换了地名 zone 跟新地名走）。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
@@ -1540,6 +1568,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **录制-回放夹具：键含所有改变结果的字段，断言的是远端路径（v0.40.0）。** `/chart` 只按 date/time 键控会让「请求错了 hsys」回放出看似正确
   的答案；离线 `CaptureClient` 记录 `_call_remote` 真正打出去的路径（`/chart` 落成 `/`），断言端点要过 `_chart_server_endpoint`。
 
+- **不替换全局 `time.sleep` / `time.time` 等进程级函数（v0.48.0）。** 别的线程会被一起替换，测试偶发红。被测代码给自己的接缝
+  （如 `manager._reprobe_sleep`），测试只替换接缝。
+- **合并并行分支后逐块复核（v0.48.0）。** 两个分支往同一处追加结构相似的块、结尾几行相同时，git 会把那几行当成共同后缀只留一份；
+  门禁跑着时不在它的工作区合并或改文件。
+
 ### 9.6 发布 · 分发（release / distribution）
 
 - **发布件 = darwin seed + 派生的 win32-x64 + wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动
@@ -1627,6 +1660,11 @@ AI分析挂载 / 命盘事盘储存」四处走同一 builder + 同一段表—�
 
 （上游 AI-analysis **SSE Issue #8** 只影响星阙桌面端 chat 流、不影响 skill 计算路径——原文与处置见
 [`docs/LESSONS.md`](./docs/LESSONS.md)。）
+
+- **坐标文字串（v0.48.0）。** 十进制 → `31n13` 与上游 `AstroHelper.convertLatToStr` / `convertLonToStr` 逐值相同（秒 `Math.round`、分向下取整、逐级进位），
+  地名路径与通用十进制路径共用 `_format_compact_coordinate` 一个函数；金样 `tests/fixtures/coordinate_text_upstream.json` 由上游源在 node 里跑出。
+  上游桌面选点用 GCJ-02 点写文本、AI 地名解析用 WGS84（差 1′），skill 跟 AI 路径；差异待报上游（skill 不偏离）。
+- **IANA 时区换算带上游的规则覆盖表（v0.48.0）。** `input_normalization._TZ_RULE_OVERRIDES` 逐条锚定 vendored `timezone.js` 的 `TZ_RULE_OVERRIDES`。
 
 ## 11. 第三方引擎与 MIT 义务（ken）
 

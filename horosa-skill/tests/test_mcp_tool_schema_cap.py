@@ -1,5 +1,5 @@
 """tools/list 预算守卫的**每工具**上限（v0.40.0）：Codex 0.158.0（2026-09-28）新增 `tool_input_schema_max_bytes`，缺省 5000 B，
-超出的 inputSchema 会被「压缩」——参数说明被静默剥掉。守卫对全量 / 精简两面的每个工具都断言 ≤ 5000 B（今日最大 3843 B）。
+超出的 inputSchema 会被「压缩」——参数说明被静默剥掉。守卫对全量 / 精简两面的每个工具都断言 ≤ 5000 B（今日最大 3274 B，horosa_astro_indiazeri）。
 负向对照：喂一个 6 KB 的合成工具必须被点名。（总量棘轮见 tests/test_mcp_list_budget.py；本文件只管每工具硬顶。）"""
 from __future__ import annotations
 
