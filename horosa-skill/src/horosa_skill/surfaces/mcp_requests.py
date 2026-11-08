@@ -224,30 +224,38 @@ def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:
 
 # `horosa_tool_run` 的公共字段：覆盖绝大多数技法的起盘输入 + 闸门确认位。
 # 其余技法专属字段走 `request`（arg model 是 extra=ignore，未声明的顶层键会被静默吞）。
+# 第三列是广告层描述（v0.48.0 起真的发出去：`mcp_schema.apply_advertised_schemas` 按 `tool_run_field_docs()` 补进
+# tools/list——此前这一列从没广告过，精简面唯一的技法通道连闸门三键都没说明）。同一字段与技法广告层同一句（`mcp_schema.CORE_DOC`）；
+# tool_run 没有 enum，ad / response_view 把取值写进描述。签名（校验层）只用前两列。
 _TOOL_RUN_COMMON_FIELDS: tuple[tuple[str, Any, str], ...] = (
-    ("date", str | None, "公历日期 YYYY-MM-DD"),
+    ("date", str | None, "公历 YYYY-MM-DD"),
     ("time", str | None, "HH:mm:ss"),
-    ("zone", str | None, "时区偏移，如 +08:00"),
-    ("lat", str | float | None, "纬度 31n13 / 31.22"),
-    ("lon", str | float | None, "经度 121e28 / 121.47"),
+    ("zone", str | None, "偏移，如 +08:00"),
+    ("lat", str | float | None, "31n13 / 31.22"),
+    ("lon", str | float | None, "121e28 / 121.47"),
     ("gpsLat", float | None, "十进制纬度"),
     ("gpsLon", float | None, "十进制经度"),
-    ("ad", int | None, "纪元 1=公元后 -1=公元前"),
-    ("gender", str | int | None, "性别 1/男 0/女"),
-    ("name", str | None, "当事人姓名"),
-    ("pos", str | None, "地点名"),
+    ("ad", int | None, "1=公元 -1=公元前"),
+    ("gender", str | int | None, "1/男 0/女"),
+    ("name", str | None, "当事人姓名（透传盘头）"),
+    ("pos", str | None, "地点显示名"),
     ("datetime", str | None, "推运目标时刻"),
     ("dirZone", str | None, "推运目标地时区"),
     ("dirLat", str | float | None, "推运目标地纬度"),
     ("dirLon", str | float | None, "推运目标地经度"),
     ("question", str | None, "所问事项"),
-    ("response_view", str | None, "响应裁剪 titles|sections"),
+    ("response_view", str | None, "full / sections / titles（全文已存档）"),
     ("agent_confirmed_settings", bool | None, "用户已确认设置→true"),
     ("defaults_accepted", bool | None, "用户接受默认→true"),
     ("clarification_notes", str | None, "确认摘要"),
-    # 唯一带描述的公共字段：其余是人人认得的起盘字段；这个是新概念，不写描述模型不知道传什么（也守住无描述属性棘轮）。
+    # 签名上也带描述的唯一一个：它是新概念（自备知识库），在别处的门面 schema 上同样有说明。
     ("knowledge", Annotated[list[str] | str | None, Field(description="自备知识库：条目名,#标签,auto")], "自备知识库：条目名 / #标签 / auto"),
 )
+
+
+def tool_run_field_docs() -> dict[str, str]:
+    """`horosa_tool_run` 公共字段 → 广告层描述（广告层只补缺：签名里已带描述的键保持原样）。"""
+    return {name: doc for name, _annotation, doc in _TOOL_RUN_COMMON_FIELDS}
 
 
 def _tool_run_signature(*, return_type: Any = Signature.empty) -> Signature:

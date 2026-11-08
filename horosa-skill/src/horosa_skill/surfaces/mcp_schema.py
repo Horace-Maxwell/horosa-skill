@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+import copy
 import re
 from typing import Any
 
@@ -25,7 +26,9 @@ from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS, SIDEREAL_AYAN
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.engine.synonyms import synonyms_for
 from horosa_skill.schemas.tools import BirthInput
+from horosa_skill.schemas.tools.advertised_types import UNTYPED_FIELD_TYPES
 from horosa_skill.schemas.tools.base import advertise_hidden_fields
+from horosa_skill.surfaces.mcp_requests import tool_run_field_docs
 
 GATE_KEYS: tuple[str, ...] = ("agent_confirmed_settings", "defaults_accepted", "clarification_notes")
 # name/pos（显示名）已声明、顶层照收，但不进广告层：两字段 × 80 工具 ≈ 10 KB，只是盘头文字。
@@ -110,15 +113,25 @@ def _core_property(field: str, tool_name: str, required: bool) -> dict[str, Any]
     return prop
 
 
+# `Any | None` 字段（anyOf:[{}, {"type":"null"}]）广告成什么 type：逐键登记在 schema 包里
+# （`schemas/tools/advertised_types.py`，那里写了为什么不放在这里）。
+def _collapse_types(field: str, prop: dict[str, Any]) -> None:
+    """anyOf 折叠成广告层的 type：去掉 "null"（可空只是「可不传」，不是一种可传的值）；非空支没有类型就查 UNTYPED_FIELD_TYPES。"""
+    members = [a for a in prop.pop("anyOf", None) or [] if isinstance(a, dict)]
+    types = sorted({str(a["type"]) for a in members if a.get("type") and a.get("type") != "null"})
+    if types:
+        prop["type"] = types if len(types) > 1 else types[0]
+        return
+    prop.update(copy.deepcopy(UNTYPED_FIELD_TYPES.get(field, {"type": "string"})))  # 表是共享的，别让下游改到它
+
+
 def _own_property(field: str, full_prop: dict[str, Any], required: bool) -> dict[str, Any]:
     prop = {k: v for k, v in full_prop.items() if k in {"type", "enum", "items", "anyOf", "description"}}
     desc = str(prop.get("description") or "").strip()
     if len(desc) > OWN_FIELD_DOC_LIMIT:
         prop["description"] = desc[: OWN_FIELD_DOC_LIMIT - 1] + "…"
-    if "anyOf" in prop and "type" not in prop:
-        types = sorted({str(a.get("type")) for a in prop["anyOf"] if isinstance(a, dict) and a.get("type")})
-        prop.pop("anyOf", None)
-        prop["type"] = types if len(types) > 1 else (types[0] if types else "string")
+    if "type" not in prop:
+        _collapse_types(field, prop)
     if "items" in prop and isinstance(prop["items"], dict):
         prop["items"] = {k: v for k, v in prop["items"].items() if k in {"type", "enum"}} or {}
     if required and not str(prop.get("description", "")).startswith("[required]"):
@@ -309,6 +322,20 @@ def portable_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _with_tool_run_docs(schema: dict[str, Any]) -> dict[str, Any]:
+    """`horosa_tool_run` 的公共字段补广告层描述（`mcp_requests.tool_run_field_docs`，只补缺；签名不动）。"""
+    docs = tool_run_field_docs()
+    props = {
+        name: (
+            {**prop, "description": docs[name]}
+            if isinstance(prop, dict) and name in docs and not str(prop.get("description") or "").strip()
+            else prop
+        )
+        for name, prop in (schema.get("properties") or {}).items()
+    }
+    return {**schema, "properties": props}
+
+
 def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
     """注册完成后重写各工具的广告层 schema/描述；返回 {mcp_name: 隐藏旋钮数}（测试/棘轮用）。"""
     manager = getattr(mcp, "_tool_manager", None)
@@ -325,6 +352,8 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
             hidden[tool.name] = int(slim.get("x-horosa-hidden-knobs", 0))
         elif tool.name in {"horosa_dispatch", "horosa_hecan"}:
             tool.parameters = advertised_dispatch_schema(hecan=tool.name == "horosa_hecan")
+        elif tool.name == "horosa_tool_run":
+            tool.parameters = _with_tool_run_docs(tool.parameters or {})
     # 🔴 最后对**全部**工具跑一遍可移植化 —— 包括 8 个门面与 horosa_tool_run。
     # 此前只有技法 + dispatch/hecan 被重写，门面直接把 pydantic 的原始 schema
     # （anyOf:[…,{null}] / default:null / title / $ref）发上线；而在精简面下门面**就是**全部工具。
