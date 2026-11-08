@@ -87,6 +87,9 @@ _WIN_FILE_ENTRIES = [
     "runtime-payload/horosa-core-js/bin/cli.mjs",
     "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
     "runtime-payload/horosa-core-js/node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运
+    "runtime-payload/horosa-core-js/node_modules/moment/package.json",
+    "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",          # v0.48.0 地名检索
+    "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
 ]
 _SWEFILES_DIR = "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/"
 
@@ -124,6 +127,33 @@ def test_assert_entries_accepts_required_directory_with_a_real_file(tmp_path: Pa
     archive = tmp_path / "runtime.zip"
     _write_full_win_zip(archive, swefiles_empty=False)
     verify_runtime_release._assert_entries(archive, "win32-x64")  # must not raise
+
+
+_PLACE_ENTRIES = (
+    "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
+    "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
+)
+
+
+def test_place_search_dependencies_are_required_on_every_platform() -> None:
+    """v0.48.0：tz-lookup 与城市库被 core-js 懒加载——缺了别的技法照常跑，只有地名检索在运行时才报错，所以发布闸必须查。
+    Windows ARM 装的是 win32-x64 载荷（contracts/release_platforms.json 的 alias），三个键覆盖全部平台。"""
+    for platform, entries in verify_runtime_release.REQUIRED_ENTRIES.items():
+        for entry in _PLACE_ENTRIES:
+            assert entry in entries, (platform, entry)
+
+
+@pytest.mark.parametrize("missing", _PLACE_ENTRIES)
+def test_a_payload_without_the_place_search_dependency_is_rejected(tmp_path: Path, missing: str) -> None:
+    archive = tmp_path / "runtime.zip"
+    with zipfile.ZipFile(archive, "w") as out:
+        for name in _WIN_FILE_ENTRIES:
+            if name == missing:
+                continue
+            out.writestr(name, (b"\xef\xbb\xbf" if name in _LAUNCHERS else b"") + b"x")
+        out.writestr(_SWEFILES_DIR + "seas_18.se1", b"ephemeris")
+    with pytest.raises(SystemExit, match="missing required entries"):
+        verify_runtime_release._assert_entries(archive, "win32-x64")
 
 
 def test_windows_launchers_must_carry_a_utf8_bom(tmp_path: Path) -> None:

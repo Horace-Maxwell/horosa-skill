@@ -23,6 +23,7 @@ SOFTWARE_USAGE_HELP: dict[str, list[str]] = {
         "起盘：直接调技法工具（如 horosa_cn_qimen），结果读 data.export_snapshot.export_text 与 sections。",
         "出报告：已有 run_id 时用 horosa_report_render(run_id, format, ai_report)——ai_report 会自动写回记忆；一步到位用 horosa_report_from_tool（注意会重新起盘）。",
         "找历史：horosa_memory_query 按人名/技法/日期/全文组合检索（limit/offset 分页），horosa_memory_show(run_id) 取完整记录。",
+        "地名：horosa_place_search(query, date) 返回星阙城市库候选（lat/lon/zone，按日期含夏令时）；技法载荷也可直接传 place（唯一命中才自动补，有歧义会拒绝并给候选，让用户选）。CLI：horosa-skill place search 上海 --date 1990-05-18。",
         "省 token：技法工具可传 response_view='titles'（只回段标题）或 'sections'（段标题+正文），完整结果始终已存档。",
     ],
     "boundaries": [

@@ -77,7 +77,8 @@ class DispatchAPI:
             # 由 dispatch → run_tool 按选中的技法重新并、记出处。认不出的档案名在这里就拒。
             payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
             try:
-                request = _validated(HecanInput, payload)
+                # 地名在校验之前换成坐标（birth / context / subject 里的 place；有歧义即结构化拒绝）。
+                request = _validated(HecanInput, self.resolve_place_fields(payload, tool_name="hecan"))
             except ValidationError as exc:
                 errors = validation_errors(exc)
                 raise ToolValidationError(
@@ -380,7 +381,8 @@ class DispatchAPI:
         # （性别只进读性别的技法）、在技法卡记出处。
         payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
         try:
-            request = _validated(DispatchInput, payload)
+            # 地名在校验之前换成坐标（birth / context / subject 里的 place；BirthInput 要 lat / lon / zone）。幂等：合参已解析过的原样过。
+            request = _validated(DispatchInput, self.resolve_place_fields(payload, tool_name="dispatch"))
         except ValidationError as exc:
             errors = validation_errors(exc)
             raise ToolValidationError(

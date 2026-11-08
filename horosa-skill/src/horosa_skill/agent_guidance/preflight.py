@@ -184,6 +184,20 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
     }
 
 
+def build_clarification_recovery(
+    *,
+    tool_name: str,
+    ask_if_missing: list[dict[str, Any]],
+    do_not_assume: list[str],
+    reason: str,
+) -> dict[str, Any]:
+    """闸门之后才发现的「必须问用户」（v0.48.0：地名有歧义 / 找不到）：与闸门同一份 agent_recovery 形状
+    （must_ask_user、双语 prompt_to_user、带 options 的 ask_if_missing、retry 三件），只是不给「按星阙默认」——地点没有默认值。"""
+    return _agent_recovery(
+        tool_name=tool_name, ask_if_missing=ask_if_missing, safe_defaults=[], do_not_assume=do_not_assume, reason=reason,
+    )
+
+
 # 记忆 / 报告门面的入参是调用方（AI）自己产的：run_id、ai_answer、format、ai_report……缺了或填错只能 AI 自己补。
 # 旧行为一律给 must_ask_user=true + 「请先确认会影响结果的设置：请补充 `ai_answer`」——SKILL.md 又规定见到
 # agent_recovery 就停下问用户，于是 agent 会去问用户要它自己该写的解读正文。技法 / dispatch / hecan 的缺参

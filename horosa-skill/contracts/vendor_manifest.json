@@ -3123,6 +3123,83 @@
           "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
         }
       ]
+    },
+    "utils/timezone.js": {
+      "upstream": "utils/timezone.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "./dateStrSafe.js",
+          "to": "../bazi/dateStrSafe.js",
+          "why": "dateStrSafe 已 vendor 在 bazi/ 下（单份）；显式钉住，不靠 basename 重指。"
+        }
+      ]
+    },
+    "place/cityMatch.js": {
+      "upstream": "components/amap/cityMatch.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/geoCompass.js": {
+      "upstream": "utils/aiTools/normalize/geoCompass.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/zone.js": {
+      "upstream": "utils/aiTools/normalize/zone.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../timezone.js",
+          "to": "../utils/timezone.js",
+          "why": "上游 utils/timezone.js 落在 vendor/utils/（与 dateTimeParse.js 同目录）；place/ 是 AI 地名解析三件的平铺目录。"
+        }
+      ]
+    },
+    "place/place.js": {
+      "upstream": "utils/aiTools/normalize/place.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../data/cities.json",
+          "to": "./data/cities.json",
+          "why": "城市库三份 JSON 逐字节 vendor 在 place/data/（上游在 src/data/）。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../data/cityTradSimpMap.json",
+          "to": "./data/cityTradSimpMap.json"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../components/amap/cityMatch.js",
+          "to": "./cityMatch.js"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import('../../../data/citiesFull.json'",
+          "to": "import('./data/citiesFull.json'",
+          "why": "大库懒加载的动态 import：import_redirect 只认静态 `from`，动态形态声明式改写（JSON 属性已由 transform 补齐）。"
+        }
+      ]
+    },
+    "place/data/cities.json": {
+      "upstream": "data/cities.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/data/cityTradSimpMap.json": {
+      "upstream": "data/cityTradSimpMap.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/data/citiesFull.json": {
+      "upstream": "data/citiesFull.json",
+      "mode": "verbatim",
+      "deviations": []
     }
   }
 }

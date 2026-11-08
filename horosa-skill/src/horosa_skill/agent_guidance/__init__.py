@@ -70,6 +70,7 @@ from horosa_skill.agent_guidance.policies import (
 )
 from horosa_skill.agent_guidance.preflight import (
     AGENT_OWNED_OPERATIONS,
+    build_clarification_recovery,
     build_validation_recovery,
     run_sensitive_settings_selftests,
     validate_agent_preflight,
@@ -129,6 +130,7 @@ __all__ = [
     "ZR_POLICY",
     "assert_guidance_covers_registered_tools",
     "build_agent_guidance",
+    "build_clarification_recovery",
     "build_technique_catalog",
     "build_tool_docstring",
     "build_tool_input_contract",

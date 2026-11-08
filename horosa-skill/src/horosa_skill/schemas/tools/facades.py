@@ -188,6 +188,20 @@ class ProfileInput(FlexibleModel):
     clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
+class PlaceSearchInput(FlexibleModel):
+    """horosa_place_search（v0.48.0）：离线地名 → 坐标 + 当日时区，与星阙选点 / AI 地名解析同一条上游管线。"""
+
+    query: str = Field(description="简体/繁體/pinyin/English")
+    date: str | None = Field(default=None, description="YYYY-MM-DD, default today")
+    time: str | None = Field(default=None, description="HH:mm")
+    limit: int | None = Field(default=None, description="default 5, max 10")
+    # 上游北京时间统一的退出口（同 BirthInput.cnUnifiedZone）；与三个闸门字段一样不进广告层。
+    cnUnifiedZone: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    agent_confirmed_settings: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    defaults_accepted: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+
+
 class AgentGuidanceInput(FlexibleModel):
     tool_name: str | None = None
     intent: str | None = None

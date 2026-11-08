@@ -94,6 +94,7 @@ tool_app = typer.Typer(help="Direct atomic method calls such as chart, qimen, li
 memory_app = typer.Typer(help="Inspect local records, show a single run, or attach the AI's final answer.")
 export_app = typer.Typer(help="Inspect the Xingque AI export registry and parse exported text into structured JSON.")
 knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as 星盘释义、大六壬地支提示、奇门象意。")
+place_app = typer.Typer(help="Offline place lookup: name → coordinates + UTC offset on a date (星阙 city library). 地名 → 坐标 + 时区。")
 benchmark_app = typer.Typer(help="Run HorosaBench benchmark cases for routing, export parity, and knowledge quality.")
 trace_app = typer.Typer(help="Inspect recent local trace records for tool runs, dispatches, and runtime operations.")
 client_app = typer.Typer(help="Default OpenClaw entry: `openclaw-setup`. Also generate configs and run smoke checks for OpenClaw / mcporter.")
@@ -105,6 +106,7 @@ app.add_typer(tool_app, name="tool")
 app.add_typer(memory_app, name="memory")
 app.add_typer(export_app, name="export")
 app.add_typer(knowledge_app, name="knowledge")
+app.add_typer(place_app, name="place")
 app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(trace_app, name="trace")
 app.add_typer(client_app, name="client")
@@ -773,6 +775,26 @@ def knowledge_search(
         payload["domain"] = domain
     try:
         result = _service().knowledge_search(payload)
+    except ToolValidationError as exc:
+        _refuse(exc)
+    _print_json(_localized({"ok": True, **result}))
+
+
+@place_app.command("search")
+def place_search(
+    query: str = typer.Argument(..., help="Place name: 简体 / 繁體 / pinyin / initials / English (上海, 朝阳, New York)."),
+    date: Optional[str] = typer.Option(None, help="YYYY-MM-DD whose UTC offset you need (DST / LMT depend on it); default today."),
+    time: Optional[str] = typer.Option(None, help="HH:mm; flags a DST-switch day where the noon offset differs."),
+    limit: Optional[int] = typer.Option(None, help="Max candidates (default 5, max 10)."),
+) -> None:
+    """Same pipeline as the MCP tool horosa_place_search and the `place` payload key: ranked candidates with
+    lat/lon (31n13 / 121e28), gpsLat/gpsLon, zone, iana, dst; `ambiguous: true` means ask the user. 地名检索。"""
+    payload: dict[str, Any] = {"query": query}
+    for key, value in (("date", date), ("time", time), ("limit", limit)):
+        if value is not None:
+            payload[key] = value
+    try:
+        result = _service().place_search(payload)
     except ToolValidationError as exc:
         _refuse(exc)
     _print_json(_localized({"ok": True, **result}))

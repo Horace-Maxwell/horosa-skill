@@ -59,6 +59,11 @@ REQUIRED_ENTRIES = {
         # bundled npm package those tools throw "Cannot find package 'lunar-javascript'" at runtime.
         "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
         "runtime-payload/horosa-core-js/node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运
+        "runtime-payload/horosa-core-js/node_modules/moment/package.json",   # civilMoment 等 vendored 上游 import 它
+        # v0.48.0 地名检索：tz-lookup（经纬度 → IANA）与 3.9 MB 城市库。core-js 是懒加载它们的——缺了别的技法照常、
+        # 只有 horosa_place_search / `place` 键在运行时才报 place.runtime_outdated，所以只有这里拦得住。
+        "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
+        "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
     ],
     "win32-x64": [
         "runtime-payload/runtime-manifest.json",
@@ -102,6 +107,11 @@ REQUIRED_ENTRIES = {
         # canping/heluo need the bundled lunar-javascript (see darwin note).
         "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
         "runtime-payload/horosa-core-js/node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运
+        "runtime-payload/horosa-core-js/node_modules/moment/package.json",   # civilMoment 等 vendored 上游 import 它
+        # v0.48.0 地名检索：tz-lookup（经纬度 → IANA）与 3.9 MB 城市库。core-js 是懒加载它们的——缺了别的技法照常、
+        # 只有 horosa_place_search / `place` 键在运行时才报 place.runtime_outdated，所以只有这里拦得住。
+        "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
+        "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
     ],
     "linux-x64": [
         "runtime-payload/runtime-manifest.json",
@@ -145,6 +155,11 @@ REQUIRED_ENTRIES = {
         # canping/heluo need the bundled lunar-javascript (see darwin note).
         "runtime-payload/horosa-core-js/node_modules/lunar-javascript/package.json",
         "runtime-payload/horosa-core-js/node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运
+        "runtime-payload/horosa-core-js/node_modules/moment/package.json",   # civilMoment 等 vendored 上游 import 它
+        # v0.48.0 地名检索：tz-lookup（经纬度 → IANA）与 3.9 MB 城市库。core-js 是懒加载它们的——缺了别的技法照常、
+        # 只有 horosa_place_search / `place` 键在运行时才报 place.runtime_outdated，所以只有这里拦得住。
+        "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
+        "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
     ],
 }
 
