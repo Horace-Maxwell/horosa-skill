@@ -168,6 +168,12 @@ Allowed shortcuts:
 - User says “按星阙默认 / 默认 / 快速起盘 / 你来决定” → use documented safe defaults and say so.
 - A stored memory run already contains the setting → reuse it and cite the run.
 
+**地名 → 坐标 / 时区（别自己估）**：用户只给地名时，不要凭记忆写经纬度或历史 UTC 偏移（北京 1986–1991 有夏令时、早年是地方平时）。
+调 `horosa_place_search {query, date}`（CLI `horosa-skill place search 上海 --date 1990-05-18`），或在技法 / dispatch 载荷里直接传
+`place:"上海"`（MCP 技法工具经 `request` 传）——唯一命中才自动补 lat / lon / zone，`warnings` 与 `technique_card.place_resolution` 写明解析结果。
+`ambiguous: true` 或 `place.ambiguous` / `place.not_found` / `place.zone_ambiguous`：把候选念给用户选（`details.agent_recovery`），绝不替用户挑；
+`place.runtime_outdated` = 请用户升级 runtime，或先直接给经纬度。
+
 Runtime enforcement (the gate is in code, not just policy):
 
 - Calculation tools, `horosa_dispatch` and `horosa_hecan` reject unconfirmed calls with `agent_guidance.required`

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
@@ -28,6 +28,7 @@ from horosa_skill.knowledge import (
 )
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
 from horosa_skill.service._context import _degrade_collector, _memory_save_failed, _run_query_scope
+from horosa_skill.service.api.place import place_resolution_note
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.envelope import (
     _apply_response_view,
@@ -66,6 +67,12 @@ class _ToolCall:
     knowledge_selection: Any
     trace: dict[str, Any]
     degrade_notes: list[str]
+    # 载荷里 `place` 的解析记录（service/api/place.py）：成功 / 失败信封的 warnings 与技法卡都回显，不进引擎请求。
+    place_records: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def place_notes(self) -> list[str]:
+        return [place_resolution_note(record) for record in self.place_records]
 
     @property
     def tool_name(self) -> str:
@@ -80,7 +87,7 @@ def _failure_envelope(call: _ToolCall, *, summary: str, code: str, message: str,
         input_normalized=call.input_normalized,
         data={},
         summary=[summary],
-        warnings=list(call.degrade_notes),
+        warnings=[*call.place_notes, *call.degrade_notes],
         memory_ref=None,
         error=ErrorInfo(code=code, message=message, details=details),
         code=code,
@@ -230,9 +237,19 @@ class ToolsAPI:
             )
         return runner(payload)
 
-    def _validated_tool_input(self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]) -> tuple[dict[str, Any], Any]:
-        """(规范化入参, 自备知识库点名)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。"""
+    def _validated_tool_input(
+        self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]
+    ) -> tuple[dict[str, Any], Any, list[dict[str, Any]]]:
+        """(规范化入参, 自备知识库点名, 地名解析记录)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。"""
         tool_name = definition.name
+        try:
+            # 地名 → 坐标 + 时区（v0.48.0，service/api/place.py）：lat / lon / zone 是必填，place 得在归一化与校验之前补上；
+            # 有歧义 / 找不到 / 旧 runtime 都是结构化拒绝（place.*，带 agent_recovery），同样有意抛出去。
+            payload = self.resolve_place_fields(payload, tool_name=tool_name)
+        except ToolValidationError as exc:
+            trace["error_code"] = exc.code
+            raise
+        payload, place_records = self.pop_place_records(payload)
         try:
             payload = normalize_request_payload(payload)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
@@ -256,7 +273,7 @@ class ToolsAPI:
                     ),
                 },
             ) from exc
-        return _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)), knowledge_selection
+        return _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)), knowledge_selection, place_records
 
     def _compute_tool_result(self, call: _ToolCall) -> dict[str, Any]:
         """起盘 + 富化 + 导出契约 + 技法卡。"""
@@ -316,7 +333,10 @@ class ToolsAPI:
         summary = _generic_summary(call.tool_name, response_data)
         # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
-        warnings: list[str] = []
+        warnings: list[str] = list(call.place_notes)
+        if call.place_records and isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
+            # 技法卡在存档之前就挂好了（_compute_tool_result）；这里补上「地点是怎么来的」，同一份存进 memory。
+            response_data["technique_card"]["place_resolution"] = [dict(record) for record in call.place_records]
         if isinstance(response_data, dict):
             raised = response_data.pop("_warnings", None)
             if isinstance(raised, list):
@@ -426,8 +446,8 @@ class ToolsAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
-            input_normalized, knowledge_selection = self._validated_tool_input(definition, payload, trace)
-            call = _ToolCall(definition, input_normalized, knowledge_selection, trace, degrade_notes)
+            input_normalized, knowledge_selection, place_records = self._validated_tool_input(definition, payload, trace)
+            call = _ToolCall(definition, input_normalized, knowledge_selection, trace, degrade_notes, place_records)
             try:
                 envelope = self._success_envelope(call, self._compute_tool_result(call))
             except HorosaSkillError as exc:

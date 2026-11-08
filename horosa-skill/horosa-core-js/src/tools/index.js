@@ -49,7 +49,13 @@ import { runTianxing } from './tianxing.js';
 import { runQizhengElection } from './qizhengElection.js';
 import { runAcgSection } from './acgSection.js';
 
+// 地名检索懒加载：它带进 npm `tz-lookup` 与 3.9 MB 城市库。静态 import 的话，任何一份缺 tz-lookup 的 node_modules
+// （开发树没重跑 npm ci、旧 runtime 只换了代码）会让本文件加载失败 = 全部 JS 技法一起挂；懒加载把影响收在
+// place_search 自己身上（Python 侧把「缺依赖 / 不认识这个工具」报成 place.runtime_outdated）。
+const runPlaceSearch = (payload) => import('./placeSearch.js').then((m) => m.runPlaceSearch(payload));
+
 const TOOL_RUNNERS = {
+  place_search: runPlaceSearch,
   uranian_extra: runUranianExtra,
   tieban_framework: runTiebanFramework,
   yanqin_yanfa: runYanqinYanfa,

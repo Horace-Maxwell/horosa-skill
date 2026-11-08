@@ -26,6 +26,7 @@ from horosa_skill.service._context import (
     progress_sink,
 )
 from horosa_skill.service.api.dispatch import DispatchAPI
+from horosa_skill.service.api.place import PlaceAPI
 from horosa_skill.service.api.reports import ReportsAPI
 from horosa_skill.service.api.tools import ToolsAPI
 from horosa_skill.service.endpoints import (
@@ -140,6 +141,7 @@ class HorosaSkillService(
     ToolsAPI,
     ReportsAPI,
     DispatchAPI,
+    PlaceAPI,
 ):
     def __init__(
         self,

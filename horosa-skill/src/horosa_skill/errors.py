@@ -179,6 +179,40 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "rename_or_overwrite",
     },
+    # 地名 → 坐标（v0.48.0，service/api/place.py）：歧义 / 找不到 / 切换日时区不唯一都是「问用户」，details.agent_recovery 带候选；
+    # not_found 的后缀会被通用规则判成「重试再体检」，必须精确登记。旧 runtime 缺这项能力 = 升级 runtime，不是重试。
+    "place.ambiguous": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个地名对应多个地点（details.candidates）。把候选念给用户选一个，不要替用户挑；选定后用那一条的 lat / lon / zone 重试。",
+            "That place name matches several places (details.candidates). Let the user pick one — never choose yourself — then retry with its lat/lon/zone.",
+        ),
+        "next_action": "ask_user_to_pick_a_candidate",
+    },
+    "place.not_found": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "城市库里没有这个地名。请用户给更具体的写法（带省 / 国家，或英文名）或直接给经纬度。",
+            "The place is not in the city library. Ask the user for a more specific name (with province/country, or English) or coordinates.",
+        ),
+        "next_action": "ask_user_for_specific_place_or_coordinates",
+    },
+    "place.zone_ambiguous": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这一天该地的 UTC 偏移不唯一（夏令时切换日）。请用户确认用哪个时区（details.ask_if_missing 给了两个选项），再带 zone 重试。",
+            "The UTC offset is not unique on that day (a DST switch). Ask the user which zone to use (two options in details.ask_if_missing), then retry with zone.",
+        ),
+        "next_action": "ask_user_for_zone",
+    },
+    "place.runtime_outdated": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "已装的离线 runtime 比本版 horosa-skill 旧，没有地名检索。请执行 details.commands 里的升级命令；升级前可以先直接给 lat / lon / zone。",
+            "The installed offline runtime predates this horosa-skill and has no place search. Run the upgrade command in details.commands; until then pass lat/lon/zone explicitly.",
+        ),
+        "next_action": "upgrade_runtime_or_pass_coordinates",
+    },
     "tool.backend_param_error": {
         "kind": "input",
         "prompt_to_user": bilingual(

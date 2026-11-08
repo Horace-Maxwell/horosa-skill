@@ -1470,6 +1470,28 @@ check('progextra(neroman / bezzafigure / jayprofection / michon) — directed fi
   assert(JSON.stringify(bez.request_fields) === JSON.stringify({ orb: 1 }), 'bezza default orb');
 });
 
+// 地名检索（v0.48.0，tools/placeSearch.js 懒加载：tz-lookup + 城市库）。期望值 = 上游 resolvePlaceOffline / dstAwareZoneAt 在上游源上
+// 跑出的值（tests/fixtures/place_search_upstream.json，test_fixture_matches_upstream 对着 HOROSA_SOURCE_ROOT 复核）：
+// 上海 1988-07-01 在 1986–1991 夏令时内 +09:00；「朝阳」三处同名不唯一；乌鲁木齐 2000 年按北京时间统一 +08:00、关掉统一回到 +06:00。
+try {
+  const { runPlaceSearch } = await import('../src/tools/placeSearch.js');
+  const sh = (await runPlaceSearch({ query: '上海', date: '1988-07-01' })).data;
+  assert(sh.resolved === true && sh.confidence === 'high', JSON.stringify(sh));
+  assert(JSON.stringify([sh.match.lat, sh.match.lon, sh.match.gpsLat, sh.match.gpsLon, sh.match.zone, sh.match.iana, sh.match.dst])
+    === JSON.stringify(['31n13', '121e28', 31.2304, 121.4737, '+09:00', 'Asia/Shanghai', true]), JSON.stringify(sh.match));
+  const cy = (await runPlaceSearch({ query: '朝阳', date: '1988-07-01', limit: 3 })).data;
+  assert(cy.resolved === false && cy.match === null, JSON.stringify(cy));
+  assert(JSON.stringify(cy.candidates.map((c) => `${c.name}|${c.region}`)) === JSON.stringify(['朝阳区|北京城区', '朝阳区|长春市', '朝阳市|辽宁省']), JSON.stringify(cy.candidates));
+  const ur = (await runPlaceSearch({ query: '乌鲁木齐', date: '2000-01-01' })).data.match;
+  assert(ur.zone === '+08:00' && ur.advisory === 'cn-unified' && ur.geoZone === 'Asia/Urumqi', JSON.stringify(ur));
+  const urLocal = (await runPlaceSearch({ query: '乌鲁木齐', date: '2000-01-01', cnUnified: false })).data.match;
+  assert(urLocal.zone === '+06:00' && urLocal.iana === 'Asia/Urumqi', JSON.stringify(urLocal));
+  console.log('  ok   placeSearch 上海 DST / 朝阳歧义 / 乌鲁木齐统一北京时间');
+} catch (err) {
+  failures += 1;
+  console.error(`  FAIL placeSearch: ${err.message}`);
+}
+
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);
   process.exit(1);

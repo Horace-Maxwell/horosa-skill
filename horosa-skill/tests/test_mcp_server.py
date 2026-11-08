@@ -162,8 +162,8 @@ def test_mcp_full_mode_exposes_all_technique_tools(tmp_path) -> None:
     settings, service = _make_service(tmp_path)
     tools = asyncio.run(create_mcp_server(service, settings).list_tools())
     names = {tool.name for tool in tools}
-    # 10 个门面 + 全部技法平铺（v0.27.0 加 technique_report；v0.28.0 加 hecan）。
-    assert len(names) == 11 + len(TOOL_DEFINITIONS)
+    # 12 个门面 + 全部技法平铺（v0.27.0 加 technique_report；v0.28.0 加 hecan；v0.45.0 knowledge_search；v0.48.0 place_search）。
+    assert len(names) == 12 + len(TOOL_DEFINITIONS)
     assert "horosa_report_from_run" not in names
     assert "horosa_cn_qimen" in names
     assert "horosa_tool_run" not in names

@@ -533,6 +533,10 @@ def _facade_shapes(envelope: dict) -> list:
          "rendered_text": "[太阳]\n- 阳性", "citation": "Xingque hover knowledge · astro/planet/Sun"},
         {"mode": "search", "query": "太阳", "matches": [{"domain": "germany", "category": "手册", "key": "太阳弧",
          "title": "太阳弧", "snippet": "太阳弧叠层", "citation": "星阙操作手册"}]},
+        # horosa_place_search（v0.48.0）：地名 / 上级地区是城市库里的数据（原样），next_step / warnings 是给人读的。
+        {"query": "朝阳", "date": "1995-07-01", "ambiguous": True, "match": None, "next_step": "有多个同名的地点；把候选念给用户选",
+         "warnings": ["没给 date：偏移按今天算"], "candidates": [{"name": "朝阳区", "region": "北京城区", "en": "", "lat": "39n55",
+         "lon": "116e26", "zone": "+08:00", "iana": "Asia/Shanghai", "dst": False}]},
     ]
 
 

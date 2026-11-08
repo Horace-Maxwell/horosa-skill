@@ -73,7 +73,8 @@ class DispatchAPI:
             metadata={"entrypoint": "hecan", "payload": payload},
         ) as trace:
             try:
-                request = _validated(HecanInput, payload)
+                # 地名在校验之前换成坐标（birth / context / subject 里的 place；有歧义即结构化拒绝）。
+                request = _validated(HecanInput, self.resolve_place_fields(payload, tool_name="hecan"))
             except ValidationError as exc:
                 errors = validation_errors(exc)
                 raise ToolValidationError(
@@ -369,7 +370,8 @@ class DispatchAPI:
         preselected_tools: list[str] | None = None,
     ) -> DispatchEnvelope:
         try:
-            request = _validated(DispatchInput, payload)
+            # 地名在校验之前换成坐标（birth / context / subject 里的 place；BirthInput 要 lat / lon / zone）。幂等：合参已解析过的原样过。
+            request = _validated(DispatchInput, self.resolve_place_fields(payload, tool_name="dispatch"))
         except ValidationError as exc:
             errors = validation_errors(exc)
             raise ToolValidationError(

@@ -22,6 +22,7 @@ GLOBAL_AGENT_RULES: list[str] = [
     "Use Horosa/Xingque defaults only when the user accepts defaults, asks for a quick/default reading, or the setting is explicitly documented as safe to default.",
     "For current-time questions, using the current local date/time/timezone is allowed, but location and technique-specific settings still need clarification when they matter.",
     "Timezone may be a fixed offset like +08:00 or an IANA name like America/Los_Angeles; Horosa normalizes IANA names by the chart date/time before calling the runtime.",
+    "For a place name, never guess coordinates or a historical UTC offset: call horosa_place_search (query + date) or pass `place` in the payload; when it is ambiguous (place.ambiguous / ambiguous=true) ask the user to pick a candidate.",
     "After a tool call, treat export_snapshot.export_text, export_snapshot.sections, and summary as the source of truth.",
 ]
 

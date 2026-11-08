@@ -357,8 +357,12 @@ def build() -> Path:
         check=True,
     )
     require_path(CORE_JS_ROOT / "node_modules" / "lunar-javascript" / "package.json")
+    # civilMoment / 月相推运 / Balbillus 的 vendored 上游都 import moment（v0.48.0 起按 package.json 逐依赖核对，verify_builder_parity）。
+    require_path(CORE_JS_ROOT / "node_modules" / "moment" / "package.json")
     # 上游 v3.13.0：月相推运精确算法（vendored astroextra/lunationPhase.js）依赖 astronomy-engine。
     require_path(CORE_JS_ROOT / "node_modules" / "astronomy-engine" / "package.json")
+    # v0.48.0 地名检索（vendored utils/timezone.js 的 ianaTimezoneAt）依赖 tz-lookup（钉上游 6.1.25 + integrity）。
+    require_path(CORE_JS_ROOT / "node_modules" / "tz-lookup" / "package.json")
     rsync_copy(CORE_JS_ROOT, PAYLOAD_ROOT / "")
 
     write_manifest(version)

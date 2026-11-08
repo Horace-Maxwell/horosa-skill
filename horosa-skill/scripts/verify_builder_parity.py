@@ -28,6 +28,9 @@ SCRIPTS = Path(__file__).resolve().parent
 MAC_BUILDER = SCRIPTS / "package_runtime_payload.sh"
 WIN_BUILDER = SCRIPTS / "build_runtime_release_windows.py"
 VERIFIER = SCRIPTS / "verify_runtime_release.py"
+# horosa-core-js 的运行期 npm 依赖：每一个都必须被两个 builder `require_path` 且在每个平台的 REQUIRED_ENTRIES 里（v0.48.0）。
+# 从 package.json 派生而不是手抄清单——手抄清单正是 `moment`（civilMoment / 月相推运 / Balbillus 都 import 它）一直没人查的原因。
+CORE_JS_PACKAGE = SCRIPTS.parent / "horosa-core-js" / "package.json"
 
 # The 8 standalone ken/神数 engines both builders must vendor (the shared kinastro engine — backing the
 # 9 kinastro-* 神数 — is handled as a separate step token below).
@@ -93,6 +96,8 @@ REQUIRED_ON_BOTH = (
         "shaozi/data/shaozi_tiaowen_6144.json",
         "node_modules/lunar-javascript/package.json",
         "node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运精确算法
+        "node_modules/tz-lookup/package.json",          # v0.48.0 地名检索（经纬度 → IANA）
+        "vendor/place/data/citiesFull.json",            # v0.48.0 地名检索城市库
         "vendor/kin_year_domain.py",
         "geomancy/data/ifa_odu.json",
         "astrostudy/qizheng_election_scan.py",
@@ -200,6 +205,24 @@ def main() -> int:
             errors.append("Windows builder's seed mode must take the jlink module list from contracts/runtime_toolchain.json")
 
     required = _load_required_entries()
+    import json as _json_deps
+
+    try:
+        npm_deps = sorted((_json_deps.loads(CORE_JS_PACKAGE.read_text(encoding="utf-8")).get("dependencies") or {}))
+    except (OSError, ValueError) as exc:
+        npm_deps = []
+        errors.append(f"cannot read {CORE_JS_PACKAGE.name} dependencies: {exc}")
+    for dep in npm_deps:
+        mac_needle = f'require_path "${{CORE_JS_ROOT}}/node_modules/{dep}/package.json"'
+        win_needle = f'require_path(CORE_JS_ROOT / "node_modules" / "{dep}" / "package.json")'
+        if mac_needle not in mac:
+            errors.append(f"macOS builder does not `{mac_needle}` — npm dep `{dep}` could ship missing")
+        if win_needle not in win:
+            errors.append(f"Windows builder does not `{win_needle}` — npm dep `{dep}` could ship missing")
+        entry = f"runtime-payload/horosa-core-js/node_modules/{dep}/package.json"
+        for platform, entries in sorted(required.items()):
+            if entry not in entries:
+                errors.append(f"verify_runtime_release.py REQUIRED_ENTRIES[{platform!r}] is missing `{entry}` (npm dep `{dep}`)")
     for platform in ("darwin-arm64", "win32-x64"):
         joined = "\n".join(required.get(platform, []))
         for needle in REQUIRED_ON_BOTH:
@@ -214,8 +237,8 @@ def main() -> int:
 
     print(
         f"builder-parity OK: both builders vendor all {len(ENGINES)} standalone engines + kinastro, "
-        "run shaozi-gen + plotly-strip + lunar-javascript, stamp identical manifest constants, "
-        "and REQUIRED_ENTRIES is symmetric across platforms."
+        f"run shaozi-gen + plotly-strip + lunar-javascript, require all {len(npm_deps)} core-js npm deps on every platform, "
+        "stamp identical manifest constants, and REQUIRED_ENTRIES is symmetric across platforms."
     )
     return 0
 

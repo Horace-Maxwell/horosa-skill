@@ -24,7 +24,7 @@ TEXT_KEYS = frozenset({
     "summary", "warnings", "message", "prompt_to_user", "title", "label", "notes", "body", "snippet",
     "rendered_text", "export_text", "snapshot_text", "citation", "tips", "lines", "raw_title", "text",
     "titles", "section_titles", "selected_sections", "section_titles_detected", "missing_selected_sections",
-    "unknown_detected_sections",
+    "unknown_detected_sections", "next_step",
 })
 SKIP_KEYS = frozenset({
     "input_normalized", "normalized_inputs", "input", "subject", "payload", "query_normalized",
@@ -198,6 +198,8 @@ KEEP_KEYS = frozenset({
     "question", "query", "user_question", "raw_question", "query_text", "clarification_notes", "ai_answer_text",
     "category", "domain", "name", "mode", "scope", "technique_label", "source", "format_source", "entrypoint",
     "path", "artifact_path", "role",
+    # 地名检索（v0.48.0）：城市库里的上级地区名与 name 一样是数据——原样回送 place 时要能对上库里的写法。
+    "region",
 })
 
 

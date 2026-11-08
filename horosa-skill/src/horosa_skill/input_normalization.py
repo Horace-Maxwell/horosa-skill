@@ -199,6 +199,26 @@ def _cn_unified_enabled(payload: dict[str, Any]) -> bool:
     return payload.get("cnUnifiedZone") not in _OPT_OUT_VALUES
 
 
+# 上游 utils/timezone.js TZ_RULE_OVERRIDES 的逐值抄本（v0.48.0）：IANA 新规先于 ICU / tzdata 落地时的前瞻覆盖——
+# 当日（含）起恒为该偏移，只收「永久废除夏令时」类已立法规则。上游用它补 ICU，本仓用它补 zoneinfo（tzdata>=2025.2 的下限
+# 早于 2026b/2026c，系统 tzdata 更旧）：否则同一个 IANA 名在 2026-11-01 之后比星阙选点差 1 小时。
+# 守卫：tests/test_place_search.py 把本表与 vendored horosa-core-js/src/vendor/utils/timezone.js 逐条比对（vendored 文件
+# 又由 revendor --from-manifest 锁到上游），上游改表 → re-vendor → 测试红 → 改这里。
+_TZ_RULE_OVERRIDES: dict[str, tuple[tuple[tuple[int, int, int], str], ...]] = {
+    "America/Edmonton": (((2026, 11, 1), "-06:00"),),
+    "America/Vancouver": (((2026, 11, 1), "-07:00"),),
+    "Africa/Casablanca": (((2026, 9, 20), "+00:00"),),
+    "Africa/El_Aaiun": (((2026, 9, 20), "+00:00"),),
+}
+
+
+def _override_offset(zone: str, ymd: tuple[int, int, int]) -> str | None:
+    for since, offset in _TZ_RULE_OVERRIDES.get(zone, ()):
+        if ymd >= since:
+            return offset
+    return None
+
+
 def _normalize_iana_zone_value(text: str, *, payload: dict[str, Any] | None, key: str) -> str | None:
     if "/" not in text:
         return None
@@ -226,6 +246,10 @@ def _normalize_iana_zone_value(text: str, *, payload: dict[str, Any] | None, key
     if unified_from is not None and payload is not None:
         payload.setdefault("geoZone", unified_from)
         payload["zoneAdvisory"] = "cn-unified"
+    # 上游 offsetForZoneAtDate 先查覆盖表再问 Intl（同序）。
+    override = _override_offset(text, reference[:3])
+    if override is not None:
+        return override
     wall = _wall_datetime_for_offset(reference)
     offset = wall.replace(tzinfo=zone).utcoffset() if wall is not None else None
     if offset is None:
