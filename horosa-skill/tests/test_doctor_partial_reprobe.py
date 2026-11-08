@@ -30,7 +30,9 @@ def _endpoints(java: bool, chart: bool) -> list[dict[str, object]]:
 @pytest.fixture()
 def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     recorded: list[float] = []
-    monkeypatch.setattr(manager_module.time, "sleep", recorded.append)
+    # 替换复探自己的接缝，不碰全局 time.sleep：全局替换会把同进程别的线程的 sleep（subprocess 轮询 0.001 s）
+    # 也记进来，render 分支的门禁里就因此偶发红过一次。
+    monkeypatch.setattr(manager_module, "_reprobe_sleep", recorded.append)
     return recorded
 
 

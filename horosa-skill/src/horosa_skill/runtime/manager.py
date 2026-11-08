@@ -494,6 +494,11 @@ _PARTIAL_REPROBE_ATTEMPTS = 3
 _PARTIAL_REPROBE_INTERVAL_SECONDS = 0.5
 
 
+def _reprobe_sleep(seconds: float) -> None:
+    """复探间隔的接缝。测试替换它而不是全局 time.sleep——后者会把别的线程（如 subprocess 轮询）的 sleep 也记进去。"""
+    time.sleep(seconds)
+
+
 class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -2549,7 +2554,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         for _ in range(_PARTIAL_REPROBE_ATTEMPTS):
             if self._all_services_reachable(endpoints) or not self._any_services_reachable(endpoints):
                 break
-            time.sleep(_PARTIAL_REPROBE_INTERVAL_SECONDS)
+            _reprobe_sleep(_PARTIAL_REPROBE_INTERVAL_SECONDS)
             endpoints = self._service_status()
         return endpoints
 
