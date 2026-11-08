@@ -163,10 +163,9 @@ def _signature_for_input_model(model: type[BaseModel], *, return_type: Any = Sig
                 WithJsonSchema(
                     {
                         "type": ["object", "string"],
-                        "description": (
-                            "Escape hatch: pass the whole payload as one object (or a JSON string). "
-                            "Required for any field not declared below."
-                        ),
+                        # 与 dispatch / hecan 同一句（v0.48.0：原英文长句 113 B × 9 个门面，两面都付）。
+                        # 技法工具的 request 描述由广告层 `mcp_schema._request_property` 重写。
+                        "description": "整包载荷（对象或 JSON 串）；未声明的键放这里",
                     }
                 ),
             ],

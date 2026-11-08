@@ -77,7 +77,7 @@ unequal / equal24，报时星随之）、`moiraTransitDate`（[流年流曜] 的
 闸门问题带 `options` 的，直接把用户选的那一项原话记进 `clarification_notes`（同名 `values` 是该选项对应的
 schema 值，可直接放进载荷）；`planetaryarc` 的弧源、神数的性别/地点这类工具自有敏感项闸门会点名问，别替用户默认。
 
-找工具：每个工具描述带 `aka:` 别名（中文口语/拼音/英文）；不确定就 `horosa_dispatch`（路由覆盖全部技法，
+找工具：每个工具描述带别名（中文口语/拼音/英文；首句已有的词不在 `aka:` 行重复）；不确定就 `horosa_dispatch`（路由覆盖全部技法，
 含 10 个择日窗口搜索：`tianxing` + 9 支 `*zeri`）或 `horosa_agent_guidance`（响应里的 `server_profile` 告诉你本进程实际平铺了哪些域、
 `HOROSA_TOOLSETS` 有没有拼错、`horosa_tool_run` 在不在）。`HOROSA_TOOLSETS` 的合法域 = `astro` / `predict` / `chart` / `cn` /
 `shenshu` / `other` / `export` / `knowledge`，别名 `western` / `chinese` / `reference` / `all` / `none`；认不出的词会被丢掉并进 warning。
