@@ -1,0 +1,567 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Horosa//Horosa Skill//ZH
+CALSCALE:GREGORIAN
+X-WR-CALNAME:法达星限 · 星阙 Horosa
+BEGIN:VEVENT
+UID:golden-1@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20280406
+DTEND;VALUE=DATE:20290719
+SUMMARY:法达星限 · 主限月亮·子限月亮
+DESCRIPTION:主限月亮·子限月亮\n主限：Moon；子限：Moon；日
+ 期：2028-04-06\n起 2028-04-06 · 止 2029-07-19（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-2@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20290719
+DTEND;VALUE=DATE:20301101
+SUMMARY:法达星限 · 主限月亮·子限土星
+DESCRIPTION:主限月亮·子限土星\n主限：Moon；子限：Saturn；
+ 日期：2029-07-19\n起 2029-07-19 · 止 2030-11-01（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-3@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20301101
+DTEND;VALUE=DATE:20320214
+SUMMARY:法达星限 · 主限月亮·子限木星
+DESCRIPTION:主限月亮·子限木星\n主限：Moon；子限：Jupiter；
+ 日期：2030-11-01\n起 2030-11-01 · 止 2032-02-14（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-4@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20320214
+DTEND;VALUE=DATE:20330528
+SUMMARY:法达星限 · 主限月亮·子限火星
+DESCRIPTION:主限月亮·子限火星\n主限：Moon；子限：Mars；日
+ 期：2032-02-14\n起 2032-02-14 · 止 2033-05-28（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-5@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20330528
+DTEND;VALUE=DATE:20340910
+SUMMARY:法达星限 · 主限月亮·子限太阳
+DESCRIPTION:主限月亮·子限太阳\n主限：Moon；子限：Sun；日
+ 期：2033-05-28\n起 2033-05-28 · 止 2034-09-10（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-6@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20340910
+DTEND;VALUE=DATE:20351223
+SUMMARY:法达星限 · 主限月亮·子限金星
+DESCRIPTION:主限月亮·子限金星\n主限：Moon；子限：Venus；
+ 日期：2034-09-10\n起 2034-09-10 · 止 2035-12-23（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-7@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20351223
+DTEND;VALUE=DATE:20370406
+SUMMARY:法达星限 · 主限月亮·子限水星
+DESCRIPTION:主限月亮·子限水星\n主限：Moon；子限：Mercury；
+ 日期：2035-12-23\n起 2035-12-23 · 止 2037-04-06（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-8@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20370406
+DTEND;VALUE=DATE:20381101
+SUMMARY:法达星限 · 主限土星·子限土星
+DESCRIPTION:主限土星·子限土星\n主限：Saturn；子限：Saturn
+ ；日期：2037-04-06\n起 2037-04-06 · 止 2038-11-01（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-9@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20381101
+DTEND;VALUE=DATE:20400528
+SUMMARY:法达星限 · 主限土星·子限木星
+DESCRIPTION:主限土星·子限木星\n主限：Saturn；子限：Jupiter
+ ；日期：2038-11-01\n起 2038-11-01 · 止 2040-05-28（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-10@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20400528
+DTEND;VALUE=DATE:20411223
+SUMMARY:法达星限 · 主限土星·子限火星
+DESCRIPTION:主限土星·子限火星\n主限：Saturn；子限：Mars；
+ 日期：2040-05-28\n起 2040-05-28 · 止 2041-12-23（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-11@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20411223
+DTEND;VALUE=DATE:20430720
+SUMMARY:法达星限 · 主限土星·子限太阳
+DESCRIPTION:主限土星·子限太阳\n主限：Saturn；子限：Sun；
+ 日期：2041-12-23\n起 2041-12-23 · 止 2043-07-20（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-12@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20430720
+DTEND;VALUE=DATE:20450213
+SUMMARY:法达星限 · 主限土星·子限金星
+DESCRIPTION:主限土星·子限金星\n主限：Saturn；子限：Venus；
+ 日期：2043-07-20\n起 2043-07-20 · 止 2045-02-13（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-13@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20450213
+DTEND;VALUE=DATE:20460910
+SUMMARY:法达星限 · 主限土星·子限水星
+DESCRIPTION:主限土星·子限水星\n主限：Saturn；子限：Mercury
+ ；日期：2045-02-13\n起 2045-02-13 · 止 2046-09-10（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-14@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20460910
+DTEND;VALUE=DATE:20480406
+SUMMARY:法达星限 · 主限土星·子限月亮
+DESCRIPTION:主限土星·子限月亮\n主限：Saturn；子限：Moon；
+ 日期：2046-09-10\n起 2046-09-10 · 止 2048-04-06（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-15@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20480406
+DTEND;VALUE=DATE:20491223
+SUMMARY:法达星限 · 主限木星·子限木星
+DESCRIPTION:主限木星·子限木星\n主限：Jupiter；子限：Jupiter
+ ；日期：2048-04-06\n起 2048-04-06 · 止 2049-12-23（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-16@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20491223
+DTEND;VALUE=DATE:20510910
+SUMMARY:法达星限 · 主限木星·子限火星
+DESCRIPTION:主限木星·子限火星\n主限：Jupiter；子限：Mars；
+ 日期：2049-12-23\n起 2049-12-23 · 止 2051-09-10（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-17@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20510910
+DTEND;VALUE=DATE:20530528
+SUMMARY:法达星限 · 主限木星·子限太阳
+DESCRIPTION:主限木星·子限太阳\n主限：Jupiter；子限：Sun；
+ 日期：2051-09-10\n起 2051-09-10 · 止 2053-05-28（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-18@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20530528
+DTEND;VALUE=DATE:20550213
+SUMMARY:法达星限 · 主限木星·子限金星
+DESCRIPTION:主限木星·子限金星\n主限：Jupiter；子限：Venus
+ ；日期：2053-05-28\n起 2053-05-28 · 止 2055-02-13（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-19@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20550213
+DTEND;VALUE=DATE:20561031
+SUMMARY:法达星限 · 主限木星·子限水星
+DESCRIPTION:主限木星·子限水星\n主限：Jupiter；子限：Mercury
+ ；日期：2055-02-13\n起 2055-02-13 · 止 2056-10-31（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-20@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20561031
+DTEND;VALUE=DATE:20580720
+SUMMARY:法达星限 · 主限木星·子限月亮
+DESCRIPTION:主限木星·子限月亮\n主限：Jupiter；子限：Moon；
+ 日期：2056-10-31\n起 2056-10-31 · 止 2058-07-20（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-21@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20580720
+DTEND;VALUE=DATE:20600406
+SUMMARY:法达星限 · 主限木星·子限土星
+DESCRIPTION:主限木星·子限土星\n主限：Jupiter；子限：Saturn
+ ；日期：2058-07-20\n起 2058-07-20 · 止 2060-04-06（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-22@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20600406
+DTEND;VALUE=DATE:20610406
+SUMMARY:法达星限 · 主限火星·子限火星
+DESCRIPTION:主限火星·子限火星\n主限：Mars；子限：Mars；日
+ 期：2060-04-06\n起 2060-04-06 · 止 2061-04-06（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-23@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20610406
+DTEND;VALUE=DATE:20620406
+SUMMARY:法达星限 · 主限火星·子限太阳
+DESCRIPTION:主限火星·子限太阳\n主限：Mars；子限：Sun；日
+ 期：2061-04-06\n起 2061-04-06 · 止 2062-04-06（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-24@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20620406
+DTEND;VALUE=DATE:20630406
+SUMMARY:法达星限 · 主限火星·子限金星
+DESCRIPTION:主限火星·子限金星\n主限：Mars；子限：Venus；
+ 日期：2062-04-06\n起 2062-04-06 · 止 2063-04-06（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-25@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20630406
+DTEND;VALUE=DATE:20640406
+SUMMARY:法达星限 · 主限火星·子限水星
+DESCRIPTION:主限火星·子限水星\n主限：Mars；子限：Mercury；
+ 日期：2063-04-06\n起 2063-04-06 · 止 2064-04-06（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-26@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20640406
+DTEND;VALUE=DATE:20650406
+SUMMARY:法达星限 · 主限火星·子限月亮
+DESCRIPTION:主限火星·子限月亮\n主限：Mars；子限：Moon；日
+ 期：2064-04-06\n起 2064-04-06 · 止 2065-04-06（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-27@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20650406
+DTEND;VALUE=DATE:20660406
+SUMMARY:法达星限 · 主限火星·子限土星
+DESCRIPTION:主限火星·子限土星\n主限：Mars；子限：Saturn；
+ 日期：2065-04-06\n起 2065-04-06 · 止 2066-04-06（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-28@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20660406
+DTEND;VALUE=DATE:20670406
+SUMMARY:法达星限 · 主限火星·子限木星
+DESCRIPTION:主限火星·子限木星\n主限：Mars；子限：Jupiter；
+ 日期：2066-04-06\n起 2066-04-06 · 止 2067-04-06（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-29@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20670406
+DTEND;VALUE=DATE:20700406
+SUMMARY:法达星限 · 主限北交点·子限北交点
+DESCRIPTION:主限北交点·子限北交点\n主限：North Node；子限
+ ：North Node；日期：2067-04-06\n起 2067-04-06 · 止 2070-04-06（
+ 不含）\n来源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-30@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20700406
+DTEND;VALUE=DATE:20720406
+SUMMARY:法达星限 · 主限南交点·子限南交点
+DESCRIPTION:主限南交点·子限南交点\n主限：South Node；子限
+ ：South Node；日期：2070-04-06\n起 2070-04-06 · 止 2072-04-06（
+ 不含）\n来源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-31@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20720406
+DTEND;VALUE=DATE:20730909
+SUMMARY:法达星限 · 主限太阳·子限太阳
+DESCRIPTION:主限太阳·子限太阳\n主限：Sun；子限：Sun；日
+ 期：2072-04-06\n起 2072-04-06 · 止 2073-09-09（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-32@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20730909
+DTEND;VALUE=DATE:20750213
+SUMMARY:法达星限 · 主限太阳·子限金星
+DESCRIPTION:主限太阳·子限金星\n主限：Sun；子限：Venus；日
+ 期：2073-09-09\n起 2073-09-09 · 止 2075-02-13（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-33@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20750213
+DTEND;VALUE=DATE:20760719
+SUMMARY:法达星限 · 主限太阳·子限水星
+DESCRIPTION:主限太阳·子限水星\n主限：Sun；子限：Mercury；
+ 日期：2075-02-13\n起 2075-02-13 · 止 2076-07-19（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-34@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20760719
+DTEND;VALUE=DATE:20771223
+SUMMARY:法达星限 · 主限太阳·子限月亮
+DESCRIPTION:主限太阳·子限月亮\n主限：Sun；子限：Moon；日
+ 期：2076-07-19\n起 2076-07-19 · 止 2077-12-23（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-35@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20771223
+DTEND;VALUE=DATE:20790528
+SUMMARY:法达星限 · 主限太阳·子限土星
+DESCRIPTION:主限太阳·子限土星\n主限：Sun；子限：Saturn；
+ 日期：2077-12-23\n起 2077-12-23 · 止 2079-05-28（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-36@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20790528
+DTEND;VALUE=DATE:20801031
+SUMMARY:法达星限 · 主限太阳·子限木星
+DESCRIPTION:主限太阳·子限木星\n主限：Sun；子限：Jupiter；
+ 日期：2079-05-28\n起 2079-05-28 · 止 2080-10-31（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-37@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20801031
+DTEND;VALUE=DATE:20820406
+SUMMARY:法达星限 · 主限太阳·子限火星
+DESCRIPTION:主限太阳·子限火星\n主限：Sun；子限：Mars；日
+ 期：2080-10-31\n起 2080-10-31 · 止 2082-04-06（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-38@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20820406
+DTEND;VALUE=DATE:20830528
+SUMMARY:法达星限 · 主限金星·子限金星
+DESCRIPTION:主限金星·子限金星\n主限：Venus；子限：Venus；
+ 日期：2082-04-06\n起 2082-04-06 · 止 2083-05-28（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-39@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20830528
+DTEND;VALUE=DATE:20840719
+SUMMARY:法达星限 · 主限金星·子限水星
+DESCRIPTION:主限金星·子限水星\n主限：Venus；子限：Mercury
+ ；日期：2083-05-28\n起 2083-05-28 · 止 2084-07-19（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-40@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20840719
+DTEND;VALUE=DATE:20850909
+SUMMARY:法达星限 · 主限金星·子限月亮
+DESCRIPTION:主限金星·子限月亮\n主限：Venus；子限：Moon；
+ 日期：2084-07-19\n起 2084-07-19 · 止 2085-09-09（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-41@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20850909
+DTEND;VALUE=DATE:20861101
+SUMMARY:法达星限 · 主限金星·子限土星
+DESCRIPTION:主限金星·子限土星\n主限：Venus；子限：Saturn；
+ 日期：2085-09-09\n起 2085-09-09 · 止 2086-11-01（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-42@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20861101
+DTEND;VALUE=DATE:20871223
+SUMMARY:法达星限 · 主限金星·子限木星
+DESCRIPTION:主限金星·子限木星\n主限：Venus；子限：Jupiter
+ ；日期：2086-11-01\n起 2086-11-01 · 止 2087-12-23（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-43@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20871223
+DTEND;VALUE=DATE:20890212
+SUMMARY:法达星限 · 主限金星·子限火星
+DESCRIPTION:主限金星·子限火星\n主限：Venus；子限：Mars；
+ 日期：2087-12-23\n起 2087-12-23 · 止 2089-02-12（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-44@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20890212
+DTEND;VALUE=DATE:20900406
+SUMMARY:法达星限 · 主限金星·子限太阳
+DESCRIPTION:主限金星·子限太阳\n主限：Venus；子限：Sun；日
+ 期：2089-02-12\n起 2089-02-12 · 止 2090-04-06（不含）\n来源：
+ 星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-45@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20900406
+DTEND;VALUE=DATE:20920213
+SUMMARY:法达星限 · 主限水星·子限水星
+DESCRIPTION:主限水星·子限水星\n主限：Mercury；子限：Mercury
+ ；日期：2090-04-06\n起 2090-04-06 · 止 2092-02-13（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-46@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20920213
+DTEND;VALUE=DATE:20931223
+SUMMARY:法达星限 · 主限水星·子限月亮
+DESCRIPTION:主限水星·子限月亮\n主限：Mercury；子限：Moon；
+ 日期：2092-02-13\n起 2092-02-13 · 止 2093-12-23（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-47@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20931223
+DTEND;VALUE=DATE:20951101
+SUMMARY:法达星限 · 主限水星·子限土星
+DESCRIPTION:主限水星·子限土星\n主限：Mercury；子限：Saturn
+ ；日期：2093-12-23\n起 2093-12-23 · 止 2095-11-01（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-48@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20951101
+DTEND;VALUE=DATE:20970909
+SUMMARY:法达星限 · 主限水星·子限木星
+DESCRIPTION:主限水星·子限木星\n主限：Mercury；子限：Jupiter
+ ；日期：2095-11-01\n起 2095-11-01 · 止 2097-09-09（不含）\n来
+ 源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-49@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20970909
+DTEND;VALUE=DATE:20990719
+SUMMARY:法达星限 · 主限水星·子限火星
+DESCRIPTION:主限水星·子限火星\n主限：Mercury；子限：Mars；
+ 日期：2097-09-09\n起 2097-09-09 · 止 2099-07-19（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-50@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:20990719
+DTEND;VALUE=DATE:21010529
+SUMMARY:法达星限 · 主限水星·子限太阳
+DESCRIPTION:主限水星·子限太阳\n主限：Mercury；子限：Sun；
+ 日期：2099-07-19\n起 2099-07-19 · 止 2101-05-29（不含）\n来源
+ ：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-51@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART;VALUE=DATE:21010529
+DURATION:P1D
+SUMMARY:法达星限 · 主限水星·子限金星
+DESCRIPTION:主限水星·子限金星\n主限：Mercury；子限：Venus
+ ；日期：2101-05-29\n起 2101-05-29 · 止日结果未给，只标起
+ 日\n来源：星阙 Horosa · 法达星限 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+END:VCALENDAR

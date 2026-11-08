@@ -96,6 +96,28 @@ def render_report(
     }
 
 
+def write_artifact(payload: bytes, *, output_path: Path, format_name: str) -> dict[str, Any]:
+    """已经生成好的字节（PNG 盘图 / ICS 日历）落盘：同 render_report 的临时文件 + 原子替换（半截文件不会出现在目标路径）、
+    目标被占用时另存旁边的空闲名字；返回同一形状的结果。"""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        final_path = _place_rendered(tmp_path, output_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    return {
+        "path": str(final_path),
+        "format": format_name,
+        "file_size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        **({"requested_output_path": str(output_path)} if final_path != output_path else {}),
+    }
+
+
 def _place_rendered(tmp_path: Path, output_path: Path) -> Path:
     """把渲染好的临时文件原子地放到位，返回最终路径。
 

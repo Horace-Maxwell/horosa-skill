@@ -708,6 +708,50 @@
         "horosa-skill/src/horosa_skill/service/api/reports.py",
         "horosa-skill/src/horosa_skill/knowledge/user.py"
       ]
+    },
+    {
+      "id": "mcp-spec.image-content",
+      "subject": "mcp-spec",
+      "fact": "Tool results may carry image content blocks {type: 'image', data: <base64>, mimeType} in every revision since 2024-11-05 (unlike resource_link, which needs 2025-06-18), so the PNG chart export sends them to all clients without protocol gating; the base64 travels inside the one result message and counts toward MCP_RESULT_WIRE_BUDGET.",
+      "source_url": "https://modelcontextprotocol.io/specification/2024-11-05/server/tools",
+      "verified_on": "2026-11-08",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
+        "horosa-skill/tests/test_report_chart_png.py"
+      ]
+    },
+    {
+      "id": "claude-code.mcp-images",
+      "subject": "claude-code",
+      "fact": "When an MCP tool returns a PNG/JPEG/GIF/WebP image, Claude sees it inline (the inline copy may be scaled down or compressed) and Claude Code v2.1.283+ also saves the original bytes under the session's tool-results directory; tools that return image data stay subject to MAX_MCP_OUTPUT_TOKENS (default 25,000) even when they declare anthropic/maxResultSizeChars.",
+      "source_url": "https://code.claude.com/docs/en/mcp",
+      "verified_on": "2026-11-08",
+      "affects": [
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
+        "horosa-skill/src/horosa_skill/reports/chart_png.py"
+      ]
+    },
+    {
+      "id": "claude-api.vision-limits",
+      "subject": "claude-api",
+      "fact": "Images are at most 8000x8000 px; a request with more than 20 images applies a stricter per-image limit (keep each side <= 3000 px); standard-tier models use a native long edge of 1568 px (1568 visual tokens), Claude 4.7+ 2576 px (4784); cost is ceil(w/28) x ceil(h/28) visual tokens; per-image size 10 MB base64 on the Claude API, 5 MB on Bedrock.",
+      "source_url": "https://platform.claude.com/docs/en/build-with-claude/vision",
+      "verified_on": "2026-11-08",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/chart_png.py",
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py"
+      ]
+    },
+    {
+      "id": "rfc5545.icalendar",
+      "subject": "rfc5545",
+      "fact": "iCalendar content lines end in CRLF; lines SHOULD NOT exceed 75 octets and are folded by CRLF + one linear white-space (unfolders must restore UTF-8 sequences split mid-character, so writers should not split them); TEXT escapes backslash, semicolon, comma and newline (\\\\ \\; \\, \\n); VEVENT requires exactly one UID and one DTSTAMP (UTC); DATE is YYYYMMDD with a 4-digit year (0001-9999 representable); DTEND;VALUE=DATE is exclusive.",
+      "source_url": "https://www.rfc-editor.org/rfc/rfc5545",
+      "verified_on": "2026-11-08",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/calendar_ics.py",
+        "horosa-skill/tests/ics_validator.py"
+      ]
     }
   ]
 }

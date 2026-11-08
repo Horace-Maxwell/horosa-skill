@@ -1,4 +1,6 @@
 * text=auto eol=lf
+# RFC 5545 要求 CRLF 行尾：日历文件（含 ICS 金样）不做换行归一，否则提交后金样变成 LF、逐字节对比全红。
+*.ics -text
 
 *.png binary
 *.jpg binary

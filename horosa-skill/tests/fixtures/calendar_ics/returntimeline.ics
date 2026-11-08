@@ -1,0 +1,78 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Horosa//Horosa Skill//ZH
+CALSCALE:GREGORIAN
+X-WR-CALNAME:回归轴 · 星阙 Horosa
+BEGIN:VEVENT
+UID:golden-1@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20260406T141005Z
+SUMMARY:回归轴 · 太阳返照 2026
+DESCRIPTION:太阳返照 2026（结果原文，UTC+08:00）：2026-04-06 22
+ :10:05\n年份：2026；太阳返照：2026-04-06 22:10:05；首个月亮
+ 返照：2026-01-07 00:52:58；太阳返照上升：射手 6.92°；月亮
+ 返照上升：天秤 26.62°\n来源：星阙 Horosa · 回归轴 · run 
+ golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-2@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20260106T165258Z
+SUMMARY:回归轴 · 月亮返照（2026 年首个）
+DESCRIPTION:月亮返照（2026 年首个）（结果原文，UTC+08:00）
+ ：2026-01-07 00:52:58\n年份：2026；太阳返照：2026-04-06 22:10:05
+ ；首个月亮返照：2026-01-07 00:52:58；太阳返照上升：射手 
+ 6.92°；月亮返照上升：天秤 26.62°\n来源：星阙 Horosa · 
+ 回归轴 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-3@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20270406T194555Z
+SUMMARY:回归轴 · 太阳返照 2027
+DESCRIPTION:太阳返照 2027（结果原文，UTC+08:00）：2027-04-07 03
+ :45:55\n年份：2027；太阳返照：2027-04-07 03:45:55；首个月亮
+ 返照：2027-01-24 16:41:30；太阳返照上升：双鱼 5.07°；月亮
+ 返照上升：巨蟹 26.60°\n来源：星阙 Horosa · 回归轴 · run 
+ golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-4@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20270124T084130Z
+SUMMARY:回归轴 · 月亮返照（2027 年首个）
+DESCRIPTION:月亮返照（2027 年首个）（结果原文，UTC+08:00）
+ ：2027-01-24 16:41:30\n年份：2027；太阳返照：2027-04-07 03:45:55
+ ；首个月亮返照：2027-01-24 16:41:30；太阳返照上升：双鱼 
+ 5.07°；月亮返照上升：巨蟹 26.60°\n来源：星阙 Horosa · 
+ 回归轴 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-5@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20280406T013300Z
+SUMMARY:回归轴 · 太阳返照 2028
+DESCRIPTION:太阳返照 2028（结果原文，UTC+08:00）：2028-04-06 09
+ :33:00\n年份：2028；太阳返照：2028-04-06 09:33:00；首个月亮
+ 返照：2028-01-15 01:36:34；太阳返照上升：双子 25.19°；月
+ 亮返照上升：天蝎 12.12°\n来源：星阙 Horosa · 回归轴 · r
+ un golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-6@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20280114T173634Z
+SUMMARY:回归轴 · 月亮返照（2028 年首个）
+DESCRIPTION:月亮返照（2028 年首个）（结果原文，UTC+08:00）
+ ：2028-01-15 01:36:34\n年份：2028；太阳返照：2028-04-06 09:33:00
+ ；首个月亮返照：2028-01-15 01:36:34；太阳返照上升：双子 
+ 25.19°；月亮返照上升：天蝎 12.12°\n来源：星阙 Horosa · 
+ 回归轴 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+END:VCALENDAR

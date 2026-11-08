@@ -457,6 +457,28 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "read_tool_result_or_pick_charting_technique",
     },
+    "report.no_calendar_content": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个结果里没有能写进日历的日期：ICS 只收择日的命中时段 / 候选时刻、推运各期与星历事件这些结果里写着的日期，不推算新日期。"
+            "要日历就对择日或推运类技法出（details.calendar_tools）；其余直接读结果。",
+            "This result has no dates that can go into a calendar: ICS only exports election hits / candidate moments, "
+            "predictive periods and ephemeris events stated in the result, and computes no new dates. Use an election or "
+            "predictive technique (details.calendar_tools), or read the result directly.",
+        ),
+        "next_action": "read_tool_result_or_pick_calendar_technique",
+    },
+    "report.png_font_unavailable": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "本机没有能画中文的 TrueType 字体（或所选字体缺图上的字），画不出不带方块字的 PNG 盘图。改出 PDF（自带回退字体），"
+            "或请用户装中文字体（如 Noto Sans CJK）后重试。",
+            "No TrueType CJK font is available (or the chosen font lacks glyphs the chart needs), so the PNG chart cannot "
+            "be drawn without tofu. Render a PDF instead (built-in fallback font), or ask the user to install a CJK font "
+            "such as Noto Sans CJK and retry.",
+        ),
+        "next_action": "render_pdf_or_install_cjk_font",
+    },
     "report.from_tool.unsaved_result": {"kind": "input", "next_action": "rerun_with_save_result_true"},
     "report.technique.no_cards": {
         "kind": "input",

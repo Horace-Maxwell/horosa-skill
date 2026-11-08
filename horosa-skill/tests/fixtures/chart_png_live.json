@@ -1,0 +1,865 @@
+{
+ "_comment": "Live recordings for the PNG chart export (reports/chart_png.py), trimmed to the keys figures.extract_figures reads. Recorded 2026-11-08 from the vendored runtime instance (chart :8877 / java :9977, Horosa-Public 10fb75de = v3.13.2) with testing_payloads.build_sample_payloads().",
+ "cases": {
+  "ziwei_birth": {
+   "chart": {
+    "houses": [
+     {
+      "ganzi": "甲子",
+      "starsMain": [
+       {
+        "name": "巨门",
+        "starlight": "旺",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [],
+      "starsEvil": [],
+      "starsOthersGood": [
+       {
+        "name": "龙池",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "截空",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       12,
+       21
+      ],
+      "phase": "帝旺",
+      "name": "父母宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "乙丑",
+      "starsMain": [
+       {
+        "name": "天相",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [
+       {
+        "name": "天魁",
+        "starlight": "旺",
+        "sihua": null
+       },
+       {
+        "name": "天喜",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsEvil": [],
+      "starsOthersGood": [
+       {
+        "name": "月德",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "副截空",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       22,
+       31
+      ],
+      "phase": "衰",
+      "name": "福德宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "甲寅",
+      "starsMain": [
+       {
+        "name": "天同",
+        "starlight": "闲",
+        "sihua": null
+       },
+       {
+        "name": "天梁",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [
+       {
+        "name": "年马",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天马",
+        "starlight": "旺",
+        "sihua": null
+       }
+      ],
+      "starsEvil": [],
+      "starsOthersGood": [
+       {
+        "name": "凤阁",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天巫",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "年解",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天虚",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "旬空",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       32,
+       41
+      ],
+      "phase": "病",
+      "name": "田宅宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "乙卯",
+      "starsMain": [
+       {
+        "name": "武曲",
+        "starlight": "陷",
+        "sihua": null
+       },
+       {
+        "name": "七杀",
+        "starlight": "陷",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [],
+      "starsEvil": [
+       {
+        "name": "天姚",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "铃星",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsOthersGood": [
+       {
+        "name": "天官",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天福",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "恩光",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "大耗",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "副旬空",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       42,
+       51
+      ],
+      "phase": "死",
+      "name": "官禄宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "丙辰",
+      "starsMain": [
+       {
+        "name": "太阳",
+        "starlight": "旺",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [],
+      "starsEvil": [
+       {
+        "name": "陀罗",
+        "starlight": "庙",
+        "sihua": null
+       },
+       {
+        "name": "地劫",
+        "starlight": "陷",
+        "sihua": null
+       }
+      ],
+      "starsOthersGood": [
+       {
+        "name": "华盖",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天月",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "蜚廉",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天伤",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       52,
+       61
+      ],
+      "phase": "墓",
+      "name": "交友宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "丁巳",
+      "starsMain": [],
+      "starsAssist": [
+       {
+        "name": "禄存",
+        "starlight": "庙",
+        "sihua": null
+       },
+       {
+        "name": "文昌",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsEvil": [],
+      "starsOthersGood": [
+       {
+        "name": "天德",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天寿",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "三台",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "劫煞",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       62,
+       71
+      ],
+      "phase": "绝",
+      "name": "迁移宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "戊午",
+      "starsMain": [
+       {
+        "name": "天机",
+        "starlight": "庙",
+        "sihua": "忌"
+       }
+      ],
+      "starsAssist": [
+       {
+        "name": "左辅",
+        "starlight": "旺",
+        "sihua": null
+       }
+      ],
+      "starsEvil": [
+       {
+        "name": "擎羊",
+        "starlight": "平",
+        "sihua": null
+       },
+       {
+        "name": "地空",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsOthersGood": [
+       {
+        "name": "天厨",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "天使",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       72,
+       81
+      ],
+      "phase": "胎",
+      "name": "疾厄宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "己未",
+      "starsMain": [
+       {
+        "name": "紫微",
+        "starlight": "庙",
+        "sihua": null
+       },
+       {
+        "name": "破军",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [
+       {
+        "name": "天钺",
+        "starlight": "旺",
+        "sihua": null
+       },
+       {
+        "name": "红鸾",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsEvil": [
+       {
+        "name": "火星",
+        "starlight": "闲",
+        "sihua": null
+       }
+      ],
+      "starsOthersGood": [
+       {
+        "name": "天才",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "封诰",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天贵",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "寡宿",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       82,
+       91
+      ],
+      "phase": "养",
+      "name": "财帛宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "庚申",
+      "starsMain": [],
+      "starsAssist": [
+       {
+        "name": "右弼",
+        "starlight": "闲",
+        "sihua": "科"
+       }
+      ],
+      "starsEvil": [],
+      "starsOthersGood": [],
+      "starsOthersBad": [],
+      "direction": [
+       92,
+       101
+      ],
+      "phase": "长生",
+      "name": "子女宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "辛酉",
+      "starsMain": [
+       {
+        "name": "天府",
+        "starlight": "陷",
+        "sihua": null
+       }
+      ],
+      "starsAssist": [
+       {
+        "name": "文曲",
+        "starlight": "庙",
+        "sihua": null
+       }
+      ],
+      "starsEvil": [
+       {
+        "name": "咸池",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersGood": [
+       {
+        "name": "八座",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "破碎",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "天空",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       102,
+       111
+      ],
+      "phase": "沐浴",
+      "name": "夫妻宫",
+      "isBody": true,
+      "isLife": false
+     },
+     {
+      "ganzi": "壬戌",
+      "starsMain": [
+       {
+        "name": "太阴",
+        "starlight": "旺",
+        "sihua": "权"
+       }
+      ],
+      "starsAssist": [],
+      "starsEvil": [],
+      "starsOthersGood": [
+       {
+        "name": "解神",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "天哭",
+        "starlight": null,
+        "sihua": null
+       },
+       {
+        "name": "阴煞",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       112,
+       121
+      ],
+      "phase": "冠带",
+      "name": "兄弟宫",
+      "isBody": false,
+      "isLife": false
+     },
+     {
+      "ganzi": "癸亥",
+      "starsMain": [
+       {
+        "name": "廉贞",
+        "starlight": "陷",
+        "sihua": null
+       },
+       {
+        "name": "贪狼",
+        "starlight": "陷",
+        "sihua": "禄"
+       }
+      ],
+      "starsAssist": [],
+      "starsEvil": [
+       {
+        "name": "天刑",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersGood": [
+       {
+        "name": "台辅",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "starsOthersBad": [
+       {
+        "name": "孤辰",
+        "starlight": null,
+        "sihua": null
+       }
+      ],
+      "direction": [
+       2,
+       11
+      ],
+      "phase": "临官",
+      "name": "命宫",
+      "isBody": false,
+      "isLife": true
+     }
+    ],
+    "wuxingJuText": "水二局",
+    "lifeMaster": "廉贞",
+    "bodyMaster": "天梁",
+    "zidou": "卯",
+    "doujun": "亥",
+    "birth": "2028-04-06 09:33:00"
+   }
+  },
+  "qimen": {
+   "pan": {
+    "cells": [
+     {
+      "palaceName": "巽",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "地",
+      "isCenter": false,
+      "tianXing": "心",
+      "door": "杜",
+      "tianGan": "戊",
+      "diGan": "丙",
+      "anGan": ""
+     },
+     {
+      "palaceName": "离",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "天",
+      "isCenter": false,
+      "tianXing": "蓬",
+      "door": "景",
+      "tianGan": "壬",
+      "diGan": "辛",
+      "anGan": ""
+     },
+     {
+      "palaceName": "坤",
+      "isZhiFu": true,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "符",
+      "isCenter": false,
+      "tianXing": "任",
+      "door": "死",
+      "tianGan": "庚",
+      "diGan": "癸",
+      "anGan": ""
+     },
+     {
+      "palaceName": "震",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "玄",
+      "isCenter": false,
+      "tianXing": "柱",
+      "door": "伤",
+      "tianGan": "己",
+      "diGan": "丁",
+      "anGan": ""
+     },
+     {
+      "palaceName": "中",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "",
+      "isCenter": true,
+      "tianXing": "",
+      "door": "",
+      "tianGan": "乙",
+      "diGan": "乙",
+      "anGan": ""
+     },
+     {
+      "palaceName": "兑",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "蛇",
+      "isCenter": false,
+      "tianXing": "冲",
+      "door": "惊",
+      "tianGan": "丁",
+      "diGan": "己",
+      "anGan": ""
+     },
+     {
+      "palaceName": "艮",
+      "isZhiFu": false,
+      "isZhiShi": true,
+      "hasKongWang": true,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "虎",
+      "isCenter": false,
+      "tianXing": "内",
+      "door": "生",
+      "tianGan": "癸",
+      "diGan": "庚",
+      "anGan": ""
+     },
+     {
+      "palaceName": "坎",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": true,
+      "isYiMa": false,
+      "hasJiXing": false,
+      "hasRuMu": false,
+      "hasMenPo": false,
+      "god": "合",
+      "isCenter": false,
+      "tianXing": "英",
+      "door": "休",
+      "tianGan": "辛",
+      "diGan": "壬",
+      "anGan": ""
+     },
+     {
+      "palaceName": "乾",
+      "isZhiFu": false,
+      "isZhiShi": false,
+      "hasKongWang": false,
+      "isYiMa": true,
+      "hasJiXing": false,
+      "hasRuMu": true,
+      "hasMenPo": false,
+      "god": "阴",
+      "isCenter": false,
+      "tianXing": "辅",
+      "door": "开",
+      "tianGan": "丙",
+      "diGan": "戊",
+      "anGan": ""
+     }
+    ],
+    "juText": "阳遁六局下元",
+    "zhiFu": "天任",
+    "zhiShi": "生门",
+    "xunShou": "癸",
+    "kongWang": "子丑"
+   }
+  },
+  "liureng_gods": {
+   "headless_liureng": {
+    "layout": {
+     "downZi": [
+      "子",
+      "丑",
+      "寅",
+      "卯",
+      "辰",
+      "巳",
+      "午",
+      "未",
+      "申",
+      "酉",
+      "戌",
+      "亥"
+     ],
+     "upZi": [
+      "巳",
+      "午",
+      "未",
+      "申",
+      "酉",
+      "戌",
+      "亥",
+      "子",
+      "丑",
+      "寅",
+      "卯",
+      "辰"
+     ],
+     "houseTianJiang": [
+      "玄武",
+      "太常",
+      "白虎",
+      "天空",
+      "青龙",
+      "勾陈",
+      "六合",
+      "朱雀",
+      "螣蛇",
+      "贵人",
+      "天后",
+      "太阴"
+     ]
+    },
+    "ke": {
+     "raw": [
+      [
+       "天后",
+       "卯",
+       "辛"
+      ],
+      [
+       "天空",
+       "申",
+       "卯"
+      ],
+      [
+       "贵人",
+       "寅",
+       "酉"
+      ],
+      [
+       "白虎",
+       "未",
+       "寅"
+      ]
+     ],
+     "lines": [
+      "一课：地盘=辛，天盘=卯，贵神=天后",
+      "二课：地盘=卯，天盘=申，贵神=天空",
+      "三课：地盘=酉，天盘=寅，贵神=贵人",
+      "四课：地盘=寅，天盘=未，贵神=白虎"
+     ]
+    },
+    "sanChuan": {
+     "cuang": [
+      "己未",
+      "空子",
+      "丁巳"
+     ],
+     "name": "涉害课",
+     "tianJiang": [
+      "白虎",
+      "朱雀",
+      "玄武"
+     ],
+     "liuQin": [
+      "父母",
+      "子孙",
+      "官鬼"
+     ]
+    },
+    "panStyleName": "戌将加巳时"
+   }
+  }
+ }
+}

@@ -1,0 +1,61 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Horosa//Horosa Skill//ZH
+CALSCALE:GREGORIAN
+X-WR-CALNAME:奇门择日 · 星阙 Horosa
+BEGIN:VEVENT
+UID:golden-1@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20280402T000000Z
+DTEND:20280402T020000Z
+SUMMARY:奇门择日 命中 1/4 阳遁九局中元
+DESCRIPTION:奇门择日 · 命中第 1 段（共 4 段）\n时段（结果
+ 原文，UTC-05:00）：2028-04-01 19:00 ~ 2028-04-01 21:00\n条件：吉
+ 格·青龙回首\n判读:\n· 设定 吉格·青龙回首 → 实际 青
+ 龙回首@兑7宫 ✓\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n
+ 地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·
+ 真太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-2@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20280403T000000Z
+DTEND:20280403T020000Z
+SUMMARY:奇门择日 命中 2/4 阳遁九局中元
+DESCRIPTION:奇门择日 · 命中第 2 段（共 4 段）\n时段（结果
+ 原文，UTC-05:00）：2028-04-02 19:00 ~ 2028-04-02 21:00\n条件：吉
+ 格·青龙回首\n判读:\n· 设定 吉格·青龙回首 → 实际 青
+ 龙回首@兑7宫 ✓\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n
+ 地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·
+ 真太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-3@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20280403T060000Z
+DTEND:20280403T080000Z
+SUMMARY:奇门择日 命中 3/4 阳遁九局中元
+DESCRIPTION:奇门择日 · 命中第 3 段（共 4 段）\n时段（结果
+ 原文，UTC-05:00）：2028-04-03 01:00 ~ 2028-04-03 03:00\n条件：吉
+ 格·青龙回首\n判读:\n· 设定 吉格·青龙回首 → 实际 青
+ 龙回首@兑7宫 ✓\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n
+ 地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·
+ 真太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:golden-4@horosa-skill
+DTSTAMP:20261108T040000Z
+DTSTART:20280403T140000Z
+DTEND:20280403T160000Z
+SUMMARY:奇门择日 命中 4/4 阳遁九局中元
+DESCRIPTION:奇门择日 · 命中第 4 段（共 4 段）\n时段（结果
+ 原文，UTC-05:00）：2028-04-03 09:00 ~ 2028-04-03 11:00\n条件：吉
+ 格·青龙回首\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n地
+ 点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·真
+ 太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+TRANSP:TRANSPARENT
+END:VEVENT
+END:VCALENDAR

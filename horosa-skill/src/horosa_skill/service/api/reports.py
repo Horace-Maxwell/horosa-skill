@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,9 @@ from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.engine.registry import resolve_tool_name
 from horosa_skill.errors import ToolValidationError, bilingual, validation_errors
 from horosa_skill.reports import render_report
+from horosa_skill.reports.calendar_ics import CALENDAR_TOOLS, extract_calendar, render_ics
+from horosa_skill.reports.chart_png import PngFontUnavailable, render_figure_pngs
+from horosa_skill.reports.renderers import _labeler, write_artifact
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.tools import (
     MemoryAnswerInput,
@@ -23,6 +27,7 @@ from horosa_skill.schemas.tools import (
     ReportTemplateInput,
     TechniqueReportInput,
 )
+from horosa_skill.service import _clock
 from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP
 from horosa_skill.textscript import REPORT_LANGUAGE, TRADITIONAL_HK, parse_script
 from horosa_skill.textscript.localize import localize_document
@@ -32,8 +37,15 @@ _RULE_LOOKUP_TOOLS = frozenset({"ziwei_rules"})
 
 
 
+# 只含引擎数据、不要 AI 解读的两种格式：PNG = 盘图本身，ICS = 结果里现成日期的日历（v0.48.0）。
+_ENGINE_ONLY_FORMATS = frozenset({"png", "ics"})
+_REPORT_FORMATS = ("json", "docx", "pdf", "png", "ics")
+_FORMAT_NOUNS = {"png": "PNG 盘图", "ics": "ICS 日历"}
+
 _REPORT_MIME = {
     "pdf": "application/pdf",
+    "png": "image/png",
+    "ics": "text/calendar",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "json": "application/json",
     "md": "text/markdown",
@@ -59,6 +71,15 @@ def _file_card(path: Any, format_name: str | None = None) -> dict[str, Any] | No
     return {"path": str(target), "uri": target.as_uri(), "name": target.name,
             "mime": _REPORT_MIME.get(kind, "application/octet-stream"),
             "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+def _run_stamp(run: dict[str, Any]) -> datetime:
+    """ICS 的 DTSTAMP：存档里这条 run 的创建时刻（同一条结果重导出，文件逐字节相同）；读不出来才用当前时刻。"""
+    try:
+        stamp = datetime.fromisoformat(str(run.get("created_at") or ""))
+    except ValueError:
+        return _clock.now(timezone.utc)
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
 
 def _render_outcome_fields(rendered: dict[str, Any]) -> dict[str, Any]:
     """render_report 如实报告的「没按要求写成」：降级成 TXT / 目标被占用另存。此前这里全部丢弃，调用方只看到「已生成 PDF」和一个 .txt 路径。"""
@@ -322,6 +343,12 @@ class ReportsAPI:
                 request = ReportRenderInput.model_validate(payload)
                 normalized_format = self._normalize_report_format(request.format)
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
+                if normalized_format in _ENGINE_ONLY_FORMATS:
+                    result = self._render_engine_only(request, run, source_artifact, normalized_format, trace)
+                    trace["run_id"] = request.run_id
+                    trace["artifact_path"] = result["artifact_path"]
+                    trace["success"] = True
+                    return result
                 source_tool_name = str(source_artifact.get("tool_name") or request.tool_name or "")
                 normalized_ai_report = self._normalize_report_ai_payload(
                     ai_report=request.ai_report,
@@ -457,6 +484,10 @@ class ReportsAPI:
 
             # 两种写法都收（chart / horosa_astro_chart）；后面按注册表键取存档与模板，所以先归一。
             request.tool_name = resolve_tool_name(request.tool_name) or request.tool_name
+            if normalized_format == "ics" and request.tool_name not in CALENDAR_TOOLS:
+                # 这个技法的结果从来不带可写进日历的日期：不白起一次盘、不白存一条记录。
+                trace["error_code"] = "report.no_calendar_content"
+                raise self._no_calendar_content(request.tool_name, [])
             result = self.run_tool(
                 request.tool_name,
                 request.payload,
@@ -490,7 +521,7 @@ class ReportsAPI:
                 ai_report=request.ai_report,
                 ai_answer_text=request.ai_answer_text,
             )
-            if not normalized_ai_report and self._report_style(request) != "chart":
+            if not normalized_ai_report and self._report_style(request) != "chart" and normalized_format not in _ENGINE_ONLY_FORMATS:
                 run, source_artifact = self._load_report_source(result.memory_ref.run_id, request.tool_name)
                 template = self.report_builder.build_template(
                     run=run,
@@ -541,7 +572,7 @@ class ReportsAPI:
                 "group_id": result.group_id,
             }
             rendered["summary"] = [
-                f"已调用 `{request.tool_name}` 并生成 {normalized_format.upper()} 结构化报告。",
+                f"已调用 `{request.tool_name}` 并生成 {_FORMAT_NOUNS.get(normalized_format) or normalized_format.upper() + ' 结构化报告'}。",
                 *rendered.get("summary", []),
             ]
             trace["run_id"] = result.memory_ref.run_id
@@ -616,9 +647,123 @@ class ReportsAPI:
 
     def _normalize_report_format(self, value: str) -> str:
         normalized = str(value or "").lower().strip()
-        if normalized not in {"json", "docx", "pdf"}:
-            raise ValueError("format must be one of: json, docx, pdf")
+        if normalized not in _REPORT_FORMATS:
+            raise ValueError(f"format must be one of: {', '.join(_REPORT_FORMATS)}")
         return normalized
+
+    def _render_engine_only(
+        self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], format_name: str, trace: dict[str, Any]
+    ) -> dict[str, Any]:
+        """PNG 盘图 / ICS 日历：只含引擎数据，不需要也不使用 ai_report（给了也不写回记忆，结果里如实说明）。"""
+        chart = self.report_builder.chart_source(run=run, source_artifact=source_artifact)
+        script = self._report_script(self._report_language(request))
+        tool_name = chart["tool_name"]
+        default = self.store.default_report_path(run_id=request.run_id, tool_name=tool_name, format_name=format_name)
+        if format_name == "png":
+            outputs, extra = self._png_outputs(request, run, source_artifact, chart, script, default)
+        else:
+            outputs, extra = self._ics_outputs(request, run, chart, script, default)
+        artifacts, cards = [], []
+        for rendered in outputs:
+            artifact = self.store.record_report_artifact(
+                run_id=request.run_id, tool_name=tool_name, format_name=format_name, path=Path(rendered["path"]),
+                trace_id=trace["trace_id"], group_id=trace["group_id"],
+            )
+            artifacts.append(artifact)
+            cards.append(_file_card(artifact["artifact_path"], format_name))
+        notes = [note for rendered in outputs for note in _render_outcome_notes(rendered)]
+        warnings = list(extra.pop("warnings", []))
+        headline = extra.pop("headline")
+        if request.ai_report or request.ai_answer_text:
+            warnings.append(f"{format_name.upper()} 只含引擎数据，ai_report / ai_answer_text 未使用，也没有写回记忆；要出解读报告用 format=pdf / docx。")
+        return {
+            **artifacts[0],
+            "file": cards[0],
+            "files": cards,
+            **extra,
+            "source": chart["source"],
+            "answer_writeback": None,
+            **_render_outcome_fields(outputs[0]),
+            "summary": [headline, *notes],
+            **({"warnings": warnings} if warnings else {}),
+            "trace_id": trace["trace_id"],
+            "group_id": trace["group_id"],
+        }
+
+    def _numbered_paths(self, output_path: Path, count: int) -> list[Path]:
+        """一张图一个文件：多张时在文件名后加 _1、_2…（同一目录，仍在已校验的输出根之内）。"""
+        if count == 1:
+            return [output_path]
+        return [output_path.with_name(f"{output_path.stem}_{index}{output_path.suffix}") for index in range(1, count + 1)]
+
+    def _png_outputs(
+        self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], chart: dict[str, Any], script: str, default: Path
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        figures = localize_document(self.report_builder.build_figures(run=run, source_artifact=source_artifact), script)
+        if not figures:
+            raise ToolValidationError(
+                bilingual(
+                    f"`{chart['tool_name']}` 这次结果里没有能画的盘图（这个技法没有盘式，或正文与数据对不上、整张不画）。"
+                    "直接读工具结果，或出 PDF 排盘报告。",
+                    f"`{chart['tool_name']}` has no chart figure in this result (the technique has no chart layout, or the "
+                    "text and the data disagree so the figure is skipped). Read the tool result directly, or render a PDF chart report.",
+                ),
+                code="report.no_chart_content",
+                details={"tool_name": chart["tool_name"], "format": "png"},
+            )
+        try:
+            images = render_figure_pngs(figures, script=script, t=_labeler(script))
+        except PngFontUnavailable as exc:
+            missing = "".join(exc.missing[:40])
+            raise ToolValidationError(
+                bilingual(
+                    "本机没有能画中文的 TrueType 字体" + (f"（所选字体缺这些字：{missing}）" if missing else "")
+                    + "，画不出不带方块字的 PNG 盘图。改出 PDF（自带回退字体），或装中文字体（如 Noto Sans CJK）后重试。",
+                    "No TrueType CJK font is available" + (f" (the chosen font lacks: {missing})" if missing else "")
+                    + ", so the PNG chart cannot be drawn without tofu. Render a PDF instead (it has a built-in fallback font), "
+                    "or install a CJK font such as Noto Sans CJK and retry.",
+                ),
+                code="report.png_font_unavailable",
+                details={"tool_name": chart["tool_name"], "missing_characters": exc.missing[:40], "fallback_format": "pdf"},
+            ) from exc
+        output_path = self._report_output_path(request.output_path, default=default)
+        outputs = [write_artifact(image["png"], output_path=path, format_name="png")
+                   for image, path in zip(images, self._numbered_paths(output_path, len(images)))]
+        figure_list = [{"title": image["title"], "kind": image["kind"], "width": image["width"], "height": image["height"],
+                        "path": rendered["path"]} for image, rendered in zip(images, outputs)]
+        return outputs, {"title": f"{chart['label']} · 盘图", "figures": figure_list,
+                         "headline": f"已生成 PNG 盘图 {len(outputs)} 张：{'、'.join(r['path'] for r in outputs)}"}
+
+    def _ics_outputs(
+        self, request: Any, run: dict[str, Any], chart: dict[str, Any], script: str, default: Path
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        extraction = extract_calendar(chart["tool_name"], chart["data"], input_normalized=chart["input_normalized"],
+                                      label=chart["label"], run_id=str(request.run_id))
+        if not extraction.events:
+            raise self._no_calendar_content(chart["tool_name"], extraction.skipped)
+        text = render_ics(extraction.events, run_id=str(request.run_id), dtstamp=_run_stamp(run),
+                          calendar_name=f"{chart['label']} · 星阙 Horosa", text=_labeler(script))
+        output_path = self._report_output_path(request.output_path, default=default)
+        rendered = write_artifact(text.encode("utf-8"), output_path=output_path, format_name="ics")
+        skipped = extraction.skipped
+        extra: dict[str, Any] = {"title": f"{chart['label']} · 日历", "event_count": len(extraction.events),
+                                 "headline": f"已生成 ICS 日历（{len(extraction.events)} 个事件）：{rendered['path']}"}
+        if skipped:
+            extra["warnings"] = [f"有 {len(skipped)} 条日期没写进日历：", *skipped[:20]]
+        return [rendered], extra
+
+    def _no_calendar_content(self, tool_name: str, skipped: list[str]) -> ToolValidationError:
+        return ToolValidationError(
+            bilingual(
+                f"`{tool_name}` 的结果里没有能写进日历的日期（日历只收择日的命中时段 / 候选时刻、推运各期与星历事件这些结果里写着的日期，"
+                "不推算新日期）。" + (f"结果里的日期都写不进去：{'；'.join(skipped[:3])}" if skipped else ""),
+                f"`{tool_name}` has no dates that can go into a calendar (only election hits / candidate moments, predictive "
+                "periods and ephemeris events stated in the result are exported; no new dates are computed)."
+                + (" Every date in the result was unusable." if skipped else ""),
+            ),
+            code="report.no_calendar_content",
+            details={"tool_name": tool_name, "format": "ics", "calendar_tools": sorted(CALENDAR_TOOLS), "skipped": skipped[:20]},
+        )
 
     def _normalize_report_ai_payload(
         self,
