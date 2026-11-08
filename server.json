@@ -3,7 +3,7 @@
   "name": "io.github.Horace-Maxwell/horosa-skill",
   "title": "Horosa Skill",
   "description": "Local-first offline 术数/占星 (Horosa 星阙): 114 technique tools, all computed on your machine.",
-  "version": "0.47.3",
+  "version": "0.48.0",
   "websiteUrl": "https://github.com/Horace-Maxwell/horosa-skill",
   "repository": {
     "url": "https://github.com/Horace-Maxwell/horosa-skill",
@@ -12,8 +12,8 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.47.3/horosa-skill-0.47.3.mcpb",
-      "version": "0.47.3",
+      "identifier": "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.48.0/horosa-skill-0.48.0.mcpb",
+      "version": "0.48.0",
       "fileSha256": "3156095d9f7b1f836f984f1d3f0f2518e1e08a093eb54d7eb1d8184fb3bb489f",
       "transport": {
         "type": "stdio"
@@ -64,10 +64,10 @@
         "streamable-http"
       ],
       "install": [
-        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.47.3/horosa_skill-0.47.3-py3-none-any.whl\" horosa-skill install"
+        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.48.0/horosa_skill-0.48.0-py3-none-any.whl\" horosa-skill install"
       ],
       "start": [
-        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.47.3/horosa_skill-0.47.3-py3-none-any.whl\" horosa-skill serve --transport stdio"
+        "uvx --from \"https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.48.0/horosa_skill-0.48.0-py3-none-any.whl\" horosa-skill serve --transport stdio"
       ],
       "releaseManifest": "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
     }
