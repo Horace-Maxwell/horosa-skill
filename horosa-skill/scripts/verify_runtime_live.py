@@ -46,9 +46,17 @@ for _stream in (sys.stdout, sys.stderr):
 # Windows lanes hit the flat 1500 s budget). Budget by host: the number is a ceiling for a healthy run, not a target.
 PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}
 # windows-11-arm runs the x64 payload under emulation and is the slowest, noisiest lane: v0.45.0 needed 2580 s of 2700, v0.45.1's
-# draft hit the ceiling at ~98% with zero failures while windows-latest took 1389 s. Only that lane gets the extra; the job
-# timeout (runtime-matrix.yml, 90 min) must still cover it plus ~15 min of install / start / client steps.
-EMULATED_PYTEST_EXTRA_SECONDS = 900
+# draft hit the ceiling at ~98% with zero failures while windows-latest took 1389 s → +900 s (3600). v0.47.x then ran at 3466 /
+# 3496 s of 3600 (96–97%, unnoticed) and v0.48.0's draft (+176 tests) was killed at 86% with zero failures → +2700 s (5400).
+# Only that lane gets the extra; the job timeout (runtime-matrix.yml) must still cover it plus ≥15 min of install / start /
+# client steps (~9–14 min measured).
+EMULATED_PYTEST_EXTRA_SECONDS = 2700
+# A lane whose pytest used more than this share of its budget prints a GitHub `::warning::` annotation (it lands in the run's
+# ANNOTATIONS, which `gh run watch` prints at the end of every release run) and records it in lane-report.json — v0.47.x sat at
+# 96–97% for two releases because nobody opened the lane reports to look.
+PYTEST_BUDGET_WARN_FRACTION = 0.85
+# The slowest tests go into pytest.log, so the next slow lane says WHICH tests grew instead of only that the suite did.
+PYTEST_DURATIONS_SHOWN = 25
 BUDGET = {"install": 600, "doctor": 120, "start": 900, "engine": 300, "setup": 600,
           "pytest": PYTEST_BUDGET_SECONDS["nt" if os.name == "nt" else "posix"], "stop": 180}
 DOCTOR_POLL_SECONDS = 10.0
@@ -686,7 +694,7 @@ class Lane:
             return self.step("pytest", True, skipped=True)
         env = self.pytest_env()
         started = time.perf_counter()
-        command = [sys.executable, "-m", "pytest", "-q", "-rsf", "-p", "no:cacheprovider", *self.args.pytest_args]
+        command = [sys.executable, "-m", "pytest", "-q", "-rsf", "-p", "no:cacheprovider", f"--durations={PYTEST_DURATIONS_SHOWN}", *self.args.pytest_args]
         # Stream pytest's output straight into pytest.log: the 2026-09-28 schedule run timed out on both Windows lanes and
         # `subprocess.run(capture_output=True)` left NOTHING behind (the artifact had no pytest.log), so nobody could tell
         # whether the suite was slow or hung. With the file as stdout the partial log survives a kill.
@@ -720,8 +728,17 @@ class Lane:
         if skips:
             problems.append(f"live gates skipped: {skips[:3]}")
         tail = "\n".join(output.splitlines()[-40:])
-        return self.step("pytest", not problems, seconds=round(time.perf_counter() - started, 1), counts=counts, problems=problems,
-                         budget_seconds=budget, failed=failures, env={"HOROSA_SERVER_ROOT": env["HOROSA_SERVER_ROOT"], "HOROSA_CHART_SERVER_ROOT": env["HOROSA_CHART_SERVER_ROOT"], "HOROSA_NODE_BIN": env.get("HOROSA_NODE_BIN")},
+        seconds = round(time.perf_counter() - started, 1)
+        budget_fraction = round(seconds / budget, 3) if budget else None
+        warnings: list[str] = []
+        if budget_fraction is not None and budget_fraction > PYTEST_BUDGET_WARN_FRACTION:
+            warnings.append(f"pytest used {seconds} s of its {budget} s budget ({budget_fraction:.0%} > {PYTEST_BUDGET_WARN_FRACTION:.0%}) — "
+                            "raise the budget (and the job timeout) before the next release, or find what grew (the --durations list in pytest.log)")
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                lane = f"{sys.platform}{' emulated' if self.args.expect_emulated else ''}"
+                print(f"::warning title=lane pytest near its budget ({lane})::{warnings[-1]}", flush=True)
+        return self.step("pytest", not problems, seconds=seconds, counts=counts, problems=problems, warnings=warnings,
+                         budget_seconds=budget, budget_fraction=budget_fraction, failed=failures, env={"HOROSA_SERVER_ROOT": env["HOROSA_SERVER_ROOT"], "HOROSA_CHART_SERVER_ROOT": env["HOROSA_CHART_SERVER_ROOT"], "HOROSA_NODE_BIN": env.get("HOROSA_NODE_BIN")},
                          tail=tail if problems else None)
 
     def stop(self) -> bool:

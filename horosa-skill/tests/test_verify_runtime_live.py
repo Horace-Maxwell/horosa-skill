@@ -322,6 +322,7 @@ def test_live_pytest_keeps_the_partial_log_when_it_times_out(tmp_path: Path, mon
 
 def test_emulated_lane_gets_the_extra_pytest_budget_and_it_fits_the_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """v0.45.1 draft：windows-11-arm（x64 仿真）pytest 在 2700 s 处被杀，进度 ~98%、零失败；windows-latest 同批只用 1389 s。
+    v0.48.0 draft：同一 lane 在 3600 s 处被杀，进度 86%、零失败（加时 900 → 2700，job 90 → 120 分钟）。
     只给仿真 lane 加时，并且加完仍要在 runtime-matrix.yml 的 job 超时里留出 ≥15 分钟给安装 / 启动 / 客户端步骤。"""
     lane = _lane(tmp_path, "horosa lane")
     lane.work.mkdir(parents=True, exist_ok=True)
@@ -340,6 +341,56 @@ def test_emulated_lane_gets_the_extra_pytest_budget_and_it_fits_the_job(tmp_path
     job_minutes = int(re.search(r"timeout-minutes:\s*(\d+)", workflow).group(1))
     emulated_budget = live.PYTEST_BUDGET_SECONDS["nt"] + live.EMULATED_PYTEST_EXTRA_SECONDS
     assert emulated_budget <= (job_minutes - 15) * 60, (emulated_budget, job_minutes)
+
+
+def _clock(*values: float):
+    it = iter(values)
+    return lambda: next(it)
+
+
+@pytest.mark.parametrize("used_fraction, warned", [(0.9, True), (0.5, False)])
+def test_lane_pytest_near_its_budget_warns_in_the_report_and_as_an_annotation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], used_fraction: float, warned: bool
+) -> None:
+    """v0.47.x: the emulated lane ran at 3466 / 3496 s of 3600 (96–97%) for two releases and nobody looked; v0.48.0's draft then
+    killed it at 86%. A lane above PYTEST_BUDGET_WARN_FRACTION now says so in lane-report.json and as a GitHub annotation."""
+    lane = _lane(tmp_path, "horosa lane")
+    lane.work.mkdir(parents=True, exist_ok=True)
+    lane.args.skip_pytest = False
+    lane.args.expect_emulated = True
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setattr(lane, "pytest_env", lambda: {"HOROSA_SERVER_ROOT": "http://127.0.0.1:1", "HOROSA_CHART_SERVER_ROOT": "http://127.0.0.1:2"})
+    monkeypatch.setattr(_FakePytestProc, "hang", False, raising=False)
+    monkeypatch.setattr(_FakePytestProc, "output", "........\n8 passed in 1.23s\n", raising=False)
+    monkeypatch.setattr(live.subprocess, "Popen", _FakePytestProc)
+    budget = live.BUDGET["pytest"] + live.EMULATED_PYTEST_EXTRA_SECONDS
+    monkeypatch.setattr(live.time, "perf_counter", _clock(1000.0, 1000.0 + used_fraction * budget))
+
+    assert lane.live_pytest() is True  # near the ceiling is a warning, never a failure
+    step = lane.report["steps"]["pytest"]
+    assert step["budget_fraction"] == pytest.approx(used_fraction, abs=0.001)
+    out = capsys.readouterr().out
+    if warned:
+        assert step["warnings"] and "raise the budget" in step["warnings"][0]
+        assert "::warning title=lane pytest near its budget" in out and "emulated" in out
+    else:
+        assert step["warnings"] == [] and "::warning" not in out
+
+
+def test_lane_pytest_lists_the_slowest_tests(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The v0.48.0 ARM timeout could say only THAT the suite grew, not which tests: the lane log had no durations."""
+    lane = _lane(tmp_path, "horosa lane")
+    lane.work.mkdir(parents=True, exist_ok=True)
+    lane.args.skip_pytest = False
+    monkeypatch.setattr(lane, "pytest_env", lambda: {"HOROSA_SERVER_ROOT": "http://127.0.0.1:1", "HOROSA_CHART_SERVER_ROOT": "http://127.0.0.1:2"})
+    monkeypatch.setattr(_FakePytestProc, "hang", False, raising=False)
+    monkeypatch.setattr(_FakePytestProc, "output", "8 passed in 1.23s\n", raising=False)
+    monkeypatch.setattr(_FakePytestProc, "instances", [], raising=False)
+    monkeypatch.setattr(live.subprocess, "Popen", _FakePytestProc)
+
+    assert lane.live_pytest() is True
+    assert f"--durations={live.PYTEST_DURATIONS_SHOWN}" in _FakePytestProc.instances[-1].command
+    assert live.PYTEST_DURATIONS_SHOWN > 0
 
 
 def test_live_pytest_streams_the_log_on_success_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

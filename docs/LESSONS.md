@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.48.0 (2026-11-08) | 发版矩阵：windows-11-arm 的 pytest 在 3600 s 处零失败被杀（进度 86%）；v0.47.x 两次已占 96–97% 却没人看 lane 报告 | 仿真 lane 加时 900 → 2700 s、job 90 → 120 分钟；lane 超 85% 打 `::warning::` 注解并写进报告；pytest.log 带 `--durations=25` |
 | v0.48.0-dev (2026-11-08) | 四路并行功能批（地名检索 / 命主档案 / 盘图与日历 / 工具面瘦身）：坐标串分钟四舍五入与上游向下取整差 1′、本机 zoneinfo 缺上游 2026 规则覆盖、`Any | None` 广告成 `type:"null"`、错误码表重复键静默覆盖、MCP 预校验把缺省值写成显式值盖掉档案、全局替换 time.sleep 让测试偶发红、合并时两个并列块的相同结尾被当成共同后缀 | 期望值一律取自上游 / 引擎；与上游逐值对拍；断言只写被测的那块；合并后逐块复核；门禁跑着时不动工作区 |
 | v0.47.4-dev (2026-11-07) | windows-smoke 偶发红：`start` 刚报两个服务都可达，紧接着 doctor 探到 chart 不通，`setup` 判 ok:false，同轮真实排盘冒烟全过；上一轮只重跑未定论 | doctor 只在「一边通一边不通」时短暂复探（3 次 × 0.5 秒），全通 / 全不通一次定论；三条负向对照。推上去后测试在 Linux / Windows CI 红：断言了带平台布局的整体 `ok`，改为只断言 `services:*` |
 | v0.47.3-dev (2026-11-06) | 公开 wheel 冒烟：`setup --vectors` 在默认 Python 3.11 的机器上解析失败。uv 按 requires-python 换解释器的逻辑认不出带 extra 的包；之前的端到端是在仓库目录里跑的，项目配置替它选中了 3.12，因为错误的原因通过 | uvx 启动器带 `--python 3.12`；端到端要在项目目录之外、干净环境里跑 |
@@ -190,6 +191,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.48.0 / 2026-11-08 — 发版矩阵：windows-11-arm 的 pytest 又撞天花板（3600 s，零失败），这次是两个版本没人看余量
+
+- **现象**：v0.48.0 draft 流水线（42525787839）只有 windows-11-arm lane 红，其余 lane、assemble、草稿资产 sha 全对。lane-report 里
+  安装 / doctor / 引擎 / 客户端（stdio 127 个工具）/ HTTP / 重启全 ok，唯一的问题是 `pytest timed out after 3600 s`，日志停在 86%、零个 F。
+- **根因**：v0.45.1 那次的规则是「发版后看各 lane 的 pytest 占比，>90% 就提前加」——v0.47.1 / v0.47.3 两次发版这条 lane 已是
+  3496 / 3466 s（97% / 96%），我没打开 lane 报告看。v0.48.0 加了 176 条测试（+5.4%），windows-latest 从 1813 s 到 2296 s（同 lane
+  两次发版之间本来就有 ±15% 的噪声，2132 → 1813 s），仿真 lane 按比例约要 4200–4400 s。本机 `--durations` 看，新测试文件合计约 29 s /
+  468 s，不是某一条新测试特别慢——是贴着线的 lane 吃不下任何增长。规则只写在文档里、没有机器提醒，就等于没有。
+- **修**：`EMULATED_PYTEST_EXTRA_SECONDS` 900 → 2700（仿真 lane pytest 5400 s）；`runtime-matrix.yml` job 超时 90 → 120 分钟（守卫要求
+  预算外再留 ≥15 分钟，本次其余步骤约 9 分钟）。lane 的 pytest 用掉 >85% 预算时：lane-report 的 pytest 步写 `budget_fraction` 与
+  `warnings`，在 Actions 里打印 `::warning title=lane pytest near its budget …::`——它出现在 run 的 ANNOTATIONS 里，`gh run watch`
+  每次发版结束都会打印，不用再记得去开报告。pytest 命令加 `--durations=25`，下次慢了能看出是哪些测试。lane 脚本取自派发 publish 的
+  提交（main），tag 与 draft 不用重做。
+- **守卫**：`tests/test_verify_runtime_live.py`——超线写 warning + 注解、低于线不写（参数化两例）；命令带 `--durations`；原有「加时后
+  仍装得进 job 超时」用例。负向对照：job 超时改回 90 → 红；阈值改成 2.0 → 红；去掉 `--durations` → 红。另用本机真 durations 日志
+  核过 `pytest_summary` / `forbidden_skips` / `failed_tests` 解析不受 durations 段影响（3425 passed / 62 skipped，0 误判）。
+- **规则**：口头规则要配机器提醒。lane 预算的余量现在由注解报给发版人；发版收尾读 ANNOTATIONS，看到 near-budget 就在下一版前加时
+  或查 `--durations` 里变慢的测试。
 
 ### v0.48.0-dev / 2026-11-08 — 四路并行功能批：地名检索 / 命主档案 / 盘图与日历 / 工具面瘦身
 

@@ -82,7 +82,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     # the ARM lane blocks like the others; arm_nonblocking=true (explicit) makes it advisory for one run
     continue-on-error: ${{ matrix.platform == 'win32-arm64' && inputs.arm_nonblocking == true }}
-    timeout-minutes: 90
+    # 120 = the emulated lane's pytest budget (verify_runtime_live.py: 2700 + 2700 s = 90 min) + ≥15 min for the other steps
+    # (tests/test_verify_runtime_live.py checks the arithmetic); v0.48.0's draft killed that lane at 86% under 90 / 3600.
+    timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
       HOROSA_RUNTIME_START_TIMEOUT_SECONDS: "900"
