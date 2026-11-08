@@ -1384,6 +1384,8 @@ A global stability pass hardened these; keep them true when you touch the releva
   `MCP_RESULT_WIRE_BUDGET`、单张 512 KiB、最多 4 张约束，超出只给链接并在 `inline_images` 写明。ICS 只用结果里写着的日期：结束 = 结果自带的结束或
   下一期开始，从不「开始 + 时长」自算；本地时间按结果自带时区转 UTC，有 JD / 毫秒值就逐条交叉核对；0001–9999 以外的年份跳过并说明；
   不支持的工具 `report.no_calendar_content`。`.ics` 一律 CRLF（`.gitattributes` `*.ics -text`）。
+- **PDF / PNG 字体的注册名 = 前缀 + 字体文件身份摘要（v0.48.0）。** reportlab 对 TrueType 同名再注册静默忽略，只按候选序号命名会让
+  别的文件拿回旧字体（Windows 上序号 0 恰是真字体，CI 两条红）。守卫 `tests/test_pdf_font_registration_identity.py`。
 
 ### 9.3.2 记忆存档（memory store / artifacts）
 

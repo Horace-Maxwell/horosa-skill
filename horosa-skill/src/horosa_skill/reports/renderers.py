@@ -1855,12 +1855,18 @@ def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | 
     return next((found[n] for n in names if n in found), None)
 
 
-def _load_ttf(TTFont: Any, font_name: str, path: str, names: tuple[str, ...] | None) -> Any | None:
+def _load_ttf(TTFont: Any, prefix: str, path: str, names: tuple[str, ...] | None) -> Any | None:
+    """注册名 = 前缀 + 字体文件身份（路径 + 子字体序号）的短摘要。reportlab 的 registerFont 对 TrueType **只认第一次**：
+    同名再注册静默忽略、getFont 仍回旧字体。此前注册名只看候选表序号（HorosaSC0…），候选表一变（测试钉字体、
+    或 Windows 上序号 0 恰是真字体）就拿回别的文件——v0.48.0 windows-smoke 因此两条红。"""
     if not Path(path).exists():
         return None
     index = _face_index(TTFont, path, names)
     if index is None:
         return None
+    import hashlib
+
+    font_name = f"{prefix}-{hashlib.sha1(f'{Path(path).resolve()}|{index}'.encode('utf-8')).hexdigest()[:10]}"
     try:
         font = TTFont(font_name, path, subfontIndex=index) if path.lower().endswith(".ttc") else TTFont(font_name, path)
     except Exception:  # noqa: BLE001 - 这一款载不了就换下一款（探针，None 即答案）

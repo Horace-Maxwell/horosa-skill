@@ -230,6 +230,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   别的线程（subprocess 轮询 0.001 s）的 sleep 也记进来。复探改走自己的接缝 `_reprobe_sleep`，测试只替换它。
 - **合并时并列块的相同结尾被当成共同后缀**：档案分支的 `ProfileInput` 与地名分支的 `PlaceSearchInput` 都以同样三行（隐藏闸门三键）结尾，
   git 只留了一份给后一个类，`ProfileInput` 静默丢了这三行。两个分支各自往同一处追加结构相似的块时，合并后逐块与原分支比对。
+- **字体注册名撞名，Windows 上两条红**（v0.48.0 发版 CI 42517406526 windows-smoke）：reportlab 的 `registerFont` 对 TrueType 只认第一次，
+  同名再注册静默忽略。注册名此前是 `HorosaSC{候选序号}`；Windows 上序号 0 恰是系统真字体，钉 Vera 的缺字用例拿回雅黑（DID NOT RAISE），
+  Vera 又占着 `HorosaTC0` 让繁体报告用例拿到缺中文字形的字体。macOS 上能载入的字体序号靠后、名字不撞，本机全绿。注册名改为前缀 + 字体文件身份
+  （路径 + 子字体序号）摘要；守卫 `tests/test_pdf_font_registration_identity.py` 用 reportlab 自带的 Vera / VeraIt 在任何平台复现；
+  本机把可用字体挪到序号 0 也复现了 CI 那两条（修前红、修后绿）。
 - **门禁跑着时在同一工作区合并**：冲突标记写进了正在被测试读的文件，那一轮结果作废。门禁跑着时不动它的工作区。
 
 ### v0.47.4-dev / 2026-11-07 — doctor 凭一次探测判「半边没起」：把瞬时抖动报成服务没起
