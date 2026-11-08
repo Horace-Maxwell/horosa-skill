@@ -284,7 +284,6 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "pick_tool_from_catalog",
     },
-    "tool.invalid_payload": {"kind": "input", "next_action": "fix_input_per_validation_errors"},
     "dispatch.no_matching_tool": {
         "kind": "input",
         "prompt_to_user": bilingual(
@@ -577,15 +576,18 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "run_technique_tool_first",
     },
+    # 这一个码同时覆盖「字段校验没过」（绝大多数）与「整包参数不是对象」两种情形。此前表里写了两遍、后者静默覆盖前者，
+    # 字段校验错误的 hint 因此一直写着「参数没解析成对象」（tests/test_no_duplicate_dict_keys.py 起守住整库字面量重键）。
     "tool.invalid_payload": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "调用参数没解析成对象。把各个字段按工具的 inputSchema 直接传（不要整包塞进一个字符串），"
-            "确需整包时 request 必须是合法 JSON 对象。",
-            "The call arguments did not parse as an object. Pass fields directly per the tool's "
-            "inputSchema; if you must send one blob, `request` has to be a valid JSON object.",
+            "参数没通过校验：按 details.errors 逐项改正对应字段（缺的问用户，不要猜）。若是整包参数没解析成对象，"
+            "就把各字段按工具的 inputSchema 直接传；确需整包时 request 必须是合法 JSON 对象。",
+            "The arguments failed validation: fix each field listed in details.errors (ask the user for anything missing; never guess). "
+            "If the whole call did not parse as an object, pass fields directly per the tool's inputSchema; "
+            "a single `request` blob must be a valid JSON object.",
         ),
-        "next_action": "resend_arguments_as_object",
+        "next_action": "fix_input_per_validation_errors",
     },
     "agent_guidance.required": {"kind": "input", "next_action": "ask_user_then_confirm"},
 }
