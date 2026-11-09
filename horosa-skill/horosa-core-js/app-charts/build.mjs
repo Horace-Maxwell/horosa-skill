@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 
 import * as esbuild from 'esbuild';
 
+import { lightThemeTokens } from './theme.mjs';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CORE = path.resolve(HERE, '..');
 const PKG = path.resolve(CORE, '..');
@@ -30,7 +32,7 @@ const BUNDLE = path.join(DIST, 'app-charts.cjs');
 const NOTICE = path.join(DIST, 'app-charts.LICENSES.txt');
 const MANIFEST = path.join(PKG, 'contracts', 'app_charts_bundle.json');
 const APP_SRC_REL = path.join('Horosa-Web', 'astrostudyui', 'src');
-const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment)(\/|$)/;
+const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign)(\/|$)/;
 const STUB = 'const h={get:(t,k)=>k==="__esModule"?true:(k==="default"?p:(k===Symbol.toPrimitive?()=>"":p))};'
   + 'const p=new Proxy(function(){return p},Object.assign(h,{apply:()=>p,construct:()=>p}));module.exports=p;';
 
@@ -52,6 +54,7 @@ fs.symlinkSync(HERE, path.join(stage, 'core'), 'dir');
 fs.symlinkSync(path.join(CORE, 'node_modules'), path.join(stage, 'node_modules'), 'dir');
 
 const appPrefix = `${path.join(stage, 'app')}${path.sep}`;
+const theme = lightThemeTokens(path.resolve(sourceRoot, APP_SRC_REL));
 const plugin = {
   name: 'horosa-app',
   setup(build) {
@@ -61,6 +64,9 @@ const plugin = {
       return { path: a.path, namespace: 'stub' };
     });
     build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: STUB, loader: 'js' }));
+    // the app's light-theme tokens (theme.mjs), baked in at build time
+    build.onResolve({ filter: /^horosa-theme-tokens$/ }, () => ({ path: 'horosa-theme-tokens', namespace: 'theme' }));
+    build.onLoad({ filter: /.*/, namespace: 'theme' }, () => ({ contents: JSON.stringify(theme.tokens), loader: 'json' }));
   },
 };
 
@@ -73,7 +79,8 @@ try {
     platform: 'node',
     format: 'cjs',
     target: 'node20',
-    minify: true,
+    minify: !process.env.HOROSA_APP_CHARTS_DEBUG,
+    define: { 'process.env.NODE_ENV': '"production"' },
     legalComments: 'none',
     preserveSymlinks: true,
     nodePaths: [path.join(stage, 'node_modules')],
@@ -93,12 +100,13 @@ const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 const appFiles = {};
 const packages = new Set();
 for (const input of Object.keys(result.metafile.inputs).sort()) {
-  if (input.startsWith("app/")) {
+  if (input.startsWith('app/')) {
     appFiles[input.slice(4)] = sha(fs.readFileSync(path.join(sourceRoot, APP_SRC_REL, input.slice(4))));
   }
   const m = input.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/);
   if (m) packages.add(m[1]);
 }
+for (const [rel, text] of Object.entries(theme.inputs)) appFiles[rel] = sha(Buffer.from(text, 'utf8'));
 let upstreamCommit = null;
 try {
   upstreamCommit = execFileSync('git', ['-C', sourceRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -120,6 +128,7 @@ const manifest = {
   bundle_sha256: sha(bundle),
   bundle_bytes: bundle.length,
   kinds: null,
+  theme_tokens: Object.keys(theme.tokens).length,
   packages: [...packages].sort().map((name) => `${name}@${JSON.parse(fs.readFileSync(path.join(CORE, 'node_modules', name, 'package.json'), 'utf8')).version}`),
   app_files: appFiles,
 };

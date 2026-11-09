@@ -24,6 +24,8 @@
   "devDependencies": {
     "d3": "7.9.0",
     "esbuild": "0.25.0",
-    "linkedom": "0.18.12"
+    "linkedom": "0.18.12",
+    "react": "17.0.2",
+    "react-dom": "17.0.2"
   }
 }

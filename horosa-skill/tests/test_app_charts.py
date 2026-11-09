@@ -63,7 +63,8 @@ def test_committed_bundle_matches_its_manifest() -> None:
     body = BUNDLE.read_bytes()
     assert hashlib.sha256(body).hexdigest() == manifest["bundle_sha256"]
     assert len(body) == manifest["bundle_bytes"]
-    assert {"natal_wheel", "ziwei"} <= set(manifest["kinds"])
+    assert {"natal_wheel", "bi_wheel", "ziwei", "guolao", "taiyi"} <= set(manifest["kinds"])
+    assert manifest["theme_tokens"] > 100, "light-theme tokens are baked in from the app stylesheets"
     assert manifest["app_files"], "the manifest must pin every app source file it bundled"
     assert b"horacedong" not in body and b"/var/folders" not in body, "bundle must not embed machine paths"
 
@@ -149,11 +150,48 @@ def test_switch_off_keeps_the_skill_drawing(monkeypatch: pytest.MonkeyPatch) -> 
     assert spec["renderer"] == "builtin" and not calls
 
 
-def test_plan_gives_each_wheel_its_own_layer_and_never_the_bi_wheel() -> None:
+def test_plan_gives_each_wheel_its_own_layer() -> None:
     data = FIXTURE["chart"]
     plan = app_charts.plan("chart", data, extract_figures("chart", data, "chart"))
     assert [request["kind"] for _i, request in plan] == ["natal_wheel"]
     assert plan[0][1]["data"]["chart"] is data["chart"]
-    bi = [{"kind": "wheel", "source": [], "outer_bodies": [{"id": "Sun"}]}]
-    assert app_charts.plan("relative", data, bi) == []
+    synastry = {"inner": {"chart": data["chart"], "params": {"name": "甲"}}, "outer": {"chart": data["chart"], "params": {"name": "乙"}}}
+    bi = [{"kind": "wheel", "source": ["inner"], "outer_bodies": [{"id": "Sun"}]}]
+    [(_i, request)] = app_charts.plan("relative", synastry, bi)
+    assert request["kind"] == "bi_wheel"
+    assert request["data"]["natualChart"]["params"]["name"] == "甲", "inner person = houses ring, as the report caption says"
     assert app_charts.plan("babylon", data, [{"kind": "wheel", "source": []}]) == []
+
+
+@needs_node
+@pytest.mark.parametrize(
+    ("tool", "kind", "marker"),
+    [
+        ("chart", "natal_wheel", 'font-family="ywastrochart"'),
+        ("ziwei_birth", "ziwei", "命主"),
+        ("guolao_chart", "guolao", "四柱"),
+        ("taiyi", "taiyi", "中宫"),
+        ("relative", "bi_wheel", 'font-family="ywastrochart"'),
+    ],
+)
+def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
+    spec = next(f for f in _figures(tool) if f.get("app_kind") == kind)
+    svg = spec["app_svg"]
+    assert spec["renderer"] == "app" and svg.startswith("<svg") and marker in svg
+    assert "var(" not in svg, "every app CSS variable must be resolved from the app's light-theme tokens"
+
+
+def test_theme_tokens_are_the_light_values_not_the_dark_fallbacks() -> None:
+    """六壬的底色回退值是暗色 #090b0e；必须按 app 亮色主题（layouts/app/*.less 的 :root）解析。"""
+    import subprocess
+
+    script = (
+        "const b=require(process.argv[1]);"
+        "process.stdout.write(b.resolveThemeVars('<rect fill=\"var(--horosa-astro-panel, #090b0e)\" "
+        "stroke=\"var(--horosa-liureng-square-line, rgba(231, 189, 117, 0.18))\"/>'))"
+    )
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not on PATH")
+    out = subprocess.run([node, "-e", script, str(BUNDLE)], capture_output=True, text=True, check=True).stdout
+    assert "#090b0e" not in out and "rgba(154, 106, 37, 0.16)" in out, out

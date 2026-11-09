@@ -220,6 +220,13 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   因为文件就在磁盘上——推上去 CI 才会红（`test_committed_bundle_matches_its_manifest` 读不到文件）。加 `!horosa-core-js/dist/` 例外；
   提交前看一眼 `git status` 里新产物在不在，别只看门禁。
 
+- **CSS 变量的回退值不一定是亮色。** 紫微的 `var(--horosa-ziwei-chart-bg, #f6f1e7)` 回退恰是亮色，六壬底色却是
+  `var(--horosa-astro-panel, #090b0e)`（暗色）。「取回退值」会让部分盘印成深底。改为构建时从 app 自己的样式表
+  （`layouts/app/*.less`）抽亮色主题令牌（`:root` / `html` < `:root[data-horosa-appearance=light]` < `body`，后代选择器不算），
+  烤进 bundle、出图时解析（`app-charts/theme.mjs`，200 个；负向对照：关掉解析 → 两族残留 `var(` → 红）。
+- **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
+  读 app 代码一律去 pin 的公开克隆。
+
 另：本机 `Horosa-Public` 已在 pin 之后（`4c1a82ca` vs pin `10fb75de`），打包一律用 pin 住的公开克隆，否则 `--check` 必红。
 本地 runtime 没带 bundle（老 payload）时自动退回自绘图，规格写 `renderer: builtin` + 原因，不静默。
 

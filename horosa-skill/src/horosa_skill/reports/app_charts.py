@@ -30,9 +30,10 @@ TEXT_FAMILY = "HorosaReportText"
 TEXT_BOLD_FAMILY = "HorosaReportTextBold"
 
 # 西洋轮：取 `figures._wheels` 记下的那一层（`source`：根 / dirChart / natalChart / charts.春分…），整份交给 app 的 AstroChartCircle。
-# 不走 app 画法的：巴比伦（无宫位体系，app 用另一套 components/babylon）、合盘双圈（另有 AstroDoubleChart，见 batch 计划）。
+# 不走 app 画法的：巴比伦（无宫位体系，app 用另一套 components/babylon）。合盘双圈走 drawDoubleChart（bi_wheel）。
 _WHEEL_SKIP_TOOLS = frozenset({"babylon"})
 _ZIWEI_TOOLS = frozenset({"ziwei_birth", "ziweizeri"})
+_GUOLAO_TOOLS = frozenset({"guolao_chart", "qizhengzeri"})  # 七政择日动盘（qizhengelection）是另一种盘，不在此列
 _HEAVY_KEYS = frozenset({"export_snapshot", "technique_card", "snapshot_text"})
 
 
@@ -56,7 +57,12 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
     requests: list[tuple[int, dict[str, Any]]] = []
     for index, spec in enumerate(figures):
         kind = spec.get("kind")
-        if kind == "wheel" and tool_name not in _WHEEL_SKIP_TOOLS and not spec.get("outer_bodies") and isinstance(spec.get("source"), list):
+        if kind == "wheel" and spec.get("outer_bodies") and isinstance(_dig(source, ["inner", "chart"]), dict) and isinstance(_dig(source, ["outer", "chart"]), dict):
+            # 合盘双圈：与自绘图同一安排（内圈甲方宫位与行星、外圈乙方行星）= app AstroDoubleChartMain 的「星盘B」页
+            pick = lambda layer: {key: layer[key] for key in ("params", "chart", "aspects", "lots") if key in layer}  # noqa: E731
+            requests.append((index, {"kind": "bi_wheel", "data": {"natualChart": pick(source["inner"]), "dirChart": pick(source["outer"])},
+                                     "options": {"size": 760}}))
+        elif kind == "wheel" and tool_name not in _WHEEL_SKIP_TOOLS and not spec.get("outer_bodies") and isinstance(spec.get("source"), list):
             layer = _dig(source, spec["source"])
             if isinstance(layer, dict) and isinstance(layer.get("chart"), dict):
                 payload = {key: value for key, value in layer.items() if key not in _HEAVY_KEYS}
@@ -69,6 +75,13 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
                 requests.append((index, {"kind": "natal_wheel", "data": payload, "options": {"size": 760}}))
         elif kind == "grid12" and tool_name in _ZIWEI_TOOLS and isinstance(source.get("chart"), dict):
             requests.append((index, {"kind": "ziwei", "data": {"chart": source["chart"]}, "options": {"size": 780}}))
+        elif kind == "taiyi" and isinstance(source.get("pan") if isinstance(source.get("pan"), dict) else source.get("taiyi"), dict):
+            # 与 figures._taiyi 同一份 pan（太乙 / 太乙择时在 pan，三式合一 / 三式择时在 taiyi）→ app 的 TaiyiBoardSvg
+            pan = source["pan"] if isinstance(source.get("pan"), dict) else source["taiyi"]
+            requests.append((index, {"kind": "taiyi", "data": {"pan": pan}, "options": {}}))
+        elif kind == "grid12" and tool_name in _GUOLAO_TOOLS and isinstance(_dig(source, ["chart", "fixedStarSu28"]), (list, dict)):
+            payload = {key: source[key] for key in ("params", "chart", "aspects", "lots") if key in source}
+            requests.append((index, {"kind": "guolao", "data": payload, "options": {"size": 760}}))
     return requests
 
 

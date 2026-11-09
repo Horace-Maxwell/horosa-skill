@@ -24,3 +24,24 @@ export function renderNatalWheel(value, options = {}) {
     unmount(svg, div);
   }
 }
+
+// 合盘双圈 — the same AstroChartCircle's drawDoubleChart, fed as AstroDoubleChartMain does:
+// { natualChart, dirChart } = (inner person, outer person). This is the app's「星盘B」tab arrangement, which matches the
+// report's caption (内圈甲方宫位与行星，外圈乙方行星).
+export function renderBiWheel(data, options = {}) {
+  if (!data || !data.natualChart || !data.natualChart.chart || !data.dirChart || !data.dirChart.chart) {
+    throw new Error('bi-wheel: needs natualChart.chart and dirChart.chart');
+  }
+  const size = Number(options.size) || 760;
+  AstroConst.setColorTheme(AstroConst.DefaultColorTheme);
+  const { id, svg } = mountSvg(size, size);
+  const { id: tipId, div } = mountTooltip();
+  try {
+    const circle = new AstroChartCircle({ divTooltip: d3.select(`#${tipId}`), onTipClick: () => {} });
+    const planetDisp = new Set([...AstroConst.DEFAULT_OBJECTS, ...AstroConst.DEFAULT_LOTS]);
+    circle.drawDoubleChart(id, { natualChart: data.natualChart, dirChart: data.dirChart }, RSTEP, AstroConst.CHART_DEFAULTOPTS, planetDisp, undefined);
+    return { svg: svg.outerHTML, width: size, height: size };
+  } finally {
+    unmount(svg, div);
+  }
+}

@@ -1371,6 +1371,10 @@ A global stability pass hardened these; keep them true when you touch the releva
     随包 `data/fonts/`，用户 2026-11-09 确认可分发）按文件注册；④adapter 只做无损的记法换算与「纸面无意义的交互件」剔除（如紫微中宫的
     「命盘信息」按钮），不改 app 的画法、不算位置；上游 bug 照「只报」处理（紫微经度科学计数法）。新加一种盘：adapter + `RENDERERS` +
     `app_charts.plan` 登记 + `tests/test_app_charts.py` 用真实引擎夹具断言 + 对照 app 截图。`HOROSA_APP_CHARTS=0` 只画自绘图。
+    已接：西洋单轮（AstroChartCircle）、合盘双圈（drawDoubleChart，内圈甲方）、紫微（ZWChart）、七政四余（GLChart，fields 取 params）、
+    太乙（TaiyiBoardSvg，React 17 `renderToStaticMarkup`）。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
+    抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
+    **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。
     下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
   - **报告骨架（v0.45.0，全部技法共用）**：封面基本信息 + 「关键设置」（技法卡里的结果敏感口径，人读规则同附录）→ 核心结论 / 总览摘要
     （AI，STORM 式 lead）→ 完整盘面（盘图 + 导出段，标题前印段号 `E{n}`，n = 导出段序号，与报告模板 `cite_id` 同号）→ 「AI 解读」部分

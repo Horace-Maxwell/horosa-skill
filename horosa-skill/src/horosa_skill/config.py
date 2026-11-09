@@ -121,6 +121,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_JAVA_HOME": "internal",
     # 报告盘图用星阙 app 原版画法（reports/app_charts.py）；=0 只画 skill 自绘的图（排查用）。
     "HOROSA_APP_CHARTS": "internal",
+    # app-charts/build.mjs 的调试开关：=1 打不压缩的 bundle（看报错栈用），只在维护机构建时设。
+    "HOROSA_APP_CHARTS_DEBUG": "internal",
 }
 # removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
 REMOVED_ENV_FLAGS: dict[str, str] = {}
