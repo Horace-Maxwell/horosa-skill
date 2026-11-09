@@ -1,25 +1,33 @@
-[简体中文](./README.md) | **English**
-
 <div align="center">
-  <h1>Horosa Skill</h1>
-  <p><strong>Turn Xingque / Horosa into an offline metaphysics capability layer any AI can call locally.</strong></p>
-  <p>Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>114</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.</p>
 
-  <p><a href="https://github.com/Horace-Maxwell/horosa-skill"><img src="https://img.shields.io/badge/GitHub-Repository-111827?style=for-the-badge&logo=github" alt="Repository" /></a>&nbsp;<a href="https://github.com/Horace-Maxwell/horosa-skill/releases"><img src="https://img.shields.io/badge/GitHub-Releases-1d4ed8?style=for-the-badge&logo=github" alt="Releases" /></a>&nbsp;<a href="./README.md"><img src="https://img.shields.io/badge/阅读-简体中文-0f766e?style=for-the-badge" alt="Read in Chinese" /></a></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/hero-en-dark.svg" />
+  <img src="./docs/assets/readme/hero-en-light.svg" alt="Horosa Skill — 114 real astrology & metaphysics techniques, callable by any AI on your own machine" width="100%" />
+</picture>
 
-  <p>
-    <img src="https://img.shields.io/github/stars/Horace-Maxwell/horosa-skill?style=flat-square" alt="GitHub stars" />
-    <img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square" alt="Release" />
-    <img src="https://img.shields.io/badge/tools-114-1d4ed8?style=flat-square" alt="114 tools" />
-    <img src="https://img.shields.io/badge/platform-macOS%20(arm64)%20%7C%20Windows%20(x64)-0f766e?style=flat-square" alt="Platforms" />
-    <img src="https://img.shields.io/badge/runtime-offline%20first-111827?style=flat-square" alt="Offline runtime" />
-    <img src="https://img.shields.io/badge/MCP-ready-111827?style=flat-square" alt="MCP ready" />
-    <img src="https://img.shields.io/badge/knowledge-31%20domains%2C%20cited-111827?style=flat-square" alt="Cited knowledge base" />
-    <img src="https://img.shields.io/badge/storage-SQLite%20%2B%20JSON-111827?style=flat-square" alt="SQLite and JSON" />
-  </p>
+<p>
+  <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=b7791f&label=release" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/tools-114-6a4fd3?style=flat-square" alt="114 tools" />
+  <img src="https://img.shields.io/badge/knowledge-31%20domains%2C%20cited-0d8478?style=flat-square" alt="Cited knowledge base" />
+  <img src="https://img.shields.io/badge/runtime-offline%20first-1f2937?style=flat-square" alt="Offline runtime" />
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-1f2937?style=flat-square" alt="Platforms" />
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f2937?style=flat-square" alt="License" /></a>
+</p>
 
-  <p><a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-374151?style=flat-square" alt="License" /></a>&nbsp;<a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing-Guide-0f766e?style=flat-square" alt="Contributing" /></a>&nbsp;<a href="./SECURITY.md"><img src="https://img.shields.io/badge/Security-Policy-991b1b?style=flat-square" alt="Security" /></a>&nbsp;<a href="./SUPPORT.md"><img src="https://img.shields.io/badge/Support-Paths-1d4ed8?style=flat-square" alt="Support" /></a>&nbsp;<a href="./CITATION.cff"><img src="https://img.shields.io/badge/Citation-CFF-7c3aed?style=flat-square" alt="Citation" /></a></p>
+<a href="./README.md">简体中文</a> · <b>English</b>
+&nbsp;&nbsp;|&nbsp;&nbsp;
+<a href="#quick-start">Quick start</a> ·
+<a href="#architecture">Architecture</a> ·
+<a href="#capability-map-114-tools">Techniques</a> ·
+<a href="#supported-ai-clients">Clients</a> ·
+<a href="#trust-stack-provenance--knowledge--evaluation--synthesis">Trust</a> ·
+<a href="#documentation-map">Docs</a>
+
 </div>
+
+<br/>
+
+Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>114</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.
 
 ---
 
@@ -37,6 +45,22 @@ It solves six things:
 - **Light repo** — code, docs, CLI, MCP, tests in Git; the heavy runtime in Releases.
 
 License: the repo is published under `GNU AGPL-3.0-only` (root [LICENSE](./LICENSE)). The three bundled third-party `ken` engines are used under their own MIT licenses (see [Credits](#credits-the-bundled-open-source-ken-engines)).
+
+## Architecture
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/architecture-en-dark.svg" />
+  <img src="./docs/assets/readme/architecture-en-light.svg" alt="Horosa Skill architecture: AI clients → the local Horosa Skill process → the offline runtime → local storage" width="100%" />
+</picture>
+
+AI clients connect over MCP (stdio / streamable-http) or the JSON-first CLI to the **local Horosa Skill process**, which gates every call, dispatches it, attaches a provenance card and renders reports. It computes on the offline runtime — the Java backend (lunar calendar / BaZi / Zi Wei / Da Liu Ren), the Python chart service (Western charts, the `ken` Three Styles engines, the kentang Shen Shu engines) and the headless JS layer `horosa-core-js` (re-laid into `aiExport.js` sections) — and writes each run to local SQLite + JSON. Upstream Xingque syncs into this repo one way; the runtime ships through GitHub Releases.
+
+### The life of one call
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/flow-en-dark.svg" />
+  <img src="./docs/assets/readme/flow-en-light.svg" alt="One call: ask → clarification gate → local compute → read the snapshot → provenance → archive and report" width="100%" />
+</picture>
 
 ## Documentation map
 
@@ -75,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `3368 / 3368 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `3375 / 3375 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
@@ -91,6 +115,11 @@ Local end-to-end signals:
 > About `solarreturn` / `lunarreturn` / `solararc` / `givenyear` / `profection` / `pd` / `pdchart` / `zr`: these predictive tools are verified working in this version and should not be flagged by an agent as "Java `/predict/*` unavailable". If a client still says so, check whether it is on an old runtime, bypassing MCP to hand-compute, or hasn't run `doctor` / `openclaw-check --full`.
 
 ## Capability map (114 tools)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/techniques-en-dark.svg" />
+  <img src="./docs/assets/readme/techniques-en-light.svg" alt="The 114 techniques by family" width="100%" />
+</picture>
 
 > Every business technique returns a uniform envelope plus a Xingque-style `export_snapshot` and a `data.technique_card` provenance card. Tools marked ⓟ are setting-sensitive and require parameter confirmation before calling.
 
@@ -533,6 +562,11 @@ This keeps the GitHub page clean, the Release assets complete, local execution o
 
 ## Repository layout
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/repo-en-dark.svg" />
+  <img src="./docs/assets/readme/repo-en-light.svg" alt="Repository layout: the horosa-skill Python package, horosa-core-js, contracts, skills, vendor, docs and manifests" width="100%" />
+</picture>
+
 | Path | Description |
 | --- | --- |
 | [`horosa-skill/`](./horosa-skill) | Core Python package, CLI, MCP server, `horosa-core-js` (headless JS engines), tests, examples, release scripts |
@@ -548,7 +582,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 3368 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 3375 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
@@ -577,3 +611,13 @@ The full self-check covers: each tool is callable → returns a uniform envelope
 **Why isn't `fengshui` in the surface yet?** The current goal is the "complete, headless, offline-verifiable" surface. `fengshui` stays excluded; we don't disguise an un-headless capability as shippable.
 
 **What's the most important quality signal?** Not badges or screenshots, but whether these five hold at once: tools really call · exports are really stable structured · every answer is really traceable to its technique and settings · results really persist and write back · benchmark / self-check / faithfulness evaluation really keep passing.
+
+<br/>
+
+<div align="center">
+
+<sub>Metaphysics tools, local first — in your own hands.</sub>
+
+[![License](https://img.shields.io/badge/License-AGPL--3.0-1f2937?style=flat-square)](./LICENSE) [![Security](https://img.shields.io/badge/Security-Policy-c13e65?style=flat-square)](./SECURITY.md) [![Support](https://img.shields.io/badge/Support-Paths-2d6acf?style=flat-square)](./SUPPORT.md) [![Contributing](https://img.shields.io/badge/Contributing-Guide-0d8478?style=flat-square)](./CONTRIBUTING.md) [![Citation](https://img.shields.io/badge/Citation-CFF-6a4fd3?style=flat-square)](./CITATION.cff)
+
+</div>

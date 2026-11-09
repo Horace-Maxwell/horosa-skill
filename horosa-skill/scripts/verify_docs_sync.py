@@ -291,7 +291,7 @@ COUNT_PROSE = re.compile(r"(\d+)\s*(?:个)?\s*(?:真实)?(技法|工具|tools\b|
 # server.json phrased it "106 technique tools" — the noun doubles as the adjective — and sat at 106 through 110 because
 # server.json was not in COUNT_DOCS and this pattern needed `real|local` (2026-10 surface audit).
 COUNT_PROSE_EN = re.compile(r"(\d+)\s+(?:real|local|technique|callable)\s+[^,.;]{0,40}?\b(tools?|techniques?)\b")
-# 「N 个术数/占星技法」逐字出现在 CLAUDE.md / AGENTS.md / banner.svg 三处 —— 用精确短语而不是放宽
+# 「N 个术数/占星技法」逐字出现在 CLAUDE.md / AGENTS.md / README 横幅（docs/assets/readme/hero-zh-*.svg） —— 用精确短语而不是放宽
 # 通用正则，否则「约 9 个门面工具」这类真·小数字会被误报。
 # 🔴 README 横幅的 alt 里也有这句，而 EMPHASIS 连标签一起剥掉：这条要读原始行，不是剥过的行。
 COUNT_PHRASE_ZH = re.compile(r"(\d+)\s*个(?:真实)?术数\s*/?\s*占星技法")
@@ -318,7 +318,9 @@ COUNT_DOCS = [
     "skills/horosa-agent/SKILL.md",
     ".claude-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
-    "docs/assets/banner.svg",
+    # v0.48.x：README 横幅改由 gen_readme_diagrams.py 生成（明暗两版），旧 banner.svg 退役。
+    "docs/assets/readme/hero-zh-light.svg",
+    "docs/assets/readme/hero-zh-dark.svg",
     # v0.33.0 批 III-5 盲区修补：examples/ 客户端文档与 .agents 镜像也写工具数——此前不在扫描面，
     # 计数漂移在这两处永不报警（claude-code.md 的门面数就这样陈旧了两个版本）。
     "horosa-skill/examples/clients/codex.md",
@@ -887,7 +889,7 @@ KNOWLEDGE_CLAIMS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("README.md", r"覆盖 (\d+) 域", ("domains",)),
     ("README.md", r"(\d+) 份技法操作手册", ("manual_domains",)),
     ("README.md", r"八字断语库[^共]{0,12}共 (\d+) 条", ("total_entries",)),
-    ("README.md", r"📚 知识库 \| (\d+) 域；技法操作手册 (\d+) 条", ("domains", "manual_entries")),
+    ("README.md", r"\| 知识库 \| (\d+) 域；技法操作手册 (\d+) 条", ("domains", "manual_entries")),
     ("README_EN.md", r"(\d+) domains", ("domains",)),
     ("README_EN.md", r"(\d+)-domain knowledge base\*\* \((\d+) cited entries", ("domains", "total_entries")),
     ("README_EN.md", r"(\d+) manual entries", ("manual_entries",)),
@@ -1069,6 +1071,24 @@ def check_agent_mirrors_generated() -> None:
         err(f"{module.SKILL_BUNDLE_REL}/{rel}: packaged skill bundle differs from skills/horosa-agent — rerun scripts/gen_agent_mirrors.py")
 
 
+def check_readme_diagrams_generated() -> None:
+    """README 的五张图（docs/assets/readme/*.svg）是生成件：技法数、MCP 面、客户端数、知识库域数、各门类数都画在图里。
+    加了技法 / 客户端却没重跑生成器，首页图就会和正文对不上——这里按渲染逐字节比对。"""
+    spec = _ilu.spec_from_file_location("gen_readme_diagrams", PKG / "scripts" / "gen_readme_diagrams.py")
+    module = _ilu.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    for rel in module.drift():
+        err(f"{rel}: differs from scripts/gen_readme_diagrams.py's render — the README diagrams are build output; rerun the generator")
+    for readme, lang in (("README.md", "zh"), ("README_EN.md", "en")):
+        text = read(ROOT / readme)
+        for fig in module.FIGURES:
+            for theme in module.THEME_NAMES:
+                ref = f"./{module.OUT_REL}/{fig}-{lang}-{theme}.svg"
+                if ref not in text:
+                    err(f"{readme}: does not show {ref} (each figure goes in a <picture> with its light and dark file)")
+
+
 THIRD_PARTY_LEDGER = PKG / "contracts" / "third_party_facts.json"
 
 
@@ -1241,6 +1261,7 @@ ONLY_CHECKS = {
     "doc-map": lambda strict: check_doc_map(),
     "lessons": lambda strict: check_lessons_distilled(),
     "mirrors": lambda strict: check_agent_mirrors_generated(),
+    "readme-diagrams": lambda strict: check_readme_diagrams_generated(),
     "group-headers": lambda strict: check_group_headers(),
     "export-contract": lambda strict: check_export_contract_versions(),
     "gate-counts": lambda strict: check_gate_counts(),
@@ -1290,6 +1311,7 @@ def main() -> None:
     check_doc_map()
     check_lessons_distilled()
     check_agent_mirrors_generated()
+    check_readme_diagrams_generated()
     check_third_party_facts(strict_staleness=strict)
     for warning in WARNINGS:
         print(f"::warning::{warning}")

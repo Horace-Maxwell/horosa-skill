@@ -578,6 +578,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
 8. 版本与文档：工具数跑 `scripts/bump_version.py --tool-counts`（改写全部声明并重渲镜像），再 `verify_mcp_list_budget.py --update-baseline`；README×2 全景表加行 + SKILL.md 工具路由加意图行
    （CI `verify_docs_sync.py` 因缺行而红）；「段补到既有工具 ≠ 新工具」——工具数徽章不动，测试数照更。
+   README 的五张图（`docs/assets/readme/*.svg`，中英 × 明暗）是**生成件**：技法 / 客户端 / 知识库数一变就跑
+   `uv run python scripts/gen_readme_diagrams.py`（门类数取自 README.md 的技法分组表，加行进对的组）；不重跑则 `check_readme_diagrams_generated` 红。
 9. **勿静默回退**：解析失败一律 raise 结构化错误，不许换默认值蒙混（`zone` 认不出 = `tool.invalid_zone`，曾回落 +08:00）；快照失败 log + `snapshot_error`，
    不许裸 `except: pass`。同族陷阱：`f"{response.get('x')}"` 键缺失时产出字面 `"None"`（6 字符真值串）——
    先判空再格式化，`f"{... or ''}"` 只有显式 `or ''` 才安全。
