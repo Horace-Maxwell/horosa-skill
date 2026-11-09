@@ -63,7 +63,7 @@ def test_committed_bundle_matches_its_manifest() -> None:
     body = BUNDLE.read_bytes()
     assert hashlib.sha256(body).hexdigest() == manifest["bundle_sha256"]
     assert len(body) == manifest["bundle_bytes"]
-    assert {"natal_wheel", "bi_wheel", "ziwei", "guolao", "taiyi", "liureng"} <= set(manifest["kinds"])
+    assert {"natal_wheel", "bi_wheel", "ziwei", "guolao", "taiyi", "liureng", "liuyao", "uranian_dial"} <= set(manifest["kinds"])
     assert manifest["theme_tokens"] > 100, "light-theme tokens are baked in from the app stylesheets"
     assert manifest["app_files"], "the manifest must pin every app source file it bundled"
     assert b"horacedong" not in body and b"/var/folders" not in body, "bundle must not embed machine paths"
@@ -174,6 +174,7 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("taiyi", "taiyi", "中宫"),
         ("relative", "bi_wheel", 'font-family="ywastrochart"'),
         ("liureng_gods", "liureng", "真太阳时"),
+        ("germany", "uranian_dial", 'font-family="ywastrochart"'),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -197,3 +198,53 @@ def test_theme_tokens_are_the_light_values_not_the_dark_fallbacks() -> None:
         pytest.skip("node not on PATH")
     out = subprocess.run([node, "-e", script, str(BUNDLE)], capture_output=True, text=True, check=True).stdout
     assert "#090b0e" not in out and "rgba(154, 106, 37, 0.16)" in out, out
+
+
+@needs_node
+def test_liuyao_uses_the_app_board_only_when_the_changed_hexagram_is_consistent() -> None:
+    """样例载荷的动爻与 changed_code 对不上：app 会从动爻自己翻出之卦（正文里没有），所以只在两者一致 / 没有动爻时换 app 画法。"""
+    import copy
+
+    data = FIXTURE["sixyao"]
+    figures = extract_figures("sixyao", data, "sixyao")
+    assert app_charts.plan("sixyao", data, figures) == [], "inconsistent 变卦 → keep the skill's drawing (本卦 only)"
+    still = copy.deepcopy(data)
+    for line in still["lines"]:
+        line["change"] = False
+    spec = app_charts.attach_app_svgs(extract_figures("sixyao", still, "sixyao"), "sixyao", still, _Client())[0]
+    assert spec["renderer"] == "app" and spec["app_kind"] == "liuyao"
+    assert "乾宫·本宫" in spec["app_svg"] and "用神" in spec["app_svg"], "the app's own analysis line (analyzeLiuyao) is printed"
+
+
+def test_bitmap_blends_translucent_fills() -> None:
+    """RGBA 底上 Pillow 只覆盖 alpha、转 RGB 后整块实色（90° 盘三个扇区曾印成饱和色块）：半透明必须按 alpha 混合。"""
+    import io
+
+    from PIL import Image
+    from reportlab.graphics.shapes import Drawing, Rect
+    from reportlab.lib.colors import Color
+
+    drawing = Drawing(20, 20)
+    drawing.add(Rect(0, 0, 20, 20, fillColor=Color(0.84, 0.42, 0.35, alpha=0.1), strokeColor=None, fillOpacity=0.1))
+    png = drawing_to_png(drawing, {"x": (str(app_charts.FONT_DIR / "ywastro.ttf"), 0)}, scale=1.0)
+    r, g, b = Image.open(io.BytesIO(png)).convert("RGB").getpixel((10, 10))
+    assert min(r, g, b) > 220, (r, g, b)
+
+
+def test_tooltips_never_become_visible_text() -> None:
+    svg = '<svg><text font-family="ywastrochart">I<title>本命 · 海王星</title></text><desc>x</desc></svg>'
+    out = app_charts.normalize_svg(svg)
+    assert "本命" not in out and "<desc" not in out and ">I</text>" in out
+
+
+def test_symbols_missing_from_the_text_font_use_the_fallback_chain() -> None:
+    from reportlab.graphics.shapes import Group, String
+
+    regular, bold, _files = _cjk_font()
+    chain = app_charts._symbol_chain()
+    if not chain or 0x211E in (app_charts._charset(regular) or set()):
+        pytest.skip("no symbol fallback font on this machine, or the text font already has ℞")
+    group = Group(String(0, 0, "℞", fontName="Courier"), String(0, 0, "本命", fontName="Courier"))
+    app_charts._swap_text_fonts(group, regular, bold)
+    assert group.contents[0].fontName in {name for name, *_ in chain}
+    assert group.contents[1].fontName == regular

@@ -224,6 +224,17 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   `var(--horosa-astro-panel, #090b0e)`（暗色）。「取回退值」会让部分盘印成深底。改为构建时从 app 自己的样式表
   （`layouts/app/*.less`）抽亮色主题令牌（`:root` / `html` < `:root[data-horosa-appearance=light]` < `body`，后代选择器不算），
   烤进 bundle、出图时解析（`app-charts/theme.mjs`，200 个；负向对照：关掉解析 → 两族残留 `var(` → 红）。
+- **桩模块对「具名导入」是 undefined。** esbuild 把 CJS 模块的具名导入变成「拷贝它自己的属性」，Proxy 没有自有属性，于是
+  `import { Select } from 'antd'` 拿到 undefined；西洋 / 紫微从没在加载期碰它，90° 盘的页面模块一加载（`XQSelect.Option = Select.Option`）就崩。
+  改为每个（包, 导入方）各生成一个 ES 模块桩，逐个导出那份文件引用的名字（都指向同一个空操作 Proxy）；改后旧四族输出逐字节不变。
+- **位图里半透明全成实色——是旧 bug。** `drawing_to_png` 在 RGBA 底上画半透明，Pillow 只覆盖像素 alpha，最后转 RGB 时整块实色；
+  自绘图不用半透明所以一直没暴露，app 的图（紫微宫线、90° 盘扇区）一进来就显形。改为 RGB 底 + RGBA 画笔（负向对照：换回 RGBA 底 → 红）。
+  另：svglib 把 fill-opacity 同时并进颜色 alpha 与 fillOpacity，两者别相乘。
+- **`<title>` 悬停提示被 svglib 当正文画出来。** 90° 盘每颗星的提示「本命 · 海王星」用符号字体印成方块；规整时剔除 title / desc。
+  app 用 system-ui 画的 ℞（U+211E）报告字体没有字形，接报告渲染器的补字字体链（`_PDF_GLYPH_FALLBACK_CANDIDATES`）。
+- **六爻只在变卦对得上时换 app 画法。** app 从动爻自己翻出之卦；样例载荷的 changed_code 与动爻不符，app 会画一个正文里没有的之卦。
+  沿用自绘图的规矩：两栏（变卦一致）或无动爻才换，否则留自绘图只画本卦。
+- **React 类组件不必真渲染。** UranianDial 的 render 只是空 `<svg>`、图在 draw() 里按 id 画——直接 new 出来、挂上同 id 的 svg、调 draw()。
 - **六壬盘要的数据结果里原本没有。** app 的 RengChart 要起课时刻那张盘（太阳宫定月将、昼夜），runner 取过这张盘但只交给 JS、没留；
   现在 runner 原样留 `board_context`（objects / isDiurnal + 实用贵人 / 性别，不另算）。runner 取盘时没要 nongli，照 app `lrChartFor` 的做法
   用 gods 的农历覆盖（缺省时间算法下两者同一时刻）。交互件「圆形盘」切换钮剔除。

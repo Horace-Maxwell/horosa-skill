@@ -22,9 +22,9 @@ from typing import Any
 FONT_DIR = Path(__file__).resolve().parents[1] / "data" / "fonts"
 # SVG font-family → (随包字体文件, reportlab 注册名)。ywastro 与 ywastrochart 在 app 里是同一个文件。
 GLYPH_FONTS = {
-    "ywastrochart": ("ywastro.ttf", "HorosaGlyphYwastro"),
-    "ywastro": ("ywastro.ttf", "HorosaGlyphYwastro"),
-    "morinus": ("morinus-webfont.ttf", "HorosaGlyphMorinus"),
+    "ywastrochart": ("ywastro.ttf", "HorosaAppYwastro"),
+    "ywastro": ("ywastro.ttf", "HorosaAppYwastro"),
+    "morinus": ("morinus-webfont.ttf", "HorosaAppMorinus"),
 }
 TEXT_FAMILY = "HorosaReportText"
 TEXT_BOLD_FAMILY = "HorosaReportTextBold"
@@ -80,6 +80,18 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
             # 与 figures._taiyi 同一份 pan（太乙 / 太乙择时在 pan，三式合一 / 三式择时在 taiyi）→ app 的 TaiyiBoardSvg
             pan = source["pan"] if isinstance(source.get("pan"), dict) else source["taiyi"]
             requests.append((index, {"kind": "taiyi", "data": {"pan": pan}, "options": {}}))
+        elif kind == "hexagram" and isinstance(source.get("lines"), list) and isinstance(source.get("nongli"), dict):
+            # 六爻：只在自绘图敢画完整的时候换（变卦与本卦 + 动爻对得上 = 两栏，或根本没有动爻）——app 会从动爻自己翻出之卦，
+            # 对不上时它画的之卦正文里没有。
+            moving = any(isinstance(line, dict) and line.get("change") for line in source["lines"])
+            if len(spec.get("columns") or []) == 2 or not moving:
+                payload = {key: source.get(key) for key in ("lines", "nongli", "liuyao_settings")}
+                requests.append((index, {"kind": "liuyao", "data": payload, "options": {"width": 900, "height": 620}}))
+        elif kind == "dial90" and isinstance(source.get("chart"), dict):
+            # 量化盘 90° 度盘：本命点 + 引擎给的 8 颗 TNP（raw.tnp，与自绘图同一份）→ app 的 UranianDial
+            tnp = _dig(source, ["raw", "tnp"]) if isinstance(_dig(source, ["raw", "tnp"]), list) else source.get("tnp")
+            if isinstance(tnp, list):
+                requests.append((index, {"kind": "uranian_dial", "data": {"chart": source["chart"], "raw": {"tnp": tnp}}, "options": {"size": 720}}))
         elif kind == "grid12" and tool_name in _LIURENG_TOOLS and isinstance(_dig(source, ["board_context", "chart"]), dict):
             # 六壬：runner 留下的起课盘 + gods 结果 + 引擎实际用的口径 → app 的 RengChart（三式合一里的六壬是另一种盘，不在此列）
             payload = {key: source.get(key) for key in ("board_context", "liureng", "runyear", "headless_liureng")}
@@ -148,6 +160,8 @@ def _family(value: str, bold: bool) -> str:
 
 
 def normalize_svg(svg: str) -> str:
+    # 悬停提示（<title> / <desc>）在浏览器里从不显示，svglib 却会把它当正文画出来
+    svg = re.sub(r"<(title|desc)\b[^>]*>.*?</\1>", "", svg, flags=re.S)
     svg = _resolve_vars(svg)
     svg = re.sub(r'(fill|stroke)="transparent"', r'\1="none"', svg)
     svg = _RGBA.sub(_rgba, svg)
@@ -186,16 +200,64 @@ def _register_fonts() -> None:
     font_map.register_font(TEXT_BOLD_FAMILY, rlgFontName="Courier-Bold")
 
 
+_SYMBOL_CHAIN: list[tuple[str, str, int, frozenset[int]]] | None = None
+
+
+def _symbol_chain() -> list[tuple[str, str, int, frozenset[int]]]:
+    """报告渲染器的补字字体链（Apple Symbols / Segoe UI Symbol / DejaVu…）：app 图里的 ℞ 等符号报告正文字体没有字形。"""
+    global _SYMBOL_CHAIN
+    if _SYMBOL_CHAIN is None:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        from horosa_skill.reports.renderers import _PDF_GLYPH_FALLBACK_CANDIDATES, _load_ttf
+
+        chain: list[tuple[str, str, int, frozenset[int]]] = []
+        for index, path in enumerate(_PDF_GLYPH_FALLBACK_CANDIDATES["sc"]):
+            font = _load_ttf(TTFont, f"HorosaAppSymbol{index}", path, None)
+            if font is None:
+                continue
+            pdfmetrics.registerFont(font)
+            source = getattr(font, "horosa_source", None) or (path, 0)
+            chain.append((font.fontName, str(source[0]), int(source[1]), frozenset(font.face.charToGlyph)))
+        _SYMBOL_CHAIN = chain
+    return _SYMBOL_CHAIN
+
+
+def _charset(font_name: str) -> frozenset[int] | None:
+    from reportlab.pdfbase import pdfmetrics
+
+    try:
+        return frozenset(pdfmetrics.getFont(font_name).face.charToGlyph)
+    except Exception:  # noqa: BLE001 - CID 回退字体没有 face：不补字（探针，None 即答案）
+        return None
+
+
 def _swap_text_fonts(node: Any, text_font: str, bold_font: str) -> None:
     from reportlab.graphics.shapes import String
 
-    for child in getattr(node, "contents", []) or []:
-        if isinstance(child, String):
+    covered = {name: _charset(name) for name in {text_font, bold_font}}
+    chain = _symbol_chain()
+
+    def walk(current: Any) -> None:
+        for child in getattr(current, "contents", []) or []:
+            if not isinstance(child, String):
+                walk(child)
+                continue
             role = _TEXT_PLACEHOLDERS.get(child.fontName)
-            if role:
-                child.fontName = bold_font if role == "bold" else text_font
-        else:
-            _swap_text_fonts(child, text_font, bold_font)
+            if not role:
+                continue
+            child.fontName = bold_font if role == "bold" else text_font
+            charset = covered.get(child.fontName)
+            missing = {ord(ch) for ch in child.text if not ch.isspace()} - charset if charset is not None else set()
+            if missing:
+                need = {ord(ch) for ch in child.text if not ch.isspace()}
+                for name, _path, _index, glyphs in chain:
+                    if need <= glyphs:
+                        child.fontName = name
+                        break
+
+    walk(node)
 
 
 def svg_drawing(svg: str, width: float, *, text_font: str, bold_font: str, problems: list[str] | None = None) -> Any | None:
@@ -221,5 +283,7 @@ def svg_drawing(svg: str, width: float, *, text_font: str, bold_font: str, probl
 
 
 def glyph_font_files() -> dict[str, tuple[str, int]]:
-    """reportlab 字体名 → (字体文件, 子字体序号)：位图（DOCX / PNG）画 app 图时要用到符号字体。"""
-    return {rl_name: (str(FONT_DIR / file_name), 0) for file_name, rl_name in GLYPH_FONTS.values()}
+    """reportlab 字体名 → (字体文件, 子字体序号)：位图（DOCX / PNG）画 app 图时要用到符号字体与补字字体。"""
+    files = {rl_name: (str(FONT_DIR / file_name), 0) for file_name, rl_name in GLYPH_FONTS.values()}
+    files.update({name: (path, index) for name, path, index, _glyphs in _symbol_chain()})
+    return files

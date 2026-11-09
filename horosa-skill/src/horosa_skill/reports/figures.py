@@ -1174,7 +1174,8 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
     k = scale * supersample
     out_w, out_h = max(1, int(drawing.width * scale)), max(1, int(drawing.height * scale))
     width, height = out_w * supersample, out_h * supersample
-    image = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    # RGB 底 + RGBA 画笔 = 半透明填充按 alpha 混合（RGBA 底上 Pillow 只会覆盖像素的 alpha，转 RGB 时整块变实色）
+    image = Image.new("RGB", (width, height), (255, 255, 255))
     pen = ImageDraw.Draw(image, "RGBA")
     fonts: dict[tuple[str, int], Any] = {}
 
@@ -1193,8 +1194,8 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
     def rgba(color: Any, opacity: Any) -> tuple[int, int, int, int] | None:
         if color is None:
             return None
-        alpha = getattr(color, "alpha", 1.0)
-        alpha = (1.0 if alpha is None else float(alpha)) * (1.0 if opacity is None else float(opacity))
+        # svglib 把 fill-opacity 同时并进颜色的 alpha 与 fillOpacity：有显式透明度就用它，没有才用颜色自带的 alpha（不相乘）
+        alpha = float(opacity) if opacity is not None else float(getattr(color, "alpha", 1.0) or 1.0)
         if alpha <= 0:
             return None
         return (round(color.red * 255), round(color.green * 255), round(color.blue * 255), round(alpha * 255))
@@ -1247,7 +1248,7 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
         layer = Image.new("RGBA", (2 * pad, 2 * pad), (0, 0, 0, 0))
         ImageDraw.Draw(layer).text((pad, pad), shape.text, font=font, fill=fill, anchor=anchor)
         layer = layer.rotate(angle, resample=Image.BICUBIC, center=(pad, pad))
-        image.alpha_composite(layer, (round(x - pad), round(y - pad)))
+        image.paste(layer, (round(x - pad), round(y - pad)), layer)
 
     def walk(node: Any, m: tuple[float, ...]) -> None:
         for shape in getattr(node, "contents", None) or []:
@@ -1313,7 +1314,7 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
                     outline(points, closed or has_fill, m, shape)
 
     walk(drawing, tuple(getattr(drawing, "transform", (1, 0, 0, 1, 0, 0))))
-    image = image.resize((out_w, out_h), Image.LANCZOS).convert("RGB")
+    image = image.resize((out_w, out_h), Image.LANCZOS)
     import io
 
     buffer = io.BytesIO()

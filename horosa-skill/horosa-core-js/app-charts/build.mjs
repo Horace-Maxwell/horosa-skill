@@ -33,8 +33,22 @@ const NOTICE = path.join(DIST, 'app-charts.LICENSES.txt');
 const MANIFEST = path.join(PKG, 'contracts', 'app_charts_bundle.json');
 const APP_SRC_REL = path.join('Horosa-Web', 'astrostudyui', 'src');
 const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign)(\/|$)/;
-const STUB = 'const h={get:(t,k)=>k==="__esModule"?true:(k==="default"?p:(k===Symbol.toPrimitive?()=>"":p))};'
-  + 'const p=new Proxy(function(){return p},Object.assign(h,{apply:()=>p,construct:()=>p}));module.exports=p;';
+
+function stubModule(pkg, importer) {
+  const source = fs.readFileSync(importer, 'utf8');
+  const names = new Set();
+  const esc = pkg.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const re = new RegExp(`(?:import|export)\\s+(?:[\\w$]+\\s*,\\s*)?\\{([^}]*)\\}\\s*from\\s*['"]${esc}['"]`, 'g');
+  for (const m of source.matchAll(re)) {
+    for (const part of m[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/)[0].trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(name) && name !== 'default') names.add(name);
+    }
+  }
+  const proxy = 'const h={get:(t,k)=>k==="__esModule"?true:(k==="default"?p:(k===Symbol.toPrimitive?()=>"":p))};'
+    + 'const p=new Proxy(function(){return p},Object.assign(h,{apply:()=>p,construct:()=>p}));';
+  return `${proxy}export default p;${[...names].sort().map((n) => `export const ${n}=p;`).join('')}`;
+}
 
 function arg(name) {
   const i = process.argv.indexOf(name);
@@ -61,9 +75,12 @@ const plugin = {
     build.onResolve({ filter: /^@horosa-app\// }, (a) => ({ path: path.join(stage, 'app', a.path.slice('@horosa-app/'.length)) }));
     build.onResolve({ filter: /^[^./]/ }, (a) => {
       if (!a.importer.startsWith(appPrefix) || REAL_FOR_APP.test(a.path)) return undefined;
-      return { path: a.path, namespace: 'stub' };
+      // one stub module per (package, importer): it exports exactly the names that file imports, so module-level code
+      // such as `XQSelect.Option = Select.Option` sees a callable no-op instead of undefined (a CJS Proxy has no own keys
+      // for esbuild's named-import interop to copy).
+      return { path: `${a.path}::${path.relative(stage, a.importer)}`, namespace: 'stub', pluginData: { pkg: a.path, importer: a.importer } };
     });
-    build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: STUB, loader: 'js' }));
+    build.onLoad({ filter: /.*/, namespace: 'stub' }, (a) => ({ contents: stubModule(a.pluginData.pkg, a.pluginData.importer), loader: 'js' }));
     // the app's light-theme tokens (theme.mjs), baked in at build time
     build.onResolve({ filter: /^horosa-theme-tokens$/ }, () => ({ path: 'horosa-theme-tokens', namespace: 'theme' }));
     build.onLoad({ filter: /.*/, namespace: 'theme' }, () => ({ contents: JSON.stringify(theme.tokens), loader: 'json' }));

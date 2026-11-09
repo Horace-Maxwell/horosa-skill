@@ -6,6 +6,8 @@ import { renderZiwei } from './adapters/ziwei.js';
 import { renderGuolao } from './adapters/guolao.js';
 import { renderTaiyi } from './adapters/taiyi.js';
 import { renderLiureng } from './adapters/liureng.js';
+import { renderLiuyao } from './adapters/liuyao.js';
+import { renderUranianDial } from './adapters/uranian.js';
 import THEME from 'horosa-theme-tokens';
 
 const VAR = /var\(\s*(--[\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*\))*))?\)/g;
@@ -18,6 +20,11 @@ export function resolveThemeVars(svg) {
     if (next === out) break;
     out = next;
   }
+  // currentColor：svglib 不认；取图里第一个（已解析的）color 属性——app 的图都是在根组上给一次 color、子元素 stroke="currentColor"。
+  if (out.includes('currentColor')) {
+    const color = (out.match(/\scolor="(?!currentColor)([^"]+)"/) || [])[1] || THEME['--horosa-chart-stroke'] || '#3b3b3b';
+    out = out.replace(/currentColor/g, color);
+  }
   return out;
 }
 
@@ -28,6 +35,8 @@ export const RENDERERS = {
   guolao: renderGuolao,
   taiyi: renderTaiyi,
   liureng: renderLiureng,
+  liuyao: renderLiuyao,
+  uranian_dial: renderUranianDial,
 };
 
 /**

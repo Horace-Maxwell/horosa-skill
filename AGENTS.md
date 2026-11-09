@@ -1373,7 +1373,9 @@ A global stability pass hardened these; keep them true when you touch the releva
     `app_charts.plan` 登记 + `tests/test_app_charts.py` 用真实引擎夹具断言 + 对照 app 截图。`HOROSA_APP_CHARTS=0` 只画自绘图。
     已接：西洋单轮（AstroChartCircle）、合盘双圈（drawDoubleChart，内圈甲方）、紫微（ZWChart）、七政四余（GLChart，fields 取 params）、
     太乙（TaiyiBoardSvg，React 17 `renderToStaticMarkup`）、大六壬（RengChart；runner 在结果里留 `board_context` = 起课盘的
-    objects / isDiurnal + 实用贵人 / 性别，盘上缺 nongli 时照 app `lrChartFor` 用 gods 农历覆盖）。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
+    objects / isDiurnal + 实用贵人 / 性别，盘上缺 nongli 时照 app `lrChartFor` 用 gods 农历覆盖）、六爻（GZChart + app 的 analyzeLiuyao；变卦与本卦 + 动爻对得上 / 无动爻才换）、
+    量化盘 90° 度盘（UranianDial：类组件直接 new + draw()）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
+    ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
     **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。
     下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
