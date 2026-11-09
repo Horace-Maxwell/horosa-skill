@@ -63,7 +63,7 @@ def test_committed_bundle_matches_its_manifest() -> None:
     body = BUNDLE.read_bytes()
     assert hashlib.sha256(body).hexdigest() == manifest["bundle_sha256"]
     assert len(body) == manifest["bundle_bytes"]
-    assert {"natal_wheel", "bi_wheel", "ziwei", "guolao", "taiyi"} <= set(manifest["kinds"])
+    assert {"natal_wheel", "bi_wheel", "ziwei", "guolao", "taiyi", "liureng"} <= set(manifest["kinds"])
     assert manifest["theme_tokens"] > 100, "light-theme tokens are baked in from the app stylesheets"
     assert manifest["app_files"], "the manifest must pin every app source file it bundled"
     assert b"horacedong" not in body and b"/var/folders" not in body, "bundle must not embed machine paths"
@@ -78,6 +78,7 @@ def test_app_draws_the_natal_wheel_and_ziwei_byte_stably() -> None:
     zw = _figures("ziwei_birth")[0]
     assert zw["renderer"] == "app" and zw["kind"] == "grid12"
     assert "命盘信息" not in zw["app_svg"], "the interactive button is removed; the center is printed in full"
+    assert "圆形盘" not in next(f for f in _figures("liureng_gods") if f.get("app_kind") == "liureng")["app_svg"], "view toggle removed"
     assert "121°28′" in zw["app_svg"] and "1°7′4″E" not in zw["app_svg"], "longitude 121e28 must not be read as 1.21e30"
 
 
@@ -172,6 +173,7 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("guolao_chart", "guolao", "四柱"),
         ("taiyi", "taiyi", "中宫"),
         ("relative", "bi_wheel", 'font-family="ywastrochart"'),
+        ("liureng_gods", "liureng", "真太阳时"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:

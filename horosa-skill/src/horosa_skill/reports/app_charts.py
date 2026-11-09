@@ -33,7 +33,8 @@ TEXT_BOLD_FAMILY = "HorosaReportTextBold"
 # 不走 app 画法的：巴比伦（无宫位体系，app 用另一套 components/babylon）。合盘双圈走 drawDoubleChart（bi_wheel）。
 _WHEEL_SKIP_TOOLS = frozenset({"babylon"})
 _ZIWEI_TOOLS = frozenset({"ziwei_birth", "ziweizeri"})
-_GUOLAO_TOOLS = frozenset({"guolao_chart", "qizhengzeri"})  # 七政择日动盘（qizhengelection）是另一种盘，不在此列
+_GUOLAO_TOOLS = frozenset({"guolao_chart", "qizhengzeri"})
+_LIURENG_TOOLS = frozenset({"liureng_gods", "liureng_runyear", "liurengzeri"})  # 七政择日动盘（qizhengelection）是另一种盘，不在此列
 _HEAVY_KEYS = frozenset({"export_snapshot", "technique_card", "snapshot_text"})
 
 
@@ -79,6 +80,10 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
             # 与 figures._taiyi 同一份 pan（太乙 / 太乙择时在 pan，三式合一 / 三式择时在 taiyi）→ app 的 TaiyiBoardSvg
             pan = source["pan"] if isinstance(source.get("pan"), dict) else source["taiyi"]
             requests.append((index, {"kind": "taiyi", "data": {"pan": pan}, "options": {}}))
+        elif kind == "grid12" and tool_name in _LIURENG_TOOLS and isinstance(_dig(source, ["board_context", "chart"]), dict):
+            # 六壬：runner 留下的起课盘 + gods 结果 + 引擎实际用的口径 → app 的 RengChart（三式合一里的六壬是另一种盘，不在此列）
+            payload = {key: source.get(key) for key in ("board_context", "liureng", "runyear", "headless_liureng")}
+            requests.append((index, {"kind": "liureng", "data": payload, "options": {"size": 760}}))
         elif kind == "grid12" and tool_name in _GUOLAO_TOOLS and isinstance(_dig(source, ["chart", "fixedStarSu28"]), (list, dict)):
             payload = {key: source[key] for key in ("params", "chart", "aspects", "lots") if key in source}
             requests.append((index, {"kind": "guolao", "data": payload, "options": {"size": 760}}))

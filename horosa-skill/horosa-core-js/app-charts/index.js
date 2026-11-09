@@ -5,6 +5,7 @@ import { renderBiWheel, renderNatalWheel } from './adapters/astro.js';
 import { renderZiwei } from './adapters/ziwei.js';
 import { renderGuolao } from './adapters/guolao.js';
 import { renderTaiyi } from './adapters/taiyi.js';
+import { renderLiureng } from './adapters/liureng.js';
 import THEME from 'horosa-theme-tokens';
 
 const VAR = /var\(\s*(--[\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*\))*))?\)/g;
@@ -26,6 +27,7 @@ export const RENDERERS = {
   ziwei: renderZiwei,
   guolao: renderGuolao,
   taiyi: renderTaiyi,
+  liureng: renderLiureng,
 };
 
 /**

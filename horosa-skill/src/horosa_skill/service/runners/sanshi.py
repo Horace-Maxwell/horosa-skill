@@ -431,6 +431,9 @@ class SanshiRunners:
             },
             "runyear": runyear,
             "headless_liureng": data,
+            # 报告盘图用星阙 app 原版 RengChart 画（reports/app_charts.py）：它要起课时刻那张盘里的 nongli / objects（太阳宫 → 月将）/
+            # isDiurnal，以及本次实际用的贵人取法与性别——都是上面已取到的引擎数据与入参，原样留一份，不另算。
+            "board_context": _liureng_board_context(chart, payload, tool_name),
             "snapshot_text": snapshot_text,
             "prerequisites": {
                 "remote_payload": gods_payload,
@@ -668,3 +671,15 @@ class SanshiRunners:
             },
             **({"_warnings": sub_warnings} if sub_warnings else {}),
         }
+
+
+def _liureng_board_context(chart: Any, payload: dict[str, Any], tool_name: str) -> dict[str, Any] | None:
+    inner = chart.get("chart") if isinstance(chart, dict) else None
+    if not isinstance(inner, dict) or not isinstance(inner.get("objects"), list):
+        return None
+    gender = payload.get("gender") if tool_name == "liureng_runyear" else None
+    return {
+        "chart": {key: inner.get(key) for key in ("objects", "nongli", "isDiurnal")},
+        "guireng": payload.get("guirengType", 2) if payload.get("guirengType") is not None else 2,
+        "gender": -1 if gender is None else (1 if gender else 0),
+    }

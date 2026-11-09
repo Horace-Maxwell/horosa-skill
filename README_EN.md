@@ -99,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `3390 / 3390 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `3391 / 3391 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
@@ -373,7 +373,7 @@ echo '{"run_id":"<run_id>","user_question":"...","ai_answer":"...","ai_answer_st
   | uv run horosa-skill memory answer --stdin     # write the final AI answer back to a record
 ```
 
-**Full chart report**: `report render --style chart` (or `report_render {style:"chart"}`) lays out every section of the technique's chart as a PDF / DOCX without any AI interpretation — cover, basic data, chart figures taken from the engine data (wheel / synastry bi-wheel, Zi Wei, Qimen, Da Liu Ren, hexagram, Taiyi sixteen palaces, Qi Zheng Si Yu, South Indian square, 90° Uranian dial; election results draw the chosen moment; Western wheels, synastry, Zi Wei, Qi Zheng Si Yu and Taiyi are drawn by the 星阙 app's own chart code, so colors and glyphs match the app), clickable contents and bookmarks, "page N of M", and a technique-basis appendix.
+**Full chart report**: `report render --style chart` (or `report_render {style:"chart"}`) lays out every section of the technique's chart as a PDF / DOCX without any AI interpretation — cover, basic data, chart figures taken from the engine data (wheel / synastry bi-wheel, Zi Wei, Qimen, Da Liu Ren, hexagram, Taiyi sixteen palaces, Qi Zheng Si Yu, South Indian square, 90° Uranian dial; election results draw the chosen moment; Western wheels, synastry, Zi Wei, Qi Zheng Si Yu, Taiyi and Da Liu Ren are drawn by the 星阙 app's own chart code, so colors and glyphs match the app), clickable contents and bookmarks, "page N of M", and a technique-basis appendix.
 
 **Your own knowledge base**: drop notes (`.md` / `.txt`, optional front matter `title` / `techniques` / `tags`) into the folder `horosa-skill knowledge mine` prints (or `knowledge add <name> --file …`), then pass `knowledge:["entry", "#tag", "auto"]` to any technique; the selected text rides along as `data.knowledge_context` for the AI to consult. It never reaches the engine and never changes the chart; the total size is capped by `HOROSA_USER_KNOWLEDGE_MAX_CHARS`. GBK / UTF-16 files are read too, and anything unreadable is listed with its reason under `problems` in `knowledge mine`; removals and overwrites go to a trash first (`knowledge trash` / `knowledge restore`); stored runs keep references only, never the note text; `runtime uninstall --purge-data` keeps your knowledge folder unless you add `--purge-knowledge`. Search with `horosa_knowledge_search` / `horosa-skill knowledge search "term"` (2-character Chinese terms, 繁/简 folding, file line citations); long notes contribute only the passages relevant to the chart. Optional vector search (finds paraphrases): `setup --client <client> --vectors` installs the dependencies (about 128 MB) into the environment your client starts the server in, downloads and verifies the 24 MB bge-small-zh model, and embeds your notes; the config is only written once all of that worked. If Hugging Face is unreachable, set `HF_ENDPOINT=<mirror>` (content is pinned by sha256). Later `setup` runs keep it on; `--no-vectors` turns it off. The `.mcpb` bundle does not carry these dependencies, so use `setup --client claude-desktop --vectors` if you want vectors there.
 
@@ -582,7 +582,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 3390 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 3391 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

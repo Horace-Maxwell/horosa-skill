@@ -224,6 +224,9 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   `var(--horosa-astro-panel, #090b0e)`（暗色）。「取回退值」会让部分盘印成深底。改为构建时从 app 自己的样式表
   （`layouts/app/*.less`）抽亮色主题令牌（`:root` / `html` < `:root[data-horosa-appearance=light]` < `body`，后代选择器不算），
   烤进 bundle、出图时解析（`app-charts/theme.mjs`，200 个；负向对照：关掉解析 → 两族残留 `var(` → 红）。
+- **六壬盘要的数据结果里原本没有。** app 的 RengChart 要起课时刻那张盘（太阳宫定月将、昼夜），runner 取过这张盘但只交给 JS、没留；
+  现在 runner 原样留 `board_context`（objects / isDiurnal + 实用贵人 / 性别，不另算）。runner 取盘时没要 nongli，照 app `lrChartFor` 的做法
+  用 gods 的农历覆盖（缺省时间算法下两者同一时刻）。交互件「圆形盘」切换钮剔除。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 
