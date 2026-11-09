@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -90,3 +91,22 @@ def test_changing_the_place_takes_the_zone_from_the_new_place(tmp_path: Path) ->
     fields = _stored(service, "爸爸")["payload"]
     assert (fields["lat"], fields["lon"], fields["zone"]) == ("31n13", "121e28", "+09:00")
     assert result["place_resolution"]["name"] == "上海"
+
+
+@requires_engine
+def test_cli_profile_save_resolves_the_place_like_the_facade(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """v0.48.0 的 CLI `profile` 直接调 run_action，绕过了地名解析：只给地名存下的档案没有坐标，之后拿它起盘被
+    `tool.invalid_payload`（缺 zone / lat / lon）拒（Windows 原生复验实测）。负向对照：改回 run_action → 红（实跑过）。"""
+    from horosa_skill.surfaces import cli
+
+    monkeypatch.setattr(cli, "_service", lambda: _service(tmp_path))
+    data = tmp_path / "mom.json"
+    data.write_text(json.dumps({"date": "1988-07-01", "time": "08:00", "place": "上海", "gender": 0}, ensure_ascii=False),
+                    encoding="utf-8")
+    cli.profile("save", "妈妈", stdin=False, input_file=data, detail=False)
+    saved = json.loads(capsys.readouterr().out)
+    assert saved["place_resolution"]["status"] == "resolved"
+    fields = saved["profile"]["payload"]
+    assert (fields["lat"], fields["lon"], fields["zone"]) == ("31n13", "121e28", "+09:00")

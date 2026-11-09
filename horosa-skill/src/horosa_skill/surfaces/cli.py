@@ -929,13 +929,12 @@ def profile(
     input_file: Optional[Path] = typer.Option(None, "--input", help="save: read the data object from a JSON file."),
     detail: bool = typer.Option(False, "--detail", help="list: include each profile's birth fields."),
 ) -> None:
-    from horosa_skill.profiles import ProfileStore, run_action
-
     body: dict[str, Any] = {"action": action, "name": name, "detail": bool(_opt(detail, False)) or None}
     if stdin or input_file is not None:
         body["data"] = _load_payload(stdin=stdin, input_file=input_file)
     try:
-        result = run_action(ProfileStore(Settings.from_env()), body)
+        # 与门面 horosa_profile 同一个入口：save 只给地名时要先解析出坐标与时区（直接调 run_action 会把地名当纯标签存下）。
+        result = _service().profile(body)
     except ToolValidationError as exc:
         _refuse(exc)
     _print_json(result)

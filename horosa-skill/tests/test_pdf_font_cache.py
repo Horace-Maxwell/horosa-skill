@@ -1,6 +1,7 @@
 """字体集的子字体枚举每个文件只做一次：枚举要把 .ttc 里每个子字体都解析一遍，占了一次 PDF 渲染约七成的时间。
+解析好的 TTFont 也按文件只做一次（v0.48.1-dev，Windows 上的大字体每份 PDF 多花约 1 秒）。
 
-台账：docs/LESSONS.md v0.47.2-dev「每出一份 PDF 都把系统字体集重新解析一遍」。
+台账：docs/LESSONS.md v0.47.2-dev「每出一份 PDF 都把系统字体集重新解析一遍」、v0.48.1-dev「TTFont 每份 PDF 重新解析」。
 """
 
 from __future__ import annotations
@@ -8,10 +9,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from weakref import WeakKeyDictionary
 
 import pytest
+import reportlab
 
-from horosa_skill.reports.renderers import _face_index
+from horosa_skill.reports.renderers import _face_index, _load_ttf
 
 
 class CountingFont:
@@ -84,3 +87,29 @@ def test_single_face_files_and_unnamed_lookups_parse_nothing(tmp_path: Path) -> 
     assert _face_index(CountingFont, str(plain), ("Face2",)) == 0
     assert _face_index(CountingFont, str(tmp_path / "x.ttc"), None) == 0
     assert CountingFont.built == 0
+
+
+def test_a_font_file_is_parsed_once_per_process(tmp_path: Path) -> None:
+    """一份 PDF 载常规体、粗体和补字字体，Windows 上都是十几 MB 的雅黑 / 宋体 ExtB（每款约 0.15 秒）；
+    v0.48.0 原生复验：110 份 PDF 解析 728 次、106 秒。负向对照：去掉 _TTF_CACHE → 红（实跑过）。"""
+    CountingFont.built = 0
+    plain = tmp_path / "msyh.ttf"
+    plain.write_bytes(b"font")
+    first = _load_ttf(CountingFont, "HorosaSC0", str(plain), None)
+    assert first is not None and CountingFont.built == 1
+    assert _load_ttf(CountingFont, "HorosaSC0", str(plain), None) is first
+    assert CountingFont.built == 1
+
+    stamp = plain.stat().st_mtime + 10
+    os.utime(plain, (stamp, stamp))
+    assert _load_ttf(CountingFont, "HorosaSC0", str(plain), None) is not first, "字体文件变了要重新解析"
+
+
+def test_one_font_object_keeps_subset_state_per_document() -> None:
+    """缓存不改变哪个对象画字：reportlab 对同名 TrueType 只认第一次注册（之后新建的对象直接丢掉，同一字形面换了
+    注册名也映射回最早那个），所以一直是一个对象跨文档画字。子集状态挂在对象里、按文档分开——这里只验这一点，
+    不往全局注册表里注册（注册了会把后面用例的同字形面字体换成这个探针对象）。"""
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    font = TTFont("HorosaCacheProbe", str(Path(reportlab.__file__).parent / "fonts" / "Vera.ttf"))
+    assert isinstance(font.state, WeakKeyDictionary)

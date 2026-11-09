@@ -1855,6 +1855,12 @@ def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | 
     return next((found[n] for n in names if n in found), None)
 
 
+# 解析好的 TTFont，按注册名 + 文件 mtime / 大小缓存。一份 PDF 要载常规体、粗体和补字字体，Windows 上这几款都是
+# 十几 MB 的雅黑 / 宋体 ExtB，每款解析约 0.15 秒；同名再注册 reportlab 本来就丢掉新对象，所以重解析纯属白费
+# （v0.48.0 Windows 原生复验：110 份 PDF 解析了 728 次、106 秒）。
+_TTF_CACHE: dict[tuple[Any, str, int, int], Any] = {}
+
+
 def _load_ttf(TTFont: Any, prefix: str, path: str, names: tuple[str, ...] | None) -> Any | None:
     """注册名 = 前缀 + 字体文件身份（路径 + 子字体序号）的短摘要。reportlab 的 registerFont 对 TrueType **只认第一次**：
     同名再注册静默忽略、getFont 仍回旧字体。此前注册名只看候选表序号（HorosaSC0…），候选表一变（测试钉字体、
@@ -1867,11 +1873,17 @@ def _load_ttf(TTFont: Any, prefix: str, path: str, names: tuple[str, ...] | None
     import hashlib
 
     font_name = f"{prefix}-{hashlib.sha1(f'{Path(path).resolve()}|{index}'.encode('utf-8')).hexdigest()[:10]}"
+    stat = os.stat(path)
+    key = (TTFont, font_name, stat.st_mtime_ns, stat.st_size)  # 带上类：测试会换成替身类
+    cached = _TTF_CACHE.get(key)
+    if cached is not None:
+        return cached
     try:
         font = TTFont(font_name, path, subfontIndex=index) if path.lower().endswith(".ttc") else TTFont(font_name, path)
     except Exception:  # noqa: BLE001 - 这一款载不了就换下一款（探针，None 即答案）
         return None
     font.horosa_source = (path, index)  # DOCX 的星盘位图（figures.drawing_to_png）用同一款字体文件
+    _TTF_CACHE[key] = font
     return font
 
 

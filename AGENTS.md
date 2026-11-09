@@ -1334,7 +1334,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   NTFS 备用数据流、非法字符一律先拦；`HOROSA_REPORT_OUTPUT_ROOTS` 配过的共享按字符串放行。新增任何接收路径的工具走同一道闸（`test_guard_refuses_before_touching_the_filesystem`）。
 - **`render_report` 的结果要原样传到调用方（v0.47.2-dev）。** `format` 记真实格式，`degraded_from` / `degrade_reason` / `requested_output_path` 进结果与摘要（`_render_outcome_fields` / `_render_outcome_notes`）——此前退化成 TXT 仍报「已生成 PDF」。
   目标被占用（开在 Acrobat / Word 里）不算渲染失败：`_place_rendered` 另存 `名字 (1).pdf`，旧文件不动。
-- **字体集枚举按文件缓存（v0.47.2-dev）。** `_face_names` 的「字面名 → 序号」表键是路径 + mtime + 大小，系统更新字体后自动重新枚举；只缓存序号，`TTFont` 对象每次新建（带每份文档的子集状态）。
+- **字体集枚举与 TTFont 都按文件缓存（v0.47.2-dev / v0.48.1-dev）。** `_face_names` 的「字面名 → 序号」表与 `_TTF_CACHE` 里解析好的
+  `TTFont`，键都带 mtime + 大小，系统更新字体后自动重来。共用一个 `TTFont` 是 reportlab 的本来用法：子集状态按文档存在对象里
+  （`WeakKeyDictionary`），`registerFont` 对同名只认第一次。测试别往 reportlab 全局注册表里注册字体（同字形面会被映射到那个对象）。
 - **PDF 按字补字形（v0.43.1-dev）。** 主字体（Songti / 雅黑）缺的字逐字走补字链 `_PDF_GLYPH_FALLBACK_CANDIDATES`：扩展 B 古籍字
   （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
   阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
@@ -1402,7 +1404,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 - **命主档案库（v0.48.0，`<data_dir>/profiles/profiles.db`）。** WAL + 跨进程写锁（新库首批并发写者在 rollback 模式下会死锁）；
   损坏的库是用户数据，绝不自动隔离重建（`profile.store_corrupt`）；`--purge-data` 缺省保留档案，`--purge-profiles` 才删。存档案时只给地名，
-  走技法同一条地名解析补坐标与时区（唯一命中才补；只改备注且标签没变不重查；换了地名 zone 跟新地名走）。
+  走技法同一条地名解析补坐标与时区（唯一命中才补；只改备注且标签没变不重查；换了地名 zone 跟新地名走）。CLI `profile` 与门面同走
+  `ToolsAPI.profile`（v0.48.1-dev 前 CLI 直调 `run_action`，地名不解析，之后起盘缺坐标被拒）。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
