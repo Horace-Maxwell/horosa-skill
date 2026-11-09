@@ -144,6 +144,8 @@ require_path "${CORE_JS_ROOT}/node_modules/moment/package.json"
 require_path "${CORE_JS_ROOT}/node_modules/astronomy-engine/package.json"
 # v0.48.0 地名检索（vendored utils/timezone.js 的 ianaTimezoneAt）依赖 tz-lookup（钉上游 6.1.25 + integrity）。
 require_path "${CORE_JS_ROOT}/node_modules/tz-lookup/package.json"
+# 报告盘图用星阙 app 原版绘图代码（自带 d3 / linkedom 的单文件，提交在仓里；scripts/verify_app_charts_bundle.py 对上游逐字节核）。
+require_path "${CORE_JS_ROOT}/dist/app-charts.cjs"
 
 rm -rf "${BUILD_ROOT}"
 mkdir -p "${STAGE_ROOT}/Horosa-Web/astrostudyui/scripts"

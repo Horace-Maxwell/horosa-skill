@@ -493,15 +493,19 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         image_fonts = _drawing_font_files(script)
         for figure in figures:
             kind = figure.get("kind")
-            if kind in figure_kit.DRAWN_KINDS:
-                # 矢量图转位图嵌进 Word（Pillow 画，不依赖 renderPM）；拿不到字体文件就跳过图、留文字说明。
-                if image_fonts is None:
-                    continue
+            drawing = None
+            if figure_kit.is_drawn(figure) and image_fonts is not None:
                 from reportlab.lib import colors as rl_colors
 
                 regular, bold = image_fonts["names"]
-                drawing = figure_kit.figure_drawing(figure, 420 if kind in {"hexagram", "taiyi"} else 380, regular, bold, rl_colors)
-                png = figure_kit.drawing_to_png(drawing, image_fonts["files"])
+                drawing = figure_kit.figure_drawing(figure, 420 if kind in {"hexagram", "taiyi", "grid12"} else 380, regular, bold, rl_colors)
+            if drawing is None and figure_kit.is_drawn(figure) and kind in figure_kit.DRAWN_KINDS:
+                continue  # 矢量图拿不到字体文件：跳过图、留文字说明
+            if drawing is not None:
+                # 矢量图转位图嵌进 Word（Pillow 画，不依赖 renderPM）；拿不到字体文件就跳过图、留文字说明。
+                from horosa_skill.reports.app_charts import glyph_font_files
+
+                png = figure_kit.drawing_to_png(drawing, {**image_fonts["files"], **glyph_font_files()})
                 if png is None:
                     continue
                 import io

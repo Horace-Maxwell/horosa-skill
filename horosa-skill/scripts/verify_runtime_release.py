@@ -64,6 +64,7 @@ REQUIRED_ENTRIES = {
         # 只有 horosa_place_search / `place` 键在运行时才报 place.runtime_outdated，所以只有这里拦得住。
         "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
         "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
+        "runtime-payload/horosa-core-js/dist/app-charts.cjs",  # 报告盘图：星阙 app 原版绘图代码
     ],
     "win32-x64": [
         "runtime-payload/runtime-manifest.json",
@@ -112,6 +113,7 @@ REQUIRED_ENTRIES = {
         # 只有 horosa_place_search / `place` 键在运行时才报 place.runtime_outdated，所以只有这里拦得住。
         "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
         "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
+        "runtime-payload/horosa-core-js/dist/app-charts.cjs",  # 报告盘图：星阙 app 原版绘图代码
     ],
     "linux-x64": [
         "runtime-payload/runtime-manifest.json",
@@ -160,6 +162,7 @@ REQUIRED_ENTRIES = {
         # 只有 horosa_place_search / `place` 键在运行时才报 place.runtime_outdated，所以只有这里拦得住。
         "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
         "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
+        "runtime-payload/horosa-core-js/dist/app-charts.cjs",  # 报告盘图：星阙 app 原版绘图代码
     ],
 }
 

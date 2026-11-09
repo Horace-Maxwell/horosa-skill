@@ -1,5 +1,8 @@
 #!/usr/bin/env node
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 import { listTools, runTool } from '../src/tools/index.js';
 
@@ -19,6 +22,26 @@ async function main() {
   const [command = 'help', arg] = process.argv.slice(2);
   if (command === 'list') {
     printJson({ ok: true, tools: listTools() });
+    return;
+  }
+  if (command === 'render-charts') {
+    // 报告盘图：跑星阙 app 自己的绘图代码（dist/app-charts.cjs，见 app-charts/build.mjs）。
+    // stdin = { figures: [{ kind, data, options }] } → { ok, results: [{ ok, svg, width, height } | { ok:false, error }] }
+    try {
+      const bundlePath = fileURLToPath(new URL('../dist/app-charts.cjs', import.meta.url));
+      if (!existsSync(bundlePath)) {
+        printJson({ ok: false, error: { code: 'app_charts.missing', message: 'dist/app-charts.cjs is not built' } });
+        process.exitCode = 1;
+        return;
+      }
+      const raw = await readStdin();
+      const parsed = raw.trim() ? JSON.parse(raw) : {};
+      const charts = createRequire(import.meta.url)(bundlePath);
+      printJson({ ok: true, kinds: charts.listKinds(), results: charts.renderCharts(parsed.figures || []) });
+    } catch (error) {
+      printJson({ ok: false, error: { code: 'cli.execution_failed', message: error instanceof Error ? error.message : String(error) } });
+      process.exitCode = 1;
+    }
     return;
   }
   if (command !== 'run' || !arg) {

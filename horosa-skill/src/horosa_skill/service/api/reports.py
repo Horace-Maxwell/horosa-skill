@@ -415,6 +415,8 @@ class ReportsAPI:
                         format_name=normalized_format,
                     ),
                 )
+                # 盘图换成星阙 app 原版画法（reports/app_charts.py）；在转文字之前配，app 图里的字跟正文一起转。
+                document["figures"] = self._attach_app_figures(document.get("figures") or [], run, source_artifact)
                 # 报告是给人读的整份文本：存档里仍是简体原文，只有落盘的这一份按设置转文字。
                 document = localize_document(document, script)
                 rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
@@ -690,6 +692,15 @@ class ReportsAPI:
             "group_id": trace["group_id"],
         }
 
+    def _attach_app_figures(self, figures: list[dict[str, Any]], run: dict[str, Any], source_artifact: dict[str, Any]) -> list[dict[str, Any]]:
+        """能用星阙 app 原版画法的盘图配上 app 的 SVG（一次 Node 调用）；配不上的照旧画，规格里写 renderer 与原因。"""
+        if not figures:
+            return figures
+        from horosa_skill.reports.app_charts import attach_app_svgs
+
+        chart = self.report_builder.chart_source(run=run, source_artifact=source_artifact)
+        return attach_app_svgs(figures, str(chart["tool_name"]), chart["data"], self.js_client)
+
     def _numbered_paths(self, output_path: Path, count: int) -> list[Path]:
         """一张图一个文件：多张时在文件名后加 _1、_2…（同一目录，仍在已校验的输出根之内）。"""
         if count == 1:
@@ -699,7 +710,8 @@ class ReportsAPI:
     def _png_outputs(
         self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], chart: dict[str, Any], script: str, default: Path
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        figures = localize_document(self.report_builder.build_figures(run=run, source_artifact=source_artifact), script)
+        figures = self._attach_app_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
+        figures = localize_document(figures, script)
         if not figures:
             raise ToolValidationError(
                 bilingual(

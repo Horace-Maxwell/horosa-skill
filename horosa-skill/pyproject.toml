@@ -15,7 +15,10 @@ dependencies = [
   # mcp 2.3 要求 pydantic>=2.12；下限跟上，免得旧 pydantic 环境装出一对不兼容的组合。
   "pydantic>=2.12.0",
   "python-docx>=1.1.2",
-  "reportlab>=4.2.0",
+  "reportlab>=4.4.3",
+  # 报告盘图用星阙 app 原版绘图代码出 SVG（horosa-core-js/dist/app-charts.cjs），svglib 把它转成 reportlab 矢量图嵌进 PDF。
+  # 2.x 不带 cairo（位图另走 figures.drawing_to_png）；只多 cssselect2 / tinycss2 / webencodings 三个纯 Python 包，lxml 已在锁里。
+  "svglib>=2.4.0,<3",
   # codex config.toml 的保注释合并（client config --write --format codex 只动 [mcp_servers.<name>]）
   "tomlkit>=0.12.0",
   "tzdata>=2025.2",
@@ -59,6 +62,8 @@ include = [
   "src/horosa_skill/knowledge/data/*.json",
   "src/horosa_skill/benchmark/data/*.json",
   "src/horosa_skill/data/*.json",
+  # 星阙 app 的星体符号字体（ywastro = ywastrochart 同一文件；morinus）：报告盘图用 app 原版代码画，符号要嵌进 PDF。
+  "src/horosa_skill/data/fonts/*.ttf",
   # v0.41.0：`setup` 装进客户端 skills 目录的 skill 副本（scripts/gen_agent_mirrors.py 生成；verify_wheel_contents.py 守）。
   "src/horosa_skill/agent_skill/**/*.md",
 ]

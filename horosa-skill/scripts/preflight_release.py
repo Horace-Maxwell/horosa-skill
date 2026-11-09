@@ -49,6 +49,8 @@ GATES: tuple[tuple[str, list[str]], ...] = (
     # 打包输入闸（v0.38.0 A2 起阻断）：Windows 半边改为从 darwin 种子在托管 runner 上派生，
     # runtime/windows 与 prepareruntime 不再是输入，mac 维护机上这一闸不再恒红——所以它回到硬闸。
     ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"]),
+    # 报告盘图用星阙 app 原版绘图代码（horosa-core-js/dist/app-charts.cjs）：必须与 pin 住的上游逐字节重建一致。
+    ("app chart bundle vs pinned upstream", ["scripts/verify_app_charts_bundle.py"]),
     ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"]),
     ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"]),
     ("docs sync", ["scripts/verify_docs_sync.py"]),

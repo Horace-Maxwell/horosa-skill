@@ -122,6 +122,38 @@ class HorosaJsEngineClient:
         parsed.pop("ok", None)
         return parsed
 
+    def render_app_charts(self, figures: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Draw report figures with the 星阙 app's own chart code (`horosa-core-js/dist/app-charts.cjs`).
+
+        `figures` = [{kind, data, options}]; returns one {ok, svg, width, height} / {ok: False, error} per figure, or None when
+        no engine root carries the bundle (an older installed runtime) or Node cannot run — the caller then keeps its own
+        drawing. Never raises: a report must not fail because the nicer picture is unavailable.
+        """
+        if not figures:
+            return []
+        roots = [root for root in self._candidate_engine_roots() if (root / "dist" / "app-charts.cjs").is_file()]
+        if not roots:
+            return None
+        node_bin = self._resolve_node_binary()
+        try:
+            completed = subprocess.run(
+                [str(node_bin), str(roots[0] / "bin" / "cli.mjs"), "render-charts"],
+                input=json.dumps({"figures": figures}, ensure_ascii=False),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                cwd=str(roots[0]),
+                timeout=self.settings.js_engine_timeout_seconds,
+            )
+            parsed = json.loads(completed.stdout or "{}")
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            return None
+        results = parsed.get("results") if isinstance(parsed, dict) and parsed.get("ok") else None
+        if not isinstance(results, list) or len(results) != len(figures):
+            return None
+        return [result if isinstance(result, dict) else {"ok": False, "error": "malformed"} for result in results]
+
     def _resolve_node_binary(self) -> Path:
         env_override = os.environ.get("HOROSA_NODE_BIN")
         if env_override:

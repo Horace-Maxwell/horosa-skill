@@ -90,6 +90,7 @@ _WIN_FILE_ENTRIES = [
     "runtime-payload/horosa-core-js/node_modules/moment/package.json",
     "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",          # v0.48.0 地名检索
     "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
+    "runtime-payload/horosa-core-js/dist/app-charts.cjs",  # 报告盘图：星阙 app 原版绘图代码
 ]
 _SWEFILES_DIR = "runtime-payload/Horosa-Web/flatlib-ctrad2/flatlib/resources/swefiles/"
 
@@ -132,6 +133,7 @@ def test_assert_entries_accepts_required_directory_with_a_real_file(tmp_path: Pa
 _PLACE_ENTRIES = (
     "runtime-payload/horosa-core-js/node_modules/tz-lookup/package.json",
     "runtime-payload/horosa-core-js/src/vendor/place/data/citiesFull.json",
+    "runtime-payload/horosa-core-js/dist/app-charts.cjs",  # 报告盘图：星阙 app 原版绘图代码
 )
 
 

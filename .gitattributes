@@ -13,3 +13,7 @@
 *.jar binary
 *.dll binary
 *.exe binary
+*.ttf binary
+*.gz binary
+# 星阙 app 原版绘图代码的打包产物（app-charts/build.mjs 生成，contracts/app_charts_bundle.json 记来源）：diff 里折叠。
+horosa-skill/horosa-core-js/dist/** linguist-generated=true

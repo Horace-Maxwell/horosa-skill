@@ -1360,6 +1360,17 @@ A global stability pass hardened these; keep them true when you touch the releva
     id 走、对照庙旺表的曜 → 地支）、七政择日动盘（对照「择日动盘」每行的宫）、南印方盘（按 `params.varga` 的分盘、宫的 sign 在
     `chart.houses`）、量化盘 90° 度盘（因子集同正文、对照折叠值）、合盘双圈（轴线不穿外圈）、择日画 `data.base` 那一刻的盘。
     新图种只改 `figures.py`：PDF / DOCX 共用 `DRAWN_KINDS` / `figure_drawing` / `figure_notes` / `grid_position`。
+  - **盘图用星阙 app 原版画法（v0.49.0-dev，`reports/app_charts.py`）。** app 用 D3 / SVG 画的盘跑 app 自己的代码：
+    `horosa-core-js/app-charts/`（adapter，喂 app 组件的就是 app 喂它的那份引擎结果）→ `node app-charts/build.mjs --source-root <pin 住的
+    Horosa-Public>` 打成 `dist/app-charts.cjs`（自带 d3 / linkedom，零运行时依赖）→ CLI `render-charts` 出 SVG → svglib 转矢量。
+    报告服务在转繁体**之前**调 `_attach_app_figures`（一次 Node），成功的规格带 `app_svg`、`renderer: app`；拿不到就画自绘图并写
+    `renderer: builtin` + `renderer_note`。PDF / DOCX / PNG 都经 `figure_drawing`（`is_drawn` 判是否画图），`drawing_to_png` 支持嵌套
+    Group / 变换 / Path / 旋转文字。规矩：①打包只用 pin 住的上游（本机 Horosa-Public 常超前）；改了 adapter 或上游动了就重打包，
+    `scripts/verify_app_charts_bundle.py`（preflight）逐字节核；②app 文件的裸 npm 引用只放行绘图栈，其余是桩——放新组件前先证
+    放行版 / 桩版逐像素一致；③svglib 只认标准 14 字体：文字字族一律走 Courier 占位再换回嵌入 TTF，符号字体（ywastro / morinus，
+    随包 `data/fonts/`，用户 2026-11-09 确认可分发）按文件注册；④adapter 只做无损的记法换算与「纸面无意义的交互件」剔除（如紫微中宫的
+    「命盘信息」按钮），不改 app 的画法、不算位置；上游 bug 照「只报」处理（紫微经度科学计数法）。新加一种盘：adapter + `RENDERERS` +
+    `app_charts.plan` 登记 + `tests/test_app_charts.py` 用真实引擎夹具断言 + 对照 app 截图。`HOROSA_APP_CHARTS=0` 只画自绘图。
     下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
   - **报告骨架（v0.45.0，全部技法共用）**：封面基本信息 + 「关键设置」（技法卡里的结果敏感口径，人读规则同附录）→ 核心结论 / 总览摘要
     （AI，STORM 式 lead）→ 完整盘面（盘图 + 导出段，标题前印段号 `E{n}`，n = 导出段序号，与报告模板 `cite_id` 同号）→ 「AI 解读」部分

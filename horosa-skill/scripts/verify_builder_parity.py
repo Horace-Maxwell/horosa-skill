@@ -98,6 +98,7 @@ REQUIRED_ON_BOTH = (
         "node_modules/astronomy-engine/package.json",   # 上游 v3.13.0 月相推运精确算法
         "node_modules/tz-lookup/package.json",          # v0.48.0 地名检索（经纬度 → IANA）
         "vendor/place/data/citiesFull.json",            # v0.48.0 地名检索城市库
+        "dist/app-charts.cjs",                          # 报告盘图：星阙 app 原版绘图代码（单文件）
         "vendor/kin_year_domain.py",
         "geomancy/data/ifa_odu.json",
         "astrostudy/qizheng_election_scan.py",

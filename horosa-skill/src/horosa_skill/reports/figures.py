@@ -142,7 +142,7 @@ def _wheels(tool_name: str, data: dict[str, Any], technique_label: str) -> list[
     charts = data.get("charts")
     if isinstance(charts, dict):  # 节气盘：一年四张（二分二至）
         ordered = sorted(charts.items(), key=lambda kv: _JIEQI_ORDER.index(kv[0]) if kv[0] in _JIEQI_ORDER else 99)
-        out = [_wheel(item.get("chart"), f"{name}盘") for name, item in ordered
+        out = [_sourced(_wheel(item.get("chart"), f"{name}盘"), ("charts", name)) for name, item in ordered
                if isinstance(item, dict) and _is_wheel_chart(item.get("chart"))]
         return [w for w in out if w][:4]
     # 相位：本命类在 data.aspects，卜卦 / 择日把整份原始结果放在 data.raw（同一张盘）。
@@ -159,9 +159,9 @@ def _wheels(tool_name: str, data: dict[str, Any], technique_label: str) -> list[
     direct = _dig(data, ("dirChart", "chart"))
     natal = _dig(data, ("natalChart", "chart"))
     if _is_wheel_chart(direct):
-        out = [_wheel(direct, _chart_title(technique_label))]
+        out = [_sourced(_wheel(direct, _chart_title(technique_label)), ("dirChart",))]
         if _is_wheel_chart(natal):
-            out.append(_wheel(natal, "本命盘"))
+            out.append(_sourced(_wheel(natal, "本命盘"), ("natalChart",)))
         return [w for w in out if w]
     for path in _WHEEL_PATHS:
         chart = _dig(data, path)
@@ -169,8 +169,15 @@ def _wheels(tool_name: str, data: dict[str, Any], technique_label: str) -> list[
             plain = tool_name in _WHEEL_NO_HOUSES  # 无宫位体系同样「无相位」：不画相位线
             wheel = _wheel(chart, _chart_title(technique_label) if path[0] != "natalChart" else "本命盘",
                            aspects if path == ("chart",) and not plain else None, houses=not plain)
-            return [wheel] if wheel else []
+            return [_sourced(wheel, path[:-1])] if wheel else []
     return []
+
+
+def _sourced(wheel: dict[str, Any] | None, source: tuple[str, ...]) -> dict[str, Any] | None:
+    """记下这张轮取自结果的哪一层（app 原版画法要拿同一层整份去画，reports/app_charts.py）。"""
+    if wheel:
+        wheel["source"] = list(source)
+    return wheel
 
 
 def _star_text(star: Any) -> str:
@@ -908,12 +915,28 @@ def dial90_drawing(spec: dict[str, Any], size: float, font: str, bold_font: str,
     return drawing
 
 
-# 画成矢量图（PDF 嵌矢量、DOCX 经 drawing_to_png 转位图）的盘图种类；其余（grid12 / grid9）画成表格。
+# 画成矢量图（PDF 嵌矢量、DOCX 经 drawing_to_png 转位图）的盘图种类；其余（grid12 / grid9）画成表格——
+# 除非这张配上了星阙 app 原版的图（`app_svg`，见 reports/app_charts.py），那就一律画 app 的图。
 DRAWN_KINDS = frozenset({"wheel", "hexagram", "taiyi", "dial90"})
 
 
+def is_drawn(spec: dict[str, Any]) -> bool:
+    return bool(spec.get("app_svg")) or spec.get("kind") in DRAWN_KINDS
+
+
 def figure_drawing(spec: dict[str, Any], width: float, font: str, bold_font: str, colors: Any) -> Any:
+    if spec.get("app_svg"):
+        from horosa_skill.reports.app_charts import svg_drawing
+
+        problems: list[str] = []
+        drawing = svg_drawing(str(spec["app_svg"]), width, text_font=font, bold_font=bold_font, problems=problems)
+        if drawing is not None:
+            return drawing
+        spec["renderer"], spec["renderer_note"] = "builtin", f"app svg could not be converted: {'; '.join(problems)}"
+        spec.pop("app_svg", None)
     kind = spec.get("kind")
+    if kind not in DRAWN_KINDS:
+        return None  # 格子盘：调用方画表格
     if kind == "hexagram":
         return hexagram_drawing(spec, width, font, bold_font, colors)
     if kind == "taiyi":
@@ -926,7 +949,7 @@ def figure_drawing(spec: dict[str, Any], width: float, font: str, bold_font: str
 def figure_notes(spec: dict[str, Any], t: Any) -> list[str]:
     """图题下的说明行（PDF 与 DOCX 同一份）：图例 + 规格里的 text / lines。"""
     notes: list[str] = []
-    if spec.get("kind") == "wheel":
+    if spec.get("kind") == "wheel" and not spec.get("app_svg"):  # 图例只描述自绘轮的配色；app 的图用 app 自己的配色
         if spec.get("outer_bodies"):
             notes.append(t("内圈为甲方宫位与行星，外圈为乙方行星；跨盘相位见正文「A对B相位」；R = 逆行。"))
         elif spec.get("aspects"):
@@ -991,7 +1014,7 @@ def _pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font:
     size = min(content_width * 0.74, 400.0) if per_row == 1 else content_width / 2 - 6
     for i in range(0, len(wheels), per_row):
         chunk = wheels[i:i + per_row]
-        cells = [[figure(wheel_drawing(w, size, font, bold_font, colors), _alt(w, t)) for w in chunk] + [""] * (per_row - len(chunk)),
+        cells = [[figure(figure_drawing(w, size, font, bold_font, colors), _alt(w, t)) for w in chunk] + [""] * (per_row - len(chunk)),
                  [paragraph(esc(w.get("title") or ""), styles["caption"]) for w in chunk] + [""] * (per_row - len(chunk))]
         block = [_table(cells, colWidths=[content_width / per_row] * per_row,
                        style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -1002,7 +1025,18 @@ def _pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font:
         out.append(KeepTogether(block))
     for spec in figures:
         kind = spec.get("kind")
-        if kind == "grid12":
+        app_drawing = None
+        if kind != "wheel" and spec.get("app_svg"):
+            app_drawing = figure_drawing(spec, min(content_width, 470.0), font, bold_font, colors)
+        if app_drawing is not None:
+            block = [_table([[figure(app_drawing, _alt(spec, t))]], colWidths=[content_width],
+                            style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))]
+            for line in [*figure_notes(spec, t), spec.get("title")]:
+                if line:
+                    block.append(paragraph(esc(str(line)), styles["caption"]))
+            block.append(Spacer(1, 10))
+            out.append(KeepTogether(block))
+        elif kind == "grid12":
             out.append(KeepTogether([_grid12(spec, content_width, styles, colors, paragraph, esc),
                                      *[paragraph(esc(line), styles["caption"]) for line in figure_notes(spec, t)],
                                      paragraph(esc(spec.get("title") or ""), styles["caption"]), Spacer(1, 10)]))
@@ -1120,60 +1154,162 @@ def _grid9(figure: dict[str, Any], width: float, styles: dict[str, Any], colors:
 
 
 def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: float = 3.0) -> bytes | None:
-    """把本模块画的 Drawing（Wedge / Circle / Line / Rect / String 五种图元）用 Pillow 画成 PNG，给 DOCX 用。
+    """把 reportlab Drawing 用 Pillow 画成 PNG，给 DOCX / PNG 盘图用。
 
     reportlab 自带的位图后端 renderPM 要另装 rlPyCairo，干净安装里没有；Pillow 是 reportlab 的依赖，一定在。
-    font_files：reportlab 字体名 → (TTF/TTC 路径, 子字体序号)；拿不到字体就返回 None（调用方退回文字说明）。
+    支持本模块自绘的五种图元，也支持 svglib 从星阙 app 原版 SVG 转出来的图（嵌套 Group + 仿射变换、Path / Polygon /
+    PolyLine / Ellipse / 圆角 Rect、旋转文字、透明度）。先按 2 倍画再缩回，边缘不起锯齿。
+    font_files：reportlab 字体名 → (TTF/TTC 路径, 子字体序号)；没登记的字体用第一款。拿不到 Pillow 就返回 None。
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
-        from reportlab.graphics.shapes import Circle, Line, Rect, String, Wedge
+        from reportlab.graphics.shapes import Circle, Ellipse, Group, Line, Path, PolyLine, Polygon, Rect, String, Wedge
     except ImportError:
         return None
-    width, height = int(drawing.width * scale), int(drawing.height * scale)
-    image = Image.new("RGB", (width, height), "white")
-    pen = ImageDraw.Draw(image)
-    fonts: dict[tuple[str, float], Any] = {}
+    supersample = 2
+    k = scale * supersample
+    out_w, out_h = max(1, int(drawing.width * scale)), max(1, int(drawing.height * scale))
+    width, height = out_w * supersample, out_h * supersample
+    image = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    pen = ImageDraw.Draw(image, "RGBA")
+    fonts: dict[tuple[str, int], Any] = {}
 
-    def rgb(color: Any) -> tuple[int, int, int] | None:
+    def mul(m: tuple[float, ...], n: tuple[float, ...]) -> tuple[float, ...]:
+        a, b, c, d, e, f = m
+        a2, b2, c2, d2, e2, f2 = n
+        return (a * a2 + c * b2, b * a2 + d * b2, a * c2 + c * d2, b * c2 + d * d2, a * e2 + c * f2 + e, b * e2 + d * f2 + f)
+
+    def apply(m: tuple[float, ...], x: float, y: float) -> tuple[float, float]:
+        a, b, c, d, e, f = m
+        return (a * x + c * y + e) * k, height - (b * x + d * y + f) * k
+
+    def unit(m: tuple[float, ...]) -> float:
+        return math.sqrt(abs(m[0] * m[3] - m[1] * m[2])) or 1.0
+
+    def rgba(color: Any, opacity: Any) -> tuple[int, int, int, int] | None:
         if color is None:
             return None
-        return tuple(round(v * 255) for v in (color.red, color.green, color.blue))  # type: ignore[return-value]
+        alpha = getattr(color, "alpha", 1.0)
+        alpha = (1.0 if alpha is None else float(alpha)) * (1.0 if opacity is None else float(opacity))
+        if alpha <= 0:
+            return None
+        return (round(color.red * 255), round(color.green * 255), round(color.blue * 255), round(alpha * 255))
 
-    def xy(x: float, y: float) -> tuple[float, float]:
-        return x * scale, height - y * scale
-
-    def font_for(name: str, size: float) -> Any:
-        key = (name, size)
+    def font_for(name: str, size_px: int) -> Any:
+        key = (name, size_px)
         if key not in fonts:
             path, index = font_files.get(name) or next(iter(font_files.values()))
-            fonts[key] = ImageFont.truetype(path, max(1, round(size * scale)), index=index)
+            fonts[key] = ImageFont.truetype(path, max(1, size_px), index=index)
         return fonts[key]
 
-    for shape in drawing.contents:
-        stroke = rgb(getattr(shape, "strokeColor", None))
-        fill = rgb(getattr(shape, "fillColor", None))
-        stroke_width = max(1, round((getattr(shape, "strokeWidth", 1) or 1) * scale))
-        if isinstance(shape, Wedge):
-            r0, r1 = shape.radius, shape.radius1 or 0
-            a0, a1 = shape.startangledegrees, shape.endangledegrees
-            steps = max(8, int(abs(a1 - a0)))
-            outer = [xy(shape.centerx + r0 * math.cos(math.radians(a0 + (a1 - a0) * k / steps)),
-                        shape.centery + r0 * math.sin(math.radians(a0 + (a1 - a0) * k / steps))) for k in range(steps + 1)]
-            inner = [xy(shape.centerx + r1 * math.cos(math.radians(a1 - (a1 - a0) * k / steps)),
-                        shape.centery + r1 * math.sin(math.radians(a1 - (a1 - a0) * k / steps))) for k in range(steps + 1)]
-            pen.polygon(outer + inner, fill=fill, outline=stroke)
-        elif isinstance(shape, Circle):
-            (x0, y0), (x1, y1) = xy(shape.cx - shape.r, shape.cy + shape.r), xy(shape.cx + shape.r, shape.cy - shape.r)
-            pen.ellipse([x0, y0, x1, y1], fill=fill, outline=stroke, width=stroke_width)
-        elif isinstance(shape, Rect):
-            (x0, y0), (x1, y1) = xy(shape.x, shape.y + shape.height), xy(shape.x + shape.width, shape.y)
-            pen.rectangle([x0, y0, x1, y1], fill=fill, outline=stroke)
-        elif isinstance(shape, Line):
-            pen.line([xy(shape.x1, shape.y1), xy(shape.x2, shape.y2)], fill=stroke, width=stroke_width)
-        elif isinstance(shape, String):
-            anchor = {"middle": "ms", "end": "rs"}.get(getattr(shape, "textAnchor", "start"), "ls")
-            pen.text(xy(shape.x, shape.y), shape.text, font=font_for(shape.fontName, shape.fontSize), fill=fill, anchor=anchor)
+    def bezier(p0: tuple[float, float], p1: tuple[float, float], p2: tuple[float, float], p3: tuple[float, float]) -> list[tuple[float, float]]:
+        pts = []
+        for i in range(1, 17):
+            t = i / 16
+            u = 1 - t
+            pts.append((u ** 3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t ** 3 * p3[0],
+                        u ** 3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t ** 3 * p3[1]))
+        return pts
+
+    def outline(points: list[tuple[float, float]], closed: bool, m: tuple[float, ...], shape: Any) -> None:
+        if len(points) < 2:
+            return
+        xy = [apply(m, x, y) for x, y in points]
+        fill = rgba(getattr(shape, "fillColor", None), getattr(shape, "fillOpacity", None)) if closed else None
+        stroke = rgba(getattr(shape, "strokeColor", None), getattr(shape, "strokeOpacity", None))
+        if fill and len(xy) >= 3:
+            pen.polygon(xy, fill=fill)
+        if stroke:
+            stroke_width = max(1, round((getattr(shape, "strokeWidth", 1) or 0) * unit(m) * k)) if getattr(shape, "strokeWidth", 1) else 0
+            if stroke_width:
+                pen.line(xy + ([xy[0]] if closed else []), fill=stroke, width=stroke_width, joint="curve")
+
+    def ellipse_points(cx: float, cy: float, rx: float, ry: float, n: int = 72) -> list[tuple[float, float]]:
+        return [(cx + rx * math.cos(2 * math.pi * i / n), cy + ry * math.sin(2 * math.pi * i / n)) for i in range(n)]
+
+    def text(shape: Any, m: tuple[float, ...]) -> None:
+        fill = rgba(getattr(shape, "fillColor", None), getattr(shape, "fillOpacity", None))
+        if fill is None or not shape.text:
+            return
+        size_px = max(1, round(shape.fontSize * unit(m) * k))
+        font = font_for(shape.fontName, size_px)
+        anchor = {"middle": "ms", "end": "rs"}.get(getattr(shape, "textAnchor", "start"), "ls")
+        x, y = apply(m, shape.x, shape.y)
+        angle = math.degrees(math.atan2(m[1], m[0]))
+        if abs(angle) < 0.05:
+            pen.text((x, y), shape.text, font=font, fill=fill, anchor=anchor)
+            return
+        pad = size_px * (len(shape.text) + 2)
+        layer = Image.new("RGBA", (2 * pad, 2 * pad), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).text((pad, pad), shape.text, font=font, fill=fill, anchor=anchor)
+        layer = layer.rotate(angle, resample=Image.BICUBIC, center=(pad, pad))
+        image.alpha_composite(layer, (round(x - pad), round(y - pad)))
+
+    def walk(node: Any, m: tuple[float, ...]) -> None:
+        for shape in getattr(node, "contents", None) or []:
+            if isinstance(shape, Group):
+                walk(shape, mul(m, tuple(shape.transform)))
+            elif isinstance(shape, String):
+                text(shape, m)
+            elif isinstance(shape, Wedge):
+                r0, r1 = shape.radius, shape.radius1 or 0
+                a0, a1 = shape.startangledegrees, shape.endangledegrees
+                steps = max(8, int(abs(a1 - a0)))
+                outer = [(shape.centerx + r0 * math.cos(math.radians(a0 + (a1 - a0) * i / steps)),
+                          shape.centery + r0 * math.sin(math.radians(a0 + (a1 - a0) * i / steps))) for i in range(steps + 1)]
+                inner = [(shape.centerx + r1 * math.cos(math.radians(a1 - (a1 - a0) * i / steps)),
+                          shape.centery + r1 * math.sin(math.radians(a1 - (a1 - a0) * i / steps))) for i in range(steps + 1)]
+                outline(outer + inner, True, m, shape)
+            elif isinstance(shape, Circle):
+                outline(ellipse_points(shape.cx, shape.cy, shape.r, shape.r), True, m, shape)
+            elif isinstance(shape, Ellipse):
+                outline(ellipse_points(shape.cx, shape.cy, shape.rx, shape.ry), True, m, shape)
+            elif isinstance(shape, Rect):
+                x0, y0, w, h = shape.x, shape.y, shape.width, shape.height
+                rx = min(getattr(shape, "rx", 0) or 0, w / 2)
+                ry = min(getattr(shape, "ry", 0) or rx, h / 2)
+                if rx and ry:
+                    pts: list[tuple[float, float]] = []
+                    for cx, cy, start in ((x0 + w - rx, y0 + ry, 270), (x0 + w - rx, y0 + h - ry, 0), (x0 + rx, y0 + h - ry, 90), (x0 + rx, y0 + ry, 180)):
+                        pts += [(cx + rx * math.cos(math.radians(start + 90 * i / 8)), cy + ry * math.sin(math.radians(start + 90 * i / 8))) for i in range(9)]
+                else:
+                    pts = [(x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h)]
+                outline(pts, True, m, shape)
+            elif isinstance(shape, Line):
+                outline([(shape.x1, shape.y1), (shape.x2, shape.y2)], False, m, shape)
+            elif isinstance(shape, (Polygon, PolyLine)):
+                flat = list(shape.points)
+                outline(list(zip(flat[0::2], flat[1::2])), isinstance(shape, Polygon), m, shape)
+            elif isinstance(shape, Path):
+                flat, ops = list(shape.points), list(shape.operators)
+                cursor = 0
+                current: list[tuple[float, float]] = []
+                subpaths: list[tuple[list[tuple[float, float]], bool]] = []
+                for op in ops:
+                    if op == 0:  # moveTo
+                        if current:
+                            subpaths.append((current, False))
+                        current = [(flat[cursor], flat[cursor + 1])]
+                        cursor += 2
+                    elif op == 1:  # lineTo
+                        current.append((flat[cursor], flat[cursor + 1]))
+                        cursor += 2
+                    elif op == 2:  # curveTo
+                        p1, p2, p3 = (flat[cursor], flat[cursor + 1]), (flat[cursor + 2], flat[cursor + 3]), (flat[cursor + 4], flat[cursor + 5])
+                        current += bezier(current[-1] if current else p1, p1, p2, p3)
+                        cursor += 6
+                    elif op == 3:  # closePath
+                        if current:
+                            subpaths.append((current, True))
+                        current = []
+                if current:
+                    subpaths.append((current, bool(getattr(shape, "isClipPath", False))))
+                has_fill = getattr(shape, "fillColor", None) is not None
+                for points, closed in subpaths:
+                    outline(points, closed or has_fill, m, shape)
+
+    walk(drawing, tuple(getattr(drawing, "transform", (1, 0, 0, 1, 0, 0))))
+    image = image.resize((out_w, out_h), Image.LANCZOS).convert("RGB")
     import io
 
     buffer = io.BytesIO()

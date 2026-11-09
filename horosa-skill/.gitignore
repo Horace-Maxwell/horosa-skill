@@ -5,6 +5,8 @@ __pycache__/
 
 build/
 dist/
+# 例外：星阙 app 原版绘图代码的打包产物要提交（报告盘图在 runtime 里直接跑它；contracts/app_charts_bundle.json 记来源）
+!horosa-core-js/dist/
 runs/
 
 memory.db

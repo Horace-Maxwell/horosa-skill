@@ -198,13 +198,32 @@ def grid_drawing(spec: dict[str, Any], width: float, font: str, bold: str, color
 
 
 def _drawing_texts(drawing: Any) -> list[tuple[str, str]]:
+    """全部文字（含 app 图里嵌套在组里的）；app 的符号字体自带字形，不进缺字检查。"""
     from reportlab.graphics.shapes import String
 
-    return [(shape.fontName, shape.text) for shape in drawing.contents if isinstance(shape, String)]
+    from horosa_skill.reports.app_charts import glyph_font_files
+
+    glyph_fonts = set(glyph_font_files())
+    out: list[tuple[str, str]] = []
+
+    def walk(node: Any) -> None:
+        for shape in getattr(node, "contents", None) or []:
+            if isinstance(shape, String):
+                if shape.fontName not in glyph_fonts:
+                    out.append((shape.fontName, shape.text))
+            else:
+                walk(shape)
+
+    walk(drawing)
+    return out
 
 
 def _figure_drawing(spec: dict[str, Any], font: str, bold: str, colors: Any) -> Any:
     kind = spec.get("kind")
+    if spec.get("app_svg"):
+        drawing = figure_kit.figure_drawing(spec, 560.0 if kind == "grid12" else 440.0, font, bold, colors)
+        if drawing is not None:
+            return drawing
     if kind in {"grid12", "grid9"}:
         return grid_drawing(spec, 560.0 if kind == "grid12" else 480.0, font, bold, colors)
     width = {"hexagram": 420.0, "taiyi": 440.0, "dial90": 420.0}.get(str(kind), 440.0)
@@ -250,7 +269,9 @@ def _compose(drawing: Any, title: str, notes: list[str], fonts: dict[str, Any], 
     """图名在上、盘图居中、图例说明在下的一张白底图。"""
     from PIL import Image, ImageDraw, ImageFont
 
-    body = figure_kit.drawing_to_png(drawing, fonts["files"], scale=scale)
+    from horosa_skill.reports.app_charts import glyph_font_files
+
+    body = figure_kit.drawing_to_png(drawing, {**fonts["files"], **glyph_font_files()}, scale=scale)
     if body is None:  # Pillow / reportlab 缺件：与缺字体同样处理（不出半张图）
         raise PngFontUnavailable()
     figure = Image.open(io.BytesIO(body)).convert("RGB")

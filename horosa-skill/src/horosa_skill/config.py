@@ -119,6 +119,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_ENABLE_STARTUP_TRANSGROUP_INIT": "internal",
     # 星阙桌面端 Windows 构建脚本（Prepare_Runtime_Windows.ps1）读的 JDK 路径：装着桌面端构建环境的机器常设成用户级变量。
     "HOROSA_JAVA_HOME": "internal",
+    # 报告盘图用星阙 app 原版画法（reports/app_charts.py）；=0 只画 skill 自绘的图（排查用）。
+    "HOROSA_APP_CHARTS": "internal",
 }
 # removed 档：曾存在于历史版本、现已删除的旗标 → 接受并忽略 + 指路。删代码不删兼容。
 REMOVED_ENV_FLAGS: dict[str, str] = {}

@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.49.0-dev (2026-11-09) | 报告盘图改用星阙 app 原版绘图代码（esbuild 打包 → linkedom 出 SVG → svglib 转矢量）：svglib 把非标准字体静默换成 Helvetica、`fill="transparent"` 画成黑块；app 紫微中宫把「121e28」当科学计数法印成 1°7′4″E（上游 bug，只报）；打包产物曾带进机器临时路径 | 字体走 Courier 占位再换回嵌入字体；SVG 先规整；adapter 只做无损记法换算；构建目录 realpath + 固定名 symlink，跨检出逐字节同一；`verify_app_charts_bundle.py` 进 preflight |
 | v0.48.0 (2026-11-08) | 发版矩阵：windows-11-arm 的 pytest 在 3600 s 处零失败被杀（进度 86%）；v0.47.x 两次已占 96–97% 却没人看 lane 报告 | 仿真 lane 加时 900 → 2700 s、job 90 → 120 分钟；lane 超 85% 打 `::warning::` 注解并写进报告；pytest.log 带 `--durations=25` |
 | v0.48.0-dev (2026-11-08) | 四路并行功能批（地名检索 / 命主档案 / 盘图与日历 / 工具面瘦身）：坐标串分钟四舍五入与上游向下取整差 1′、本机 zoneinfo 缺上游 2026 规则覆盖、`Any | None` 广告成 `type:"null"`、错误码表重复键静默覆盖、MCP 预校验把缺省值写成显式值盖掉档案、全局替换 time.sleep 让测试偶发红、合并时两个并列块的相同结尾被当成共同后缀 | 期望值一律取自上游 / 引擎；与上游逐值对拍；断言只写被测的那块；合并后逐块复核；门禁跑着时不动工作区 |
 | v0.47.4-dev (2026-11-07) | windows-smoke 偶发红：`start` 刚报两个服务都可达，紧接着 doctor 探到 chart 不通，`setup` 判 ok:false，同轮真实排盘冒烟全过；上一轮只重跑未定论 | doctor 只在「一边通一边不通」时短暂复探（3 次 × 0.5 秒），全通 / 全不通一次定论；三条负向对照。推上去后测试在 Linux / Windows CI 红：断言了带平台布局的整体 `ok`，改为只断言 `services:*` |
@@ -191,6 +192,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.49.0-dev / 2026-11-09 — 报告盘图改用星阙 app 原版绘图代码：五处「看起来对、其实不对」
+
+用户要报告里的盘图与 app 一致。路线（用户定）：app 里用 D3 / SVG 画的盘直接跑 app 原版代码（`horosa-core-js/app-charts/`
+→ esbuild 从 Horosa-Public 打包成 `dist/app-charts.cjs` → Node + linkedom 出 SVG → `reports/app_charts.py` 用 svglib 转
+reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。第一批：西洋单轮（31 个技法、37 张图）+ 紫微。踩到的：
+
+- **svglib 字体映射只认 PDF 标准 14 字体。** `FontMap.register_font(family, rlgFontName=已注册的 TTF 名)` 不报错、但查找时
+  落回 Helvetica——中文全成方块，PDF 也不再全嵌字体（PDF/UA 声明随之失真）。数字字重（`font-weight="400"`）会去找
+  `family-400` 这种名字，同样落回 Helvetica。守卫做法：规整时把所有非符号字族改成两个占位名、映射到 Courier / Courier-Bold，
+  转完把这两个名字换成报告嵌入的 TTF；`tests/test_app_charts.py` 断言转出的图里没有 Helvetica / Courier（负向对照：去掉换字 → 红）。
+- **`fill="transparent"` 在 svglib 里是黑色。** 西洋轮的宫位环整圈涂黑。规整：transparent → none；`var(--x, 回退)` 取回退值
+  （app 浅色主题值就写在回退里）；rgba → 颜色 + opacity。
+- **上游 bug：紫微中宫经度。** 引擎给 `"121e28"`，`Number("121e28")` 是合法科学计数法 1.21e30 → `formatLonDms` 印 1°7′4″E；
+  所有东经盘都错，app 自己也一样。按「上游问题只报」写 `notes-local/upstream-reports/2026-11-09-ziwei-center-lon-sci-notation.md`；
+  adapter 只做无损记法换算（度 + 分/60 → 十进制度）交给 app 自己排版（负向对照：去掉换算 → 红）。
+- **打包产物里带机器路径 / 不可复现。** macOS 的 `os.tmpdir()` 是 symlink，esbuild 的模块键算成 `../../../var/folders/…` 相对路径，
+  换一台机器字节就变。做法：构建目录先 realpath，再用固定名 symlink（`stage/app`、`stage/core`、`stage/node_modules`）+
+  `preserveSymlinks`；两个不同路径的同一上游检出 `--check` 逐字节相同才算过。产物来源（上游 commit、130 个 app 文件 sha、esbuild /
+  d3 / linkedom 版本、bundle sha）写进 `contracts/app_charts_bundle.json`；`scripts/verify_app_charts_bundle.py` 进 preflight。
+- **app 的 helper 拖进整个 UI 栈。** 绘图模块经 `utils/helper.js → request.js` 引到 antd / react-dom / dva / node-forge，6 MB。
+  app 文件发出的裸 npm 引用只放行绘图栈（d3 家族、moment），其余换成什么都不做的桩；放行 / 桩化两版对同一份数据逐像素一致
+  才采用（linkedom 与 jsdom 也逐像素一致）。随机 id 用种子重置、`navigator` 钉成与 OS 无关的值，输出逐字节稳定。
+
+- **产物差点没进 git。** `horosa-skill/.gitignore` 的 `dist/`（给 Python 构建产物的）把 `horosa-core-js/dist/` 一起吞了；本机门禁 25/25 全绿，
+  因为文件就在磁盘上——推上去 CI 才会红（`test_committed_bundle_matches_its_manifest` 读不到文件）。加 `!horosa-core-js/dist/` 例外；
+  提交前看一眼 `git status` 里新产物在不在，别只看门禁。
+
+另：本机 `Horosa-Public` 已在 pin 之后（`4c1a82ca` vs pin `10fb75de`），打包一律用 pin 住的公开克隆，否则 `--check` 必红。
+本地 runtime 没带 bundle（老 payload）时自动退回自绘图，规格写 `renderer: builtin` + 原因，不静默。
 
 ### v0.48.0 / 2026-11-08 — 发版矩阵：windows-11-arm 的 pytest 又撞天花板（3600 s，零失败），这次是两个版本没人看余量
 

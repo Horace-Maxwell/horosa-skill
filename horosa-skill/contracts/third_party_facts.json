@@ -778,6 +778,16 @@
         "horosa-skill/horosa-core-js/src/vendor/place/data/citiesFull.json",
         "horosa-skill/src/horosa_skill/service/api/place.py"
       ]
+    },
+    {
+      "id": "svglib.font-mapping",
+      "subject": "svglib",
+      "fact": "svglib 2.4.0: FontMap.register_font(family, rlgFontName=X) only maps onto the 14 standard PDF fonts; a non-standard rlgFontName without font_path is not stored and lookups fall back to Helvetica. Numeric font-weight values become part of the lookup name (family-400), also falling back. fill=\"transparent\" renders as black; CSS var() is not resolved.",
+      "source_url": "https://github.com/deeplook/svglib/blob/main/svglib/fonts.py",
+      "verified_on": "2026-11-09",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/app_charts.py"
+      ]
     }
   ]
 }
