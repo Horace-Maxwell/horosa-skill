@@ -591,6 +591,8 @@ _ZERI_RETITLE = "（择时盘 {moment}）"
 _APP_ONLY = {
     "jinkou": ("jinkou", "金口诀盘", ("board_context", "jinkou")),
     "suzhan": ("suzhan", "宿盘", ("chart",)),
+    "feigong": ("feigong", "飞宫同心盘", ("feigong",)),
+    "michon": ("michon", "回归 / 恒星双黄道", ("raw",)),
 }
 
 

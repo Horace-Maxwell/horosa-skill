@@ -10,15 +10,21 @@ import { renderLiuyao } from './adapters/liuyao.js';
 import { renderUranianDial } from './adapters/uranian.js';
 import { renderJinkou } from './adapters/jinkou.js';
 import { renderSuzhan } from './adapters/suzhan.js';
+import { renderBabylon } from './adapters/babylon.js';
+import { renderFeigong } from './adapters/feigong.js';
+import { renderMichon } from './adapters/michon.js';
 import THEME from 'horosa-theme-tokens';
+import SCOPES from 'horosa-theme-scopes';
 
 const VAR = /var\(\s*(--[\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*\))*))?\)/g;
 
 /** Resolve `var(--x, fallback)` the way the app's light theme does (tokens from its own stylesheets, see theme.mjs). */
-export function resolveThemeVars(svg) {
+export function resolveThemeVars(svg, scope) {
+  // a page scope (theme.mjs: `.horosa-workspace-shell .<scope>`) overrides the global tokens for that page's boards
+  const tokens = scope && SCOPES[scope] ? { ...THEME, ...SCOPES[scope] } : THEME;
   let out = svg;
   for (let round = 0; round < 6; round += 1) {
-    const next = out.replace(VAR, (_m, name, fallback) => (THEME[name] !== undefined ? THEME[name] : (fallback || '').trim()));
+    const next = out.replace(VAR, (_m, name, fallback) => (tokens[name] !== undefined ? tokens[name] : (fallback || '').trim()));
     if (next === out) break;
     out = next;
   }
@@ -41,6 +47,9 @@ export const RENDERERS = {
   uranian_dial: renderUranianDial,
   jinkou: renderJinkou,
   suzhan: renderSuzhan,
+  babylon: renderBabylon,
+  feigong: renderFeigong,
+  michon: renderMichon,
 };
 
 /**
@@ -56,7 +65,8 @@ export function renderCharts(requests) {
     reseed(1);
     try {
       const drawn = render(request.data, request.options || {});
-      return { ok: true, ...drawn, svg: resolveThemeVars(drawn.svg) };
+      const { themeScope, ...rest } = drawn;
+      return { ok: true, ...rest, svg: resolveThemeVars(drawn.svg, themeScope) };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }

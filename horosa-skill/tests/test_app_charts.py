@@ -177,6 +177,9 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("germany", "uranian_dial", 'font-family="ywastrochart"'),
         ("jinkou", "jinkou", "贵神"),
         ("suzhan", "suzhan", "四柱"),
+        ("babylon", "babylon", "恒星黄道"),
+        ("feigong", "feigong", "中宫"),
+        ("michon", "michon", "ASC"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -268,3 +271,62 @@ def test_suzhan_board_gets_the_four_pillars_from_board_context() -> None:
     assert not data["chart"].get("nongli") and data["board_context"]["nongli"]["bazi"], "fixture exercises the chart-service path"
     [(_i, request)] = app_charts.plan("suzhan", data, extract_figures("suzhan", data, "suzhan"))
     assert request["data"]["board_context"]["nongli"] == data["board_context"]["nongli"]
+
+
+def test_inline_style_fonts_are_lifted_and_italic_maps_to_the_text_font() -> None:
+    """React 的 style={{ fontFamily }} 落成内联 style（巴比伦七曜符号）：不提成属性，svglib 拿到没注册的字族名、符号印成字母；
+    斜体（楔文转写）svglib 映到 Oblique，也要换回报告字体（否则缺字形印方块）。"""
+    out = app_charts.normalize_svg('<svg><text style="font-family:ywastro;font-variant-numeric:tabular-nums">G</text></svg>')
+    assert 'font-family="HorosaAppYwastro"' in out and 'style="font-variant-numeric:tabular-nums"' in out, out
+    regular, bold, _files = _cjk_font()
+    drawing = app_charts.svg_drawing('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40" viewBox="0 0 100 40">'
+                                     '<text x="2" y="20" font-style="italic">MUL.MUL</text></svg>', 100, text_font=regular, bold_font=bold)
+    assert [s.fontName for s in _strings(drawing)] == [regular]
+
+
+@needs_node
+def test_babylon_planets_use_the_app_glyph_font() -> None:
+    regular, bold, _files = _cjk_font()
+    spec = next(f for f in _figures("babylon") if f.get("app_kind") == "babylon")
+    names = [s.fontName for s in _strings(app_charts.svg_drawing(spec["app_svg"], 520, text_font=regular, bold_font=bold))]
+    assert names.count("HorosaAppYwastro") == 7, "七曜 glyphs (style font-family) must land on the registered glyph font"
+
+
+def _strings(node):
+    from reportlab.graphics.shapes import String
+
+    for child in getattr(node, "contents", []) or []:
+        if isinstance(child, String):
+            yield child
+        else:
+            yield from _strings(child)
+
+
+def test_suzhan_board_nongli_failure_says_what_it_costs() -> None:
+    """宿盘盘图另取四柱失败：警告说的是「报告里不画宿盘」，不能借用七政四余的流年话术。负向对照：删掉 runner 里该分支 → 红。"""
+    from horosa_skill.service._context import _degrade_collector
+    from horosa_skill.service.runners.guolao import GuolaoRunners
+
+    class _Down:
+        def _call_remote(self, *_a, **_k):
+            raise RuntimeError("java down")
+
+    with _degrade_collector() as notes:
+        assert GuolaoRunners._guolao_fetch_nongli(_Down(), {}, "2028-04-06", "09:33:00", role="宿盘盘图") is None
+    assert any("宿占报告盘图" in note for note in notes) and not any("七政四余" in note for note in notes), notes
+
+
+@needs_node
+def test_page_scoped_tokens_use_the_pages_light_values() -> None:
+    """飞宫在「卜其他」的皇极式布局里：--horosa-huangji-text 由 .horosa-huangji-redesign 按亮色重定义（→ --horosa-text）；
+    取 var() 的回退值是暗色主题的浅米色 #e8dcc8（中宫干字几乎看不见）。负向对照：adapter 去掉 themeScope → 红。"""
+    spec = next(f for f in _figures("feigong") if f.get("app_kind") == "feigong")
+    assert "#e8dcc8" not in spec["app_svg"].lower(), "page scope must resolve --horosa-huangji-text to the light theme's text colour"
+
+
+def test_bundle_stays_free_of_page_ui() -> None:
+    """飞宫页模块经时空面板把地图与城市库（citiesFull.json 等 ~4 MB）拖进 bundle（实测 5.2 MB）；APP_UI_ONLY 把这些纯页面 UI
+    桩掉后 1.5 MB、输出逐字节不变。新接一种盘时若又拖进页面 UI，这里先红。"""
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert manifest["bundle_bytes"] < 3_000_000, manifest["bundle_bytes"]
+    assert not any(path.startswith(("components/amap/", "data/cit")) for path in manifest["app_files"])

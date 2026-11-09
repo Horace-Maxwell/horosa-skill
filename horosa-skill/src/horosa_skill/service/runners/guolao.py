@@ -326,7 +326,9 @@ class GuolaoRunners:
                 },
             )
         except Exception as exc:  # noqa: BLE001 — 四柱只影响神煞/虚实/化曜/月限的取值来源，不许带崩整盘
-            if role == "本命":
+            if role == "宿盘盘图":
+                note = "宿占报告盘图：本盘没有四柱、另取（/nongli/time）也失败，报告里不画宿盘（宿占正文不受影响）。"
+            elif role == "本命":
                 note = (
                     "七政四余 本命四柱（/nongli/time）不可用：Moira 规则层按公历年干支单柱起（[神煞]/[虚实]/[本命化曜] 缺月日时三柱）、"
                     "[三主与化曜] 生年化曜/命宫配干按公历年干支回退、[限法实算] 月限行省略。"

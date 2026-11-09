@@ -5,7 +5,10 @@
 // does in the app's light theme: the root carries data-horosa-appearance="light" and no light-flavor attribute
 // (paper is the default). Declarations on `:root` / `html` apply; attribute-qualified root selectors that match light
 // mode win over them (higher specificity); `body` ones win over both (nearer ancestor). Descendant selectors
-// (`:root .ant-dropdown`) never reach a free-standing chart, so they are ignored.
+// (`:root .ant-dropdown`) never reach a free-standing chart, so they are ignored — except PAGE SCOPES: a page container
+// directly under the workspace shell (`.horosa-workspace-shell .horosa-huangji-redesign`, and its
+// `:root[data-horosa-appearance=light] …` twin) re-defines tokens for every board on that page (飞宫 draws with
+// --horosa-huangji-text). Those are kept per scope class (base < light); an adapter names its page's scope.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -50,6 +53,9 @@ const LIGHT_ROOT_RANKS = new Map([
   ['body:not([data-horosa-appearance=dark])', 4],
 ]);
 
+// (norm() drops the blank after `]`, so the light twin reads `…=light].horosa-workspace-shell …`)
+const SCOPE = /^(?:((?::root|html)\[data-horosa-appearance=light\]) ?)?\.horosa-workspace-shell \.([\w-]+)$/;
+
 function expand(parents, own) {
   const children = own.split(',').map((s) => s.trim()).filter(Boolean);
   if (!parents.length) return children;
@@ -67,6 +73,7 @@ export function lightThemeTokens(appSrc) {
   const dir = path.join(appSrc, 'layouts', 'app');
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.less')).sort();
   const best = new Map(); // name → { rank, order, value }
+  const scoped = new Map(); // scope → Map(name → { rank, order, value })
   const inputs = {};
   let order = 0;
   for (const file of files) {
@@ -91,9 +98,18 @@ export function lightThemeTokens(appSrc) {
         if (!m || !stack.length) continue;
         order += 1;
         let rank = 0;
-        for (const sel of stack[stack.length - 1]) rank = Math.max(rank, LIGHT_ROOT_RANKS.get(norm(sel)) || 0);
-        if (!rank) continue;
         const value = m[2].replace(/\s*!important\s*$/, '').trim();
+        for (const sel of stack[stack.length - 1]) {
+          rank = Math.max(rank, LIGHT_ROOT_RANKS.get(norm(sel)) || 0);
+          const scope = norm(sel).match(SCOPE);
+          if (!scope) continue;
+          const srank = scope[1] ? 2 : 1;
+          if (!scoped.has(scope[2])) scoped.set(scope[2], new Map());
+          const sm = scoped.get(scope[2]);
+          const sprev = sm.get(m[1]);
+          if (!sprev || srank > sprev.rank || (srank === sprev.rank && order > sprev.order)) sm.set(m[1], { rank: srank, order, value });
+        }
+        if (!rank) continue;
         const prev = best.get(m[1]);
         if (!prev || rank > prev.rank || (rank === prev.rank && order > prev.order)) best.set(m[1], { rank, order, value });
       } else {
@@ -103,5 +119,10 @@ export function lightThemeTokens(appSrc) {
   }
   const tokens = {};
   for (const [name, { value }] of [...best.entries()].sort(([a], [b]) => a.localeCompare(b))) tokens[name] = value;
-  return { tokens, inputs };
+  const scopes = {};
+  for (const scope of [...scoped.keys()].sort()) {
+    scopes[scope] = {};
+    for (const [name, { value }] of [...scoped.get(scope).entries()].sort(([a], [b]) => a.localeCompare(b))) scopes[scope][name] = value;
+  }
+  return { tokens, scopes, inputs };
 }

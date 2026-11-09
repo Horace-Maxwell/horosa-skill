@@ -32,6 +32,11 @@ const BUNDLE = path.join(DIST, 'app-charts.cjs');
 const NOTICE = path.join(DIST, 'app-charts.LICENSES.txt');
 const MANIFEST = path.join(PKG, 'contracts', 'app_charts_bundle.json');
 const APP_SRC_REL = path.join('Horosa-Web', 'astrostudyui', 'src');
+// App files that are page UI only — the time / place picker panel (and the map + city databases behind it), saved-case
+// drawers, the page's time-draft plumbing. Board methods never call them; a page module that imports them (FeiGongMain…)
+// would otherwise drag ~4 MB of city data into the bundle. Same no-op stub as the npm UI packages; a new entry must
+// leave every committed kind's SVG byte-identical (tests/test_app_charts.py renders them all).
+const APP_UI_ONLY = /^(components\/amap\/|components\/comp\/SpaceTimePanel$|utils\/kentangCaseSave$|utils\/divinationTimeDraft$|data\/cit(ies|y)[A-Za-z]*\.json$)/;
 const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign)(\/|$)/;
 
 function stubModule(pkg, importer) {
@@ -80,10 +85,18 @@ const plugin = {
       // for esbuild's named-import interop to copy).
       return { path: `${a.path}::${path.relative(stage, a.importer)}`, namespace: 'stub', pluginData: { pkg: a.path, importer: a.importer } };
     });
+    build.onResolve({ filter: /^\.\.?\// }, (a) => {
+      if (!a.importer.startsWith(appPrefix)) return undefined;
+      const rel = path.relative(path.join(stage, 'app'), path.resolve(path.dirname(a.importer), a.path)).split(path.sep).join('/');
+      if (!APP_UI_ONLY.test(rel.replace(/\.js$/, ''))) return undefined;
+      return { path: `${a.path}::${path.relative(stage, a.importer)}`, namespace: 'stub', pluginData: { pkg: a.path, importer: a.importer } };
+    });
     build.onLoad({ filter: /.*/, namespace: 'stub' }, (a) => ({ contents: stubModule(a.pluginData.pkg, a.pluginData.importer), loader: 'js' }));
     // the app's light-theme tokens (theme.mjs), baked in at build time
     build.onResolve({ filter: /^horosa-theme-tokens$/ }, () => ({ path: 'horosa-theme-tokens', namespace: 'theme' }));
-    build.onLoad({ filter: /.*/, namespace: 'theme' }, () => ({ contents: JSON.stringify(theme.tokens), loader: 'json' }));
+    build.onLoad({ filter: /^horosa-theme-tokens$/, namespace: 'theme' }, () => ({ contents: JSON.stringify(theme.tokens), loader: 'json' }));
+    build.onResolve({ filter: /^horosa-theme-scopes$/ }, () => ({ path: 'horosa-theme-scopes', namespace: 'theme' }));
+    build.onLoad({ filter: /^horosa-theme-scopes$/, namespace: 'theme' }, () => ({ contents: JSON.stringify(theme.scopes), loader: 'json' }));
   },
 };
 
@@ -101,6 +114,8 @@ try {
     legalComments: 'none',
     preserveSymlinks: true,
     nodePaths: [path.join(stage, 'node_modules')],
+    // app 由 umi 3 + React 17 编译：自动 JSX 运行时（文件里不 import React 也能写 JSX，如 BabylonHoroscope）
+    jsx: 'automatic',
     loader: { '.js': 'jsx', '.png': 'dataurl', '.jpg': 'dataurl', '.svg': 'text', '.less': 'text', '.css': 'text', '.json': 'json' },
     plugins: [plugin],
     metafile: true,
@@ -146,6 +161,7 @@ const manifest = {
   bundle_bytes: bundle.length,
   kinds: null,
   theme_tokens: Object.keys(theme.tokens).length,
+  theme_scopes: Object.keys(theme.scopes).length,
   packages: [...packages].sort().map((name) => `${name}@${JSON.parse(fs.readFileSync(path.join(CORE, 'node_modules', name, 'package.json'), 'utf8')).version}`),
   app_files: appFiles,
 };

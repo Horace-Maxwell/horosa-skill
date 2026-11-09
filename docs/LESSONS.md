@@ -242,6 +242,22 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   画出来才进报告，画不出来（老 runtime 没带 bundle、数据缺）整张图连标题一起去掉，不留空框、PNG 出图不报空成功（`_png_outputs` 看实际出图数）。
 - **宿盘中宫要四柱，chart 服务给的盘里没有。** app 的盘恒来自 Java `/chart`（带 `chart.nongli`）；样例载荷是 ASC 宫起点（houseStartMode 1），
   runner 改走 chart 服务，盘上没有 nongli，app 中宫直接抛错。runner 另取同一时刻的四柱放 `board_context`（不并进 chart，宿占正文与导出快照不变）。
+- **app 用自动 JSX 运行时。** 巴比伦星盘文件里只 `import { Component }`、没有 React，esbuild 默认经典运行时报「React is not defined」。
+  app 是 umi 3 + React 17（自动运行时），打包改 `jsx: 'automatic'`；已接的十族输出逐字节不变（分进程各跑一次比对——同进程装两份
+  bundle 会共用 DOM 全局与随机种子，比出来的差异是假的）。
+- **页面模块会拖进整套页面 UI。** 飞宫的盘画在 `FeiGongMain.renderCenter` 里，一 import 页面模块就经时空面板带进地图与城市库，bundle
+  1.4 → 5.2 MB。把纯 UI 的 app 路径（`components/amap/`、`SpaceTimePanel`、`kentangCaseSave`、`divinationTimeDraft`、城市 JSON）列进
+  `APP_UI_ONLY`，与 npm UI 包同一种桩；回到 1.5 MB、飞宫 SVG 逐字节不变。守卫：bundle < 3 MB 且不含地图 / 城市库（负向对照：清空清单 → 红）。
+- **内联 style 里的字族 svglib 不按我们的映射走。** 巴比伦七曜用 `style={{ fontFamily: AstroFont }}`，规整只认属性，svglib 拿到没注册的
+  `ywastro`，符号印成字母 A–G；楔文转写是斜体，svglib 映到 `HorosaReportText-Italic`，不在占位表里，Ḫ 印方块。规整时把 style 里的字族 /
+  字重 / 斜体提成属性；斜体注册到 Courier-Oblique 占位再换回报告字体（负向对照各一条）。
+- **令牌也有页面级的。** 飞宫中宫干字用 `--horosa-huangji-text`，它只在页面容器 `.horosa-workspace-shell .horosa-huangji-redesign`（及亮色版）
+  里定义；全局表里没有 → 取回退值 = 暗色主题的浅米色，字几乎看不见。theme.mjs 另收「工作区壳下一层页面容器」的令牌（base < light，
+  注意 norm() 会吃掉 `]` 后的空格），adapter 回 `themeScope`（负向对照：去掉 → 红）。
+- **巴比伦盘的口径从 JS 拿，不在 adapter 里重算。** 派系档解析（档默认 + 显式覆写）只在 core-js `tools/babylon.js` 里有一份；它多回一个
+  `board: {jdn, opts}`，runner 存 `board_context`，adapter 用 app 的 `buildHoroscope` 按同一口径再起一次——盘与正文不会各走各的。
+- **金口诀显式昼夜时仍要取一次 /chart。** 以前调用方给了 isDiurnal 就不取盘；app 的盘图要起课盘，现在照取，但只给盘图，昼夜仍以调用方为准
+  （盘图切片里的 isDiurnal 也改成调用方的值）。旧测试「显式昼夜时不发 /chart」据此改写，保留「调用方昼夜胜出」那条断言。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 

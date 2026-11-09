@@ -58,6 +58,12 @@ _APP_ONLY_PAYLOADS = {
     "jinkou": _jinkou_payload,
     "suzhan": lambda source: ({key: source[key] for key in ("params", "chart", "aspects", "lots", "board_context") if key in source}
                               if isinstance(_dig(source, ["chart", "fixedStarSu28"]), (list, dict)) else None),
+    # 米雄：/astroextra/michon 原样响应（正文同一份）
+    "michon": lambda source: ({"raw": {key: source["raw"].get(key) for key in ("cusps", "planets", "superpositions", "ayanamsa", "equalHouses")}}
+                              if isinstance(source.get("raw"), dict) and isinstance(source["raw"].get("superpositions"), list) else None),
+    # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
+    "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
+                               if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),
 }
 
 
@@ -78,6 +84,10 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
             pick = lambda layer: {key: layer[key] for key in ("params", "chart", "aspects", "lots") if key in layer}  # noqa: E731
             requests.append((index, {"kind": "bi_wheel", "data": {"natualChart": pick(source["inner"]), "dirChart": pick(source["outer"])},
                                      "options": {"size": 760}}))
+        elif kind == "wheel" and tool_name == "babylon" and isinstance(source.get("board_context"), dict) and isinstance(_dig(source, ["raw", "chart"]), dict):
+            # 巴比伦：app 的星盘是恒星黄道宫带 + 七曜（BabylonHoroscope.renderWheel），不是西洋轮；正文同一 jdn / opts
+            requests.append((index, {"kind": "babylon", "data": {"raw": {"chart": source["raw"]["chart"]}, "board_context": source["board_context"]},
+                                     "options": {}}))
         elif kind == "wheel" and tool_name not in _WHEEL_SKIP_TOOLS and not spec.get("outer_bodies") and isinstance(spec.get("source"), list):
             layer = _dig(source, spec["source"])
             if isinstance(layer, dict) and isinstance(layer.get("chart"), dict):
@@ -160,6 +170,30 @@ _RGBA = re.compile(r'(fill|stroke)="rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.
 _WEIGHT = re.compile(r'font-weight="(\d+|bold|normal)"')
 _FAMILY = re.compile(r'font-family="([^"]*)"')
 _TEXT_OPEN = re.compile(r"<(text|tspan)\b([^>]*)>")
+_STYLE = re.compile(r'\sstyle="([^"]*)"')
+_LIFTED = ("font-family", "font-weight", "font-style")
+
+
+def _lift_style(match: re.Match[str]) -> str:
+    """React 的 style={{ fontFamily }} 落成内联 style：字族 / 字重 / 斜体提成属性，好让下面按属性换成注册过的字族
+    （巴比伦星盘的七曜符号字体就写在 style 里；不提的话 svglib 拿到一个没注册的字族名，符号印成字母）。"""
+    tag, attrs = match.groups()
+    style = _STYLE.search(attrs)
+    if not style:
+        return match.group(0)
+    keep: list[str] = []
+    lifted: list[str] = []
+    for decl in style.group(1).split(";"):
+        key, _, value = decl.partition(":")
+        key, value = key.strip().lower(), value.strip()
+        if not key:
+            continue
+        if key in _LIFTED and f'{key}="' not in attrs:
+            lifted.append(f'{key}="{value}"')
+        else:
+            keep.append(f"{key}:{value}")
+    rest = _STYLE.sub(f' style="{";".join(keep)}"' if keep else "", attrs, count=1)
+    return f"<{tag}{rest}{''.join(' ' + item for item in lifted)}>"
 
 
 def _resolve_vars(svg: str) -> str:
@@ -189,6 +223,7 @@ def normalize_svg(svg: str) -> str:
     svg = _resolve_vars(svg)
     svg = re.sub(r'(fill|stroke)="transparent"', r'\1="none"', svg)
     svg = _RGBA.sub(_rgba, svg)
+    svg = _TEXT_OPEN.sub(_lift_style, svg)
 
     def text_tag(match: re.Match[str]) -> str:
         tag, attrs = match.groups()
@@ -211,7 +246,8 @@ def normalize_svg(svg: str) -> str:
 
 # svglib 只肯把字族映射到 PDF 标准 14 字体（映射到别的已注册字体会静默落回 Helvetica）。于是文字字族先映射到 Courier /
 # Courier-Bold（app 从不用 Courier，规整时其余字族都已改成这两个占位名），转完再把这两个名字换成报告嵌入的 TrueType 字体。
-_TEXT_PLACEHOLDERS = {"Courier": "regular", "Courier-Bold": "bold"}
+# 斜体（巴比伦宫名的楔文转写）svglib 映到 Oblique；报告的中文字体没有斜体，照常体画
+_TEXT_PLACEHOLDERS = {"Courier": "regular", "Courier-Bold": "bold", "Courier-Oblique": "regular", "Courier-BoldOblique": "bold"}
 
 
 def _register_fonts() -> None:
@@ -222,6 +258,8 @@ def _register_fonts() -> None:
         font_map.register_font(rl_name, str(FONT_DIR / file_name), rlgFontName=rl_name)
     font_map.register_font(TEXT_FAMILY, rlgFontName="Courier")
     font_map.register_font(TEXT_BOLD_FAMILY, rlgFontName="Courier-Bold")
+    font_map.register_font(TEXT_FAMILY, style="italic", rlgFontName="Courier-Oblique")
+    font_map.register_font(TEXT_BOLD_FAMILY, style="italic", rlgFontName="Courier-BoldOblique")
 
 
 _SYMBOL_CHAIN: list[tuple[str, str, int, frozenset[int]]] | None = None

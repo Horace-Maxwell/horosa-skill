@@ -1376,7 +1376,14 @@ A global stability pass hardened these; keep them true when you touch the releva
     objects / isDiurnal + 实用贵人 / 性别，盘上缺 nongli 时照 app `lrChartFor` 用 gods 农历覆盖）、六爻（GZChart + app 的 analyzeLiuyao；变卦与本卦 + 动爻对得上 / 无动爻才换）、
     量化盘 90° 度盘（UranianDial：类组件直接 new + draw()）、金口诀（JinKouPanChart；runner 留起课盘 `board_context`）、宿占（SZChart；
     中宫四柱：本盘走 chart 服务时 runner 另取同刻农历放 `board_context`，不并进 chart）。原先没图的技法用 `kind="app"`（app 专属图，
-    `figures._APP_ONLY` + `app_charts._APP_ONLY_PAYLOADS`）：没有自绘版本，app 画不出来就整张不进报告（`_drop_undrawn_app_only`，不留空框）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
+    `figures._APP_ONLY` + `app_charts._APP_ONLY_PAYLOADS`）：没有自绘版本，app 画不出来就整张不进报告（`_drop_undrawn_app_only`，不留空框）。
+    巴比伦（BabylonHoroscope.renderWheel；起盘口径 = core-js `tools/babylon.js` 回的 `board` {jdn, opts}，runner 存 `board_context`）、
+    飞宫（FeiGongMain.prototype.renderCenter 挂在裸实例上调；取页面块里的 svg）、米雄（MichonDualRing，SSR）。
+    ⑨打包用自动 JSX 运行时（app 是 umi 3 + React 17，文件里可以不 import React）；⑩页面模块拖进纯 UI（时空面板 → 地图 + 城市库 ~4 MB）
+    时把那几个 app 路径列进 `APP_UI_ONLY` 桩掉，输出须逐字节不变，bundle 上限守卫 3 MB；⑪React 写的 `style={{ fontFamily }}` 落成内联 style，
+    规整时把字族 / 字重 / 斜体提成属性；斜体映到 Courier-Oblique 占位再换回报告字体；⑫页面级令牌：页面容器
+    （`.horosa-workspace-shell .<scope>` 及其亮色版）重定义的变量按 scope 存（theme.mjs `scopes`），adapter 回 `themeScope` 指明。
+    推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）——要不要改等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
     **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。

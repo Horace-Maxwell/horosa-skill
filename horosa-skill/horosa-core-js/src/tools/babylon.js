@@ -89,7 +89,8 @@ export function runBabylon(payload) {
   // lons 供 [数理星历] 的五星恒星黄经锚与月亮多列的太阳黄经（上游 :373 / BabylonMain.js:140 同传）；
   // 缺它时该段五星行全缺、太阳锚恒 0°。
   const text = buildBabylonSnapshotText(bab, { ...opts, ephemDigest, lons }) || '';
-  return { text };
+  // board：报告盘图（app 原版 BabylonHoroscope 星盘）按同一 jdn / opts 再起一次 buildHoroscope，盘与正文同一口径。
+  return { text, board: { jdn, opts } };
 }
 
 export default runBabylon;

@@ -492,9 +492,12 @@ class WesternRunners:
                 details={"message": js.get("message")},
             )
         snapshot_text = f"{(js or {}).get('text') or ''}".strip()
+        board = (js or {}).get("board") if isinstance(js, dict) else None
         return {
             "chart": chart.get("chart"),
             "raw": chart,
+            # 报告盘图（app 原版 BabylonHoroscope）用的起盘口径：JS 算正文时的同一 jdn / 派系 opts，不另算
+            "board_context": board if isinstance(board, dict) else None,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="babylon", snapshot_text=snapshot_text),
         }
