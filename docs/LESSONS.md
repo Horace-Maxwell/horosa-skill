@@ -269,6 +269,18 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
 - **模块私有的转换函数，从页面方法的返回元素里取。** 策天 / 演禽转紫微盘的 `buildKinAstroZiWeiChart` 没有导出；在裸对象上调页面方法
   `renderZiWeiCopiedCenter(pan)`，返回的 React 元素 props 里就是 app 自己转好的盘。该页面模块会拖进参评 / 河洛 / 正传 / 一掌经等兄弟页
   （诗文库 ~2.4 MB），同样列进 `APP_UI_ONLY`（输出逐字节不变）。
+- **HTML 盘：照 app 尺寸用 JS 重画，数据一律走 app 自己的代码。** 奇门（DunJiaBoard）、南印（IndiaSouthChart）、八字（BaZiFineChart）
+  在 app 里是 HTML + less。重画时宫格尺寸 / 字号 / 颜色抄 app 的内联样式与 less，配色表与数据函数直接 import；八字的生克连线、
+  十神、藏干、神煞计算都是模块私有，就 SSR 渲染组件、从标记里读出来再排版。看 app 原样：SSR 出 HTML + 把 layouts/app/*.less
+  轻度预处理成 CSS（Chrome 原生嵌套），起本地静态服务在浏览器面板里截图对照。
+- **行内 tspan 在 svglib 里会压字。** svglib 按占位字体（Courier）字宽排同一行的 tspan 片段，之后我们换成报告字体，宽度对不上
+  ——南印「Ma 6°」的度数压在名字上。自带 x 的 tspan（太乙逐行起笔）没事。adapter 不用行内 tspan；守卫扫所有 app SVG。
+- **守卫被 heredoc 的转义废掉，负向对照才看出来。** 上面那条守卫最初用 Python heredoc 写进测试，`\b` 成了真退格符，正则什么都
+  匹配不到——测试永远绿。负向对照（改回行内 tspan）没红才查出来。写正则走 Edit / raw 字符串，写完必跑负向对照。
+- **画法说明不该跟着换了画法的图走。** 「每宫自上而下：八神 / 九星 天盘干 / 八门 地盘干」「○ = 动爻」「0° 在上、逆时针」都在描述
+  skill 自绘图；换成 app 的图后版式 / 记号不同。规格里拆出 `legend`，只在自绘图下印；数据说明（局、主算客算）照留。
+- **app 的缺省值要逐项照页面查。** 八字页缺省「简盘」（细盘要用户存过）、`onlyZiGanShen` 缺省 true（不出副星行）；南印是缺省盘式、
+  星曜集是 `DEFAULT_OBJECTS` 不含 lots。照组件 props 的「未传」值猜会画出 app 里用户看不到的东西。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 

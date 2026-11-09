@@ -312,7 +312,7 @@ def _qimen(data: dict[str, Any]) -> list[dict[str, Any]]:
         f"空亡 {pan.get('kongWang')}" if pan.get("kongWang") else "",
     ) if part)
     return [{"kind": "grid9", "title": "奇门盘", "cells": cells, "text": caption,
-             "lines": ["每宫自上而下：八神 / 九星 天盘干 / 八门 地盘干"]}]
+             "legend": ["每宫自上而下：八神 / 九星 天盘干 / 八门 地盘干"]}]
 
 
 def _hexagram(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -350,7 +350,7 @@ def _hexagram(data: dict[str, Any]) -> list[dict[str, Any]]:
     if not columns:
         return []
     note = "○ = 动爻（自下而上 初爻 → 上爻）；六神、六亲、世应见下文「断卦结构」" + ("" if len(columns) == 2 else "；之卦见下文「卦象」")
-    return [{"kind": "hexagram", "title": "卦象", "columns": columns, "text": note}]
+    return [{"kind": "hexagram", "title": "卦象", "columns": columns, "legend": [note]}]
 
 
 def _section_body(data: dict[str, Any], *titles: str) -> str | None:
@@ -407,7 +407,8 @@ def _taiyi(data: dict[str, Any], whole: dict[str, Any]) -> list[dict[str, Any]]:
         "names": list(_TAIYI_NAMES),
         "center": {"title": "五", "lines": ["中宫"]},
         "text": caption,
-        "lines": [line for line in (calc, "外圈为各宫神煞（引擎十六宫标记），太乙所在宫着色。") if line],
+        "lines": [calc] if calc else [],
+        "legend": ["外圈为各宫神煞（引擎十六宫标记），太乙所在宫着色。"],
     }]
 
 
@@ -580,7 +581,7 @@ def _dial90(data: dict[str, Any], whole: dict[str, Any]) -> list[dict[str, Any]]
             return []
     points.sort(key=lambda p: p["fold"])
     return [{"kind": "dial90", "title": "90° 中点盘", "points": points,
-             "text": "因子折叠到 0–90°（0° 在上、逆时针）；同一指针位上的因子互成 0 / 90 / 180 / 270° 硬相位。"}]
+             "legend": ["因子折叠到 0–90°（0° 在上、逆时针）；同一指针位上的因子互成 0 / 90 / 180 / 270° 硬相位。"]}]
 
 
 _ZERI_RETITLE = "（择时盘 {moment}）"
@@ -596,11 +597,16 @@ _APP_ONLY = {
     "qizhengkin": ("qizhengkin", "坚七政圆盘", ("raw",)),
     "cetian": ("cetian", "策天紫微盘", ("raw",)),
     "xianqin": ("xianqin", "演禽盘", ("raw",)),
+    "bazi_birth": ("bazi", "八字命盘", ("bazi",)),
+    "bazi_direct": ("bazi", "八字命盘", ("bazi",)),
+    "bazizeri": ("bazi", "八字命盘", ("bazi",)),
 }
 
 
 def _app_only(tool_name: str, data: dict[str, Any]) -> list[dict[str, Any]]:
     entry = _APP_ONLY.get(tool_name)
+    if data.get("pan_moment") and isinstance(data.get("base"), dict):
+        data = data["base"]  # 择日：画选中时刻那一盘（与其他择日盘图同一来源）
     if not entry or not all(data.get(key) for key in entry[2]):
         return []
     return [{"kind": "app", "app_kind": entry[0], "title": entry[1]}]
@@ -982,7 +988,8 @@ def figure_notes(spec: dict[str, Any], t: Any) -> list[str]:
             notes.append(t("内圈连线为引擎给出的相位：蓝 = 六合，绿 = 三分，红 = 刑 / 冲；R = 逆行。"))
         elif any(b.get("retro") for b in spec.get("bodies") or []):
             notes.append(t("R = 逆行。"))
-    for line in [spec.get("text"), *(spec.get("lines") or [])]:
+    # legend = 自绘图的画法说明（哪个位置是什么、什么记号表示什么）；换成 app 的画法后不再成立，只在自绘图下印
+    for line in [spec.get("text"), *(spec.get("lines") or []), *([] if spec.get("app_svg") else (spec.get("legend") or []))]:
         if line:
             notes.append(str(line))
     return notes

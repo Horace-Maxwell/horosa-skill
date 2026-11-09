@@ -1388,6 +1388,13 @@ A global stability pass hardened these; keep them true when you touch the releva
     ⑬svglib 不认 dominant-baseline：规整时折成 dy（middle / central 0.35em、hanging 0.8em），所有 app 图都受益；⑭桩掉的包若在画图路径上，
     app 的 try/catch 会把错吞掉、盘面静默缺块（lunar-javascript 被桩 → 策天中宫无四柱）：新接一族要逐项核盘面上该有的数据都在，
     计算库（lunar-javascript）放行；放行后已接各族输出逐字节不变（分进程比对）。
+    HTML 类（app 用 HTML + less 画的盘）在 app-charts 里用 JS 照 app 尺寸重画成 SVG：数据 / 配色一律调 app 自己的函数与表
+    （奇门 `qimen.js` 照 DunJiaBoard 的 214 px 宫格；南印 `india.js` 用 IndiaSouthChart 导出的 helper + styles.less 尺寸；八字 `bazi.js`
+    SSR 出 BaZiFineChart 简盘、从标记里读行 / 格 / 生克连线再照 03-bazi.less 排版——私有函数不导出时就读 app 渲染出的 DOM）。
+    ⑮行内 `<tspan>`（不带 x）svglib 按占位字体字宽排、换字体后压字：adapter 不用；守卫「每个 tspan 自带 x」。⑯规格的 `legend` =
+    自绘图的画法说明，换成 app 图就不印（`figure_notes`）；数据说明留在 text / lines。⑰app 缺省值逐项照页面（八字简盘、
+    onlyZiGanShen=true 不出副星；南印缺省盘式 south、DEFAULT_OBJECTS 无 lots）。参考图：SSR 出 app HTML 盘 + 预处理的 app less
+    （notes-local/app-board-ref，`.claude/launch.json` 的 app-board-ref 静态服务 18767）。
     推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）；七政择日动盘要 Moira 规则与整张七政盘，
     择日结果里没有——这两类要不要加请求等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`

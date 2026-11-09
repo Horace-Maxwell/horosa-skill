@@ -15,6 +15,9 @@ import { renderFeigong } from './adapters/feigong.js';
 import { renderMichon } from './adapters/michon.js';
 import { renderQizhengKin } from './adapters/qizhengkin.js';
 import { makeKinZiwei } from './adapters/kinziwei.js';
+import { renderQimen } from './adapters/qimen.js';
+import { renderIndiaSouth } from './adapters/india.js';
+import { renderBazi } from './adapters/bazi.js';
 import THEME from 'horosa-theme-tokens';
 import SCOPES from 'horosa-theme-scopes';
 
@@ -55,6 +58,9 @@ export const RENDERERS = {
   qizhengkin: renderQizhengKin,
   cetian: makeKinZiwei('cetian'),
   xianqin: makeKinZiwei('xianqin'),
+  qimen: renderQimen,
+  india_south: renderIndiaSouth,
+  bazi: renderBazi,
 };
 
 /**

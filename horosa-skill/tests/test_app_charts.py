@@ -184,6 +184,9 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("qizhengkin", "qizhengkin", "坚七政"),
         ("cetian", "cetian", "命宫"),
         ("xianqin", "xianqin", "命星"),
+        ("qimen", "qimen", "值符"),
+        ("india_chart", "india_south", "命盘"),
+        ("bazi_birth", "bazi", "日元"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -359,3 +362,24 @@ def test_kin_ziwei_center_has_the_four_pillars() -> None:
     把错吞了、中宫只剩「年 月 日 时」四个空标签。负向对照：REAL_FOR_APP 去掉 lunar-javascript → 红。"""
     svg = next(f for f in _figures("cetian") if f.get("app_kind") == "cetian")["app_svg"]
     assert re.search(r">壬\s*<", svg) and re.search(r">戌\s*<", svg), "四柱 ganzhi printed in the center"
+
+
+@needs_node
+def test_every_tspan_carries_its_own_x() -> None:
+    """svglib 排行内 <tspan> 用的是占位字体（Courier）的字宽，换回报告字体后片段互相压字；每个 tspan 自带 x（太乙那样逐行起笔）才对。
+    负向对照：南印 adapter 改回「名 / 度数 / R」一个 text 里三个行内 tspan → 红。"""
+    for tool in ("qimen", "india_chart", "bazi_birth", "taiyi"):
+        for spec in _figures(tool):
+            for tag in re.findall(r"<tspan\b[^>]*>", spec.get("app_svg") or ""):
+                assert re.search(r'\sx="', tag), (tool, tag)
+
+
+@needs_node
+def test_drawing_conventions_of_the_skill_drawing_are_not_printed_under_app_boards() -> None:
+    """规格的 legend 只描述 skill 自绘图（「每宫自上而下：八神 / 九星 天盘干…」）；换成 app 遁甲盘后版式不同，不再印。"""
+    from horosa_skill.reports.figures import figure_notes
+
+    spec = next(f for f in _figures("qimen") if f.get("kind") == "grid9")
+    assert spec.get("app_svg") and not any("每宫自上而下" in n for n in figure_notes(spec, str))
+    builtin = {k: v for k, v in spec.items() if k != "app_svg"}
+    assert any("每宫自上而下" in n for n in figure_notes(builtin, str))

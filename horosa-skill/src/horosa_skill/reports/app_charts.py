@@ -53,6 +53,8 @@ def _jinkou_payload(source: dict[str, Any]) -> dict[str, Any] | None:
     return {"board_context": source["board_context"], "liureng": prerequisites["liureng"], "jinkou": source.get("jinkou")}
 
 
+_QIMEN_PAN_KEYS = ("cells", "ganzhi", "options", "keGanZhi", "juText", "zhiFu", "zhiShi", "xunKong", "kongWang", "xunShou", "allKong",
+                   "shiftPalace", "fengJu", "isJinhan", "dateStr", "timeStr", "realSunTime")
 _KIN_ZIWEI_KEYS = ("cetian", "dateStr", "hourBranch", "latitude", "longitude", "lunar", "mingGong", "palaceCards", "pillars",
                    "shenGong", "showFlags", "timeStr", "timezone", "xianqin", "yiyu", "ziwei")
 
@@ -78,6 +80,8 @@ _APP_ONLY_PAYLOADS = {
     # 策天 / 演禽：kentang 盘原样，只取 app 转紫微盘（KinAstroMain.buildKinAstroZiWeiChart）读的那些键
     "cetian": lambda source: _kin_pan(source, "cetian"),
     "xianqin": lambda source: _kin_pan(source, "xianqin"),
+    # 八字：引擎的 bazi（四柱 / 十神 / 藏干 / 神煞 / 农历）= app BaZiFineChart 的 value
+    "bazi": lambda source: ({"bazi": source["bazi"]} if isinstance(source.get("bazi"), dict) and isinstance(source["bazi"].get("fourColumns"), dict) else None),
     # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
     "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
                                if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),
@@ -116,6 +120,14 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
                 if not isinstance(payload.get("params"), dict) and isinstance(source.get("params"), dict):
                     payload["params"] = source["params"]  # 黄道 / 界 / 三分主星口径跟着本次请求走
                 requests.append((index, {"kind": "natal_wheel", "data": payload, "options": {"size": 760}}))
+        elif kind == "grid12" and spec.get("layout") == "india_south" and isinstance(source.get("chart"), dict):
+            # 南印方盘：app 缺省盘式（IndiaSouthChart，HTML）照它的样式表重画成 SVG（adapters/india.js），同一份 chart
+            params = source.get("params") if isinstance(source.get("params"), dict) else {}
+            varga = params.get("varga") if isinstance(params.get("varga"), dict) else {}
+            digits = re.sub(r"\D", "", str(varga.get("label") or "D1").split()[0])
+            chartnum = varga.get("chartnum") if isinstance(varga.get("chartnum"), int) else int(digits or 1)
+            requests.append((index, {"kind": "india_south", "data": {"chartObj": {"chart": source["chart"]}, "chartnum": chartnum,
+                                                                    "lagnaRef": params.get("indiaLagnaRef") or "asc"}, "options": {}}))
         elif kind == "grid12" and tool_name in _ZIWEI_TOOLS and isinstance(source.get("chart"), dict):
             requests.append((index, {"kind": "ziwei", "data": {"chart": source["chart"]}, "options": {"size": 780}}))
         elif kind == "app" and spec.get("app_kind") in _APP_ONLY_PAYLOADS:
@@ -133,6 +145,10 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
             if len(spec.get("columns") or []) == 2 or not moving:
                 payload = {key: source.get(key) for key in ("lines", "nongli", "liuyao_settings")}
                 requests.append((index, {"kind": "liuyao", "data": payload, "options": {"width": 900, "height": 620}}))
+        elif kind == "grid9" and isinstance(source.get("pan"), dict) and isinstance(source["pan"].get("cells"), list) and not source["pan"].get("isJinhan"):
+            # 奇门：app 遁甲盘（HTML）照 DunJiaBoard 的尺寸与配色重画成 SVG（adapters/qimen.js），同一份 pan
+            pan = source["pan"]
+            requests.append((index, {"kind": "qimen", "data": {"pan": {key: pan.get(key) for key in _QIMEN_PAN_KEYS if key in pan}}, "options": {}}))
         elif kind == "dial90" and isinstance(source.get("chart"), dict):
             # 量化盘 90° 度盘：本命点 + 引擎给的 8 颗 TNP（raw.tnp，与自绘图同一份）→ app 的 UranianDial
             tnp = _dig(source, ["raw", "tnp"]) if isinstance(_dig(source, ["raw", "tnp"]), list) else source.get("tnp")

@@ -58,11 +58,11 @@ def test_hexagram_draws_the_changed_gua_only_when_it_agrees_with_the_moving_line
     assert [c["title"] for c in ok["columns"]] == ["本卦 · 乾为天", "变卦 · 兑为泽"]
     assert ok["columns"][0]["moving"] == [False, False, True, False, False, True]
     # 六神不画：data.lines 的六神可以与引擎「断卦结构」表（按日干起）不一致，图与表打架时读者无所适从。
-    assert ok["columns"][0]["lines"] == [""] * 6 and "断卦结构" in ok["text"]
+    assert ok["columns"][0]["lines"] == [""] * 6 and "断卦结构" in ok["legend"][0]
     # 调用方给的 changed_code 与动爻对不上（样例载荷正是如此）：只画本卦，之卦以正文为准，不自己翻爻去推。
     mismatch, = figures.extract_figures("sixyao", {"current_code": "111111", "changed_code": "101010", "lines": lines,
                                                    "descriptions": descriptions})
-    assert [c["title"] for c in mismatch["columns"]] == ["本卦 · 乾为天"] and "之卦见下文" in mismatch["text"]
+    assert [c["title"] for c in mismatch["columns"]] == ["本卦 · 乾为天"] and "之卦见下文" in mismatch["legend"][0]
 
 
 def test_wheel_titles_and_tradition_exclusions() -> None:
