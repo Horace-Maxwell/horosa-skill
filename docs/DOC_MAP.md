@@ -10,7 +10,8 @@
 | `AGENTS.md` | 全部 agent / 维护者的现行规则（§0–§12） | 每条教训（LESSONS → 蒸馏）、每次发布的 compaction gate | `check_lessons_distilled`、`check_links`、`check_conflict_markers` |
 | `README.md` | 中文用户首页：能力、安装、客户端矩阵、平台表、状态 | 版本 / 工具数 / 测试数 / 客户端或平台事实变化 | `check_versions`、`check_tool_coverage`、`check_test_count_*`、`check_platform_table`、`check_client_matrix_connectors`、`check_docker_claims`、`check_knowledge_counts`、`check_group_headers`、`check_export_contract_versions`、`check_gate_counts`（v0.40.0 三把新锁）、`check_readme_diagrams_generated` |
 | `README_EN.md` | 英文首页（与中文覆盖同一组事实，章节组织不同） | 同上 | 同上 + `check_readme_diagrams_generated`（五张图明暗两版都要挂上） |
-| `docs/assets/readme/*.svg` | README 的五张图（封面 / 架构 / 一次调用 / 技法图谱 / 仓库结构）× 中英 × 明暗（**生成件**） | 技法 / 客户端 / 知识库数变化、架构或目录变化：改 `scripts/gen_readme_diagrams.py` 后重跑 | `check_readme_diagrams_generated`（按渲染逐字节比对） |
+| `docs/assets/readme/*.svg` | README 的五张图（封面 / 架构 / 一次调用 / 技法图谱 / 仓库结构）× 中英 × 明暗（**生成件**；封面与每张图抬头内嵌官方图标） | 技法 / 客户端 / 知识库数变化、架构或目录变化：改 `scripts/gen_readme_diagrams.py` 后重跑 | `check_readme_diagrams_generated`（按渲染逐字节比对） |
+| `docs/assets/brand/horosa-icon-{256,96}.png` | 星阙官方 app 图标（取自星阙开源仓 `Horosa_Desktop_Installer/web/horosa-icon.png`，只缩放未改动） | 上游换图标时重新缩放并重渲 README 图 | `tests/test_readme_diagrams.py`（封面与 README 页脚必须用它） |
 | `README.zh-CN.md` | 简短中文指针 | 极少 | `check_links` |
 | `docs/LESSONS.md` | 只增台账：symptom → root cause → fix/guard 原文 | 每次踩坑（协议 v3 第 1 条） | `check_lessons_distilled`（每节必有索引行；最新三版必有 AGENTS 蒸馏） |
 | `docs/DOC_MAP.md` | 本表 | 新增 / 删除任何指导性文档 | `check_doc_map` |

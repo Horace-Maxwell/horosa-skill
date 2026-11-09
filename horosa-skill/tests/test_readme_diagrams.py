@@ -86,3 +86,13 @@ def test_docs_sync_flags_a_readme_that_drops_a_figure(tmp_path: Path, monkeypatc
     ds.check_readme_diagrams_generated()
     assert any("repo-zh-dark.svg" in e for e in ds.ERRORS), ds.ERRORS
     assert not any("README_EN.md" in e for e in ds.ERRORS), ds.ERRORS
+
+
+def test_official_icon_is_the_brand_everywhere(rendered: dict[str, str]) -> None:
+    """The hero and every diagram header embed the official Horosa icon; both READMEs show it in the footer."""
+    for rel, body in rendered.items():
+        assert "data:image/png;base64," in body, f"{rel}: the official icon is not embedded"
+    for size in (256, 96):
+        assert gen.icon_uri(size) in "".join(rendered.values()), f"horosa-icon-{size}.png is unused"
+    for readme in ("README.md", "README_EN.md"):
+        assert "./docs/assets/brand/horosa-icon-96.png" in (REPO_ROOT / readme).read_text(encoding="utf-8"), readme

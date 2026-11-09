@@ -8,12 +8,12 @@
 <sub>A local-first MCP server &amp; CLI that exposes 114 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.</sub>
 
 <p>
-  <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=b7791f&label=release" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/技法-114-6a4fd3?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-3375_passed-2d8a56?style=flat-square" alt="3375 passed" />
-  <img src="https://img.shields.io/badge/runtime-offline_first-0d8478?style=flat-square" alt="offline" />
-  <img src="https://img.shields.io/badge/macOS_·_Windows-1f2937?style=flat-square" alt="macOS and Windows" />
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f2937?style=flat-square" alt="AGPL-3.0" /></a>
+  <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
+  <img src="https://img.shields.io/badge/测试-3376_passed-3e7c6f?style=flat-square" alt="3376 passed" />
+  <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
+  <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
 </p>
 
 <b>简体中文</b> · <a href="./README_EN.md">English</a>
@@ -568,7 +568,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **3375 / 3375 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 122 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **3376 / 3376 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 122 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -584,7 +584,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 3375 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 3376 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
@@ -618,8 +618,10 @@ uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导�
 
 <div align="center">
 
+<img src="./docs/assets/brand/horosa-icon-96.png" width="56" alt="星阙 Horosa 官方图标" />
+
 <sub>玄学工具，本地优先，掌握在你自己手里。</sub>
 
-[![License](https://img.shields.io/badge/License-AGPL--3.0-1f2937?style=flat-square)](./LICENSE) [![Security](https://img.shields.io/badge/Security-Policy-c13e65?style=flat-square)](./SECURITY.md) [![Support](https://img.shields.io/badge/Support-Paths-2d6acf?style=flat-square)](./SUPPORT.md) [![Contributing](https://img.shields.io/badge/Contributing-Guide-0d8478?style=flat-square)](./CONTRIBUTING.md) [![Citation](https://img.shields.io/badge/Citation-CFF-6a4fd3?style=flat-square)](./CITATION.cff)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-1c1917?style=flat-square)](./LICENSE) [![Security](https://img.shields.io/badge/Security-Policy-ae5845?style=flat-square)](./SECURITY.md) [![Support](https://img.shields.io/badge/Support-Paths-3f658e?style=flat-square)](./SUPPORT.md) [![Contributing](https://img.shields.io/badge/Contributing-Guide-3e7c6f?style=flat-square)](./CONTRIBUTING.md) [![Citation](https://img.shields.io/badge/Citation-CFF-1c1917?style=flat-square)](./CITATION.cff)
 
 </div>

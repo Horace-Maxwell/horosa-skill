@@ -6,12 +6,12 @@
 </picture>
 
 <p>
-  <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=b7791f&label=release" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/tools-114-6a4fd3?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/knowledge-31%20domains%2C%20cited-0d8478?style=flat-square" alt="Cited knowledge base" />
-  <img src="https://img.shields.io/badge/runtime-offline%20first-1f2937?style=flat-square" alt="Offline runtime" />
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-1f2937?style=flat-square" alt="Platforms" />
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f2937?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/tools-114-1c1917?style=flat-square" alt="114 tools" />
+  <img src="https://img.shields.io/badge/knowledge-31%20domains%2C%20cited-3e7c6f?style=flat-square" alt="Cited knowledge base" />
+  <img src="https://img.shields.io/badge/runtime-offline%20first-1c1917?style=flat-square" alt="Offline runtime" />
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-1c1917?style=flat-square" alt="Platforms" />
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="License" /></a>
 </p>
 
 <a href="./README.md">简体中文</a> · <b>English</b>
@@ -99,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `3375 / 3375 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `3376 / 3376 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
@@ -582,7 +582,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 3375 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 3376 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```
@@ -616,8 +616,10 @@ The full self-check covers: each tool is callable → returns a uniform envelope
 
 <div align="center">
 
+<img src="./docs/assets/brand/horosa-icon-96.png" width="56" alt="The official Horosa (星阙) icon" />
+
 <sub>Metaphysics tools, local first — in your own hands.</sub>
 
-[![License](https://img.shields.io/badge/License-AGPL--3.0-1f2937?style=flat-square)](./LICENSE) [![Security](https://img.shields.io/badge/Security-Policy-c13e65?style=flat-square)](./SECURITY.md) [![Support](https://img.shields.io/badge/Support-Paths-2d6acf?style=flat-square)](./SUPPORT.md) [![Contributing](https://img.shields.io/badge/Contributing-Guide-0d8478?style=flat-square)](./CONTRIBUTING.md) [![Citation](https://img.shields.io/badge/Citation-CFF-6a4fd3?style=flat-square)](./CITATION.cff)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-1c1917?style=flat-square)](./LICENSE) [![Security](https://img.shields.io/badge/Security-Policy-ae5845?style=flat-square)](./SECURITY.md) [![Support](https://img.shields.io/badge/Support-Paths-3f658e?style=flat-square)](./SUPPORT.md) [![Contributing](https://img.shields.io/badge/Contributing-Guide-3e7c6f?style=flat-square)](./CONTRIBUTING.md) [![Citation](https://img.shields.io/badge/Citation-CFF-1c1917?style=flat-square)](./CITATION.cff)
 
 </div>
