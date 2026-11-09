@@ -499,8 +499,8 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
 
                 regular, bold = image_fonts["names"]
                 drawing = figure_kit.figure_drawing(figure, 420 if kind in {"hexagram", "taiyi", "grid12"} else 380, regular, bold, rl_colors)
-            if drawing is None and figure_kit.is_drawn(figure) and kind in figure_kit.DRAWN_KINDS:
-                continue  # 矢量图拿不到字体文件：跳过图、留文字说明
+            if drawing is None and (kind == "app" or (figure_kit.is_drawn(figure) and kind in figure_kit.DRAWN_KINDS)):
+                continue  # 矢量图拿不到字体文件 / 只有 app 画得出的盘没画成：跳过图、留文字说明
             if drawing is not None:
                 # 矢量图转位图嵌进 Word（Pillow 画，不依赖 renderPM）；拿不到字体文件就跳过图、留文字说明。
                 from horosa_skill.reports.app_charts import glyph_font_files

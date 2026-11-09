@@ -585,6 +585,21 @@ def _dial90(data: dict[str, Any], whole: dict[str, Any]) -> list[dict[str, Any]]
 
 _ZERI_RETITLE = "（择时盘 {moment}）"
 
+# 只有星阙 app 原版画法才画得出来的盘（skill 没有自绘版）：规格 kind="app"，reports/app_charts.py 配上 app 的 SVG；
+# 配不上（旧 runtime 没带 bundle、Node 起不来、HOROSA_APP_CHARTS=0）就整张不出，不留空框。
+# 技法 → (app 画法, 图名, 结果里必须在场的键)
+_APP_ONLY = {
+    "jinkou": ("jinkou", "金口诀盘", ("board_context", "jinkou")),
+    "suzhan": ("suzhan", "宿盘", ("chart",)),
+}
+
+
+def _app_only(tool_name: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+    entry = _APP_ONLY.get(tool_name)
+    if not entry or not all(data.get(key) for key in entry[2]):
+        return []
+    return [{"kind": "app", "app_kind": entry[0], "title": entry[1]}]
+
 
 def extract_figures(tool_name: str, data: Any, technique_label: str = "") -> list[dict[str, Any]]:
     """返回这次结果能画的盘图规格（可能为空）。任何一种取不全就整张不画——画一张缺宫的盘比不画更糟。
@@ -617,6 +632,8 @@ def extract_figures(tool_name: str, data: Any, technique_label: str = "") -> lis
             figures.extend(_dial90(source, data))
         except (TypeError, ValueError, KeyError, IndexError):
             pass
+    if not figures:
+        figures.extend(_app_only(tool_name, source))
     if moment:
         for figure in figures:
             figure["title"] = f"{figure.get('title') or ''}{_ZERI_RETITLE.format(moment=moment)}"

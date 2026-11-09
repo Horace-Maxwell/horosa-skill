@@ -1374,7 +1374,9 @@ A global stability pass hardened these; keep them true when you touch the releva
     已接：西洋单轮（AstroChartCircle）、合盘双圈（drawDoubleChart，内圈甲方）、紫微（ZWChart）、七政四余（GLChart，fields 取 params）、
     太乙（TaiyiBoardSvg，React 17 `renderToStaticMarkup`）、大六壬（RengChart；runner 在结果里留 `board_context` = 起课盘的
     objects / isDiurnal + 实用贵人 / 性别，盘上缺 nongli 时照 app `lrChartFor` 用 gods 农历覆盖）、六爻（GZChart + app 的 analyzeLiuyao；变卦与本卦 + 动爻对得上 / 无动爻才换）、
-    量化盘 90° 度盘（UranianDial：类组件直接 new + draw()）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
+    量化盘 90° 度盘（UranianDial：类组件直接 new + draw()）、金口诀（JinKouPanChart；runner 留起课盘 `board_context`）、宿占（SZChart；
+    中宫四柱：本盘走 chart 服务时 runner 另取同刻农历放 `board_context`，不并进 chart）。原先没图的技法用 `kind="app"`（app 专属图，
+    `figures._APP_ONLY` + `app_charts._APP_ONLY_PAYLOADS`）：没有自绘版本，app 画不出来就整张不进报告（`_drop_undrawn_app_only`，不留空框）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
     **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。

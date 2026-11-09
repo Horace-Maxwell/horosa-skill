@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from horosa_skill.reports import app_charts
-from horosa_skill.reports.figures import drawing_to_png, extract_figures, figure_drawing
+from horosa_skill.reports.figures import drawing_to_png, extract_figures, figure_drawing, is_drawn
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = PKG_ROOT / "horosa-core-js" / "dist" / "app-charts.cjs"
@@ -175,6 +175,8 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("relative", "bi_wheel", 'font-family="ywastrochart"'),
         ("liureng_gods", "liureng", "真太阳时"),
         ("germany", "uranian_dial", 'font-family="ywastrochart"'),
+        ("jinkou", "jinkou", "贵神"),
+        ("suzhan", "suzhan", "四柱"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -248,3 +250,21 @@ def test_symbols_missing_from_the_text_font_use_the_fallback_chain() -> None:
     app_charts._swap_text_fonts(group, regular, bold)
     assert group.contents[0].fontName in {name for name, *_ in chain}
     assert group.contents[1].fontName == regular
+
+
+@needs_node
+def test_app_only_figures_appear_only_when_the_app_draws_them() -> None:
+    """金口诀 / 宿占 没有 skill 自画版本（kind="app"）：app 画出来才进报告，画不出来整张图不出现（不留空框）。"""
+    for tool in ("jinkou", "suzhan"):
+        figures = extract_figures(tool, FIXTURE[tool], tool)
+        assert [f["kind"] for f in figures] == ["app"], tool
+        assert not is_drawn(figures[0]), "no builtin drawing behind an app-only figure"
+        assert app_charts.attach_app_svgs(figures, tool, FIXTURE[tool], None) == [], "undrawn app-only figure is dropped"
+
+
+def test_suzhan_board_gets_the_four_pillars_from_board_context() -> None:
+    """宿盘中宫要四柱（app 的盘来自 Java /chart，恒带 chart.nongli）；本盘走 chart 服务时 runner 另取放在 board_context，不并进 chart。"""
+    data = FIXTURE["suzhan"]
+    assert not data["chart"].get("nongli") and data["board_context"]["nongli"]["bazi"], "fixture exercises the chart-service path"
+    [(_i, request)] = app_charts.plan("suzhan", data, extract_figures("suzhan", data, "suzhan"))
+    assert request["data"]["board_context"]["nongli"] == data["board_context"]["nongli"]

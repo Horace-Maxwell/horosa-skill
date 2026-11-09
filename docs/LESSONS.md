@@ -238,6 +238,10 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
 - **六壬盘要的数据结果里原本没有。** app 的 RengChart 要起课时刻那张盘（太阳宫定月将、昼夜），runner 取过这张盘但只交给 JS、没留；
   现在 runner 原样留 `board_context`（objects / isDiurnal + 实用贵人 / 性别，不另算）。runner 取盘时没要 nongli，照 app `lrChartFor` 的做法
   用 gods 的农历覆盖（缺省时间算法下两者同一时刻）。交互件「圆形盘」切换钮剔除。
+- **原先没图的技法：app 专属图（`kind="app"`）。** 金口诀、宿占以前报告里没有盘图，自绘版本也不存在；规格只登记「交给 app 画」，
+  画出来才进报告，画不出来（老 runtime 没带 bundle、数据缺）整张图连标题一起去掉，不留空框、PNG 出图不报空成功（`_png_outputs` 看实际出图数）。
+- **宿盘中宫要四柱，chart 服务给的盘里没有。** app 的盘恒来自 Java `/chart`（带 `chart.nongli`）；样例载荷是 ASC 宫起点（houseStartMode 1），
+  runner 改走 chart 服务，盘上没有 nongli，app 中宫直接抛错。runner 另取同一时刻的四柱放 `board_context`（不并进 chart，宿占正文与导出快照不变）。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 

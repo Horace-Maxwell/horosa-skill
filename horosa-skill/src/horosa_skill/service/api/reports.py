@@ -712,7 +712,11 @@ class ReportsAPI:
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         figures = self._attach_app_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
         figures = localize_document(figures, script)
-        if not figures:
+        try:
+            images = render_figure_pngs(figures, script=script, t=_labeler(script)) if figures else []
+        except PngFontUnavailable:
+            images = None  # 缺字体：下面照旧按字体问题报
+        if not figures or images == []:  # 没有盘式 / 只有 app 画得出的盘这次没转成
             raise ToolValidationError(
                 bilingual(
                     f"`{chart['tool_name']}` 这次结果里没有能画的盘图（这个技法没有盘式，或正文与数据对不上、整张不画）。"
@@ -724,7 +728,8 @@ class ReportsAPI:
                 details={"tool_name": chart["tool_name"], "format": "png"},
             )
         try:
-            images = render_figure_pngs(figures, script=script, t=_labeler(script))
+            if images is None:  # 第一次因缺字体失败：重来一次，让下面按字体问题给出可操作的报错
+                images = render_figure_pngs(figures, script=script, t=_labeler(script))
         except PngFontUnavailable as exc:
             missing = "".join(exc.missing[:40])
             raise ToolValidationError(

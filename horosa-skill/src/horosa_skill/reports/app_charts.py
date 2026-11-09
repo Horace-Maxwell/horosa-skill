@@ -46,6 +46,21 @@ def _dig(data: Any, path: list[str] | tuple[str, ...]) -> Any:
     return data
 
 
+def _jinkou_payload(source: dict[str, Any]) -> dict[str, Any] | None:
+    prerequisites = source.get("prerequisites") if isinstance(source.get("prerequisites"), dict) else {}
+    if not isinstance(source.get("board_context"), dict) or not isinstance(prerequisites.get("liureng"), dict):
+        return None
+    return {"board_context": source["board_context"], "liureng": prerequisites["liureng"], "jinkou": source.get("jinkou")}
+
+
+# kind="app"（只有 app 画得出来、skill 没有自绘版）的规格：app 画法 → 从结果里取喂给 adapter 的那几块
+_APP_ONLY_PAYLOADS = {
+    "jinkou": _jinkou_payload,
+    "suzhan": lambda source: ({key: source[key] for key in ("params", "chart", "aspects", "lots", "board_context") if key in source}
+                              if isinstance(_dig(source, ["chart", "fixedStarSu28"]), (list, dict)) else None),
+}
+
+
 def enabled() -> bool:
     return os.environ.get("HOROSA_APP_CHARTS", "1").strip().lower() not in {"0", "false", "off", "no"}
 
@@ -76,6 +91,10 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
                 requests.append((index, {"kind": "natal_wheel", "data": payload, "options": {"size": 760}}))
         elif kind == "grid12" and tool_name in _ZIWEI_TOOLS and isinstance(source.get("chart"), dict):
             requests.append((index, {"kind": "ziwei", "data": {"chart": source["chart"]}, "options": {"size": 780}}))
+        elif kind == "app" and spec.get("app_kind") in _APP_ONLY_PAYLOADS:
+            payload = _APP_ONLY_PAYLOADS[spec["app_kind"]](source)
+            if payload is not None:
+                requests.append((index, {"kind": spec["app_kind"], "data": payload, "options": {"size": 760}}))
         elif kind == "taiyi" and isinstance(source.get("pan") if isinstance(source.get("pan"), dict) else source.get("taiyi"), dict):
             # 与 figures._taiyi 同一份 pan（太乙 / 太乙择时在 pan，三式合一 / 三式择时在 taiyi）→ app 的 TaiyiBoardSvg
             pan = source["pan"] if isinstance(source.get("pan"), dict) else source["taiyi"]
@@ -109,7 +128,7 @@ def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, cl
     for spec in out:
         spec.setdefault("renderer", "builtin")
     if not requests:
-        return out
+        return _drop_undrawn_app_only(out)
     results = None
     failure = "app-charts bundle unavailable"
     render = getattr(client, "render_app_charts", None)
@@ -126,7 +145,12 @@ def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, cl
         else:
             reason = failure if results is None else str((result or {}).get("error") or "render failed")
             out[index]["renderer_note"] = f"app {request['kind']}: {reason}"
-    return out
+    return _drop_undrawn_app_only(out)
+
+
+def _drop_undrawn_app_only(figures: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """kind="app" 的盘没有自绘版：app 没画出来就整张不出（规格里本就只有图名，留着只会印一个空框）。"""
+    return [spec for spec in figures if spec.get("kind") != "app" or spec.get("app_svg")]
 
 
 # ───────────────────────────── SVG 规整 ─────────────────────────────

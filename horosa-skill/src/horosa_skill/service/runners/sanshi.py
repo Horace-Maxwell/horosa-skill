@@ -327,11 +327,13 @@ class SanshiRunners:
         # 时补一份 /chart 取 isDiurnal，取不到才留 null = 按时支粗判；页面 castIsDiurnal 同为地平口径）。此前 skill 只认调用方
         # 显式 isDiurnal，缺省恒按时支粗判 —— 日出 / 日落前后的课贵人昼夜取反。
         jinkou_payload = dict(payload)
+        board_chart: Any = None
         if jinkou_payload.get("isDiurnal") is None:
             lr_diurnal = liureng.get("isDiurnal") if isinstance(liureng, dict) else None
             if lr_diurnal is None:
                 try:
                     chart = self._call_remote("/chart", _liureng_chart_payload(payload))
+                    board_chart = chart
                     inner = chart.get("chart") if isinstance(chart.get("chart"), dict) else chart
                     lr_diurnal = inner.get("isDiurnal")
                 except Exception as exc:  # noqa: BLE001 — 取不到昼夜只回退时支粗判（上游同），须留痕
@@ -361,8 +363,16 @@ class SanshiRunners:
         if ken_response is not None and route_reason == "no_ken":
             warnings.append("金口诀 ken 盘未带四位行（rows），本次由本地引擎出课 —— 与星阙 ken 盘可能不一致。")
         snapshot_text = js_result.get("snapshot_text")
+        if board_chart is None:
+            # 报告盘图（app 原版 JinKouPanChart）要起课时刻那张盘：太阳宫定月将、农历定日柱。昼夜已另有来源时这里补取一次；
+            # 取不到只影响盘图（报告退回不画这张），写进 warnings。
+            try:
+                board_chart = self._call_remote("/chart", _liureng_chart_payload(payload))
+            except Exception as exc:  # noqa: BLE001 — 盘图上下文缺失只影响报告配图，须留痕
+                _degrade("jinkou board chart fetch failed: %s", exc, note="金口诀报告盘图：取起课盘失败，报告里不画金口诀盘。")
         result: dict[str, Any] = {
             "jinkou": data,
+            "board_context": _liureng_board_context(board_chart, payload, "jinkou"),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="jinkou", snapshot_text=snapshot_text),
             "prerequisites": {"liureng": liureng},
@@ -673,13 +683,27 @@ class SanshiRunners:
         }
 
 
+def _board_gender(value: Any) -> int:
+    """app 盘面的性别格：1 男 / 0 女 / -1 未知（入参可能是 bool、1/0 或「男 / 女」）。"""
+    if value is None or value == "":
+        return -1
+    if isinstance(value, str):
+        return 1 if value.strip() in {"1", "男", "male", "m", "true"} else (0 if value.strip() in {"0", "女", "female", "f", "false"} else -1)
+    return 1 if value else 0
+
+
 def _liureng_board_context(chart: Any, payload: dict[str, Any], tool_name: str) -> dict[str, Any] | None:
+    """六壬 / 金口诀报告盘图（app 原版 RengChart / JinKouPanChart）要的起课盘切片与本次实用口径——已取到的数据，原样留存。"""
     inner = chart.get("chart") if isinstance(chart, dict) else None
     if not isinstance(inner, dict) or not isinstance(inner.get("objects"), list):
         return None
-    gender = payload.get("gender") if tool_name == "liureng_runyear" else None
+    default_guireng = 0 if tool_name == "jinkou" else 2  # 两页的贵人缺省不同（金口诀页 0、六壬页 2）
+    gender = payload.get("gender") if tool_name in {"liureng_runyear", "jinkou"} else None
+    board = {key: inner.get(key) for key in ("objects", "nongli", "isDiurnal")}
+    if tool_name == "jinkou" and payload.get("isDiurnal") is not None:
+        board["isDiurnal"] = bool(payload["isDiurnal"])  # 金口诀调用方显式给了昼夜：盘与正文同一口径
     return {
-        "chart": {key: inner.get(key) for key in ("objects", "nongli", "isDiurnal")},
-        "guireng": payload.get("guirengType", 2) if payload.get("guirengType") is not None else 2,
-        "gender": -1 if gender is None else (1 if gender else 0),
+        "chart": board,
+        "guireng": payload.get("guirengType") if payload.get("guirengType") is not None else default_guireng,
+        "gender": _board_gender(gender),
     }

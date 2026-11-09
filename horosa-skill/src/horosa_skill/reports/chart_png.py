@@ -241,6 +241,8 @@ def render_figure_pngs(figures: list[dict[str, Any]], *, script: str, t: Any = s
     prepared = []
     for spec in figures:
         drawing = _figure_drawing(spec, regular, bold, colors)
+        if drawing is None:  # 只有 app 画得出的盘（kind="app"）这次没转成：不出这张
+            continue
         title = str(spec.get("title") or "")
         notes = [str(note) for note in figure_kit.figure_notes(spec, t) if note]
         prepared.append((spec, drawing, title, notes))

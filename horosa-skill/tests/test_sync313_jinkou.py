@@ -40,13 +40,16 @@ def test_jinkou_takes_day_night_from_the_chart_when_the_caller_gives_none(tmp_pa
         assert _jinkou_js_payload(js)["isDiurnal"] is horizon
 
 
-def test_explicit_is_diurnal_wins_and_skips_the_chart_request(tmp_path) -> None:
+def test_explicit_is_diurnal_wins_over_the_chart(tmp_path) -> None:
+    """调用方给了 isDiurnal 就以它为准。v0.49.0-dev 起这时仍取一次 /chart——只给报告盘图（app 的 JinKouPanChart 要起课盘），
+    不拿它的昼夜覆盖调用方（盘说昼、调用方说夜 → JS 与盘图都按夜）。"""
     client, js = _DiurnalChartClient(True), RecordingJs()
     env = _fake_service(tmp_path, client=client, js=js).run_tool(
         "jinkou", {**BASE_LR, "agent_confirmed_settings": True, "isDiurnal": False}, save_result=False)
     assert env.ok, env.error
-    assert "/chart" not in [ep for ep, _ in client.calls]
+    assert [ep for ep, _ in client.calls].count("/chart") == 1, "one chart fetch, for the report board only"
     assert _jinkou_js_payload(js)["isDiurnal"] is False
+    assert env.data["board_context"]["chart"]["isDiurnal"] is False, "board and text use the caller's day/night"
 
 
 def test_chart_without_day_night_falls_back_to_the_branch_judgement(tmp_path) -> None:

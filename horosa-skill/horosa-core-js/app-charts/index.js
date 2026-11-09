@@ -8,6 +8,8 @@ import { renderTaiyi } from './adapters/taiyi.js';
 import { renderLiureng } from './adapters/liureng.js';
 import { renderLiuyao } from './adapters/liuyao.js';
 import { renderUranianDial } from './adapters/uranian.js';
+import { renderJinkou } from './adapters/jinkou.js';
+import { renderSuzhan } from './adapters/suzhan.js';
 import THEME from 'horosa-theme-tokens';
 
 const VAR = /var\(\s*(--[\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*\))*))?\)/g;
@@ -37,6 +39,8 @@ export const RENDERERS = {
   liureng: renderLiureng,
   liuyao: renderLiuyao,
   uranian_dial: renderUranianDial,
+  jinkou: renderJinkou,
+  suzhan: renderSuzhan,
 };
 
 /**

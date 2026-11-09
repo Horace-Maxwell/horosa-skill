@@ -673,8 +673,13 @@ class GuolaoRunners:
                 "suzhan chart carries no nongli hour; house start fell back to ASC",
                 note="宿占人事十二宫缺省按八字公式起盘，但本盘没有农历时支（Java /chart 未附 nongli）→ 已按 ASC 起（上游同）。",
             )
+        # 报告盘图（app 原版 SZChart）的中宫要四柱：app 的盘恒来自 Java /chart（带 chart.nongli）。本盘走 chart 服务（ASC 档 / Java
+        # 不可用）时没有，另取同一时刻的四柱留给盘图——不并进 chart（宿占正文照旧按本盘口径），取不到只是报告里不画这张。
+        chart_part = response.get("chart") if isinstance(response.get("chart"), dict) else {}
+        board_nongli = chart_part.get("nongli") or self._guolao_fetch_nongli(payload, payload.get("date"), payload.get("time"), role="宿盘盘图")
         return {
             **response,
+            "board_context": {"nongli": board_nongli} if board_nongli else None,
             "compute_sources": {"chart": "java" if house_start == 0 and not java_failed else "chart_service"},
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="suzhan", snapshot_text=snapshot_text),
