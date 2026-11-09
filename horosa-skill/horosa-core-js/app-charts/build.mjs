@@ -32,12 +32,19 @@ const BUNDLE = path.join(DIST, 'app-charts.cjs');
 const NOTICE = path.join(DIST, 'app-charts.LICENSES.txt');
 const MANIFEST = path.join(PKG, 'contracts', 'app_charts_bundle.json');
 const APP_SRC_REL = path.join('Horosa-Web', 'astrostudyui', 'src');
-// App files that are page UI only — the time / place picker panel (and the map + city databases behind it), saved-case
-// drawers, the page's time-draft plumbing. Board methods never call them; a page module that imports them (FeiGongMain…)
-// would otherwise drag ~4 MB of city data into the bundle. Same no-op stub as the npm UI packages; a new entry must
-// leave every committed kind's SVG byte-identical (tests/test_app_charts.py renders them all).
-const APP_UI_ONLY = /^(components\/amap\/|components\/comp\/SpaceTimePanel$|utils\/kentangCaseSave$|utils\/divinationTimeDraft$|data\/cit(ies|y)[A-Za-z]*\.json$)/;
-const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign)(\/|$)/;
+// App files that are never on a board's draw path — page UI (the time / place picker panel and the map + city databases
+// behind it, saved-case drawers, the page's time-draft plumbing) and SIBLING pages a page module imports for its other
+// tabs (KinAstroMain → 参评 / 河洛 / 正传 / 一掌经 pages with their verse databases, the 演禽 side panels, 铁板 framework).
+// A board method that lives in such a page module (FeiGongMain.renderCenter, KinAstroMain.renderZiWeiCopiedCenter) would
+// otherwise drag 4–5 MB into the bundle. Same no-op stub as the npm UI packages; a new entry must leave every committed
+// kind's SVG byte-identical (checked when added; tests/test_app_charts.py guards size and renders every kind).
+const APP_UI_ONLY = new RegExp([
+  '^components/amap/', '^components/comp/SpaceTimePanel$', '^utils/kentangCaseSave$', '^utils/divinationTimeDraft$',
+  '^data/cit(ies|y)[A-Za-z]*\\.json$',
+  '^components/shusuan/(CanPingMain|HeLuoMain|ZhengChuanMain)$', '^components/yizhangjing/YiZhangJingMain$',
+  '^components/yanqin/(YanQinBranchPanel|YanQinControls)$', '^utils/tiebanFrameworkLocal$',
+].join('|'));
+const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign|lunar-javascript)(\/|$)/;
 
 function stubModule(pkg, importer) {
   const source = fs.readFileSync(importer, 'utf8');

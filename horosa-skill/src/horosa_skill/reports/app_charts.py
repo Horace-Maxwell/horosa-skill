@@ -53,6 +53,17 @@ def _jinkou_payload(source: dict[str, Any]) -> dict[str, Any] | None:
     return {"board_context": source["board_context"], "liureng": prerequisites["liureng"], "jinkou": source.get("jinkou")}
 
 
+_KIN_ZIWEI_KEYS = ("cetian", "dateStr", "hourBranch", "latitude", "longitude", "lunar", "mingGong", "palaceCards", "pillars",
+                   "shenGong", "showFlags", "timeStr", "timezone", "xianqin", "yiyu", "ziwei")
+
+
+def _kin_pan(source: dict[str, Any], key: str) -> dict[str, Any] | None:
+    raw = source.get("raw")
+    if not isinstance(raw, dict) or not isinstance(raw.get(key), (dict, list)):
+        return None
+    return {"raw": {name: raw[name] for name in _KIN_ZIWEI_KEYS if name in raw}}
+
+
 # kind="app"（只有 app 画得出来、skill 没有自绘版）的规格：app 画法 → 从结果里取喂给 adapter 的那几块
 _APP_ONLY_PAYLOADS = {
     "jinkou": _jinkou_payload,
@@ -61,6 +72,12 @@ _APP_ONLY_PAYLOADS = {
     # 米雄：/astroextra/michon 原样响应（正文同一份）
     "michon": lambda source: ({"raw": {key: source["raw"].get(key) for key in ("cusps", "planets", "superpositions", "ayanamsa", "equalHouses")}}
                               if isinstance(source.get("raw"), dict) and isinstance(source["raw"].get("superpositions"), list) else None),
+    # 坚七政：kentang 盘原样（正文同一份）；只取圆盘读的几块
+    "qizhengkin": lambda source: ({"raw": {key: source["raw"].get(key) for key in ("qizheng", "dateStr", "timeStr", "location", "gender", "timezone")}}
+                                  if isinstance(_dig(source, ["raw", "qizheng", "chart"]), dict) else None),
+    # 策天 / 演禽：kentang 盘原样，只取 app 转紫微盘（KinAstroMain.buildKinAstroZiWeiChart）读的那些键
+    "cetian": lambda source: _kin_pan(source, "cetian"),
+    "xianqin": lambda source: _kin_pan(source, "xianqin"),
     # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
     "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
                                if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),
@@ -171,7 +188,23 @@ _WEIGHT = re.compile(r'font-weight="(\d+|bold|normal)"')
 _FAMILY = re.compile(r'font-family="([^"]*)"')
 _TEXT_OPEN = re.compile(r"<(text|tspan)\b([^>]*)>")
 _STYLE = re.compile(r'\sstyle="([^"]*)"')
-_LIFTED = ("font-family", "font-weight", "font-style")
+_LIFTED = ("font-family", "font-weight", "font-style", "dominant-baseline", "alignment-baseline")
+# svglib 不认 dominant-baseline（字一律落在基线上）：按浏览器的位置折成 dy（em 跟字号走）。app 的图里 middle / central
+# 上千处（紫微星曜与宫名、星盘度数），不折的话整体上移约 0.35em，竖排星名的首字压出格子上沿（演禽）。
+_BASELINE_DY = {"middle": "0.35em", "central": "0.35em", "hanging": "0.8em", "text-before-edge": "0.8em"}
+_BASELINE = re.compile(r'\s(?:dominant|alignment)-baseline="([^"]*)"')
+
+
+def _baseline(match: re.Match[str]) -> str:
+    tag, attrs = match.groups()
+    found = _BASELINE.search(attrs)
+    if not found:
+        return match.group(0)
+    attrs = _BASELINE.sub("", attrs)
+    shift = _BASELINE_DY.get(found.group(1).strip())
+    if shift and ' dy="' not in attrs:
+        attrs = f'{attrs.rstrip("/")} dy="{shift}"' + ("/" if attrs.endswith("/") else "")
+    return f"<{tag}{attrs}>"
 
 
 def _lift_style(match: re.Match[str]) -> str:
@@ -224,6 +257,7 @@ def normalize_svg(svg: str) -> str:
     svg = re.sub(r'(fill|stroke)="transparent"', r'\1="none"', svg)
     svg = _RGBA.sub(_rgba, svg)
     svg = _TEXT_OPEN.sub(_lift_style, svg)
+    svg = _TEXT_OPEN.sub(_baseline, svg)
 
     def text_tag(match: re.Match[str]) -> str:
         tag, attrs = match.groups()

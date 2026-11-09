@@ -258,6 +258,17 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   `board: {jdn, opts}`，runner 存 `board_context`，adapter 用 app 的 `buildHoroscope` 按同一口径再起一次——盘与正文不会各走各的。
 - **金口诀显式昼夜时仍要取一次 /chart。** 以前调用方给了 isDiurnal 就不取盘；app 的盘图要起课盘，现在照取，但只给盘图，昼夜仍以调用方为准
   （盘图切片里的 isDiurnal 也改成调用方的值）。旧测试「显式昼夜时不发 /chart」据此改写，保留「调用方昼夜胜出」那条断言。
+- **svglib 不认 dominant-baseline。** app 图里 middle / central 上千处（紫微星曜、宫名、星盘度数）都按基线画，整体上移约 0.35em；
+  演禽竖排星名的首字直接压出格子上沿才被看见。规整时折成 `dy`（em 随字号），已接各族一起变准。守卫 + 负向对照。
+- **被桩掉的计算库会被 app 的 try/catch 吞掉。** 策天 / 演禽后端不给四柱，app 用 lunar-javascript 本地排；那个包不在放行表里 → 桩
+  → 抛错 → app 的兜底 catch 静默回落占位符，中宫只剩「年 月 日 时」空标签，没有任何报错。lunar-javascript 放行（core-js 本就依赖，
+  MIT，版本同 app）；放行后已接 13 张盘逐字节不变（证明此前没有别的族被同样吞掉）。新接一族时逐项核「盘上该有的数据」都画出来了。
+- **组件自己的 less 才是颜色来源。** 坚七政圆盘的颜色全是 `--qz-*`（默认暗色，`:root[light] .horosa-qizheng-kin-wheel` 覆盖）加类规则
+  （`.qz-wheel-bg { fill }`）；svglib 两样都不认。`app-charts/css.js` 只对这一份样式表照浏览器做：令牌 base < light，类规则里的呈现属性
+  写成属性（CSS 规则本就压过呈现属性）。负向对照：去掉 → 暗底残留 → 红。
+- **模块私有的转换函数，从页面方法的返回元素里取。** 策天 / 演禽转紫微盘的 `buildKinAstroZiWeiChart` 没有导出；在裸对象上调页面方法
+  `renderZiWeiCopiedCenter(pan)`，返回的 React 元素 props 里就是 app 自己转好的盘。该页面模块会拖进参评 / 河洛 / 正传 / 一掌经等兄弟页
+  （诗文库 ~2.4 MB），同样列进 `APP_UI_ONLY`（输出逐字节不变）。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 

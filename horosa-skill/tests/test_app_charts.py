@@ -13,6 +13,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -180,6 +181,9 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("babylon", "babylon", "恒星黄道"),
         ("feigong", "feigong", "中宫"),
         ("michon", "michon", "ASC"),
+        ("qizhengkin", "qizhengkin", "坚七政"),
+        ("cetian", "cetian", "命宫"),
+        ("xianqin", "xianqin", "命星"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -330,3 +334,28 @@ def test_bundle_stays_free_of_page_ui() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert manifest["bundle_bytes"] < 3_000_000, manifest["bundle_bytes"]
     assert not any(path.startswith(("components/amap/", "data/cit")) for path in manifest["app_files"])
+
+
+def test_dominant_baseline_becomes_dy() -> None:
+    """svglib 不认 dominant-baseline：app 图里 middle / central 上千处整体上移约 0.35em（演禽竖排星名首字压出格子）。
+    规整时折成 dy（em 随字号）。负向对照：去掉 _baseline 这一步 → 红。"""
+    out = app_charts.normalize_svg('<svg><text x="1" y="2" dominant-baseline="middle">危</text>'
+                                   '<text style="dominant-baseline:hanging">井</text><text dy="3" dominant-baseline="central">x</text></svg>')
+    assert out.count('dy="0.35em"') == 1 and 'dy="0.8em"' in out and 'dy="3"' in out and "baseline" not in out, out
+
+
+@needs_node
+def test_component_stylesheet_light_tokens_and_class_rules_are_inlined() -> None:
+    """坚七政圆盘的颜色全在组件 less 里（默认暗色、:root[light] 覆盖）+ 类规则（.qz-wheel-bg 的 fill）；svglib 两样都不认。
+    css.applyComponentCss 照浏览器亮色主题内联。负向对照：adapter 去掉这一步 → 底色缺失 / 暗色残留 → 红。"""
+    svg = next(f for f in _figures("qizhengkin") if f.get("app_kind") == "qizhengkin")["app_svg"]
+    assert "var(--qz" not in svg and "#070718" not in svg and "#0b0b20" not in svg
+    assert re.search(r'<rect fill="#f8f4eb"[^>]*class="qz-wheel-bg"', svg), "light panel fill from the class rule"
+
+
+@needs_node
+def test_kin_ziwei_center_has_the_four_pillars() -> None:
+    """策天 / 演禽后端不产四柱，app 用 lunar-javascript 本地排（buildLocalBaziResult）；那个包被当 UI 桩掉时 app 的 try/catch
+    把错吞了、中宫只剩「年 月 日 时」四个空标签。负向对照：REAL_FOR_APP 去掉 lunar-javascript → 红。"""
+    svg = next(f for f in _figures("cetian") if f.get("app_kind") == "cetian")["app_svg"]
+    assert re.search(r">壬\s*<", svg) and re.search(r">戌\s*<", svg), "四柱 ganzhi printed in the center"

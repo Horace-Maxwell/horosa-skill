@@ -1383,7 +1383,13 @@ A global stability pass hardened these; keep them true when you touch the releva
     时把那几个 app 路径列进 `APP_UI_ONLY` 桩掉，输出须逐字节不变，bundle 上限守卫 3 MB；⑪React 写的 `style={{ fontFamily }}` 落成内联 style，
     规整时把字族 / 字重 / 斜体提成属性；斜体映到 Courier-Oblique 占位再换回报告字体；⑫页面级令牌：页面容器
     （`.horosa-workspace-shell .<scope>` 及其亮色版）重定义的变量按 scope 存（theme.mjs `scopes`），adapter 回 `themeScope` 指明。
-    推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）——要不要改等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
+    坚七政（GuoLaoQizhengWheel；颜色全在组件 less → `app-charts/css.js` 照浏览器亮色内联令牌与类规则）、策天 / 演禽（KinAstroMain 的
+    `renderZiWeiCopiedCenter` 在裸对象上调，从返回元素的 props 取 app 自己转好的紫微盘，再走紫微画法）。
+    ⑬svglib 不认 dominant-baseline：规整时折成 dy（middle / central 0.35em、hanging 0.8em），所有 app 图都受益；⑭桩掉的包若在画图路径上，
+    app 的 try/catch 会把错吞掉、盘面静默缺块（lunar-javascript 被桩 → 策天中宫无四柱）：新接一族要逐项核盘面上该有的数据都在，
+    计算库（lunar-javascript）放行；放行后已接各族输出逐字节不变（分进程比对）。
+    推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）；七政择日动盘要 Moira 规则与整张七政盘，
+    择日结果里没有——这两类要不要加请求等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
     **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。

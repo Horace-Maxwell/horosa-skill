@@ -13,6 +13,8 @@ import { renderSuzhan } from './adapters/suzhan.js';
 import { renderBabylon } from './adapters/babylon.js';
 import { renderFeigong } from './adapters/feigong.js';
 import { renderMichon } from './adapters/michon.js';
+import { renderQizhengKin } from './adapters/qizhengkin.js';
+import { makeKinZiwei } from './adapters/kinziwei.js';
 import THEME from 'horosa-theme-tokens';
 import SCOPES from 'horosa-theme-scopes';
 
@@ -50,6 +52,9 @@ export const RENDERERS = {
   babylon: renderBabylon,
   feigong: renderFeigong,
   michon: renderMichon,
+  qizhengkin: renderQizhengKin,
+  cetian: makeKinZiwei('cetian'),
+  xianqin: makeKinZiwei('xianqin'),
 };
 
 /**

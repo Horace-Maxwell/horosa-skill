@@ -593,6 +593,9 @@ _APP_ONLY = {
     "suzhan": ("suzhan", "宿盘", ("chart",)),
     "feigong": ("feigong", "飞宫同心盘", ("feigong",)),
     "michon": ("michon", "回归 / 恒星双黄道", ("raw",)),
+    "qizhengkin": ("qizhengkin", "坚七政圆盘", ("raw",)),
+    "cetian": ("cetian", "策天紫微盘", ("raw",)),
+    "xianqin": ("xianqin", "演禽盘", ("raw",)),
 }
 
 
