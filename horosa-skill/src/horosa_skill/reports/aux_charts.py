@@ -15,7 +15,8 @@ app 的页面在结果之外另取一张盘来画：
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from horosa_skill.reports.figures import _ZERI_RETITLE, _wheel
 
@@ -100,10 +101,12 @@ def build(tool_name: str, charts: dict[str, Any]) -> dict[str, Any]:
         spec = {
             "kind": "app", "app_kind": "guolao_moira",
             "title": entry["title"] + _ZERI_RETITLE.format(moment=charts.get("moment") or ""),
+            # 喂法 = GuoLaoChartMain.render 的 Moira 分支：本盘 / 流年盘（罗计已换位、挂了四柱）、规则全集、择日端点数据（静盘宫位）、
+            # 内嵌页的 fields（adapter 照 QizhengZeriMain.buildFields 由起盘载荷搭）
             "app_request": {"kind": "guolao_moira", "data": {
-                "root": _pick(root), "transit": _pick(moira.get("transitChartObj") or {}),
+                "root": _layer(root), "transit": _layer(moira.get("transitChartObj") or {}),
                 "transitParams": moira.get("transitParams") or {}, "rules": moira.get("rules") or {},
-                "params": charts.get("params") or {},
+                "election": charts.get("election") or {}, "params": charts.get("params") or {},
             }, "options": {}},
         }
     else:  # pragma: no cover — AUX_TOOLS 与这里同改

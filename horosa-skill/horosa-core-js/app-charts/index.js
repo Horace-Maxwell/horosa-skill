@@ -4,6 +4,7 @@ import { reseed } from './dom.js';
 import { renderBiWheel, renderNatalWheel } from './adapters/astro.js';
 import { renderZiwei } from './adapters/ziwei.js';
 import { renderGuolao } from './adapters/guolao.js';
+import { renderGuolaoMoira } from './adapters/guolao_moira.js';
 import { renderTaiyi } from './adapters/taiyi.js';
 import { renderLiureng } from './adapters/liureng.js';
 import { renderLiuyao } from './adapters/liuyao.js';
@@ -56,6 +57,7 @@ export const RENDERERS = {
   bi_wheel: renderBiWheel,
   ziwei: renderZiwei,
   guolao: renderGuolao,
+  guolao_moira: renderGuolaoMoira,
   taiyi: renderTaiyi,
   liureng: renderLiureng,
   liuyao: renderLiuyao,

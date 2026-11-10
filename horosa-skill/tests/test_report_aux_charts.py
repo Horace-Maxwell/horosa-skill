@@ -39,8 +39,8 @@ def _resolve(node: Any) -> Any:
             target: Any = _RAW
             for key in node["$same_as"]:
                 target = target[key]
-            return _resolve({k: v for k, v in target.items() if k in ("params", "chart", "aspects", "lots")}
-                            if node["$same_as"][-1] == "base" else target)
+            heavy = ("export_snapshot", "technique_card", "snapshot_text")  # the stored base minus these = the re-cast chart object
+            return _resolve({k: v for k, v in target.items() if k not in heavy} if node["$same_as"][-1] == "base" else target)
         return {key: _resolve(value) for key, value in node.items()}
     if isinstance(node, list):
         return [_resolve(item) for item in node]
@@ -136,6 +136,81 @@ def test_without_the_app_drawing_the_builtin_double_wheel_still_draws() -> None:
     figures, notes = _settled("neroman", Gone())
     assert figures[0]["renderer"] == "builtin" and figures[0]["outer_bodies"] and notes == []
     assert "app_request" not in figures[0]
+
+
+@needs_node
+def test_qizhengzeri_moira_wheel_replaces_the_square_board() -> None:
+    figures, notes = _settled("qizhengzeri")
+    assert notes == []
+    assert [f["kind"] for f in figures] == ["app"], "the GLChart square board gives way to the page's Moira wheel"
+    spec = figures[0]
+    assert spec["renderer"] == "app" and spec["app_kind"] == "guolao_moira", spec.get("renderer_note")
+    assert spec["title"].startswith("七政择日盘（Moira）（择时盘 ")
+    svg = spec["app_svg"]
+    assert "七政四余 · Moira 风" in svg, "the wheel's own side caption"
+    transit = FIXTURE["qizhengzeri"]["aux"]["moira"]["transitParams"]
+    assert f"流年时间：{transit['date'].replace('-', '/')} {transit['time']}" in svg, "the 流年 ring is the transit chart the text was written from"
+    assert "moira-western-house-grid" in svg, "static western houses from the election endpoint are drawn"
+    assert "var(" not in svg and "--moira" not in svg, "component tokens resolved to the light theme"
+
+
+@needs_node
+def test_loading_the_bundle_leaves_nothing_that_keeps_node_alive() -> None:
+    """GuoLaoMoiraWheel imports react-dom (client) for its hover popup; loading that starts React's scheduler, whose
+    MessageChannel kept every process that loads the bundle alive for good (build.mjs's own kinds probe hung). The client
+    renderer is a stub for app files; this proves the bundle can be loaded and left."""
+    import subprocess
+
+    bundle = PKG_ROOT / "horosa-core-js" / "dist" / "app-charts.cjs"
+    manifest = json.loads((PKG_ROOT / "contracts" / "app_charts_bundle.json").read_text(encoding="utf-8"))
+    assert "guolao_moira" in manifest["kinds"]
+    completed = subprocess.run(["node", "-e", f"require({json.dumps(str(bundle))})"], capture_output=True, timeout=30)
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_qizhengzeri_keeps_the_square_board_when_moira_cannot_be_drawn() -> None:
+    class Gone:
+        def render_app_charts(self, figures):
+            return None
+
+    before = extract_figures("qizhengzeri", FIXTURE["qizhengzeri"]["data"], "qizhengzeri")
+    figures, notes = _settled("qizhengzeri", Gone())
+    assert [f["title"] for f in figures] == [f["title"] for f in before] and figures[0]["kind"] == "grid12"
+    assert not any("aux_superseded" in f or "app_request" in f for f in figures)
+    assert len(notes) == 1 and notes[0].startswith("七政择日盘（Moira）（择时盘") and "没有画出" in notes[0]
+
+
+def test_moira_recast_is_pinned_to_the_stored_run_and_must_match_it(tmp_path: Path) -> None:
+    from horosa_skill.service._context import _capture_figure_data
+
+    case = FIXTURE["qizhengzeri"]
+    service = _service(tmp_path, CaptureClient())
+    seen: list[dict[str, Any]] = []
+    stored = json.loads(json.dumps(case["data"]))
+    stored["base"]["technique_card"] = {"generated_at": "2026-11-09T23:30:00+00:00"}  # +08:00 → already 11-10 there
+
+    class Env:
+        ok, error = True, None
+
+    def recast(tool, payload, save_result=True):
+        assert tool == "guolao_chart" and save_result is False
+        seen.append(payload)
+        _capture_figure_data("guolao_moira", case["aux"]["moira"])
+        env = Env()
+        env.data = json.loads(json.dumps(recast.root))
+        return env
+
+    service.run_tool = recast  # type: ignore[method-assign]
+    service._call_remote = lambda endpoint, body, **kw: {"ResultCode": 0, "Result": case["aux"]["election"]}  # type: ignore[method-assign]
+    recast.root = case["aux"]["root"]
+    charts = service._aux_qizhengzeri_moira(case["input_normalized"], stored)
+    assert seen[0]["moiraTransitDate"] == "2026-11-10", "the 流年 moment is the stored run's day in the chart's zone, not today"
+    assert charts["election"] == case["aux"]["election"]
+    changed = json.loads(json.dumps(case["aux"]["root"]))
+    changed["chart"]["objects"][0]["lon"] = (float(changed["chart"]["objects"][0]["lon"]) + 1) % 360
+    recast.root = changed
+    with pytest.raises(ValueError, match="differ from the stored result"):
+        service._aux_qizhengzeri_moira(case["input_normalized"], stored)
 
 
 # ───────────────────────────── the service: compute at render time ─────────────────────────────
