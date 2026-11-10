@@ -748,6 +748,8 @@ class ReportsAPI:
             return self._aux_tianxing_moment_chart(payload, data)
         if kind == "syzygy":
             return self._aux_prenatal_syzygy_chart(payload, data)
+        if tool_name == "guolao_chart":
+            return self._aux_guolao_chart_moira(payload, data)
         return self._aux_qizhengzeri_moira(payload, data)
 
     def _numbered_paths(self, output_path: Path, count: int) -> list[Path]:

@@ -40,7 +40,7 @@ def _resolve(node: Any) -> Any:
             for key in node["$same_as"]:
                 target = target[key]
             heavy = ("export_snapshot", "technique_card", "snapshot_text")  # the stored base minus these = the re-cast chart object
-            return _resolve({k: v for k, v in target.items() if k not in heavy} if node["$same_as"][-1] == "base" else target)
+            return _resolve({k: v for k, v in target.items() if k not in heavy} if node["$same_as"][-1] in ("base", "data") else target)
         return {key: _resolve(value) for key, value in node.items()}
     if isinstance(node, list):
         return [_resolve(item) for item in node]
@@ -211,6 +211,57 @@ def test_moira_recast_is_pinned_to_the_stored_run_and_must_match_it(tmp_path: Pa
     recast.root = changed
     with pytest.raises(ValueError, match="differ from the stored result"):
         service._aux_qizhengzeri_moira(case["input_normalized"], stored)
+
+
+@needs_node
+def test_guolao_chart_draws_the_pages_moira_wheel_and_keeps_the_square_board_as_fallback() -> None:
+    """The 七政 page's default view (engine 星阙七政, chart style Moira) is GuoLaoMoiraWheel, not the GLChart square board."""
+    figures, notes = _settled("guolao_chart")
+    assert notes == [] and [f["kind"] for f in figures] == ["app"]
+    spec = figures[0]
+    assert spec["renderer"] == "app" and spec["app_kind"] == "guolao_moira", spec.get("renderer_note")
+    assert spec["title"] == aux_charts.title("guolao_chart"), "no 择时盘 suffix outside 七政择日"
+    svg = spec["app_svg"]
+    assert "七政四余 · Moira 风" in svg and "静盘：回归今宿" in svg, "the sample casts with 宿度制 2"
+    transit = FIXTURE["guolao_chart"]["aux"]["moira"]["transitParams"]
+    assert f"流年时间：{transit['date'].replace('-', '/')} {transit['time']}" in svg
+
+    class Gone:
+        def render_app_charts(self, figures):
+            return None
+
+    figures, notes = _settled("guolao_chart", Gone())
+    assert [f["kind"] for f in figures] == ["grid12"] and figures[0]["title"] == "七政四余十二宫"
+    assert len(notes) == 1 and notes[0].startswith(aux_charts.title("guolao_chart") + "没有画出")
+
+
+def test_guolao_chart_moira_uses_the_runners_own_settings_and_the_stored_moment(tmp_path: Path) -> None:
+    from horosa_skill.service._context import _capture_figure_data
+
+    case = FIXTURE["guolao_chart"]
+    service = _service(tmp_path, CaptureClient())
+    stored = {**json.loads(json.dumps(case["data"])), "technique_card": {"generated_at": "2026-11-09T23:30:00+00:00"}}
+    seen: list[dict[str, Any]] = []
+
+    class Env:
+        ok, error = True, None
+
+    def recast(tool, payload, save_result=True):
+        assert tool == "guolao_chart" and save_result is False
+        seen.append(payload)
+        _capture_figure_data("guolao_moira", case["aux"]["moira"])
+        env = Env()
+        env.data = json.loads(json.dumps(case["aux"]["root"]))
+        return env
+
+    service.run_tool = recast  # type: ignore[method-assign]
+    service._call_remote = lambda endpoint, body, **kw: {"ResultCode": 0, "Result": case["aux"]["election"]}  # type: ignore[method-assign]
+    charts = service._aux_engine_charts("guolao_chart", aux_charts.engine("guolao_chart"), stored, case["input_normalized"])
+    assert seen[0]["moiraTransitDate"] == "2026-11-10" and charts["election"] == case["aux"]["election"]
+    assert charts["params"]["doubingSu28"] == 2
+    unset = {k: v for k, v in case["input_normalized"].items() if k != "doubingSu28"}
+    charts = service._aux_engine_charts("guolao_chart", aux_charts.engine("guolao_chart"), stored, unset)
+    assert charts["params"]["doubingSu28"] == 0, "the 七政 page's own default 宿度制 (0 荀爽距星), not 七政择日's 2"
 
 
 # ───────────────────────────── the service: compute at render time ─────────────────────────────

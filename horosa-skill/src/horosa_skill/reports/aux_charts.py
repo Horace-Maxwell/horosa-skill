@@ -6,7 +6,8 @@ app 的页面在结果之外另取一张盘来画：
 - 推运 / 恒星推运（次限）：ProgMethodPanel 拿所选推运法（缺省 secondary）的推运时刻另起 /chart，画本命 / 推运双盘。
 - 天星择日：页面中栏是选中命中时刻的西占单轮；结果只有命中区间。
 - 产前朔望：页面左图是朔望那一刻的整盘；结果只留了星体位置。
-- 七政择日：内嵌七政页在选中时刻画 Moira 圆盘（GuoLaoMoiraWheel），要 Moira 规则全集 + 流年盘；结果只留正文用的几键。
+- 七政择日 / 七政四余：七政页（择日页内嵌的也是它）缺省画 Moira 圆盘（GuoLaoMoiraWheel），要 Moira 规则全集 + 流年盘 +
+  择日端点的静盘宫位；结果只留正文用的几键。
 
 做法（一套机制）：报告服务出图前按存档的入参 + 结果里实际用过的时刻，经真引擎补算那张盘（不存档、不改工具返回体，
 `ReportsAPI._aux_engine_charts`），这里把它变成盘图规格：西洋轮同时带自绘版（Node / 出图包不可用时照样有图）与 app 请求
@@ -43,6 +44,9 @@ AUX_TOOLS: dict[str, dict[str, Any]] = {
     # 七政择日：原有的七政方盘（GLChart）是 app 的另一种盘式；Moira 圆盘画出来才换掉它
     "qizhengzeri": {"engine": "qizheng_moira", "title": "七政择日盘（Moira）",
                     "replaces": lambda spec: spec.get("kind") == "grid12"},
+    # 七政页本身：引擎缺省星阙七政、盘式缺省 Moira（getStoredGuolaoChartStyle），方盘（GLChart）只在 Moira 画不出时留着
+    "guolao_chart": {"engine": "qizheng_moira", "title": "七政四余盘（Moira）",
+                     "replaces": lambda spec: spec.get("kind") == "grid12"},
 }
 
 
@@ -104,7 +108,7 @@ def build(tool_name: str, charts: dict[str, Any]) -> dict[str, Any]:
         root, moira = charts["root"], charts["moira"]
         spec = {
             "kind": "app", "app_kind": "guolao_moira",
-            "title": entry["title"] + _ZERI_RETITLE.format(moment=charts.get("moment") or ""),
+            "title": entry["title"] + (_ZERI_RETITLE.format(moment=charts["moment"]) if charts.get("moment") else ""),
             # 喂法 = GuoLaoChartMain.render 的 Moira 分支：本盘 / 流年盘（罗计已换位、挂了四柱）、规则全集、择日端点数据（静盘宫位）、
             # 内嵌页的 fields（adapter 照 QizhengZeriMain.buildFields 由起盘载荷搭）
             "app_request": {"kind": "guolao_moira", "data": {

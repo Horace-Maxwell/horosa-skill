@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import re
+from datetime import datetime
 from typing import Any
 
 from horosa_skill.astro_rulers import SUNRISE_MODES
@@ -14,8 +15,8 @@ from horosa_skill.errors import (
 )
 from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from horosa_skill.service import _clock
-from horosa_skill.service._common import _ganzhi_year
-from horosa_skill.service._context import _capture_figure_data, _degrade
+from horosa_skill.service._common import _finite_number, _ganzhi_year
+from horosa_skill.service._context import _capture_figure_data, _degrade, figure_capture
 from horosa_skill.service.options_cn import _day_boundary_switches
 from horosa_skill.service.text.chinese import (
     _apply_guolao_node_mode,
@@ -597,6 +598,63 @@ class GuolaoRunners:
             response["guolaoMoiraRules"] = moira_rules_slim
         response["export_snapshot"] = self._augment_export_payload(technique="guolao", snapshot_text=snapshot_text)
         return response
+
+    # ── 出报告时补算的 Moira 圆盘（reports/aux_charts.py；七政页与七政择日页共用）──────────────────────────
+    def _aux_guolao_chart_moira(self, payload: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+        """七政页（GuoLaoChartMain，引擎缺省星阙七政、盘式缺省 Moira）画的 GuoLaoMoiraWheel：存档入参 + 存档的盘。"""
+        if not isinstance(data.get("chart"), dict):
+            raise ValueError(bilingual("存档结果里没有七政盘", "stored result has no 七政 chart"))
+        return {**self._aux_guolao_moira(payload, data), "moment": ""}
+
+    def _aux_guolao_moira(self, payload: dict[str, Any], stored: dict[str, Any]) -> dict[str, Any]:
+        """GuoLaoMoiraWheel 要整张七政盘 + 流年盘 + Moira 规则全集 + 择日端点的静盘宫位（页面 requestElectionData）；结果只留正文
+        用的那几键。在补算作用域里按同一载荷重起一次 guolao_chart（不存档），runner 交出规则全集与流年盘；流年时刻钉回原结果
+        起盘那一刻（缺省「今天」，否则隔天出报告流年就变了）。重起的盘与规则须与存档逐键一致，否则不画。"""
+        payload = dict(payload)
+        generated = f"{(stored.get('technique_card') or {}).get('generated_at') or ''}"
+        if not payload.get("moiraTransitDate") and generated:
+            payload["moiraTransitDate"] = _moira_transit_moment(payload, now=datetime.fromisoformat(generated))[0]
+        with figure_capture() as captured:
+            env = self.run_tool("guolao_chart", payload, save_result=False)
+        moira = captured.get("guolao_moira")
+        if not env.ok or not isinstance(env.data, dict):
+            raise ValueError(bilingual(f"重起七政盘失败：{env.error.code if env.error else 'unknown'}",
+                                       f"re-casting guolao_chart failed: {env.error.code if env.error else 'unknown'}"))
+        if not isinstance(moira, dict):
+            raise ValueError(bilingual("Moira 规则（/qizheng/moira）或流年盘不可用", "Moira rules (/qizheng/moira) or the transit chart were not available"))
+        root = env.data
+        slim = stored.get("guolaoMoiraRules") if isinstance(stored.get("guolaoMoiraRules"), dict) else {}
+        if root.get("chart") != stored.get("chart") or any(moira["rules"].get(key) != value for key, value in slim.items()):
+            raise ValueError(bilingual("重起的七政盘或 Moira 规则与存档不一致", "the re-cast chart or its Moira rules differ from the stored result"))
+        transit = moira["transitChartObj"] if isinstance(moira.get("transitChartObj"), dict) else {}
+        tp = moira.get("transitParams") if isinstance(moira.get("transitParams"), dict) else {}
+        # 静盘西占宫位格 = 页面 requestElectionData 的 /qizhengelection/pan（同键同缺省：eleLifeMode sunrise、ayanamsaDeg 0、
+        # 紫炁与天海冥黄经透传自流年盘）
+        transit_objects = {o.get("id"): o for o in ((transit.get("chart") or {}).get("objects") or []) if isinstance(o, dict)}
+        extra = []
+        ziqi = transit_objects.get("Purple Clouds")
+        if ziqi is not None and _finite_number(ziqi.get("lon")) is not None:
+            extra.append({"id": "PurpleClouds", "label": "炁", "lon": float(ziqi["lon"]), "lat": 0, "speed": 0})
+        for body_id, label in (("Uranus", "天"), ("Neptune", "海"), ("Pluto", "冥")):
+            body = transit_objects.get(body_id)
+            if body is not None and _finite_number(body.get("lon")) is not None:
+                extra.append({"id": body_id, "label": label, "lon": float(body["lon"]),
+                              "lat": float(body["lat"]) if _finite_number(body.get("lat")) is not None else 0,
+                              "speed": float(body["lonspeed"]) if _finite_number(body.get("lonspeed")) is not None else 0})
+        election = self._require_qizhengelection_ok(self._call_remote("/qizhengelection/pan", {
+            "date": tp.get("date"), "time": tp.get("time") or "12:00:00",
+            "staticDate": payload.get("date"), "staticTime": payload.get("time"),
+            "zone": tp.get("zone") or "8:00", "gpsLat": tp.get("gpsLat"), "gpsLon": tp.get("gpsLon"),
+            "eleLifeMode": "sunrise",
+            "nodeType": "true" if tp.get("guolaoNodeType") == "true" else "mean",
+            "lilithType": "true" if tp.get("guolaoLilithType") == "true" else "mean",
+            "ayanamsaDeg": 0, "extraBodies": extra,
+        }), endpoint="/qizhengelection/pan", expect="dict")
+        # 盘面四角注记读页面 fields：宿度制 / 命度法 / 罗计月孛取法按 runner 实际起盘用的值（缺省各页不同，不交给 adapter 猜）
+        su28, settings = self._guolao_chart_settings(payload)
+        params = {**payload, "doubingSu28": su28,
+                  **{key: settings[key] for key in ("guolaoLifeMode", "guolaoNodeType", "guolaoLilithType") if settings.get(key)}}
+        return {"root": root, "moira": moira, "election": election, "params": params}
 
     # 宿度制九档（perchart.py:54-62 SU28_MODE_* / parseSu28Mode :731-748；上游 newChartSeeds.js:48 check 0–8）。
     _SU28_MODES = frozenset(range(9))
