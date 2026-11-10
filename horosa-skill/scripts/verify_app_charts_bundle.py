@@ -4,7 +4,8 @@
 The report figures run the 星阙 app's own chart code from that bundle (reports/app_charts.py). It is built from a
 Horosa-Public checkout by `horosa-core-js/app-charts/build.mjs`; this rebuilds it in memory from HOROSA_SOURCE_ROOT and
 fails when the bundle, its license notice or `contracts/app_charts_bundle.json` differ — i.e. upstream chart code moved
-(re-vendor: rerun the build and look at the figures) or someone edited the bundle by hand.
+(re-vendor: rerun the build and look at the figures) or someone edited the bundle by hand. It also checks the tarot card
+pictures shipped in the package against the same tree (scripts/sync_tarot_art.py --check).
 
     HOROSA_SOURCE_ROOT=/path/to/Horosa-Public uv run python scripts/verify_app_charts_bundle.py
 
@@ -43,7 +44,10 @@ def main() -> int:
         [node, "app-charts/build.mjs", "--source-root", str(Path(source_root).expanduser()), "--check"],
         cwd=CORE_JS,
     )
-    return result.returncode
+    # 塔罗牌面图（报告牌阵图用）与同一个 pin 的 public/tarot-art 逐字节一致（scripts/sync_tarot_art.py）
+    art = subprocess.run([sys.executable, str(PKG_ROOT / "scripts" / "sync_tarot_art.py"), "--source-root",
+                          str(Path(source_root).expanduser()), "--check"], cwd=PKG_ROOT)
+    return result.returncode or art.returncode
 
 
 if __name__ == "__main__":

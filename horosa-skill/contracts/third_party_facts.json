@@ -788,6 +788,19 @@
       "affects": [
         "horosa-skill/src/horosa_skill/reports/app_charts.py"
       ]
+    },
+    {
+      "id": "tarot-art.provenance",
+      "subject": "tarot card pictures (upstream public/tarot-art)",
+      "fact": "144 JPEG scans (300 px high, ~1.96 MB): RWS 78 (rws/ar00-21, wa/cu/sw/pe 02-10, ac/pa/kn/qu/ki), and the 22 majors each of TdM, Wirth and Egyptian (named by card sid). Copied byte for byte from the public upstream at commit 10fb75de980bb0a6e0d1f50c7ee93cc97a88d7de (first added in b3dffa2e, release v3.0.0, 2026-06-29) into src/horosa_skill/data/tarot-art/ with per-file sha256 in manifest.json. Upstream records NO source and NO licence for the scan files themselves: no README, attribution file or commit message names where they were scanned or downloaded from. The only statement is a code comment in components/tarot/engine/cardArt.js asserting the decks are public domain (RWS / Pamela Colman Smith 1909, Tarot de Marseille / Nicolas Conver 1760, Oswald Wirth 1889, Falconnier 1896); that comment concerns the historic designs, not these particular scans, and is not independently verified here — public-domain status of the files is NOT a verified fact. The maintainer stated on 2026-11-09 that the skill may ship them. The app's on-board attribution line (PUBLIC_DOMAIN_ATTRIBUTION) is about the card meanings text (Waite 1911), not the pictures.",
+      "source_url": "https://github.com/Horace-Maxwell/Horosa-Web-App-comprehensively-improved-MacOS/tree/10fb75de980bb0a6e0d1f50c7ee93cc97a88d7de/Horosa-Web/astrostudyui/public/tarot-art",
+      "verified_on": "2026-11-09",
+      "affects": [
+        "horosa-skill/src/horosa_skill/data/tarot-art/manifest.json",
+        "horosa-skill/scripts/sync_tarot_art.py",
+        "horosa-skill/horosa-core-js/app-charts/adapters/tarot.js",
+        "horosa-skill/src/horosa_skill/reports/app_charts.py"
+      ]
     }
   ]
 }

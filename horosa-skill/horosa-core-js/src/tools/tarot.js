@@ -33,6 +33,41 @@ function toBool(value) {
   return null;
 }
 
+// 报告牌阵图（app 的 TarotMain.renderCenter）要的那一份抽牌结果：就是上面产出正文的同一个 reading，不另抽。
+// 牌只记 id + sid（app 侧按同一牌组表取回牌对象，sid 对不上就不画），免得每张牌 ~600 字节的牌义随结果存档。
+function cardRef(card) {
+  return card ? { cardId: card.id, sid: card.sid } : null;
+}
+
+function boardContext(reading) {
+  const draw = (d) => ({
+    position: d.position,
+    ...cardRef(d.card),
+    cardId: d.cardId,
+    isReversed: !!d.isReversed,
+    ...(d.crossed ? { crossed: true } : {}),
+    ...(d.dignity ? { dignity: d.dignity } : {}),
+    ...(d.overlay ? { overlay: { ...cardRef(d.overlay.card), isReversed: !!d.overlay.isReversed } } : {}),
+  });
+  const ook = reading.ook && !reading.ook.error ? {
+    sigId: reading.ook.sigId,
+    operations: reading.ook.operations.map((op) => ({
+      op: op.op, name: op.name, pileLabel: op.pileLabel, pileIndex: op.pileIndex, pileSize: op.pileSize,
+      chain: (op.chain || []).map((it) => ({ ...cardRef(it.card), isReversed: !!it.isReversed })),
+    })),
+    op5: reading.ook.op5 || null,
+  } : (reading.ook ? { error: reading.ook.error } : null);
+  return {
+    deckId: reading.deckId,
+    spreadType: reading.spreadType,
+    settings: reading.settings,
+    significator: reading.significator ? cardRef(reading.significator.card) : null,
+    draws: (reading.draws || []).map(draw),
+    firstReversal: reading.firstReversal || null,
+    ook,
+  };
+}
+
 export function runTarot(payload) {
   try {
     const p = payload && typeof payload === 'object' ? payload : {};
@@ -117,7 +152,7 @@ export function runTarot(payload) {
       snapshot_text: snapshotText,
       deck,
       spread,
-      data: { ok: true, deck, spread, params_applied: applied, params_ignored: ignored.sort() },
+      data: { ok: true, deck, spread, params_applied: applied, params_ignored: ignored.sort(), board_context: boardContext(reading) },
     };
   } catch (e) {
     return fail('reading_failed', `${(e && e.message) || e}`);

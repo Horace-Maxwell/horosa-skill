@@ -612,6 +612,7 @@ _APP_ONLY = {
     "acg": ("acg", "天文地图（行星线）", ("acg",)),
     # 河洛：app 中栏的信息板（HeLuoMain.renderCenter）；盘上的纳音 / chartExtras 由 core-js 同一次调用放在 board_context
     "heluo": ("heluo", "河洛理数", (("heluo", "board_context"),)),
+    "tarot": ("tarot", "塔罗牌阵", ("board_context",)),
 }
 # app 的一块长板按它自己的卡分成几张图（河洛中栏整块约 760 × 2400 px，一张图排进一页就小得没法读）：技法 → ((部分, 图名), …)
 _APP_ONLY_PARTS = {
@@ -1225,17 +1226,19 @@ def _grid9(figure: dict[str, Any], width: float, styles: dict[str, Any], colors:
 # ───────────────────────────── DOCX 位图（不依赖 renderPM） ─────────────────────────────
 
 
-def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: float = 3.0) -> bytes | None:
+def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: float = 3.0, *, photo_jpeg: bool = False) -> bytes | None:
     """把 reportlab Drawing 用 Pillow 画成 PNG，给 DOCX / PNG 盘图用。
 
     reportlab 自带的位图后端 renderPM 要另装 rlPyCairo，干净安装里没有；Pillow 是 reportlab 的依赖，一定在。
     支持本模块自绘的五种图元，也支持 svglib 从星阙 app 原版 SVG 转出来的图（嵌套 Group + 仿射变换、Path / Polygon /
     PolyLine / Ellipse / 圆角 Rect、旋转文字、透明度）。先按 2 倍画再缩回，边缘不起锯齿。
     font_files：reportlab 字体名 → (TTF/TTC 路径, 子字体序号)；没登记的字体用第一款。拿不到 Pillow 就返回 None。
+    photo_jpeg：图里有位图（塔罗牌面照片）时改出 JPEG（q88）——照片存 PNG 要大三四倍（31 张牌阵 2 MB → 0.6 MB）；没有位图照旧 PNG。
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
         from reportlab.graphics.shapes import Circle, Ellipse, Group, Line, Path, PolyLine, Polygon, Rect, String, Wedge
+        from reportlab.graphics.shapes import Image as BitmapShape
     except ImportError:
         return None
     supersample = 2
@@ -1246,6 +1249,7 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
     image = Image.new("RGB", (width, height), (255, 255, 255))
     pen = ImageDraw.Draw(image, "RGBA")
     fonts: dict[tuple[str, int], Any] = {}
+    bitmaps: list[Any] = []
 
     def mul(m: tuple[float, ...], n: tuple[float, ...]) -> tuple[float, ...]:
         a, b, c, d, e, f = m
@@ -1318,10 +1322,38 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
         layer = layer.rotate(angle, resample=Image.BICUBIC, center=(pad, pad))
         image.paste(layer, (round(x - pad), round(y - pad)), layer)
 
+    def bitmap(shape: Any, m: tuple[float, ...]) -> None:
+        """位图（app 塔罗牌面图）：图的 (u, v)（v 向下）→ 形状坐标（左下角 x, y、顶边在 y + 高）→ 当前矩阵 → 画布像素，一次仿射贴上
+        （逆位牌的 180°、横置牌的 90° 都在矩阵里）。"""
+        source = shape.path if hasattr(shape.path, "mode") else Image.open(shape.path)
+        iw, ih = source.size
+        if not (iw and ih and shape.width and shape.height):
+            return
+        a, b, c, d, e, f = m
+        sx, sy = shape.width / iw, shape.height / ih
+        x0, y0 = shape.x, shape.y + shape.height
+        forward = (k * a * sx, -k * c * sy, k * (a * x0 + c * y0 + e), -k * b * sx, k * d * sy, height - k * (b * x0 + d * y0 + f))
+        fa, fb, fc, fd, fe, ff = forward
+        corners = [(fa * u + fb * v + fc, fd * u + fe * v + ff) for u, v in ((0, 0), (iw, 0), (0, ih), (iw, ih))]
+        left, top = math.floor(min(p[0] for p in corners)), math.floor(min(p[1] for p in corners))
+        right, bottom = math.ceil(max(p[0] for p in corners)), math.ceil(max(p[1] for p in corners))
+        det = fa * fe - fb * fd
+        if not det or right <= left or bottom <= top:
+            return
+        # Pillow 要「画布像素 → 原图像素」的逆变换；画在以 (left, top) 为原点的小图层上再贴
+        ia, ib, id_, ie = fe / det, -fb / det, -fd / det, fa / det
+        tx, ty = fc - left, ff - top
+        inverse = (ia, ib, -(ia * tx + ib * ty), id_, ie, -(id_ * tx + ie * ty))
+        layer = source.convert("RGBA").transform((right - left, bottom - top), Image.AFFINE, inverse, resample=Image.BICUBIC)
+        image.paste(layer, (left, top), layer)
+        bitmaps.append(shape)
+
     def walk(node: Any, m: tuple[float, ...]) -> None:
         for shape in getattr(node, "contents", None) or []:
             if isinstance(shape, Group):
                 walk(shape, mul(m, tuple(shape.transform)))
+            elif isinstance(shape, BitmapShape):
+                bitmap(shape, m)
             elif isinstance(shape, String):
                 text(shape, m)
             elif isinstance(shape, Wedge):
@@ -1386,5 +1418,8 @@ def drawing_to_png(drawing: Any, font_files: dict[str, tuple[str, int]], scale: 
     import io
 
     buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=True)
+    if photo_jpeg and bitmaps:
+        image.save(buffer, format="JPEG", quality=88, optimize=True)
+    else:
+        image.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()

@@ -500,6 +500,9 @@ class CnDivinationRunners:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tarot", snapshot_text=snapshot_text),
         }
+        # 报告牌阵图：JS 算正文的同一个 reading（牌 id / 朝向 / 牌位 / 牌组），app 的 TarotMain.renderCenter 照它摆牌，不另抽
+        if isinstance(data.get("board_context"), dict):
+            out["board_context"] = data["board_context"]
         if ignored:
             out["_warnings"] = [f"tarot 未识别的 options 键已忽略：{'、'.join(ignored)}（键集锚引擎 resolveSettings）。"]
         return out

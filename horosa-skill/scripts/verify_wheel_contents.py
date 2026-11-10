@@ -17,6 +17,7 @@ publish workflow (`uv build --wheel`) and checks the entries the runtime code re
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -32,6 +33,7 @@ REQUIRED_ENTRIES = (
     "horosa_skill/benchmark/data/horosa_bench.json",
     "horosa_skill/data/sensitive_settings.json",
     "horosa_skill/data/report_technique_profiles.json",
+    "horosa_skill/data/tarot-art/manifest.json",
     "horosa_skill/runtime/templates/windows/start_horosa_local.ps1",
     "horosa_skill/runtime/templates/windows/stop_horosa_local.ps1",
     "horosa_skill/surfaces/mcp_server.py",
@@ -102,6 +104,13 @@ def main() -> int:
         if "horosa-skill = horosa_skill.surfaces.cli:app" not in entry_text:
             errors.append("console script `horosa-skill` entry point missing from entry_points.txt")
         errors.extend(host_path_hits(text_entries))
+        # 塔罗牌面图：报告牌阵图按 manifest 逐张取图；wheel 里少一张，那张牌就静默退回符号牌面
+        art_manifest = PKG_ROOT / "src" / "horosa_skill" / "data" / "tarot-art" / "manifest.json"
+        art_files = sorted(json.loads(art_manifest.read_text(encoding="utf-8")).get("files") or {}) if art_manifest.is_file() else []
+        if not art_files:
+            errors.append("src/horosa_skill/data/tarot-art/manifest.json missing or empty (scripts/sync_tarot_art.py)")
+        errors += [f"missing tarot card picture horosa_skill/data/tarot-art/{rel}" for rel in art_files
+                   if f"horosa_skill/data/tarot-art/{rel}" not in names]
         if any("horosa-core-js" in n for n in names):
             errors.append("horosa-core-js must not be vendored into the wheel (it ships in the runtime payload)")
         if errors:
@@ -109,7 +118,8 @@ def main() -> int:
             for err in errors:
                 print(f"  - {err}", file=sys.stderr)
             return 1
-        print(f"wheel-contents OK: {wheels[0].name} carries {len(names)} entries, {len(packs)} helpdoc packs, runtime templates, console script")
+        print(f"wheel-contents OK: {wheels[0].name} carries {len(names)} entries, {len(packs)} helpdoc packs, {len(art_files)} tarot pictures, "
+              "runtime templates, console script")
         return 0
 
 

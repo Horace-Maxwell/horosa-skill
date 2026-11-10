@@ -43,6 +43,7 @@ const APP_UI_ONLY = new RegExp([
   '^data/cit(ies|y)[A-Za-z]*\\.json$',
   '^components/shusuan/(CanPingMain|HeLuoMain|ZhengChuanMain)$', '^components/yizhangjing/YiZhangJingMain$',
   '^components/yanqin/(YanQinBranchPanel|YanQinControls)$', '^utils/tiebanFrameworkLocal$',
+  '^components/tarot/CardDetailDrawer$', // 塔罗单牌详情抽屉（点牌才开）：带进 ~140 KB 牌义表，牌阵图不用
 ].join('|'));
 const CSS_MODULES = /components\/sanshi\/SanShiUnitedMain\.less$/;
 const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign|lunar-javascript)(\/|$)/;
