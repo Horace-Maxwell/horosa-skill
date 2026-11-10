@@ -835,7 +835,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   与工作树改动都没碰 `UPSTREAM_INPUT_ROOTS` / `UPSTREAM_INPUT_FILES`（Horosa-Web/、runtime/、scripts/、安装器 package.json），碰了就拒写；
   preflight 的「pin 在公开远端」排在全部闸之后，验最终的 pin，收尾只在 provenance 真变了才提示提交。守卫：`tests/test_verify_upstream_sync.py`
   （临时 git 仓 + 裸「公开远端」五种情形、读上游脚本的路径扫描、闸序）。v0.40.1 发布时 preflight 曾把本地未推送的 ecd742f6 写进 pin。
-- **矩阵 lane 的预算按主机，超时必须留证据（v0.40.0）。** `PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}`（Windows 在 live 套件上慢 4–5×；
+- **矩阵 lane 的预算按主机，超时必须留证据（v0.40.0）。** `PYTEST_BUDGET_SECONDS = {"nt": 3600, "posix": 1500}`（Windows 在 live 套件上慢 4–5×；
   2026-09-28 的 schedule 跑两条 Windows lane 恰在 1500 s 被杀且无 pytest.log）；pytest 输出流式写 `pytest.log`，超时 step 带尾巴 40 行与 `budget_seconds`。
   树每长一截就回头看一次 Windows lane 的 pytest 秒数（lane-report `steps.pytest.seconds`）。
 - **GitHub Actions 主版本跟 runner 的 Node（v0.40.0）。** 2026-09-23 起 runner 不再有 Node 20，node20 action 被强制跑在 Node 24 上；仓里 11 个 action
@@ -903,8 +903,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   export-fixture 契约 + core-js JS golden，别在它里面造「boot runtime」job；真机证据来自矩阵三 lane
   （macos-latest / windows-latest / windows-11-arm，`scripts/verify_runtime_live.py`：chart-only 降级在任何 lane 都算失败，
   live pytest 的闸门 skip 理由不得出现）。**维护者本机 live 全套仍是 tag 前闸**（§8），矩阵是发布前的第二道、每周一次的第三道。
-  pytest 预算按主机：nt 2700 / posix 1500，仿真的 windows-11-arm 另加 `EMULATED_PYTEST_EXTRA_SECONDS`（v0.45.1 在 2700 s、v0.48.0
-  在 3600 s 处零失败被杀——后者前两版已占 96–97% 没人看）；现为 +2700 s、job 120 分钟，加完要装得进 job 超时（留 ≥15 分钟）。
+  pytest 预算按主机：nt 3600 / posix 1500，仿真的 windows-11-arm 另加 `EMULATED_PYTEST_EXTRA_SECONDS`（v0.45.1 在 2700 s、v0.48.0
+  在 3600 s 处零失败被杀——后者前两版已占 96–97% 没人看）；现为 +1800 s（总 5400 s）、job 120 分钟，加完要装得进 job 超时（留 ≥15 分钟）。
+  v0.49.0 把 nt 从 2700 提到 3600：windows-latest 在 v0.48.0 已用 93%，这版测试又多约 8%。发版前看上一版的 near-budget 注解，提前加。
   lane 超 85% 预算会打 `::warning title=lane pytest near its budget` 注解：**发版收尾读 run 的 ANNOTATIONS**，见到就在下一版前加时或查
   pytest.log 里的 `--durations` 榜。lane 脚本取自派发提交，不是 tag。
 - **合并后查冲突标记**：每次 fetch/ff 后 `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'`（v0.11.0 曾把

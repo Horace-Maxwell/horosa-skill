@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
 | v0.49.0-dev (2026-11-09) | 七政四余报告画的是方盘，app 七政页缺省是 Moira 圆盘；赤纬推运 app 画赤纬图（svg + 绝对定位 HTML 的卡片）而报告画本命轮 | Moira 补算抽成 guolao runner 共用、fields 口径按 runner 实际值（两页缺省宿度制不同）；赤纬图 svg 原样 + HTML 读 DOM 重画，踩到 `left:0;right:0` 居中、svg 丢首尾空白、卡片高含内边距三处；七条负向对照各红 |
 | v0.49.0-dev (2026-11-09) | 河洛 / 神数的「信息板」要不要进报告：多数神数板只是把正文重排成卡片；河洛的板却有正文没有的大半内容，且整块 2400 px 高、要的纳音 / chartExtras 结果里没有、卦辞库让 bundle 超 4 MB | 逐板「抽文字 → 繁转简 → 对照 snapshot_text」定取舍，只加河洛；按 app 的卡切四张图；core-js 交 board_context；bundle 上限 5 MB；`tests/test_app_charts_heluo.py` 三条负向对照各红 |
 | v0.49.0-dev (2026-11-09) | app 发牌动画（`animation … both`）在浏览器里盖掉了几何牌位的内联 `translate(-50%,-50%) rotate(90deg)`：牌按左上角落位、凯尔特交叉牌不横置、整张盖住第一张（上游 bug）；塔罗牌面扫描件来源 / 授权上游从未记录；补字链印不出的 emoji 符号会让 PNG 整张拒绝 | 牌阵图照内联几何画（= 减少动态效果下的 app），上游只报；144 张逐字节随包 + manifest + 第三方事实如实写「来源未记录、维护者准许」；`horosa-optional-glyph` 印不出就去掉；守卫 tests/test_tarot_figures.py 九条，负向对照十条全红 |

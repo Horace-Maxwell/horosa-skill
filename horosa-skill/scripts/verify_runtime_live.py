@@ -44,13 +44,15 @@ for _stream in (sys.stdout, sys.stderr):
 # pytest: the live suite is ~4–5× slower on the hosted Windows runners than on macOS (v0.38.1 release matrix: darwin 226 s vs
 # windows-latest 970 s / windows-11-arm 1022 s for 1210 tests; 2026-09-28 schedule run: darwin 583 s for 1771 tests while BOTH
 # Windows lanes hit the flat 1500 s budget). Budget by host: the number is a ceiling for a healthy run, not a target.
-PYTEST_BUDGET_SECONDS = {"nt": 2700, "posix": 1500}
+# v0.48.0: windows-latest used 2504 / 2700 s (93%, the new near-budget annotation lit on its first run); v0.49.0 adds ~8% to the
+# suite (report figures) → nt 3600 s. The emulated lane's total stays 5400 s (extra 2700 → 1800), so the job timeout is unchanged.
+PYTEST_BUDGET_SECONDS = {"nt": 3600, "posix": 1500}
 # windows-11-arm runs the x64 payload under emulation and is the slowest, noisiest lane: v0.45.0 needed 2580 s of 2700, v0.45.1's
 # draft hit the ceiling at ~98% with zero failures while windows-latest took 1389 s → +900 s (3600). v0.47.x then ran at 3466 /
 # 3496 s of 3600 (96–97%, unnoticed) and v0.48.0's draft (+176 tests) was killed at 86% with zero failures → +2700 s (5400).
 # Only that lane gets the extra; the job timeout (runtime-matrix.yml) must still cover it plus ≥15 min of install / start /
 # client steps (~9–14 min measured).
-EMULATED_PYTEST_EXTRA_SECONDS = 2700
+EMULATED_PYTEST_EXTRA_SECONDS = 1800  # nt 3600 + 1800 = 5400 s, the same total as v0.48.0
 # A lane whose pytest used more than this share of its budget prints a GitHub `::warning::` annotation (it lands in the run's
 # ANNOTATIONS, which `gh run watch` prints at the end of every release run) and records it in lane-report.json — v0.47.x sat at
 # 96–97% for two releases because nobody opened the lane reports to look.
