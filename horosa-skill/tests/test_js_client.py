@@ -110,3 +110,35 @@ def test_timeout_recovery_does_not_blame_the_install() -> None:
     assert "HOROSA_JS_ENGINE_TIMEOUT_SECONDS" in recovery["prompt_to_user"]
     assert "已安装离线 runtime" not in recovery["prompt_to_user"]
     assert recovery_for("js_engine.node_unavailable", {})["agent_recovery"]["next_action"] == "install_or_set_node_then_retry"
+
+
+def test_engine_timeout_at_least_only_raises_the_wall_clock(tmp_path: Path, monkeypatch) -> None:
+    """择时扫描把墙钟抬到「至少 N 秒」：只抬不降、出了作用域就回到配置值，超时报的是实际用的那个数。"""
+    from horosa_skill.engine.js_client import engine_timeout_at_least
+
+    client = _client_with_engine(tmp_path, monkeypatch)
+    seen: list[float] = []
+
+    def fake_run(*args, **kwargs):
+        seen.append(kwargs["timeout"])
+        raise subprocess.TimeoutExpired(cmd="node", timeout=kwargs["timeout"])
+
+    monkeypatch.setattr("horosa_skill.engine.js_client.subprocess.run", fake_run)
+
+    def timeout_reported() -> float:
+        with pytest.raises(ToolTransportError) as exc_info:
+            client.run("zeri_scan", {})
+        return exc_info.value.details["timeout_seconds"]
+
+    assert timeout_reported() == 60.0
+    with engine_timeout_at_least(276.0):
+        assert timeout_reported() == 276.0
+        with engine_timeout_at_least(5.0):
+            assert timeout_reported() == 60.0  # 低于配置的下限不生效
+        assert timeout_reported() == 276.0
+    assert timeout_reported() == 60.0
+    assert seen == [60.0, 276.0, 60.0, 276.0, 60.0]
+
+    client.settings = client.settings.model_copy(update={"js_engine_timeout_seconds": 900.0})
+    with engine_timeout_at_least(276.0):
+        assert timeout_reported() == 900.0  # 用户配得更大时照用配置

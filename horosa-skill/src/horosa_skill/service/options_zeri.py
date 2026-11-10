@@ -50,7 +50,8 @@ def _clamped_max_span(payload: dict[str, Any], cap: int) -> int:
     🔴 此前 `int(payload.get("maxSpanDays") or CAP)` 让 maxSpanDays 变成一个**能把上限抬高**的
     旋钮：传 5000 就真按 5000 天放行。上限不是礼貌建议——tianxing 的 731 天来自 splitByMonth 的
     800 次 guard（耗尽会**不 push 最后一段**就退出，尾部被丢却仍报成完整搜索），本地扫描的 92 天
-    来自 JS 子进程 60 秒墙钟。抬高上限只会把这两个失败模式换成「跑到超时」或「静默截断」，
+    是扫描成本与客户端 600 秒工具超时的折中（扫描墙钟按窗口给，见 ZeriRunners._ZERI_SCAN_SECONDS_PER_DAY）。
+    抬高上限只会把这两个失败模式换成「跑到超时」或「静默截断」，
     而调用方看到的仍是一个自称成功的结果。maxSpanDays 因此只保留「调**低**」这一半语义。
     非法/缺省值一律回落 cap；≤0 也回落（0 会让任何窗口都超限）。
     """

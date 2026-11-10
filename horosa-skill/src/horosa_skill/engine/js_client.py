@@ -1,14 +1,32 @@
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import json
 import os
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 from horosa_skill.config import Settings
 from horosa_skill.errors import ToolTransportError
 from horosa_skill.runtime import HorosaRuntimeManager
+
+# 一次已知要算很久的调用（择时区间扫描，成本随窗口线性涨）把墙钟抬到「至少 N 秒」。走 ContextVar 而不是给 run() 加参数：
+# 测试里十几个替身按 run(tool_name, payload) 实现，签名一变全要跟着改。只抬不降——配置的 HOROSA_JS_ENGINE_TIMEOUT_SECONDS 更大时照用配置。
+_MIN_TIMEOUT_SECONDS: contextvars.ContextVar[float | None] = contextvars.ContextVar(
+    "horosa_js_engine_min_timeout", default=None
+)
+
+
+@contextlib.contextmanager
+def engine_timeout_at_least(seconds: float) -> Iterator[None]:
+    token = _MIN_TIMEOUT_SECONDS.set(seconds)
+    try:
+        yield
+    finally:
+        _MIN_TIMEOUT_SECONDS.reset(token)
 
 
 class HorosaJsEngineClient:
@@ -50,6 +68,7 @@ class HorosaJsEngineClient:
                 details={"path": str(cli_path)},
             )
 
+        timeout_seconds = max(self.settings.js_engine_timeout_seconds, _MIN_TIMEOUT_SECONDS.get() or 0.0)
         try:
             completed = subprocess.run(
                 [str(node_bin), str(cli_path), "run", tool_name],
@@ -59,7 +78,7 @@ class HorosaJsEngineClient:
                 errors="replace",
                 capture_output=True,
                 cwd=str(engine_root),
-                timeout=self.settings.js_engine_timeout_seconds,
+                timeout=timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
             raise ToolTransportError(
@@ -67,7 +86,7 @@ class HorosaJsEngineClient:
                 code="js_engine.timeout",
                 details={
                     "tool": tool_name,
-                    "timeout_seconds": self.settings.js_engine_timeout_seconds,
+                    "timeout_seconds": timeout_seconds,
                     "node_bin": str(node_bin),
                 },
             ) from exc

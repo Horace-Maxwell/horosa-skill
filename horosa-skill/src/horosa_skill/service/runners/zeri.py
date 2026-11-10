@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from horosa_skill.civil_calendar import _to_slash_date
+from horosa_skill.engine.js_client import engine_timeout_at_least
 from horosa_skill.errors import (
     HorosaSkillError,
     ToolTransportError,
@@ -17,6 +18,7 @@ from horosa_skill.service.options_zeri import (
     _QIMENZERI_MAX_SPAN_DAYS,
     _TIANXING_MAX_SPAN_DAYS,
     _clamped_max_span,
+    _day_span,
     _electionscan_options,
     _electionscan_zone,
     _require_sane_window,
@@ -561,10 +563,16 @@ class ZeriRunners:
                        "sections": ("择时搜索配置", "择时条件", "命中时段")},
     }
 
-    # 各择日成员的窗口上限（天）。都比引擎自带上限紧：JS 子进程有墙钟，而扫描成本随窗口线性涨。
+    # 各择日成员的窗口上限（天）。都比引擎自带上限紧：扫描成本随窗口线性涨，客户端工具超时按 600 秒配。
     # 日粒度的黄历便宜得多，故放宽。绝不静默截断（AGENTS §5.9）。
     _ZERI_MAX_SPAN_DAYS = {"huanglizeri": 366}
     _ZERI_DEFAULT_MAX_SPAN_DAYS = 92
+    # 区间扫描的墙钟按窗口给，不用全局 60 秒：92 天上限原先只是「60 秒内跑得完」的估计，实测越线——v0.48.0 在 Windows x64 上
+    # 92 天窗口单扫描就要三式合一 82 秒、太乙 69 秒（六壬 / 紫微 / 八字 / 黄历都在 3 秒内），ARM 仿真再慢约 3 倍。每天给 4 秒
+    # （最重的约 0.9 秒 / 天），封顶 540 秒：客户端工具超时按 600 秒配（client_config/audit），扫完还要铸展示盘。
+    # 墙钟仍在，只是不再比上限承诺的窗口还短。
+    _ZERI_SCAN_SECONDS_PER_DAY = 4.0
+    _ZERI_SCAN_MAX_TIMEOUT_SECONDS = 540.0
 
     # 上游各择时宿主页的**出厂扫描口径**（组件 state.options 初值；日界两键=全局出厂值 1/1）。
     # skill 此前只把调用方显式给的键交给引擎，余下落到引擎内建缺省 —— 而引擎缺省与页面出厂档并不
@@ -757,7 +765,10 @@ class ZeriRunners:
         if payload.get("maxHits"):
             request["limits"] = {"maxHits": payload.get("maxHits")}
         _progress_tick(0, 2, f"{label}：本地区间扫描")
-        scan = self.js_client.run("zeri_scan", request)
+        span_days = (_day_span(start_date, end_date) or 0) + 1  # _require_sane_window 已保证可解析；两端都算
+        budget = min(self._ZERI_SCAN_MAX_TIMEOUT_SECONDS, span_days * self._ZERI_SCAN_SECONDS_PER_DAY)
+        with engine_timeout_at_least(budget):
+            scan = self.js_client.run("zeri_scan", request)
         _progress_tick(1, 2, f"{label}：铸展示盘")
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):

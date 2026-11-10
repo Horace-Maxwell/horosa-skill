@@ -622,7 +622,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
     工具表**，症状是「这个 server 在某某客户端里一个工具都没有」，不是「某个参数不好使」。
     每次 service 调用必须**卸载到工作线程**（FastMCP 1.x 不替你做，`async def` 里直接调同步体
     = 整个事件循环被占住）。分段循环必须 `_progress_tick`（既报进度也是取消检查点）。
-    `maxSpanDays` 是**上限**不是旋钮，只能调低。新增客户端格式时同批更新 README×2 的
+    `maxSpanDays` 是**上限**不是旋钮，只能调低。上限承诺的窗口必须在墙钟内跑得完：本地区间扫描那一次 JS 调用包在
+    `engine_timeout_at_least(天数 × _ZERI_SCAN_SECONDS_PER_DAY)` 里（只抬不降，封顶 540 秒，低于客户端配的 600 秒），
+    改窗口上限或每天预算时拿最慢平台上最重技法的实测「秒 / 天」核一遍（v0.49.1-dev：三式合一 0.9 秒 / 天）。新增客户端格式时同批更新 README×2 的
     Works-with 矩阵，并在 `client check` 的 `_client_config_locations` 的路径表里登记它的配置文件位置（三个 OS 各一行，
     Devin 那样的改名旧路径留作候选）。（`tests/test_client_lockstep.py` 锁，见下条。）
 
@@ -1052,7 +1054,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 | 只有 Windows：太乙 / 三式合一报 `runtime.*` 或空的 `taiyi` 段，chart 服务 stderr 是 `DLL load failed while importing _parse_times: An Application Control policy has blocked this file` | Smart App Control 拒绝加载载荷里的 `astropy/time/_parse_times.pyd`（无签名、流行度不够；同一文件在旧根放行、新装 / 升级后被拦） | v0.43.1-dev 起 manager 每次 start 把应用控制替身拷进随包 Python（astropy 落回纯 Python 解析器，结果不变）：升级 skill 后 `runtime restart`；stderr 应改见 `horosa: Windows Application Control blocked … using the pure-Python fallback` |
 | 只有 Windows：管道 / 重定向下 `horosa-skill --help` 抛 UnicodeEncodeError，或 stderr 的 JSON 解析时 UnicodeDecodeError | 文本流是 ANSI 代码页（cp1252 / cp936），而 JSON 输出按 UTF-8 写 | v0.47.2-dev 起所有入口统一 UTF-8；消费方一律按 UTF-8 解码（PowerShell 5.1 管道仍会按 OEM 重编码，用 `--output` 文件） |
 | 报告路径变成 `名字 (1).pdf`，结果带 `requested_output_path` | 目标开在 Acrobat / Word 里，新报告另存（设计行为） | 关掉旧文件后重新生成即回原名；旧文件未动 |
-| 太乙 / 三式合一择时报 `js_engine.timeout` | 窗口太长撞 60 秒墙钟（三式合一 92 天贴边），不是引擎坏了 | 拆短窗口，或调大 `HOROSA_JS_ENGINE_TIMEOUT_SECONDS` 并重启客户端 |
+| 太乙 / 三式合一择时报 `js_engine.timeout` | 扫描超出按窗口给的墙钟（每天 4 秒、封顶 540 秒；`details.timeout_seconds` 是实际用的数）：机器特别慢或在仿真里跑，不是引擎坏了。v0.49.1-dev 之前一律 60 秒，这两个技法的 92 天窗口在 Windows x64 上必超 | 拆短窗口；或调大 `HOROSA_JS_ENGINE_TIMEOUT_SECONDS`（取两者较大）并重启客户端 |
 | Windows：客户端里 horosa 起不来 / `setup` 在 `stdio_probe` 失败带 `diagnosis.cause = windows_app_control_blocked`；终端里 `uv run …` 报 `Failed to spawn: … (os error 4551)` | Smart App Control（应用控制）拒绝运行 uv 给该环境现生成的 `Scripts\*.exe`（trampoline 无签名、无云端信誉，同机时拦时放）；`python.exe` 不受影响 | `setup` / `client config` 加 `--entry module`（SAC 开着时 `--entry auto` 已自动这样写）→ 配置变成 `… python -m horosa_skill serve`；终端里同样改用 `uv run python -m horosa_skill …`；doctor `windows.smart_app_control` 看状态；不必关闭 SAC（v0.43.1-dev 台账） |
 | Windows：`setup`（或 lane 的客户端步骤）在 `stdio_probe` 失败，失败包带 `details.diagnosis.cause = windows_file_in_use`（stderr 尾巴是 `failed to remove file …\Scripts\horosa-skill.exe … (os error 32)`） | 另一个已挂着的 horosa MCP 会话（`uv run … serve`）占着 venv 里的 exe / 已加载的 .pyd；客户端那条 `uv run` 要先把 venv 同步到当前版本（`git pull` 换过版本号就会触发），删不掉被占文件，server 未启动即退出。macOS/Linux 可替换运行中的文件，不会遇到 | 关掉（或重启）挂着 horosa 的会话再重跑；终端里的 `uv run` 可临时 `UV_NO_SYNC=1`（依赖未变时安全）；维护机复验一律在**独立 git worktree**（自有 venv）里跑门禁与 lane，别和本机开着的 MCP 会话抢同一个 venv（v0.39.0 台账） |
 | `setup --client claude-code` 只打印了命令没注册（`config_mode: printed`） | `claude` 不在 PATH（GUI 装的 Claude Code 没把 CLI 放进 shell PATH） | 复制 `steps.config.command` 到有 `claude` 的终端执行，或 `--scope project` 写当前项目的 `.mcp.json`（v0.38.0 B4） |
