@@ -987,7 +987,10 @@ def figure_drawing(spec: dict[str, Any], width: float, font: str, bold_font: str
 def figure_notes(spec: dict[str, Any], t: Any) -> list[str]:
     """图题下的说明行（PDF 与 DOCX 同一份）：图例 + 规格里的 text / lines。"""
     notes: list[str] = []
-    if spec.get("kind") == "wheel" and spec.get("app_svg"):
+    if spec.get("kind") == "wheel" and spec.get("ring_note"):
+        # 出报告时补算的推运双盘（reports/aux_charts.py）：圈层说明随技法，不是合盘的「甲方 / 乙方」
+        notes.append(str(spec["ring_note"]) + ("" if spec.get("app_svg") else t("R = 逆行。")))
+    elif spec.get("kind") == "wheel" and spec.get("app_svg"):
         # app 的图用 app 自己的配色与逆行符号（℞）：只留结构说明，不留自绘轮的配色图例
         if spec.get("outer_bodies"):
             notes.append(t("内圈为甲方宫位与行星，外圈为乙方行星；跨盘相位见正文「A对B相位」。"))

@@ -127,7 +127,10 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
     requests: list[tuple[int, dict[str, Any]]] = []
     for index, spec in enumerate(figures):
         kind = spec.get("kind")
-        if kind == "wheel" and spec.get("outer_bodies") and isinstance(_dig(source, ["inner", "chart"]), dict) and isinstance(_dig(source, ["outer", "chart"]), dict):
+        if isinstance(spec.get("app_request"), dict):
+            # 出报告时补算的盘（reports/aux_charts.py）：引擎整盘已按 app 页面的喂法备好，原样转交
+            requests.append((index, spec["app_request"]))
+        elif kind == "wheel" and spec.get("outer_bodies") and isinstance(_dig(source, ["inner", "chart"]), dict) and isinstance(_dig(source, ["outer", "chart"]), dict):
             # 合盘双圈：与自绘图同一安排（内圈甲方宫位与行星、外圈乙方行星）= app AstroDoubleChartMain 的「星盘B」页
             pick = lambda layer: {key: layer[key] for key in ("params", "chart", "aspects", "lots") if key in layer}  # noqa: E731
             requests.append((index, {"kind": "bi_wheel", "data": {"natualChart": pick(source["inner"]), "dirChart": pick(source["outer"])},
@@ -228,8 +231,9 @@ def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, cl
 
 
 def _drop_undrawn_app_only(figures: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """kind="app" 的盘没有自绘版：app 没画出来就整张不出（规格里本就只有图名，留着只会印一个空框）。"""
-    return [spec for spec in figures if spec.get("kind") != "app" or spec.get("app_svg")]
+    """kind="app" 的盘没有自绘版：app 没画出来就整张不出（规格里本就只有图名，留着只会印一个空框）。
+    补算的那张（`aux`）留给 aux_charts.settle：它要据此留下被换的原图并写明原因。"""
+    return [spec for spec in figures if spec.get("kind") != "app" or spec.get("app_svg") or spec.get("aux")]
 
 
 # ───────────────────────────── SVG 规整 ─────────────────────────────

@@ -11,7 +11,7 @@ from horosa_skill.errors import (
     ToolValidationError,
     bilingual,
 )
-from horosa_skill.service._context import _degrade, _progress_tick
+from horosa_skill.service._context import _degrade, _progress_tick, figure_capture
 from horosa_skill.service.options_cn import _qimen_effective_options
 from horosa_skill.service.options_zeri import (
     _QIMENZERI_MAX_SPAN_DAYS,
@@ -350,32 +350,39 @@ class ZeriRunners:
             "export_snapshot": self._augment_export_payload(technique="qizhengelection", snapshot_text=snapshot_text),
         }
 
+    def _tianxing_moment_payload(self, payload: dict[str, Any], hit: dict[str, Any]) -> dict[str, Any] | None:
+        """选中命中那一刻的 chart 工具载荷（正文 [选中时刻星盘] 与报告的选中时刻盘图同一份）。"""
+        pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
+        if not pick:
+            return None
+        parts = pick.split(" ")
+        moment_payload = {
+            "date": parts[0],
+            "time": (parts[1] if len(parts) > 1 else "12:00") + (":00" if len(parts) > 1 and parts[1].count(":") == 1 else ""),
+            "zone": payload.get("zone"),
+            "lat": payload.get("lat"),
+            "lon": payload.get("lon"),
+            "pos": payload.get("pos"),
+            "hsys": payload.get("hsys"),
+            "zodiacal": payload.get("zodiacal"),
+            "siderealAyanamsa": payload.get("siderealAyanamsa"),
+            # [Q-419/T-382][Q-268/T-254] 选中时刻盘与扫描同源构参（上游 previewChartParams 带全局古典口径 +
+            # 'user' 档历元两键，TianxingElectionMain.js:393-395）：否则非缺省口径下命中判定与所见盘不同形。
+            # 与扫描同一次双读合并（顶层 → options 覆盖）。
+            **_electionscan_options(payload),
+            **_electionscan_options(payload.get("options")),
+            # 择时盘沿用调用方已确认的设置；这里是同一次请求的内部子盘，不再过闸。
+            "agent_confirmed_settings": True,
+            "clarification_notes": "tianxing selected-moment sub-chart (same confirmed settings)",
+        }
+        return {k: v for k, v in moment_payload.items() if v is not None}
+
     def _tianxing_selected_moment_section(self, payload: dict[str, Any], hit: dict[str, Any]) -> str:
         try:
-            pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
-            if not pick:
+            moment_payload = self._tianxing_moment_payload(payload, hit)
+            if moment_payload is None:
                 return ""
-            parts = pick.split(" ")
-            moment_payload = {
-                "date": parts[0],
-                "time": (parts[1] if len(parts) > 1 else "12:00") + (":00" if len(parts) > 1 and parts[1].count(":") == 1 else ""),
-                "zone": payload.get("zone"),
-                "lat": payload.get("lat"),
-                "lon": payload.get("lon"),
-                "pos": payload.get("pos"),
-                "hsys": payload.get("hsys"),
-                "zodiacal": payload.get("zodiacal"),
-                "siderealAyanamsa": payload.get("siderealAyanamsa"),
-                # [Q-419/T-382][Q-268/T-254] 选中时刻盘与扫描同源构参（上游 previewChartParams 带全局古典口径 +
-                # 'user' 档历元两键，TianxingElectionMain.js:393-395）：否则非缺省口径下命中判定与所见盘不同形。
-                # 与扫描同一次双读合并（顶层 → options 覆盖）。
-                **_electionscan_options(payload),
-                **_electionscan_options(payload.get("options")),
-                # 择时盘沿用调用方已确认的设置；这里是同一次请求的内部子盘，不再过闸。
-                "agent_confirmed_settings": True,
-                "clarification_notes": "tianxing selected-moment sub-chart (same confirmed settings)",
-            }
-            moment_payload = {k: v for k, v in moment_payload.items() if v is not None}
+            pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
             chart_env = self.run_tool("chart", moment_payload, save_result=False)
             if not chart_env.ok:
                 _degrade("tianxing [选中时刻星盘] sub-chart failed: %s", chart_env.error.code if chart_env.error else "unknown")
@@ -388,6 +395,19 @@ class ZeriRunners:
         except Exception as exc:  # noqa: BLE001 - 星盘正文失败不阻断搜索段（上游同款 try 包裹），但要让调用方知道少了这一段
             _degrade("tianxing [选中时刻星盘] sub-chart failed: %s", exc)
             return ""
+
+    def _aux_tianxing_moment_chart(self, payload: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+        """报告补算（reports/aux_charts.py）：天星择日页中栏的西占单轮 = 选中命中时刻的 /chart 整盘（页面点结果行即起此盘；
+        正文 [选中时刻星盘] 取首个命中，图与它同一刻同一载荷）。不存档。"""
+        intervals = data.get("intervals") if isinstance(data.get("intervals"), list) else []
+        hit = intervals[0] if intervals and isinstance(intervals[0], dict) else None
+        moment_payload = self._tianxing_moment_payload(payload, hit) if hit else None
+        if moment_payload is None:
+            raise ValueError("no hit interval: there is no selected moment to chart")
+        env = self.run_tool("chart", moment_payload, save_result=False)
+        if not env.ok or not isinstance(env.data, dict):
+            raise ValueError(f"selected-moment chart failed: {env.error.code if env.error else 'unknown'}")
+        return {"chart": env.data, "moment": f"{hit.get('pick') or hit.get('start')}"}
 
     def _run_qimenzeri_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         start_date, start_time, end_date, end_time = self._tianxing_window(payload)
@@ -868,6 +888,49 @@ class ZeriRunners:
         "indiazeri": {"ayanamsa": "lahiri", "nodeType": "mean"},
     }
 
+    def _zeri_backend_base_payload(
+        self, tool_name: str, payload: dict[str, Any], pan_moment: Any, scan_opts: dict[str, Any]
+    ) -> dict[str, Any]:
+        """展示盘（选中时刻那一盘）的基底技法载荷：择日正文的基底段与报告补算的 Moira 盘同一份。"""
+        start_date, start_time, _end_date, _end_time = self._tianxing_window(payload)
+        pan_date, _, pan_time = str(pan_moment or "").partition(" ")
+        base_payload = {k: v for k, v in payload.items()
+                        if k not in ("conditions", "options", "natal", "maxHits", "maxSpanDays",
+                                     "startDate", "startTime", "endDate", "endTime",
+                                     "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
+                                     "su28Mode", "nodeType", "lilithType", "fuOrb")}
+        base_payload.update({"date": pan_date or start_date,
+                             "time": pan_time or start_time or "00:00:00",
+                             "agent_confirmed_settings": True,
+                             "clarification_notes": f"{tool_name} selected-moment sub-chart"})
+        if tool_name == "qizhengzeri":
+            # 展示盘跟随扫描口径（上游 QizhengZeriMain.buildFields :365-402 [挂载自检 F-37]）：罗计交点 / 月孛
+            # 走 guolao 键名（perchart.applyGuolaoSiyu 读 guolaoNodeType/guolaoLilithType）；宿度制
+            # su28Mode → doubingSu28（:390 `doubingSu28: Number(o.su28Mode)`，缺省 2 回归今宿）。
+            base_payload["guolaoNodeType"] = scan_opts.get("nodeType", "mean")
+            base_payload["guolaoLilithType"] = scan_opts.get("lilithType", "mean")
+            base_payload["doubingSu28"] = int(scan_opts.get("su28Mode", 2))
+        return base_payload
+
+    def _aux_qizhengzeri_moira(self, payload: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+        """报告补算（reports/aux_charts.py）：七政择日页内嵌的七政页（GuoLaoChartMain，引擎锁星阙七政、盘式缺省 Moira）在选中
+        时刻画的 GuoLaoMoiraWheel 要整张七政盘 + 流年盘 + Moira 规则全集；结果只留正文用的那几键，于是在补算作用域里按同一
+        基底载荷重起一次 guolao_chart（不存档），由 runner 交出规则全集与流年盘。"""
+        pan_moment = data.get("pan_moment")
+        if not pan_moment or not isinstance(data.get("base"), dict):
+            raise ValueError("stored result has no selected-moment chart")
+        base_payload = self._zeri_backend_base_payload(
+            "qizhengzeri", payload, pan_moment, self._zeri_backend_scan_options("qizhengzeri", payload)
+        )
+        with figure_capture() as captured:
+            env = self.run_tool("guolao_chart", base_payload, save_result=False)
+        moira = captured.get("guolao_moira")
+        if not env.ok or not isinstance(env.data, dict):
+            raise ValueError(f"guolao_chart at the selected moment failed: {env.error.code if env.error else 'unknown'}")
+        if not isinstance(moira, dict):
+            raise ValueError("Moira rules (/qizheng/moira) or the transit chart were not available")
+        return {"root": env.data, "moira": moira, "params": base_payload, "moment": f"{pan_moment}"}
+
     def _zeri_backend_scan_options(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         """后端扫描口径：页面出厂档 → 顶层 → options 依次覆盖（与 tianxing 同款双读，options 优先）。
 
@@ -1009,23 +1072,7 @@ class ZeriRunners:
         base: dict[str, Any] = {}
         if spec["base_tool"]:
             pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
-            pan_date, _, pan_time = str(pan_moment).partition(" ")
-            base_payload = {k: v for k, v in payload.items()
-                            if k not in ("conditions", "options", "natal", "maxHits", "maxSpanDays",
-                                         "startDate", "startTime", "endDate", "endTime",
-                                         "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
-                                         "su28Mode", "nodeType", "lilithType", "fuOrb")}
-            base_payload.update({"date": pan_date or start_date,
-                                 "time": pan_time or start_time or "00:00:00",
-                                 "agent_confirmed_settings": True,
-                                 "clarification_notes": f"{tool_name} selected-moment sub-chart"})
-            if tool_name == "qizhengzeri":
-                # 展示盘跟随扫描口径（上游 QizhengZeriMain.buildFields :365-402 [挂载自检 F-37]）：罗计交点 / 月孛
-                # 走 guolao 键名（perchart.applyGuolaoSiyu 读 guolaoNodeType/guolaoLilithType）；宿度制
-                # su28Mode → doubingSu28（:390 `doubingSu28: Number(o.su28Mode)`，缺省 2 回归今宿）。
-                base_payload["guolaoNodeType"] = scan_opts.get("nodeType", "mean")
-                base_payload["guolaoLilithType"] = scan_opts.get("lilithType", "mean")
-                base_payload["doubingSu28"] = int(scan_opts.get("su28Mode", 2))
+            base_payload = self._zeri_backend_base_payload(tool_name, payload, pan_moment, scan_opts)
             base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
             if base_env.ok and isinstance(base_env.data, dict):
                 base = base_env.data

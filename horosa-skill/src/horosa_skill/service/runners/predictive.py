@@ -279,6 +279,63 @@ class PredictiveRunners:
             target_time = f"{int(match.group(1)):02d}:{match.group(2)}:{match.group(3) or '00'}"
         return {"targetDate": target_date or _today_for_chart(payload.get("zone")), "targetTime": target_time}
 
+    def _directed_figure_body(
+        self, payload: dict[str, Any], technique: str, target: dict[str, Any], request_fields: dict[str, Any], *, with_chart: bool
+    ) -> dict[str, Any]:
+        """推运图族的请求体（工具调用与报告补算同一份）：本命盘参数（AstroExtraCommon.chartParams）+ 目标时刻 + 技法口径。"""
+        knob_keys = set(self._DIRECTED_FIGURE_DEFAULTS[technique]) | {"orb", "mzSwap", "mzEqual", "withChart"}
+        natal_payload = {k: v for k, v in self._astroextra_natal_payload(payload).items() if k not in knob_keys}
+        return {**self._astroextra_chart_params(natal_payload), **target, **request_fields, "withChart": 1 if with_chart else 0}
+
+    # ── 出报告时补算的盘（reports/aux_charts.py 用）：结果里没有、app 却画着的那张盘 ──────────────────────────
+    # 只在出报告时由 ReportsAPI._aux_engine_charts 调；不写存档、不进工具返回体。输入 = 存档里的 input_normalized + 结果里
+    # 实际用过的时刻 / 口径（不按「今天」重算缺省目标日），所以补出来的盘与正文是同一次起盘。
+
+    def _aux_directed_figure_charts(self, payload: dict[str, Any], technique: str, data: dict[str, Any]) -> dict[str, Any]:
+        """推运图族双盘 = 页面 DirectedFigurePage.renderWheel：内圈本命盘（页面主盘 /chart），外圈 = 同一请求带 withChart:1
+        时后端另起的整盘（astrostudy/directed_figures.py `_relocated_chart`）。"""
+        target, request_fields = data.get("target"), data.get("request")
+        if not isinstance(request_fields, dict) or not isinstance(target, dict):
+            raise ValueError("stored result has no target / request fields to repeat")
+        endpoint = self._DIRECTED_FIGURE_ENDPOINTS[technique]
+        response = self._call_remote(endpoint, self._directed_figure_body(payload, technique, target, request_fields, with_chart=True))
+        outer = response.get("chart") if isinstance(response, dict) else None
+        if not isinstance(outer, dict) or not isinstance(outer.get("chart"), dict):
+            raise ValueError(f"{endpoint} (withChart=1) returned no directed chart")
+        natal = self._call_remote("/chart", self._astroextra_natal_payload(payload))
+        return {"natal": natal, "outer": outer, "moment": f"{target.get('targetDate') or ''} {target.get('targetTime') or ''}".strip()}
+
+    def _aux_progression_charts(self, payload: dict[str, Any], technique: str, data: dict[str, Any]) -> dict[str, Any]:
+        """推运页 ProgMethodPanel（AstroProgChart.js）：外圈 = 所选推运法（页面缺省 secondary 次限）的推运时刻起的 /chart 整盘，
+        请求体 = chartParams(本命) + 推运日期 / 时刻（splitDateTime）；恒星推运（mode=sidereal）两圈都强制 zodiacal:1 重取。"""
+        method = next((m for m in data.get("methods") or [] if isinstance(m, dict) and m.get("method") == "secondary"), None)
+        moment = f"{((method or {}).get('progressedDate') or {}).get('datetime') or ''}".strip()
+        if not moment:
+            raise ValueError("stored result has no secondary-progression moment")
+        parts = moment.replace("T", " ").split(" ")
+        date, time = parts[0].replace("/", "-"), (parts[1] if len(parts) > 1 and parts[1] else "12:00:00")
+        natal_payload = self._astroextra_natal_payload(payload)
+        chart_params = self._astroextra_chart_params(natal_payload)
+        if technique == "vedicprog":
+            natal = self._call_remote("/chart", {**chart_params, "zodiacal": 1})
+            outer = self._call_remote("/chart", {**chart_params, "zodiacal": 1, "date": date, "time": time})
+        else:
+            natal = self._call_remote("/chart", natal_payload)
+            outer = self._call_remote("/chart", {**chart_params, "date": date, "time": time})
+        return {"natal": natal, "outer": outer, "moment": moment}
+
+    def _aux_prenatal_syzygy_chart(self, payload: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+        """产前朔望页（AstroPrenatalSyzygy.load）：以朔望时刻、出生地起的整盘——与正文 [产前朔望盘·星体位置] 同一请求。"""
+        syzygy = data.get("syzygy") if isinstance(data.get("syzygy"), dict) else {}
+        moment = split_syzygy_datetime(syzygy.get("datetime")) if syzygy.get("type") else None
+        if moment is None:
+            raise ValueError("stored result has no syzygy moment")
+        chart = self._call_remote("/chart", self._prenatal_syzygy_chart_body(payload, moment))
+        return {"chart": chart, "moment": f"{syzygy.get('datetime')}", "type": syzygy.get("type")}
+
+    def _prenatal_syzygy_chart_body(self, payload: dict[str, Any], moment: dict[str, Any]) -> dict[str, Any]:
+        return {**self._astroextra_chart_params(self._astroextra_natal_payload(payload)), "date": moment["date"], "time": moment["time"]}
+
     def _run_directed_figure_tool(
         self, payload: dict[str, Any], technique: str, fetch: Callable[[dict[str, Any]], dict[str, Any]]
     ) -> dict[str, Any]:
@@ -286,10 +343,9 @@ class PredictiveRunners:
         settings = self._directed_figure_settings(payload, technique)
         request_fields = self._directed_figure_request_fields(technique, settings)
         target = self._directed_figure_target(payload, technique)
-        knob_keys = set(self._DIRECTED_FIGURE_DEFAULTS[technique]) | {"orb", "mzSwap", "mzEqual", "withChart"}
-        natal_payload = {k: v for k, v in self._astroextra_natal_payload(payload).items() if k not in knob_keys}
         # withChart: 0 —— 后端缺省另起一张「推运外圈」整盘（星阙页面双盘绘图用，~100 KB）；快照正文不读它，headless 不要。
-        body = {**self._astroextra_chart_params(natal_payload), **target, **request_fields, "withChart": 0}
+        # 报告要画双盘时由 _aux_directed_figure_charts 在出报告那一刻按存档的 target / request 另取（结果与存档不带它）。
+        body = self._directed_figure_body(payload, technique, target, request_fields, with_chart=False)
         response = fetch(body)
         natal_header = self._natal_header(technique, payload)
         chart_obj = natal_header or _ptext.payload_chart_wrap(payload)
@@ -634,7 +690,7 @@ class PredictiveRunners:
             _degrade("prenatalsyzygy: 朔望结果缺 datetime，无法以朔望时刻排盘（[产前朔望盘·星体位置] 写「暂缺」行）")
         else:
             try:
-                syzygy_chart = self._call_remote("/chart", {**base, "date": moment["date"], "time": moment["time"]})
+                syzygy_chart = self._call_remote("/chart", self._prenatal_syzygy_chart_body(payload, moment))
             except HorosaSkillError as exc:
                 _degrade("prenatalsyzygy: 以朔望时刻排盘失败（[产前朔望盘·星体位置] 写「暂缺」行）: %s", exc)
         snapshot_text = build_prenatal_syzygy_snapshot_text(
