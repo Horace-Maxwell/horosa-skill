@@ -425,3 +425,26 @@ def test_sanshi_board_replaces_the_liureng_grid_under_its_own_title() -> None:
     assert "阳遁" in board["app_svg"] and "驿马" in board["app_svg"], "the board's own info cards (旬 / 局, 神煞) are drawn"
     data = {k: v for k, v in FIXTURE["sanshiunited"].items() if k != "board_context"}
     assert all(r["kind"] != "sanshi" for _i, r in app_charts.plan("sanshiunited", data, extract_figures("sanshiunited", data, "sanshiunited")))
+
+
+def test_builtin_grid_captions_keep_their_legend_in_pdf_and_docx() -> None:
+    """legend 拆出后，PDF 九宫与 DOCX 格子盘的图注曾直接读 text / lines，自绘图的画法说明就丢了（只该在 app 图下不印）。"""
+    import inspect
+
+    from horosa_skill.reports import figures, renderers
+
+    pdf = inspect.getsource(figures._pdf_flowables)
+    docx = inspect.getsource(renderers)
+    assert 'spec.get("text"), *(spec.get("lines")' not in pdf and 'figure.get("text"), *(figure.get("lines")' not in docx
+    spec = {"kind": "grid9", "legend": ["每宫自上而下"], "text": "局"}
+    assert figures.figure_notes(spec, str) == ["局", "每宫自上而下"]
+
+
+def test_tall_app_boards_are_narrowed_to_fit_one_page() -> None:
+    """三式合一盘 720 × 1110：按 470 pt 宽排高 725 pt，超过盘图标题下的剩余高度 → 标题孤零零留在上一页。按宽高比收窄到高 ≤ 600 pt。"""
+    from horosa_skill.reports.figures import _APP_FIGURE_MAX_HEIGHT, _app_figure_width
+
+    tall = {"app_svg": '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1110">'}
+    square = {"app_svg": '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720">'}
+    assert abs(_app_figure_width(tall, 470) * 1110 / 720 - _APP_FIGURE_MAX_HEIGHT) < 0.01
+    assert _app_figure_width(square, 470) == 470

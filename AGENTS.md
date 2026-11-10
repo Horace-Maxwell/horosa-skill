@@ -1404,6 +1404,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     三式合一（SanshiUnitedBoard：CSS module 样式表——构建时让 `SanShiUnitedMain.less` 的 styles.x 回 "x"（`CSS_MODULES`），SSR 标记
     才看得出每个元素穿哪条规则；内联的 % / px / calc() 几何按所在盒解析，配色字重取样式表；runner 留起课星盘 board_context；
     换下自绘的六壬天地盘时标题随之改为「三式合一盘」——app 请求可带 `title`）。adapter 要读自己样式表的文字用 `@horosa-app/x.less?text`。
+    ⑱app 图高 ≤ 600 pt（按宽高比收窄，标题与图同页）；格子盘 / 九宫图注一律走 `figure_notes`（含 legend）。
     测试里跑 node ESM 一律走 `tests/node_esm.run_node_esm`（Windows 路径；守卫 test_subprocess_encoding）。
     推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）；七政择日动盘要 Moira 规则与整张七政盘，
     择日结果里没有——这两类要不要加请求等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；

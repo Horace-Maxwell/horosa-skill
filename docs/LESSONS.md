@@ -297,6 +297,10 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
 - **大夹具按「证明代码路径」裁。** 天文地图一份结果里行星线坐标就 1 MB；夹具只留两颗行星（同一条绘制路径），payload 也只送出厂设置
   会画的 meta + planets。
 - **测试里手写 `node --input-type=module` 会被守卫拦下。** Windows 上模块路径要转 file URL；一律走 `tests/node_esm.run_node_esm`。
+- **拆字段时要找全所有读它的地方。** 画法说明挪进 `legend` 后，`figure_notes` 改对了，PDF 九宫分支与 DOCX 格子盘图注却各自直接读
+  `text / lines`——自绘图的说明悄悄没了（只该在 app 图下不印）。看展示报告才发现；两处改走 `figure_notes`，守卫扫源码。
+- **高盘按宽排会把标题挤成孤行。** 三式合一盘 720 × 1110 按 470 pt 宽排高 725 pt，盘图标题下放不下，整张挪到下一页、上一页只剩标题。
+  app 图按宽高比收窄到高 ≤ 600 pt（`_app_figure_width`）。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 

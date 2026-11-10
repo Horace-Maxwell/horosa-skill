@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import math
+import re
 from contextvars import ContextVar
 from typing import Any
 
@@ -1044,6 +1045,18 @@ def pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font: 
         _TABLE_FACTORY.reset(token)
 
 
+_APP_FIGURE_MAX_HEIGHT = 600.0  # pt：高盘（三式 / 轨策 / 五兆）按宽排会超过一页剩余高度，标题孤零零留在上一页
+
+
+def _app_figure_width(spec: dict[str, Any], width: float) -> float:
+    """按 app SVG 的宽高比收窄，使图高不超过 _APP_FIGURE_MAX_HEIGHT（标题与图能落在同一页）。"""
+    match = re.search(r'<svg\b[^>]*?\swidth="([\d.]+)"[^>]*?\sheight="([\d.]+)"', str(spec.get("app_svg") or "")[:600])
+    if not match or float(match.group(1)) <= 0:
+        return width
+    aspect = float(match.group(2)) / float(match.group(1))
+    return min(width, _APP_FIGURE_MAX_HEIGHT / aspect) if aspect > 0 else width
+
+
 def _pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font: str, bold_font: str,
                    styles: dict[str, Any], colors: Any, paragraph: Any, esc: Any, t: Any, figure: Any) -> list[Any]:
     from reportlab.platypus import KeepTogether, Spacer, TableStyle
@@ -1069,7 +1082,7 @@ def _pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font:
         kind = spec.get("kind")
         app_drawing = None
         if kind != "wheel" and spec.get("app_svg"):
-            app_drawing = figure_drawing(spec, min(content_width, 470.0), font, bold_font, colors)
+            app_drawing = figure_drawing(spec, _app_figure_width(spec, min(content_width, 470.0)), font, bold_font, colors)
         if app_drawing is not None:
             block = [_table([[figure(app_drawing, _alt(spec, t))]], colWidths=[content_width],
                             style=TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))]
@@ -1084,7 +1097,7 @@ def _pdf_flowables(figures: list[dict[str, Any]], *, content_width: float, font:
                                      paragraph(esc(spec.get("title") or ""), styles["caption"]), Spacer(1, 10)]))
         elif kind == "grid9":
             block = [_grid9(spec, content_width, styles, colors, paragraph, esc)]
-            for line in [spec.get("text"), *(spec.get("lines") or []), spec.get("title")]:
+            for line in [*figure_notes(spec, t), spec.get("title")]:  # 含 legend（自绘九宫的画法说明）
                 if line:
                     block.append(paragraph(esc(str(line)), styles["caption"]))
             block.append(Spacer(1, 10))

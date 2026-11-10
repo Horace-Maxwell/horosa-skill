@@ -560,7 +560,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
                     style_run(center.add_paragraph().add_run(str(line)), size=8.8, color="14211F")
             caption = doc.add_paragraph()
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            notes = [figure.get("text"), *(figure.get("lines") or []), figure.get("title")]
+            notes = [*figure_kit.figure_notes(figure, t), figure.get("title")]  # 含 legend（自绘格子盘的画法说明）
             style_run(caption.add_run("　".join(str(x) for x in notes if x)), size=8.6, color="66706D")
         if image_fonts is None and any(f.get("kind") in figure_kit.DRAWN_KINDS for f in figures):
             note = doc.add_paragraph()
