@@ -243,12 +243,14 @@ def test_pdf_docx_and_png_reports_carry_the_card_faces(tmp_path: Path) -> None:
     streams = [_inflate(m.group(1).strip()) for m in re.finditer(rb"stream\r?\n(.*?)endstream", pdf.read_bytes(), re.S)]
     inline_jpegs = sum(len(re.findall(rb"BI /W \d+ /H 300 /BPC 8 /CS /DeviceRGB /F \[(?:/A85 )?/DCT\] ID", s)) for s in streams)
     assert inline_jpegs == cards, f"each drawn card is embedded as its JPEG (DCT passthrough), got {inline_jpegs} / {cards}"
+    if _drawing_font_files(SIMPLIFIED) is None:
+        # CI Linux: no CJK TrueType → DOCX and PNG figures are not rasterised by design (labels would print as tofu);
+        # test_docx_without_a_cjk_font_still_renders_without_the_spread pins that branch on every machine.
+        return
     docx = Path(service.report_render({"run_id": run_id, "format": "docx", "style": "chart", "output_path": "t.docx"})["file"]["path"])
     with zipfile.ZipFile(docx) as archive:
         media = [archive.read(n) for n in archive.namelist() if n.startswith("word/media/")]
     assert any(m.startswith(b"\xff\xd8") for m in media), "the spread is rasterised with its pictures (JPEG = bitmaps were drawn)"
-    if _drawing_font_files(SIMPLIFIED) is None:
-        return  # CI Linux: no CJK TrueType → PNG is refused by design (test_report_chart_png covers that)
     from PIL import Image
 
     png = Path(service.report_render({"run_id": run_id, "format": "png", "output_path": "t.png"})["file"]["path"])
@@ -257,3 +259,31 @@ def test_pdf_docx_and_png_reports_carry_the_card_faces(tmp_path: Path) -> None:
         _h, sat, val = hsv.split()
         vivid = sum(1 for s, v in zip(sat.tobytes(), val.tobytes()) if s > 120 and v > 60)
     assert vivid > 200 * 120 * 0.03, f"the PNG must show the painted card faces, only {vivid} vivid pixels"
+
+
+@needs_node
+def test_docx_without_a_cjk_font_still_renders_without_the_spread(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI 的 Ubuntu 没有中文 TrueType：DOCX 不栅格化盘图（印不了中文标签），报告照出。v0.49.0 首推时这条分支只在 CI 上走到，
+    本机门禁全绿、CI 红；这里在每台机器上都模拟一次。"""
+    from fakes import FakeClient
+
+    from horosa_skill.config import Settings
+    from horosa_skill.engine.js_client import HorosaJsEngineClient
+    from horosa_skill.memory.store import MemoryStore
+    from horosa_skill.reports import renderers
+    from horosa_skill.service import HorosaSkillService
+    from horosa_skill.testing_payloads import build_sample_payloads
+
+    monkeypatch.setattr(renderers, "_PDF_FONT_CANDIDATES", {"sc": [], "tc": []})
+    assert renderers._drawing_font_files(renderers.SIMPLIFIED) is None
+    settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", db_path=tmp_path / "m.db",
+                        output_dir=tmp_path / "runs", runtime_root=tmp_path / "rt", data_dir=tmp_path / "data")
+    js = HorosaJsEngineClient(settings)
+    js._candidate_engine_roots = lambda: [CORE_JS]  # type: ignore[method-assign]
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=js)
+    env = service.run_tool("tarot", build_sample_payloads()["tarot"], save_result=True)
+    out = service.report_render({"run_id": env.memory_ref.run_id, "format": "docx", "style": "chart", "output_path": "t.docx"})
+    docx = Path(out["file"]["path"])
+    assert docx.is_file() and docx.stat().st_size > 1000 and "degraded_from" not in out
+    with zipfile.ZipFile(docx) as archive:
+        assert not [n for n in archive.namelist() if n.startswith("word/media/")]
