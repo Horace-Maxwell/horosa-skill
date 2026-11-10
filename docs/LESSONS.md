@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.49.0-dev (2026-11-09) | app 盘图让 pytest 慢了三成（≈480 → 610–680 s），Windows x64 lane 本来就在 93%：每次出图的 Node 进程算完还空等约 2.5 s，app 原版代码加载时留着轮询的 setTimeout | `render-charts` 等 stdout 写完再 `process.exit(0)`；直接 exit 会截断在 65 511 字节（管道缓冲）；守卫两条，负向对照各自红 |
 | v0.49.0-dev (2026-11-09) | 报告盘图改用星阙 app 原版绘图代码（esbuild 打包 → linkedom 出 SVG → svglib 转矢量）：svglib 把非标准字体静默换成 Helvetica、`fill="transparent"` 画成黑块；app 紫微中宫把「121e28」当科学计数法印成 1°7′4″E（上游 bug，只报）；打包产物曾带进机器临时路径 | 字体走 Courier 占位再换回嵌入字体；SVG 先规整；adapter 只做无损记法换算；构建目录 realpath + 固定名 symlink，跨检出逐字节同一；`verify_app_charts_bundle.py` 进 preflight |
 | v0.48.1-dev (2026-11-09) | v0.48.0 Windows 原生复验：CLI `profile save` 只给地名不补坐标（门面补、CLI 绕过，之后起盘缺 zone / lat / lon 被拒）；`report.no_chart_content` 的恢复提示让八字 PNG 用户「去对八字出」；每份 PDF 重新解析 TrueType（Windows 大字体，110 份 728 次 106 秒），AGENTS 记的「TTFont 带每份文档状态、须每次新建」不成立 | CLI 走 `ToolsAPI.profile`；提示写明 PNG 只画有盘式的技法、改出 PDF / DOCX；`_TTF_CACHE` 按注册名 + mtime / 大小缓存（同一测试 133 → 88 秒，48 份渲染逐字节相同）|
 | v0.48.0 (2026-11-08) | 发版矩阵：windows-11-arm 的 pytest 在 3600 s 处零失败被杀（进度 86%）；v0.47.x 两次已占 96–97% 却没人看 lane 报告 | 仿真 lane 加时 900 → 2700 s、job 90 → 120 分钟；lane 超 85% 打 `::warning::` 注解并写进报告；pytest.log 带 `--durations=25` |
@@ -193,6 +194,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.49.0-dev / 2026-11-09 — 出一张图白等 2.5 秒：app 代码留下的定时器拖住了 Node 退出
+
+- **现象**：接手时比对门禁耗时，feat/app-style-figures 的 pytest 是 610–680 s，main 约 480 s，慢了三成。v0.48.0 发版时 Windows x64 lane 已用到 2504 / 2700 s（93%），照比例会超时，发版卡在那条 lane。
+- **根因**：`node bin/cli.mjs render-charts` 空调用墙钟 2.75 s、CPU 0.3 s；加载 bundle 只要 70 ms。`process.getActiveResourcesInfo()` 显示剩一个 Timeout：app 原版代码在模块加载时挂着轮询用的 `setTimeout`，事件循环要等它到期才自然退出。所以**每出一份带图的报告用户都白等 2.5 s**，不只是测试慢。
+- **修**：`render-charts` 把结果写进 stdout、等写入回调之后 `process.exit(0)`。不去关 app 代码里的定时器：那是 vendored 原版，改它脆弱，而且定时器跟出图无关。
+- **差点埋下的第二个坑**：直接 `process.stdout.write(body); process.exit(0)` 在管道下会截断，负向对照实测输出正好停在 **65 511 字节**（管道缓冲）。报告图多的技法输出几百 KB，这样改等于让大报告的图静默丢失。
+- **守卫**：`tests/test_app_charts.py::test_the_render_process_exits_as_soon_as_its_output_is_written`，两条断言分开：大输出（真实星盘请求 × 12，约 765 KB）不截断；空输入 < 1.8 s（本机 0.2 s，被拖住 2.6 s）。负向对照：不主动退出 → 2.70 s 红；不等写完就退 → 65 511 字节红。**第一版守卫两条对照都不红**：输出太小，不到管道缓冲；时间门槛按图数放宽得太松。
+- **结果**：全量 pytest 472 s，回到 main 的水平。最慢的几条（六壬择时扫描 21 s、全技法报告 20 s）是 main 上就有的。
+- **法则**：带 Node 子进程的功能要量墙钟与 CPU 两个数，差得多就是在空等。子进程主动退出前必须等 stdout 写完。
 
 ### v0.49.0-dev / 2026-11-09 — 报告盘图改用星阙 app 原版绘图代码：五处「看起来对、其实不对」
 

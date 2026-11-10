@@ -448,3 +448,39 @@ def test_tall_app_boards_are_narrowed_to_fit_one_page() -> None:
     square = {"app_svg": '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720">'}
     assert abs(_app_figure_width(tall, 470) * 1110 / 720 - _APP_FIGURE_MAX_HEIGHT) < 0.01
     assert _app_figure_width(square, 470) == 470
+
+
+@needs_node
+def test_the_render_process_exits_as_soon_as_its_output_is_written() -> None:
+    """app 原版代码加载时留着轮询的 setTimeout：不主动退出的话每次出图都白等约 2.5 s（全技法报告测试因此慢了三成）。
+
+    输出要远大于管道缓冲（约 64 KB）：管道下 stdout.write 是异步的，不等写完就 exit 会截断，小输出测不出来。
+    """
+    import subprocess
+    import time
+
+    class Recorder:
+        requests: list = []
+
+        def render_app_charts(self, figures):
+            Recorder.requests = list(figures)
+            return None
+
+    app_charts.attach_app_svgs(extract_figures("chart", FIXTURE["chart"], "chart"), "chart", FIXTURE["chart"], Recorder())
+    assert Recorder.requests, "chart 应该有要 app 画的图"
+    def render(figures: list) -> tuple[str, float]:
+        started = time.monotonic()
+        completed = subprocess.run(["node", str(PKG_ROOT / "horosa-core-js" / "bin" / "cli.mjs"), "render-charts"],
+                                   cwd=PKG_ROOT / "horosa-core-js", capture_output=True, input=json.dumps({"figures": figures}),
+                                   text=True, encoding="utf-8", timeout=120)
+        return completed.stdout, time.monotonic() - started
+
+    # 不截断：退早了输出正好停在 65 511 字节（管道缓冲），负向对照实测。
+    figures = Recorder.requests * 12
+    out, _elapsed = render(figures)
+    assert len(out) > 200_000, len(out)
+    parsed = json.loads(out)
+    assert parsed["ok"] is True and len(parsed["results"]) == len(figures) and all(r["ok"] for r in parsed["results"])
+    # 不空等：本机正常 0.2 s，被定时器拖住是 2.6 s；门槛给慢的 CI 机器留了余量。
+    _out, elapsed = render([])
+    assert elapsed < 1.8, f"render-charts took {elapsed:.2f} s with nothing to draw: something keeps the event loop alive again"

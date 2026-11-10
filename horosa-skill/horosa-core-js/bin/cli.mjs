@@ -37,7 +37,11 @@ async function main() {
       const raw = await readStdin();
       const parsed = raw.trim() ? JSON.parse(raw) : {};
       const charts = createRequire(import.meta.url)(bundlePath);
-      printJson({ ok: true, kinds: charts.listKinds(), results: charts.renderCharts(parsed.figures || []) });
+      // 写完就退：app 原版代码在加载时留着轮询用的 setTimeout，事件循环要空等约 2.5 s 才自然退出，每份报告都白等。
+      // 只在 stdout 真的写完之后退出（管道下 write 是异步的，直接 exit 会截断输出）。
+      const body = `${JSON.stringify({ ok: true, kinds: charts.listKinds(), results: charts.renderCharts(parsed.figures || []) }, null, 2)}\n`;
+      await new Promise((resolve) => process.stdout.write(body, resolve));
+      process.exit(0);
     } catch (error) {
       printJson({ ok: false, error: { code: 'cli.execution_failed', message: error instanceof Error ? error.message : String(error) } });
       process.exitCode = 1;

@@ -1364,7 +1364,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     新图种只改 `figures.py`：PDF / DOCX 共用 `DRAWN_KINDS` / `figure_drawing` / `figure_notes` / `grid_position`。
   - **盘图用星阙 app 原版画法（v0.49.0-dev，`reports/app_charts.py`）。** app 用 D3 / SVG 画的盘跑 app 自己的代码：
     `horosa-core-js/app-charts/`（adapter，喂 app 组件的就是 app 喂它的那份引擎结果）→ `node app-charts/build.mjs --source-root <pin 住的
-    Horosa-Public>` 打成 `dist/app-charts.cjs`（自带 d3 / linkedom，零运行时依赖）→ CLI `render-charts` 出 SVG → svglib 转矢量。
+    Horosa-Public>` 打成 `dist/app-charts.cjs`（自带 d3 / linkedom，零运行时依赖）→ CLI `render-charts` 出 SVG → svglib 转矢量。 `render-charts` 写完 stdout 就 `process.exit(0)`（app 代码加载时留着轮询的 setTimeout，自然退出要空等约 2.5 s）；必须等写入回调再退，直接 exit 在管道下截断于 65 511 字节。守卫 `test_the_render_process_exits_as_soon_as_its_output_is_written`。
     报告服务在转繁体**之前**调 `_attach_app_figures`（一次 Node），成功的规格带 `app_svg`、`renderer: app`；拿不到就画自绘图并写
     `renderer: builtin` + `renderer_note`。PDF / DOCX / PNG 都经 `figure_drawing`（`is_drawn` 判是否画图），`drawing_to_png` 支持嵌套
     Group / 变换 / Path / 旋转文字。规矩：①打包只用 pin 住的上游（本机 Horosa-Public 常超前）；改了 adapter 或上游动了就重打包，
