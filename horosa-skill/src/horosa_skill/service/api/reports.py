@@ -416,9 +416,9 @@ class ReportsAPI:
                     ),
                 )
                 # 盘图换成星阙 app 原版画法（reports/app_charts.py）；在转文字之前配，app 图里的字跟正文一起转。
-                document["figures"], figure_notes = self._report_figures(document.get("figures") or [], run, source_artifact)
-                if figure_notes:
-                    document["figure_notes"] = figure_notes
+                document["figures"], figure_gaps = self._report_figures(document.get("figures") or [], run, source_artifact)
+                if figure_gaps:
+                    document["figure_gaps"] = figure_gaps
                 # 报告是给人读的整份文本：存档里仍是简体原文，只有落盘的这一份按设置转文字。
                 document = localize_document(document, script)
                 rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
@@ -458,7 +458,7 @@ class ReportsAPI:
                 "answer_writeback": answer_writeback,
                 **_render_outcome_fields(rendered),
                 "summary": [f"已生成 {rendered['format'].upper()} 结构化报告：{artifact['artifact_path']}", *_render_outcome_notes(rendered),
-                            *document.get("figure_notes", [])],
+                            *document.get("figure_gaps", [])],
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -759,9 +759,9 @@ class ReportsAPI:
     def _png_outputs(
         self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], chart: dict[str, Any], script: str, default: Path
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        figures, figure_notes = self._report_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
+        figures, figure_gaps = self._report_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
         figures = localize_document(figures, script)
-        figure_notes = localize_document(figure_notes, script)
+        figure_gaps = localize_document(figure_gaps, script)
         try:
             images = render_figure_pngs(figures, script=script, t=_labeler(script)) if figures else []
         except PngFontUnavailable:
@@ -775,7 +775,7 @@ class ReportsAPI:
                     "text and the data disagree so the figure is skipped). Read the tool result directly, or render a PDF chart report.",
                 ),
                 code="report.no_chart_content",
-                details={"tool_name": chart["tool_name"], "format": "png", **({"figure_notes": figure_notes} if figure_notes else {})},
+                details={"tool_name": chart["tool_name"], "format": "png", **({"figure_gaps": figure_gaps} if figure_gaps else {})},
             )
         try:
             if images is None:  # 第一次因缺字体失败：重来一次，让下面按字体问题给出可操作的报错
@@ -800,7 +800,7 @@ class ReportsAPI:
                         "path": rendered["path"]} for image, rendered in zip(images, outputs)]
         return outputs, {"title": f"{chart['label']} · 盘图", "figures": figure_list,
                          "headline": f"已生成 PNG 盘图 {len(outputs)} 张：{'、'.join(r['path'] for r in outputs)}",
-                         **({"warnings": figure_notes} if figure_notes else {})}
+                         **({"warnings": figure_gaps} if figure_gaps else {})}
 
     def _ics_outputs(
         self, request: Any, run: dict[str, Any], chart: dict[str, Any], script: str, default: Path

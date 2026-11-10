@@ -33,7 +33,7 @@ HUMAN_RENDER_HIDDEN_SECTION_IDS = {
 class Block:
     """`kind` 决定读哪些字段：
     card（text 标题、body、role = 强调色）· heading（text、role = 用途）· body（body）· part（text、role = chart / ai / appendix）·
-    note（text）· figures（盘图；document["figure_notes"] 随后成 note）· section（text 标题、body、role = 分组、cite 段号、in_part = 在某个部分之下）·
+    note（text）· figures（盘图；document["figure_gaps"] 随后成 note）· section（text 标题、body、role = 分组、cite 段号、in_part = 在某个部分之下）·
     orphan_figures（text = 部分标题：有盘图却没有任何章节时，只有 PDF 补印）。
     """
 
@@ -119,7 +119,7 @@ def body_blocks(document: dict[str, Any], t: Any = str) -> list[Block]:
     show_ai = document.get("show_ai", True) is not False
     figures = any(isinstance(figure, dict) for figure in document.get("figures") or [])
     # 出报告时补算的盘没画出来（reports/aux_charts.py）：盘图节下说明缺了哪张、为什么
-    figure_notes = [Block("note", str(note)) for note in document.get("figure_notes") or [] if str(note).strip()]
+    figure_gaps = [Block("note", str(note)) for note in document.get("figure_gaps") or [] if str(note).strip()]
     blocks: list[Block] = []
     conclusion = _human_ai_value(ai_report, "direct_answer") or _human_ai_value(ai_report, "analysis_focus")
     if show_ai and conclusion:
@@ -140,13 +140,13 @@ def body_blocks(document: dict[str, Any], t: Any = str) -> list[Block]:
             ai_body = []
         if group in parts and group != current_group:
             blocks.append(Block("part", parts[group], role=str(group)))
-            if group == "chart" and (figures or figure_notes):
-                blocks += [Block("heading", t("盘图"), role="figures"), *([Block("figures")] if figures else []), *figure_notes]
-                figure_notes = []
+            if group == "chart" and (figures or figure_gaps):
+                blocks += [Block("heading", t("盘图"), role="figures"), *([Block("figures")] if figures else []), *figure_gaps]
+                figure_gaps = []
         current_group = group
         cite = str(section.get("cite_id") or "") if group == "chart" else ""
         blocks.append(Block("section", str(section.get("title") or t("章节")), str(section.get("body") or ""), role=str(group or ""), cite=cite, in_part=group in parts))
     blocks += ai_body
     if figures and current_group is None:
         blocks.append(Block("orphan_figures", parts["chart"]))
-    return blocks + figure_notes  # 没有「完整盘面」部分时说明排在最后，不丢
+    return blocks + figure_gaps  # 没有「完整盘面」部分时说明排在最后，不丢

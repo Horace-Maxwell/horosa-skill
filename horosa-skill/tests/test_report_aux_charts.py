@@ -320,9 +320,9 @@ def run_payload_methods(service: HorosaSkillService, run: dict[str, Any]) -> lis
 
 # ───────────────────────────── where the note is printed ─────────────────────────────
 
-def test_figure_notes_are_printed_under_the_figure_heading() -> None:
+def test_figure_gaps_are_printed_under_the_figure_heading() -> None:
     document = {"sections": [{"id": "s", "title": "起盘信息", "body": "x", "group": "chart", "human_visible": True}],
-                "figures": [], "figure_notes": ["演进推运双盘没有画出：原因。"]}
+                "figures": [], "figure_gaps": ["演进推运双盘没有画出：原因。"]}
     blocks = body_blocks(document)
     kinds = [(b.kind, b.text) for b in blocks]
     assert ("heading", "盘图") in kinds and ("note", "演进推运双盘没有画出：原因。") in kinds

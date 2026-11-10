@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.49.0-dev (2026-11-09) | 推运双盘 / 七政择日 Moira 盘 / 天星择日与产前朔望的时刻盘：app 在结果之外另取一张盘，报告画不出；补算时差点撞上三件事——`_call_remote` 探不到会去起 runtime、缺省「今天」让隔天的报告换了盘、bundle 带进 react-dom 客户端后 scheduler 的 MessageChannel 让进程永不退出 | 出报告时按存档入参 + 结果里实际用过的时刻经真引擎补算（不存档、不启动 runtime、重起须与存档一致），app 原版代码画；失败留原图 + `figure_gaps` 说明；react-dom 只放行 server；十三条负向对照各红 |
 | v0.49.0-dev (2026-11-09) | app 盘图让 pytest 慢了三成（≈480 → 610–680 s），Windows x64 lane 本来就在 93%：每次出图的 Node 进程算完还空等约 2.5 s，app 原版代码加载时留着轮询的 setTimeout | `render-charts` 等 stdout 写完再 `process.exit(0)`；直接 exit 会截断在 65 511 字节（管道缓冲）；守卫两条，负向对照各自红 |
 | v0.49.0-dev (2026-11-09) | 报告盘图改用星阙 app 原版绘图代码（esbuild 打包 → linkedom 出 SVG → svglib 转矢量）：svglib 把非标准字体静默换成 Helvetica、`fill="transparent"` 画成黑块；app 紫微中宫把「121e28」当科学计数法印成 1°7′4″E（上游 bug，只报）；打包产物曾带进机器临时路径 | 字体走 Courier 占位再换回嵌入字体；SVG 先规整；adapter 只做无损记法换算；构建目录 realpath + 固定名 symlink，跨检出逐字节同一；`verify_app_charts_bundle.py` 进 preflight |
 | v0.48.1-dev (2026-11-09) | v0.48.0 Windows 原生复验：CLI `profile save` 只给地名不补坐标（门面补、CLI 绕过，之后起盘缺 zone / lat / lon 被拒）；`report.no_chart_content` 的恢复提示让八字 PNG 用户「去对八字出」；每份 PDF 重新解析 TrueType（Windows 大字体，110 份 728 次 106 秒），AGENTS 记的「TTFont 带每份文档状态、须每次新建」不成立 | CLI 走 `ToolsAPI.profile`；提示写明 PNG 只画有盘式的技法、改出 PDF / DOCX；`_TTF_CACHE` 按注册名 + mtime / 大小缓存（同一测试 133 → 88 秒，48 份渲染逐字节相同）|
@@ -194,6 +195,20 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.49.0-dev / 2026-11-09 — app 另取的那张盘：出报告时经真引擎补算（推运双盘 / Moira 盘 / 选中时刻盘）
+
+- **现象**：星阙 app 有几页在工具结果之外另取一张盘来画，报告只能少一张图或画错图：推运图族（演进推运 / Bezza / 周日小限）的双盘外圈是同一请求带 `withChart` 时后端另起的整盘（工具特意发 `withChart: 0`，~100 KB、正文不读）；推运 / 恒星推运用次限推运时刻另起 `/chart`；天星择日画选中命中时刻的盘（结果只有区间）；产前朔望画朔望那一刻的整盘（结果只留星体位置）；七政择日内嵌的七政页缺省画 Moira 圆盘（`GuoLaoMoiraWheel`），要 Moira 规则全集 + 流年盘 + `/qizhengelection/pan` 的静盘宫位，结果只留正文用的几键，报告画的是另一种盘式（GLChart 方盘）。
+- **做法（协调者定：一套机制，不加大工具返回体与存档）**：`reports/aux_charts.py` + `ReportsAPI._report_figures`。出图前按存档的 `input_normalized` + 结果里实际用过的时刻 / 口径，经 runner 的同一份请求体补算（请求体抽成共用函数：`_directed_figure_body` / `_tianxing_moment_payload` / `_zeri_backend_base_payload` / `_prenatal_syzygy_chart_body`），交 app 原版代码画（`app_request` 原样转交 `app_charts.plan`）。七政 runner 在 `figure_capture()` 作用域里交出规则全集与流年盘，作用域外 no-op。
+- **差点埋下的坑**：
+  - `_call_remote` 探不到后端会去 `start_local_services`：出报告不该起 runtime。补算前先 `probe`，没在跑就照原样出报告并说明（`test_a_report_never_starts_the_runtime`）。
+  - 缺省「今天」：推运目标日缺省今天、Moira 流年缺省「今天正午」。隔天出报告，补算的盘就不是正文那张了。推运用结果里存的 `target` / `request`；流年钉到存档基底盘 `technique_card.generated_at` 那天（按盘的时区）；重起的七政盘与 Moira 规则须与存档逐键一致，否则不画。
+  - **bundle 带进 react-dom 客户端**：`GuoLaoMoiraWheel` 为悬浮提示 import `createPortal`，`react-dom` 在放行名单里，于是整个客户端渲染器进了 bundle（+228 KB）；它一加载就起 React scheduler 的 `MessageChannel`，**载入 bundle 的进程永不退出**——`build.mjs` 自己的 kinds 探测就挂住了。`render-charts` 恰好主动 exit 才没露馅。改为 app 文件只放行 `react-dom/server`，客户端渲染器走桩；桩版 / 放行版 Moira 输出逐字节一致，其余 29 种盘与改前 bundle 逐字节一致（`test_loading_the_bundle_leaves_nothing_that_keeps_node_alive`，负向对照超时红）。
+  - Moira 盘的西占宫位格来自页面另发的 `requestElectionData`（`/qizhengelection/pan` 的 `staticHousesBySystem`）：不读页面代码只看盘组件会漏掉，盘照样画、只是静默少一环。
+  - 名字对不上号：协调者写的「Jay（jaynesprog）」——双盘页是周日小限 `jayprofection`；`jaynesprog`（赤纬推运）在 app 里画的是赤纬梯图（HTML + SVG，数据已在结果里），不属补算，未做。Bezza 推运图与演进推运同一页类，一并接上。
+- **失败时**：补算或出图不成，原图不动，「缺了哪张、为什么」进 `document["figure_gaps"]`，印在「盘图」节下（PDF / DOCX），PNG 进 `warnings`，报告结果的 summary 也带上。
+- **守卫**：`tests/test_report_aux_charts.py`（实例实抓夹具 `report_aux_charts_live.json.gz`）二十条，十三条负向对照各自红：补算不带 withChart、改用今天的目标日、不先探引擎、子盘存档、丢说明、版式不印说明、恒星推运不重取恒星黄道、合盘图注、Moira 不换下方盘、流年不钉、不比对存档、react-dom 客户端放行、plan 不转交 `app_request`。全量 pytest 加约 6 s。
+- **法则**：报告要一张结果里没有的盘，就在出报告那一刻用存档入参经真引擎补算，**不**加大工具返回体；任何「缺省今天」的输入都要钉回原结果，并核对补出来的盘与存档那张一致。新接 app 组件前查它 import 的包是否在放行名单里、载入后进程能否退出。
 
 ### v0.49.0-dev / 2026-11-09 — 出一张图白等 2.5 秒：app 代码留下的定时器拖住了 Node 退出
 
