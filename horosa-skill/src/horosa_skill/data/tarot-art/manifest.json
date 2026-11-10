@@ -1,0 +1,871 @@
+{
+  "_comment": "Tarot card pictures copied byte for byte from the pinned Horosa-Public tree (scripts/sync_tarot_art.py). Upstream records no source or licence for these scans; see contracts/third_party_facts.json tarot-art.provenance.",
+  "upstream_commit": "10fb75de980bb0a6e0d1f50c7ee93cc97a88d7de",
+  "upstream_path": "Horosa-Web/astrostudyui/public/tarot-art",
+  "files": {
+    "egyptian/death.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 9997,
+      "sha256": "dcc18502b4d6bbf23e8535f9394f8e00538fa2786aa20f61a41265d6ed56824c"
+    },
+    "egyptian/hanged_man.jpg": {
+      "width": 159,
+      "height": 300,
+      "bytes": 11981,
+      "sha256": "35ab20b8640821a23e2fd22c501e0e21b77c37b999d667123dc0ce4de700f6f2"
+    },
+    "egyptian/high_priestess.jpg": {
+      "width": 150,
+      "height": 300,
+      "bytes": 13582,
+      "sha256": "160f0052cd89c417d335d9eb086f67e4802898bba54c12cdde28509fa21de606"
+    },
+    "egyptian/judgement.jpg": {
+      "width": 151,
+      "height": 300,
+      "bytes": 11788,
+      "sha256": "5cdc0b6e8f1d1a766c855668b031825d28b0ec76a8abd0cd65c5e4116d6588bb"
+    },
+    "egyptian/justice.jpg": {
+      "width": 160,
+      "height": 300,
+      "bytes": 13017,
+      "sha256": "3f0713292a9621eeb80472deb8e7f10a6b39e33914fefba1d801be6e5559d846"
+    },
+    "egyptian/strength.jpg": {
+      "width": 156,
+      "height": 300,
+      "bytes": 10318,
+      "sha256": "02ff1c9441dce5990d6ee4afc82ec934652a3c03d027b627895117591c3c2c6c"
+    },
+    "egyptian/temperance.jpg": {
+      "width": 155,
+      "height": 300,
+      "bytes": 11622,
+      "sha256": "471e2ad27ad80f5016ab2717c4511a15ee39bf013ee29fc9e713bb40ffecfe0a"
+    },
+    "egyptian/the_chariot.jpg": {
+      "width": 164,
+      "height": 300,
+      "bytes": 13426,
+      "sha256": "a5a8d4c2c325f771df6b05192023ef0d562d10e0aa03b1c26b1eafae79c98932"
+    },
+    "egyptian/the_devil.jpg": {
+      "width": 155,
+      "height": 300,
+      "bytes": 13093,
+      "sha256": "84d0157e8de9ab4651b03a131f5009d15de5074150f4d11a34d1eccddf345529"
+    },
+    "egyptian/the_emperor.jpg": {
+      "width": 161,
+      "height": 300,
+      "bytes": 10193,
+      "sha256": "fa5df5ac625bd1b78d2f56d33db48a5c3b1adbc5de9e54e3910b1a9b92219d9f"
+    },
+    "egyptian/the_empress.jpg": {
+      "width": 155,
+      "height": 300,
+      "bytes": 14580,
+      "sha256": "87c7467981992215a9ed6b4dbc6a90141257884500cbf82547281c52057b21c7"
+    },
+    "egyptian/the_fool.jpg": {
+      "width": 151,
+      "height": 300,
+      "bytes": 11552,
+      "sha256": "1e08dbb4f4dcbda7c7c647020296cc6e4aeb5ab3bb5ca8d64b7472db3d1e5a76"
+    },
+    "egyptian/the_hermit.jpg": {
+      "width": 158,
+      "height": 300,
+      "bytes": 10097,
+      "sha256": "c638d20f72bacf5ed3adea1ed42ad56f4a2226490228ac777b4ca2dc87808942"
+    },
+    "egyptian/the_hierophant.jpg": {
+      "width": 156,
+      "height": 300,
+      "bytes": 15842,
+      "sha256": "8688deb996572f9ad7c4c11615a34b0428cc812c6e8406897b38713e8cf47056"
+    },
+    "egyptian/the_lovers.jpg": {
+      "width": 146,
+      "height": 300,
+      "bytes": 14741,
+      "sha256": "8dec01272364824e90882c35c36ceac878adfb01c081deb6e07d6215c9804db7"
+    },
+    "egyptian/the_magician.jpg": {
+      "width": 157,
+      "height": 300,
+      "bytes": 9898,
+      "sha256": "6ae9af3562e3756ac509283f4982f25a75c4c023c21f6beaa36c35afa191d825"
+    },
+    "egyptian/the_moon.jpg": {
+      "width": 161,
+      "height": 300,
+      "bytes": 12844,
+      "sha256": "223319cd05e02824f2f94b15e3630133c7324a57f6af6126d3aeddee53f43b7c"
+    },
+    "egyptian/the_star.jpg": {
+      "width": 154,
+      "height": 300,
+      "bytes": 11507,
+      "sha256": "9d78e08249276416de2ab1a65c762ef7c419f4f666bec2fff685f7d2c0b5d458"
+    },
+    "egyptian/the_sun.jpg": {
+      "width": 161,
+      "height": 300,
+      "bytes": 11357,
+      "sha256": "2fa433f0e553cd82231aceaeb0ed3197d7254a47fe274541aa7c674a2bf532ff"
+    },
+    "egyptian/the_tower.jpg": {
+      "width": 159,
+      "height": 300,
+      "bytes": 12950,
+      "sha256": "27ef6330dd1be4c23f6cc927483ce9c725e2153927009b1a8414afecac4fa5b7"
+    },
+    "egyptian/the_world.jpg": {
+      "width": 160,
+      "height": 300,
+      "bytes": 10431,
+      "sha256": "c5dc179aa7c294ba223ede48882eb8cb466f7b371ee762cb352cd9684195ec5e"
+    },
+    "egyptian/wheel_of_fortune.jpg": {
+      "width": 163,
+      "height": 300,
+      "bytes": 12214,
+      "sha256": "e6b2b4f238853ef11a0bbf0814ac2ee7c53761d26a9e808630f27bbd20a702d1"
+    },
+    "rws/ar00.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 15779,
+      "sha256": "a9018b270997da4dfca3ced165cd21e1695a73d62c2fce9ef396afe85078f0b3"
+    },
+    "rws/ar01.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 15426,
+      "sha256": "31a56b445ada9fef7ce3c317f5e825c7754f87d6923dd5224c482c96ee477ad4"
+    },
+    "rws/ar02.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 17145,
+      "sha256": "711d96317ca84ebc8c3a4c086fc97d71c4ca92c2fff762f2c976f2daf85add6a"
+    },
+    "rws/ar03.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 19319,
+      "sha256": "dcf8be82f6e38693d447deca59dcfe448d97588600f17013950e73908b465f66"
+    },
+    "rws/ar04.jpg": {
+      "width": 175,
+      "height": 300,
+      "bytes": 17358,
+      "sha256": "9d5778b150213d2c60fbc9f8d6114fec2863e38e98a27506c6910d6176f3f790"
+    },
+    "rws/ar05.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 17849,
+      "sha256": "b6cdce22e240c262fc107121633439066a6ccccf5a1e4b855229094f643e254b"
+    },
+    "rws/ar06.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 18423,
+      "sha256": "18642f7e153e195cedf5f1ca86b710e1fce7d8e7647805f47b59265b9e4f1108"
+    },
+    "rws/ar07.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 18181,
+      "sha256": "b54b3e2b397383a4df5639261bb27de51969d68fda90a6bdf1d27b2e71fb7499"
+    },
+    "rws/ar08.jpg": {
+      "width": 166,
+      "height": 300,
+      "bytes": 12988,
+      "sha256": "3c8415a6ae14f6f1296509865f3a11d0d80650feb6b52692cd0e3020523fa929"
+    },
+    "rws/ar09.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 11352,
+      "sha256": "f490d460e51117d7a667b04759475910566632c13a4a0d0afd34c8653a4bf77c"
+    },
+    "rws/ar10.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 16924,
+      "sha256": "6d69a0753335aa220b0e1aa12a2f4a3825f8a70c49dd532de0de0a1ba5eb366a"
+    },
+    "rws/ar11.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 16766,
+      "sha256": "df9b367860125d57b9f2b816d58392f44a37ee1656cb37fce83e06cfca6e9ab0"
+    },
+    "rws/ar12.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 12143,
+      "sha256": "6dee8d0c2164f7012c96d6e80d880abe983707124f83972e092a982cd00305a7"
+    },
+    "rws/ar13.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 18083,
+      "sha256": "3d2328be4f713fa1345934eb0f2aaceeb7f1f6e9c9dee7c027078a25792a76e5"
+    },
+    "rws/ar14.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 17900,
+      "sha256": "68f55434c1cb2dec520a1e7c8410a26cffd8fc3fff1cbff013075b0699d34474"
+    },
+    "rws/ar15.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 15115,
+      "sha256": "518cd9f309c8460e7c2bf30df7abeb088f952bb57d7e9fc196914771596e4fe7"
+    },
+    "rws/ar16.jpg": {
+      "width": 175,
+      "height": 300,
+      "bytes": 15236,
+      "sha256": "3c1f8706bca38dd12d1b26d467448eb19f345380610011db9f73a929da6a549a"
+    },
+    "rws/ar17.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 16091,
+      "sha256": "df6ff9a5d70b5c272882e40633624d48e70b49ce817ab32f6ba0960f7ce69d26"
+    },
+    "rws/ar18.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 15724,
+      "sha256": "c29368ef690fb4294c7868762cee724b8622038da4d9efdd88ce1e3b51eee0c1"
+    },
+    "rws/ar19.jpg": {
+      "width": 176,
+      "height": 300,
+      "bytes": 18670,
+      "sha256": "2e5ea3adda01d2fafe2665eb5082e3c61b73b7d1d7eb608213250a0446133d17"
+    },
+    "rws/ar20.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 19274,
+      "sha256": "fb67cdb577abcf9e65fe22cb60131c945465aced940e7399870e0a87fa6a87f6"
+    },
+    "rws/ar21.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 18127,
+      "sha256": "afe8a83bc168f3cbe1022ed9eaef5e15eecce3d064af6d45dbdda5b76d28981b"
+    },
+    "rws/cu02.jpg": {
+      "width": 169,
+      "height": 300,
+      "bytes": 14458,
+      "sha256": "c1c326d2ce4310d31b6e3b7a176c5948e2e021ae071874b2b7ce9503fdb5e96a"
+    },
+    "rws/cu03.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 15552,
+      "sha256": "a061262a81b6d9a72f476f95301d392e17cf0102059d8db001b8c3cf1023f6b5"
+    },
+    "rws/cu04.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 13384,
+      "sha256": "0800278aaea21a865eb48e552a8b3aa42a0f1bafb613457677c02377840c26fa"
+    },
+    "rws/cu05.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 8991,
+      "sha256": "a71469b6d84585c9429a87c1a03b10ba4c25079a62416d0139bcde2a83a4af86"
+    },
+    "rws/cu06.jpg": {
+      "width": 169,
+      "height": 300,
+      "bytes": 17302,
+      "sha256": "970151434ff6895ce0048aac6655eb0cc21c48e467ea453db48656d792e1d6cf"
+    },
+    "rws/cu07.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 17032,
+      "sha256": "9c3a22ecc76bbc8947b7e29951a7021bb07085334408643e79709beb75c8ca05"
+    },
+    "rws/cu08.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 12463,
+      "sha256": "6896100b1a407d9d54389b533e1f09fcfb5169579b74bd303de48d51a38dc56b"
+    },
+    "rws/cu09.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 15886,
+      "sha256": "83185deab8f593153ac379a025475885b53ef39dbeb68d5c1f62789f5b77b452"
+    },
+    "rws/cu10.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 13461,
+      "sha256": "1b370d1d83a5f0761d549faef92ec6c0196ab93170b35118288a6f1d3611674c"
+    },
+    "rws/cuac.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13936,
+      "sha256": "9c98d0e6e489a25c852deecc582bf696acc8b119be9a59f7f850cb580cc3fdea"
+    },
+    "rws/cuki.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 14796,
+      "sha256": "f48a6316bfe9c486e6feca3d495f9be1bcd7bcafe672399fa646746aea087759"
+    },
+    "rws/cukn.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 14424,
+      "sha256": "07ea27c5253d0cbbcd50f5a80052923b272c6344bb80160dc5190e1810e059ae"
+    },
+    "rws/cupa.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 12038,
+      "sha256": "c6461d07d11e8ebfdb57f3d9aed12590c0134b96adf75d340b3f459e3409f75f"
+    },
+    "rws/cuqu.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 16384,
+      "sha256": "d30e3256547c4756f21544c3579a358bb061414b6483d8cc1be81a784ae4884f"
+    },
+    "rws/pe02.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 12548,
+      "sha256": "32023a8bdd9ffbe916a129ab543d43fdc8e49eca9ca834f80e348a5da65cd25d"
+    },
+    "rws/pe03.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 17905,
+      "sha256": "cb03bc405a24d17c94994ca222419867b1c14bc77222a4f5f6021506129389fd"
+    },
+    "rws/pe04.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 9748,
+      "sha256": "e13809fd9ee8ae41fbc529f5f201058061beb35f8447da2a09a330653449bfa2"
+    },
+    "rws/pe05.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 20002,
+      "sha256": "92c6f750c81c22cca24d668d389402475d85d020c23a236c561ac5db8ea23130"
+    },
+    "rws/pe06.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 13928,
+      "sha256": "a58f68bfaf500a8b554d6a7b8c17232976bb6c358d468b2162660f06a042f182"
+    },
+    "rws/pe07.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 15014,
+      "sha256": "a03d615a3b13d11f14104c2184ee45241218f130fa7b9871f713fa8f3f064e1e"
+    },
+    "rws/pe08.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 12727,
+      "sha256": "9899aea45efc739f0626b4c312905cb829baaead0e393828a7fa65bb7b494c0f"
+    },
+    "rws/pe09.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 16712,
+      "sha256": "32871ac6a005bb6fae2b57a24d701cef1f89cc0729b34efb45cd718534416281"
+    },
+    "rws/pe10.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 19166,
+      "sha256": "a162af2948350c105ea1b2c319ff8d4b62180729921fc7473feaf687aeda210b"
+    },
+    "rws/peac.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 13176,
+      "sha256": "1219a2afb16192366f828113aba0934128f5fcb48015b8fab009fbdbddf8cd12"
+    },
+    "rws/peki.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 17661,
+      "sha256": "5005873d20fa91c51cd6b24c7b387022e4d5cca2797db02b82fef5691b69f39f"
+    },
+    "rws/pekn.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 12973,
+      "sha256": "846674ecbeecb4d2e2cfba2f0eddbb19780cb5400e2be8b337f23a8735de957d"
+    },
+    "rws/pepa.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 12612,
+      "sha256": "6caae583e767c205e2278502d802b4c31e68efa9556d1973062cdcc67fae24d1"
+    },
+    "rws/pequ.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 19321,
+      "sha256": "83690b83d39ed76a056501047f477b586e534d68a83520b657560cbd9ff450f6"
+    },
+    "rws/sw02.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 11347,
+      "sha256": "0d94481f793abd7044eaeee62131c0221abc2dd6eeb59a9e5f7f7b546aa83cd2"
+    },
+    "rws/sw03.jpg": {
+      "width": 169,
+      "height": 300,
+      "bytes": 11415,
+      "sha256": "7d17316af0d9edd373b0c686259ca639736c865ca2ec1e85f98be3398cfebf63"
+    },
+    "rws/sw04.jpg": {
+      "width": 169,
+      "height": 300,
+      "bytes": 13157,
+      "sha256": "56cd13fd03e87bf2b46ebe7a6b7a5c628cef2da0270061b4c046856212608343"
+    },
+    "rws/sw05.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 14920,
+      "sha256": "b52969e3ba38c8c1e3093ff2d8ed205c262c423141e5c0eca6329e51a937325d"
+    },
+    "rws/sw06.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 13410,
+      "sha256": "1f184c2eb654978e76db90699ae7e531d72efba22f2d75d8189875450354224d"
+    },
+    "rws/sw07.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 13554,
+      "sha256": "262e3061f4ba666337d1c8b761945b4aacee19e93e0f7cac81b844d44bb5c6bb"
+    },
+    "rws/sw08.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 13880,
+      "sha256": "8f9401a7fdc48f56c74173b3d890ec58dac07b85b8bfca18fc3de51e9d092a0e"
+    },
+    "rws/sw09.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 14302,
+      "sha256": "3556ea461529fcc87ae7fce10d6a463d426ad7004c5dbbdb222ce89638768d54"
+    },
+    "rws/sw10.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 13180,
+      "sha256": "bf7fcb5172c9bf2789cbe65f0fe81eb89f81a13dfd30435e6baf0b4417cc7e38"
+    },
+    "rws/swac.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 12333,
+      "sha256": "4ae80bc48bf0f008e8d0f21ab48129e9a25a735a0b0feb45e7c4590d37fee70e"
+    },
+    "rws/swki.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 15477,
+      "sha256": "6b5be5de9a1bf5210c11080ca3e98eb66b5d331eb4b3bb3d21ffd6d9261c86d0"
+    },
+    "rws/swkn.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 16556,
+      "sha256": "2ae6aca213f8be99c1a367bcec2e4593328fa9a9da8bf1d8b45866815ea22614"
+    },
+    "rws/swpa.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 14708,
+      "sha256": "32eba4684158b74e387ea4eeb8b8a626b2bf1f73944eff7f87ba441edc79c300"
+    },
+    "rws/swqu.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14348,
+      "sha256": "78b05c86a59a9f12973185d1f872ca96f08b340173d107c6e68ffbef44ccac47"
+    },
+    "rws/wa02.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 12855,
+      "sha256": "50e34b5dae8e471ed18da5f62ccaeff71de55cb119e6bc72a0f7838b6a2e5779"
+    },
+    "rws/wa03.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 13165,
+      "sha256": "518927d5043ac73ab5b320b86c4dbb5586ae16e2d0bf79304c85713b6b415bce"
+    },
+    "rws/wa04.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 14279,
+      "sha256": "0ed91ee30fad3777e33da4e2db5085a28a50d2317e3f15d7a940aac804ce0ad7"
+    },
+    "rws/wa05.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 14774,
+      "sha256": "129099e2b0de2a3e4a2744c2bad671aae33ef2a82298c5fc0d532f144941d495"
+    },
+    "rws/wa06.jpg": {
+      "width": 173,
+      "height": 300,
+      "bytes": 15024,
+      "sha256": "11f28e6e4564815606702f10b81c999c06f1a94222324646db86ab200a251e51"
+    },
+    "rws/wa07.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 12918,
+      "sha256": "3feff72cf6a455c1f45d497435f79daa8cf604ff70cb7d52fea23eb4e48b4eed"
+    },
+    "rws/wa08.jpg": {
+      "width": 170,
+      "height": 300,
+      "bytes": 13156,
+      "sha256": "5fcebdbea2aebf3fd2b72bb71f78a73555b484026cbe2786895eeb6085181414"
+    },
+    "rws/wa09.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 15335,
+      "sha256": "8f9354f28a9deb88b25b70cf292ebc0746d7f984aaed76969e4c12e95df58e48"
+    },
+    "rws/wa10.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 13502,
+      "sha256": "851d4ab1b4349c169990991a3306c2c8e1acf3e9afaa39674261af0ba07f904a"
+    },
+    "rws/waac.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 12529,
+      "sha256": "bf0722525298c2efab0d5d7cd1a8a4125103c8c7a596c2f8d85a798bc9f73d8f"
+    },
+    "rws/waki.jpg": {
+      "width": 169,
+      "height": 300,
+      "bytes": 16094,
+      "sha256": "77c66bfab5c0919bad98d8820f6169738e2ea5062dde951248da98fe0c03f78e"
+    },
+    "rws/wakn.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 15639,
+      "sha256": "1951e82292f4fc5cbdfd7d5e482915b1280f672f90ea69d94472fde70072e262"
+    },
+    "rws/wapa.jpg": {
+      "width": 171,
+      "height": 300,
+      "bytes": 13489,
+      "sha256": "b50378dfa367b57ee9435f8aa3339261e7486773c7f5827fd746ebbb5d11e0f0"
+    },
+    "rws/waqu.jpg": {
+      "width": 172,
+      "height": 300,
+      "bytes": 17846,
+      "sha256": "cfbf63fedc65766415c5532b404ef55f1ba3b1a434f3604008875870072240dd"
+    },
+    "tdm/death.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13478,
+      "sha256": "482af6515dc4c27e65ee84c4305b551c6eb47c8b69296548475b6719939002b8"
+    },
+    "tdm/hanged_man.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 12104,
+      "sha256": "b250f07760d00e42cc89294c66cf22bc53194e08b1cd6eb122213ee577fe848f"
+    },
+    "tdm/high_priestess.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 11897,
+      "sha256": "73c2eb2b48a8cdd18fbcd6f77935ad56a0f3ac0a49e2f87178877a9708e3a929"
+    },
+    "tdm/judgement.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14060,
+      "sha256": "e32fee6d965e709a85b2bf66e56d87c2d9e78ccd133d45ec3f35c2234024e848"
+    },
+    "tdm/justice.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 11757,
+      "sha256": "49ddf45aa6f84996ab393e40aefa9192cba3927b97d55ad92c3d2e92a3116e39"
+    },
+    "tdm/strength.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 11885,
+      "sha256": "061e89481176a3cfb919f3f662a2f185a1b4cffa37095d9f1da5ae2eed9d8dcf"
+    },
+    "tdm/temperance.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 12371,
+      "sha256": "11b74d49ee443c900e3252162ce2e95e72a3bdd7a2b25846bfa898bb6ff08089"
+    },
+    "tdm/the_chariot.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14232,
+      "sha256": "93c46feef24dd7ff578a1849e94c5bb355ec4708df9acd0dcb91936b2b6bc21d"
+    },
+    "tdm/the_devil.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14517,
+      "sha256": "9bcc5d5c30645dba4ac97379a10ff91e19402485c128c084b533924b9badff94"
+    },
+    "tdm/the_emperor.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13734,
+      "sha256": "4c9afc273b287952e771b00efac086c32eb6b9edad6db9cff5a6cd0c80d8624e"
+    },
+    "tdm/the_empress.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 11503,
+      "sha256": "3e23bbc968fb2cb6b4f3da1045356d30e35ec801cc6d8987d70723ff4407adaf"
+    },
+    "tdm/the_fool.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 12935,
+      "sha256": "43d581bd717382aa9faec4a24d3d11b944e4416a914da2ed56ad18da9f3eb43b"
+    },
+    "tdm/the_hermit.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 11205,
+      "sha256": "058c7041dfff9dbe7f5ac9b0e46a95780441140d355b9c9ed4baff9f8f73b452"
+    },
+    "tdm/the_hierophant.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13315,
+      "sha256": "852904bd19bc8b0bcc53c6a9aa9d0b325bcc30ea9ed60b712fc27a9771e926fb"
+    },
+    "tdm/the_lovers.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13917,
+      "sha256": "6c1fcf0ff18e8b9f944ae8d9763e254ecb1990fe44ee5e787f81c4f880189f0d"
+    },
+    "tdm/the_magician.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13410,
+      "sha256": "0d6424398a64dd76e7d805d8e624debe061f8f9dd54f799c23cc0c364f2303f3"
+    },
+    "tdm/the_moon.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14730,
+      "sha256": "c99933010a4d3c7d5375fe0c4a700e6a34164f65c429678df752e5bf7e23f162"
+    },
+    "tdm/the_star.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13674,
+      "sha256": "a2171521fc7dc20019f32d1d7bdb73d1b6bc0819dceb526e7ba803dbdbfc6562"
+    },
+    "tdm/the_sun.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14021,
+      "sha256": "eb2cc6c814527c7e5bf3c29a01be75fa51042a676184c25bce9b5d39faff9215"
+    },
+    "tdm/the_tower.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14949,
+      "sha256": "e48760177e81948d7e63dfb15d4cfc3594b7ce5fd5d71a6bec2820866ce9a210"
+    },
+    "tdm/the_world.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 14314,
+      "sha256": "953ecb352da6bd02243767f506f3d1783227c6af420c7d8d846b37421f3110c7"
+    },
+    "tdm/wheel_of_fortune.jpg": {
+      "width": 168,
+      "height": 300,
+      "bytes": 13789,
+      "sha256": "38c32eb6378ac7f8b0a0b267b516bb4d7ed934d0005d29cf76270b0441d155b1"
+    },
+    "wirth/death.jpg": {
+      "width": 179,
+      "height": 300,
+      "bytes": 9202,
+      "sha256": "38eabb96eed19e85a9275d4d243d2abd44f5a52c6a0a24a071933294779dd643"
+    },
+    "wirth/hanged_man.jpg": {
+      "width": 180,
+      "height": 300,
+      "bytes": 10300,
+      "sha256": "8c8ff6e162fe28bd4e88a778eb3d876917b722a1381dab6b8d0d706a4c200a70"
+    },
+    "wirth/high_priestess.jpg": {
+      "width": 177,
+      "height": 300,
+      "bytes": 10046,
+      "sha256": "6f1ff77b8f94e0e033c47e9ffab73994dd4be55cc8aa9a3b3ebcaa48c04bea8c"
+    },
+    "wirth/judgement.jpg": {
+      "width": 177,
+      "height": 300,
+      "bytes": 10607,
+      "sha256": "f6f6e088aa9c644b540d4ce86adc7f3f3ab6d6d5825500d0d5667f84e78a3084"
+    },
+    "wirth/justice.jpg": {
+      "width": 178,
+      "height": 300,
+      "bytes": 10736,
+      "sha256": "2f83e7152c9b6c6630e1df06e85f712bee7fb7831cd5c3fa156b266b4a41db04"
+    },
+    "wirth/strength.jpg": {
+      "width": 179,
+      "height": 300,
+      "bytes": 10178,
+      "sha256": "783fbceb64b5be2e5ee535d158d1583e3177a6e33cc6d4056c7d303bd5c39b25"
+    },
+    "wirth/temperance.jpg": {
+      "width": 178,
+      "height": 300,
+      "bytes": 10312,
+      "sha256": "6e942b258c0912b198e5c1ab2dedc72e43250eb18e3f444e85e7ca626bdec3fd"
+    },
+    "wirth/the_chariot.jpg": {
+      "width": 174,
+      "height": 300,
+      "bytes": 11641,
+      "sha256": "b31c477ec6e6b0b86db232b3544f514a991770697feed6dd3445be4ae4b33957"
+    },
+    "wirth/the_devil.jpg": {
+      "width": 178,
+      "height": 300,
+      "bytes": 10968,
+      "sha256": "a6345fc6dedf6b615f85eedc93279b72f6af236c76ad44c18c24ff55c88f5e14"
+    },
+    "wirth/the_emperor.jpg": {
+      "width": 177,
+      "height": 300,
+      "bytes": 10628,
+      "sha256": "6bae48b6b784a5b19c4db48dd58788a2d9fa5d4de63ca58c7ee179d18ab55798"
+    },
+    "wirth/the_empress.jpg": {
+      "width": 177,
+      "height": 300,
+      "bytes": 10127,
+      "sha256": "31f993ae73942457101682bdbd76e607adb54a165646c07ad126a32d6dc53cfd"
+    },
+    "wirth/the_fool.jpg": {
+      "width": 177,
+      "height": 300,
+      "bytes": 11456,
+      "sha256": "3527c146d61f11029d09f2807e5adbf2cfd2a7d9f5b825fa3bddb5139c818f66"
+    },
+    "wirth/the_hermit.jpg": {
+      "width": 179,
+      "height": 300,
+      "bytes": 8695,
+      "sha256": "939889e73a9f4c14bfdbebd3147bdcad73f5b9898167ca68b1e2f76b33726de9"
+    },
+    "wirth/the_hierophant.jpg": {
+      "width": 179,
+      "height": 300,
+      "bytes": 10045,
+      "sha256": "fbd74bc90af6141de89c0acfd34933abfa50331c8d2f792026a0b6c5bc094879"
+    },
+    "wirth/the_lovers.jpg": {
+      "width": 179,
+      "height": 300,
+      "bytes": 11604,
+      "sha256": "25ff7be111d79f3a015d2bb4f562af5433c967732d340e106133a28c6cdd117f"
+    },
+    "wirth/the_magician.jpg": {
+      "width": 178,
+      "height": 300,
+      "bytes": 11017,
+      "sha256": "d4b083cd980c6a89b4bcaa0572bff5001852ef18b61fe3c37ff57be1de37889d"
+    },
+    "wirth/the_moon.jpg": {
+      "width": 178,
+      "height": 300,
+      "bytes": 11160,
+      "sha256": "98c9420a4b147024c9ac276b69cfdb883a80cedb60008e80edbcd6630db7b917"
+    },
+    "wirth/the_star.jpg": {
+      "width": 179,
+      "height": 300,
+      "bytes": 10061,
+      "sha256": "05351f040f1a806ec25ac29a389b4a81af31b419f8247f195b4e4bf1d81850ad"
+    },
+    "wirth/the_sun.jpg": {
+      "width": 177,
+      "height": 300,
+      "bytes": 10253,
+      "sha256": "db7137ff5287011c8a185a50adf8ba4e6348b39f914088a9a5e74f514769fd2f"
+    },
+    "wirth/the_tower.jpg": {
+      "width": 176,
+      "height": 300,
+      "bytes": 12400,
+      "sha256": "060199e6ecab996b631865490453f5df39720b3bc9f20be27188bf04a154c28a"
+    },
+    "wirth/the_world.jpg": {
+      "width": 180,
+      "height": 300,
+      "bytes": 10677,
+      "sha256": "737d518457416434562223c6a7b52387f5aa3831131f0455d66058853355e7da"
+    },
+    "wirth/wheel_of_fortune.jpg": {
+      "width": 178,
+      "height": 300,
+      "bytes": 11409,
+      "sha256": "5cb959f0cf238b00c01a6c5fc19877df6c6f395bf60df0f3b4f54ae1bdf3d540"
+    }
+  }
+}

@@ -13,9 +13,12 @@
 
 from __future__ import annotations
 
+import base64
 import io
+import json
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +31,56 @@ GLYPH_FONTS = {
 }
 TEXT_FAMILY = "HorosaReportText"
 TEXT_BOLD_FAMILY = "HorosaReportTextBold"
+# 装饰性符号（塔罗没有牌面图时的符号牌面 ✦ / 🐎 …）：报告字体与补字链都印不出来时整个去掉，不印方块
+OPTIONAL_GLYPH_SVG_FAMILY = "horosa-optional-glyph"
+OPTIONAL_FAMILY = "HorosaOptionalGlyph"
+
+# 塔罗牌面图：从 pin 住的上游逐字节拷进包里（scripts/sync_tarot_art.py），manifest 记尺寸与 sha。app 的 cardImageUrl 给出的
+# 相对路径（tarot-art/<牌组>/<文件>.jpg）就是这里的键；只认这个形状，别的 href 一律不读文件。
+TAROT_ART_DIR = Path(__file__).resolve().parents[1] / "data" / "tarot-art"
+_TAROT_HREF = re.compile(r"^tarot-art/(rws|tdm|wirth|egyptian)/([a-z0-9_]+\.jpg)$")
+_IMAGE_TAG = re.compile(r"<image\b[^>]*?>(?:\s*</image>)?")
+_HREF_ATTR = re.compile(r'\s(?:xlink:)?href="([^"]*)"')
+
+
+@lru_cache(maxsize=1)
+def _tarot_manifest() -> dict[str, Any]:
+    try:
+        return json.loads((TAROT_ART_DIR / "manifest.json").read_text(encoding="utf-8")).get("files") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def tarot_art_sizes() -> dict[str, list[int]]:
+    """这次安装真有的牌面图：{app 的相对路径: [宽, 高]}。缺了的不列（app 侧就画符号牌面，与 app 的 <img onError> 同一回退）。"""
+    return {f"tarot-art/{rel}": [int(meta["width"]), int(meta["height"])] for rel, meta in sorted(_tarot_manifest().items())
+            if (TAROT_ART_DIR / rel).is_file()}
+
+
+@lru_cache(maxsize=256)
+def _tarot_data_uri(href: str) -> str | None:
+    match = _TAROT_HREF.match(href)
+    if not match or f"{match.group(1)}/{match.group(2)}" not in _tarot_manifest():
+        return None
+    try:
+        data = (TAROT_ART_DIR / match.group(1) / match.group(2)).read_bytes()
+    except OSError:
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii")
+
+
+def embed_images(svg: str) -> str:
+    """把 app 图里的牌面图（href 以 tarot-art/ 开头）换成内嵌 data URI（svglib 从内存读 SVG，读不了相对路径）；别的 <image>
+    原样不动。读不到的牌面图整个去掉（app 侧只给它确认有的图，见 tarot_art_sizes；这里只兜底），绝不读包外文件。"""
+    def swap(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        href = _HREF_ATTR.search(tag)
+        if not href or not href.group(1).startswith("tarot-art/"):
+            return tag
+        uri = _tarot_data_uri(href.group(1))
+        return _HREF_ATTR.sub(f' href="{uri}"', tag, count=1) if uri else ""
+
+    return _IMAGE_TAG.sub(swap, svg) if "<image" in svg else svg
 
 # 西洋轮：取 `figures._wheels` 记下的那一层（`source`：根 / dirChart / natalChart / charts.春分…），整份交给 app 的 AstroChartCircle。
 # 不走 app 画法的：巴比伦（无宫位体系，app 用另一套 components/babylon）。合盘双圈走 drawDoubleChart（bi_wheel）。
@@ -109,6 +162,9 @@ _APP_ONLY_PAYLOADS = {
     # （出厂设置下交映 / 交叉点图层都关着，只送 meta + planets）
     "acg": lambda source: ({"acg": {key: source["acg"][key] for key in ("meta", "planets") if key in source["acg"]}}
                            if isinstance(_dig(source, ["acg", "planets"]), (dict, list)) else None),
+    # 塔罗：JS 算正文的同一个 reading（牌 id + sid / 朝向 / 牌位 / 牌组 / 口径）= app TarotMain.renderCenter 摆的那一副
+    "tarot": lambda source: ({"board_context": source["board_context"]}
+                             if isinstance(_dig(source, ["board_context", "draws"]), list) and source["board_context"]["draws"] else None),
     # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
     "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
                                if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),
@@ -167,7 +223,10 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
         elif kind == "app" and spec.get("app_kind") in _APP_ONLY_PAYLOADS:
             payload = _APP_ONLY_PAYLOADS[spec["app_kind"]](source)
             if payload is not None:
-                requests.append((index, {"kind": spec["app_kind"], "data": payload, "options": {"size": 760}}))
+                options: dict[str, Any] = {"size": 760}
+                if spec["app_kind"] == "tarot":
+                    options["art"] = tarot_art_sizes()  # 随包牌面图：app 照图的宽高比排牌，没有的牌回落符号牌面
+                requests.append((index, {"kind": spec["app_kind"], "data": payload, "options": options}))
         elif kind == "taiyi" and isinstance(source.get("pan") if isinstance(source.get("pan"), dict) else source.get("taiyi"), dict):
             # 与 figures._taiyi 同一份 pan（太乙 / 太乙择时在 pan，三式合一 / 三式择时在 taiyi）→ app 的 TaiyiBoardSvg
             pan = source["pan"] if isinstance(source.get("pan"), dict) else source["taiyi"]
@@ -299,6 +358,8 @@ def _family(value: str, bold: bool) -> str:
     for name in (part.strip().strip("'\"").lower() for part in value.split(",")):
         if name in GLYPH_FONTS:
             return GLYPH_FONTS[name][1]
+        if name == OPTIONAL_GLYPH_SVG_FAMILY:
+            return OPTIONAL_FAMILY
     return TEXT_BOLD_FAMILY if bold else TEXT_FAMILY
 
 
@@ -333,7 +394,9 @@ def normalize_svg(svg: str) -> str:
 # svglib 只肯把字族映射到 PDF 标准 14 字体（映射到别的已注册字体会静默落回 Helvetica）。于是文字字族先映射到 Courier /
 # Courier-Bold（app 从不用 Courier，规整时其余字族都已改成这两个占位名），转完再把这两个名字换成报告嵌入的 TrueType 字体。
 # 斜体（巴比伦宫名的楔文转写）svglib 映到 Oblique；报告的中文字体没有斜体，照常体画
-_TEXT_PLACEHOLDERS = {"Courier": "regular", "Courier-Bold": "bold", "Courier-Oblique": "regular", "Courier-BoldOblique": "bold"}
+# 可省的符号走 Times-Roman 占位（app 的图里没有别的字落到 Times）：印得出来换成报告字体 / 补字字体，印不出来就去掉。
+_TEXT_PLACEHOLDERS = {"Courier": "regular", "Courier-Bold": "bold", "Courier-Oblique": "regular", "Courier-BoldOblique": "bold",
+                      "Times-Roman": "optional"}
 
 
 def _register_fonts() -> None:
@@ -346,6 +409,7 @@ def _register_fonts() -> None:
     font_map.register_font(TEXT_BOLD_FAMILY, rlgFontName="Courier-Bold")
     font_map.register_font(TEXT_FAMILY, style="italic", rlgFontName="Courier-Oblique")
     font_map.register_font(TEXT_BOLD_FAMILY, style="italic", rlgFontName="Courier-BoldOblique")
+    font_map.register_font(OPTIONAL_FAMILY, rlgFontName="Times-Roman")
 
 
 _SYMBOL_CHAIN: list[tuple[str, str, int, frozenset[int]]] | None = None
@@ -388,7 +452,7 @@ def _swap_text_fonts(node: Any, text_font: str, bold_font: str) -> None:
     chain = _symbol_chain()
 
     def walk(current: Any) -> None:
-        for child in getattr(current, "contents", []) or []:
+        for child in list(getattr(current, "contents", []) or []):
             if not isinstance(child, String):
                 walk(child)
                 continue
@@ -400,10 +464,11 @@ def _swap_text_fonts(node: Any, text_font: str, bold_font: str) -> None:
             missing = {ord(ch) for ch in child.text if not ch.isspace()} - charset if charset is not None else set()
             if missing:
                 need = {ord(ch) for ch in child.text if not ch.isspace()}
-                for name, _path, _index, glyphs in chain:
-                    if need <= glyphs:
-                        child.fontName = name
-                        break
+                font = next((name for name, _path, _index, glyphs in chain if need <= glyphs), None)
+                if font:
+                    child.fontName = font
+                elif role == "optional":
+                    current.contents.remove(child)  # 装饰符号：哪款字体都印不出来就不印（不出方块，PNG 也不因它拒绝出图）
 
     walk(node)
 
@@ -414,7 +479,7 @@ def svg_drawing(svg: str, width: float, *, text_font: str, bold_font: str, probl
         from svglib.svglib import svg2rlg
 
         _register_fonts()
-        drawing = svg2rlg(io.BytesIO(normalize_svg(svg).encode("utf-8")))
+        drawing = svg2rlg(io.BytesIO(embed_images(normalize_svg(svg)).encode("utf-8")))
     except Exception as exc:  # noqa: BLE001 — 任何解析失败都退回原画法；原因交给调用方写进 renderer_note
         if problems is not None:
             problems.append(f"{type(exc).__name__}: {exc}")

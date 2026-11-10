@@ -64,6 +64,10 @@ include = [
   "src/horosa_skill/data/*.json",
   # 星阙 app 的星体符号字体（ywastro = ywastrochart 同一文件；morinus）：报告盘图用 app 原版代码画，符号要嵌进 PDF。
   "src/horosa_skill/data/fonts/*.ttf",
+  # 塔罗牌面图（上游 public/tarot-art 逐字节拷贝，144 张 ≈1.9 MB；来源 / 授权上游未记录，见 contracts/third_party_facts.json
+  # tarot-art.provenance；维护者 2026-11-09 定随包分发）：报告牌阵图照 app 显示真实牌面。scripts/sync_tarot_art.py 同步。
+  "src/horosa_skill/data/tarot-art/manifest.json",
+  "src/horosa_skill/data/tarot-art/*/*.jpg",
   # v0.41.0：`setup` 装进客户端 skills 目录的 skill 副本（scripts/gen_agent_mirrors.py 生成；verify_wheel_contents.py 守）。
   "src/horosa_skill/agent_skill/**/*.md",
 ]

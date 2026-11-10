@@ -505,7 +505,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
                 # 矢量图转位图嵌进 Word（Pillow 画，不依赖 renderPM）；拿不到字体文件就跳过图、留文字说明。
                 from horosa_skill.reports.app_charts import glyph_font_files
 
-                png = figure_kit.drawing_to_png(drawing, {**image_fonts["files"], **glyph_font_files()})
+                png = figure_kit.drawing_to_png(drawing, {**image_fonts["files"], **glyph_font_files()}, photo_jpeg=True)
                 if png is None:
                     continue
                 import io

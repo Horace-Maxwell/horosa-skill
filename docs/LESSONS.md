@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.49.0-dev (2026-11-09) | app 发牌动画（`animation … both`）在浏览器里盖掉了几何牌位的内联 `translate(-50%,-50%) rotate(90deg)`：牌按左上角落位、凯尔特交叉牌不横置、整张盖住第一张（上游 bug）；塔罗牌面扫描件来源 / 授权上游从未记录；补字链印不出的 emoji 符号会让 PNG 整张拒绝 | 牌阵图照内联几何画（= 减少动态效果下的 app），上游只报；144 张逐字节随包 + manifest + 第三方事实如实写「来源未记录、维护者准许」；`horosa-optional-glyph` 印不出就去掉；守卫 tests/test_tarot_figures.py 九条，负向对照十条全红 |
 | v0.49.0-dev (2026-11-09) | app 盘图让 pytest 慢了三成（≈480 → 610–680 s），Windows x64 lane 本来就在 93%：每次出图的 Node 进程算完还空等约 2.5 s，app 原版代码加载时留着轮询的 setTimeout | `render-charts` 等 stdout 写完再 `process.exit(0)`；直接 exit 会截断在 65 511 字节（管道缓冲）；守卫两条，负向对照各自红 |
 | v0.49.0-dev (2026-11-09) | 报告盘图改用星阙 app 原版绘图代码（esbuild 打包 → linkedom 出 SVG → svglib 转矢量）：svglib 把非标准字体静默换成 Helvetica、`fill="transparent"` 画成黑块；app 紫微中宫把「121e28」当科学计数法印成 1°7′4″E（上游 bug，只报）；打包产物曾带进机器临时路径 | 字体走 Courier 占位再换回嵌入字体；SVG 先规整；adapter 只做无损记法换算；构建目录 realpath + 固定名 symlink，跨检出逐字节同一；`verify_app_charts_bundle.py` 进 preflight |
 | v0.48.1-dev (2026-11-09) | v0.48.0 Windows 原生复验：CLI `profile save` 只给地名不补坐标（门面补、CLI 绕过，之后起盘缺 zone / lat / lon 被拒）；`report.no_chart_content` 的恢复提示让八字 PNG 用户「去对八字出」；每份 PDF 重新解析 TrueType（Windows 大字体，110 份 728 次 106 秒），AGENTS 记的「TTFont 带每份文档状态、须每次新建」不成立 | CLI 走 `ToolsAPI.profile`；提示写明 PNG 只画有盘式的技法、改出 PDF / DOCX；`_TTF_CACHE` 按注册名 + mtime / 大小缓存（同一测试 133 → 88 秒，48 份渲染逐字节相同）|
@@ -194,6 +195,18 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.49.0-dev / 2026-11-09 — 塔罗牌阵图带真实牌面：浏览器里 app 自己的发牌动画把牌位冲掉了
+
+- **做了什么**：报告的塔罗图跑 app 的 `TarotMain.renderCenter`（SSR → 读 DOM → 照 `12-india-tarot-geomancy.less` 与 `22-tail-fixes.less` 排成 SVG），牌面用上游 `public/tarot-art` 的 144 张图（RWS 78 + 马赛 / 维尔特 / 埃及各 22 大牌），按 app 的 `cardImageUrl` 取图。core-js `tarot.js` 把产出正文的同一个 reading 放进 `board_context`（牌只记 id + sid），app 侧按牌组表取回牌对象，sid 对不上就不出图。
+- **对照方法**：把同一份 reading 用 app 代码 SSR 成 HTML、套 app 的样式表在浏览器里量每张牌的框。量出来与 SVG 相差 ≤ 1 px（凯尔特十字、三张、马蹄铁、生命树、雷诺曼、31 张月历大阵、开钥五操作、十二宫 + 指示牌）。第一次量开钥差 41 px：迷你牌名按两行估了，实际一行；改成按实际折行算。参考页没有 antd 的全局样式（line-height 1.5715、border-box），要手动补上，否则每张牌矮 7 px，会误以为 adapter 错了。
+- **上游 bug（只报）**：`.horosa-tarot-geo-slot { animation: horosa-tarot-deal … both }` 的终帧 `transform: translateY(0) scale(1)` 按 CSS 层叠盖过内联的 `translate(-50%,-50%) rotate(90deg)`（动画优先于内联样式）。在 Chrome 里实测，计算出的 transform 是单位矩阵：牌以左上角而不是中心落在牌位上，凯尔特第 2 张不横置、整张盖住第 1 张。只有开了「减少动态效果」的系统才看得到设计的几何。报告图照内联几何画：画成 bug 的样子会把一张抽到的牌完全挡住。
+- **晚加载的样式表会赢**：`22-tail-fixes.less` 的 `.horosa-workspace-shell .horosa-tarot-card-name { font-size: max(15px, …) }` 和 geo-slot 的 12 px 同为两个类，后加载的赢。所以几何牌阵里牌名其实是 15 px、牌最小高 152 px。只读 12 号样式表会照错尺寸。
+- **牌面图来源**：上游没有 README、没有署名文件，提交信息也没写扫描件从哪来。只有 `cardArt.js` 一行注释说这些牌组「公有领域」，而且说的是历史设计，不是这批扫描件。第三方事实账本如实写「来源未记录」和「维护者 2026-11-09 准许分发」，不写成已核实的公有领域。图逐字节拷贝：它们本就是约 q75 的 300 px JPEG，按 q75 重压反而大 1%，optimize 只省 0.2%。保留逐字节，preflight 才能拿 sha 与 pin 对。
+- **符号牌面的方块字**：没有图的牌组（托特、雷诺曼…）用 app 的符号牌面，雷诺曼的符号是 emoji（🐎 👤），补字链（Apple Symbols / Segoe UI Symbol / DejaVu）都没有，PNG 会因缺字整张拒绝。符号改走 `horosa-optional-glyph`：哪款字体都印不出来就去掉这个字，牌名照印。正文文字从不这样处理。
+- **体积**：wheel 2 420 667 → 4 416 999 字节；bundle 3.71 → 4.14 MB（单牌详情抽屉桩掉，省 0.21 MB；其余 30 种盘输出逐字节不变），上限放到 4.5 MB。DOCX 的牌阵位图存 PNG，31 张大阵 2.0 MB，改存 JPEG（q88）约 0.6 MB。PDF 里的牌面图是原 JPEG 直通（DCT，不重编码）。
+- **守卫**：`tests/test_tarot_figures.py` 九条 + `test_app_charts` 参数化与体积两处；每条负向对照都改一处守卫，十条都红（不旋转逆位牌面、缺图仍出 `<image>`、不核 sid、换种子取 board_context、不内嵌、`<image>` 白名单放宽、位图不画、DOCX 不出 JPEG、不去可省符号、改一字节图）。`verify_wheel_contents.py` 按 manifest 逐张查 wheel。只删 pyproject 的 include 行它不会红：hatch 按 packages 本来就收进包。删一张图会红。
+- **法则**：对照 app 的样子前先确认参考页里的 CSS 就是 app 里生效的那套（全局 antd、加载顺序、动画）。第三方素材只写查得到的事实，查不到的写「未记录」。
 
 ### v0.49.0-dev / 2026-11-09 — 出一张图白等 2.5 秒：app 代码留下的定时器拖住了 Node 退出
 

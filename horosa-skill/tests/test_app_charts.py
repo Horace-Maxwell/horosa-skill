@@ -197,6 +197,7 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("tongshefa", "tongshefa", "互潜"),
         ("acg", "acg", "acg-lines"),
         ("sanshiunited", "sanshi", "旬空"),
+        ("tarot", "tarot", "凯尔特十字"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -344,10 +345,12 @@ def test_page_scoped_tokens_use_the_pages_light_values() -> None:
 def test_bundle_stays_free_of_page_ui() -> None:
     """飞宫页模块经时空面板把地图与城市库（citiesFull.json 等 ~4 MB）拖进 bundle（实测 5.2 MB）；APP_UI_ONLY 把这些纯页面 UI
     桩掉后 1.5 MB、输出逐字节不变。新接一种盘时若又拖进页面 UI，这里先红。上限随正当的盘面代码（地占 / 灵棋 / 轨策…）
-    放宽到 4 MB；地图 / 城市库的逐项检查不变。"""
+    放宽到 4 MB；塔罗牌阵（renderCenter 要牌组表、牌名与牌义：+0.43 MB，单牌详情抽屉已桩掉）放宽到 4.5 MB。
+    地图 / 城市库 / 塔罗详情抽屉的逐项检查不变。"""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert manifest["bundle_bytes"] < 4_000_000, manifest["bundle_bytes"]
+    assert manifest["bundle_bytes"] < 4_500_000, manifest["bundle_bytes"]
     assert not any(path.startswith(("components/amap/", "data/cit")) for path in manifest["app_files"])
+    assert "components/tarot/CardDetailDrawer.js" not in manifest["app_files"], "the per-card drawer (≈140 KB of meanings) is page UI"
 
 
 def test_dominant_baseline_becomes_dy() -> None:
