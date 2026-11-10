@@ -540,8 +540,11 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     "report.no_chart_content": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "这个工具没有盘面，排不出完整排盘报告。直接读它的结果；要报告就对起盘类技法（八字、星盘、奇门…）出。",
-            "This tool has no chart, so there is no complete chart report. Read its result directly, or report on a charting technique.",
+            "这个结果没有可排的盘面或盘图：解析 / 清单 / 知识类工具没有盘面；PNG 只画有盘式的技法（八字等没有盘图）。"
+            "直接读它的结果；要报告就改出 PDF / DOCX，或对起盘类技法出。",
+            "This result has no chart or chart figure to lay out: parse / registry / knowledge tools have no chart, and PNG only "
+            "draws techniques with a chart layout (BaZi has none). Read the result directly, render PDF / DOCX instead, or "
+            "report on a charting technique.",
         ),
         "next_action": "read_tool_result_or_pick_charting_technique",
     },

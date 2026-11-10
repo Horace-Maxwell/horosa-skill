@@ -17,6 +17,7 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.49.0-dev (2026-11-09) | 报告盘图改用星阙 app 原版绘图代码（esbuild 打包 → linkedom 出 SVG → svglib 转矢量）：svglib 把非标准字体静默换成 Helvetica、`fill="transparent"` 画成黑块；app 紫微中宫把「121e28」当科学计数法印成 1°7′4″E（上游 bug，只报）；打包产物曾带进机器临时路径 | 字体走 Courier 占位再换回嵌入字体；SVG 先规整；adapter 只做无损记法换算；构建目录 realpath + 固定名 symlink，跨检出逐字节同一；`verify_app_charts_bundle.py` 进 preflight |
+| v0.48.1-dev (2026-11-09) | v0.48.0 Windows 原生复验：CLI `profile save` 只给地名不补坐标（门面补、CLI 绕过，之后起盘缺 zone / lat / lon 被拒）；`report.no_chart_content` 的恢复提示让八字 PNG 用户「去对八字出」；每份 PDF 重新解析 TrueType（Windows 大字体，110 份 728 次 106 秒），AGENTS 记的「TTFont 带每份文档状态、须每次新建」不成立 | CLI 走 `ToolsAPI.profile`；提示写明 PNG 只画有盘式的技法、改出 PDF / DOCX；`_TTF_CACHE` 按注册名 + mtime / 大小缓存（同一测试 133 → 88 秒，48 份渲染逐字节相同）|
 | v0.48.0 (2026-11-08) | 发版矩阵：windows-11-arm 的 pytest 在 3600 s 处零失败被杀（进度 86%）；v0.47.x 两次已占 96–97% 却没人看 lane 报告 | 仿真 lane 加时 900 → 2700 s、job 90 → 120 分钟；lane 超 85% 打 `::warning::` 注解并写进报告；pytest.log 带 `--durations=25` |
 | v0.48.0-dev (2026-11-08) | 四路并行功能批（地名检索 / 命主档案 / 盘图与日历 / 工具面瘦身）：坐标串分钟四舍五入与上游向下取整差 1′、本机 zoneinfo 缺上游 2026 规则覆盖、`Any | None` 广告成 `type:"null"`、错误码表重复键静默覆盖、MCP 预校验把缺省值写成显式值盖掉档案、全局替换 time.sleep 让测试偶发红、合并时两个并列块的相同结尾被当成共同后缀 | 期望值一律取自上游 / 引擎；与上游逐值对拍；断言只写被测的那块；合并后逐块复核；门禁跑着时不动工作区 |
 | v0.47.4-dev (2026-11-07) | windows-smoke 偶发红：`start` 刚报两个服务都可达，紧接着 doctor 探到 chart 不通，`setup` 判 ok:false，同轮真实排盘冒烟全过；上一轮只重跑未定论 | doctor 只在「一边通一边不通」时短暂复探（3 次 × 0.5 秒），全通 / 全不通一次定论；三条负向对照。推上去后测试在 Linux / Windows CI 红：断言了带平台布局的整体 `ok`，改为只断言 `services:*` |
@@ -306,6 +307,34 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
 
 另：本机 `Horosa-Public` 已在 pin 之后（`4c1a82ca` vs pin `10fb75de`），打包一律用 pin 住的公开克隆，否则 `--check` 必红。
 本地 runtime 没带 bundle（老 payload）时自动退回自绘图，规格写 `renderer: builtin` + 原因，不静默。
+
+### v0.48.1-dev / 2026-11-09 — v0.48.0 Windows 原生复验：CLI 档案不解析地名、PNG 拒绝提示自相矛盾、每份 PDF 重新解析字体
+
+- **现象**：
+  1. 端到端（公开 v0.48.0 runtime、28899 / 29999）：`profile save 妈妈 --input`（只给 `place: 上海`）成功，存下的 payload 却只有
+     date / time / gender；随后 `tool run chart` 带 `profile: 妈` → `tool.invalid_payload`（缺 zone / lat / lon）。发布说明写的是
+     「存档案时只给地名，会自动补坐标和时区」。
+  2. 八字 `format: png` 被拒（八字没有盘式，设计如此），但 `agent_recovery.prompt_to_user` 是「这个工具没有盘面……要报告就对起盘类
+     技法（八字、星盘、奇门…）出」——对八字自相矛盾。
+  3. live lane 里 `test_all_callable_techniques_can_generate_human_readable_pdf_and_docx` 196 s（9 月 `--durations` 记的是 54 s）。
+- **根因**：
+  1. 地名补全写在 `ToolsAPI.profile`（b95a3db），docstring 说「CLI `profile` 走同一个函数」，CLI 实际直接调 `profiles.run_action`。
+     `test_profile_place.py` 只测服务层，CLI 这条路没人走过。
+  2. 一个码两个拒绝点（无盘面工具的 chart 报告、无盘式的 PNG），恢复表的提示只照前一种写；PNG 拒绝点自己的报错文字是对的。
+  3. CPU profile：`_load_ttf` 1388 次、`TTFont.__init__` 728 次，共 106 s / 232 s。每份 PDF 都新建常规体、粗体与补字字体（Windows 上
+     是十几 MB 的雅黑 / 宋体 ExtB，一款约 0.15 s）。v0.47.2 只缓存了 .ttc 的字面名表，AGENTS 写「`TTFont` 对象每次新建（带每份文档
+     的子集状态）」——查 reportlab 源码：子集状态是对象里的 `WeakKeyDictionary`（键是文档）；`registerFont` 对同名只认第一次，
+     同一字形面换了注册名也映射回最早的对象，新建的对象从没被用来画字，纯属白费。mac 上字体小，这笔账不显眼。
+- **修**：CLI `profile` 改走 `_service().profile(body)`；恢复表提示写明 PNG 只画有盘式的技法（八字等没有盘图）、改出 PDF / DOCX；
+  `_TTF_CACHE` 按（类, 注册名, mtime, 大小）缓存解析好的 TTFont。
+- **核对**：真 runtime 重跑复现：只给「上海」存档 → 31n13 / 121e28 / +08:00（1965 年无夏令时），起盘 ok。字体缓存：同一测试同机 A/B
+  133 → 88 s；`reportlab.rl_config.invariant = 1` 下 6 技法 × 简繁 × PDF / DOCX × 首次 / 复用共 48 份，有无缓存逐字节相同。
+- **守卫**：`test_cli_profile_save_resolves_the_place_like_the_facade`；`test_png_refuses_a_run_without_a_figure_and_writes_nothing`
+  加断言提示；`test_a_font_file_is_parsed_once_per_process`；`test_one_font_object_keeps_subset_state_per_document`。负向对照：
+  CLI 改回 run_action → 红；提示改回 → 红；去掉缓存查找 → 红。
+- **顺带踩的**：第一版「reportlab 只认第一次注册」的测试真往全局注册表注册了 Vera，后面用例里同字形面的字体被映射成这个探针对象
+  （缺 `horosa_source`），9 条红。测试别往 reportlab 全局注册表里放字体。
+- **规则**：「X 走同一个函数」这类注释要配一条从那个表面进来的测试；写进 AGENTS 的设计理由（「必须每次新建」）先对着库源码核一遍。
 
 ### v0.48.0 / 2026-11-08 — 发版矩阵：windows-11-arm 的 pytest 又撞天花板（3600 s，零失败），这次是两个版本没人看余量
 

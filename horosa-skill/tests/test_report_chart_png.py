@@ -23,7 +23,7 @@ from fakes import FakeClient, FakeJsClient
 from PIL import Image
 
 from horosa_skill.config import Settings
-from horosa_skill.errors import ToolValidationError, classify_code, recovery_for
+from horosa_skill.errors import RECOVERY_TABLE, ToolValidationError, classify_code, recovery_for
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.reports import chart_png, renderers
 from horosa_skill.reports.figures import extract_figures, grid_position
@@ -112,6 +112,9 @@ def test_png_refuses_a_run_without_a_figure_and_writes_nothing(tmp_path: Path, g
         service.report_render({"run_id": run_id, "format": "png"})
     assert refused.value.code == "report.no_chart_content" and refused.value.details["format"] == "png"
     assert not list((tmp_path / "runs").rglob("*.png"))
+    # 同一个码的 prompt_to_user 此前只讲「这个工具没有盘面，对八字等起盘类技法出」——八字 PNG 被拒时自相矛盾。
+    prompt = RECOVERY_TABLE["report.no_chart_content"]["prompt_to_user"]
+    assert "PNG" in prompt and "PDF" in prompt
 
 
 def test_png_refuses_without_a_cjk_truetype_font(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
