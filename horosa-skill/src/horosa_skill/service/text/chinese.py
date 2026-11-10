@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 import re
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from horosa_skill.engine import astro_snapshot as _astro_snap
@@ -107,8 +107,9 @@ def _build_guolao_limit_lines(chart: dict[str, Any], payload: dict[str, Any]) ->
     ]
 
 
-def _moira_transit_moment(payload: dict[str, Any]) -> tuple[str, str]:
-    """流年盘时刻：显式 moiraTransitDate/Time，缺省 = 当前日期（按出生时区）正午。"""
+def _moira_transit_moment(payload: dict[str, Any], now: datetime | None = None) -> tuple[str, str]:
+    """流年盘时刻：显式 moiraTransitDate/Time，缺省 = 当前日期（按出生时区）正午。`now`（带时区）= 按那一刻算「当前」
+    （报告补算 Moira 盘时钉回原结果起盘的那一刻，流年与正文同一年同一天）。"""
     date = f"{payload.get('moiraTransitDate') or ''}".strip().replace("/", "-")
     time_text = f"{payload.get('moiraTransitTime') or ''}".strip() or "12:00:00"
     if date:
@@ -121,8 +122,8 @@ def _moira_transit_moment(payload: dict[str, Any]) -> tuple[str, str]:
         offset = sign * timedelta(hours=int(m.group(2)), minutes=int(m.group(3) or 0))
     elif re.fullmatch(r"-?\d{1,2}(\.\d+)?", zone):
         offset = timedelta(hours=float(zone))
-    now = _clock.now(timezone.utc) + offset
-    return now.strftime("%Y-%m-%d"), time_text
+    moment = (now.astimezone(timezone.utc) if now is not None else _clock.now(timezone.utc)) + offset
+    return moment.strftime("%Y-%m-%d"), time_text
 
 
 def _swap_guolao_node_ids_deep(value: Any) -> Any:

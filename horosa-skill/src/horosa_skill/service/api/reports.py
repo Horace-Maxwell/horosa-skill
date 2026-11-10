@@ -416,7 +416,9 @@ class ReportsAPI:
                     ),
                 )
                 # 盘图换成星阙 app 原版画法（reports/app_charts.py）；在转文字之前配，app 图里的字跟正文一起转。
-                document["figures"] = self._attach_app_figures(document.get("figures") or [], run, source_artifact)
+                document["figures"], figure_gaps = self._report_figures(document.get("figures") or [], run, source_artifact)
+                if figure_gaps:
+                    document["figure_gaps"] = figure_gaps
                 # 报告是给人读的整份文本：存档里仍是简体原文，只有落盘的这一份按设置转文字。
                 document = localize_document(document, script)
                 rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
@@ -455,7 +457,8 @@ class ReportsAPI:
                 "source": document["source"],
                 "answer_writeback": answer_writeback,
                 **_render_outcome_fields(rendered),
-                "summary": [f"已生成 {rendered['format'].upper()} 结构化报告：{artifact['artifact_path']}", *_render_outcome_notes(rendered)],
+                "summary": [f"已生成 {rendered['format'].upper()} 结构化报告：{artifact['artifact_path']}", *_render_outcome_notes(rendered),
+                            *document.get("figure_gaps", [])],
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -692,14 +695,60 @@ class ReportsAPI:
             "group_id": trace["group_id"],
         }
 
-    def _attach_app_figures(self, figures: list[dict[str, Any]], run: dict[str, Any], source_artifact: dict[str, Any]) -> list[dict[str, Any]]:
-        """能用星阙 app 原版画法的盘图配上 app 的 SVG（一次 Node 调用）；配不上的照旧画，规格里写 renderer 与原因。"""
-        if not figures:
-            return figures
+    def _report_figures(
+        self, figures: list[dict[str, Any]], run: dict[str, Any], source_artifact: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """出报告用的盘图：①结果里没有、app 却画着的那张盘，此刻经真引擎补算（reports/aux_charts.py）；②能用星阙 app 原版
+        画法的配上 app 的 SVG（一次 Node 调用），配不上的照旧画，规格里写 renderer 与原因。返回（盘图, 说明）：说明 = 补算或
+        出图没成的那张缺了什么、为什么，印在盘图节下。"""
+        from horosa_skill.reports import aux_charts
         from horosa_skill.reports.app_charts import attach_app_svgs
 
         chart = self.report_builder.chart_source(run=run, source_artifact=source_artifact)
-        return attach_app_svgs(figures, str(chart["tool_name"]), chart["data"], self.js_client)
+        tool_name, data = str(chart["tool_name"]), chart["data"]
+        notes: list[str] = []
+        if aux_charts.wanted(tool_name, data):
+            spec, note = self._aux_figure(tool_name, data, chart["input_normalized"])
+            if spec is not None:
+                figures = aux_charts.merge(tool_name, figures, spec)
+            if note:
+                notes.append(note)
+        if not figures:
+            return figures, notes
+        figures, settle_notes = aux_charts.settle(attach_app_svgs(figures, tool_name, data, self.js_client))
+        return figures, notes + settle_notes
+
+    def _aux_figure(self, tool_name: str, data: dict[str, Any], payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+        """补算一张盘图（不存档：runner 走 run_tool(save_result=False) 或直接打端点）。不会因此启动 runtime——引擎没在跑
+        就照原样出报告并说明。任何失败都只换来一句说明，报告照出。"""
+        from horosa_skill.reports import app_charts, aux_charts
+
+        kind = aux_charts.engine(tool_name)
+        if kind == "qizheng_moira" and not app_charts.enabled():
+            return None, aux_charts.failure_note(tool_name, "星阙 app 画法已关闭（HOROSA_APP_CHARTS=0），这张盘没有自绘版")
+        if not self._aux_engine_running(kind):
+            return None, aux_charts.failure_note(tool_name, "排盘引擎没有在运行；出报告不会去启动它，引擎起来后重出报告即可")
+        try:
+            return aux_charts.build(tool_name, self._aux_engine_charts(tool_name, kind, data, payload)), None
+        except Exception as exc:  # noqa: BLE001 — 补算是旁路：说清缺了哪张、为什么，报告照出
+            return None, aux_charts.failure_note(tool_name, f"{type(exc).__name__}: {exc}")
+
+    def _aux_engine_running(self, kind: str) -> bool:
+        """补算只用已经在跑的引擎（_call_remote 探不到会去启动 runtime，出报告不该有这个副作用）。七政 Moira 规则在 Java 侧。"""
+        if not self.chart_client.probe("/healthz"):
+            return False
+        return kind != "qizheng_moira" or self.client.probe("/common/time")
+
+    def _aux_engine_charts(self, tool_name: str, kind: str, data: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+        if kind == "directed":
+            return self._aux_directed_figure_charts(payload, tool_name, data)
+        if kind == "progression":
+            return self._aux_progression_charts(payload, tool_name, data)
+        if kind == "tianxing":
+            return self._aux_tianxing_moment_chart(payload, data)
+        if kind == "syzygy":
+            return self._aux_prenatal_syzygy_chart(payload, data)
+        return self._aux_qizhengzeri_moira(payload, data)
 
     def _numbered_paths(self, output_path: Path, count: int) -> list[Path]:
         """一张图一个文件：多张时在文件名后加 _1、_2…（同一目录，仍在已校验的输出根之内）。"""
@@ -710,8 +759,9 @@ class ReportsAPI:
     def _png_outputs(
         self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], chart: dict[str, Any], script: str, default: Path
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        figures = self._attach_app_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
+        figures, figure_gaps = self._report_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
         figures = localize_document(figures, script)
+        figure_gaps = localize_document(figure_gaps, script)
         try:
             images = render_figure_pngs(figures, script=script, t=_labeler(script)) if figures else []
         except PngFontUnavailable:
@@ -725,7 +775,7 @@ class ReportsAPI:
                     "text and the data disagree so the figure is skipped). Read the tool result directly, or render a PDF chart report.",
                 ),
                 code="report.no_chart_content",
-                details={"tool_name": chart["tool_name"], "format": "png"},
+                details={"tool_name": chart["tool_name"], "format": "png", **({"figure_gaps": figure_gaps} if figure_gaps else {})},
             )
         try:
             if images is None:  # 第一次因缺字体失败：重来一次，让下面按字体问题给出可操作的报错
@@ -749,7 +799,8 @@ class ReportsAPI:
         figure_list = [{"title": image["title"], "kind": image["kind"], "width": image["width"], "height": image["height"],
                         "path": rendered["path"]} for image, rendered in zip(images, outputs)]
         return outputs, {"title": f"{chart['label']} · 盘图", "figures": figure_list,
-                         "headline": f"已生成 PNG 盘图 {len(outputs)} 张：{'、'.join(r['path'] for r in outputs)}"}
+                         "headline": f"已生成 PNG 盘图 {len(outputs)} 张：{'、'.join(r['path'] for r in outputs)}",
+                         **({"warnings": figure_gaps} if figure_gaps else {})}
 
     def _ics_outputs(
         self, request: Any, run: dict[str, Any], chart: dict[str, Any], script: str, default: Path

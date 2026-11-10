@@ -88,6 +88,28 @@ def _progress_tick(done: int, total: int, label: str) -> None:
         logger.debug("progress tick failed", exc_info=True)
 
 
+# ---- 出报告时补算盘图的旁路（v0.49.0-dev）----
+# 报告要画的某些盘，runner 算的时候手上有、却不进结果（七政 Moira 规则全集 + 流年盘：结果只留正文用的那几键）。出报告时
+# 在这个作用域里重跑同一工具（save_result=False），runner 把那几样交到这里；作用域外是 no-op —— 工具调用的返回体与存档不变。
+_FIGURE_CAPTURE: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("horosa_figure_capture", default=None)
+
+
+@contextlib.contextmanager
+def figure_capture() -> Iterator[dict[str, Any]]:
+    captured: dict[str, Any] = {}
+    token = _FIGURE_CAPTURE.set(captured)
+    try:
+        yield captured
+    finally:
+        _FIGURE_CAPTURE.reset(token)
+
+
+def _capture_figure_data(key: str, value: Any) -> None:
+    captured = _FIGURE_CAPTURE.get()
+    if captured is not None:
+        captured[key] = value
+
+
 @contextlib.contextmanager
 def _degrade_collector() -> Iterator[list[str]]:
     """一次 run_tool 的降级说明作用域；退出时冒泡到外层调用（嵌套工具的缺段外层也要知道）。"""

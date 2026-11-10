@@ -15,7 +15,7 @@ from horosa_skill.errors import (
 from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from horosa_skill.service import _clock
 from horosa_skill.service._common import _ganzhi_year
-from horosa_skill.service._context import _degrade
+from horosa_skill.service._context import _capture_figure_data, _degrade
 from horosa_skill.service.options_cn import _day_boundary_switches
 from horosa_skill.service.text.chinese import (
     _apply_guolao_node_mode,
@@ -554,6 +554,8 @@ class GuolaoRunners:
                     moira_sections = {k: f"{v or ''}".strip() for k, v in sections.items()}
                 if isinstance(rules, dict):
                     moira_rules_full = rules
+                    # 报告的 Moira 盘（GuoLaoMoiraWheel）要规则全集 + 流年盘；只在出报告的补算作用域里交出去，结果不带
+                    _capture_figure_data("guolao_moira", {"rules": rules, "transitChartObj": transit_chart, "transitParams": transit_params})
                     moira_rules_slim = {
                         k: rules.get(k) for k in ("weakSolid", "yearStars", "transitYearStars", "natalYearStars", "godHits") if k in rules
                     }
