@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from horosa_skill.errors import bilingual
 from horosa_skill.reports.figures import _ZERI_RETITLE, _wheel
 
 _HEAVY_KEYS = frozenset({"export_snapshot", "technique_card", "snapshot_text"})
@@ -46,7 +47,10 @@ AUX_TOOLS: dict[str, dict[str, Any]] = {
 
 
 def wanted(tool_name: str, data: Any) -> bool:
-    return tool_name in AUX_TOOLS and isinstance(data, dict)
+    if tool_name not in AUX_TOOLS or not isinstance(data, dict):
+        return False
+    # 天星择日零命中是结果、不是失败：页面没有可点的命中行，也就没有选中时刻那张盘可缺
+    return tool_name != "tianxing" or bool(data.get("intervals"))
 
 
 def engine(tool_name: str) -> str:
@@ -74,7 +78,7 @@ def build(tool_name: str, charts: dict[str, Any]) -> dict[str, Any]:
         inner = _wheel(natal.get("chart") or {}, entry["title"])
         ring = _wheel(outer.get("chart") or {}, "")
         if not inner or not ring:
-            raise ValueError("the engine chart has no full set of 12 houses and 7 planets")
+            raise ValueError(bilingual("引擎回的盘缺宫位或七政", "the engine chart has no full set of 12 houses and 7 planets"))
         moment = str(charts.get("moment") or "")
         when = f"推至 {moment}" if kind == "directed" else f"推运时刻 {moment}（一日行一年）"
         inner.update(
@@ -91,7 +95,7 @@ def build(tool_name: str, charts: dict[str, Any]) -> dict[str, Any]:
         aspects = (chart.get("aspects") or {}).get("normalAsp") if isinstance(chart.get("aspects"), dict) else None
         spec = _wheel(chart.get("chart") or {}, label, aspects)
         if not spec:
-            raise ValueError("the engine chart has no full set of 12 houses and 7 planets")
+            raise ValueError(bilingual("引擎回的盘缺宫位或七政", "the engine chart has no full set of 12 houses and 7 planets"))
         payload = _layer(chart)
         if not isinstance(payload.get("aspects"), dict):
             payload["aspects"] = {"normalAsp": {}}
@@ -110,7 +114,7 @@ def build(tool_name: str, charts: dict[str, Any]) -> dict[str, Any]:
             }, "options": {}},
         }
     else:  # pragma: no cover — AUX_TOOLS 与这里同改
-        raise ValueError(f"unknown aux chart engine {kind!r}")
+        raise ValueError(bilingual(f"未知的补算种类 {kind!r}", f"unknown aux chart engine {kind!r}"))
     spec["aux"] = True
     return spec
 

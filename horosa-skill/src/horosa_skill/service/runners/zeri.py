@@ -406,10 +406,11 @@ class ZeriRunners:
         hit = intervals[0] if intervals and isinstance(intervals[0], dict) else None
         moment_payload = self._tianxing_moment_payload(payload, hit) if hit else None
         if moment_payload is None:
-            raise ValueError("no hit interval: there is no selected moment to chart")
+            raise ValueError(bilingual("没有命中区间，也就没有选中时刻", "no hit interval: there is no selected moment to chart"))
         env = self.run_tool("chart", moment_payload, save_result=False)
         if not env.ok or not isinstance(env.data, dict):
-            raise ValueError(f"selected-moment chart failed: {env.error.code if env.error else 'unknown'}")
+            raise ValueError(bilingual(f"选中时刻起盘失败：{env.error.code if env.error else 'unknown'}",
+                                  f"selected-moment chart failed: {env.error.code if env.error else 'unknown'}"))
         return {"chart": env.data, "moment": f"{hit.get('pick') or hit.get('start')}"}
 
     def _run_qimenzeri_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -922,7 +923,7 @@ class ZeriRunners:
         时刻钉回原结果起盘那一刻（缺省「今天」，否则隔天出报告流年就变了）。重起的盘与规则须与存档逐键一致，否则不画。"""
         pan_moment, stored = data.get("pan_moment"), data.get("base")
         if not pan_moment or not isinstance(stored, dict):
-            raise ValueError("stored result has no selected-moment chart")
+            raise ValueError(bilingual("存档结果里没有选中时刻那一盘", "stored result has no selected-moment chart"))
         base_payload = self._zeri_backend_base_payload(
             "qizhengzeri", payload, pan_moment, self._zeri_backend_scan_options("qizhengzeri", payload)
         )
@@ -933,13 +934,14 @@ class ZeriRunners:
             env = self.run_tool("guolao_chart", base_payload, save_result=False)
         moira = captured.get("guolao_moira")
         if not env.ok or not isinstance(env.data, dict):
-            raise ValueError(f"guolao_chart at the selected moment failed: {env.error.code if env.error else 'unknown'}")
+            raise ValueError(bilingual(f"选中时刻重起七政盘失败：{env.error.code if env.error else 'unknown'}",
+                                  f"guolao_chart at the selected moment failed: {env.error.code if env.error else 'unknown'}"))
         if not isinstance(moira, dict):
-            raise ValueError("Moira rules (/qizheng/moira) or the transit chart were not available")
+            raise ValueError(bilingual("Moira 规则（/qizheng/moira）或流年盘不可用", "Moira rules (/qizheng/moira) or the transit chart were not available"))
         root = env.data
         slim = stored.get("guolaoMoiraRules") if isinstance(stored.get("guolaoMoiraRules"), dict) else {}
         if root.get("chart") != stored.get("chart") or any(moira["rules"].get(key) != value for key, value in slim.items()):
-            raise ValueError("the re-cast chart or its Moira rules differ from the stored result")
+            raise ValueError(bilingual("重起的七政盘或 Moira 规则与存档不一致", "the re-cast chart or its Moira rules differ from the stored result"))
         transit = moira["transitChartObj"] if isinstance(moira.get("transitChartObj"), dict) else {}
         tp = moira.get("transitParams") if isinstance(moira.get("transitParams"), dict) else {}
         # 静盘西占宫位格 = 页面 requestElectionData 的 /qizhengelection/pan（同键同缺省：eleLifeMode sunrise、ayanamsaDeg 0、

@@ -272,6 +272,19 @@ def test_selected_moment_chart_runs_the_chart_tool_without_storing_it(tmp_path: 
     assert _runs(service) == runs_before, "the extra computation must not store a memory run"
 
 
+def test_tianxing_without_a_hit_has_no_selected_moment_and_no_gap_note(tmp_path: Path) -> None:
+    """Zero hits is a result, not a failure: the page has no picked row, so there is no moment chart to miss."""
+    client = CaptureClient()
+    service = _service(tmp_path, client)
+    env = service.run_tool("tianxing", {**build_sample_payloads()["tianxing"], "startDate": "1997-01-02", "endDate": "1997-01-05"},
+                           save_result=True)
+    assert env.ok and env.data["intervals"] == []
+    run, artifact = service._load_report_source(env.memory_ref.run_id, None)
+    client.calls.clear()
+    assert service._report_figures([], run, artifact) == ([], [])
+    assert client.calls == []
+
+
 def test_engine_without_the_chart_keeps_the_report_and_says_what_is_missing(tmp_path: Path) -> None:
     service = _service(tmp_path, CaptureClient())  # the fake answers withChart=1 like withChart=0: no chart
     run, artifact = _stored(service, "neroman")

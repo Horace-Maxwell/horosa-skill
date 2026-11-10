@@ -207,7 +207,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   - Moira 盘的西占宫位格来自页面另发的 `requestElectionData`（`/qizhengelection/pan` 的 `staticHousesBySystem`）：不读页面代码只看盘组件会漏掉，盘照样画、只是静默少一环。
   - 名字对不上号：协调者写的「Jay（jaynesprog）」——双盘页是周日小限 `jayprofection`；`jaynesprog`（赤纬推运）在 app 里画的是赤纬梯图（HTML + SVG，数据已在结果里），不属补算，未做。Bezza 推运图与演进推运同一页类，一并接上。
 - **失败时**：补算或出图不成，原图不动，「缺了哪张、为什么」进 `document["figure_gaps"]`，印在「盘图」节下（PDF / DOCX），PNG 进 `warnings`，报告结果的 summary 也带上。
-- **守卫**：`tests/test_report_aux_charts.py`（实例实抓夹具 `report_aux_charts_live.json.gz`）二十条，十三条负向对照各自红：补算不带 withChart、改用今天的目标日、不先探引擎、子盘存档、丢说明、版式不印说明、恒星推运不重取恒星黄道、合盘图注、Moira 不换下方盘、流年不钉、不比对存档、react-dom 客户端放行、plan 不转交 `app_request`。全量 pytest 加约 6 s。
+- **守卫**：`tests/test_report_aux_charts.py`（实例实抓夹具 `report_aux_charts_live.json.gz`）二十一条，十三条负向对照各自红：补算不带 withChart、改用今天的目标日、不先探引擎、子盘存档、丢说明、版式不印说明、恒星推运不重取恒星黄道、合盘图注、Moira 不换下方盘、流年不钉、不比对存档、react-dom 客户端放行、plan 不转交 `app_request`。全量 pytest 加约 6 s。
 - **法则**：报告要一张结果里没有的盘，就在出报告那一刻用存档入参经真引擎补算，**不**加大工具返回体；任何「缺省今天」的输入都要钉回原结果，并核对补出来的盘与存档那张一致。新接 app 组件前查它 import 的包是否在放行名单里、载入后进程能否退出。
 
 ### v0.49.0-dev / 2026-11-09 — 出一张图白等 2.5 秒：app 代码留下的定时器拖住了 Node 退出

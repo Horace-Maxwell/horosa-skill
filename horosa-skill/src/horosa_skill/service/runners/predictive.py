@@ -35,6 +35,7 @@ from horosa_skill.errors import (
     HorosaSkillError,
     ToolTransportError,
     ToolValidationError,
+    bilingual,
 )
 from horosa_skill.service import _clock
 from horosa_skill.service._common import (
@@ -296,12 +297,12 @@ class PredictiveRunners:
         时后端另起的整盘（astrostudy/directed_figures.py `_relocated_chart`）。"""
         target, request_fields = data.get("target"), data.get("request")
         if not isinstance(request_fields, dict) or not isinstance(target, dict):
-            raise ValueError("stored result has no target / request fields to repeat")
+            raise ValueError(bilingual("存档结果里没有可重发的目标时刻 / 请求口径", "stored result has no target / request fields to repeat"))
         endpoint = self._DIRECTED_FIGURE_ENDPOINTS[technique]
         response = self._call_remote(endpoint, self._directed_figure_body(payload, technique, target, request_fields, with_chart=True))
         outer = response.get("chart") if isinstance(response, dict) else None
         if not isinstance(outer, dict) or not isinstance(outer.get("chart"), dict):
-            raise ValueError(f"{endpoint} (withChart=1) returned no directed chart")
+            raise ValueError(bilingual(f"{endpoint}（withChart=1）没有回推运外圈盘", f"{endpoint} (withChart=1) returned no directed chart"))
         natal = self._call_remote("/chart", self._astroextra_natal_payload(payload))
         return {"natal": natal, "outer": outer, "moment": f"{target.get('targetDate') or ''} {target.get('targetTime') or ''}".strip()}
 
@@ -311,7 +312,7 @@ class PredictiveRunners:
         method = next((m for m in data.get("methods") or [] if isinstance(m, dict) and m.get("method") == "secondary"), None)
         moment = f"{((method or {}).get('progressedDate') or {}).get('datetime') or ''}".strip()
         if not moment:
-            raise ValueError("stored result has no secondary-progression moment")
+            raise ValueError(bilingual("存档结果里没有次限推运时刻", "stored result has no secondary-progression moment"))
         parts = moment.replace("T", " ").split(" ")
         date, time = parts[0].replace("/", "-"), (parts[1] if len(parts) > 1 and parts[1] else "12:00:00")
         natal_payload = self._astroextra_natal_payload(payload)
@@ -329,7 +330,7 @@ class PredictiveRunners:
         syzygy = data.get("syzygy") if isinstance(data.get("syzygy"), dict) else {}
         moment = split_syzygy_datetime(syzygy.get("datetime")) if syzygy.get("type") else None
         if moment is None:
-            raise ValueError("stored result has no syzygy moment")
+            raise ValueError(bilingual("存档结果里没有朔望时刻", "stored result has no syzygy moment"))
         chart = self._call_remote("/chart", self._prenatal_syzygy_chart_body(payload, moment))
         return {"chart": chart, "moment": f"{syzygy.get('datetime')}", "type": syzygy.get("type")}
 
