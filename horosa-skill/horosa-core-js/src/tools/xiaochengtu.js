@@ -61,6 +61,8 @@ export function runXiaoChengTu(payload) {
       zhi: qi.zhi && qi.zhi.name,
       dongYaos: qi.dongYaos || [],
       yongGong,
+      // 报告盘图（app 原版 XiaoChengTuMain.renderCenter）要的整卦对象（爻 / 上下卦 / 互卦）——正文所用的同一份 qi，不另算
+      board_context: { ben: qi.ben, zhi: qi.zhi },
     },
     snapshot_text,
   };

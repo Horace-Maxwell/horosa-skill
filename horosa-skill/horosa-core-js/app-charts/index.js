@@ -18,6 +18,12 @@ import { makeKinZiwei } from './adapters/kinziwei.js';
 import { renderQimen } from './adapters/qimen.js';
 import { renderIndiaSouth } from './adapters/india.js';
 import { renderBazi } from './adapters/bazi.js';
+import { renderGeomancy } from './adapters/geomancy.js';
+import { renderXiaoliuren } from './adapters/xiaoliuren.js';
+import { renderXiaochengtu } from './adapters/xiaochengtu.js';
+import { renderGuice } from './adapters/guice.js';
+import { renderLingqi } from './adapters/lingqi.js';
+import { renderWuzhao } from './adapters/wuzhao.js';
 import THEME from 'horosa-theme-tokens';
 import SCOPES from 'horosa-theme-scopes';
 
@@ -61,6 +67,12 @@ export const RENDERERS = {
   qimen: renderQimen,
   india_south: renderIndiaSouth,
   bazi: renderBazi,
+  geomancy: renderGeomancy,
+  xiaoliuren: renderXiaoliuren,
+  xiaochengtu: renderXiaochengtu,
+  guice: renderGuice,
+  lingqi: renderLingqi,
+  wuzhao: renderWuzhao,
 };
 
 /**

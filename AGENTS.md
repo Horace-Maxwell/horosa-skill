@@ -1395,6 +1395,10 @@ A global stability pass hardened these; keep them true when you touch the releva
     自绘图的画法说明，换成 app 图就不印（`figure_notes`）；数据说明留在 text / lines。⑰app 缺省值逐项照页面（八字简盘、
     onlyZiGanShen=true 不出副星；南印缺省盘式 south、DEFAULT_OBJECTS 无 lots）。参考图：SSR 出 app HTML 盘 + 预处理的 app less
     （notes-local/app-board-ref，`.claude/launch.json` 的 app-board-ref 静态服务 18767）。
+    卜类（地占护盾 / 小六壬 / 小成图 / 轨策 / 灵棋 / 五兆）同法：SSR 页面方法 → 读 DOM → 照 less 排版（共用 `adapters/cnxkit.js`
+    的令牌与文字助手，页面令牌走 `themeScope: horosa-huangji-redesign`）；antd 件（Popover / Tag）是桩、SSR 不出来：Popover 在子类里
+    剥掉外壳（`el.props.children`），Tag 那一枚自己画、值仍调 app 的判定函数（灵棋 isWuDay）。正文只回名称、盘要整对象时，由 core-js
+    工具把算正文那一份对象放进 `board_context`（小成图 qi 的本 / 之卦、轨策 qiGua 结果），不在 adapter 里重算。bundle 上限 4 MB。
     推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）；七政择日动盘要 Moira 规则与整张七政盘，
     择日结果里没有——这两类要不要加请求等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`

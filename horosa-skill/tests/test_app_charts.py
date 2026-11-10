@@ -187,6 +187,12 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("qimen", "qimen", "值符"),
         ("india_chart", "india_south", "命盘"),
         ("bazi_birth", "bazi", "日元"),
+        ("geomancy", "geomancy", "护盾方盘"),
+        ("xiaoliuren", "xiaoliuren", "一传"),
+        ("xiaochengtu", "xiaochengtu", "用宫"),
+        ("guice", "guice", "四位盘"),
+        ("lingqi", "lingqi", "灵棋盘"),
+        ("wuzhao", "wuzhao", "空亡"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -333,9 +339,10 @@ def test_page_scoped_tokens_use_the_pages_light_values() -> None:
 
 def test_bundle_stays_free_of_page_ui() -> None:
     """飞宫页模块经时空面板把地图与城市库（citiesFull.json 等 ~4 MB）拖进 bundle（实测 5.2 MB）；APP_UI_ONLY 把这些纯页面 UI
-    桩掉后 1.5 MB、输出逐字节不变。新接一种盘时若又拖进页面 UI，这里先红。"""
+    桩掉后 1.5 MB、输出逐字节不变。新接一种盘时若又拖进页面 UI，这里先红。上限随正当的盘面代码（地占 / 灵棋 / 轨策…）
+    放宽到 4 MB；地图 / 城市库的逐项检查不变。"""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert manifest["bundle_bytes"] < 3_000_000, manifest["bundle_bytes"]
+    assert manifest["bundle_bytes"] < 4_000_000, manifest["bundle_bytes"]
     assert not any(path.startswith(("components/amap/", "data/cit")) for path in manifest["app_files"])
 
 
@@ -383,3 +390,22 @@ def test_drawing_conventions_of_the_skill_drawing_are_not_printed_under_app_boar
     assert spec.get("app_svg") and not any("每宫自上而下" in n for n in figure_notes(spec, str))
     builtin = {k: v for k, v in spec.items() if k != "app_svg"}
     assert any("每宫自上而下" in n for n in figure_notes(builtin, str))
+
+
+def test_core_js_tools_return_the_cast_objects_the_board_needs() -> None:
+    """小成图 / 轨策的正文只回卦名；app 的盘要整卦对象（爻 / 上下卦 / 互卦）与起卦结果。core-js 工具把算正文时那一份
+    qi / gua 原样放进 board_context（不另算），报告盘图用 app 的 buildPan / buildGuicePan 按同一份再起。"""
+    from node_esm import run_node_esm
+
+    if not shutil.which("node"):
+        pytest.skip("node not on PATH")
+    tools = PKG_ROOT / "horosa-core-js" / "src" / "tools"
+    script = (
+        "const [x, g] = await Promise.all([import(process.argv[1]), import(process.argv[2])]);"
+        "const a = x.runXiaoChengTu({ qiguaFa: 'manual', up: '乾', lo: '兑', dongYaos: [3], yongGong: 1 }).data.board_context;"
+        "const b = g.runGuice({ qiguaFa: 'baoshu', nums: [7, 9], hourZhi: '午', yearZhi: '午', monthZhi: '巳', lunarMonth: 4, lunarDay: 5 }).data.board_context;"
+        "process.stdout.write(JSON.stringify({ a, b }));"
+    )
+    out = json.loads(run_node_esm(script, tools / "xiaochengtu.js", tools / "guice.js", cwd=PKG_ROOT / "horosa-core-js"))
+    assert out["a"]["ben"]["lines"] and out["a"]["ben"]["up"] == "乾" and out["a"]["zhi"]["lines"]
+    assert out["b"]["gua"]["up"] and out["b"]["gua"]["dongYao"]

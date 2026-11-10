@@ -66,6 +66,8 @@ export function runGuice(payload) {
       // 本卦名在 pan.gua.name（buildGuicePan 叠加），变卦名在 pan.bianName；raw gua 只有 up/lo/dongYao。
       gua: { ben: (pan.gua && pan.gua.name) || null, bian: pan.bianName || null, dongYao: gua.dongYao },
       settings,
+      // 报告盘图（app 原版 GuiceMain.renderCenter）用 app 的 buildGuicePan 按同一份起卦结果 + ctx / settings / 世应输入再起盘
+      board_context: { gua },
     },
     snapshot_text,
   };

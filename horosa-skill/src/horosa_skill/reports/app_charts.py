@@ -82,6 +82,21 @@ _APP_ONLY_PAYLOADS = {
     "xianqin": lambda source: _kin_pan(source, "xianqin"),
     # 八字：引擎的 bazi（四柱 / 十神 / 藏干 / 神煞 / 农历）= app BaZiFineChart 的 value
     "bazi": lambda source: ({"bazi": source["bazi"]} if isinstance(source.get("bazi"), dict) and isinstance(source["bazi"].get("fourColumns"), dict) else None),
+    # 地占：引擎 reading（十六图形 / 得地 / 记号传本）= app 护盾方盘读的那一份
+    "geomancy": lambda source: ({"reading": {key: source["reading"][key] for key in ("figures16", "technique", "settings") if key in source["reading"]}}
+                                if isinstance(source.get("reading"), dict) and isinstance(source["reading"].get("figures16"), list) else None),
+    # 小六壬：结果即 app 页面的 ke（school / nums / chuan / analysis）
+    "xiaoliuren": lambda source: ({"xiaoliuren": source["xiaoliuren"]} if isinstance(source.get("xiaoliuren"), dict) and isinstance(source["xiaoliuren"].get("chuan"), list) else None),
+    # 小成图：JS 正文所用 qi 的整卦对象（board_context）+ 起卦法 / 动爻 / 用宫
+    "xiaochengtu": lambda source: ({"xiaochengtu": source["xiaochengtu"]} if isinstance(_dig(source, ["xiaochengtu", "board_context", "ben"]), dict) else None),
+    # 轨策：JS 的起卦结果（board_context.gua）+ 本次 ctx / settings / 世应输入 → app 的 buildGuicePan
+    "guice": lambda source: ({"guice": {"board_context": source["guice"]["board_context"]}, "input_normalized": source.get("input_normalized") or {}}
+                             if isinstance(_dig(source, ["guice", "board_context", "gua"]), dict) else None),
+    # 灵棋：三层枚数（= app 页面 state.counts）+ 占问类别 + 起卦日干支（六戊日提示）
+    "lingqi": lambda source: ({key: source.get(key) for key in ("counts", "category", "day_ganzhi")} if isinstance(source.get("counts"), list) else None),
+    # 五兆：kentang 盘的五位与古法层（positions / classic）= app 兆图读的那两块
+    "wuzhao": lambda source: ({"raw": {key: source["raw"].get(key) for key in ("positions", "classic")}}
+                              if isinstance(_dig(source, ["raw", "positions"]), list) else None),
     # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
     "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
                                if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),

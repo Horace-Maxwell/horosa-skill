@@ -600,6 +600,12 @@ _APP_ONLY = {
     "bazi_birth": ("bazi", "八字命盘", ("bazi",)),
     "bazi_direct": ("bazi", "八字命盘", ("bazi",)),
     "bazizeri": ("bazi", "八字命盘", ("bazi",)),
+    "geomancy": ("geomancy", "护盾方盘", ("reading",)),
+    "xiaoliuren": ("xiaoliuren", "小六壬宫盘", ("xiaoliuren",)),
+    "xiaochengtu": ("xiaochengtu", "洛书九宫", ("xiaochengtu",)),
+    "guice": ("guice", "皇极轨策", ("guice",)),
+    "lingqi": ("lingqi", "灵棋盘", ("counts",)),
+    "wuzhao": ("wuzhao", "五兆兆图", ("raw",)),
 }
 
 

@@ -281,6 +281,14 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   skill 自绘图；换成 app 的图后版式 / 记号不同。规格里拆出 `legend`，只在自绘图下印；数据说明（局、主算客算）照留。
 - **app 的缺省值要逐项照页面查。** 八字页缺省「简盘」（细盘要用户存过）、`onlyZiGanShen` 缺省 true（不出副星行）；南印是缺省盘式、
   星曜集是 `DEFAULT_OBJECTS` 不含 lots。照组件 props 的「未传」值猜会画出 app 里用户看不到的东西。
+- **antd 件在 SSR 里是桩，React 渲不出来。** 卜类页面方法里夹着 Popover（悬停说明）和 Tag（六戊日、载自事盘）；桩是一个
+  Proxy 函数，React 当组件调用后拿到的还是 Proxy → 渲染报错。Popover：子类覆写该方法、剥掉外壳只留 children；Tag：页面方法照常
+  渲（不走 Tag 分支），那一枚标签按 app 的判定函数（isWuDay）自己画。
+- **正文只回名称时，盘要的对象由算正文的那段 JS 一并交出。** 小成图的结果只有卦名（山水蒙），app 盘要爻 / 上下卦 / 互卦对象；
+  轨策只有本卦 / 变卦名，app 要 qiGua 的起卦结果。在 core-js 工具里把同一份 qi / gua 放进 `board_context`，adapter 用 app 的
+  buildPan / buildGuicePan 再起一次——不在 adapter 里按名称倒推，也不另算。
+- **参考图的 less 预处理要按块剥 `:global { }`。** 文件级的 `:global {` 换成裸 `{` 浏览器整块丢弃，卜类的 cnx 样式一条没生效；
+  要连同配对的 `}` 一起去掉（scratchpad 的 build_ref_css.py）。页面级类（`horosa-xlr-page` 等）也要套上，否则方格 / 居中规则不生效。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 
