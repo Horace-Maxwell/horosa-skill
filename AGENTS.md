@@ -1409,7 +1409,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     ⑱app 图高 ≤ 600 pt（按宽高比收窄，标题与图同页）；格子盘 / 九宫图注一律走 `figure_notes`（含 legend）。
     ⑲塔罗牌阵（v0.49.0-dev，TarotMain.renderCenter）：core-js 交产出正文的同一个 reading（`board_context`，牌只记 id + sid，app 侧按牌组表取回、sid 不符就不画）；牌面图 = 上游 public/tarot-art 144 张**逐字节**随包（`data/tarot-art/` + manifest，`scripts/sync_tarot_art.py`，preflight 里与 pin 比对；扫描件来源 / 授权上游未记录，只认维护者 2026-11-09 准许分发，见第三方事实 `tarot-art.provenance`，别写成「公有领域」），app 侧只引用 `options.art` 里确有的图、其余画 app 的符号牌面；`embed_images` 只读 `tarot-art/` 白名单。app 的发牌动画（fill both）盖掉了内联 translate/rotate（上游 bug，只报），图照内联几何画（= 减少动态效果下的 app）。印不出的装饰符号走 `horosa-optional-glyph`，去掉不印方块；DOCX 有照片的图出 JPEG。
     测试里跑 node ESM 一律走 `tests/node_esm.run_node_esm`（Windows 路径；守卫 test_subprocess_encoding）。
-    ⑲app 在结果之外另取的盘（推运图族 / 推运 / 恒星推运双盘、天星择日与产前朔望的时刻盘、七政择日 Moira 圆盘）**出报告时**经真引擎补算（v0.49.0-dev，`reports/aux_charts.py` + `ReportsAPI._report_figures`）：存档入参 + 结果里实际用过的时刻、runner 同一份请求体、`save_result=False`、先 probe 不起 runtime；工具调用仍 `withChart: 0`；「缺省今天」一律钉回原结果（Moira 流年钉 `generated_at`），重起须与存档一致；失败留原图 + `figure_gaps` 说明。app 文件的 `react-dom` 只放行 server（客户端渲染器的 scheduler 让进程永不退出）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
+    ⑲app 在结果之外另取的盘（推运图族 / 推运 / 恒星推运双盘、天星择日与产前朔望的时刻盘、七政四余与七政择日的 Moira 圆盘——七政页缺省盘式，方盘只作退路）**出报告时**经真引擎补算（v0.49.0-dev，`reports/aux_charts.py` + `ReportsAPI._report_figures`）：存档入参 + 结果里实际用过的时刻、runner 同一份请求体、`save_result=False`、先 probe 不起 runtime；工具调用仍 `withChart: 0`；「缺省今天」一律钉回原结果（Moira 流年钉 `generated_at`），重起须与存档一致；失败留原图 + `figure_gaps` 说明。app 文件的 `react-dom` 只放行 server（客户端渲染器的 scheduler 让进程永不退出）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
     **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。
@@ -1461,7 +1461,12 @@ A global stability pass hardened these; keep them true when you touch the releva
   守卫 `tests/test_app_charts_heluo.py`（改结果里的值板跟着变；三条负向对照各自红）。
 - **页面兄弟模块的桩只对 app 内部引用生效。** HeLuoMain 在 `APP_UI_ONLY` 里（KinAstroMain 的兄弟页），adapter 用 `@horosa-app/` 直引拿到真模块，
   KinAstroMain 那条引用仍是桩。卦辞库 heluoTiaowen.json（388 KB）在画图路径上；esbuild 缺省 ascii 字符集把 CJK 转成 `\u` 转义，
-  JSON 进 bundle 约翻倍（+0.76 MB）。bundle 上限 5 MB。
+  JSON 进 bundle 约翻倍（+0.76 MB）。bundle 上限 5.5 MB。
+- **卡片式混合组件（svg + 绝对定位 HTML）**：svg 原样留，HTML 部分（标题、图例、错位后的标签）读 SSR 出的 DOM 的位置 / 颜色 / 文字重画成
+  svg 文字，宽度按 app 量到的栏宽给（赤纬推运 AstroDeclinationLadder，`adapters/declination.js`，v0.49.0-dev）。`left:0;right:0;text-align:center`
+  是横跨整卡、`left + translateX(-50%)` 才是以 left 为中；svg 会丢 `<text>` 首尾空白（图例里的全角空格），空白要折成 x 前进量；卡片高 = 内容高
+  + 上下内边距。页面主图换掉原图时走补算盘同一套 `aux` / `aux_superseded`：画不出留原图 + `figure_gaps`。对照法：app 的 SSR 标记 + 令牌 /
+  app CSS 与重画结果在无头 Chrome 里并排截图。
 
 ### 9.3.2 记忆存档（memory store / artifacts）
 

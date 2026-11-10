@@ -2,6 +2,7 @@
 // `window` / `navigator` while they load.
 import { reseed } from './dom.js';
 import { renderBiWheel, renderNatalWheel } from './adapters/astro.js';
+import { renderDeclinationLadder } from './adapters/declination.js';
 import { renderZiwei } from './adapters/ziwei.js';
 import { renderGuolao } from './adapters/guolao.js';
 import { renderGuolaoMoira } from './adapters/guolao_moira.js';
@@ -57,6 +58,7 @@ export function resolveThemeVars(svg, scope) {
 export const RENDERERS = {
   natal_wheel: renderNatalWheel,
   bi_wheel: renderBiWheel,
+  declination_ladder: renderDeclinationLadder,
   ziwei: renderZiwei,
   guolao: renderGuolao,
   guolao_moira: renderGuolaoMoira,
