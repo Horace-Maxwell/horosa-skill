@@ -264,6 +264,53 @@ def test_guolao_chart_moira_uses_the_runners_own_settings_and_the_stored_moment(
     assert charts["params"]["doubingSu28"] == 0, "the 七政 page's own default 宿度制 (0 荀爽距星), not 七政择日's 2"
 
 
+def _ladder(client: Any = None) -> tuple[list[dict[str, Any]], list[str]]:
+    data = FIXTURE["jaynesprog"]["data"]
+    figures = extract_figures("jaynesprog", data, "jaynesprog")
+    return aux_charts.settle(app_charts.attach_app_svgs(figures, "jaynesprog", data, client or _Client()))
+
+
+@needs_node
+def test_jaynesprog_draws_the_apps_declination_ladder_from_the_stored_result() -> None:
+    """赤纬推运's page draws AstroDeclinationLadder (natal / progressed declinations + parallels), not a wheel; the data is in
+    the stored result (raw.natalDeclinations, methods[secondary])."""
+    import re
+
+    figures, notes = _ladder()
+    assert notes == [] and [f.get("app_kind") for f in figures] == ["declination_ladder"]
+    spec = figures[0]
+    assert spec["renderer"] == "app", spec.get("renderer_note")
+    svg = spec["app_svg"]
+    assert all(word in svg for word in ("赤纬图", "本命", "推运", "赤道 0°", "出界 +23°26′"))
+    assert "var(" not in svg and "<div" not in svg and "<span" not in svg, "the HTML parts are redrawn as svg"
+    data = FIXTURE["jaynesprog"]["data"]
+    method = next(m for m in data["methods"] if m["method"] == "secondary")
+    # one glyph per body per column, in the app's symbol font
+    assert len(re.findall(r'font-family="ywastro"', svg)) == len(data["raw"]["natalDeclinations"]) + len(method["declinations"])
+    for row in [*data["raw"]["natalDeclinations"], *method["declinations"]]:
+        assert f"{'+' if row['decl'] >= 0 else ''}{row['decl']:.1f}°" in svg, row
+    drawn = [p for p in method["parallels"] if p["a"] in {d["id"] for d in method["declinations"]}]
+    assert svg.count('stroke-width="1.3"') == len(drawn), "one line per engine parallel / contraparallel"
+    # the HTML boxes, read from the app's render: title centred across the card, legend runs without the blanks svg would
+    # drop (the full-width spaces are advanced over), card = 760 content + 2 × 12 padding (+ border)
+    title_x = float(re.search(r'<text x="([\d.]+)"[^>]*>赤纬图</text>', svg).group(1))
+    assert 380 - 40 < title_x < 380, title_x
+    assert ">反平行</text>" in svg and not re.search(r">\s+[^<\s]", svg), "no run starts with a blank"
+    assert 'height="786"' in svg[:200]
+
+
+def test_jaynesprog_keeps_its_previous_wheel_when_the_ladder_cannot_be_drawn() -> None:
+    class Gone:
+        def render_app_charts(self, figures):
+            return None
+
+    before = [f for f in extract_figures("jaynesprog", FIXTURE["jaynesprog"]["data"], "jaynesprog") if f["kind"] != "app"]
+    figures, notes = _ladder(Gone())
+    assert [f["title"] for f in figures] == [f["title"] for f in before] and figures[0]["kind"] == "wheel"
+    assert not any("aux_superseded" in f for f in figures)
+    assert len(notes) == 1 and "赤纬图" in notes[0] and "没有画出" in notes[0]
+
+
 # ───────────────────────────── the service: compute at render time ─────────────────────────────
 
 class _EngineWithCharts(CaptureClient):

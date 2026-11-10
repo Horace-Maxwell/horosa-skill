@@ -640,6 +640,19 @@ def _app_only(tool_name: str, data: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"kind": "app", "app_kind": entry[0], "title": entry[1]}]
 
 
+def _declination_ladder(data: dict[str, Any], figures: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """赤纬推运：app 页（ProgMethodPanel mode=declination）画的是赤纬图（AstroDeclinationLadder），不是星盘。数据全在结果里
+    （raw.natalDeclinations + methods 里所选推运法——页面缺省 secondary——的 declinations / parallels）。只有 app 画法：
+    画出来就换下原来的本命轮，画不出就留着它并说明（reports/aux_charts.settle，`aux` / `aux_superseded` 同补算盘一套）。"""
+    natal = _dig(data, ("raw", "natalDeclinations"))
+    methods = [m for m in data.get("methods") or [] if isinstance(m, dict)]
+    method = next((m for m in methods if m.get("method") == "secondary"), methods[0] if methods else None)
+    if not isinstance(natal, list) or not natal or not isinstance(method, dict) or not isinstance(method.get("declinations"), list):
+        return figures
+    ladder = {"kind": "app", "app_kind": "declination_ladder", "title": "赤纬图（本命 / 次限推运）", "aux": True}
+    return [ladder, *({**figure, "aux_superseded": True} for figure in figures)]
+
+
 def extract_figures(tool_name: str, data: Any, technique_label: str = "") -> list[dict[str, Any]]:
     """返回这次结果能画的盘图规格（可能为空）。任何一种取不全就整张不画——画一张缺宫的盘比不画更糟。
 
@@ -673,6 +686,8 @@ def extract_figures(tool_name: str, data: Any, technique_label: str = "") -> lis
             pass
     if not figures:
         figures.extend(_app_only(tool_name, source))
+    if tool_name == "jaynesprog":
+        figures = _declination_ladder(source, figures)
     if moment:
         for figure in figures:
             figure["title"] = f"{figure.get('title') or ''}{_ZERI_RETITLE.format(moment=moment)}"

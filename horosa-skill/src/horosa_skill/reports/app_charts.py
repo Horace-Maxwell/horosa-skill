@@ -123,7 +123,18 @@ def _kin_pan(source: dict[str, Any], key: str) -> dict[str, Any] | None:
 
 
 # kind="app"（只有 app 画得出来、skill 没有自绘版）的规格：app 画法 → 从结果里取喂给 adapter 的那几块
+def _declination_payload(source: dict[str, Any]) -> dict[str, Any] | None:
+    methods = [m for m in source.get("methods") or [] if isinstance(m, dict)]
+    method = next((m for m in methods if m.get("method") == "secondary"), methods[0] if methods else None)
+    natal = _dig(source, ["raw", "natalDeclinations"])
+    if not isinstance(natal, list) or not isinstance(method, dict):
+        return None
+    return {"natalDeclinations": natal, "method": {key: method.get(key) for key in ("method", "declinations", "parallels")}}
+
+
 _APP_ONLY_PAYLOADS = {
+    # 赤纬推运：页面缺省推运法（secondary）的赤纬 / 平行 + 本命赤纬 = app AstroDeclinationLadder 的三个 props
+    "declination_ladder": _declination_payload,
     "jinkou": _jinkou_payload,
     "suzhan": lambda source: ({key: source[key] for key in ("params", "chart", "aspects", "lots", "board_context") if key in source}
                               if isinstance(_dig(source, ["chart", "fixedStarSu28"]), (list, dict)) else None),
