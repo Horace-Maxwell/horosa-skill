@@ -28,6 +28,7 @@ import { renderYizhangjing } from './adapters/yizhangjing.js';
 import { renderTongshefa } from './adapters/tongshefa.js';
 import { renderAcg } from './adapters/acg.js';
 import { renderSanshi } from './adapters/sanshi.js';
+import { renderHeluo } from './adapters/heluo.js';
 import THEME from 'horosa-theme-tokens';
 import SCOPES from 'horosa-theme-scopes';
 
@@ -81,6 +82,7 @@ export const RENDERERS = {
   tongshefa: renderTongshefa,
   acg: renderAcg,
   sanshi: renderSanshi,
+  heluo: renderHeluo,
 };
 
 /**

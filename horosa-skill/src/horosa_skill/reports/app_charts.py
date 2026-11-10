@@ -112,6 +112,9 @@ _APP_ONLY_PAYLOADS = {
     # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
     "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
                                if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),
+    # 河洛：core-js 正文那一份 chart / dayun / judge / solarTerm + board_context（纳音、chartExtras）+ 取法口径 = app getModel 的 m
+    "heluo": lambda source: ({"heluo": source["heluo"], "input_normalized": source.get("input_normalized") or {}}
+                             if isinstance(_dig(source, ["heluo", "board_context", "extras"]), dict) else None),
 }
 
 
@@ -167,7 +170,7 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
         elif kind == "app" and spec.get("app_kind") in _APP_ONLY_PAYLOADS:
             payload = _APP_ONLY_PAYLOADS[spec["app_kind"]](source)
             if payload is not None:
-                requests.append((index, {"kind": spec["app_kind"], "data": payload, "options": {"size": 760}}))
+                requests.append((index, {"kind": spec["app_kind"], "data": payload, "options": {"size": 760, **(spec.get("app_options") or {})}}))
         elif kind == "taiyi" and isinstance(source.get("pan") if isinstance(source.get("pan"), dict) else source.get("taiyi"), dict):
             # 与 figures._taiyi 同一份 pan（太乙 / 太乙择时在 pan，三式合一 / 三式择时在 taiyi）→ app 的 TaiyiBoardSvg
             pan = source["pan"] if isinstance(source.get("pan"), dict) else source["taiyi"]

@@ -610,15 +610,32 @@ _APP_ONLY = {
     "yizhangjing": ("yizhangjing", "一掌经十二宫盘", ("yizhangjing",)),
     "tongshefa": ("tongshefa", "统摄法三象", ("tongshefa",)),
     "acg": ("acg", "天文地图（行星线）", ("acg",)),
+    # 河洛：app 中栏的信息板（HeLuoMain.renderCenter）；盘上的纳音 / chartExtras 由 core-js 同一次调用放在 board_context
+    "heluo": ("heluo", "河洛理数", (("heluo", "board_context"),)),
 }
+# app 的一块长板按它自己的卡分成几张图（河洛中栏整块约 760 × 2400 px，一张图排进一页就小得没法读）：技法 → ((部分, 图名), …)
+_APP_ONLY_PARTS = {
+    "heluo": (("detail", "河洛起卦详情"), ("xian", "先天卦"), ("hou", "后天卦"), ("daxian", "河洛大限")),
+}
+
+
+def _has(data: dict[str, Any], key: str | tuple[str, ...]) -> bool:
+    for part in (key,) if isinstance(key, str) else key:
+        if not isinstance(data, dict):
+            return False
+        data = data.get(part)
+    return bool(data)
 
 
 def _app_only(tool_name: str, data: dict[str, Any]) -> list[dict[str, Any]]:
     entry = _APP_ONLY.get(tool_name)
     if data.get("pan_moment") and isinstance(data.get("base"), dict):
         data = data["base"]  # 择日：画选中时刻那一盘（与其他择日盘图同一来源）
-    if not entry or not all(data.get(key) for key in entry[2]):
+    if not entry or not all(_has(data, key) for key in entry[2]):
         return []
+    parts = _APP_ONLY_PARTS.get(tool_name)
+    if parts:
+        return [{"kind": "app", "app_kind": entry[0], "title": title, "app_options": {"part": part}} for part, title in parts]
     return [{"kind": "app", "app_kind": entry[0], "title": entry[1]}]
 
 

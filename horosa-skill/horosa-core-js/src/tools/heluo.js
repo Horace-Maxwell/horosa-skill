@@ -13,7 +13,7 @@
 // /大限·岁运 dynamic labels are legacy-mapped to the declared aiExport sections 先天卦/后天卦/大限 in
 // the skill's export layer.
 import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
-import calc, { daYun, judge, buildSnapshotText, heluoSolarTermOfDate } from '../vendor/heluo/heluoLocal.js';
+import calc, { daYun, judge, buildSnapshotText, heluoSolarTermOfDate, chartExtras } from '../vendor/heluo/heluoLocal.js';
 import { ganzhiYearBase } from '../vendor/utils/ganzhiYearBase.js';
 import { parseYearFromDateStr } from '../vendor/bazi/dateStrSafe.js';
 
@@ -130,6 +130,11 @@ export function runHeluo(payload) {
   const dy = daYun(chart.xian, chart.hou, birthYear);
   const st = heluoSolarTermOfDate(date, input.zone, quHuaGong);
   const jg = judge(chart, fourPillars, monthZhi, st);
+  // 报告盘图（app 的 HeLuoMain.renderCenter）另读两样正文用不到的：年柱纳音与 chartExtras。照 HeLuoMain.getModel 的同一式
+  // 由这一次的 bazi / chart / judge 交出（board_context），盘图不另算。
+  const nayinStr = (fc.year && (fc.year.naying || fc.year.nayin)) || '';
+  const nayinChar = '金木水火土'.includes(nayinStr.slice(-1)) ? nayinStr.slice(-1) : '';
+  const extras = chartExtras(chart, fourPillars, monthZhi, jg, { sanhou: st ? st.houLabel : '', nayin: nayinChar });
 
   return {
     tool: 'heluo',
@@ -155,6 +160,7 @@ export function runHeluo(payload) {
       dayun: dy,
       judge: jg,
       solarTerm: st,
+      board_context: { nayin: nayinStr, extras },
     },
     // extra 带 opts/monthZhi：流年分歧口径随取法走，且 [断验] 的时令/先后天卦气三行由 monthZhi→SEASON 救活
     snapshot_text: buildSnapshotText(chart, jg, dy, { opts: hlOpts, monthZhi, birthYear }),
