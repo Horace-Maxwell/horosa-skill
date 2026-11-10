@@ -1444,6 +1444,25 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **PDF / PNG 字体的注册名 = 前缀 + 字体文件身份摘要（v0.48.0）。** reportlab 对 TrueType 同名再注册静默忽略，只按候选序号命名会让
   别的文件拿回旧字体（Windows 上序号 0 恰是真字体，CI 两条红）。守卫 `tests/test_pdf_font_registration_identity.py`。
 
+### 9.3.1b 盘图 · app 信息板（河洛 / 神数，v0.49.0-dev）
+
+- **先量再画。** 河洛、神数各页中栏多是「信息板」（标签 / 值卡片）。加一块之前先证明它比正文多东西：SSR 出 app 的板方法，抽出全部文字
+  片段，繁转简后逐段对照 `snapshot_text`；只是把正文重排成卡片的不加（图不该重印正文）。2026-11-09 实测结论：
+  - **加**：河洛（HeLuoMain.renderCenter）。正文缺起卦详情 14 行、先后天卦画 + 纳甲六亲世应 + 元堂、卦辞吉凶 / 卦旨 / 互覆卦 / 理数标签、
+    易经爻辞与推命、大限每段吉凶。
+  - **不加**：皇极经世（卦符与元会运世位次正文已有）、太玄（四位卦画只是筮数 2·2·1·1 的字符图）、荆诀、神易数、邵子、铁板（八卦滚
+    卦画对应的卦名正文已列）、分定经、北极、南极、蠢子、神数正传（板上多出的只有推算式字串与「辟卦基数＋序数」）。
+    策天 / 演禽 / 坚七政 / 五兆早已有盘图。上游板改版（加了正文没有的内容）时按同法重量。
+- **长板按 app 自己的卡切成几张图。** 河洛中栏约 760 × 2400 px，一张图排进一页就小得没法读：`figures._APP_ONLY_PARTS` 列（部分, 图名），
+  规格带 `app_options.part`，`app_charts.plan` 并进 Node 请求的 options（起卦详情 / 先天卦 / 后天卦 / 大限）。纸面上无意义的交互件照删：
+  「经文」展开钮、下钻 ▾ 列、表头「点行看爻辞、点▾看流年」。
+- **板上另算的值由引擎同一次调用交出。** app 的 getModel 另算年柱纳音与 chartExtras；core-js `tools/heluo.js` 照同式放进
+  `heluo.board_context`，adapter 只把结果拼成 app 的 m、调 app 的 renderCenter。没有 board_context（旧 runtime）就不出图。
+  守卫 `tests/test_app_charts_heluo.py`（改结果里的值板跟着变；三条负向对照各自红）。
+- **页面兄弟模块的桩只对 app 内部引用生效。** HeLuoMain 在 `APP_UI_ONLY` 里（KinAstroMain 的兄弟页），adapter 用 `@horosa-app/` 直引拿到真模块，
+  KinAstroMain 那条引用仍是桩。卦辞库 heluoTiaowen.json（388 KB）在画图路径上；esbuild 缺省 ascii 字符集把 CJK 转成 `\u` 转义，
+  JSON 进 bundle 约翻倍（+0.76 MB）。bundle 上限 5 MB。
+
 ### 9.3.2 记忆存档（memory store / artifacts）
 
 - **`runs/` 的产物是一次起盘唯一的完整副本，写它绝不原地（v0.47.2-dev）。** `memory/store.py` 里写文件只有 `_write_json_atomic`（同目录临时文件 + fsync + `fsretry.replace`，失败清临时文件、不动原文件）；`write_text` / `write_bytes` 回潮即红（`test_the_store_has_no_in_place_writes`）。权限按 umask，改写沿用原文件的。

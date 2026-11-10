@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.49.0-dev (2026-11-09) | 河洛 / 神数的「信息板」要不要进报告：多数神数板只是把正文重排成卡片；河洛的板却有正文没有的大半内容，且整块 2400 px 高、要的纳音 / chartExtras 结果里没有、卦辞库让 bundle 超 4 MB | 逐板「抽文字 → 繁转简 → 对照 snapshot_text」定取舍，只加河洛；按 app 的卡切四张图；core-js 交 board_context；bundle 上限 5 MB；`tests/test_app_charts_heluo.py` 三条负向对照各红 |
 | v0.49.0-dev (2026-11-09) | app 盘图让 pytest 慢了三成（≈480 → 610–680 s），Windows x64 lane 本来就在 93%：每次出图的 Node 进程算完还空等约 2.5 s，app 原版代码加载时留着轮询的 setTimeout | `render-charts` 等 stdout 写完再 `process.exit(0)`；直接 exit 会截断在 65 511 字节（管道缓冲）；守卫两条，负向对照各自红 |
 | v0.49.0-dev (2026-11-09) | 报告盘图改用星阙 app 原版绘图代码（esbuild 打包 → linkedom 出 SVG → svglib 转矢量）：svglib 把非标准字体静默换成 Helvetica、`fill="transparent"` 画成黑块；app 紫微中宫把「121e28」当科学计数法印成 1°7′4″E（上游 bug，只报）；打包产物曾带进机器临时路径 | 字体走 Courier 占位再换回嵌入字体；SVG 先规整；adapter 只做无损记法换算；构建目录 realpath + 固定名 symlink，跨检出逐字节同一；`verify_app_charts_bundle.py` 进 preflight |
 | v0.48.1-dev (2026-11-09) | v0.48.0 Windows 原生复验：CLI `profile save` 只给地名不补坐标（门面补、CLI 绕过，之后起盘缺 zone / lat / lon 被拒）；`report.no_chart_content` 的恢复提示让八字 PNG 用户「去对八字出」；每份 PDF 重新解析 TrueType（Windows 大字体，110 份 728 次 106 秒），AGENTS 记的「TTFont 带每份文档状态、须每次新建」不成立 | CLI 走 `ToolsAPI.profile`；提示写明 PNG 只画有盘式的技法、改出 PDF / DOCX；`_TTF_CACHE` 按注册名 + mtime / 大小缓存（同一测试 133 → 88 秒，48 份渲染逐字节相同）|
@@ -194,6 +195,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.49.0-dev / 2026-11-09 — 河洛与神数的信息板：先量它比正文多什么，再决定画不画
+
+- **现象**：盘图「凡 app 有盘面的都补」做到河洛与 14 种神数时，这些页的中栏是「信息板」——标题、标签 / 值卡片、四柱格、条文卡。
+  照搬会让报告里每个神数多一两页「把正文再印一遍」的图。
+- **怎么判的**：dev-only 打包里加一个 SSR 入口，对每个板方法喂真实引擎结果（vendored 实例 8880 / 9980，样例载荷），抽出 HTML 的全部
+  文字片段，繁转简后逐段在 `snapshot_text` 里找。没找到的几乎都是卡片标签或把正文两项拼成一格（「3 / 162」「1113 · 干宫」）。
+  荆诀 29 段缺 4、神易数 46 缺 8、皇极 57 缺 9（卦符 ䷛ 与元会运世位次正文已有）、邵子 30 缺 2、分定经 42 缺 3、北极 70 缺 20、
+  南极 70 缺 11、蠢子 52 缺 12、铁板 99 缺 29（框架推演那几段正文也有，只是写法不同；八卦滚卦画对应的卦名正文已列）、
+  太玄 45 缺 9（四行 ▅ 是筮数 2·2·1·1 的字符图）、正传 75 缺 17（推算式字串与「辟卦基数＋序数」）。河洛 179 段缺 107：
+  起卦详情 14 行、纳甲六亲世应、卦旨 / 互覆卦 / 理数标签、易经爻辞与推命、大限吉凶都只在板上。所以只加河洛。
+- **河洛板的三个坑**：
+  1. 板要的 `m` 里有两样结果没有：年柱纳音（getModel 从八字取）与 chartExtras。不在 adapter 里补算（铁律 1），由 core-js
+     `tools/heluo.js` 同一次调用照 getModel 同式交进 `board_context`；没有它（旧 runtime）就不出图。
+  2. 整块中栏约 760 × 2400 px，按「高 ≤ 600 pt」收窄后字小得没法读。按 app 自己的卡切成四张（起卦详情 / 先天卦 / 后天卦 / 大限），
+     规格带 `app_options.part`。
+  3. HeLuoMain 早被列进 `APP_UI_ONLY`（KinAstroMain 的兄弟页，拖进诗文库）；adapter 用 `@horosa-app/` 直引拿真模块，KinAstroMain 的
+     那条仍是桩。卦辞库 heluoTiaowen.json 388 KB，进 bundle 却涨了 0.76 MB：esbuild 缺省 ascii 字符集把每个 CJK 字写成 `\uXXXX`。
+     bundle 3.71 → 4.47 MB，上限 4 → 5 MB。
+- **守卫**：`tests/test_app_charts_heluo.py`。负向对照：保留表头交互提示 → 红；adapter 自己用 chartExtras 算 → 「改结果里的值板跟着变」红；
+  figures 不要求 board_context → 「旧结果不出图」红。core-js 测试在实现前红（KeyError board_context）。
+- **顺带看到的上游问题（只报）**：kinastro 后端的快照把「乾」繁转简成「干」（邵子「卦名：干」、北极「干宫 · 码 1113」），app 板上邵子读
+  `raw.shaozi.guaName` 印的是「乾」，同一盘两处不一致。
+- **法则**：一块 app 板进报告之前先回答「它比正文多什么」，用抽文字对照来答，不凭印象；长板沿 app 自己的卡切。
 
 ### v0.49.0-dev / 2026-11-09 — 出一张图白等 2.5 秒：app 代码留下的定时器拖住了 Node 退出
 
