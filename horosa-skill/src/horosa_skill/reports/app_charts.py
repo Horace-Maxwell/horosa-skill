@@ -53,6 +53,9 @@ def _jinkou_payload(source: dict[str, Any]) -> dict[str, Any] | None:
     return {"board_context": source["board_context"], "liureng": prerequisites["liureng"], "jinkou": source.get("jinkou")}
 
 
+_SANSHI_TOOLS = frozenset({"sanshiunited", "sanshizeri"})
+# 奇门 pan 全给（三式盘的神煞 / 虚实 / 四柱助手各读不同的键），只去掉原始回包与导出段这些大块
+_SANSHI_QIMEN_HEAVY = frozenset({"raw", "allRaw", "sections", "source", "backend"})
 _QIMEN_PAN_KEYS = ("cells", "ganzhi", "options", "keGanZhi", "juText", "zhiFu", "zhiShi", "xunKong", "kongWang", "xunShou", "allKong",
                    "shiftPalace", "fengJu", "isJinhan", "dateStr", "timeStr", "realSunTime")
 _KIN_ZIWEI_KEYS = ("cetian", "dateStr", "hourBranch", "latitude", "longitude", "lunar", "mingGong", "palaceCards", "pillars",
@@ -97,6 +100,15 @@ _APP_ONLY_PAYLOADS = {
     # 五兆：kentang 盘的五位与古法层（positions / classic）= app 兆图读的那两块
     "wuzhao": lambda source: ({"raw": {key: source["raw"].get(key) for key in ("positions", "classic")}}
                               if isinstance(_dig(source, ["raw", "positions"]), list) else None),
+    # 一掌经：core-js 算正文那份 model 中 renderBoard 读的切片（board_context）
+    "yizhangjing": lambda source: ({"yizhangjing": {"board_context": source["yizhangjing"]["board_context"]}}
+                                   if isinstance(_dig(source, ["yizhangjing", "board_context", "chart"]), dict) else None),
+    # 统摄法：四宫所选八卦（selected）→ app 的 buildTongSheFaModel
+    "tongshefa": lambda source: ({"tongshefa": {"selected": source["tongshefa"]["selected"]}} if isinstance(_dig(source, ["tongshefa", "selected"]), dict) else None),
+    # 天文地图：/location/acg 原样响应（= app AcgD3Map 的 value）
+    # （出厂设置下交映 / 交叉点图层都关着，只送 meta + planets）
+    "acg": lambda source: ({"acg": {key: source["acg"][key] for key in ("meta", "planets") if key in source["acg"]}}
+                           if isinstance(_dig(source, ["acg", "planets"]), (dict, list)) else None),
     # 飞宫：起局三要素（起支 / 日干 / 日支）= JS 算正文时用的那一份，app 的 buildJu 照同一调用再起
     "feigong": lambda source: ({"feigong": {key: source["feigong"].get(key) for key in ("qiZhi", "dayGan", "dayZhi")}}
                                if isinstance(source.get("feigong"), dict) and all(source["feigong"].get(k) for k in ("qiZhi", "dayGan", "dayZhi")) else None),
@@ -135,6 +147,13 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
                 if not isinstance(payload.get("params"), dict) and isinstance(source.get("params"), dict):
                     payload["params"] = source["params"]  # 黄道 / 界 / 三分主星口径跟着本次请求走
                 requests.append((index, {"kind": "natal_wheel", "data": payload, "options": {"size": 760}}))
+        elif kind == "grid12" and tool_name in _SANSHI_TOOLS and isinstance(source.get("board_context"), dict) and isinstance(source.get("qimen"), dict):
+            # 三式合一：app 的三式合一盘（外圈星盘 + 奇门 + 六壬 + 课传）替换自绘的六壬天地盘；同一次起课的各层
+            prereq = source.get("prerequisites") if isinstance(source.get("prerequisites"), dict) else {}
+            suffix = spec["title"][len("六壬天地盘"):] if str(spec.get("title") or "").startswith("六壬天地盘") else ""
+            requests.append((index, {"kind": "sanshi", "title": f"三式合一盘{suffix}", "data": {
+                "board_context": source["board_context"], "qimen": {key: value for key, value in source["qimen"].items() if key not in _SANSHI_QIMEN_HEAVY},
+                "liureng": source.get("liureng") or {}, "displaySolarTime": prereq.get("displaySolarTime")}, "options": {}}))
         elif kind == "grid12" and spec.get("layout") == "india_south" and isinstance(source.get("chart"), dict):
             # 南印方盘：app 缺省盘式（IndiaSouthChart，HTML）照它的样式表重画成 SVG（adapters/india.js），同一份 chart
             params = source.get("params") if isinstance(source.get("params"), dict) else {}
@@ -192,7 +211,7 @@ def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, cl
     render = getattr(client, "render_app_charts", None)
     if callable(render):
         try:
-            results = render([request for _index, request in requests])
+            results = render([{key: value for key, value in request.items() if key != "title"} for _index, request in requests])
         except Exception as exc:  # noqa: BLE001 — 拿不到 app 的图就画原来的图，原因写进每张规格的 renderer_note
             failure = f"app-charts call failed: {type(exc).__name__}: {exc}"
             results = None
@@ -200,6 +219,8 @@ def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, cl
         result = results[position] if results else None
         if result and result.get("ok") and isinstance(result.get("svg"), str):
             out[index].update(renderer="app", app_kind=request["kind"], app_svg=result["svg"])
+            if request.get("title"):
+                out[index]["title"] = request["title"]  # app 的这张盘与自绘图不是同一种（三式：自绘六壬天地盘 → app 三式合一盘）
         else:
             reason = failure if results is None else str((result or {}).get("error") or "render failed")
             out[index]["renderer_note"] = f"app {request['kind']}: {reason}"

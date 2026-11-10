@@ -44,6 +44,7 @@ const APP_UI_ONLY = new RegExp([
   '^components/shusuan/(CanPingMain|HeLuoMain|ZhengChuanMain)$', '^components/yizhangjing/YiZhangJingMain$',
   '^components/yanqin/(YanQinBranchPanel|YanQinControls)$', '^utils/tiebanFrameworkLocal$',
 ].join('|'));
+const CSS_MODULES = /components\/sanshi\/SanShiUnitedMain\.less$/;
 const REAL_FOR_APP = /^(d3(-[a-z-]+)?|internmap|delaunator|robust-predicates|moment|react|react-dom|scheduler|object-assign|lunar-javascript)(\/|$)/;
 
 function stubModule(pkg, importer) {
@@ -84,7 +85,13 @@ const theme = lightThemeTokens(path.resolve(sourceRoot, APP_SRC_REL));
 const plugin = {
   name: 'horosa-app',
   setup(build) {
+    // `@horosa-app/x.less?text` = the stylesheet's text for an adapter (css.js / a board that reads its own rules)
+    build.onResolve({ filter: /^@horosa-app\/.*\.less\?text$/ }, (a) => ({ path: path.join(stage, 'app', a.path.slice('@horosa-app/'.length, -'?text'.length)), namespace: 'lesstext' }));
+    build.onLoad({ filter: /.*/, namespace: 'lesstext' }, (a) => ({ contents: fs.readFileSync(a.path, 'utf8'), loader: 'text' }));
     build.onResolve({ filter: /^@horosa-app\// }, (a) => ({ path: path.join(stage, 'app', a.path.slice('@horosa-app/'.length)) }));
+    // CSS-module stylesheets (`import styles from './X.less'` then styles.cls): in the app the bundler hashes the class names;
+    // here they resolve to the plain rule names, so the rendered markup says which rule each element wears.
+    build.onLoad({ filter: CSS_MODULES }, () => ({ contents: 'export default new Proxy({}, { get: (t, k) => (typeof k === "string" ? k : undefined) });', loader: 'js' }));
     build.onResolve({ filter: /^[^./]/ }, (a) => {
       if (!a.importer.startsWith(appPrefix) || REAL_FOR_APP.test(a.path)) return undefined;
       // one stub module per (package, importer): it exports exactly the names that file imports, so module-level code

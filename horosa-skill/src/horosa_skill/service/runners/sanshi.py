@@ -679,6 +679,13 @@ class SanshiRunners:
                 "chart_request": chart_request,
                 "isDiurnal": is_diurnal,
             },
+            # 报告盘图（app 原版 SanshiUnitedBoard）外圈要起课时刻那张星盘（宫位 / 星曜按地支）——上面已取到的同一张，切片留存；
+            # 直接时间取本次入参（页面 fmtDirect 读表单的日期 / 时间）
+            "board_context": {
+                "chart": {key: astro_chart.get(key) for key in ("objects", "houses")},
+                "date": payload.get("date"),
+                "time": payload.get("time"),
+            },
             **({"_warnings": sub_warnings} if sub_warnings else {}),
         }
 

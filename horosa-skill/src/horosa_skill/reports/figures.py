@@ -606,6 +606,9 @@ _APP_ONLY = {
     "guice": ("guice", "皇极轨策", ("guice",)),
     "lingqi": ("lingqi", "灵棋盘", ("counts",)),
     "wuzhao": ("wuzhao", "五兆兆图", ("raw",)),
+    "yizhangjing": ("yizhangjing", "一掌经十二宫盘", ("yizhangjing",)),
+    "tongshefa": ("tongshefa", "统摄法三象", ("tongshefa",)),
+    "acg": ("acg", "天文地图（行星线）", ("acg",)),
 }
 
 

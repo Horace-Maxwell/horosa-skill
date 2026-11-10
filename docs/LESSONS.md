@@ -289,6 +289,14 @@ reportlab 矢量）；HTML 网格类在 Python 里照样重画（下一批）。
   buildPan / buildGuicePan 再起一次——不在 adapter 里按名称倒推，也不另算。
 - **参考图的 less 预处理要按块剥 `:global { }`。** 文件级的 `:global {` 换成裸 `{` 浏览器整块丢弃，卜类的 cnx 样式一条没生效；
   要连同配对的 `}` 一起去掉（scratchpad 的 build_ref_css.py）。页面级类（`horosa-xlr-page` 等）也要套上，否则方格 / 居中规则不生效。
+- **CSS module 的类名在 SSR 里是空的。** 三式合一盘的标注靠 `styles.topBox` 这类 CSS module 类名定样式；esbuild 把 less 当文本，
+  `styles.x` 是 undefined，SSR 出来的元素没有 class，既排不了版也认不出是什么。构建时只对这一份样式表换成「styles.x 回 "x"」的
+  模块（`CSS_MODULES`），标记里就是规则名；排版再读同一份 less（`?text` 导入）。负向对照：去掉 → 三式两条测试红。
+- **d3-zoom 要 SVG DOM。** 天文地图的 rebuild 挂了平移缩放，d3-zoom 读 `svg.viewBox.baseVal` / `width.baseVal`；linkedom 没有这些接口，
+  直接抛错。给挂载的 svg 补只读值即可（只影响交互，不画任何东西）。
+- **大夹具按「证明代码路径」裁。** 天文地图一份结果里行星线坐标就 1 MB；夹具只留两颗行星（同一条绘制路径），payload 也只送出厂设置
+  会画的 meta + planets。
+- **测试里手写 `node --input-type=module` 会被守卫拦下。** Windows 上模块路径要转 file URL；一律走 `tests/node_esm.run_node_esm`。
 - **adapter 要照 pin 住的上游写。** 七政第一版照本机 Horosa-Public（已超前）引了 `utils/ascRaMode.js`，pin 上没有这个文件，打包直接失败。
   读 app 代码一律去 pin 的公开克隆。
 

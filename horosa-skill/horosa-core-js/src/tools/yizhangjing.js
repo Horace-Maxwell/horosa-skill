@@ -160,6 +160,12 @@ export function runYizhangjing(payload) {
       shenshaLayer: model.shenshaLayer,
       xiaoxian: buildXiaoxianRows(c, model),
       flowShen: buildFlowShenTable(c),
+      // 报告盘图（app 原版 YiZhangJingMain.renderBoard）读的那几块：同一份 model，原样切出，不另算
+      board_context: {
+        chart: ['dirText', 'fourIdx', 'fourPalaceRank', 'mingBranch', 'mingGe', 'mingIdx', 'mingStar', 'yinyang']
+          .reduce((acc, k) => ({ ...acc, [k]: c[k] }), {}),
+        ...['daoRows', 'daoTerm', 'gradeSet', 'input', 'naming', 'renshi', 'sishi'].reduce((acc, k) => ({ ...acc, [k]: model[k] }), {}),
+      },
     },
     snapshot_text: snapshotText,
   };

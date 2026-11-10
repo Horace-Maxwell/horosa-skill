@@ -193,6 +193,10 @@ def test_plan_gives_each_wheel_its_own_layer() -> None:
         ("guice", "guice", "四位盘"),
         ("lingqi", "lingqi", "灵棋盘"),
         ("wuzhao", "wuzhao", "空亡"),
+        ("yizhangjing", "yizhangjing", "命宫主星"),
+        ("tongshefa", "tongshefa", "互潜"),
+        ("acg", "acg", "acg-lines"),
+        ("sanshiunited", "sanshi", "旬空"),
     ],
 )
 def test_each_family_is_drawn_by_the_app_with_light_theme_tokens(tool: str, kind: str, marker: str) -> None:
@@ -409,3 +413,15 @@ def test_core_js_tools_return_the_cast_objects_the_board_needs() -> None:
     out = json.loads(run_node_esm(script, tools / "xiaochengtu.js", tools / "guice.js", cwd=PKG_ROOT / "horosa-core-js"))
     assert out["a"]["ben"]["lines"] and out["a"]["ben"]["up"] == "乾" and out["a"]["zhi"]["lines"]
     assert out["b"]["gua"]["up"] and out["b"]["gua"]["dongYao"]
+
+
+@needs_node
+def test_sanshi_board_replaces_the_liureng_grid_under_its_own_title() -> None:
+    """三式合一：自绘的是六壬天地盘；app 的是三式合一盘（外圈星盘 + 奇门 + 六壬 + 课传），换上时标题随之改（不是同一种盘）。
+    外圈要起课那张星盘——runner 留在 board_context；缺了就仍画自绘的六壬天地盘。"""
+    figures = _figures("sanshiunited")
+    board = next(f for f in figures if f.get("app_kind") == "sanshi")
+    assert board["title"] == "三式合一盘"
+    assert "阳遁" in board["app_svg"] and "驿马" in board["app_svg"], "the board's own info cards (旬 / 局, 神煞) are drawn"
+    data = {k: v for k, v in FIXTURE["sanshiunited"].items() if k != "board_context"}
+    assert all(r["kind"] != "sanshi" for _i, r in app_charts.plan("sanshiunited", data, extract_figures("sanshiunited", data, "sanshiunited")))

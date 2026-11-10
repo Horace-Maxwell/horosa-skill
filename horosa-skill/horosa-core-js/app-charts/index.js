@@ -24,6 +24,10 @@ import { renderXiaochengtu } from './adapters/xiaochengtu.js';
 import { renderGuice } from './adapters/guice.js';
 import { renderLingqi } from './adapters/lingqi.js';
 import { renderWuzhao } from './adapters/wuzhao.js';
+import { renderYizhangjing } from './adapters/yizhangjing.js';
+import { renderTongshefa } from './adapters/tongshefa.js';
+import { renderAcg } from './adapters/acg.js';
+import { renderSanshi } from './adapters/sanshi.js';
 import THEME from 'horosa-theme-tokens';
 import SCOPES from 'horosa-theme-scopes';
 
@@ -73,6 +77,10 @@ export const RENDERERS = {
   guice: renderGuice,
   lingqi: renderLingqi,
   wuzhao: renderWuzhao,
+  yizhangjing: renderYizhangjing,
+  tongshefa: renderTongshefa,
+  acg: renderAcg,
+  sanshi: renderSanshi,
 };
 
 /**

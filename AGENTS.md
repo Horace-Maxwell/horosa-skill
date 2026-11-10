@@ -1399,6 +1399,12 @@ A global stability pass hardened these; keep them true when you touch the releva
     的令牌与文字助手，页面令牌走 `themeScope: horosa-huangji-redesign`）；antd 件（Popover / Tag）是桩、SSR 不出来：Popover 在子类里
     剥掉外壳（`el.props.children`），Tag 那一枚自己画、值仍调 app 的判定函数（灵棋 isWuDay）。正文只回名称、盘要整对象时，由 core-js
     工具把算正文那一份对象放进 `board_context`（小成图 qi 的本 / 之卦、轨策 qiGua 结果），不在 adapter 里重算。bundle 上限 4 MB。
+    一掌经（core-js 交 renderBoard 读的 model 切片）、统摄法（导出的 buildTongSheFaModel + renderMatrixStylePanel，剥 Card）、天文地图
+    （AcgD3Map 实例化后调它自己的 rebuild；linkedom 缺 SVG DOM 的 viewBox / width / height baseVal，给挂载的 svg 补只读值供 d3-zoom 读）、
+    三式合一（SanshiUnitedBoard：CSS module 样式表——构建时让 `SanShiUnitedMain.less` 的 styles.x 回 "x"（`CSS_MODULES`），SSR 标记
+    才看得出每个元素穿哪条规则；内联的 % / px / calc() 几何按所在盒解析，配色字重取样式表；runner 留起课星盘 board_context；
+    换下自绘的六壬天地盘时标题随之改为「三式合一盘」——app 请求可带 `title`）。adapter 要读自己样式表的文字用 `@horosa-app/x.less?text`。
+    测试里跑 node ESM 一律走 `tests/node_esm.run_node_esm`（Windows 路径；守卫 test_subprocess_encoding）。
     推运双盘（Neroman / Jay / 次限）要后端外圈整盘，skill 特意 `withChart: 0`（~100 KB、正文不读）；七政择日动盘要 Moira 规则与整张七政盘，
     择日结果里没有——这两类要不要加请求等用户定，未接。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
