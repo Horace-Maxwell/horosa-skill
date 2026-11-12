@@ -60,6 +60,9 @@ def _evaluate_tool_case(case: dict[str, Any], result: Any) -> dict[str, Any]:
         "format_source_ok": (required_format_source is None or actual_format_source == required_format_source),
         "required_sections": required_sections,
         "required_fragments": required_fragments,
+        # 红了要能看出为什么：缺哪个段、哪个片段（此前只有一个 False，「宫头：」改成表格后要翻导出全文才知道）。
+        "missing_sections": [title for title in required_sections if title not in section_titles],
+        "missing_fragments": [fragment for fragment in required_fragments if fragment not in export_text],
     }
 
 
@@ -100,6 +103,7 @@ def _evaluate_faithfulness_case(case: dict[str, Any], result: Any) -> dict[str, 
         "trace_id": result.trace_id,
         "group_id": result.group_id,
         "faithfulness_ok": bool(verdict.get("ok")),
+        "faithfulness_status": verdict.get("status"),
         "flagged": flagged,
         "claims": verdict.get("claims", []),
         "expect_ok": expect_ok,
@@ -184,21 +188,45 @@ def _summarize(results: list[dict[str, Any]], *, skipped: list[str], dataset: di
             if item["verdict_ok"]:
                 passed += 1
     executed_count = len(executed)
+    total = len(dataset.get("cases", []))
+    gates = _gate_selftests()
+    ok = executed_count > 0 and passed == executed_count and gates["ok"]
+    # 结论与覆盖面放在一起（2026-11-11 深审 B-1）：`--skip-runtime` 只跑 120 条里的 3 条，此前报告顶层是一个光秃秃的
+    # pass_rate 1.0。现在 pass_rate 按全部 case 算，「跑了的里面过了几条」另记 pass_rate_executed；verdict 区分全量通过
+    # 与「只跑了一部分、跑了的都过了」。
+    verdict = "fail" if not ok else ("pass" if executed_count == total else "pass_partial")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "benchmark": dataset.get("metadata", {}),
-        "cases_total": len(dataset.get("cases", [])),
+        "verdict": verdict,
+        "coverage": {"executed": executed_count, "skipped": len(skipped), "total": total,
+                     "ratio": round(executed_count / total, 4) if total else 0.0},
+        "summary": bilingual(
+            f"{verdict}：执行 {executed_count}/{total} 条，通过 {passed} 条；跳过 {len(skipped)} 条（需要运行时）。",
+            f"{verdict}: executed {executed_count} of {total} cases, {passed} passed; {len(skipped)} skipped (they need the runtime).",
+        ),
+        "cases_total": total,
         "cases_executed": executed_count,
         "cases_skipped": len(skipped),
         "skipped_case_ids": skipped,
         "cases_passed": passed,
-        "pass_rate": round((passed / executed_count), 4) if executed_count else 0.0,
+        "pass_rate": round(passed / total, 4) if total else 0.0,
+        "pass_rate_executed": round(passed / executed_count, 4) if executed_count else 0.0,
         # 澄清闸自测（v0.33.0 批 II-2）：bench 与 pytest 共跑 sensitive_settings.json 的
         # self_tests + coverage 不变量（新工具漏登记闸表/策略=整轮 bench 红）。
-        "gate_selftests": _gate_selftests(),
-        "ok": executed_count > 0 and passed == executed_count and _gate_selftests()["ok"],
+        "gate_selftests": gates,
+        "ok": ok,
         "results": results,
     }
+
+
+def exit_code(report: dict[str, Any], *, require_full: bool = False) -> int:
+    """CLI / 脚本的退出码：失败 1；要求全量却只跑了一部分 2；其余 0。"""
+    if report.get("verdict") == "fail" or not report.get("ok"):
+        return 1
+    if require_full and report.get("verdict") != "pass":
+        return 2
+    return 0
 
 
 def _gate_selftests() -> dict[str, Any]:

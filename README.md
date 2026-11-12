@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-5167_passed-3e7c6f?style=flat-square" alt="5167 passed" />
+  <img src="https://img.shields.io/badge/测试-5498_passed-3e7c6f?style=flat-square" alt="5498 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -519,8 +519,9 @@ TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，�
 | 项 | 说明 |
 | --- | --- |
 | 开关 | `HOROSA_JEV=off`（默认）/ `shadow`（只记录它会怎么判，行为不变）/ `enforce`；密钥 `HOROSA_JEV_API_KEY`（Claude Desktop / 插件在设置里填，永不写进 Horosa 文件） |
-| 离机的数据 | 一档 `HOROSA_JEV_SCOPE=meta`（默认）：**本地脱敏**后的问题文本（日期 / 时刻 / 坐标 / 地名 / 号码 → 占位符）+ 技法名 + 设置键名；二档 `snapshot`：额外允许导出快照文本，仅供未来的忠实性/合参判定面 |
+| 离机的数据 | 一档 `HOROSA_JEV_SCOPE=meta`（默认）：问题原文经**本地脱敏**后的文本 + 技法名 + 设置键名（只有键名、没有值），没有别的。脱敏按构造做：**任何一串数字**（含全角）一律变 `<数字>`，认得出类型的先换成 `<日期>` `<时刻>` `<坐标>` `<电话>` `<证件号>` `<年龄>`；汉字数字的年月日时（一九九〇年、五月初三、八点半）、干支（庚午、甲子日）、时辰（辰时）、生肖（属马）、英文月份日期与钟点（May 3、8:15pm）；星阙地名库里的**每一个**地名（中文名、英文名、拼音，繁简都认）与本机命主档案的名字 / 别名 / 地点标签；「我叫 / 名叫 / 姓名 / my name is」引出的人名与「我姓王」；邮箱、手机号、身份证号、带门牌号的街道。地名库找不到时这一问不发。二档 `snapshot`：额外允许导出快照文本，仅供未来的忠实性/合参判定面 |
 | 不离机的数据 | 出生日期、时刻、坐标、地名原值；盘面与导出全文（一档）；密钥；本地记忆 |
+| 残余风险（认不出的写法会原样离机） | 不经引导词、单独出现的人名（「我老公李雷」「王小明 1990…」里的名字）；地名库里没有、也不带 省/市/县/区/镇/乡/村 后缀的地名（如「台中」「九龙」）、小区 / 单位 / 学校名、不带门牌号的街道；不带单位的汉字数字（「三十五」）。过度替换也有：与地名同字的普通词偶尔变成 `<地点>`（技法术语如「印度占星」「万年历」受保护）。 |
 | 服务商事实 | 托管闭源模型，美国机房；「不用于训练」是合同承诺（非架构保证）；数据留存无公开数字，零留存仅企业版 |
 | 每次自陈 | `data.technique_card.decisions[]` / `horosa_dispatch` 的 `decision_layer`（模型 id、选项、置信、是否采纳）；`horosa-skill jev status` / `jev events`（本地账本） |
 | 权限边界 | 代码持有权限：确定性路径永远是权威；`enforce` 需在自家中文标注集上晋升过的阈值锁；任何失败关闭式回落并写进 `warnings` |
@@ -535,7 +536,7 @@ TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，�
 - `report_render` 生成 DOCX / PDF / JSON：Markdown 表格渲染为真 Word 表格（跨页重复表头）、导航大纲、目录、页码、中文字体，异常自动降级保全文。
 - `report technique` 生成技法依据报告（机器元数据），与咨询报告（AI 终稿）分轨，互不混入。
 - **完整排盘报告**：`report render --style chart`（或 `report_render {style:"chart"}`）不经 AI 解读，直接把该技法的全部盘面段落排成 PDF / DOCX——封面、基本信息、盘图（星盘轮 / 合盘双圈 / 紫微十二宫 / 奇门九宫 / 六壬天地盘 / 六爻卦图 / 太乙十六宫 / 七政四余方盘 / 南印方盘 / 量化盘 90° 度盘；择日结果画选中时刻的盘；全部取自引擎数据；西洋盘、合盘、紫微、七政四余、太乙、大六壬、六爻、90° 度盘、金口诀、宿占、巴比伦、飞宫、米雄双黄道、坚七政、策天、演禽直接用星阙 app 自己的绘图代码画；奇门、南印、八字、地占、小六壬、小成图、轨策、灵棋、五兆、一掌经、统摄法、三式合一照 app 的版式与配色重画，天文地图直接用 app 的地图代码，配色、星体符号与 app 一致）、可点击目录与书签、「第 N 页 / 共 M 页」、技法依据附录。
-- **自备知识库**：把自己的笔记（`.md` / `.txt`）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。GBK / UTF-16 文件也能读，读不了的在 `knowledge mine` 的 `problems` 里写明原因；删除与覆盖先进回收站（`knowledge trash` / `knowledge restore`）；运行存档只记引用、不存笔记正文；`runtime uninstall --purge-data` 默认保留知识库。检索：`horosa_knowledge_search` / `horosa-skill knowledge search "词"`（两字词即可、繁简互通，标出处行号）；长笔记计算时只带与本盘相关的段落。可选向量检索（换了说法也能找到）：`setup --client <客户端> --vectors`——把依赖（约 128 MB）装进客户端起 server 的环境、下载并校验 24 MB 的 bge-small-zh 模型、向量化笔记，全部验证通过才写配置；连不上 Hugging Face 时设 `HF_ENDPOINT=<镜像>`（内容有 sha256 把关）。之后重跑 `setup` 会沿用，`--no-vectors` 关闭。`.mcpb` 一键包不带这些依赖，要用向量请走 `setup --client claude-desktop --vectors`。
+- **自备知识库**：把自己的笔记（`.md` / `.markdown` / `.txt` 文本文件；PDF、Word、JSON、没有扩展名的文件和隐藏文件不读，`knowledge mine` 的 `not_indexed` 与检索结果的 `warnings` 会按原因和扩展名列出来，另存成 .md 或 .txt 即可）放进 `horosa-skill knowledge mine` 列出的文件夹（或 `knowledge add <名> --file …`），计算时传 `knowledge:["条目名", "#标签", "auto"]`，选中的正文随结果挂在 `data.knowledge_context` 供 AI 参考（不进引擎、不改盘面；总字数受 `HOROSA_USER_KNOWLEDGE_MAX_CHARS` 限）。GBK / UTF-16 文件也能读，读不了的在 `knowledge mine` 的 `problems` 里写明原因；删除与覆盖先进回收站（`knowledge trash` / `knowledge restore`）；运行存档只记引用、不存笔记正文；`runtime uninstall --purge-data` 默认保留知识库。检索：`horosa_knowledge_search` / `horosa-skill knowledge search "词"`（两字词即可、繁简互通，标出处行号）；长笔记计算时只带与本盘相关的段落。可选向量检索（换了说法也能找到）：`setup --client <客户端> --vectors`——把依赖（约 128 MB）装进客户端起 server 的环境、下载并校验 24 MB 的 bge-small-zh 模型、向量化笔记，全部验证通过才写配置；连不上 Hugging Face 时设 `HF_ENDPOINT=<镜像>`（内容有 sha256 把关）。之后重跑 `setup` 会沿用，`--no-vectors` 关闭。`.mcpb` 一键包不带这些依赖，要用向量请走 `setup --client claude-desktop --vectors`。
 
 ```bash
 uv run horosa-skill knowledge add 八字/滴天髓笔记 --file ./notes.md --techniques bazi_birth --tags 古籍
@@ -570,7 +571,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **5167 / 5167 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **5498 / 5498 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -586,7 +587,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 5167 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 5498 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

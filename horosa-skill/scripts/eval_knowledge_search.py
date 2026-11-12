@@ -59,6 +59,21 @@ def evaluate_set(name: str) -> dict[str, Any]:
     }
 
 
+def evaluate_relevance(name: str = "relevance_2026_11_11") -> dict[str, Any]:
+    """每条要求的名次（top = 1 / 3）以内命中算过。K-2（2026-11-11）：裸词时手册的界面页、一行口诀排在专讲这个词的条目前面。"""
+    cases = json.loads(EVAL_FILE.read_text(encoding="utf-8"))["sets"][name]
+    per: dict[str, list[tuple[str, int | None, int]]] = defaultdict(list)
+    for case in cases:
+        per[case["class"]].append((case["q"], rank_of(case["q"], case["want"]), int(case.get("top") or 1)))
+
+    def rate(rows: list[tuple[str, int | None, int]]) -> float:
+        return round(sum(bool(rank and rank <= top) for _, rank, top in rows) / max(len(rows), 1), 3)
+
+    rows = [row for group in per.values() for row in group]
+    return {"n": len(rows), "hit": rate(rows), "classes": {cls: rate(group) for cls, group in per.items()},
+            "misses": [(q, rank, top) for q, rank, top in rows if not (rank and rank <= top)]}
+
+
 def self_names() -> list[tuple[str, str, str]]:
     """(domain, key, 显示名)：有中文名的条目；断语库的「标题」是一句话不是名字，不算。"""
     names = []

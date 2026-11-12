@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from collections.abc import Iterator
@@ -374,16 +375,10 @@ def _build_liureng_house_entry(bundle: dict[str, Any], jiang_name: str, tian_bra
 def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
     index = load_knowledge_index()
-    domains = [domain] if domain else sorted(bundles)
+    domains = [canonical_domain(domain)] if domain else sorted(bundles)
     result_domains: list[dict[str, Any]] = []
     for name in domains:
-        bundle = bundles.get(name)
-        if not bundle:
-            raise ToolValidationError(
-                f"Unknown knowledge domain: {name}",
-                code="knowledge.unknown_domain",
-                details={"domain": name},
-            )
+        bundle = bundles[name]
         if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
             result_domains.append(
                 {
@@ -486,17 +481,9 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
-    domain = f"{payload.get('domain') or ''}".strip()
+    domain = canonical_domain(payload.get("domain"))
     category = f"{payload.get('category') or ''}".strip()
     key = f"{payload.get('key') or ''}".strip()
-    if domain not in bundles:
-        # MCP-08（surface 批，最小改动）：空 domain 旧报「Unknown knowledge domain: 」——说清缺了什么、能填什么。
-        raise ToolValidationError(
-            bilingual(f"知识库 domain {'缺失' if not domain else f'不认识：{domain}'}。可选值见 details.accepted。",
-                      f"Knowledge domain {'is missing' if not domain else f'is unknown: {domain}'}; see details.accepted."),
-            code="knowledge.unknown_domain",
-            details={"domain": domain, "accepted": [*sorted(bundles), "user"]},  # "user" 由 service 层先接走（自备知识库）
-        )
     if bundles[domain].get("schema") == "horosa.knowledge.helpdoc.v1":
         return _read_helpdoc_entry(bundles[domain], domain=domain, category=category, key=key)
     if domain == "astro":
@@ -699,9 +686,150 @@ _DOMAIN_WORDS = {
     "节气": ("jieqi",), "三式": ("sanshi",), "玄史": ("xuanshi",), "演禽": ("yanqin",), "一掌经": ("yizhangjing",), "占星": ("astro_manual", "astro"),
 }
 _NAMED_DOMAIN_BOOST = 2.0
+# 裸词查询时往后放的条目（2026-11-11 深审 K-2）：手册里讲界面的页（右栏标签、排盘设置、快捷键…）与一行口诀。
+# 它们常把词提一遍却不讲它，「用神」「长生」「互容」排第一的都是这种页。仍在结果里，只是排在专讲这个词的条目后面。
+_ASIDE_FACTOR = 0.5
+_UI_KEY_WORDS = ("右栏", "页签", "标签", "设置", "显示", "快捷键", "配色", "档案管理", "检索与筛选", "分页", "导入", "导出", "保存",
+                 "使用提示", "挂载", "接口", "模版", "操作", "资料范围", "视角", "图层", "时间播放", "点选", "排障", "AI")
+_UI_DOMAINS = frozenset({"aianalysis", "astrodata_manual", "planetarium", "astro3d"})
+_ONE_LINER_CHARS = 40
+_HEADWORD_BONUS = 5.0  # 小于档内相关度的跨度（30），只在同档、相关度相近时起作用
 _THIN_RESULT = 3  # 比这还少又没有点名命中：多半是整串碰巧在哪儿连着出现过一次，补上切开后的结果
 _TIER_SCORE = {3: 100.0, 2: 60.0, 1: 30.0, 0: 0.0}  # 全等 > 名字里含 > 标题里含 > 只在正文
 _RELEVANCE_SPAN = 30.0  # 相关度压进 [0, 30)：档内按相关度排，永远越不过上一档
+
+
+# 英文术语 → 语料里的中文词（2026-11-11 深审 K-3）。只收语料自己中英对照过的：英文在语料里出现过，并且与这个中文词写在一起
+# （「主限法（Primary Direction）」这类），测试逐条核对，还要求中文词有命中。语料里没有英文写法的词（combust、retrograde…）
+# 不收：零命中时给近似标题建议，并说明语料是中文写的，而不是替语料编一个译名。中文一侧必须是语料里的标题 / 小节名 / 加粗词
+# （search_vocabulary）：hyleg→生命主、grand trine→大三角 这类只在正文里对照过的没有收。
+TERM_ALIASES: dict[str, str] = {
+    "firdaria": "法达星限", "profection": "小限法", "solar return": "太阳返照",
+    "lunar return": "月亮返照", "solar arc": "太阳弧", "primary direction": "主限法", "secondary progression": "次限推运",
+    "zodiacal releasing": "黄道星释", "lot of fortune": "幸运点", "lot of spirit": "精神点", "lot of marriage": "婚姻点",
+    "composite": "组合盘", "davison": "时空中点盘", "relocation": "异地重置盘", "draconic": "龙盘", "decans": "三十六旬",
+    "orb": "容许度", "whole sign": "整宫", "house system": "分宫制", "transits": "流年法", "mundane": "世俗盘",
+    "tropical": "回归黄道", "ephemeris": "星历", "decennials": "十年大运", "distributions": "界推运",
+    "planetary ages": "行星年龄", "planetary arc": "行星弧", "persian directed": "波斯向运", "prenatal syzygy": "产前朔望",
+    "lunation phase": "月相推运", "extra returns": "多重回归", "triplicity rulers": "三分主星", "thema mundi": "世界范式盘",
+    "muhurta": "择时", "varga": "分盘", "half-sum": "中点", "eminence": "显赫程度", "melothesia": "身体部位",
+    "klimata": "七气候带", "chorography": "占星地理分野", "age point": "年龄推进点",
+}
+
+
+@lru_cache(maxsize=1)
+def search_vocabulary() -> frozenset[str]:
+    """语料自己标出来的词：条目名、手册名、领域词、写法异体、分类名，以及正文里的小节名 / 加粗 / 「引号」词（按分隔符切开）。
+
+    零命中改写切词时优先用它（2026-11-11 深审 K-1）：「八字里的用神」该切成「八字 / 用神」，不是「八 / 字里 / 用神」。"""
+    raw: set[str] = set(_DOMAIN_WORDS) | {spelling for pair in retrieval.SPELLING_VARIANTS for spelling in pair}
+    for doc in search_docs():
+        raw |= set(doc.names) | {doc.category}
+        for pattern in _MARKED:
+            raw.update(match.group(1) for match in pattern.finditer(doc.body))
+    for bundle in load_knowledge_bundles().values():
+        raw.add(f"{bundle.get('label') or ''}".split(" · ")[0])
+    words: set[str] = set()
+    for item in raw:
+        for part in _VOCAB_SPLIT.split(retrieval.normalize(item)):
+            part = part.strip()
+            if 2 <= len(part) <= 8 and (retrieval.CJK_RUN.fullmatch(part) or re.fullmatch(r"[a-z][a-z\-]+", part)):
+                words.add(part)
+    return frozenset(words)
+
+
+_MARKED = (re.compile(r"\*\*([^*\n]{2,24})\*\*"), re.compile(r"「([^」\n]{2,16})」"), re.compile(r"^#{1,6}\s*(.+)$", re.M),
+           re.compile(r"【([^】\n]{2,16})】"))
+_VOCAB_SPLIT = re.compile(r"[\s/／·・、，,：:；;（）()「」【】<>《》|≠=+*#\-—…。！？!?●○◆◇▸▶•\[\]\d]+")
+
+
+# 自备知识库的域 id 与叫法。字面量与 knowledge/user.py 的 USER_DOMAIN 相同（那边 import 本模块，反过来会成环；测试钉两处相等）。
+USER_DOMAIN = "user"
+_USER_DOMAIN_NAMES = ("自备知识库", "自备", "笔记", "我的笔记", "用户笔记", "notes", "my notes", "user notes")
+_DOMAIN_KEY_NOISE = re.compile(r"[\s_\-·・/／()（）]+")
+
+
+def _domain_key(name: Any) -> str:
+    """域名比较用的键：全半角 / 繁简 / 大小写归一，再去掉空白与连接符（`Bazi-Pithy`、`bazi pithy`、`八字四柱·操作手册` 都认）。"""
+    return _DOMAIN_KEY_NOISE.sub("", retrieval.normalize(f"{name or ''}"))
+
+
+@lru_cache(maxsize=1)
+def domain_names() -> dict[str, str]:
+    """归一后的叫法 → 域 id。来源只有三处：域 id、手册自己的显示名（整名 / 「·」前半 / 去括号）、查询点名领域用的 `_DOMAIN_WORDS`。
+
+    先登记的不被覆盖：「八字」是 `_DOMAIN_WORDS` 里排第一的 bazi，不是名字里也带「八字」的断语库。
+    """
+    bundles = load_knowledge_bundles()
+    names: dict[str, str] = {}
+
+    def add(name: str, domain: str) -> None:
+        key = _domain_key(name)
+        if key:
+            names.setdefault(key, domain)
+
+    for domain in sorted(bundles):
+        add(domain, domain)
+    for name in (USER_DOMAIN, *_USER_DOMAIN_NAMES):
+        add(name, USER_DOMAIN)
+    for word, targets in _DOMAIN_WORDS.items():
+        add(word, targets[0])
+    for domain in sorted(bundles):
+        label = f"{bundles[domain].get('label') or ''}"
+        head = label.rsplit("·", 1)[0].strip()
+        for name in (label, head, re.sub(r"[（(].*?[）)]", "", head)):
+            add(name, domain)
+    return names
+
+
+def domain_listing(*, with_user: bool = True) -> list[dict[str, str]]:
+    """可用的域：[{domain, label}]。报错与 registry 用同一份。"""
+    bundles = load_knowledge_bundles()
+    listing = [{"domain": domain, "label": f"{bundles[domain].get('label') or ''}"} for domain in sorted(bundles)]
+    if with_user:
+        listing.append({"domain": USER_DOMAIN, "label": _USER_DOMAIN_NAMES[0]})
+    return listing
+
+
+def unknown_domain_error(name: Any, *, with_user: bool = True) -> ToolValidationError:
+    text = f"{name or ''}".strip()
+    listing = domain_listing(with_user=with_user)
+    names = domain_names()
+    near = difflib.get_close_matches(_domain_key(text), list(names), n=3, cutoff=0.6)
+    suggestions = list(dict.fromkeys(names[key] for key in near if with_user or names[key] != USER_DOMAIN))
+    hint_zh = f"是不是：{'、'.join(suggestions)}？" if suggestions else ""
+    hint_en = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
+    # 消息里只放显示名的前半：整名里有「 / 」，会和双语分隔符撞上（完整显示名在 details.valid_domains）。
+    shown_zh = "、".join(f"{row['domain']}（{row['label'].rsplit('·', 1)[0].strip()}）" if row["label"] else row["domain"] for row in listing)
+    return ToolValidationError(
+        bilingual(
+            f"没有这个知识域：{text}。{hint_zh}可用的域（id 或中文名都行，繁简、大小写不限）：{shown_zh}。",
+            f"Unknown knowledge domain: {text}.{hint_en} Valid domains (an id or its Chinese display name, either script, any case): "
+            f"{', '.join(row['domain'] for row in listing)}.",
+        ),
+        code="knowledge.unknown_domain",
+        # `accepted`：与其余「值不在可选表里」的错误同一个键（report.format_unsupported 等，MCP 错误契约测试按它读）；
+        # `valid_domains` 带显示名，给要念给用户听的客户端。
+        details={"domain": text, "accepted": [row["domain"] for row in listing], "valid_domains": listing, "suggestions": suggestions},
+    )
+
+
+def canonical_domain(name: Any, *, with_user: bool = False) -> str:
+    """`domain` 参数 → 域 id。认 id、显示名、繁体、任意大小写；认不出抛一条带可用清单的双语错误（三处入口同一条）。
+
+    `with_user`：自备知识库（user）在这个入口能不能用。内置语料自己的函数不认它。
+    """
+    domain = domain_names().get(_domain_key(name))
+    if domain is None or (domain == USER_DOMAIN and not with_user):
+        raise unknown_domain_error(name, with_user=with_user)
+    return domain
+
+
+def domain_also_named(name: Any) -> tuple[str, ...]:
+    """这个叫法在 `_DOMAIN_WORDS` 里还指着哪些别的域（「八字」→ 过滤用 bazi，另有 bazi_pithy）：过滤只取一个域，其余要说出来。"""
+    key = _domain_key(name)
+    return next((targets[1:] for word, targets in _DOMAIN_WORDS.items() if _domain_key(word) == key), ())
+
 
 
 @dataclass(frozen=True)
@@ -798,6 +926,18 @@ def search_docs() -> tuple[SearchDoc, ...]:
     return tuple(_search_doc(*coordinate) for coordinate in _coordinates())
 
 
+def _is_aside(doc: SearchDoc) -> bool:
+    if doc.domain == "bazi_pithy":
+        return len(doc.body) - len(doc.title) < _ONE_LINER_CHARS
+    return doc.category == "手册" and (doc.domain in _UI_DOMAINS or any(word in doc.key for word in _UI_KEY_WORDS))
+
+
+def _term_group(term: tuple[str, ...]) -> str:
+    """同一个词的不同写法（七杀 / 七煞）算一个词：AND 只要求其中一种写法出现。"""
+    joined = "".join(term)
+    return min(joined, retrieval._VARIANT_OF.get(joined, joined))
+
+
 def _tier(doc: SearchDoc, exact: str, tokens: tuple[str, ...]) -> int:
     if exact in doc.names:
         return 3
@@ -806,8 +946,15 @@ def _tier(doc: SearchDoc, exact: str, tokens: tuple[str, ...]) -> int:
     return 1 if tokens and retrieval.term_count(doc.fields[0][0], tokens) else 0
 
 
-def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int]) -> list[tuple[float, bool, SearchDoc]]:
-    """(分数, 是否全等, 文档)，分数降序。分数 = 档位底分 + 相关度：同一档内按相关度排，不会再一片同分。"""
+def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int],
+          stats: dict[str, Any] | None = None) -> list[tuple[float, bool, SearchDoc]]:
+    """(分数, 是否全等, 文档)，分数降序。分数 = 档位底分 + 相关度：同一档内按相关度排，不会再一片同分。
+
+    2026-11-11 深审 K-2：
+    - 查询里点名的领域词（「八字 用神」的「八字」）只用来加权，不再自己贡献相关度：此前「八字断语库」的标题里就有「八字」，
+      一行口诀凭标题把专讲用神的条目挤到第三。
+    - 去掉领域词后只剩一个词（裸词）：讲界面的手册页与一行口诀乘 _ASIDE_FACTOR，仍在结果里。
+    - 两个以上的词：同时含全部词的排在只含部分词的前面；`stats["match_mode"]` = all / any（没有一条全含时退回 any）。"""
     parsed = retrieval.parse_query(query)
     exact = retrieval.normalize(query).strip()
     tokens = retrieval.TOKEN.findall(exact)
@@ -819,21 +966,79 @@ def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int]) -
             df[term] = sum(1 for doc in corpus if retrieval.term_count(doc.haystack, term))
     ranked: list[tuple[float, bool, SearchDoc]] = []
     named = {term: _DOMAIN_WORDS["".join(term)] for term in parsed.scored if "".join(term) in _DOMAIN_WORDS}
+    topic_terms = [term for term in parsed.scored if term not in named]
+    groups = {_term_group(term) for term in topic_terms}
+    bare = len(groups) == 1
+    covers_all: dict[int, bool] = {}
     for doc in corpus:
         by_term = {
             term: retrieval.bm25(sum(weight * retrieval.term_count(text, term) for text, weight in doc.fields),
                                  df[term], n_docs, len(doc.haystack), avg_len)
             for term in parsed.scored}
-        relevance = sum(by_term.values())
         topic = sum(score for term, score in by_term.items() if term not in named)
+        relevance = topic if topic_terms else sum(by_term.values())
         if topic and any(doc.domain in domains for domains in named.values()):
             relevance *= _NAMED_DOMAIN_BOOST
+        if bare and _is_aside(doc) and not any(
+                by_term[term] and retrieval.term_count(text, term) for term in topic_terms for text, _ in doc.fields[:2]):
+            # 只在正文里顺带提到才往后放：词出现在条目名 / 分类名里（「三字诀」「八字排盘设置」）就是在问这一条
+            relevance *= _ASIDE_FACTOR
         tier = _tier(doc, exact, whole)
-        if tier == 0 and relevance <= 0:
+        if tier == 0 and relevance <= 0 and not any(by_term.values()):
             continue
-        ranked.append((round(_TIER_SCORE[tier] + _RELEVANCE_SPAN * relevance / (1 + relevance), 4), tier == 3, doc))
-    ranked.sort(key=lambda row: (-row[0], row[2].domain, row[2].category, row[2].key))
+        # 「全含」：每个词都出现；条目名正好是其中一个词的（「太阳天蝎」里的「太阳」「天蝎」两条）也算——它就是在讲那个词。
+        covers_all[id(doc)] = len(groups) > 1 and (
+            groups <= {_term_group(term) for term in topic_terms if by_term[term] > 0}
+            or any("".join(term) in doc.names for term in topic_terms))
+        base = _TIER_SCORE[tier]
+        if tier == 2 and any(name.startswith(exact) for name in doc.names):
+            base += _HEADWORD_BONUS  # 名字以这个词开头（「四化与运限」之于「四化」）：比词只在名字中间出现的更像是在讲它
+        ranked.append((round(base + _RELEVANCE_SPAN * relevance / (1 + relevance), 4), tier == 3, doc))
+    ranked.sort(key=lambda row: (not covers_all.get(id(row[2])), -row[0], row[2].domain, row[2].category, row[2].key))
+    if stats is not None and len(groups) > 1:
+        stats["match_mode"] = "all" if any(covers_all.values()) else "any"
+        stats["terms"] = sorted(groups)
     return ranked
+
+
+def rewrite_query(query: str) -> str | None:
+    """检索会怎么改写这句话（英文换中文 + 去问句外壳 + 按语料词表切词），不管原句有没有命中；没得改返回 None。
+
+    search_knowledge 只在原句命中太少时才改写；这里给评测与测试一个不依赖命中数的入口（contracts/knowledge_question_rewrite.json）。"""
+    aliased, used = retrieval.apply_aliases(query, TERM_ALIASES)
+    if used:  # 英文已经换成语料里的中文词：不再切（「主限法」切开只会变成「主限」）
+        return aliased
+    corpus = search_docs()
+    whole_query = retrieval.normalize(aliased)
+    rewritten = retrieval.expand_query(
+        aliased, retrieval.cached(lambda term: 0 if term == whole_query else sum(1 for doc in corpus if term in doc.haystack)),
+        len(corpus), search_vocabulary())
+    return rewritten or (aliased if used else None)
+
+
+def corpus_suggestions(query: str, domain: str | None = None, *, limit: int = 5) -> list[str]:
+    """零命中时的「是不是想搜」：与查询最接近的条目名 / 语料词（difflib），英文查询还对英文别名比。"""
+    text = retrieval.normalize(query).strip()
+    names = {name for doc in search_docs() if not domain or doc.domain == domain for name in doc.names
+             if 2 <= len(name) <= 12 and " · " not in name}
+    pool = sorted(names | search_vocabulary())
+    found = difflib.get_close_matches(text, pool, n=limit, cutoff=0.5)
+    if re.search(r"[a-z]", text):
+        found += [TERM_ALIASES[english] for english in difflib.get_close_matches(text, list(TERM_ALIASES), n=limit, cutoff=0.6)]
+    return list(dict.fromkeys(found))[:limit]
+
+
+def no_match(query: str, suggestions: list[str]) -> dict[str, Any]:
+    """零命中的说明（双语）：语料是中文写的；给出建议词。"""
+    english = bool(re.search(r"[A-Za-z]", query)) and not retrieval.CJK_RUN.search(retrieval.normalize(query))
+    tried = "、".join(suggestions)
+    zh = ("内置知识是中文写的，英文词多半搜不到：换成中文术语再搜。" if english else "没有找到：换个说法，或拆成更短的词（两个字也能查）。")
+    en = ("The bundled knowledge is written in Chinese, so most English words find nothing: search with the Chinese term."
+          if english else "Nothing found: rephrase, or use shorter terms (two Chinese characters are enough).")
+    if suggestions:
+        zh += f"相近的词：{tried}。"
+        en += f" Closest terms: {', '.join(suggestions)}."
+    return {"suggestions": suggestions, "no_match": bilingual(zh, en)}
 
 
 def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> dict[str, Any]:
@@ -846,17 +1051,11 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
     query = f"{payload.get('query') or ''}".strip()
     if not query:
         raise ToolValidationError(
-            "knowledge search requires a non-empty `query`",
+            bilingual("检索词是空的：给 query 一个词。", "knowledge search requires a non-empty `query`"),
             code="knowledge.search.empty_query",
             details={},
         )
-    domain_filter = f"{payload.get('domain') or ''}".strip() or None
-    if domain_filter and domain_filter not in load_knowledge_bundles():
-        raise ToolValidationError(
-            f"Unknown knowledge domain: {domain_filter}",
-            code="knowledge.unknown_domain",
-            details={"domain": domain_filter},
-        )
+    domain_filter = canonical_domain(payload.get("domain")) if f"{payload.get('domain') or ''}".strip() else None
     try:
         limit = int(payload.get("limit") or 8)
     except (TypeError, ValueError):
@@ -864,16 +1063,21 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
     limit = max(1, min(limit, 20))
     corpus = [doc for doc in search_docs() if not domain_filter or doc.domain == domain_filter]
     df: dict[tuple[str, ...], int] = {}
-    ranked = _rank(corpus, query, df)
-    expanded = None
-    if len(ranked) < _THIN_RESULT and " " not in query and not any(row[1] for row in ranked):
-        whole_query = retrieval.normalize(query)
-        expanded = retrieval.expand_query(
-            query, retrieval.cached(lambda term: 0 if term == whole_query else sum(1 for doc in corpus if term in doc.haystack)),
-            len(corpus))
-        if expanded:
+    # 英文术语先换成语料里的中文词（语料是中文写的）：「primary direction」→「主限法」。换了什么写进 aliases_used。
+    aliased, used = retrieval.apply_aliases(query, TERM_ALIASES)
+    stats: dict[str, Any] = {}
+    ranked = _rank(corpus, aliased, df, stats)
+    expanded = aliased if used else None
+    if len(ranked) < _THIN_RESULT and " " not in aliased and not any(row[1] for row in ranked):
+        whole_query = retrieval.normalize(aliased)
+        rewritten = retrieval.expand_query(
+            aliased, retrieval.cached(lambda term: 0 if term == whole_query else sum(1 for doc in corpus if term in doc.haystack)),
+            len(corpus), search_vocabulary())
+        if rewritten:
+            expanded = rewritten
             found = {id(row[2]) for row in ranked}  # 原查询的命中留在前面：改写只补不换
-            ranked = [*ranked, *(row for row in _rank(corpus, expanded, df) if id(row[2]) not in found)]
+            stats = {}
+            ranked = [*ranked, *(row for row in _rank(corpus, rewritten, df, stats) if id(row[2]) not in found)]
     terms = [term for term in retrieval.parse_query(expanded or query).terms if term]
     matches = [
         {
@@ -901,6 +1105,16 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
     }
     if expanded:
         result["expanded_query"] = expanded
+    if used:
+        result["aliases_used"] = [[english, chinese] for english, chinese in used if chinese]
+    if stats.get("match_mode"):
+        result["match_mode"] = stats["match_mode"]
+        if stats["match_mode"] == "any":
+            result["warnings"] = [bilingual(
+                f"没有一条同时含全部检索词（{'、'.join(stats['terms'])}），下面是只含其中一部分的结果。",
+                f"No entry contains all of the search terms ({', '.join(stats['terms'])}); these match only some of them.")]
+    if not ranked:
+        result.update(no_match(query, corpus_suggestions(query, domain_filter)))
     if looks_traditional(query):
         result["query_folded"] = fold_to_simplified(query)
     return result

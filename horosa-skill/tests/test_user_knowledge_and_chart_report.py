@@ -124,8 +124,8 @@ def test_budget_is_shared_and_truncation_is_marked(tmp_path: Path) -> None:
     context = user_knowledge.build_context(settings, ["长", "短"], tool_name="chart")
     long_entry, short_entry = context["entries"]
     assert long_entry["truncated"] is True and long_entry["selection"] == "relevant" and long_entry["passages"]
-    assert short_entry["truncated"] is False and short_entry["text"] == "乙" * 100
-    assert sum(len(e["text"]) for e in context["entries"]) <= 1000
+    assert short_entry["truncated"] is False and user_knowledge.unfence(short_entry["text"]) == "乙" * 100
+    assert sum(len(user_knowledge.unfence(e["text"])) for e in context["entries"]) <= 1000  # 预算算正文，不算围栏
     assert context["max_chars"] == 1000
 
 
@@ -186,7 +186,7 @@ def test_remove_goes_to_the_trash_and_restore_brings_it_back(tmp_path: Path) -> 
     assert gone.value.code == "knowledge.user_not_found"
     restored = user_knowledge.restore_entry(settings, removed["trash_id"])
     assert restored["restored"] == "占卜/求财心得.txt"
-    assert user_knowledge.read_entry(settings, "占卜/求财心得")["text"] == "小六壬遇速喜，求财宜速。"
+    assert user_knowledge.unfence(user_knowledge.read_entry(settings, "占卜/求财心得")["text"]) == "小六壬遇速喜，求财宜速。"
     assert user_knowledge.list_trash(settings) == []
     with pytest.raises(ToolValidationError) as missing:
         user_knowledge.restore_entry(settings, "../../etc")
@@ -217,7 +217,7 @@ def test_read_and_search_user_entries(tmp_path: Path) -> None:
     _seed(tmp_path / "kb")
     settings = _settings(tmp_path)
     read = user_knowledge.read_entry(settings, "滴天髓笔记")
-    assert read["domain"] == "user" and read["lines"] == ["天道：欲识三元万法宗。"]
+    assert read["domain"] == "user" and read["lines"] == [user_knowledge.FENCE_OPEN, "天道：欲识三元万法宗。", user_knowledge.FENCE_CLOSE]
     assert "用户自备知识库" in read["citation"]
     hits = user_knowledge.search_matches(settings, "求财")
     assert hits[0]["key"] == "占卜/求财心得" and hits[0]["domain"] == "user"
@@ -258,7 +258,7 @@ def test_run_tool_attaches_selected_knowledge_without_touching_the_chart(tmp_pat
     refs = stored_run["data"]["knowledge_context"]["entries"]
     assert [ref["id"] for ref in refs] == ["滴天髓笔记", "通用"]
     assert all("text" not in ref and ref["text_stored"] is False and len(ref["sha256"]) == 64 for ref in refs)
-    assert result.data["knowledge_context"]["entries"][0]["text"] == "天道：欲识三元万法宗。"  # 交给 AI 的那份仍有全文
+    assert user_knowledge.unfence(result.data["knowledge_context"]["entries"][0]["text"]) == "天道：欲识三元万法宗。"  # 交给 AI 的那份仍有全文
 
 
 def test_knowledge_selection_never_reaches_the_engine_request(tmp_path: Path) -> None:

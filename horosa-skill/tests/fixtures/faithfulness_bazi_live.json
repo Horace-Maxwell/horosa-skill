@@ -1,0 +1,138 @@
+{
+ "_provenance": "bazi_birth live run of testing_payloads sample (shared vendored engine chart :8877 / java :9977), 2026-11-12; trimmed to the keys benchmark/faithfulness.extract_facts reads for the day-master / 格局 / 大运 families. Re-record by re-running the same payload.",
+ "tool": "bazi_birth",
+ "payload": {
+  "agent_confirmed_settings": true,
+  "clarification_notes": "self-check fixture with explicit test settings",
+  "date": "2028-04-06",
+  "time": "09:33:00",
+  "zone": "+08:00",
+  "lat": "31n13",
+  "lon": "121e28",
+  "gpsLat": 31.2167,
+  "gpsLon": 121.4667,
+  "ad": 1
+ },
+ "data": {
+  "bazi": {
+   "fourColumns": {
+    "year": {
+     "ganzi": "戊申",
+     "stem": {
+      "cell": "戊",
+      "element": "Earth",
+      "polar": "Positive"
+     }
+    },
+    "month": {
+     "ganzi": "丙辰",
+     "stem": {
+      "cell": "丙",
+      "element": "Fire",
+      "polar": "Positive"
+     }
+    },
+    "day": {
+     "ganzi": "辛酉",
+     "stem": {
+      "cell": "辛",
+      "element": "Metal",
+      "polar": "Negative"
+     }
+    },
+    "time": {
+     "ganzi": "癸巳",
+     "stem": {
+      "cell": "癸",
+      "element": "Water",
+      "polar": "Negative"
+     }
+    }
+   },
+   "gejuYongShen": {
+    "geju": {
+     "name": "正印格",
+     "tenGod": "印",
+     "gan": "戊",
+     "via": "本气透干"
+    },
+    "bianGe": [
+     {
+      "type": "化气",
+      "name": "辛丙合化水",
+      "cond": "日干合月干·化神未必得令",
+      "yong": "生扶水",
+      "bei": "克泄水",
+      "note": "化神未得令恐假化，待运补化神，请复核。"
+     }
+    ],
+    "zaGe": [
+     {
+      "name": "杂气财官格",
+      "cond": "辰月库藏乙(才)",
+      "note": "喜刑冲开库或透出，库闭则待运。",
+      "group": "虚邀暗冲",
+      "quality": "待复核",
+      "broken": []
+     }
+    ]
+   },
+   "direction": [
+    {
+     "startYear": 2037,
+     "mainDirect": {
+      "ganzi": "丁巳"
+     }
+    },
+    {
+     "startYear": 2047,
+     "mainDirect": {
+      "ganzi": "戊午"
+     }
+    },
+    {
+     "startYear": 2057,
+     "mainDirect": {
+      "ganzi": "己未"
+     }
+    },
+    {
+     "startYear": 2067,
+     "mainDirect": {
+      "ganzi": "庚申"
+     }
+    },
+    {
+     "startYear": 2077,
+     "mainDirect": {
+      "ganzi": "辛酉"
+     }
+    },
+    {
+     "startYear": 2087,
+     "mainDirect": {
+      "ganzi": "壬戌"
+     }
+    },
+    {
+     "startYear": 2097,
+     "mainDirect": {
+      "ganzi": "癸亥"
+     }
+    },
+    {
+     "startYear": 2107,
+     "mainDirect": {
+      "ganzi": "甲子"
+     }
+    },
+    {
+     "startYear": 2117,
+     "mainDirect": {
+      "ganzi": "乙丑"
+     }
+    }
+   ]
+  }
+ }
+}

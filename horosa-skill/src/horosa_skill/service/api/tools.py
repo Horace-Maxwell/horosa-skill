@@ -238,8 +238,8 @@ class ToolsAPI:
             **user_knowledge.overview(self.settings, limit=200),
             "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto / ?检索词]，选中的正文挂在 data.knowledge_context"
                           "（长条目只带与本盘相关的段落，每段标标题与行号）；检索：horosa_knowledge_search；精读一条："
-                          "knowledge_read(domain=\"user\", key=…, from_line=…)。往文件夹里放 .md / .txt 即可新增；"
-                          "problems 列出没能读入的文件和原因。",
+                          "knowledge_read(domain=\"user\", key=…, from_line=…)。往文件夹里放 .md / .markdown / .txt 即可新增；"
+                          "problems 列出读不了的文件和原因，not_indexed 列出格式不读的文件（PDF、Word 等，另存成 .md 或 .txt）。",
         }
 
     def knowledge_search(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -252,13 +252,28 @@ class ToolsAPI:
             raise ToolValidationError(bilingual("知识检索的参数不对。", "Invalid payload for knowledge search."),
                                       code="knowledge.search.invalid_payload", details={"errors": exc.errors()}) from exc
         result = self._search_knowledge(request.model_dump())
-        matches = result.get("matches") or []
-        result["how_to_read"] = (
-            "精读一条：horosa_knowledge_read，参数取命中项的 read 字段（自备笔记带 from_line，从命中段开始读）；"
-            "内置条目用 domain + category + key。" if matches else
-            "没有命中：换个说法、拆成更短的词（两个字也能查），或去掉 domain 过滤。"
-        )
+        result["how_to_read"] = self._how_to_read(bool(result.get("matches")))
         return result
+
+    def _how_to_read(self, found: bool) -> str:
+        """怎么精读一条命中：点名的工具必须是这个进程真的暴露出去的那个。
+
+        精简面（HOROSA_MCP_COMPACT=1）没有 horosa_knowledge_read：照旧写它，客户端照着调就是 Unknown tool。"""
+        if not found:
+            return bilingual(
+                "没有命中：换个说法、拆成更短的词（两个字也能查），或去掉 domain 过滤。",
+                "No match: rephrase, use shorter terms (two Chinese characters are enough), or drop the domain filter.",
+            )
+        via_run = ("horosa_tool_run（tool_name 填 knowledge_read，request 填命中项的 read 字段）",
+                   "horosa_tool_run with tool_name=\"knowledge_read\" and request = the match's `read` object")
+        tail = ("自备笔记的 read 带 from_line，从命中段开始读。", "For user notes `read` carries from_line, so reading starts at the matching passage.")
+        if self.settings.mcp_compact:
+            return bilingual(f"精读一条：{via_run[0]}。{tail[0]}", f"To read a match in full: call {via_run[1]}. {tail[1]}")
+        return bilingual(
+            f"精读一条：horosa_knowledge_read，参数取命中项的 read 字段；工具列表里没有它时改用 {via_run[0]}。{tail[0]}",
+            "To read a match in full: call horosa_knowledge_read with the match's `read` object as arguments; "
+            f"if that tool is not in your tool list, call {via_run[1]}. {tail[1]}",
+        )
 
     def _search_knowledge(self, payload: dict[str, Any]) -> dict[str, Any]:
         return knowledge_search.search_all(self.settings, payload)
@@ -283,10 +298,11 @@ class ToolsAPI:
             ) from exc
 
     def _local_knowledge_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
+        domain, _notes = knowledge_search.resolve_domain(payload.get("domain"))
+        if domain == user_knowledge.USER_DOMAIN:
             return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
-        registry = build_knowledge_registry(domain=payload.get("domain"))
-        if not payload.get("domain"):
+        registry = build_knowledge_registry(domain=domain or None)
+        if not domain:
             registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
         return registry
 
@@ -294,7 +310,7 @@ class ToolsAPI:
         if f"{payload.get('query') or ''}".strip():
             # 检索已有专门的门面 horosa_knowledge_search（v0.45.0）；knowledge_read 带 query 的老用法照旧可用。
             return self._search_knowledge(payload)
-        domain = f"{payload.get('domain') or ''}".strip()
+        domain, _notes = knowledge_search.resolve_domain(payload.get("domain"))
         if domain == user_knowledge.USER_DOMAIN:
             return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
                                              from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))

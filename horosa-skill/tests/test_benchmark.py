@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from horosa_skill.benchmark import load_benchmark_dataset, run_benchmark
 from horosa_skill.config import Settings
 
@@ -107,3 +110,74 @@ def test_bench_records_a_broken_case_instead_of_aborting(tmp_path, monkeypatch) 
     item = next(r for r in report["results"] if r["id"] == "faith_tarot_missing_fields")
     assert item["ok"] is False and item["error_code"] == "tool.invalid_payload" and item["verdict_ok"] is False
     assert report["ok"] is False and report["cases_executed"] >= 3
+    assert report["verdict"] == "fail" and bench.exit_code(report) == 1
+
+
+# ── 2026-11-11 深审 B-1：结论旁边写覆盖面；数据集片段对着仓里录下的真实导出核对 ─────────────────────────────
+
+
+def test_a_partial_run_reports_coverage_and_never_a_bare_full_pass_rate(tmp_path) -> None:
+    """此前 `--skip-runtime` 跑 120 条里的 3 条，顶层报 pass_rate 1.0、ok true，CI 日志读起来像全量通过。"""
+    from horosa_skill.benchmark.runner import exit_code
+
+    settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", db_path=tmp_path / "memory.db",
+                        output_dir=tmp_path / "runs", trace_dir=tmp_path / "traces")
+    report = run_benchmark(settings=settings, skip_runtime=True, save_result=False)
+    coverage = report["coverage"]
+    assert coverage["executed"] == report["cases_executed"] < coverage["total"] == report["cases_total"]
+    assert coverage["executed"] + coverage["skipped"] == coverage["total"]
+    assert report["verdict"] == "pass_partial" and report["ok"] is True
+    assert report["pass_rate"] == round(report["cases_passed"] / coverage["total"], 4) < 0.5
+    assert report["pass_rate_executed"] == 1.0
+    chinese, english = report["summary"].split(" / ", 1)
+    assert f"{coverage['executed']}/{coverage['total']}" in chinese and f"executed {coverage['executed']} of {coverage['total']}" in english
+    assert exit_code(report) == 0 and exit_code(report, require_full=True) == 2
+
+
+def test_a_missing_fragment_is_named_in_the_case_result() -> None:
+    from types import SimpleNamespace
+
+    from horosa_skill.benchmark.runner import _evaluate_tool_case
+
+    result = SimpleNamespace(ok=True, trace_id=None, group_id=None, data={"export_snapshot": {
+        "export_text": "[宫位宫头]\n| 宫位 | 宫头 |", "selected_sections": ["宫位宫头"], "technique": {"key": "astrochart"}}})
+    case = {"id": "x", "kind": "tool", "tool": "chart", "required_sections": ["宫位宫头", "相位"], "required_fragments": ["宫头：", "宫头"]}
+    item = _evaluate_tool_case(case, result)
+    assert item["missing_fragments"] == ["宫头："] and item["missing_sections"] == ["相位"] and not item["required_fragments_ok"]
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+# 手写 tool case 的 required_fragments 对着仓里录下的**真实**导出核对（离线）。录音来自 vendored 引擎实跑；
+# app 形样例（export_snapshots/*.txt）是旧版式的样子，「宫头：」就还在里面——拿它核对抓不住 B-1，所以 chart 不用它。
+RECORDED_EXPORTS: dict[str, list[tuple[str, tuple[str, ...]]]] = {
+    "chart_export_parity": [("sync311_chartexport_live.json", ("tropical_default", "upstream_text")),
+                            ("sync313_western_live.json", ("node_exalt", "upstream_text"))],
+    "guolao_moira_sections": [("sync311_w3b_guolao_live.json", ("live_snapshot_text",))],
+    "qimen_export_parity": [("export_snapshots/qimen_live_snapshot.txt", ())],
+}
+# 没有录音的：只有带运行时的 lane 能核对（`run_benchmark.py --require-full`）。
+LIVE_ONLY = {"bazi_inverse_candidates": "仓里没有 bazi_inverse 的导出录音"}
+
+
+def _recorded(name: str, path: tuple[str, ...]) -> str:
+    raw = (FIXTURES / name).read_text(encoding="utf-8")
+    if not path:
+        return raw
+    node = json.loads(raw)
+    for key in path:
+        node = node[key]
+    return node
+
+
+def test_every_curated_fragment_occurs_in_a_recorded_live_export() -> None:
+    """B-1：数据集里「宫头：」在导出改成表格后再也不出现，bench 全量跑 119/120；离线 CI 只跑 --skip-runtime 看不见。"""
+    cases = [c for c in load_benchmark_dataset()["cases"] if c["kind"] == "tool" and c.get("required_fragments")]
+    assert cases
+    for case in cases:
+        if case["id"] in LIVE_ONLY:
+            continue
+        assert case["id"] in RECORDED_EXPORTS, f"{case['id']}：给它配一份录下的导出，或写进 LIVE_ONLY 并说明原因"
+        for name, path in RECORDED_EXPORTS[case["id"]]:
+            text = _recorded(name, path)
+            missing = [fragment for fragment in case["required_fragments"] if fragment not in text]
+            assert not missing, (case["id"], name, missing)

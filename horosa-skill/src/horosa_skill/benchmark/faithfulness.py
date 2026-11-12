@@ -29,6 +29,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from horosa_skill.errors import bilingual
+
 FAITHFULNESS_SCHEMA = "horosa.skill.faithfulness.v1"
 
 _PLANET_CN = {
@@ -115,6 +117,53 @@ _PERIOD_CLAIM = re.compile(
     r"[^，。；\n]{0,10}?(?:期|限|时段|阶段|主限|子限|大限|从|自|在|于)?[^，。；\n]{0,6}?(\d{4})(?:[-/年.](\d{1,2}))?"
 )
 
+# ---- v4 族（2026-11-11 深审 B-2）：日主、英文四柱、格局、大运——都只认引擎**明写**的值，不推算 ----
+_STEM_EN = {"jia": "甲", "yi": "乙", "bing": "丙", "ding": "丁", "wu": "戊", "ji": "己", "geng": "庚", "xin": "辛", "ren": "壬", "gui": "癸"}
+_BRANCH_EN = {"zi": "子", "chou": "丑", "yin": "寅", "mao": "卯", "chen": "辰", "si": "巳", "wu": "午", "wei": "未", "shen": "申",
+              "you": "酉", "xu": "戌", "hai": "亥"}
+_ELEMENT_EN = {"wood": "木", "fire": "火", "earth": "土", "metal": "金", "water": "水"}
+_ELEMENT_ENGINE = {"Wood": "木", "Fire": "火", "Earth": "土", "Metal": "金", "Water": "水"}
+_POLAR_ENGINE = {"Positive": "阳", "Negative": "阴"}
+_DAY_MASTER_CLAIM = re.compile(r"(?:日主|日元|日干)[^，。；\n甲-癸木火土金水]{0,3}?([阴陽阳])?([甲乙丙丁戊己庚辛壬癸])?([木火土金水])")
+_DAY_MASTER_STEM_CLAIM = re.compile(r"(?:日主|日元|日干)[^，。；\n甲-癸]{0,3}?([甲乙丙丁戊己庚辛壬癸])(?![子丑寅卯辰巳午未申酉戌亥])")
+_STEMS_EN = "|".join(_STEM_EN)
+_BRANCHES_EN = "|".join(_BRANCH_EN)
+_EN_DAY_MASTER_CLAIM = re.compile(
+    rf"(?i)\bday[ -]?master\b\s*(?:(?:is|was|being|as|of)\b|[=:：])?\s*(?:an?\s+|the\s+)?"
+    rf"(?:(yang|yin)\s+)?(?:({_STEMS_EN})\b\s*)?(wood|fire|earth|metal|water)?\b"
+)
+_EN_PILLAR_CLAIM = re.compile(
+    rf"(?i)\b(year|month|day|hour|time)\s+pillar\b[^.;,\n]{{0,12}}?\b({_STEMS_EN})[\s-]?({_BRANCHES_EN})\b"
+)
+_GEJU_CLAIM = re.compile(r"([一-鿿]{2,4})格(?!局|外|调|式)")
+_DAYUN_CLAIM = re.compile(r"大运[^，。；\n甲-癸]{0,8}?([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])")
+_EN_DAYUN_CLAIM = re.compile(rf"(?i)\b(?:luck|decade|da yun)\s+(?:pillar|period|cycle)\b[^.;,\n]{{0,16}}?\b({_STEMS_EN})[\s-]?({_BRANCHES_EN})\b")
+
+# 每个断言族找的是什么：零断言时告诉调用方「找过哪些、一条也没有」。
+CLAIM_FAMILIES = (
+    ("ganzhi_pillar", "四柱干支（年柱、月柱、日柱、时柱，含英文 year pillar Geng Wu）", "four pillars (year, month, day and hour pillar)"),
+    ("day_master", "日主（日主、日元、日干，含英文 day master）", "day master"),
+    ("geju", "格局（XX格）", "chart structure (格局)"),
+    ("dayun", "大运干支", "luck pillars (大运)"),
+    ("placement", "行星落座", "planet in sign"),
+    ("body_palace", "紫微身宫", "Zi Wei body palace"),
+    ("ziwei_star", "紫微主星落宫", "Zi Wei major star in palace"),
+    ("sanchuan", "大六壬三传", "Da Liu Ren three transmissions"),
+    ("gua", "六爻本卦、之卦与动爻", "hexagram names and moving lines"),
+    ("tarot", "塔罗牌名与正逆", "tarot cards and orientation"),
+    ("qimen", "奇门值符、值使与落宫", "Qi Men duty star, duty door and palace"),
+    ("hit_window", "择日命中日期", "election hit dates"),
+    ("period_boundary", "推运时段年份", "period boundaries"),
+    ("ganzhi_token", "其余干支引用", "any other stem-branch pair"),
+)
+# 格局名单：只判这些「格」字结尾的词（「风格」「性格」「人格」不是格局断言）。
+_GEJU_NAMES = frozenset({
+    "正官", "七杀", "偏官", "正财", "偏财", "正印", "偏印", "食神", "伤官", "建禄", "月刃", "羊刃", "阳刃", "月劫", "禄刃",
+    "从财", "从杀", "从儿", "从势", "从强", "从旺", "专旺", "曲直", "炎上", "稼穑", "从革", "润下", "化气", "日德", "魁罡",
+    "金神", "日贵", "杂气财官", "杂气", "两神成象", "飞天禄马", "倒冲", "井栏叉", "壬骑龙背", "六阴朝阳", "六乙鼠贵",
+    "刑合", "拱禄", "拱贵", "趋乾", "归禄", "子遥巳", "丑遥巳", "印绶", "财官", "官印", "杀印", "伤官配印", "食神制杀",
+})
+
 _TAROT_SNAPSHOT_ROW = re.compile(r"^\|\s*位置\d+[^|]*\|[^|]*\|([^|]+)\|\s*(正位|逆位|横置)\s*\|", re.M)
 
 
@@ -143,6 +192,9 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
         "qimen": {},         # {"值符": 天X, "值使": X门, "palaces": {宫: 行文本}}（v3）
         "hit_windows": None, # None=非择日；[(start, end)]=命中区间（v3）
         "period_rows": {},   # 推运表：标签（行星）→ {YYYY-MM…} 日期集（v3）
+        "day_master": None,  # {"stem": 戊, "element": 土, "polar": 阳}：引擎 fourColumns.day.stem 明写的值（v4）
+        "geju": None,        # 引擎 gejuYongShen 明写的格局名集合（主格 + 杂格 + 变格）（v4）
+        "dayun": None,       # 引擎大运表里的干支 → 起运年（v4）
         "tokens": set(),
     }
 
@@ -154,6 +206,39 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
         ganzi = item.get("ganzi") if isinstance(item, dict) else None
         if isinstance(ganzi, str) and _GANZHI.fullmatch(ganzi):
             facts["pillars"][cn] = ganzi
+
+    # v4 日主：日柱天干与引擎自己写的五行 / 阴阳（不查表推）
+    day = four.get("day") if isinstance(four.get("day"), dict) else {}
+    stem = day.get("stem") if isinstance(day.get("stem"), dict) else {}
+    if isinstance(stem.get("cell"), str) and stem["cell"] in "甲乙丙丁戊己庚辛壬癸" and len(stem["cell"]) == 1:
+        facts["day_master"] = {"stem": stem["cell"], "element": _ELEMENT_ENGINE.get(f"{stem.get('element')}"),
+                               "polar": _POLAR_ENGINE.get(f"{stem.get('polar')}")}
+
+    # v4 格局：gejuYongShen.geju / bianGe / zaGe 里引擎写出的名字
+    geju = bazi.get("gejuYongShen") if isinstance(bazi, dict) and isinstance(bazi.get("gejuYongShen"), dict) else None
+    if geju is not None:
+        names: set[str] = set()
+        def listed(value: Any) -> list[Any]:
+            return value if isinstance(value, list) else [value]
+
+        for item in (*listed(geju.get("geju")), *listed(geju.get("bianGe")), *listed(geju.get("zaGe") or [])):
+            name = item.get("name") if isinstance(item, dict) else item
+            if isinstance(name, str) and name.strip():
+                names.add(name.strip().removesuffix("格"))
+        facts["geju"] = names
+
+    # v4 大运：direction[].mainDirect.ganzi + startYear（引擎排出的每一步）
+    direction = bazi.get("direction") if isinstance(bazi, dict) else None
+    if isinstance(direction, list):
+        steps: dict[str, int | None] = {}
+        for step in direction:
+            if not isinstance(step, dict):
+                continue
+            main = step.get("mainDirect") if isinstance(step.get("mainDirect"), dict) else step
+            ganzi = main.get("ganzi") or main.get("ganZhi")
+            if isinstance(ganzi, str) and _GANZHI.fullmatch(ganzi):
+                steps[ganzi] = step.get("startYear")
+        facts["dayun"] = steps
 
     # 西占落座（chart.objects：EN id/sign → CN 正名）
     chart = data.get("chart") if isinstance(data.get("chart"), dict) else {}
@@ -261,8 +346,10 @@ def extract_facts(envelope: dict[str, Any]) -> dict[str, Any]:
 
 
 def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
-    """逐断言判定。返回 {schema, claims, metrics, ok}；答案无可判断言时 ok=True 且 claims=[]（
-    「没有断言」不是失败——失败必须是**具体的**编造/矛盾）。"""
+    """逐断言判定。返回 {schema, claims, metrics, status, ok}：status = pass / fail / not_assessed。
+
+    答案无可判断言时 status=not_assessed、ok=None（「没有断言」既不是失败——失败必须是**具体的**编造/矛盾——
+    也不是通过）；附 message 说明找过哪些断言族。"""
     text = f"{answer_text or ''}"
     claims: list[dict[str, Any]] = []
 
@@ -285,6 +372,62 @@ def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
             add("ganzhi_pillar", m.group(0), "supported", expected=truth, actual=claimed)
         else:
             add("ganzhi_pillar", m.group(0), "contradicted", expected=truth, actual=claimed)
+
+    slot_en = {"year": "年", "month": "月", "day": "日", "hour": "时", "time": "时"}
+    for m in _EN_PILLAR_CLAIM.finditer(text):
+        slot = slot_en[m.group(1).lower()]
+        claimed = _STEM_EN[m.group(2).lower()] + _BRANCH_EN[m.group(3).lower()]
+        truth = pillars.get(slot)
+        if truth is None:
+            add("ganzhi_pillar", m.group(0), "supported" if claimed in (facts.get("tokens") or set()) else "invented", actual=claimed)
+        else:
+            add("ganzhi_pillar", m.group(0), "supported" if claimed == truth else "contradicted", expected=truth, actual=claimed)
+
+    # v4 日主：族门槛 = 引擎写了日柱天干。只比答案明说的那几项（天干 / 五行 / 阴阳）。
+    master = facts.get("day_master")
+    if master:
+        def judge_master(span: str, polar: str | None, stem_cn: str | None, element: str | None) -> None:
+            wrong = [(what, truth) for what, said, truth in (("stem", stem_cn, master["stem"]), ("element", element, master.get("element")),
+                                                              ("polar", polar, master.get("polar")))
+                     if said and truth and said != truth]
+            said = "".join(x for x in (polar, stem_cn, element) if x)
+            truth_text = f"{master.get('polar') or ''}{master['stem']}{master.get('element') or ''}"
+            add("day_master", span, "contradicted" if wrong else "supported", expected=truth_text, actual=said)
+
+        seen_spans: list[tuple[int, int]] = []
+        for m in _DAY_MASTER_CLAIM.finditer(text):
+            judge_master(m.group(0), (m.group(1) or "").replace("陽", "阳") or None, m.group(2), m.group(3))
+            seen_spans.append(m.span())
+        for m in _DAY_MASTER_STEM_CLAIM.finditer(text):
+            if not any(a <= m.start() < b for a, b in seen_spans):
+                judge_master(m.group(0), None, m.group(1), None)
+        for m in _EN_DAY_MASTER_CLAIM.finditer(text):
+            polar = {"yang": "阳", "yin": "阴"}.get((m.group(1) or "").lower())
+            stem_cn = _STEM_EN.get((m.group(2) or "").lower())
+            element = _ELEMENT_EN.get((m.group(3) or "").lower())
+            if polar or stem_cn or element:
+                judge_master(m.group(0), polar, stem_cn, element)
+
+    # v4 格局：族门槛 = 引擎给了格局；只判名单里的格名（「性格」「风格」不算）
+    geju_names = facts.get("geju")
+    if geju_names is not None:
+        for m in _GEJU_CLAIM.finditer(text):
+            name = next((m.group(1)[i:] for i in range(len(m.group(1)) - 1) if m.group(1)[i:] in _GEJU_NAMES), None)
+            if name is None:
+                continue
+            add("geju", f"{name}格", "supported" if name in geju_names else "contradicted",
+                expected="、".join(sorted(f"{n}格" for n in geju_names)) or "（引擎未给格局）", actual=f"{name}格")
+
+    # v4 大运：族门槛 = 引擎排了大运；说出的大运干支必须是其中一步
+    dayun = facts.get("dayun")
+    if dayun:
+        for m in _DAYUN_CLAIM.finditer(text):
+            claimed = m.group(1)
+            add("dayun", m.group(0), "supported" if claimed in dayun else "contradicted",
+                expected="、".join(dayun), actual=claimed)
+        for m in _EN_DAYUN_CLAIM.finditer(text):
+            claimed = _STEM_EN[m.group(1).lower()] + _BRANCH_EN[m.group(2).lower()]
+            add("dayun", m.group(0), "supported" if claimed in dayun else "contradicted", expected="、".join(dayun), actual=claimed)
 
     placements: dict[str, str] = facts.get("placements") or {}
     for m in _PLACEMENT_CLAIM.finditer(text):
@@ -420,9 +563,11 @@ def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
                 add("hit_window", m.group(0), "supported", expected=f"{len(windows)} window(s)", actual=day)
             else:
                 add("hit_window", m.group(0), "contradicted", expected="; ".join(f"{s}~{e}" for s, e in windows[:5]), actual=day)
-        if windows:
-            for m in _NO_HIT_CLAIM.finditer(text):
+        for m in _NO_HIT_CLAIM.finditer(text):
+            if windows:
                 add("hit_window", m.group(0), "contradicted", expected=f"{len(windows)} hit window(s)", actual="无命中")
+            else:  # 真的没命中，答案也这么说：这是一条核对过的断言，不是「没有断言」
+                add("hit_window", m.group(0), "supported", expected="无命中", actual="无命中")
 
     # v3 推运时段：行星 ↔ 年（月）必须出现在该行星的表行里
     period_rows: dict[str, set] = facts.get("period_rows") or {}
@@ -454,6 +599,24 @@ def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
     invented = sum(1 for c in claims if c["status"] == "invented")
     contradicted = sum(1 for c in claims if c["status"] == "contradicted")
     total = len(claims)
+    # 三种结论（2026-11-11 深审 B-2）：此前零断言也给 ok=true、ratio 1.0——「Your day master is Jia wood」对着一张戊日主的盘
+    # 照样「全部属实」。没有可核对的断言 = 没有评估，不是通过：ok=None、ratio=None、status=not_assessed，并说出找过什么。
+    if not total:
+        looked = [family for family in CLAIM_FAMILIES if family[0] != "ganzhi_token"]
+        verdict: dict[str, Any] = {
+            "status": NOT_ASSESSED,
+            "ok": None,
+            "message": bilingual(
+                "答案里没有找到可以对盘核对的事实断言，这次没有评估（不是通过）。找过：" + "、".join(f[1] for f in looked) + "。",
+                "No checkable chart fact was found in the answer, so nothing was assessed (this is not a pass). Looked for: "
+                + ", ".join(f[2] for f in looked) + ".",
+            ),
+            "families_checked": [family[0] for family in CLAIM_FAMILIES],
+        }
+    else:
+        # 零编造 + 零矛盾才算过：invented/contradicted 每一条都是「读起来言之凿凿的假盘面」。
+        passed = invented == 0 and contradicted == 0
+        verdict = {"status": "pass" if passed else "fail", "ok": passed}
     return {
         "schema": FAITHFULNESS_SCHEMA,
         "claims": claims,
@@ -462,8 +625,11 @@ def verify_answer(answer_text: str, facts: dict[str, Any]) -> dict[str, Any]:
             "supported": supported,
             "invented": invented,
             "contradicted": contradicted,
-            "faithfulness_ratio": round(supported / total, 4) if total else 1.0,
+            "faithfulness_ratio": round(supported / total, 4) if total else None,
         },
-        # 零编造 + 零矛盾才算过：invented/contradicted 每一条都是「读起来言之凿凿的假盘面」。
-        "ok": invented == 0 and contradicted == 0,
+        **verdict,
     }
+
+
+NOT_ASSESSED = "not_assessed"
+EXIT_FAIL, EXIT_NOT_ASSESSED = 1, 3  # CLI 退出码：失败与「没评估」分开，脚本能区分

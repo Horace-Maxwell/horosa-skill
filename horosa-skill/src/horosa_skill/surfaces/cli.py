@@ -1034,10 +1034,16 @@ def benchmark_run(
     skip_runtime: bool = typer.Option(False, help="Skip runtime-backed cases and run only local knowledge / metadata checks."),
     save_result: bool = typer.Option(False, help="Persist benchmark tool outputs into the local record layer."),
     hermetic: bool = typer.Option(False, "--hermetic", help="可复现模式：剥除白名单外全部 HOROSA_* env（本机旗标不再左右结论），报告记录剥了什么。"),
+    require_full: bool = typer.Option(False, "--require-full", help="Exit 2 unless every case ran. 只跑了一部分时以 2 退出。"),
 ) -> None:
+    from horosa_skill.benchmark.runner import exit_code
+
     settings = Settings.from_env()
     report = run_benchmark(settings=settings, dataset_path=dataset, skip_runtime=skip_runtime, save_result=save_result, hermetic=hermetic)
     _print_json(report)
+    code = exit_code(report, require_full=require_full)
+    if code:
+        raise typer.Exit(code=code)
 
 
 @app.command(help="合参：一问多技法交叉印证，产出合参模板（分歧必须披露）。Cross-technique synthesis template.")
@@ -1069,7 +1075,7 @@ def benchmark_faithfulness(
     answer_text: Optional[str] = typer.Option(None, "--answer-text", help="Short inline AI answer text."),
     tool: str | None = typer.Option(None, "--tool", help="Optional tool name for multi-tool runs."),
 ) -> None:
-    from horosa_skill.benchmark.faithfulness import extract_facts, verify_answer
+    from horosa_skill.benchmark.faithfulness import EXIT_FAIL, EXIT_NOT_ASSESSED, extract_facts, verify_answer
 
     if not answer_file and not answer_text:
         _emit_refusal("benchmark.faithfulness.answer_missing", "需要 --answer-file 或 --answer-text")
@@ -1096,8 +1102,11 @@ def benchmark_faithfulness(
     if opinion is not None:
         report["model_opinion"] = opinion
     _print_json(report)
+    # 失败（有编造 / 矛盾）退出 1；没有可核对的断言（not_assessed）退出 3——脚本不能把「没评估」当成「通过」。
+    if report["ok"] is None:
+        raise typer.Exit(code=EXIT_NOT_ASSESSED)
     if not report["ok"]:
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=EXIT_FAIL)
 
 
 @trace_app.command("latest", help='Show the most recent local trace events (sanitized). 查看最近的追踪记录。')

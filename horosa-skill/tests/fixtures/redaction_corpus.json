@@ -1,0 +1,974 @@
+{
+ "_comment": "决策层一档脱敏语料（2026-11-11 深审 J1）：text 送进 redact_text，leaks 里每一项都不许出现在结果里（大小写不敏感）；结果里也不许剩任何数字。前 17 条是审计复现原样（source=auditor），其余覆盖简繁、英文、全角、汉字数字、干支、时辰、坐标、号码、引导词人名。私有词（命主档案名 / 别名 / 地点标签）见 private_terms。认不出的写法不放进来：它们写在 README 隐私表的「残余风险」里。 residual 列出已知会留下的写法（地名库里没有「台中」这个中文名），只作记录、不断言。",
+ "private_terms": [
+  "妈妈",
+  "我妈",
+  "Mom",
+  "湖南衡阳",
+  "小宝",
+  "阿强"
+ ],
+ "cases": [
+  {
+   "text": "帮我看看八字，1990年5月3日早上八点，上海，女",
+   "leaks": [
+    "1990",
+    "5月3日",
+    "八点",
+    "上海"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "王小明 1990-05-03 08:15 生于北京市朝阳区，电话13812345678",
+   "leaks": [
+    "1990",
+    "05-03",
+    "08:15",
+    "北京",
+    "朝阳",
+    "13812345678"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "我叫王小明，一九九〇年五月三日辰时出生在上海",
+   "leaks": [
+    "王小明",
+    "一九九〇",
+    "五月三日",
+    "辰时",
+    "上海"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "農曆庚午年四月初九 卯時 台北 男命",
+   "leaks": [
+    "庚午",
+    "四月初九",
+    "卯時",
+    "台北"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "born May 3, 1990 at 8:15am in Shanghai, female, name Alice Wang",
+   "leaks": [
+    "May 3",
+    "1990",
+    "8:15",
+    "Shanghai",
+    "Alice",
+    "Wang"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "3 May 1990 8am London",
+   "leaks": [
+    "3 May",
+    "1990",
+    "8am",
+    "London"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "1990/5/3 上午8点15分 广州 31n14 121e28",
+   "leaks": [
+    "1990",
+    "8点",
+    "广州",
+    "31n14",
+    "121e28"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "lat 31.2304 lon 121.4737, 5/3/1990 08:15",
+   "leaks": [
+    "31.2304",
+    "121.4737",
+    "5/3/1990",
+    "08:15"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "北纬31度14分 东经121度28分 九〇年出生",
+   "leaks": [
+    "31度",
+    "121度",
+    "九〇年"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "90年5月3号早8点 成都人 我妈妈",
+   "leaks": [
+    "90年",
+    "5月3号",
+    "8点",
+    "成都",
+    "妈妈"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "我老公和我合盘，他1988.12.01 晚上11点半 生在哈尔滨",
+   "leaks": [
+    "1988",
+    "12.01",
+    "11点",
+    "哈尔滨"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "身份证 310101199005031234 邮箱 a.b@example.com",
+   "leaks": [
+    "310101199005031234",
+    "a.b@example.com"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "我住在浦东新区世纪大道100号，想问下个月搬家吉日",
+   "leaks": [
+    "浦东新区",
+    "100号"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "今年35岁，属马，想问事业",
+   "leaks": [
+    "35岁",
+    "属马"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "下午三点一刻生的，子时还是丑时不确定",
+   "leaks": [
+    "三点",
+    "子时",
+    "丑时"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "+86 138 1234 5678 / 021-65432100",
+   "leaks": [
+    "138 1234",
+    "5678",
+    "65432100"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "1990年闰五月初三寅时生于香港",
+   "leaks": [
+    "1990",
+    "闰五月",
+    "初三",
+    "寅时",
+    "香港"
+   ],
+   "source": "auditor"
+  },
+  {
+   "text": "我女儿2015年8月20日下午3点出生在杭州，想看看她的紫微",
+   "leaks": [
+    "2015",
+    "8月20日",
+    "3点",
+    "杭州"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我是1985年腊月二十三子时生的，出生在成都",
+   "leaks": [
+    "1985",
+    "腊月二十三",
+    "子时",
+    "成都"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "二〇〇一年正月初一卯时，西安，男",
+   "leaks": [
+    "二〇〇一",
+    "正月初一",
+    "卯时",
+    "西安"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "公历1979年11月7日 22:40 生于南京",
+   "leaks": [
+    "1979",
+    "11月7日",
+    "22:40",
+    "南京"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "阴历八月十五 晚上九点 出生于武汉",
+   "leaks": [
+    "八月十五",
+    "九点",
+    "武汉"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我的生日是七月七号，凌晨两点，在重庆",
+   "leaks": [
+    "七月七号",
+    "两点",
+    "重庆"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "1992.03.14 14:05 深圳 男 想问婚姻",
+   "leaks": [
+    "1992",
+    "03.14",
+    "14:05",
+    "深圳"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生时间：1999-09-09 09:09:09，地点：天津",
+   "leaks": [
+    "1999",
+    "09-09",
+    "09:09",
+    "天津"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "八字是甲子年丙寅月戊辰日庚申时，看看今年运势",
+   "leaks": [
+    "甲子",
+    "丙寅",
+    "戊辰",
+    "庚申"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "四柱：辛未 庚子 丁卯 壬寅",
+   "leaks": [
+    "辛未",
+    "庚子",
+    "丁卯",
+    "壬寅"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我妈1962年3月5日6点生在湖南衡阳",
+   "leaks": [
+    "1962",
+    "3月5日",
+    "6点",
+    "湖南衡阳",
+    "我妈"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "给Mom看看紫微，她是mom不是我",
+   "leaks": [
+    "Mom",
+    "mom"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "小宝2020年6月1日出生，帮小宝起个名",
+   "leaks": [
+    "2020",
+    "6月1日",
+    "小宝"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "阿强想问工作，他生于1977年",
+   "leaks": [
+    "阿强",
+    "1977"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我在苏州工作，老家是温州",
+   "leaks": [
+    "苏州",
+    "温州"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我住北京，出生在沈阳",
+   "leaks": [
+    "北京",
+    "沈阳"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "在廣州出生，現居臺北",
+   "leaks": [
+    "廣州",
+    "臺北"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生地：香港九龍",
+   "leaks": [
+    "香港"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生在昆明市五华区",
+   "leaks": [
+    "昆明",
+    "五华区"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "坐标 39.9042, 116.4074，北京时间",
+   "leaks": [
+    "39.9042",
+    "116.4074",
+    "北京"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "经纬度：东经116.4度，北纬39.9度",
+   "leaks": [
+    "116.4",
+    "39.9"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "GPS 22.5431,114.0579",
+   "leaks": [
+    "22.5431",
+    "114.0579"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我的位置是 23n08 113e16",
+   "leaks": [
+    "23n08",
+    "113e16"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "手机 13912345678，帮我看下",
+   "leaks": [
+    "13912345678"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "联系电话：+86 139 0000 1111",
+   "leaks": [
+    "139 0000",
+    "1111"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "邮箱 zhangsan_1990@qq.com",
+   "leaks": [
+    "zhangsan_1990@qq.com",
+    "1990"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "身份证号 11010119900307123X",
+   "leaks": [
+    "11010119900307123X"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "姓名：李四，男，1980年生",
+   "leaks": [
+    "李四",
+    "1980"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我名叫陈晓燕，农历三月初八生",
+   "leaks": [
+    "陈晓燕",
+    "三月初八"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我姓王，九五年的",
+   "leaks": [
+    "我姓王",
+    "九五年"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "名字叫赵六，属龙",
+   "leaks": [
+    "赵六",
+    "属龙"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我老婆叫刘丽，她1991年生",
+   "leaks": [
+    "刘丽",
+    "1991"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我儿子叫张小明，今年8岁",
+   "leaks": [
+    "张小明",
+    "8岁"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我女儿叫小美，五岁了",
+   "leaks": [
+    "小美",
+    "五岁"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "my name is John Smith, born 12 July 1988 in New York",
+   "leaks": [
+    "John",
+    "Smith",
+    "12 July",
+    "1988",
+    "New York"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "I was born on July 4th, 1976 at 6:30 pm in Chicago",
+   "leaks": [
+    "July 4th",
+    "1976",
+    "6:30",
+    "Chicago"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "Born 1990-05-03 at 08:15 in Paris, France",
+   "leaks": [
+    "1990",
+    "05-03",
+    "08:15",
+    "Paris"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "call me Mary, I was born in Toronto on March 21",
+   "leaks": [
+    "Mary",
+    "Toronto",
+    "March 21"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "Birth: 21st of March 2001, 11am, Sydney",
+   "leaks": [
+    "21st",
+    "2001",
+    "11am",
+    "Sydney"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "DOB 03/05/1990 time 7:45 AM place Berlin",
+   "leaks": [
+    "03/05/1990",
+    "7:45",
+    "Berlin"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "I'm 34 years old and live in Singapore",
+   "leaks": [
+    "34 years",
+    "Singapore"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "born at noon on Dec 25 1985 in Los Angeles",
+   "leaks": [
+    "Dec 25",
+    "1985",
+    "Los Angeles"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "My birth time is 23:59 and I was born in Beijing",
+   "leaks": [
+    "23:59",
+    "Beijing"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "lat: 51.5074 lng: -0.1278 born 1960",
+   "leaks": [
+    "51.5074",
+    "0.1278",
+    "1960"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "location 40.7128 N, 74.0060 W",
+   "leaks": [
+    "40.7128",
+    "74.0060"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "Name: Wang Fang, born in Wuhan",
+   "leaks": [
+    "Wang",
+    "Fang",
+    "Wuhan"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "my name's Li Lei, from Chengdu",
+   "leaks": [
+    "Li Lei",
+    "Chengdu"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "生于１９８８年１２月１日",
+   "leaks": [
+    "１９８８",
+    "１２",
+    "1988",
+    "12月1日"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "早上７点３０分在广州出生",
+   "leaks": [
+    "７点",
+    "7点",
+    "广州"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "電話０９１２３４５６７８",
+   "leaks": [
+    "０９１２",
+    "0912345678"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "民國七十九年五月三日出生於台中",
+   "leaks": [
+    "七十九年",
+    "五月三日"
+   ],
+   "source": "added",
+   "residual": [
+    "台中"
+   ]
+  },
+  {
+   "text": "我是八零后，八八年生，属龙",
+   "leaks": [
+    "八八年",
+    "属龙"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "1990年5月生，具体几号忘了",
+   "leaks": [
+    "1990",
+    "5月"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "九十年代初出生在大连",
+   "leaks": [
+    "大连"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "大约两千年左右，出生在青岛",
+   "leaks": [
+    "青岛"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "农历二〇〇八年冬月廿二午时",
+   "leaks": [
+    "二〇〇八",
+    "冬月廿二",
+    "午时"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "戊戌年 甲子月 丙午日 辛卯时",
+   "leaks": [
+    "戊戌",
+    "甲子",
+    "丙午",
+    "辛卯"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "晚子时出生，日柱庚辰",
+   "leaks": [
+    "晚子时",
+    "庚辰"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "清晨五点半左右出生",
+   "leaks": [
+    "五点半"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生于19点20分",
+   "leaks": [
+    "19点20分"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "1975年出生，现年49岁",
+   "leaks": [
+    "1975",
+    "49岁"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "三十八岁，想问财运",
+   "leaks": [
+    "三十八岁"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "帮我看下2024年的流年，我是1990年的",
+   "leaks": [
+    "2024",
+    "1990"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "下个月18号适合搬家吗，我住在南宁",
+   "leaks": [
+    "18号",
+    "南宁"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "想在2025年6月6日结婚，地点长沙",
+   "leaks": [
+    "2025",
+    "6月6日",
+    "长沙"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "2023年12月31日23点59分起一卦",
+   "leaks": [
+    "2023",
+    "12月31日",
+    "23点59分"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "今天下午4点15分，问失物",
+   "leaks": [
+    "4点15分"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "他在1966年10月1日出生，河南郑州人",
+   "leaks": [
+    "1966",
+    "10月1日",
+    "郑州"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "宝宝预产期2026年3月，想择日剖腹产，医院在合肥",
+   "leaks": [
+    "2026",
+    "3月",
+    "合肥"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "帮我老公看看，他属猴，1980年8月8号",
+   "leaks": [
+    "属猴",
+    "1980",
+    "8月8号"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "老家山东济南，户口在青岛",
+   "leaks": [
+    "济南",
+    "青岛"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生在拉萨，现在在西宁工作",
+   "leaks": [
+    "拉萨",
+    "西宁"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我在纽约出生，后来搬到伦敦",
+   "leaks": [
+    "纽约",
+    "伦敦"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生在东京都，住在大阪",
+   "leaks": [
+    "东京",
+    "大阪"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我妈妈和我合盘，她是1960年的",
+   "leaks": [
+    "妈妈",
+    "1960"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "请用 08:00 作为出生时间",
+   "leaks": [
+    "08:00"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "晚上十一点五十",
+   "leaks": [
+    "十一点五十"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "时间大概是7:15PM",
+   "leaks": [
+    "7:15"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "born ~ 3am, maybe 4am",
+   "leaks": [
+    "3am",
+    "4am"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "my mom was born on 1963/02/14",
+   "leaks": [
+    "1963",
+    "02/14"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "I live at 10 Downing Street, London",
+   "leaks": [
+    "10",
+    "London"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "邮编200120",
+   "leaks": [
+    "200120"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "订单号 98765432",
+   "leaks": [
+    "98765432"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "出生日期：二零零零年二月二十九日",
+   "leaks": [
+    "二零零零",
+    "二月二十九"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "時辰是亥時，地點在高雄",
+   "leaks": [
+    "亥時",
+    "高雄"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "1988年農曆六月初六 申時 生於澳門",
+   "leaks": [
+    "1988",
+    "六月初六",
+    "申時",
+    "澳門"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "他叫周杰，屬羊",
+   "leaks": [
+    "周杰",
+    "屬羊"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "姓名為黃小玲，九二年生",
+   "leaks": [
+    "黃小玲",
+    "九二年"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我的名字是林志强，生在厦门",
+   "leaks": [
+    "林志强",
+    "厦门"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "born in Hong Kong on the 5th of November 1995",
+   "leaks": [
+    "5th",
+    "1995",
+    "Hong Kong"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "Taipei, 1983-07-07, 05:05",
+   "leaks": [
+    "Taipei",
+    "1983",
+    "07-07",
+    "05:05"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "妈妈的生日是3.8，在哈尔滨",
+   "leaks": [
+    "3.8",
+    "哈尔滨"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "我出生于公元1999年",
+   "leaks": [
+    "1999"
+   ],
+   "source": "added"
+  },
+  {
+   "text": "零点三十分出生",
+   "leaks": [
+    "零点三十分"
+   ],
+   "source": "added"
+  }
+ ]
+}
