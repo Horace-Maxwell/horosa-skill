@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -228,7 +230,17 @@ def _pending_bodies(store: MemoryStore, count: int, *, tool: str = "chart") -> l
     return ids
 
 
-def test_not_scanned_counts_bodies_not_yet_indexed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture(params=["fine", "coarse"])
+def clock(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    """两种单调钟都跑：本机的细钟，和 Windows 那样的粗钟（GetTickCount64 15.6 ms 一跳；这里取最坏情形：整段测试都在同一跳里）。
+    v0.50.0 windows-smoke：预算 0 时「此刻 > 截止」在同一跳里永远不成立，一口气读完了全部正文，not_scanned 成了 0。"""
+    if request.param == "coarse":
+        frozen = time.monotonic()
+        monkeypatch.setattr(store_module, "time", SimpleNamespace(monotonic=lambda: frozen))
+    return request.param
+
+
+def test_not_scanned_counts_bodies_not_yet_indexed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: str) -> None:
     store = _store(tmp_path)
     _pending_bodies(store, 5)
     monkeypatch.setattr(store_module, "BODY_BACKFILL_BUDGET_SECONDS", 0.0)
@@ -245,7 +257,7 @@ def test_bodies_are_backfilled_and_then_found(tmp_path: Path) -> None:
     assert report["not_scanned"] == 0
 
 
-def test_filters_narrow_what_counts_as_unscanned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_filters_narrow_what_counts_as_unscanned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: str) -> None:
     store = _store(tmp_path)
     _pending_bodies(store, 4, tool="qimen")
     _pending_bodies(store, 2, tool="chart")
@@ -258,7 +270,7 @@ def test_filters_narrow_what_counts_as_unscanned(tmp_path: Path, monkeypatch: py
     assert report["not_scanned"] == 4, "只数过滤后的 run（读掉的那一个是最新的 chart）"
 
 
-def test_query_memory_tells_the_caller_what_it_did_not_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_query_memory_tells_the_caller_what_it_did_not_search(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: str) -> None:
     settings = _settings(tmp_path)
     store = MemoryStore(settings)
     _pending_bodies(store, 8)

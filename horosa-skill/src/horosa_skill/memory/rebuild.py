@@ -529,7 +529,7 @@ def rebuild_from_artifacts(
             (int(suffix) for files in inventory.runs.values() for _, _, suffix in files.artifacts if suffix.isdigit()), default=0
         )
         for files in sorted(inventory.runs.values(), key=lambda item: item.newest, reverse=True):
-            if deadline is not None and time.monotonic() > deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 report["complete"] = False
                 break
             report["scanned_runs"] += 1
@@ -570,7 +570,7 @@ def rebuild_from_artifacts(
             and conn.execute("SELECT 1 FROM tool_calls WHERE run_id = ? LIMIT 1", (row[0],)).fetchone()
         ]
     for run_id in missing_manifest:
-        if deadline is not None and time.monotonic() > deadline:
+        if deadline is not None and time.monotonic() >= deadline:
             report["complete"] = False
             break
         try:

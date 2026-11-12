@@ -524,6 +524,8 @@ class MemoryStore:
 
     def index_pending_bodies(self, *, budget_seconds: float | None) -> dict[str, int]:
         """把还没进索引的盘面正文从产物文件读进检索文档，新的先读。读文件不便宜，所以有时间预算；None = 读完为止。
+        预算用完 = 「此刻 ≥ 截止」，至少读一个：Windows 的单调钟 15.6 ms 一跳，同一跳里「此刻 > 截止」永远不成立，
+        预算 0 曾经一口气读完全部（v0.50.0 windows-smoke）。
 
         返回 `{"indexed": 这次读了几个 run, "pending": 还剩几个}`。"""
         deadline = None if budget_seconds is None else time.monotonic() + budget_seconds
@@ -543,7 +545,7 @@ class MemoryStore:
                     for item in paths:
                         texts.extend(_search.export_texts_from_file(Path(item["path"])))
                     batch.append((row["id"], texts))
-                    if deadline is not None and time.monotonic() > deadline:
+                    if deadline is not None and time.monotonic() >= deadline:
                         break
                 conn.execute("BEGIN IMMEDIATE")
                 try:
@@ -566,7 +568,7 @@ class MemoryStore:
                     conn.rollback()
                     raise
                 indexed += len(batch)
-                if deadline is not None and time.monotonic() > deadline:
+                if deadline is not None and time.monotonic() >= deadline:
                     break
             pending = int(conn.execute("SELECT COUNT(*) FROM run_search WHERE state = 0").fetchone()[0])
         return {"indexed": indexed, "pending": pending}
