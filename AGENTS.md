@@ -386,7 +386,8 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 `validate_input=False`，广告与校验解耦）：字段描述/枚举/`[required]` 标记照登，但一律 `default=None` +
 `Annotated[Any, WithJsonSchema(...)]`，MCP 层零必填——否则 `request={…}` 逃生通道走不到、数字经纬度在
 归一化前被拒、且都绕过 `agent_recovery`。内联 `$defs` 时**绝不能残留 `$ref`**（模型自引用会让 pydantic
-构不出 arg model，服务器起不来）。
+构不出 arg model，服务器起不来）。`_signature_for_input_model` 按进程缓存（模型类的纯函数）：广告层只能给 `Tool.parameters` 换新
+dict，**不许原地改**签名里的字段 schema——否则同进程第二次 `create_mcp_server` 与第一次不同（`test_mcp_list_slim` 比冷 / 热构建逐字节）。
 
 **tools/list 预算（v0.47.0）**：全量面硬顶 256 KB 已近满（v0.47.0 推运图族四法之后 260 223 B，余量 ~1.9 KB）；一个 BirthInput 技法工具的广告层
 ≈ 1.9–2.7 KB。新工具只广告域核心 + 推运目标字段 + 闸门三键，口径旋钮一律 `ADVERTISE_HIDDEN`（guidance `options_keys` 必须有说明，
@@ -436,10 +437,11 @@ elicit 必须在任何副作用之前（MRTR 的重试会重放整个工具函�
 runner 里嵌套的 `run_tool` 由 `_context._run_tool_scope` 摘掉 `PRESENTATION_KEYS`、不套视图（黄历择日曾因子调用的快照被清空丢 7 段）。
 新加结果形状（新的门面 / 嵌套结果）先想好它在阅读视图里长什么样，再进 `tests/test_result_view_catalogue.py` 的整表守卫。
 
-**Node 地板 ≥ 20.10**：数算 JSON 走 `import X from './x.json' with { type: 'json' }`；`src/tools/index.js`
-顶层 import 使旧 Node **语法级**炸掉整个模块图（qimen/taiyi/jinkou/tongshefa 全挂，不只数算）。bundled
-runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 raw-node JSON import 继续用
-`with`（不用废弃的 `assert`）。
+**Node 地板 ≥ 20.10**：数算 JSON 走 `import X from './x.json' with { type: 'json' }`，旧 Node 加载即语法错；Python 侧先读版本，
+低于地板直接 `js_engine.node_too_old`。bundled runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 raw-node JSON
+import 继续用 `with`（不用废弃的 `assert`）。**`src/tools/index.js` 每个技法按需 `import()`（v0.50.0-dev）**：`cli.mjs` 一次只跑一个工具，
+静态加载全部 51 个模块每次 spawn 多 0.1 s；新技法照 `lazy('./x.js', 'runX')` 登记，`test/loadcheck.mjs` 逐项 `resolveRunner`（写错导出名即红）。
+有副作用的补丁模块（`lunarYearCache`）仍在文件顶部静态 import。
 
 **地名与命主档案（v0.48.0）**：载荷键 `place`（地名）与 `profile`（档案名 / 别名）都在 run_tool / dispatch / hecan 的**归一化与校验之前**处理，
 先并档案、再解析地名；MCP 层是 `_mcp_payload(_placed(payload, …), Model)`（地名在 MCP 预校验之前补上；带档案名的载荷不在 MCP 层预校验，
@@ -640,7 +642,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 12. **值级金标 + 边界纪律**（v0.33.1 · issue #15 家族，原文见 LESSONS）：**跨边界不改键**（原样透传是
     唯一被证明安全的形状；改键必在 `contracts/js_boundary_contracts.json` 留豁免与理由）。**每个本地 JS
     技法至少一条值级金标** —— 钉具体算出值而非段头/行数，期望值带权威来源注释，并附**负向对照**（把
-    bug 改回去，金标必须红）；棘轮 `contracts/value_golden_debt.json`。参数接线**锚到引擎自带的词表**
+    bug 改回去，金标必须红）；棘轮 `contracts/value_golden_debt.json`。金标块必须**调用**从 `src/tools/<名>.js` 导入的名字
+    （标题、注释里出现技法名不算；只测 vendored 函数不算接线），无 runner 的辅助模块走 `covered_via`；`selfcheck.mjs` 的 async check
+    放在哪都行（收尾前再等一次 pending）。参数接线**锚到引擎自带的词表**
     （`HORARY_PARAM_BY_KEY` / `ELECTION_PARAM_BY_KEY` / `BABYLON_SCHEMES`），不手抄会漂移的清单；认不出的
     键回执 `data.params_ignored`。**错误信号每上一层都要有人接**（JS 结构化错误 → Python enricher →
     `_warnings`）。统一判据：「改这个参数，结果必须变」。守卫 `verify_js_boundary_contracts.py` /
@@ -805,8 +809,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   `tests/test_dockerfile_matches_wheel_includes.py`）。
 
 - **horosa-core-js 的 npm 依赖集 = `package.json`（v0.48.0 加 tz-lookup 6.1.25，钉上游 package-lock 的版本与 integrity）。**
-  `verify_builder_parity` 逐依赖要求两个 builder 都 `require_path`、三平台 `REQUIRED_ENTRIES` 都列出；带新依赖的 JS 工具在 `tools/index.js` 懒加载，
-  旧 runtime 缺依赖只坏这一个工具（`place.runtime_outdated`，带升级命令），其余 50 个照常加载。
+  `verify_builder_parity` 逐依赖要求两个 builder 都 `require_path`、三平台 `REQUIRED_ENTRIES` 都列出；JS 工具在 `tools/index.js` 一律按需加载，
+  旧 runtime 缺依赖只坏用到它的工具（地名：`place.runtime_outdated`，带升级命令），其余照常加载。
 
 ## 7. 发布协议（release law）
 
@@ -1791,6 +1795,22 @@ A global stability pass hardened these; keep them true when you touch the releva
   （如 `manager._reprobe_sleep`），测试只替换接缝。
 - **合并并行分支后逐块复核（v0.48.0）。** 两个分支往同一处追加结构相似的块、结尾几行相同时，git 会把那几行当成共同后缀只留一份；
   门禁跑着时不在它的工作区合并或改文件。
+
+### 9.5.1 守卫的证据与跳过（v0.50.0-dev）
+
+- **新守卫先看它红**：写出它要抓的那个缺陷（变异体：影子副本里改一行），实跑看它红，再看它在真树上绿；两样都写进 docstring 的「负向对照」。
+  深审 C-18 十把守卫各自漏掉了自己声称防的缺陷（台账 2026-11-12「守卫红不了」）。
+- **证据只认代码**：「名字出现」不是「被调用」。旋钮接线认代码记号（`verify_schema_knob_wiring`：AST / JS 记号，注释与说明句不算，只描述旋钮的文件不算读者，
+  基线每条写上游读者 `file:line`）；值金标认调用（`verify_value_goldens`）；错误码「有测试」认测试代码里的字符串字面量（docstring 不算）。
+- **期望不和被测物住一个文件**：闸门行为的整表期望在 `tests/fixtures/gate_matrix.json`（114 技法 × 四形状，`uv run python tests/test_gate_matrix.py --record`
+  重录，diff 里看清改了谁）；生成件（`contracts/jev_eval/*.jsonl` 等）由测试按生成器重算比对。
+- **跳过要说出标签**：原因以 `tests/skips.py` 的七个标签之一开头（`[upstream-checkout]` `[platform]` `[host]` `[opt-in]` `[version-skew]`
+  `[not-applicable]` `[no-runtime]`）；没标签的 skip 在 conftest 变成失败，跑完打印「skipped by reason: …」计数，`test_skip_tags.py` 静态扫全部字面量
+  （只在别的平台触发的也查）。live lane（`verify_runtime_live.py`）只放行 `LIVE_LANE_ALLOWED_SKIP_TAGS`（白名单，与 `skips.LIVE_LANE_ALLOWED` 锁步）；
+  live 用例的函数体里不 skip：闸已确认实例活着且点名，再出错就是失败；只有已装 payload 早于本树时才 `[version-skew]`。
+- **上游检出只认 `HOROSA_SOURCE_ROOT`**：用 `skips.upstream_path` / `needs_upstream`，没设就跳过，绝不猜维护者路径（猜到别的版本的 checkout 会直接红）。
+  CI 不设它：这批测试只在 preflight / 维护机跑，计数见每次运行末尾的 `upstream-checkout N`。
+- **并发测真路径**：sleep 桩只能量「事件循环让不让路」；串扰要用真 MCP 客户端打真技法（`test_real_local_techniques_run_concurrently_without_cross_talk`）。
 
 ### 9.6 发布 · 分发（release / distribution）
 
