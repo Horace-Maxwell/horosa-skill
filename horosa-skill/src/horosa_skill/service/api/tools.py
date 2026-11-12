@@ -156,8 +156,8 @@ class ToolsAPI:
             **user_knowledge.overview(self.settings, limit=200),
             "how_to_use": "计算时传 knowledge=[条目 id / 标题 / #标签 / auto / ?检索词]，选中的正文挂在 data.knowledge_context"
                           "（长条目只带与本盘相关的段落，每段标标题与行号）；检索：horosa_knowledge_search；精读一条："
-                          "knowledge_read(domain=\"user\", key=…, from_line=…)。往文件夹里放 .md / .txt 即可新增；"
-                          "problems 列出没能读入的文件和原因。",
+                          "knowledge_read(domain=\"user\", key=…, from_line=…)。往文件夹里放 .md / .markdown / .txt 即可新增；"
+                          "problems 列出读不了的文件和原因，not_indexed 列出格式不读的文件（PDF、Word 等，另存成 .md 或 .txt）。",
         }
 
     def knowledge_search(self, payload: dict[str, Any]) -> dict[str, Any]:

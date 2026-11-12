@@ -115,3 +115,63 @@ def test_valid_paging_is_taken_as_given_without_a_note(tmp_path: Path, payload: 
     result = knowledge_search.search_all(_settings(tmp_path), {"query": "用神", **payload})
     assert "warnings" not in result
     assert result["limit"] == int(payload.get("limit") or 8) and result["offset"] == int(payload.get("offset") or 0)
+
+
+# ---- 没进索引的文件要说出来（K-U1）
+
+
+def _mixed_folder(tmp_path: Path) -> None:
+    _put(tmp_path, "盲派口诀.md", "# 盲派\n\n七杀有制化为权。\n")
+    _put(tmp_path, "长文.markdown", "# 长文\n\n伤官见官。\n")
+    _put(tmp_path, "plain.txt", "禄随忌走。\n")
+    _put(tmp_path, "book.pdf", "%PDF-1.4 渊海子平")
+    _put(tmp_path, "扫描.PDF", "%PDF-1.4 三命通会")
+    _put(tmp_path, "notes.docx", "PK fake docx")
+    _put(tmp_path, "data.json", '{"a": "三命通会"}')
+    _put(tmp_path, "README", "no extension 滴天髓\n")
+    _put(tmp_path, ".hidden.md", "# hidden\n甲己合土\n")
+    _put(tmp_path, "sub/深层.md", "# 深层\n寅申巳亥\n")
+    _put(tmp_path, "sub/图.png", "png")
+    for junk in (".DS_Store", "Thumbs.db", "草稿.md~", "~$notes.docx", ".horosa-x.tmp"):
+        _put(tmp_path, junk, "junk")
+
+
+def test_files_that_are_not_read_are_counted_by_reason_and_extension(tmp_path: Path) -> None:
+    _mixed_folder(tmp_path)
+    overview = uk.overview(_settings(tmp_path))
+    assert overview["count"] == 4  # .md / .markdown / .txt / 子目录里的 .md
+    skipped = overview["not_indexed"]
+    assert skipped["total"] == 7
+    assert skipped["by_reason"] == {"unsupported_extension": 5, "no_extension": 1, "hidden": 1}
+    assert skipped["by_extension"] == {".pdf": 2, "(none)": 1, ".docx": 1, ".json": 1, ".md": 1, ".png": 1}
+    assert set(skipped["examples"]) == {"book.pdf", "扫描.PDF", "notes.docx", "data.json", "README", ".hidden.md", "sub/图.png"}
+    assert skipped["supported_extensions"] == list(uk.SUFFIXES)
+    chinese, english = skipped["message"].split(" / ", 1)
+    assert "7 个文件没有读入" in chinese and ".pdf ×2" in chinese and ".md 或 .txt" in chinese
+    assert "7 file(s)" in english and "were not read" in english and " / " not in english
+    for suffix in uk.SUFFIXES:  # 说「只读哪几种」的清单就是代码里那一份
+        assert suffix in chinese and suffix in english
+
+
+def test_system_and_editor_droppings_are_not_reported(tmp_path: Path) -> None:
+    _put(tmp_path, "a.md", "空亡者，虚也。")
+    for junk in (".DS_Store", "Thumbs.db", "desktop.ini", "草稿.md~", "~$a.docx", ".horosa-x.tmp", ".obsidian/app.json"):
+        _put(tmp_path, junk, "junk")
+    assert "not_indexed" not in uk.overview(_settings(tmp_path))
+    assert "warnings" not in uk.search_user(_settings(tmp_path), "空亡")
+
+
+@pytest.mark.parametrize("domain", ["user", ""])
+def test_a_search_says_which_files_it_could_not_look_in(tmp_path: Path, domain: str) -> None:
+    """放了 PDF 的人搜「渊海子平」得到 0 条：原因是那个文件没读入，不是笔记里没有。"""
+    _mixed_folder(tmp_path)
+    result = knowledge_search.search_all(_settings(tmp_path), {"query": "渊海子平", "domain": domain})
+    assert not [m for m in result["matches"] if m["domain"] == "user"]
+    assert any("7 个文件没有读入" in w and ".pdf ×2" in w for w in result["warnings"]), result.get("warnings")
+
+
+def test_the_readmes_name_the_same_formats_as_the_code() -> None:
+    root = Path(__file__).resolve().parents[2]
+    formats = " / ".join(f"`{suffix}`" for suffix in uk.SUFFIXES)
+    for name in ("README.md", "README_EN.md"):
+        assert formats in (root / name).read_text(encoding="utf-8"), f"{name} 没写 {formats}"

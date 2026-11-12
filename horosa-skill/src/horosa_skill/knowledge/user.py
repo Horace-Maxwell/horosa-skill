@@ -125,6 +125,7 @@ class Catalog:
     problems: list[Problem] = field(default_factory=list)
     index_ok: bool = False  # 检索索引已与本次扫描对齐（indexed_catalog 设）；False 时检索退回逐条子串
     index_report: dict[str, Any] = field(default_factory=dict)
+    skipped: list[tuple[str, str]] = field(default_factory=list)  # (相对路径, 原因)：在文件夹里但没读入的文件
 
     def by_key(self) -> dict[str, UserKnowledgeEntry]:
         return {_key(entry.id): entry for entry in self.entries}
@@ -388,6 +389,7 @@ def scan(settings: Any) -> Catalog:
     resolved_root = root.resolve()
     entries: list[UserKnowledgeEntry] = []
     problems: list[Problem] = []
+    skipped: list[tuple[str, str]] = []
     seen_files: set[str] = set()
     root_key = str(resolved_root)
     with _CACHE_LOCK:
@@ -409,7 +411,10 @@ def scan(settings: Any) -> Catalog:
             kept.append(name)
         dirnames[:] = kept
         for name in sorted(filenames):
-            if name.startswith(".") or Path(name).suffix.lower() not in SUFFIXES:
+            reason = _skip_reason(name)
+            if reason is not None:
+                if reason:
+                    skipped.append((_nfc((rel_dir / name).as_posix()), reason))
                 continue
             path = here / name
             relpath = _nfc((rel_dir / name).as_posix())
@@ -457,7 +462,56 @@ def scan(settings: Any) -> Catalog:
             problems.append(Problem(entry.relpath, "unknown_technique",
                                     f"techniques 里不认识：{'、'.join(unknown)}（auto 不会因为它们选中这条）", entry.id))
     final.sort(key=lambda e: e.id)
-    return Catalog(root=root, exists=True, entries=final, problems=problems)
+    return Catalog(root=root, exists=True, entries=final, problems=problems, skipped=skipped)
+
+
+_OS_JUNK = frozenset({"thumbs.db", "desktop.ini", "icon\r"})
+SKIP_REASONS = ("unsupported_extension", "no_extension", "hidden")
+
+
+def _skip_reason(name: str) -> str | None:
+    """这个文件名为什么不读入：None = 读；"" = 系统 / 编辑器的杂项，不读也不必说；其余是要告诉用户的原因。
+
+    此前不认的扩展名一律悄悄跳过：往文件夹里放了 PDF / Word 的人看到的是「搜不到」，而不是「这个格式不读」。
+    """
+    suffix = Path(name).suffix.lower()
+    if name.startswith("."):
+        return "hidden" if suffix in SUFFIXES else ""
+    if name.casefold() in _OS_JUNK or name.endswith("~") or name.startswith("~$"):
+        return ""
+    if suffix in SUFFIXES:
+        return None
+    return "unsupported_extension" if suffix else "no_extension"
+
+
+def not_indexed(catalog: Catalog, *, examples: int = 8) -> dict[str, Any] | None:
+    """没读入的文件：按原因、按扩展名计数 + 几个文件名 + 怎么办。全都读入了返回 None。"""
+    if not catalog.skipped:
+        return None
+    by_reason: dict[str, int] = {}
+    by_extension: dict[str, int] = {}
+    for relpath, reason in catalog.skipped:
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+        extension = Path(relpath).suffix.lower() or "(none)"
+        by_extension[extension] = by_extension.get(extension, 0) + 1
+    by_extension = dict(sorted(by_extension.items(), key=lambda item: (-item[1], item[0])))
+    listed = "、".join(f"{extension} ×{count}" for extension, count in by_extension.items())
+    listed_en = ", ".join(f"{extension} ×{count}" for extension, count in by_extension.items())
+    formats = "、".join(SUFFIXES)
+    return {
+        "total": len(catalog.skipped),
+        "by_reason": {reason: by_reason[reason] for reason in SKIP_REASONS if reason in by_reason},
+        "by_extension": by_extension,
+        "examples": [relpath for relpath, _ in catalog.skipped[:examples]],
+        "supported_extensions": list(SUFFIXES),
+        "message": bilingual(
+            f"知识库文件夹里有 {len(catalog.skipped)} 个文件没有读入、搜不到（{listed}）：只读 {formats} 的文本文件。"
+            "PDF、Word、JSON 等请另存或导出成 .md 或 .txt 再放进来；没有扩展名的补上扩展名；以「.」开头的隐藏文件去掉开头的点。",
+            f"{len(catalog.skipped)} file(s) in the knowledge folder were not read and cannot be searched ({listed_en}): only "
+            f"{', '.join(SUFFIXES)} text files are read. Save or export PDF, Word or JSON files as .md or .txt; add an extension to files "
+            "that have none; remove the leading dot from hidden files.",
+        ),
+    }
 
 
 def _is_junction(path: Path) -> bool:
@@ -1212,11 +1266,16 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
             "read": {"domain": USER_DOMAIN, "key": entry.id, "from_line": int(first_line)},
             **({"exact": True} if retrieval.normalize(entry.title) == folded else {}),
         })
+    notes = list(found.problems)
+    skipped = not_indexed(catalog)
+    if skipped:
+        # 搜不到的原因可能就是「那个文件根本没读入」：每次检索都说一遍，不只在注册表里。
+        notes.append(skipped["message"])
     return {"matches": matches, "total_matched": found.total, "offset": offset, "limit": limit,
             "next_offset": offset + len(matches) if offset + len(matches) < found.total else None,
             "engine": _engine(settings, catalog) if found.used_index else "substring",
             **({"expanded_query": expanded} if expanded else {}),
-            **({"warnings": found.problems} if found.problems else {})}
+            **({"warnings": notes} if notes else {})}
 
 
 def _engine(settings: Any, catalog: Catalog) -> str:
@@ -1242,6 +1301,7 @@ def overview(settings: Any, *, limit: int = 50) -> dict[str, Any]:
         "entries": [entry.summary() for entry in catalog.entries[:limit]],
         "truncated": len(catalog.entries) > limit,
         "problems": [problem.as_dict() for problem in catalog.problems],
+        **({"not_indexed": skipped} if (skipped := not_indexed(catalog)) else {}),
         "trash": len(list_trash(settings)),
         "search_index": {"engine": "fts5-bm25" if catalog.index_ok else "substring",
                          "passages": catalog.index_report.get("chunks", 0)},
