@@ -180,3 +180,41 @@ def test_every_baselined_knob_points_at_its_upstream_reader(tmp_path: Path) -> N
     assert module.pointer_problems({"X.someKnob": "missing.py:1"}, tmp_path)
     (tmp_path / "a.py").write_text("data.get('someKnob')\n", encoding="utf-8")
     assert not module.pointer_problems({"X.someKnob": "a.py:1 (reads it)"}, tmp_path)
+
+
+# ── verify_value_goldens ────────────────────────────────────────────────────────────────────────
+
+
+def test_value_golden_guard_is_green() -> None:
+    assert _run_main(_load("verify_value_goldens")) == 0
+
+
+def test_a_tool_named_in_a_title_or_comment_is_not_covered() -> None:
+    """C-18 #8：旧扫描只要求「值级 check 块里出现技法名」，标题、注释都算——calendarExtras / qimenzeri 的旧金标测的是
+    vendored 函数（personBazi / computeQimenScanPan），从没调过 tools/ 那层；placeResolve 靠 placeSearch 块里的一行注释过关。
+    现在要求块里**调用**从 src/tools/<名>.js 导入的名字，注释先剥掉。负向对照：去掉注释剥离、或把「调用」放宽成「名字出现」，各红一例（实跑过）。"""
+    module = _load("verify_value_goldens")
+    header = "import { runTongshu } from '../src/tools/tongshu.js';\nimport { personBazi } from '../src/vendor/calendar/riziEngine.js';\n"
+    titled = header + "check('tongshu 值级', () => {\n  // runTongshu 在这里只是注释\n  assert(personBazi({}).xi[0] === '水', 'x');\n});\n"
+    commented_call = header + "check('x', () => {\n  /* runTongshu({ date }) 曾经这样调 */ // runTongshu({})\n  assert(personBazi({}).xi[0] === '水', 'x');\n});\n"
+    named_in_string = header + "check('x', () => {\n  assert(personBazi({}).label === 'runTongshu 甲', 'runTongshu');\n});\n"
+    for text in (titled, commented_call, named_in_string):
+        assert "tongshu" not in module.scan(text)[0], text
+    called = header + "check('值级', () => {\n  assert(runTongshu({ date: '2028-04-06' }).text.includes('日干支：辛酉'), 'x');\n});\n"
+    assert "tongshu" in module.scan(called)[0]
+    # 动态 import 解构出来的名字同样算（placeSearch 的写法）；`a.runTongshu(` 这种别人的属性不算。
+    dynamic = "try {\n  const { runTongshu: rt } = await import('../src/tools/tongshu.js');\n  assert(rt({}).text === '甲', 'x');\n} catch (e) {}\n"
+    assert "tongshu" in module.scan("\n" + dynamic.replace("try {", "try {", 1))[0]
+    assert module.tool_bindings("import { a as b, c } from '../src/tools/x.js';") == {"b": "x", "c": "x"}
+    # 模板字符串里的中文也算值级断言（jinkou 金标的写法）
+    assert module._is_value_level("assert(text.includes(`四柱：${g.year}年`), 'pillars');")
+
+
+def test_the_real_selfcheck_covers_the_tools_it_claims() -> None:
+    module = _load("verify_value_goldens")
+    covered, all_tools = module.scan()
+    baseline = json.loads((PKG_ROOT / "contracts" / "value_golden_debt.json").read_text(encoding="utf-8"))
+    assert set(baseline["covered"]) <= covered
+    assert {"calendarExtras", "qimenzeri", "tongshu", "egyptSection", "classicalDerived", "jinkou"} <= covered
+    assert set(baseline["covered_via"]) == {"placeResolve"} and baseline["covered_via"]["placeResolve"]["via"] in covered
+    assert len(baseline["debt"]) <= 10 and not (set(baseline["debt"]) & covered)
