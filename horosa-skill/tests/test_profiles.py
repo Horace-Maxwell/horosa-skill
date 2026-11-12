@@ -398,12 +398,13 @@ def test_day_picker_persons_take_profiles_with_only_the_keys_the_engine_reads(tm
     service = _service(tmp_path, js=js)
     _save(service.profiles, "妈妈", MOM)
     result = service.run_tool("calendar_month", {"date": "2028-04-06", "zone": "+08:00", "rizi": {"event": "嫁娶", "persons": [
-        {"profile": "妈妈", "role": "女方"}, {"name": "乙", "date": "1990-01-01", "time": "08:00", "zone": "+08:00", "gender": 1}]}, **CONFIRM},
+        # role 走日子馆角色词表（self / spouse / family；v0.50.0 深审余项：「女方」不是上游角色，快照曾印 undefined / 原文）。
+        {"profile": "妈妈", "role": "配偶"}, {"name": "乙", "date": "1990-01-01", "time": "08:00", "zone": "+08:00", "gender": 1, "role": "本人"}]}, **CONFIRM},
         save_result=False)
     assert result.ok, result.error
     person = result.input_normalized["rizi"]["persons"][0]
     # 嵌套的人一样过归一化（IANA 时区按出生日期折成偏移）；经纬度不进（日子馆不读）。
-    assert person == {"role": "女方", "date": "1962-03-05", "time": "06:00:00", "zone": "+08:00", "gender": 0}
+    assert person == {"role": "spouse", "date": "1962-03-05", "time": "06:00:00", "zone": "+08:00", "gender": 0}
     assert result.data["technique_card"]["profiles"][0]["slot"] == "rizi.persons[0]"
 
 

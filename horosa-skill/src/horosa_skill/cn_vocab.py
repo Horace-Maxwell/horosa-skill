@@ -288,3 +288,51 @@ def parse_gua_desc_names(value: Any) -> Any:
         raise field_issues_error(issues, extra_details={"accepted": [{"value": code, "label": full} for code, full, _ in rows]},
                                  tool_name="gua_desc")
     return out
+
+
+# 日子馆当事人的角色（vendored riziSnapshot.ROLE_LABEL：self 本人 / spouse 配偶 / family 家人）。上游页面第一个当事人恒是「本人」
+# （RiziMain 初始 persons=[{role:'self'}]），再添加的人由用户选角色；skill 以前不传 role → 快照印「undefined（甲）」（深审余项）。
+RIZI_ROLE = V("role", {"self": ("本人", "自己", "我", "命主"), "spouse": ("配偶", "伴侣", "夫", "妻", "丈夫", "妻子"),
+                       "family": ("家人", "亲属")}, labels={"self": "本人", "spouse": "配偶", "family": "家人"})
+
+
+def parse_rizi(value: Any) -> Any:
+    """calendar_month.rizi：每个当事人的 role 读成 self / spouse / family；第一个人没给按「本人」（上游初始当事人，进 warnings），
+    其后的人没给 → 逐字段问（不替用户定是配偶还是家人）；认不出 → tool.invalid_option。"""
+    from horosa_skill.input_fields import add_input_note
+    from horosa_skill.input_normalization import field_issues_error
+
+    if not isinstance(value, dict) or not isinstance(value.get("persons"), list):
+        return value
+    persons: list[Any] = []
+    issues: list[dict[str, Any]] = []
+    for index, person in enumerate(value["persons"]):
+        if not isinstance(person, dict):
+            persons.append(person)
+            continue
+        field = f"rizi.persons[{index}].role"
+        raw = person.get("role")
+        if raw is None or is_blank(raw):
+            if index == 0:
+                add_input_note(f"`{field}` 没给：第一个当事人按「本人」（上游日子馆的初始当事人）。",
+                               f"`{field}` not given: the first person is read as self (the upstream page's initial person).")
+                persons.append({**person, "role": "self"})
+                continue
+            issues.append({"field": field, "code": "tool.missing_field", "got": None, "expected": "self 本人 / spouse 配偶 / family 家人",
+                           "example": "spouse", "ask_user": True, "options": RIZI_ROLE.accepted,
+                           "message": f"缺 `{field}`：第 {index + 1} 个当事人是配偶还是家人？ / Missing `{field}`: is person {index + 1} the spouse or family?"})
+            persons.append(person)
+            continue
+        try:
+            parsed = RIZI_ROLE.parse(raw)
+        except FieldIssue as issue:
+            issues.append({"field": field, "code": issue.code, "got": raw, "expected": f"{issue.expected_zh} / {issue.expected_en}",
+                           "example": "spouse", "ask_user": False, "options": issue.options, "message": f"{issue.zh} / {issue.en}"})
+            persons.append(person)
+            continue
+        if parsed.note_zh:
+            add_input_note(f"`{field}`{parsed.note_zh}", f"`{field}` {parsed.note_en}")
+        persons.append({**person, "role": parsed.value})
+    if issues:
+        raise field_issues_error(issues, tool_name="calendar_month")
+    return {**value, "persons": persons}
