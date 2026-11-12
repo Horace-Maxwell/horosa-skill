@@ -62,5 +62,5 @@ def long_paths_enabled() -> bool:
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
             value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
             return int(value) == 1
-    except Exception:  # noqa: BLE001
+    except (ImportError, OSError, TypeError, ValueError):  # 键不在（FileNotFoundError）、值不是数：按没开
         return False
