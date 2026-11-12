@@ -44,7 +44,8 @@
       "name": "defaults accepted passes",
       "tool": "bazi_birth",
       "payload": {
-        "defaults_accepted": true
+        "defaults_accepted": true,
+        "gender": 1
       },
       "expect": "pass"
     },
@@ -77,9 +78,19 @@
       "expect": "pass"
     },
     {
-      "name": "dispatch blocks bare",
+      "name": "dispatch blocks when the routed technique still has open settings",
       "tool": "dispatch",
-      "payload": {},
+      "payload": {
+        "query": "帮我看看八字",
+        "birth": {
+          "date": "1990-01-01",
+          "time": "12:00:00",
+          "zone": "+08:00",
+          "lat": "31n13",
+          "lon": "121e28",
+          "gender": 1
+        }
+      },
       "expect": "block"
     },
     {
@@ -116,6 +127,62 @@
         "time": "12:00:00"
       },
       "expect": "block"
+    },
+    {
+      "name": "a confirmation cannot stand in for a fact (gender, v0.50)",
+      "tool": "bazi_birth",
+      "payload": {
+        "defaults_accepted": true
+      },
+      "expect": "block"
+    },
+    {
+      "name": "nothing open passes without flags (huangli with its date, v0.50)",
+      "tool": "huangli",
+      "payload": {
+        "date": "2026-11-11"
+      },
+      "expect": "pass"
+    },
+    {
+      "name": "dispatch: out-of-scope goes to the routing refusal, not the questionnaire (v0.50)",
+      "tool": "dispatch",
+      "payload": {
+        "query": "帮我看手相"
+      },
+      "expect": "pass"
+    },
+    {
+      "name": "dispatch: confirmed but no question moment for a cast technique blocks (v0.50)",
+      "tool": "dispatch",
+      "payload": {
+        "query": "用奇门看看这笔投资",
+        "birth": {
+          "date": "1990-01-01",
+          "time": "12:00:00",
+          "zone": "+08:00",
+          "lat": "31n13",
+          "lon": "121e28"
+        },
+        "agent_confirmed_settings": true
+      },
+      "expect": "block"
+    },
+    {
+      "name": "dispatch: confirmed with the question moment in context passes (v0.50)",
+      "tool": "dispatch",
+      "payload": {
+        "query": "用奇门看看这笔投资",
+        "context": {
+          "date": "1990-01-01",
+          "time": "12:00:00",
+          "zone": "+08:00",
+          "lat": "31n13",
+          "lon": "121e28"
+        },
+        "agent_confirmed_settings": true
+      },
+      "expect": "pass"
     }
   ]
 }

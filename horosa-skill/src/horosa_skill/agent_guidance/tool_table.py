@@ -302,7 +302,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "conditions", "question": "择日要满足什么条件？"},
             {"field": "location", "question": "起盘地点用哪里？", "options": ["当前位置/客户端位置", "指定城市或经纬度"]},
             {"field": "topic", "question": "这次择日是为什么事？（搬家/开业/婚嫁…）"},
-            {"field": "gender", "question": "紫微择时按男命还是女命起盘？（扫描按性别起命盘，影响阴阳局与宫位条件）", "options": ["男（星阙默认）", "女"]},
+            {"field": "gender", "question": "紫微择时按男命还是女命起盘？（扫描按性别起命盘，影响阴阳局与宫位条件）", "options": ["男", "女"], "values": [1, 0]},
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 92, "meaning": "搜索窗上限；更长请分段"},
@@ -637,7 +637,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="大六壬行年/年运。",
         required_context=COMMON_LOCATION_FIELDS + ["gender", "target year/date when different from base time"],
         ask_if_missing=[
-            {"field": "gender", "question": "行年需要性别，请选择。", "options": ["男", "女"]},
+            {"field": "gender", "question": "行年需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
             {"field": "guaDate/guaYearGanZi", "question": "要看哪一年/哪一段行年？"},
             {"field": "guirengType", "question": "贵人体系是否沿用星阙默认星占法贵人？", "options": ["星占法贵人", "六壬法贵人", "遁甲法贵人", "甲戊兼牛羊", "干合阳阴贵"], "values": [2, 0, 1, 3, 4]},
         ],
@@ -718,6 +718,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
             {"field": "method", "question": "取法用明法还是古法？", "options": ["明法（月支反向取日宫·默认）", "古法（八字日支为日宫）"]},
+            {"field": "gender", "question": "性别？（男命 / 女命取法不同）", "options": ["男", "女"], "values": [1, 0]},
             {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["真太阳时（星阙默认，按经度+均时差校正）", "钟表时 timeAlg=1"]},
         ],
         safe_defaults=[
@@ -734,6 +735,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "date/time/place", "question": "请提供出生日期、时间、经度（真太阳时用）和性别。"},
             {"field": "timeAlg", "question": "用真太阳时还是钟表时？", "options": ["真太阳时（星阙默认，按经度+均时差校正）", "钟表时 timeAlg=1"]},
             {"field": "quHuaGong", "question": "取化工法用哪一档？（只在四立前十八日土用期生人有差）", "options": ["土王寄坤艮（星阙默认）", "直取四方伯 siFangBoOnly"]},
+            {"field": "gender", "question": "性别？（男命 / 女命取法不同）", "options": ["男", "女"], "values": [1, 0]},
         ],
         safe_defaults=[
             {"field": "timeAlg", "value": 0, "meaning": "真太阳时：上游 AI 挂载无头 buildFieldObject timeAlg ?? 0；页面全局字段出厂亦 0（HeLuoMain 的 fieldVal 回退 1 从不生效）"},
@@ -757,6 +759,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=["birth date", "birth time", "gender"],
         ask_if_missing=[
             {"field": "date/time", "question": "请提供出生日期、时间和性别（一掌经按农历口径排盘）。"},
+            {"field": "gender", "question": "性别？（男命 / 女命取法不同）", "options": ["男", "女"], "values": [1, 0]},
             {"field": "dingYue", "question": "定月用农历月还是节气月？", "options": ["农历月（默认，闰月十五折半）", "节气月（按八字月支序）"]},
             {"field": "annualMethod", "question": "逐年看小限还是流年十二神？（文献明训两法只用一套；不指定则两法并列）", "options": ["小限 xiaoxian", "流年十二神 liunian", "两法并列（不指定，同星阙 AI 挂载缺省）"]},
         ],
@@ -1026,6 +1029,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=["流派 school", "生辰 date/time/zone+lon+lat（除 xinyi 外）", "性别 gender", "流派专属参数"],
         ask_if_missing=[
             {"field": "school", "question": "用哪一流派？", "options": ["铁板神数 tieban", "邵子神数 shaozi(fatherAge/motherAge/yuan)", "大定数 dading(dadingYear)", "六亲数 liuqin(askHourZhi/env)", "铁算心易 xinyi(查询 item/sound/ke/gong)"]},
+            {"field": "gender", "question": "性别？（男命 / 女命取法不同）", "options": ["男", "女"], "values": [1, 0]},
             {"field": "date/time/gender", "question": "请提供出生的日期、时间、时区（+经度）与性别（铁算心易查询层除外）。"},
             {"field": "school-params", "question": "流派专属：邵子的父母年龄/元(上中下)、大定的所推流年、六亲的演算时辰/环境。"},
         ],
@@ -1234,7 +1238,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
-            {"field": "gender", "question": "紫微需要性别，请选择。", "options": ["男", "女"]},
+            {"field": "gender", "question": "紫微需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
             {"field": "after23NewDay/lateZiHourUseNextDay/timeAlg", "question": "子时换日、晚子时时柱和时间算法是否沿用星阙默认？", "options": ["沿用默认", "指定"]},
             {
                 "field": "sihuaSchool/传本",
@@ -1260,6 +1264,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
             {"field": "timeAlg/after23NewDay/lateZiHourUseNextDay", "question": "真太阳时、子时换日、晚子时时柱是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
+            {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
             {
                 "field": "godKeyPos/minggongMethod/school",
                 "question": "神煞主位、命宫起法、断命流派是否沿用星阙默认？",
@@ -1290,7 +1295,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
             {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
-            {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"]},
+            {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
         ],
         safe_defaults=[
             {"field": "adjustJieqi", "value": False, "meaning": "星阙 v3.13.0 起恒不调整节气（八字页 / 无头 / 择日恒发 0；给 true 也按不调整起盘并进 warnings）"},

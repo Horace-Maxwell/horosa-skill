@@ -172,6 +172,27 @@ def _as_is(error: dict[str, Any]) -> dict[str, Any]:
     return error
 
 
+def _mentions_place(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("place") not in (None, ""):
+        return True
+    return any(_mentions_place(payload.get(key)) for key in ("birth", "context", "subject", "inner", "outer"))
+
+
+async def _gate_view_with_places(mcp: MCPServer, gate: str, view: Any) -> Any:
+    """[dispatch 批 v0.50 F9] 闸门判定前把 `place` 换成坐标（与执行时同一个解析器）。"""
+    resolver = getattr(mcp, "gate_place_resolver", None)
+    if resolver is None or not _mentions_place(view):
+        return view
+    import anyio
+
+    try:
+        return await anyio.to_thread.run_sync(lambda: resolver(dict(view), gate))
+    except Exception:  # noqa: BLE001 - 解析失败留给执行时报（带候选）；闸门不因此崩
+        return view
+
+
 async def _gated_run(
     mcp: MCPServer,
     *,
@@ -197,6 +218,9 @@ async def _gated_run(
             return refuse(_mcp_error_payload(exc))
         except Exception as exc:  # noqa: BLE001 - 兜底也必须是信封
             return refuse(_mcp_internal_error_payload(exc))
+        # [dispatch 批 v0.50 F9] 闸门看地名解析之后的载荷：给了 place 就不再追问地点 / 时区。解析在工作线程里（会起 node）；
+        # 解析失败（有歧义 / 找不到）不在这里报——闸门照旧判定，执行时由地名解析给出带候选的结构化拒绝。
+        view = await _gate_view_with_places(mcp, gate, view)
         error = _agent_preflight_error(gate, view)
         if error is not None:
             updated = await _maybe_elicit_gate(mcp, gate, payload, error)
@@ -234,6 +258,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     )
     mcp.output_script = settings.output_script
     mcp.profile_settings = settings  # 闸门按命主档案过滤追问（_gated_run）
+    # [dispatch 批 v0.50 F9] 闸门在地名解析之后判定（_gate_view_with_places）。
+    mcp.gate_place_resolver = lambda payload, tool_name: _placed(payload, tool_name)
 
     def _placed(payload: Any, tool_name: str) -> Any:
         """地名 → 坐标（v0.48.0）：MCP 层先按技法 / dispatch 模型校验（lat / lon / zone 必填），载荷里的 `place` 必须在那之前

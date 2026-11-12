@@ -10,6 +10,7 @@ from horosa_skill.agent_guidance.base import (
     SENSITIVE_SETTINGS,
     _clarify_override,
 )
+from horosa_skill.agent_guidance import questions as gate_questions
 from horosa_skill.agent_guidance.catalog import build_agent_guidance
 from horosa_skill.agent_guidance.tool_table import TOOL_GUIDANCE
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
@@ -35,8 +36,8 @@ def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], 
     """闸门追问文案（**双语**）。
 
     这段文本会被 agent 原样转给用户，在支持 elicitation 的客户端还会直接变成原生表单的标题——
-    单中文会让非中文用户面对一整块看不懂的表单。技法名词保持中文（它们本就是专名），但每条指引
-    都配英文，使任何语言的用户都知道「要我确认什么、怎么快速继续」。
+    单中文会让非中文用户面对一整块看不懂的表单。每个问题都是「中文 / English」（data/gate_questions_en.json），
+    技法用中文正名（不念注册表键）；长选项表不逐条列（见 questions.present）。
     """
     if not ask_if_missing:
         return (
@@ -44,21 +45,45 @@ def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], 
             "I still need the key inputs for this call — please provide them, or say to continue with "
             "Xingque defaults."
         )
-    lines = [
-        f"调用 `{tool_name}` 前需要先确认这些会影响结果的设置：",
-        f"Before running `{tool_name}`, please confirm these result-changing settings:",
-    ]
-    for index, item in enumerate(ask_if_missing[:6], start=1):
+    label = _tool_label(tool_name)
+    facts = [item for item in ask_if_missing if item.get("fact")]
+    settings = [item for item in ask_if_missing if not item.get("fact")]
+    lines: list[str] = []
+    if settings:
+        lines += [
+            f"调用{label}前需要先确认这些会影响结果的设置：",
+            f"Before running {label}, please confirm these result-changing settings:",
+        ]
+    if facts:
+        lines += [
+            "这些是只有用户知道的事实，确认默认设置代替不了它们：",
+            "These are facts only the user knows; accepting defaults cannot stand in for them:",
+        ]
+    for index, item in enumerate([*facts, *settings][:8], start=1):
         question = str(item.get("question") or item.get("field") or "请补充这个参数。")
         options = item.get("options")
         if isinstance(options, list) and options:
             question = f"{question} 可选 / options：{' / '.join(str(option) for option in options)}"
+        elif item.get("how_to_change"):
+            question = f"{question} {item['how_to_change']}"
         lines.append(f"{index}. {question}")
-    if safe_defaults:
+    if safe_defaults and settings:
         defaults = "; ".join(f"{item.get('field')}={item.get('value')}" for item in safe_defaults[:5])
         lines.append(f"如果你想快速继续，也可以明确说“按星阙默认”，我会使用：{defaults}。")
         lines.append(f"To continue immediately, say “use Xingque defaults” and I will use: {defaults}.")
     return "\n".join(lines)
+
+
+def _tool_label(tool_name: str) -> str:
+    from horosa_skill.engine.synonyms import display_name
+
+    if tool_name in {"dispatch", "horosa_dispatch"}:
+        return "自动选技法（dispatch）"
+    if tool_name in {"hecan", "horosa_hecan"}:
+        return "合参（hecan）"
+    name = resolve_tool_name(tool_name) or tool_name
+    shown = display_name(name)
+    return f"「{shown}」" if shown != name else f"`{name}`"
 
 
 def _agent_recovery(
@@ -84,40 +109,72 @@ def _agent_recovery(
     }
 
 
-def _filter_provided_questions(ask_if_missing: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """闸问题按 payload 已提供字段过滤：用户已给的信息不再重复追问。
+def open_questions(tool_name: str, payload: dict[str, Any], *, confirmed: bool) -> list[dict[str, Any]]:
+    """这个技法对这份载荷还开着的问题（已呈现：双语 / 精简选项 / fact 标记）。
 
-    条目 field 形如 "date/time" 或 "after23NewDay/timeAlg"（斜杠=同组多字段）；组内字段全部
-    已显式提供（非 None）才略过该问。别名 location≈lat/lon，birth/date≈date。
-    """
-    provided = {key for key, value in payload.items() if value is not None}
-    alias_groups = {
-        "location": {"lat", "lon", "gpsLat", "gpsLon", "location"},
-        "place": {"lat", "lon", "gpsLat", "gpsLon", "location"},
-        "birth": {"date"},
+    未确认：已答的不问、谓词不成立的不问。已确认：只剩事实（确认标记回答了设置，回答不了事实）。"""
+    guidance = build_agent_guidance(tool_name=tool_name)
+    policy = guidance["tools"][tool_name]
+    items: list[dict[str, Any]] = []
+    for question in policy.get("ask_if_missing", []):
+        if not isinstance(question, dict):
+            continue
+        if not gate_questions.applies(tool_name, question, payload) or gate_questions.answered(tool_name, question, payload):
+            continue
+        if confirmed and not gate_questions.is_fact(tool_name, question):
+            continue
+        items.append(gate_questions.present(tool_name, question, payload))
+    return items
+
+
+def _filter_provided_questions(ask_if_missing: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """兼容旧调用点：按载荷过滤（不分技法覆盖）。新代码用 open_questions。"""
+    return [
+        item for item in ask_if_missing
+        if not isinstance(item, dict) or not gate_questions.answered("", item, payload)
+    ]
+
+
+def _block(tool_name: str, ask_if_missing: list[dict[str, Any]], safe_defaults: list[dict[str, Any]],
+           do_not_assume: list[str], *, reason: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    result = {
+        "ok": False,
+        "tool_name": tool_name,
+        "enforced": True,
+        "code": GATE_FAILURE_CODE,
+        "message": (
+            "This Horosa tool is protected by the agent guidance gate. "
+            "Ask the user for missing result-changing settings first, or pass "
+            "`agent_confirmed_settings: true` / `defaults_accepted: true` after explicit confirmation."
+            if reason == "missing_agent_confirmation"
+            else "Facts only the user knows are missing; a confirmation flag cannot stand in for them. "
+            "Ask the user for each item in ask_if_missing and retry with the values."
+        ),
+        "ask_if_missing": ask_if_missing,
+        "safe_defaults": safe_defaults,
+        "do_not_assume": do_not_assume,
+        "confirmation_fields": CONFIRMATION_FIELDS,
+        "agent_recovery": _agent_recovery(
+            tool_name=tool_name,
+            ask_if_missing=ask_if_missing,
+            safe_defaults=safe_defaults,
+            do_not_assume=do_not_assume,
+            reason=reason,
+        ),
     }
-    filtered: list[dict[str, Any]] = []
-    for item in ask_if_missing:
-        if not isinstance(item, dict):
-            filtered.append(item)
-            continue
-        fields = [part.strip() for part in str(item.get("field") or "").split("/") if part.strip()]
-        if not fields:
-            filtered.append(item)
-            continue
-        def _has(field: str) -> bool:
-            if field in provided:
-                return True
-            aliases = alias_groups.get(field)
-            return bool(aliases and aliases & provided)
-        if all(_has(field) for field in fields):
-            continue
-        filtered.append(item)
-    return filtered
+    if extra:
+        result.update(extra)
+        result["agent_recovery"].update({k: v for k, v in extra.items() if k in ("missing_facts", "example_payload")})
+    return result
 
 
 def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Return a structured gate result before a calculation tool is allowed to run."""
+    """Return a structured gate result before a calculation tool is allowed to run.
+
+    v0.50：问题逐条按载荷判定（questions.py）——已答的不问、不适用的不问、什么都不缺就放行（mode=nothing_to_confirm）；
+    确认标记回答设置，回答不了事实（结果依赖的性别、起课时刻、第二个人、要推的年份）。dispatch / hecan 先路由、
+    再按选中技法实际会收到的载荷取问题的并集。
+    """
 
     # MCP 名（horosa_astro_chart）先归一到注册表键：下面「不认识的名字放行」只该放行真·非技法名，
     # 否则换个写法就能绕过闸门。
@@ -135,53 +192,24 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
 
     confirmed = payload.get("agent_confirmed_settings") is True
     defaults_accepted = payload.get("defaults_accepted") is True
-    if confirmed or defaults_accepted:
-        return {
-            "ok": True,
-            "tool_name": tool_name,
-            "enforced": True,
-            "mode": "agent_confirmed_settings" if confirmed else "defaults_accepted",
-        }
+    flagged = confirmed or defaults_accepted
+    mode = "agent_confirmed_settings" if confirmed else ("defaults_accepted" if defaults_accepted else "nothing_to_confirm")
 
     if is_dispatch:
-        ask_if_missing = [
-            {"field": "target technique", "question": "你想调用哪一种技法？", "options": ["星盘", "大六壬", "奇门", "八字", "紫微", "其他"]},
-            {"field": "date/time", "question": "使用当前时间，还是指定时间？"},
-            {"field": "location", "question": "地点、经纬度、时区用哪里？"},
-            {"field": "question", "question": "这次要问的具体事情是什么？"},
-        ]
-        if is_hecan and payload.get("tools"):
-            ask_if_missing = ask_if_missing[1:]  # 显式 `tools` 已经答了「用哪种技法」
-        safe_defaults = [{"field": "routing", "value": "dispatch selection", "meaning": "仅在用户确认目标和默认设置后自动选择工具"}]
-        do_not_assume = ["Do not dispatch to a calculation tool before confirming result-changing settings."]
-    else:
-        guidance = build_agent_guidance(tool_name=tool_name)
-        policy = guidance["tools"][tool_name]
-        ask_if_missing = _filter_provided_questions(policy.get("ask_if_missing", []), payload)
-        safe_defaults = policy.get("safe_defaults", [])
-        do_not_assume = policy.get("do_not_assume", [])
-    return {
-        "ok": False,
-        "tool_name": tool_name,
-        "enforced": True,
-        "code": GATE_FAILURE_CODE,
-        "message": (
-            "This Horosa tool is protected by the agent guidance gate. "
-            "Ask the user for missing result-changing settings first, or pass "
-            "`agent_confirmed_settings: true` / `defaults_accepted: true` after explicit confirmation."
-        ),
-        "ask_if_missing": ask_if_missing,
-        "safe_defaults": safe_defaults,
-        "do_not_assume": do_not_assume,
-        "confirmation_fields": CONFIRMATION_FIELDS,
-        "agent_recovery": _agent_recovery(
-            tool_name=tool_name,
-            ask_if_missing=ask_if_missing,
-            safe_defaults=safe_defaults,
-            do_not_assume=do_not_assume,
-            reason="missing_agent_confirmation",
-        ),
-    }
+        from horosa_skill.agent_guidance.dispatch_gate import dispatch_gate
+
+        return dispatch_gate(tool_name, payload, flagged=flagged, mode=mode, is_hecan=is_hecan, block=_block,
+                             open_questions=open_questions)
+
+    open_items = open_questions(tool_name, payload, confirmed=flagged)
+    if not open_items:
+        return {"ok": True, "tool_name": tool_name, "enforced": True, "mode": mode}
+    guidance = build_agent_guidance(tool_name=tool_name)
+    policy = guidance["tools"][tool_name]
+    return _block(
+        tool_name, open_items, [] if flagged else policy.get("safe_defaults", []), policy.get("do_not_assume", []),
+        reason="missing_required_facts" if flagged else "missing_agent_confirmation",
+    )
 
 
 def build_clarification_recovery(
@@ -233,6 +261,25 @@ def _agent_fixable_recovery(operation: str, errors: list[dict[str, Any]]) -> dic
     }
 
 
+def _validation_questions(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for error in errors:
+        if not isinstance(error, dict):
+            continue
+        loc = error.get("loc")
+        field = ".".join(str(part) for part in loc) if isinstance(loc, (list, tuple)) and loc else "(payload)"
+        if field in seen:
+            continue
+        seen.add(field)
+        problem = str(error.get("msg") or error.get("type") or "invalid")
+        out.append({
+            "field": field,
+            "question": bilingual(f"`{field}` 缺失或不合法（{problem}）：请提供 / 改正。", f"`{field}` is missing or invalid ({problem}): please provide / fix it."),
+        })
+    return out[:8]
+
+
 def build_validation_recovery(
     *,
     operation_name: str,
@@ -249,11 +296,11 @@ def build_validation_recovery(
     if not tool_name and operation in AGENT_OWNED_OPERATIONS:
         return _agent_fixable_recovery(operation, errors)
     target = tool_name or operation_name
-    if tool_name in TOOL_GUIDANCE or tool_name in {"dispatch", "horosa_dispatch"}:
-        gate = validate_agent_preflight(tool_name, {})
-        ask_if_missing = gate.get("ask_if_missing", [])
-        safe_defaults = gate.get("safe_defaults", [])
-        do_not_assume = gate.get("do_not_assume", [])
+    if tool_name in TOOL_GUIDANCE or tool_name in {"dispatch", "horosa_dispatch", "hecan", "horosa_hecan"}:
+        # v0.50：只问校验真正卡住的字段——旧做法拿空载荷重放整份闸门问卷（用户给过的也重问，17 KB 起）。
+        ask_if_missing = _validation_questions(errors)
+        safe_defaults = []
+        do_not_assume = ["Do not invent the missing values; ask the user for exactly these fields."]
     else:
         missing_fields = []
         for error in errors:
