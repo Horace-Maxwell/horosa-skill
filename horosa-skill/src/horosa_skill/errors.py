@@ -128,6 +128,37 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "shorten_window_or_raise_timeout",
     },
+    # JS 引擎的三种「装得不对」各有专门的修法，不落到前缀规则的泛泛一句（v0.50.0-dev，E-11 / C-19 / E-02）。
+    "js_engine.node_too_old": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "本机找到的 Node 太旧，本地 JS 引擎跑不起来（details.found / details.required）。装离线 runtime（自带合适版本的 node），"
+            "或把 HOROSA_NODE_BIN 指向一个够新的 node，然后重启客户端。",
+            "The Node found on this machine is too old for the local JS engine (details.found / details.required). Install the "
+            "offline runtime (it ships a suitable node) or point HOROSA_NODE_BIN at a newer node, then restart the client.",
+        ),
+        "next_action": "install_runtime_or_point_node_bin_at_a_newer_node",
+    },
+    "js_engine.node_bin_missing": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "HOROSA_NODE_BIN 指向的文件不存在（details.path）。改成真实存在的 node，或删掉这个变量用离线 runtime 自带的 node。",
+            "HOROSA_NODE_BIN points at a file that does not exist (details.path). Point it at a real node, or unset it to use the "
+            "offline runtime's bundled node.",
+        ),
+        "next_action": "fix_or_unset_horosa_node_bin",
+    },
+    "js_engine.cli_missing": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "本地 JS 引擎（horosa-core-js）不在本机（details.searched 列出找过的位置）。装离线 runtime（自带引擎），或设 "
+            "HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录；只设 HOROSA_SERVER_ROOT 的网关模式不带这个引擎。",
+            "The local JS engine (horosa-core-js) is not on this machine (details.searched lists where it looked). Install the "
+            "offline runtime (it ships the engine), or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory; gateway mode "
+            "(HOROSA_SERVER_ROOT only) does not include this engine.",
+        ),
+        "next_action": "install_runtime_or_set_core_js_root",
+    },
     # 自备知识库（knowledge/user.py）：都是使用者自己能改的输入问题，不是「重试 / 体检」。
     "knowledge.user_not_found": {
         "kind": "input",
