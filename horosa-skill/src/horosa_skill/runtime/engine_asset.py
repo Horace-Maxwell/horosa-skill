@@ -253,6 +253,18 @@ class EngineAssetMixin:
 
         node = node_runtime.resolve_node(self.settings, self.load_installed_manifest()).as_dict()
         result_warnings = list(warnings)
+        if reason == "manifest_lacks_platform":
+            result_warnings.append({
+                "code": "runtime.engine_only_installed",
+                "message": bilingual(
+                    f"这份发布清单里没有本平台（{platform_name}）的 runtime 归档（发布不完整？），先只装了 JS 引擎。稍后重跑 `install`，"
+                    "或用 `--manifest-url` 换一份完整的清单，就会装上离线 runtime。",
+                    f"This release manifest has no runtime archive for this platform ({platform_name}) (an incomplete release?), so "
+                    "only the JS engine was installed for now. Rerun `install` later, or pass a complete manifest with "
+                    "`--manifest-url`, to get the offline runtime.",
+                ),
+                "platform": platform_name,
+            })
         if reason == "no_payload_for_platform":
             result_warnings.append({
                 "code": "runtime.engine_only_installed",

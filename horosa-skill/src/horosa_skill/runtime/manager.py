@@ -690,7 +690,9 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                     # 装它，而不是报「不支持」——此前这里一失败，这些机器上所有本地 JS 技法都是 js_engine.cli_missing。
                     result = self.install_engine_only(
                         manifest_url=manifest_location, force=force, progress=progress, sha256=pinned_sha256,
-                        manifest_data=manifest_data, manifest_location=manifest_location, reason="no_payload_for_platform",
+                        manifest_data=manifest_data, manifest_location=manifest_location,
+                        # 支持的平台却不在清单里 = 这次发布不完整（不是「本平台没有载荷」），告警要说对原因。
+                        reason="manifest_lacks_platform" if platform_has_payload(platform_name) else "no_payload_for_platform",
                         platform_name=platform_name, warnings=install_warnings,
                     )
                     advice = _platform_dead_end_advice(platform_name)

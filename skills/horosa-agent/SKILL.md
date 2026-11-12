@@ -369,5 +369,6 @@ uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.
 uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.49.0/horosa_skill-0.49.0-py3-none-any.whl" horosa-skill selfcheck
 ```
 
-Intel Macs and Linux have no offline runtime (gateway mode); restricted networks, mirrors and failures:
+Intel Macs and Linux have no offline runtime: `setup` / `install` there installs only the JS engine (local JS techniques; needs
+Node.js >= 20.10) and the rest goes through gateway mode; restricted networks, mirrors and failures:
 [`references/troubleshooting.md`](./references/troubleshooting.md).

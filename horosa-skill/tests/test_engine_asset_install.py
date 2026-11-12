@@ -322,6 +322,16 @@ def test_install_on_a_platform_without_a_payload_installs_the_engine(tmp_path: P
     assert engine_asset.installed_engine_root(settings.runtime_root) is not None
 
 
+def test_a_supported_platform_missing_from_the_manifest_is_called_an_incomplete_release(tmp_path: Path, server) -> None:
+    """win32-x64 has a payload; a manifest without it is a half release, not «this platform has none»."""
+    base, www = server
+    manifest_uri, _ = _publish(www, base)
+    result = HorosaRuntimeManager(_settings(tmp_path)).install(manifest_url=manifest_uri, platform_key="win32-x64")
+    assert (result["mode"], result["reason"]) == ("engine_only", "manifest_lacks_platform")
+    notice = next(w for w in result["warnings"] if w["code"] == "runtime.engine_only_installed")
+    assert "--manifest-url" in notice["message"] and "没有离线 runtime 归档，只装了" not in notice["message"]
+
+
 def test_without_the_asset_a_payloadless_platform_still_gets_the_old_dead_end(tmp_path: Path) -> None:
     manifest = tmp_path / "m.json"
     manifest.write_text(json.dumps({"version": "0.49.0", "platforms": {"darwin-arm64": {"url": "x", "sha256": "0" * 64}}}),
