@@ -73,7 +73,8 @@ def test_silent_ken_fallback_shows_up_as_a_declaration_mismatch() -> None:
     card = _card(response_data={"pan": {"source": "local_calcDunJia"}, "export_snapshot": {}})
     assert card["compute"]["measured"] == {"pan": "local_calcDunJia"}
     assert card["compute"]["matches_declaration"] is False
-    assert "⚠️" in render_technique_card_markdown(card)
+    # 文字样式的 ⚠（不带 U+FE0F）：PDF 的补字链画得出；带 FE0F 的 emoji 样式在 PDF 里是方块（评审 R-02）
+    assert "⚠" in render_technique_card_markdown(card) and "\ufe0f" not in render_technique_card_markdown(card)
 
 
 def test_missing_measurement_is_unknown_not_a_false_pass() -> None:

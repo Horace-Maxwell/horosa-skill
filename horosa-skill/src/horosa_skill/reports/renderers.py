@@ -876,13 +876,91 @@ def _plain(text: str) -> str:
 _LONG_FLOAT_RE = re.compile(r"(?<![\d.])(-?\d+\.\d{4})\d{3,}(?![\d.])")
 
 
-_EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF]\ufe0f?")
-
-
 def _display_number(text: str) -> str:
-    """人读版里把 7 位以上小数（引擎原文的 `误差0.7548645849180389`）四舍五入到 4 位；彩色 emoji（📍）换成 ▸——PDF 字体
-    都没有彩色字形（Apple Color Emoji 是位图字体，reportlab 嵌不了），不换就是方块。机读 JSON 不经这里，仍是原文。"""
-    return _EMOJI_RE.sub("▸", _LONG_FLOAT_RE.sub(lambda m: f"{float(m.group(0)):.4f}", text))
+    """人读版里把 7 位以上小数（引擎原文的 `误差0.7548645849180389`）四舍五入到 4 位。只对引擎原文；机读 JSON 不经这里。
+    emoji 不在这里换（v0.50.0）：DOCX 原样保留（Word 有彩色字体兜底），PDF 在 _pdf_symbols 里按含义换成画得出的符号。"""
+    return _LONG_FLOAT_RE.sub(lambda m: f"{float(m.group(0)):.4f}", text)
+
+
+# ── PDF 里的 emoji 与符号（v0.50.0，评审 R-02）────────────────────────────────
+# PDF 只能嵌 TrueType 轮廓字体，彩色 emoji（Apple Color Emoji / Segoe UI Emoji 是位图或 COLR）一个都画不出来。此前只把
+# U+1F300–1FAFF 一段换成 ▸：✅ ❌ ⚠️ ⭐ 1️⃣ 不在这一段，印成方块；🔴 / 🟢、👍 / 👎 全成 ▸，意思反了也看不出。
+# 现在：先去掉不占位的修饰（变体选择符、零宽连接、肤色），键帽数字成圈码，常见的按含义换（不同含义换成不同符号，红绿灯保留颜色）；
+# 其余符号由 _wrap_missing_glyphs_chain 按真实字体的 cmap 判：主字体和补字链都画不了才换成 ▸。DOCX 不经这里，原样保留 emoji。
+_INVISIBLE_MARKS = frozenset([0xFE0E, 0xFE0F, 0x200D, *range(0x1F3FB, 0x1F400), *range(0xE0020, 0xE0080)])
+_KEYCAP = 0x20E3
+_KEYCAP_DIGITS = {"0": "⓪", "1": "①", "2": "②", "3": "③", "4": "④", "5": "⑤", "6": "⑥", "7": "⑦", "8": "⑧", "9": "⑨", "#": "#", "*": "*"}
+_RED, _ORANGE, _AMBER, _GREEN, _BLUE, _PURPLE, _BROWN = "#c53030", "#dd6b20", "#b7791f", "#2f855a", "#2b6cb0", "#6b46c1", "#8b5a2b"
+_PDF_SYMBOLS: dict[str, tuple[str, str | None]] = {
+    # 对 / 错
+    "✅": ("✓", _GREEN), "✔": ("✓", None), "☑": ("✓", None), "🆗": ("✓", None),
+    "❌": ("✗", _RED), "❎": ("✗", None), "✖": ("✗", None), "🚫": ("✗", _RED), "⛔": ("✗", _RED),
+    # 星 / 提示
+    "⭐": ("★", _AMBER), "🌟": ("★", _AMBER), "✨": ("✦", _AMBER), "💫": ("✦", None),
+    "❗": ("!", _RED), "❕": ("!", None), "‼": ("!!", _RED), "❓": ("?", None), "❔": ("?", None), "⁉": ("!?", None),
+    "💡": ("◆", _AMBER), "📌": ("▸", None), "📍": ("▸", None), "👉": ("▸", None), "🔹": ("◆", _BLUE), "🔸": ("◆", _ORANGE),
+    "🔺": ("▲", _RED), "🔻": ("▼", _RED), "📈": ("↗", _GREEN), "📉": ("↘", _RED),
+    "👍": ("⊕", _GREEN), "👎": ("⊖", _RED),
+    # 方向
+    "➡": ("→", None), "⬅": ("←", None), "⬆": ("↑", None), "⬇": ("↓", None), "↗": ("↗", None), "↘": ("↘", None),
+    "🔄": ("⟳", None), "🔁": ("⟳", None),
+    # 红绿灯：同一个圆点，颜色不同（意思不同就印得不同）
+    "🔴": ("●", _RED), "🟠": ("●", _ORANGE), "🟡": ("●", _AMBER), "🟢": ("●", _GREEN), "🔵": ("●", _BLUE),
+    "🟣": ("●", _PURPLE), "🟤": ("●", _BROWN), "⚫": ("●", None), "⚪": ("○", None),
+    "🟥": ("■", _RED), "🟧": ("■", _ORANGE), "🟨": ("■", _AMBER), "🟩": ("■", _GREEN), "🟦": ("■", _BLUE),
+    "🟪": ("■", _PURPLE), "🟫": ("■", _BROWN), "⬛": ("■", None), "⬜": ("□", None),
+    "🔟": ("⑩", None),
+}
+
+
+def _pdf_symbols(markup: str) -> str:
+    """PDF 段落标记里的 emoji → 画得出的符号（只动标签外的文字）。见上方表的说明。"""
+    if markup.isascii():
+        return markup
+    out: list[str] = []
+    in_tag = False
+    index, size = 0, len(markup)
+    while index < size:
+        ch = markup[index]
+        if in_tag:
+            out.append(ch)
+            in_tag = ch != ">"
+            index += 1
+            continue
+        if ch == "<":
+            in_tag = True
+            out.append(ch)
+            index += 1
+            continue
+        code = ord(ch)
+        # 键帽：数字 / # / * + (FE0F) + U+20E3
+        if ch in _KEYCAP_DIGITS:
+            follow = index + 1
+            if follow < size and ord(markup[follow]) == 0xFE0F:
+                follow += 1
+            if follow < size and ord(markup[follow]) == _KEYCAP:
+                out.append(_KEYCAP_DIGITS[ch])
+                index = follow + 1
+                continue
+        if code in _INVISIBLE_MARKS or code == _KEYCAP:
+            index += 1
+            continue
+        mapped = _PDF_SYMBOLS.get(ch)
+        if mapped is not None:
+            text, color = mapped
+            out.append(f'<font color="{color}">{text}</font>' if color else text)
+        else:
+            out.append(ch)
+        index += 1
+    return "".join(out)
+
+
+def _is_symbol(ch: str) -> bool:
+    """会被「画不了就换 ▸」的字：符号（So）与 emoji 区。字母、汉字从不换（v0.43 起的规矩：正文文字补不了就原样留）。"""
+    import unicodedata
+
+    code = ord(ch)
+    return unicodedata.category(ch) == "So" or 0x1F000 <= code <= 0x1FAFF or 0x2600 <= code <= 0x27BF
 
 
 _CITE_RE = re.compile(r"\[(E\d+)\]")
@@ -1114,7 +1192,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 args = (latin_styles[style.name], *args[1:])
             else:
                 kwargs["style"] = latin_styles[style.name]
-        paragraph = _Paragraph(patch_glyphs(text), *args, **kwargs)
+        paragraph = _Paragraph(patch_glyphs(_pdf_symbols(text)), *args, **kwargs)
         paragraph.pdf_tag = heading_tags.get(str(getattr(paragraph.style, "name", "")).removesuffix("Latin"), "P")
         return paragraph
 
@@ -2133,6 +2211,7 @@ _PDF_GLYPH_FALLBACK_CANDIDATES: dict[str, tuple[str, ...]] = {
     "tc": ("C:/Windows/Fonts/mingliub.ttc", "C:/Windows/Fonts/simsunb.ttf", *_SYMBOL_FALLBACKS),
 }
 _GLYPH_FALLBACK_FROM = 0x80  # ASCII（含标记 <b>、&amp;、href 键）永远不会被包
+_SYMBOL_PLACEHOLDERS = ("▸", "•", "·")  # 画不了的符号换成第一个画得出的
 
 
 def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font: str) -> str:
@@ -2143,11 +2222,13 @@ def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font
 def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str, Any]]) -> str:
     """把主字体画不了的字按补字链找第一款画得了的字体，同字体的相邻字连成段包进 `<font name=…>`；
 
-    补不了的字、主字体有的字原样留着，其余逐字节不变。primary / 链上的码位集合都只需支持 `in`。
+    补不了的文字、主字体有的字原样留着（正文文字从不替换）；**符号**（So / emoji 区）主字体与补字链都画不了时换成 ▸
+    （v0.50.0，评审 R-02：按真实 cmap 判，不按码位段猜）。标签内不动。primary / 链上的码位集合都只需支持 `in`。
     """
     out: list[str] = []
     run: list[str] = []
     run_font: str | None = None
+    in_tag = False
 
     def flush() -> None:
         nonlocal run, run_font
@@ -2155,8 +2236,22 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
             out.append(f'<font name="{run_font}">{"".join(run)}</font>')
         run, run_font = [], None
 
+    def drawable(code: int) -> bool:
+        return code in primary or any(code in covered for _, covered in chain)
+
+    placeholder = next((c for c in _SYMBOL_PLACEHOLDERS if drawable(ord(c))), "")
     for ch in markup:
         code = ord(ch)
+        if in_tag or ch == "<":
+            flush()
+            out.append(ch)
+            in_tag = ch != ">"
+            continue
+        if code >= _GLYPH_FALLBACK_FROM and not drawable(code) and _is_symbol(ch):
+            ch = placeholder
+            if not ch:
+                continue
+            code = ord(ch)
         font = None
         if code >= _GLYPH_FALLBACK_FROM and code not in primary:
             font = next((name for name, covered in chain if code in covered), None)
@@ -2192,8 +2287,7 @@ def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_
         pdfmetrics.registerFontFamily(font.fontName, normal=font.fontName, bold=font.fontName,
                                       italic=font.fontName, boldItalic=font.fontName)
         chain.append((font.fontName, set(font.face.charToGlyph)))
-    if not chain:
-        return identity
+    # 没有补字字体时也要过一遍：画不了的符号照样换掉（文字仍原样，逐字节不变）
     return lambda markup: _wrap_missing_glyphs_chain(markup, drawable, chain)
 
 

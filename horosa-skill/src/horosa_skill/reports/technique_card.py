@@ -245,7 +245,7 @@ def render_technique_card_markdown(card: dict[str, Any]) -> str:
     lines = [
         f"**本次所用技法**：{label}（`{card.get('tool')}`）",
         f"- 算源：{engines}"
-        + ("" if compute.get("matches_declaration") is not False else "　⚠️ 与声明不一致，请核对"),
+        + ("" if compute.get("matches_declaration") is not False else "　⚠ 与声明不一致，请核对"),
     ]
     settings = card.get("settings") or {}
     if settings:
@@ -376,11 +376,11 @@ def render_technique_report_markdown(report: dict[str, Any]) -> str:
     else:
         for conflict in consistency.get("setting_conflicts") or []:
             detail = "；".join(f"{value} ← {'、'.join(tools)}" for value, tools in conflict["values"].items())
-            lines.append(f"- ⚠️ **{conflict['label']} 口径不一致**：{detail}。{conflict['why_it_matters']}")
+            lines.append(f"- ⚠ **{conflict['label']} 口径不一致**：{detail}。{conflict['why_it_matters']}")
         if consistency.get("export_contract_unclean"):
-            lines.append(f"- ⚠️ 导出契约有缺口：{'、'.join(consistency['export_contract_unclean'])}")
+            lines.append(f"- ⚠ 导出契约有缺口：{'、'.join(consistency['export_contract_unclean'])}")
         if consistency.get("compute_mismatched"):
-            lines.append(f"- ⚠️ 实测算源与声明不符：{'、'.join(consistency['compute_mismatched'])}")
+            lines.append(f"- ⚠ 实测算源与声明不符：{'、'.join(consistency['compute_mismatched'])}")
     lines.append("")
 
     lines.append("## 技法一览")

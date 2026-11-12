@@ -281,7 +281,8 @@ def archive_png(path: Path, name: str) -> bytes:
 def test_sentences_after_a_diamond_stay_body_text_and_emoji_do_not_become_tofu() -> None:
     kinds = [kind for kind, _, _ in renderers._md_lines("◆ 叠断\n◆ 兄弟数：3–9 人\n◆ 互见权厄孤刃并见，刑伤已定。")]
     assert kinds == ["heading", "text", "text"]
-    assert renderers._display_number("📍掌位：寅") == "▸掌位：寅"
+    # emoji 换符号挪到 PDF 专用的 _pdf_symbols（v0.50.0）：DOCX 原样保留 emoji
+    assert renderers._pdf_symbols("📍掌位：寅") == "▸掌位：寅" and renderers._display_number("📍掌位：寅") == "📍掌位：寅"
 
 
 def test_sanshiunited_does_not_redraw_its_inconsistent_qimen_sub_pan() -> None:
