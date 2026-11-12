@@ -121,7 +121,8 @@ tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput �
 dispatch 自己的 warnings 还会说明「这句话没点名技法、缺省选了某技法」和「哪些设置没有技法接受」——照实告诉用户。
 
 **每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
-它是确定性元数据，任何 `response_view` 下都在。要文件就调 `horosa_technique_report`（`run_id` 单次、
+它是确定性元数据，任何 `response_view` 下都在（知识库 / 导出注册表这类不起盘的工具没有卡）。`settings` 列出这个技法每一项会改结果的设置：
+`text` 是人读的值，`source` 说它从哪来（user 用户给的 / profile 命主档案 / place 按地点推得 / default 缺省）——缺省得来的要告诉用户。要文件就调 `horosa_technique_report`（`run_id` 单次、
 `group_id` 整场，后者还会检出跨技法口径冲突）。细则与两种报告的分界：[`references/reports.md`](./references/reports.md)。
 
 ## Core Rule
@@ -281,7 +282,7 @@ deterministic local fallback answered; `horosa-skill jev status` shows the state
 | 推运图族：演进推运 / 推运图 / 周日小限 / 双黄道 | `neroman`（Néroman 对数时标弧：`nerK` / `nerT0` / `nerKeepDec` / `nerOrb`）/ `bezzafigure`（Bezza 真太阳弧世俗推进：`bezzaOrb`）/ `jayprofection`（Jay 赤经中天每年 +30°：`jayFrom`）—— 三者 `targetDate` 缺省=本盘时区今天；`michon`（Michon 双黄道：`michonOrb` / `michonSwap` / `michonEqual`，与目标时刻无关）。四法只按回归黄道算 |
 | 星历 / 回归轴 / 产前朔望 / 回归黄道二次推运（上游 v3.11） | `ephemeris`（日期窗事件 + 行运触发本命：startDate/endDate/includeTransits/eclipseTimeMode；留的顺逆按逐日速度复核，可能与星阙桌面版的标签不同——改过的留带 `directionUpstream`）/ `returntimeline`（startYear/count 1–40）/ `prenatalsyzygy` / `prog`（targetDate/targetTime/minorVariant；恒星黄道走 `vedicprog`） |
 | Horary 卜卦 / Election 择日 | `horary` (the chart is cast with the chosen `school`'s house system / terms / triplicity, as in 星阙) / `election` (pass `natal` to add [本命合参] + [回归与主限]; topic-specific inputs such as `surgeryPart`, `tradeSide`, `talismanStar`, `crisisBase`) |
-| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门 → `qimenzeri`；另有择日十技法的其余八支：黄历 `huanglizeri`（日粒度）/ 八字 `bazizeri` / 太乙 `taiyizeri` / 紫微 `ziweizeri` / 六壬 `liurengzeri` / 三式合一 `sanshizeri`（条件可跨三式）/ 七政 `qizhengzeri` / 印度 Muhurta `indiazeri`。全部要 startDate/endDate + conditions 条件树；条件类键见各工具 agent_guidance（引擎自带词表，别自己编）；单点评估仍用 `election` |
+| 择日「找日子」——要在一段时间里搜时刻，而不是评一个候选时刻 | 西占征象 → `tianxing`（`explainAt` 可对单时刻逐叶判读）；奇门 → `qimenzeri`；另有择日十技法的其余八支：黄历 `huanglizeri`（日粒度）/ 八字 `bazizeri` / 太乙 `taiyizeri` / 紫微 `ziweizeri` / 六壬 `liurengzeri` / 三式合一 `sanshizeri`（条件可跨三式）/ 七政 `qizhengzeri` / 印度 Muhurta `indiazeri`。全部要 startDate/endDate + conditions 条件树；条件类键与每类的含义见各工具 agent_guidance 的 `condition_types`（引擎自带词表，别自己编）。**极性**：有的条件自带判法（黄历 `chong_shengxiao` 的 `mode` 缺省 without = 不冲所选肖），`negate: true` 再取反——「避开冲马」写缺省判法、不加 negate；结果摘要的「条件按此理解」与 `data.condition_echo` 写着引擎实际怎么读的，先核对再解读；单点评估仍用 `election` |
 | 七政择日动盘（十一曜山位 / 日月食 / 方位到达） | `qizhengelection`（action: pan / eclipses / azimuthsearch；date/time 是候选时刻非出生盘） |
 | 生时校正（出生时间不确定） | `india_rectify`（KP 法锚点±半窗扫描；输出证据与排序，采用与否由用户决定） |
 | Harmonic 调波盘 | `harmonic` |
