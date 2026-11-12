@@ -131,8 +131,11 @@ def test_classical_calibre_line_lists_only_non_default_keys() -> None:
         "日心 cazimi=60′；空亡口径=容许度12°30′；空亡计三王星=开；宫头相位=开(≤3°)；点位相位=开(受体·≤3°)；映点容许度=2°；"
         "恒星轨档=按星等；恒星平轨=2°；落宫宫头前移=3°。"
     )
-    # 值域外 / 缺 vocMode 的伴发键不发（classicalChartGlobals.js:185/188）
-    assert snap.build_classical_calibre_line({"antisciaOrb": 7, "vocIncludeOuter": 1}) == ""
+    # 缺 vocMode 的伴发键不发（classicalChartGlobals.js:188）；值域外的 str / int 档不发（:185）。
+    assert snap.build_classical_calibre_line({"vocIncludeOuter": 1, "orbSystem": "whole_sign", "luminaryOrbBonus": 15}) == ""
+    # skill 偏离（v0.50.0）：float 键（容许度）表外的有限数照写——headless 请求体可以给 7°，后端 /chart 与判读层照算 7°，
+    # 上游这里卡档只因页面写不进表外值；照搬就成了「盘按 7° 算、口径行按缺省」（入参词表 western_vocab 收量程内任意数）。
+    assert snap.build_classical_calibre_line({"antisciaOrb": 7}) == "古典口径（非默认项）：映点容许度=7°。"
 
 
 @requires_node

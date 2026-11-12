@@ -23,6 +23,7 @@
 | v0.50.0-dev (2026-11-12) | 技法卡只回显手写的少数键：六爻缺省男却 settings 空、紫微 `gender: false`、岁差空串；看不出来源 | 设置全表从闸门指引表推出，每项人读值 + 来源（用户 / 档案 / 地点 / 缺省）；`test_technique_card_settings.py` 整表守卫 |
 | v0.50.0-dev (2026-11-12) | 择日条件极性没人说：冲煞生肖自带判法再加 negate = 双重否定，拿到冲马的日子 | 生成自上游注册表的条件说明 + negate 规则 + 每个择日结果回显引擎读法；`test_zeri_conditions.py`（真引擎冲马对照） |
 | v0.50.0-dev (2026-11-12) | 摘要噪声、知识结果挂技法卡、节气盘「没要」报「缺」、模板正文两份、决策层白发请求、OTLP 不自陈、精简面指向不存在的工具、追问不点名技法 | 一句话标题、无卡域、not_requested_sections、模板去重、enforce 不问、instructions 第三说法、按面写读法、追问点名；各有守卫 |
+| v0.50.0-dev (2026-11-12) | 派生盘（十三分 / 十二分 / 希腊分 / 调波 / 龙盘）的 [古典格局] 是本命分析逐字节照搬；古典口径键原值下发、口径行照抄（真交点写了、算的是平交点）；分析请求不带口径；01:59.5 写成 01:00；十年大运 / 调波 / 七政择日 / 卜卦 / 择日认不出的值静默换缺省 | `western_vocab` 一键一张词表（`Vocabulary` 加数值模式；容许度收量程内任意数并照写）；`CLASSICAL_ANALYSIS_TOOLS` 镜像钉版 skip 名单；分析带口径；分钟进位；词表性质测试 + 钉版对表 |
 | v0.50.0-dev (2026-11-12) | 并行九批各自全绿，合进集成分支后撞出七处衔接：闸门看不到入参批的别名 / 嵌套提升、缺性别名单两份（12 / 17）、同一错误码登记两次、两个码表达同一件事、可选值键 accepted / allowed / valid_domains 三种、密钥判定子串误报 MAX_TOKENS、tools/list 量尺把线上不发的 null 计入撞硬顶 | 合并后在集成分支重跑全量门禁；同一事实只留一份（名单、错误码、详情键、归一化载荷）；预算守卫量线上真发的形状 |
 | v0.50.0-dev (2026-11-12) | MCP 结果把原始引擎树当正文交给模型：114 技法中位 17 万字符、72 个超过 Claude Code 5 万字符落盘线；调度两技法 290 万字符；`include_all` 指引 126 万字符；3 MB 澄清备注原样回显两遍 | MCP 缺省改阅读视图（正文一遍 + 段索引 + 依据卡），模型预算按段裁并给照抄可用的续读调用，JSON 不缩进，调度 / 合参 / 存档读回同一视图；整表体积守卫 |
 | v0.50.0-dev (2026-11-12) | `response_view` 跟着载荷进了 runner 的子调用：择日先算的展示盘快照被清空，黄历择日 14 段丢 7 段、多一条假的「结果不完整」（7 个择日技法同病） | `run_tool` 记调用深度，嵌套调用摘掉展示键、不套视图；整表对照每种视图与原始结果的段与告警 |
@@ -373,6 +374,45 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `test_per_field_prompt_names_the_technique`、`test_context_place_without_a_date_takes_the_zone_from_the_date_the_query_names`、
   `test_stored_inputs_carry_no_empty_internal_keys`；各自负向对照已跑。
 - **规则**：凡把数据送出本机的开关都要在 instructions 自陈；摘要第一行必须有信息；「没要」不是「缺」（AGENTS §4.4 / §9.3）。
+### v0.50.0-dev / 2026-11-12 — 西占 runner：口径行写的不是算的，派生盘挂本命结论（古典口径词表、`[古典格局]` 范围、分钟进位）
+
+- **现象**（深审 C-01 / C-03 / C-10 / C-11 / C-22 西占 / CN-N5 / CN-N6，共享引擎实测）：
+  1. 十三分 / 十二分 / 希腊分 / 调波 / 龙盘的 `[古典格局]` 与本命盘逐字节相同（后端 `/astroextra/analysis` 按常规黄道以本命参数重算）；
+     上游钉版 `pipeline.js:513-518` 的 `CLASSICAL_SKIP_KEYS` 明说这是「本命结论冒充派生盘结论」而跳过，skill 的注释却说「headless 无此顾虑，是 extra」。
+  2. 分析请求只带十来个键；上游是 `{...chartObj.params}`（含这张盘的非缺省古典口径）。实测 westNodeType / termsVariant / triplicity /
+     orbSystem / lotProjection / almutenTripMode / planetaryHourMethod / topocentricMoon / lotsDocReverse / erosConstruction / 恒星轨档都改
+     分析结果——用户改了口径，主盘照改、`[古典格局]` 照缺省。
+  3. 古典口径键原值下发：`westNodeType: True` / `"真交点"`、`triplicity: "ptolemaic"` / `"托勒密"`、`sectBuffer: 5` 后端不认按缺省算，
+     `[起盘信息]`「古典口径（非默认项）」行却照抄原值（`三分集=ptolemaic`、`区分判定=5`）；`vocMode "byOrb"` / `orbSystem "whole_sign"` /
+     `lotProjection "Sign"` 静默按缺省、行里也不写。`termsVariant=4` 无 `customTermsDay` 时后端回落埃及界、行写「自定义界表」。
+     反方向也有：表外容许度（`combustOrb: 9`）后端照算，行与分析请求却按上游「值域外不发」丢掉。
+  4. 行星周期 01:59.5 写成 01:00（`round(分) % 60` 不进时）；波斯向运点位 12°59.7′ 写成 12°00′。
+  5. 十年大运 `orderType: "chaldaean"` 等四键认不出 → 缺省、`[十年大运设置]` 照抄；调波 0 / −3 → H1、1000 → H360；七政择日
+     `kind: "月食"` 搜日食、`plate: "bogus"` 照收而山位行缺、`ziZheng` 的 JSON 布尔被类型层拒而 `"false"` 照收。
+  6. 扫尾同族：行星周期 `p1: "土星"` 后端换木星、配置行写「土星」；卜卦 `category` / `school`、择日 `topicId` / `school` 引擎静默回落
+     general / classical / marriage / modern_main；宿占 `houseStartMode: 2` → 0；世运卜卦 `mhKind` → war；七政择日 `eleLifeMode` /
+     `nodeType` / `lilithType` / `body` 认不出 → 后端缺省；占星地图 `pointHsys` 认不出 → 整宫（连缺省 placidus 都不是）；卜卦 / 择日
+     `options` 判读层覆写（HORARY_PARAM_SPEC / ELECTION_PARAM_SPEC 的 select / switch 键）值认不出 → 引擎按缺省、无回执。
+- **根因**：值域只在上游页面的下拉框里，headless 入口没有它；runner 里 `x or 缺省` / `== 'x' else 缺省`；口径行由镜像上游的 builder 直接读原值
+  （上游 UI 写不进表外值，所以它的 builder 从来不用防）。派生盘那条是把上游的有意跳过当成了性能取舍。
+- **修**：
+  - `western_vocab.py`：一个设置一张 `input_fields.Vocabulary`（phase-1 机制；新增 `numeric` 模式：数值按数比、`17′` / `8.5°` 认，绝不落进别名表——
+    `_vocab_key` 吃小数点，`1.5` 与 `15` 撞键）。古典口径键值域取自 `CLASSICAL_PARAM_SPEC_NON_DEFAULT`，挂在 BirthInput（前端名 fixedStarOrb* 走模型级前置校验）；
+    容许度类（float）另收量程内任意数（后端与判读层照算，`judgeLayerHeadless`「数值键不设档」是既定口径），`classical_backend_overrides` 对 float 不卡档（有意偏离上游，口径行照写）；
+    `_calibre_phrase` 不在表里就不写（第二层）；`termsVariant=4` 缺表即拒。十年大运、调波（1–360 整数，越界拒、不夹）、七政择日、行星周期、卜卦 / 择日、宿占、世运卜卦、
+    占星地图落点宫制同机制。卜卦 / 择日的 `options` 字典在 JS 侧按引擎词表判（`horosa-core-js/src/shared/specOptions.js`，进既有的 `invalid_inputs` 回执；卜卦在起盘前就拒）。
+  - `engine/registry.py`：`ASTRO_CHART_FAMILY_TOOLS`（[埃及历] 吃本盘，全族挂）与 `CLASSICAL_ANALYSIS_TOOLS = {chart, relocation}`（镜像钉版 skip 名单）分开；
+    四个跳过键的 preset 去掉 `古典格局`（与上游 preset 同），`export_section_debt.json` 重算收紧。分析请求带 `classical_backend_overrides_from_fields(payload)`。
+  - 重置盘：钉版（1108）照本命出生地挂分析（`chartObj` 是本命盘，注释「本命语义仍成立」），skill 同；上游 HEAD `dacdc905`（pipeline.js:543-560）改为按重置后地点、
+    随重置盘快照进正文——re-vendor 时跟进，测试 `test_chart_and_relocation_keep_the_analysis` 会因此红，是预期。
+  - `civil_calendar._round_hour_to_minute`：四舍五入到分钟后 divmod 进时、进日（民用历轴，跨改历缺口）；波斯向运点位同法进度、满 30° 进下一座。
+- **守卫**：`tests/test_western_vocab.py`（37 张词表表驱动认 / 拒；词表值域 ≡ spec；古典口径每键每档的变体写法「要么读成规范值且整份入参与口径行逐字段相同、
+  要么拒」的性质测试；口径行不写原值；表外容许度照写）；`tests/test_western_runner_fixes.py`（派生盘不拉分析、不出段；chart / relocation 照挂；分析请求带口径；
+  集合 ≡ 钉版 pipeline.js skip 名单；分钟进位；十年大运 / 调波 / 七政择日端到端；共享引擎 live 一条）；`test_sync311_western.py::
+  test_judge_layer_override_values_are_checked_against_the_engine_spec`。负向对照都实跑红过（另：checkSpecValue 恒 ok → 红）：词表改成原样返回 → 87 红；
+  口径行恢复照抄原值 → 红；float 恢复卡档 → 红；集合加回 chart13 → 两条红；去掉口径转发 → 红；进位换回 `% 60` → 两条红。
+- **规则**：枚举类设置在 schema 层过词表，runner 不写 `or 缺省`；镜像上游 builder 时，上游靠 UI 值域兜住的输入，headless 入口要自己兜；
+  上游的「跳过」先当口径读，别当性能取舍。
 
 ### v0.50.0-dev / 2026-11-12 — 并行九批合并的衔接坑
 

@@ -81,6 +81,17 @@ def _civil_ymd_of_jdn(jdn: float) -> tuple[int, int, int]:
     return (astro - 1 if astro <= 0 else astro), month, day
 
 
+def _round_hour_to_minute(astro_year: int, month: int, day: int, hour: float) -> tuple[int, int, int, int, int]:
+    """后端 civil_revjul 给的 (天文年, 月, 日, 小时浮点) → 四舍五入到分钟，满 60 分进时、满 24 时进日（民用历，跨月 / 跨年 /
+    改历缺口照此轴走）。旧写法 `round(分) % 60` 把 01:59.5 写成 01:00——差一小时（审计 C-10）。返回 (天文年, 月, 日, 时, 分)。"""
+    days, minutes = divmod(_js_math_round(float(hour) * 60), 1440)
+    if days:
+        display = astro_year if astro_year > 0 else astro_year - 1
+        y, month, day = _civil_ymd_of_jdn(_civil_jdn(display, month, day) + days)
+        astro_year = y + 1 if y < 0 else y
+    return astro_year, month, day, minutes // 60, minutes % 60
+
+
 # dateTimeParse.js DATE_TIME_RE 逐字（re.ASCII = JS 的 \d / \s 只认 ASCII 数字）。
 _DATE_TIME_RE = re.compile(
     r"^([+-]?\d{1,6})(?:([-/])(\d{1,2})(?:([-/])(\d{1,2}))?)?(?:(?:T|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2})(?:[.,](\d+))?)?)?"

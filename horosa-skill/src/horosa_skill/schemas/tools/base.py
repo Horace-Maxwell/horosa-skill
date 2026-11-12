@@ -3,14 +3,13 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from horosa_skill.astro_rulers import (
     HOUSE_SYSTEM_LABELS,
     SUNRISE_MODE_DEFAULT,
-    SUNRISE_MODES,
 )
-from horosa_skill.errors import bilingual
+from horosa_skill.western_vocab import CLASSICAL_DECLARED_FIELDS, CLASSICAL_UNDECLARED_FIELDS, classical_vocabulary_options
 
 
 def advertise_hidden_fields(model: type[Any]) -> frozenset[str]:
@@ -174,16 +173,62 @@ class BirthInput(FlexibleModel):
         description="日出 / 日没口径：center=日心·不计折射（缺省）| apparent=日面上缘·含大气折射（历书）；影响七政日出安命 / 报时星 / 星盘信息日出日没。",
     )
 
-    @field_validator("sunriseMode", mode="before")
+    @field_validator("sunriseMode", mode="after")
     @classmethod
     def _sunrise_mode_non_default(cls, value: Any) -> Any:
-        if value is None or value == "":
-            return None
-        text = f"{value}".strip()
-        if text not in SUNRISE_MODES:
-            raise ValueError(bilingual(f"sunriseMode 只能取 {'/'.join(SUNRISE_MODES)}（收到 {value!r}）",
-                                        f"sunriseMode must be one of {'/'.join(SUNRISE_MODES)} (got {value!r})"))
-        return None if text == SUNRISE_MODE_DEFAULT else text
+        # 词表（下面的 _classical_vocabulary）先把写法读成规范值；缺省档不下发（上游 send:'nonDefault' = 缺省请求体零变）。
+        return None if value == SUNRISE_MODE_DEFAULT else value
+
+    # v0.50.0：古典口径键（classicalParamSpec.js send:'nonDefault' 全表 + 恒星轨两键）一键一张词表（western_vocab）：
+    # 认得的写法（大小写 / 中文名 / 布尔）→ 规范值，认不出 → tool.invalid_option。此前 `ptolemaic` / `托勒密` / `True` 原样
+    # 下发，后端不认按缺省算，[起盘信息] 的「古典口径（非默认项）」行却照抄原值——行与盘不一致。
+    @field_validator(*CLASSICAL_DECLARED_FIELDS, mode="before")
+    @classmethod
+    def _classical_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.western_vocab import parse_classical
+
+        return parse_classical(info.field_name, value)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _classical_frontend_names(cls, data: Any) -> Any:
+        """恒星轨的前端名 fixedStarOrb / fixedStarOrbMode 未声明（走 extra，键名保留），同一张词表在这里判。"""
+        if not isinstance(data, dict) or not any(name in data for name in CLASSICAL_UNDECLARED_FIELDS):
+            return data
+        from horosa_skill.input_fields import FieldIssue, is_blank, note_parsed, pydantic_field_error
+        from horosa_skill.western_vocab import classical_vocabulary
+
+        out = dict(data)
+        for name in CLASSICAL_UNDECLARED_FIELDS:
+            if name not in out:
+                continue
+            if out[name] is None or is_blank(out[name]):
+                out.pop(name)
+                continue
+            try:
+                out[name] = note_parsed(classical_vocabulary(name).parse(out[name]), name)
+            except FieldIssue as issue:
+                raise pydantic_field_error(issue, name) from None
+        return out
+
+    @model_validator(mode="after")
+    def _custom_terms_need_tables(self) -> Any:
+        """termsVariant=4（自定义界表）要随盘 12 座表体：后端缺表静默回落埃及界，口径行却写「界系=自定义界表」。
+        上游回落本机编辑器仓；headless 没有仓 → 缺 customTermsDay 就拒（不替用户换回埃及界）。"""
+        if getattr(self, "termsVariant", None) != 4 or (isinstance(self.customTermsDay, list) and len(self.customTermsDay) == 12):
+            return self
+        from horosa_skill.input_fields import FieldIssue, pydantic_field_error
+
+        issue = FieldIssue(
+            "tool.invalid_option",
+            "termsVariant=4（自定义界表）要同时给 customTermsDay（12 座界表；夜表 customTermsNight 可缺）：缺表时后端按埃及界算。",
+            "termsVariant=4 (custom terms) needs customTermsDay (the 12-sign table; customTermsNight optional); without it the backend uses the Egyptian terms.",
+            expected_zh="0 埃及界 / 1 托勒密·校勘本 / 2 托勒密·经典传本 / 3 迦勒底；或 4 + customTermsDay",
+            expected_en="0 Egyptian / 1 Ptolemaic (critical) / 2 Ptolemaic (classical) / 3 Chaldean; or 4 with customTermsDay",
+            example=0, options=classical_vocabulary_options("termsVariant"),
+        )
+        raise pydantic_field_error(issue, "termsVariant")
+
     cazimiOrb: Any | None = Field(default=None, description="核心内(cazimi)容许度。")
     combustOrb: Any | None = Field(default=None, description="燃烧(combust)容许度。")
     underBeamsOrb: Any | None = Field(default=None, description="日光下(under the beams)容许度。")

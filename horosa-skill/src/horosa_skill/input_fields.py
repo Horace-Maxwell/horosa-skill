@@ -841,39 +841,73 @@ class Vocabulary:
     """
 
     def __init__(self, field_name: str, choices: Mapping[Any, Sequence[str]], *, labels: Mapping[Any, str] | None = None,
-                 code: str = "tool.invalid_option") -> None:
-        self.field_name, self.code = field_name, code
+                 code: str = "tool.invalid_option", numeric: bool = False) -> None:
+        """`numeric=True`：取值是数（容许度 8.5、界系 0–4、开关 0/1）。数与数字串按数值比（容差 1e-3，选项之间至少差 1′），
+        `8.5°` / `17′`（角分）也认；数值不在表里即拒——绝不落进别名表（`_vocab_key` 会吃掉小数点，`1.5` 与 `15` 撞键）。"""
+        self.field_name, self.code, self.numeric = field_name, code, numeric
         self.labels = {value: (labels or {}).get(value, str(value)) for value in choices}
         self._lookup: dict[str, Any] = {}
         for value, aliases in choices.items():
-            for alias in (str(value), *aliases):
+            for alias in ((*aliases,) if numeric else (str(value), *aliases)):
                 self._lookup.setdefault(_vocab_key(alias), value)
 
     @property
     def accepted(self) -> list[dict[str, Any]]:
         return [{"value": value, "label": label} for value, label in self.labels.items()]
 
-    def parse(self, value: Any) -> Parsed:
-        if not isinstance(value, bool) and value in self.labels:
-            return Parsed(value)
-        hit = self._lookup.get(_vocab_key(value)) if isinstance(value, (str, int, float)) and not isinstance(value, bool) else None
-        if hit is None and isinstance(value, bool):
-            hit = self._lookup.get(_vocab_key(str(value).lower()))
-        if hit is not None:
-            plain = str(value).strip() == str(hit)
-            return Parsed(hit) if plain else Parsed(
-                hit, f"{self.field_name}「{value}」按 {hit}（{self.labels[hit]}）读。", f"{self.field_name} '{value}' was read as {hit} ({self.labels[hit]}).")
+    def _read_as(self, value: Any, hit: Any) -> Parsed:
+        plain = not isinstance(value, bool) and ((self.numeric and value == hit) or clean_text(value) == str(hit))
+        return Parsed(hit) if plain else Parsed(
+            # 字段名由 note_parsed 加前缀（`field`：…），这里不再重复。
+            hit, f"「{value}」按 {hit}（{self.labels[hit]}）读。", f"'{value}' was read as {hit} ({self.labels[hit]}).")
+
+    def issue(self, value: Any) -> FieldIssue:
         pairs = " ".join(f"{v}={label}" for v, label in self.labels.items())
-        raise FieldIssue(
+        return FieldIssue(
             self.code, f"{self.field_name} 认不出 {value!r}。", f"Unrecognized {self.field_name}: {value!r}.",
             expected_zh="可选值：" + pairs, expected_en="accepted values: " + pairs, example=next(iter(self.labels)), options=self.accepted,
         )
+
+    def parse(self, value: Any) -> Parsed:
+        if self.numeric and not isinstance(value, bool):
+            number = _vocab_number(value)
+            if number is not None:
+                for choice in self.labels:
+                    if isinstance(choice, (int, float)) and not isinstance(choice, bool) and abs(float(choice) - number) <= 1e-3:
+                        return self._read_as(value, choice)
+                raise self.issue(value)
+        if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+            exact = next((choice for choice in self.labels if type(choice) is type(value) and choice == value), None)
+            if exact is not None:
+                return Parsed(exact)
+            hit = self._lookup.get(_vocab_key(value))
+        else:
+            hit = self._lookup.get(_vocab_key(str(value).lower())) if isinstance(value, bool) else None
+        if hit is not None:
+            return self._read_as(value, hit)
+        raise self.issue(value)
 
 
 def _vocab_key(value: Any) -> str:
     from horosa_skill.textscript import fold_to_simplified
 
     return re.sub(r"[\s_\-·.]", "", fold_to_simplified(clean_text(value)).lower())
+
+
+_VOCAB_NUMBER_RE = re.compile(r"^(?P<num>[+-]?\d+(?:\.\d+)?)\s*(?P<unit>°|度|′|'|分)?$")
+
+
+def _vocab_number(value: Any) -> float | None:
+    """数 / 数字串（`8.5`、`8.5°`、`17′` = 17 角分）→ float；别的 → None（交给别名表）。"""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value) if math.isfinite(float(value)) else None
+    if not isinstance(value, str):
+        return None
+    match = _VOCAB_NUMBER_RE.match(clean_text(value))
+    if not match:
+        return None
+    number = float(match.group("num"))
+    return number / 60 if match.group("unit") in ("′", "'", "分") else number
 
 
 def field_validator_for(parse: Callable[[Any], Parsed], field_name: str) -> Callable[[Any], Any]:
@@ -891,6 +925,13 @@ def field_validator_for(parse: Callable[[Any], Parsed], field_name: str) -> Call
             raise PydanticCustomError("horosa_field", "{message}", {"message": f"{issue.zh} / {issue.en}", **issue_context(issue)}) from None
 
     return validate
+
+
+def pydantic_field_error(issue: FieldIssue, field_name: str) -> Exception:
+    """模型级校验器（没有 loc 的 model_validator）用：同一个 horosa_field 错误，字段名放进 ctx（tool_error_from_validation 认它）。"""
+    from pydantic_core import PydanticCustomError
+
+    return PydanticCustomError("horosa_field", "{message}", {"message": f"{issue.zh} / {issue.en}", "field": field_name, **issue_context(issue)})
 
 
 def issue_context(issue: FieldIssue) -> dict[str, Any]:

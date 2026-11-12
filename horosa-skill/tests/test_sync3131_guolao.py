@@ -217,7 +217,9 @@ def test_invalid_sunrise_mode_is_refused_before_any_backend_call(tmp_path) -> No
     client = GuolaoReplayClient(GUOLAO_FIX)
     with pytest.raises(ToolValidationError) as info:
         _service(tmp_path, client).run_tool("guolao_chart", {**GUOLAO_FIX["payload"], "sunriseMode": "sunrise"}, save_result=False)
-    assert info.value.code == "tool.invalid_payload"
+    # v0.50.0 起 sunriseMode 走古典口径词表（western_vocab），拒码 = tool.invalid_option、可选值在 options。
+    assert info.value.code == "tool.invalid_option"
+    assert [o["value"] for o in info.value.details["options"]] == ["center", "apparent"]
     assert client.requests("/chart") == []
 
 

@@ -474,6 +474,9 @@ birth / subject / context、natal、davison）、`horosa_tool_run`、dispatch / 
 `options_cn._resolved_day_switches` 补了缺省的同一值——盘头与正文由 live 全目录守卫对拍。公元前只有一种写法：`_fold_era` 把 `ad=-1` + 不带负号的日期改成
 带负号日期（`ad` 只收 1 / -1）。中式枚举设置进 `cn_vocab.py`（规范值锚到 adapter / 上游选项源码），别在 adapter 写 `x === 'a' ? 'a' : 缺省`；
 起课输入（nums / counts / 卦名）给了用不了就 `tool.<技法>_invalid_cast`，结果带 `cast_method`；本地历法域外 `tool.date_range_unsupported`。
+西占 / 推运 / 七政择日的词表集中在 `western_vocab.py`（v0.50.0-dev）：古典口径键值域取自 `CLASSICAL_PARAM_SPEC_NON_DEFAULT`、挂在 BirthInput，规范值同时是
+后端请求值、口径行、`[古典格局]` 请求体的唯一来源；数值类用 `Vocabulary(numeric=True)`（按数比，绝不落进别名表）；容许度类收量程内任意数；
+上游靠页面下拉框兜住的值域，headless 入口一律自己兜（`tests/test_western_vocab.py` 的性质测试：变体写法要么读成规范值且整份入参相同，要么拒）。
 
 ### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
 
@@ -1925,6 +1928,12 @@ AI分析挂载 / 命盘事盘储存」四处走同一 builder + 同一段表—�
   同名多地一律问，没有「挑大城市」规则；只在用户写的分隔符上拆，跨逗号不粘连。别名只指向库里唯一一条（坐标从条目取，表里无坐标）；
   `placeData/regions.json` 由 `scripts/gen_place_regions.mjs` 从 CLDR 生成，勿手改。改规则先跑 `tests/test_place_acceptance.py`（语料 + 全库性质）。
   re-vendor 后上游若修了首字母 / 头尾回退，规则照旧成立；城市库换版要重审语料里的歧义行。上游缺陷清单待报上游，skill 不改 vendored 原件。
+
+- **`[古典格局]` 只挂上游会挂的盘（v0.50.0-dev）。** `engine.registry.CLASSICAL_ANALYSIS_TOOLS` 镜像钉版 `pipeline.js` 的 `CLASSICAL_SKIP_KEYS` /
+  `CLASSICAL_SKIP_DERIVED`（`test_analysis_tool_set_mirrors_the_upstream_skip_list` 对钉版逐项比）：十三分 / 十二分 / 希腊分 / 调波 / 龙盘不挂（本命分析冒充派生盘结论），
+  `[埃及历]` 吃本盘、全族照挂（`ASTRO_CHART_FAMILY_TOOLS`）。分析请求带这张盘的非缺省古典口径（上游 `{...chartObj.params}`）。重置盘按钉版照本命出生地分析；
+  上游 HEAD `dacdc905` 已改为按重置后地点、随重置盘快照进正文——re-vendor 时跟进并改测试。口径行（`build_classical_calibre_line`）只写有名字的档，
+  float 容许度不卡档（有意偏离：headless 可给表外值且后端照算）。
 
 ## 11. 第三方引擎与 MIT 义务（ken）
 

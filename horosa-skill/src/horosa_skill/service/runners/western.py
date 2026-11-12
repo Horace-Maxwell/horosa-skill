@@ -9,7 +9,7 @@ from horosa_skill.astro_rulers import (
     DRACONIC_HOUSE_MODES,
 )
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
-from horosa_skill.civil_calendar import _parse_date_parts
+from horosa_skill.civil_calendar import _parse_date_parts, _round_hour_to_minute
 from horosa_skill.engine.astroextra_snapshots import fmt_num
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
 from horosa_skill.schemas.tools.astro import INDIA_RECTIFY_DEAD_KEYS
@@ -25,7 +25,10 @@ from horosa_skill.service.text.astro_core import (
     _round3,
     _sign_degree,
 )
-from horosa_skill.service.text.chart_family import _build_astro_snapshot_text, _india_comma_lists
+from horosa_skill.service.text.chart_family import (
+    _build_astro_snapshot_text,
+    _india_comma_lists,
+)
 from horosa_skill.service.text.predictive import _build_india_rectify_snapshot_text
 from horosa_skill.service.text.western import (
     _angle_text,
@@ -99,9 +102,10 @@ class WesternRunners:
             if not isinstance(ev, dict):
                 continue
             try:
-                hour_val = float(ev.get("hour") or 0.0)
-                hh, mm = int(hour_val), int(round((hour_val - int(hour_val)) * 60)) % 60
-                when = f"{ev.get('year')}-{int(ev.get('month') or 0):02d}-{int(ev.get('day') or 0):02d} {hh:02d}:{mm:02d}"
+                year, month, day, hh, mm = _round_hour_to_minute(
+                    int(ev.get("year")), int(ev.get("month") or 0), int(ev.get("day") or 0), float(ev.get("hour") or 0.0)
+                )
+                when = f"{year}-{month:02d}-{day:02d} {hh:02d}:{mm:02d}"
             except (TypeError, ValueError):
                 when = f"{ev.get('year')}"
             event_lines.append(f"{when}（UT）　{_sign_degree(ev.get('lon'))}")
@@ -400,10 +404,8 @@ class WesternRunners:
         # 调波盘: a backend chart-extra computation on the Python chart service (/astroextra/harmonic).
         # 上游 v50 已给调波盘正式导出键（aiExport.js 的 `harmonic`，属 ASTRO_LIKE_EXPORT_KEYS 族），
         # 故此处不再是「无契约的实验面」——见 TOOL_EXPORT_TECHNIQUE_MAP。
-        try:
-            harmonic_num = max(1, min(int(payload.get("harmonic", 9)), 360))
-        except (TypeError, ValueError):
-            harmonic_num = 9
+        # 调波数在 schema 层已判（western_vocab.parse_harmonic：1–360 整数，越界拒），这里不再夹取。
+        harmonic_num = int(payload.get("harmonic") or 9)
         orb = payload.get("orb", 2.0)
         remote_payload = {**payload, "predictive": 0, "harmonic": harmonic_num, "orb": orb}
         response = self._call_remote("/astroextra/harmonic", remote_payload)
@@ -519,7 +521,8 @@ class WesternRunners:
         lines: list[str] = []
         if response.get("nodeLon") is not None:
             # [Q-351/T-332]（AstroDraconicLab.js:4-7/53）注明真 / 平交点：本命盘 params.westNodeType === 'true' → 真交点，否则平交点。
-            node_type = "真交点" if payload.get("westNodeType") in ("true", True) else "平交点"
+            # westNodeType 在 schema 层已读成规范值（western_vocab：True / 真交点 / TRUE → 'true'），与后端算龙首用的是同一个值。
+            node_type = "真交点" if payload.get("westNodeType") == "true" else "平交点"
             lines.append(f"北交点 {fmt_num(response['nodeLon'], 2)}°（{node_type}） → 归零白羊 0°（龙盘基准）")
         # v3.13.1 AstroDraconicLab.js:80：宫位口径行无条件 push（缺省档同样写出）→ [龙盘] 段恒出。
         lines.append(

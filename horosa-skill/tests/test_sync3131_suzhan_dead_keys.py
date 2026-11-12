@@ -34,11 +34,12 @@ requires_upstream = pytest.mark.skipif(
 )
 
 _BASE = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "39n54", "lon": "116e23"}
-# 每个死键一个非缺省、能过 BirthInput 校验的值（取值按各字段 description 的可选档）。
+# 每个死键一个非缺省、能过 BirthInput 校验的值（v0.50.0 起古典口径键过词表 western_vocab：取规范值——旧表里的 sectBuffer 3 /
+# triplicity "ptolemy" / vocMode 2 / viaCombustaVariant 1 / fixedStarOrbMode 1 不是任何一档，现在任何技法都拒）。
 _NON_DEFAULT: dict[str, Any] = {
-    "termsVariant": 1, "sectBuffer": 3, "leoBoundFirst": 1, "triplicity": "ptolemy", "lotReversal": 0, "lotsDocReverse": 1,
-    "nodeExaltation": 1, "geminiBoundEmended": 1, "cazimiOrb": 0.5, "combustOrb": 9, "underBeamsOrb": 16, "vocMode": 2,
-    "vocIncludeOuter": 1, "fixedStarOrbMode": 1, "fixedStarOrb": 2, "antisciaOrb": 2, "viaCombustaVariant": 1,
+    "termsVariant": 1, "sectBuffer": "ptolemy5", "leoBoundFirst": 1, "triplicity": "Ptolemaic", "lotReversal": 0, "lotsDocReverse": 1,
+    "nodeExaltation": 1, "geminiBoundEmended": 1, "cazimiOrb": 0.5, "combustOrb": 9, "underBeamsOrb": 16, "vocMode": "by_orb",
+    "vocIncludeOuter": 1, "fixedStarOrbMode": "byMagnitude", "fixedStarOrb": 2, "antisciaOrb": 2, "viaCombustaVariant": "narrow",
     "combustOwnChariotExempt": 1, "stationMarking": "exactWindow", "hermeticLotsReversal": 0, "erosConstruction": "valens",
     "lotFortuneVariant": "moonAboveNight", "lotFatherCombustAlt": 1, "lotProjection": "sign", "dignityDebilities": 0,
     "almutenTripMode": "sectRulerOnly", "planetaryHourMethod": "unequal", "sunriseMode": "apparent", "orbSystem": "byAspect",

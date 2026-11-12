@@ -11,6 +11,8 @@ from __future__ import annotations
 import pytest
 from test_sync311_w3b_gim import _guolao_run, requires_node
 
+from horosa_skill.errors import ToolValidationError
+
 
 def _setup_line(env) -> str:
     return next(line for line in env.data["snapshot_text"].splitlines() if line.startswith("报时星太阳时："))
@@ -36,10 +38,11 @@ def test_non_default_planetary_hour_method_reaches_backend_and_snapshot(tmp_path
 
 
 def test_invalid_planetary_hour_method_is_refused_before_any_backend_call(tmp_path) -> None:
-    env, client = _guolao_run(tmp_path, {"planetaryHourMethod": "sundial"})
-    assert not env.ok
-    assert "planetaryHourMethod" in f"{env.error}"
-    assert client.requests("/chart") == []
+    # v0.50.0 起古典口径键在 schema 层过词表（western_vocab）：模型校验就拒（tool.invalid_option，options = 全表），一个请求都不发。
+    with pytest.raises(ToolValidationError) as info:
+        _guolao_run(tmp_path, {"planetaryHourMethod": "sundial"})
+    assert info.value.code == "tool.invalid_option" and info.value.details["field"] == "planetaryHourMethod"
+    assert [o["value"] for o in info.value.details["options"]] == ["sunrise", "unequal", "equal24"]
 
 
 @requires_node

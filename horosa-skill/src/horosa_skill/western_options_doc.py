@@ -16,7 +16,7 @@ from typing import Any
 
 from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 from horosa_skill.engine.registry import (
-    CLASSICAL_ANALYSIS_TOOLS,
+    ASTRO_CHART_FAMILY_TOOLS,
     EGYPT_AXIS_KEYS,
     STRONG_RECEPTION_DEFAULT_TOOLS,
     TOOL_DEFINITIONS,
@@ -103,7 +103,7 @@ JUDGE_GLOBAL_KEYS = (
     "starOrb(=fixedStarOrb)/starOrbMode(=fixedStarOrbMode)/combustMitigateSameSign/antiscia"
 )
 
-# BirthInput 上只作用于快照的口径键（send:'never'）按工具挂文档：[埃及历]/[信息] 随 service._CLASSICAL_ANALYSIS_TOOLS
+# BirthInput 上只作用于快照的口径键（send:'never'）按工具挂文档：[埃及历]/[信息] 随 engine.registry.ASTRO_CHART_FAMILY_TOOLS
 # （键表 engine.registry.EGYPT_AXIS_KEYS），[古典·显赫计分] 主宰光体四个全局判定键只 chart。
 _EMINENCE_KEYS = ("busyPlaces", "dynamicalDivisions", "domicileMasterMethod", "rayWeighting")
 
@@ -119,7 +119,7 @@ def house_system_doc() -> str:
 def _static_doc(tool_name: str) -> dict[str, str]:
     if tool_name == "horary":
         return {
-            "category": "问卜类别（20 类，括号=事项宫；认不出 → general）："
+            "category": "问卜类别（20 类，括号=事项宫；也认中文名，认不出报 tool.invalid_option）："
             + " ".join(f"{k}={label}({house if house else '月亮下一入相'})" for k, label, house in HORARY_CATEGORIES)
             + "；father/mother 的 4/10 宫随 options.parentHousesVariant（traditional 4父10母 | modern 反之）。",
             "school": "判读流派 7 档（缺省 classical），同时定起盘字段（上游 horaryBackendFields）："
@@ -132,7 +132,7 @@ def _static_doc(tool_name: str) -> dict[str, str]:
         }
     if tool_name == "election":
         return {
-            "topicId": "用事（37 类，认不出 → marriage）：" + " ".join(f"{k}={cn}" for k, cn in ELECTION_TOPICS),
+            "topicId": "用事（37 类；也认中文名，认不出报 tool.invalid_option）：" + " ".join(f"{k}={cn}" for k, cn in ELECTION_TOPICS),
             "school": "择日流派 5 档：" + " ".join(f"{k}={cn}" for k, cn in ELECTION_SCHOOLS)
             + "；未显式给 hsys 时宫制随流派（hellenistic/modern_revival=0、persian=1、renaissance=2、modern_main=0）。",
             "判读全局层": f"顶层古典键 {JUDGE_GLOBAL_KEYS} 进判读全局层（流派口径之下、options 之上）。",
@@ -187,7 +187,7 @@ def western_options_doc(tool_name: str) -> dict[str, str]:
         if field is not None and field.description:
             doc[name] = field.description
     if isinstance(model, type) and issubclass(model, BirthInput):
-        if tool_name in CLASSICAL_ANALYSIS_TOOLS:
+        if tool_name in ASTRO_CHART_FAMILY_TOOLS:
             doc["showOnlyRulExaltReception"] = str(BirthInput.model_fields["showOnlyRulExaltReception"].description)
             for name in EGYPT_AXIS_KEYS:
                 doc[name] = str(BirthInput.model_fields[name].description)

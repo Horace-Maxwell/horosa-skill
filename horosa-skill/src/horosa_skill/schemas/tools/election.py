@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from horosa_skill.schemas.tools.base import BirthInput, _unadvertised
 from horosa_skill.schemas.tools.cn_divination import QimenInput
@@ -246,6 +246,16 @@ class QizhengElectionInput(BirthInput):
     days: int | None = Field(default=None, description="azimuthsearch 专用：向后搜索天数（缺省 3，上限 30）")
     body: str | None = Field(default=None, description="azimuthsearch 专用：星曜中文标签 日月金木水火土（缺省 日）")
 
+    # v0.50.0：七个枚举旋钮各一张词表（western_vocab.QIZHENG_ELECTION_VOCABULARIES）。此前 kind="月食" 静默搜日食、
+    # plate="bogus" 照收而山位行缺、ziZheng 的 JSON 布尔被类型层拒而字符串 "false" 照收（读成真北）、eleLifeMode / nodeType /
+    # lilithType / body 认不出时后端静默换缺省。
+    @field_validator("kind", "plate", "ziZheng", "eleLifeMode", "nodeType", "lilithType", "body", mode="before")
+    @classmethod
+    def _qizheng_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.western_vocab import QIZHENG_ELECTION_VOCABULARIES, parse_with
+
+        return parse_with(QIZHENG_ELECTION_VOCABULARIES[info.field_name], info.field_name, value)
+
 
 class HoraryInput(BirthInput):
     # 长尾旋钮：照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（mcp_schema.advertise_hidden_fields）。
@@ -255,7 +265,7 @@ class HoraryInput(BirthInput):
     # 卜卦 (horary): the chart is cast at the QUESTION moment (date/time/place = when the question was asked).
     # category picks the quesited house — 引擎词表 CATEGORY_DEF 20 类（general/wealth/family/property/father/mother/
     # pregnancy/health/marriage/lawsuit/theft/death/travel/career/hope/enemy/message/lost/lost_animal/trade；
-    # unknown → general）。全表与中文名见 agent_guidance。
+    # 认不出 → tool.invalid_option，v0.50.0 起；引擎自身会静默回落 general）。全表与中文名见 agent_guidance。
     category: str | None = "general"
     # 流派档（horarySchools.js HORARY_SCHOOLS 七档）：classical(默认)/renaissance/strict/sequence/hellenistic/medieval/modern。
     # 流派同时决定**起盘字段**（上游 horaryBackendFields：宫制/界系/三分集/福点反转/星群，页面 HoraryMain.js:543）与判读口径。
@@ -292,6 +302,14 @@ class HoraryInput(BirthInput):
         default=None, description="判读层参数覆写 {key: value}；键取自引擎词表 HORARY_PARAM_SPEC。"
     )
 
+    # v0.50.0：问类 / 流派过词表（western_vocab.divination_vocabularies）——引擎对认不出的值静默回落 general / classical。
+    @field_validator("category", "school", mode="before")
+    @classmethod
+    def _horary_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.western_vocab import divination_vocabularies, parse_with
+
+        return parse_with(divination_vocabularies()["horary"][info.field_name], info.field_name, value)
+
 
 class ElectionInput(BirthInput):
     hsys: int | None = 0  # 上游 ElectionMain.js:100 出厂种子 { tradition: 1, zodiacal: 0, hsys: 0 }（:121 回退亦 0）
@@ -300,7 +318,7 @@ class ElectionInput(BirthInput):
     )
     # 择日 (electional): the chart is cast at a CANDIDATE moment (date/time/place = the time being evaluated).
     # topicId picks the rule pack + hard flags: marriage/business/move_in/buy_property/trade/buy_car/contract/
-    # surgery/travel/job_hunt/... (TOPIC_MASTER 37 类；unknown → marriage；全表见 agent_guidance).
+    # surgery/travel/job_hunt/... (TOPIC_MASTER 37 类；认不出 → tool.invalid_option（引擎自身静默回落 marriage）；全表见 agent_guidance).
     topicId: str | None = "marriage"
     tradition: bool | None = True
     predictive: bool | None = False
@@ -339,3 +357,11 @@ class ElectionInput(BirthInput):
     surgeryPart: str | None = Field(default=None, description="手术部位星座（surgery）：aries…pisces（按星座主管身体部位）。")
     surgeryPartOpposite: bool | None = Field(default=None, description="部位禁忌延及对宫（surgery）；缺省不延。")
     crisisBase: Any | None = Field(default=None, description="病始日期 YYYY-MM-DD（surgery/medication）：产 [危象日参照]。")
+
+    # v0.50.0：用事 / 流派过词表（western_vocab.divination_vocabularies）——引擎对认不出的值静默回落 marriage / modern_main。
+    @field_validator("topicId", "school", mode="before")
+    @classmethod
+    def _election_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.western_vocab import divination_vocabularies, parse_with
+
+        return parse_with(divination_vocabularies()["election"][info.field_name], info.field_name, value)

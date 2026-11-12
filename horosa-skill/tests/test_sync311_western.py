@@ -158,11 +158,34 @@ def test_horary_top_level_classical_keys_feed_the_global_judge_layer(tmp_path: P
 
 
 def test_horary_invalid_global_enum_is_an_error(tmp_path: Path) -> None:
-    service = _service(tmp_path, RecordingClient(chart_for=lambda p: CHART_TRADITIONAL))
-    result = service.run_tool("horary", {**BIRTH, "vocMode": "no_such_mode"}, save_result=False)
-    assert result.ok is False
-    assert result.error.code == "tool.horary_invalid_setting"
-    assert "vocMode" in result.error.message
+    """顶层古典口径键 v0.50.0 起在 schema 层过词表（western_vocab）：认不出的值在发任何请求之前就拒（tool.invalid_option，
+    options = 全表）。此前由 JS 判读全局层回执 tool.horary_invalid_setting（ok=false 信封）。"""
+    client = RecordingClient(chart_for=lambda p: CHART_TRADITIONAL)
+    service = _service(tmp_path, client)
+    with pytest.raises(ToolValidationError) as info:
+        service.run_tool("horary", {**BIRTH, "vocMode": "no_such_mode"}, save_result=False)
+    assert info.value.code == "tool.invalid_option"
+    assert info.value.details["field"] == "vocMode"
+    assert "by_orb" in [o["value"] for o in info.value.details["options"]]
+    assert client.calls == []
+
+
+def test_judge_layer_override_values_are_checked_against_the_engine_spec(tmp_path: Path) -> None:
+    """判读层覆写（options 字典）的值按引擎词表判（tools/specOptions.js，v0.50.0）：此前 options.vocMode='bogus' 照出盘、判读按缺省，
+    无任何回执。认得的写法换成档值（'2' → 2、'true' → true）；认不出 → tool.<技法>_invalid_setting，卜卦在起盘之前就拒。
+    负向对照（实跑过）：specOptions.checkSpecValue 恒返回 ok → 本用例红。"""
+    client = RecordingClient(chart_for=lambda p: CHART_TRADITIONAL)
+    service = _service(tmp_path, client)
+    bad = service.run_tool("horary", {**BIRTH, "options": {"vocMode": "no_such_mode"}}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.horary_invalid_setting"
+    assert bad.error.details["invalid"][0]["key"] == "vocMode" and client.bodies("/chart") == []
+    switch = service.run_tool("horary", {**BIRTH, "options": {"detectAbscission": "maybe"}}, save_result=False)
+    assert switch.ok is False and switch.error.details["invalid"][0]["allowed"] == [True, False]
+    good = service.run_tool("horary", {**BIRTH, "options": {"hsys": "3", "detectAbscission": "true"}}, save_result=False)
+    assert good.ok is True and client.bodies("/chart")[-1]["hsys"] == 3
+    election = service.run_tool("election", {**BIRTH, "options": {"orbProfile": "tight"}}, save_result=False)
+    assert election.ok is False and election.error.code == "tool.election_invalid_setting"
+    assert election.error.details["invalid"][0]["allowed"] == ["modern", "moiety", "sign"]
 
 
 def test_horary_self_assessment_and_question_reach_the_snapshot(tmp_path: Path) -> None:

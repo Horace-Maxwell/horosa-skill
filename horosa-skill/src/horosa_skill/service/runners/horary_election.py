@@ -58,6 +58,8 @@ class HoraryElectionRunners:
             {"action": "backend_fields", "school": payload.get("school") or "classical", "options": payload.get("options"), "params": params},
         )
         data = js.get("data") if isinstance(js, dict) else None
+        # 判读层覆写值认不出（options.vocMode='bogus' 之类）→ 起盘之前就报（JS specOptions，v0.50.0）。
+        self._raise_invalid_divination_inputs("horary", data.get("invalid_inputs") if isinstance(data, dict) else None)
         fields = data.get("backendFields") if isinstance(data, dict) else None
         if not isinstance(fields, dict) or fields.get("hsys") is None:
             raise ToolTransportError(
