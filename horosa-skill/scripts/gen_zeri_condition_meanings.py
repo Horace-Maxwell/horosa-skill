@@ -11,6 +11,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+for _stream in (sys.stdout, sys.stderr):  # 打印路径 / 中文：Windows 控制台缺省不是 UTF-8
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8", errors="replace")
+
 PKG = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PKG / "src"))
 
@@ -40,7 +45,7 @@ def main() -> int:
             return 1
         print("zeri condition meanings up to date")
         return 0
-    DATA_PATH.write_text(text, encoding="utf-8")
+    DATA_PATH.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {DATA_PATH}")
     return 0
 
