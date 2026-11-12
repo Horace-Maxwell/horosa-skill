@@ -410,8 +410,10 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 
 **地名与命主档案（v0.48.0）**：载荷键 `place`（地名）与 `profile`（档案名 / 别名）都在 run_tool / dispatch / hecan 的**归一化与校验之前**处理，
 先并档案、再解析地名；MCP 层是 `_mcp_payload(_placed(payload, …), Model)`（地名在 MCP 预校验之前补上；带档案名的载荷不在 MCP 层预校验，
-否则模型缺省值会冒充显式值）。地名只认上游 `resolvePlaceOffline` 的 `confidence == "high"`，其余（歧义 / medium / 找不到 / 夏令时切换日）
-一律结构化拒绝（`place.*`，带候选与 `agent_recovery`），绝不替用户挑。显式 lat/lon/zone 永远优先；档案字段逐键让位于显式字段；
+否则模型缺省值会冒充显式值）。地名按 skill 自己的接受规则（v0.50.0，`placeResolve.js` 的 `verdict`，见 §10）定：上游 high 不作数
+（拼音首字母、地区半截提示都能到 high）；其余（歧义 / 近似 / 太宽 / 坐标写进 place / 找不到 / 夏令时切换日）一律结构化拒绝
+（`place.*`，带候选与 `agent_recovery`），绝不替用户挑；提示语里举的写法必须真能解析（有测试跑）。解析说明进 `summary`、结构化的一份
+进技法卡 `place_resolution`，`warnings` 只放真要提醒的事（dispatch 把带 warnings 的结果算降级）。显式 lat/lon/zone 永远优先；档案字段逐键让位于显式字段；
 档案只补它存了的，澄清闸照问没存的（铁律 2 不变）。档案名 / 别名 / 地名标签进决策层前脱敏成 `<档案>`。
 
 ### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
@@ -1483,7 +1485,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **命主档案库（v0.48.0，`<data_dir>/profiles/profiles.db`）。** WAL + 跨进程写锁（新库首批并发写者在 rollback 模式下会死锁）；
   损坏的库是用户数据，绝不自动隔离重建（`profile.store_corrupt`）；`--purge-data` 缺省保留档案，`--purge-profiles` 才删。存档案时只给地名，
   走技法同一条地名解析补坐标与时区（唯一命中才补；只改备注且标签没变不重查；换了地名 zone 跟新地名走）。CLI `profile` 与门面同走
-  `ToolsAPI.profile`（v0.48.1-dev 前 CLI 直调 `run_action`，地名不解析，之后起盘缺坐标被拒）。
+  `ToolsAPI.profile`（v0.48.1-dev 前 CLI 直调 `run_action`，地名不解析，之后起盘缺坐标被拒）。档案身份键折繁简（v0.50.0 `store_key`：
+  「媽媽」存进「妈妈」，显示名不改写）；旧库里已有的两条按各自主键照旧各取各的（精确名优先），不自动合并。rename 不合并两个人；
+  导出 / 导入只在 CLI（导入整份先校验，坏一条一条都不写）。
 
 ### 9.4 客户端配置 · setup · doctor（client config / setup / doctor）
 
@@ -1752,6 +1756,12 @@ AI分析挂载 / 命盘事盘储存」四处走同一 builder + 同一段表—�
   地名路径与通用十进制路径共用 `_format_compact_coordinate` 一个函数；金样 `tests/fixtures/coordinate_text_upstream.json` 由上游源在 node 里跑出。
   上游桌面选点用 GCJ-02 点写文本、AI 地名解析用 WGS84（差 1′），skill 跟 AI 路径；差异待报上游（skill 不偏离）。
 - **IANA 时区换算带上游的规则覆盖表（v0.48.0）。** `input_normalization._TZ_RULE_OVERRIDES` 逐条锚定 vendored `timezone.js` 的 `TZ_RULE_OVERRIDES`。
+- **地名「何时可以不问用户」是 skill 的规则，不镜像上游（v0.50.0，有意偏离）。** 上游 `resolvePlaceOffline` 原样跑、字段原样回（parity 金标照旧），
+  但它的 high 会经拼音首字母（NYC → 银川）与地区半截提示（St. Petersburg → 佛州）给错城市。`src/tools/placeResolve.js` 另出 `verdict`：
+  条目本名 / 英文名 / 全拼 / 行政区词干 / `placeData/aliases.json` 别名等于规范化查询才 resolved，可带库能核对的国家 / 行政区上级限定词；
+  同名多地一律问，没有「挑大城市」规则；只在用户写的分隔符上拆，跨逗号不粘连。别名只指向库里唯一一条（坐标从条目取，表里无坐标）；
+  `placeData/regions.json` 由 `scripts/gen_place_regions.mjs` 从 CLDR 生成，勿手改。改规则先跑 `tests/test_place_acceptance.py`（语料 + 全库性质）。
+  re-vendor 后上游若修了首字母 / 头尾回退，规则照旧成立；城市库换版要重审语料里的歧义行。上游缺陷清单待报上游，skill 不改 vendored 原件。
 
 ## 11. 第三方引擎与 MIT 义务（ken）
 
