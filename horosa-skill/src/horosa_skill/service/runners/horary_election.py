@@ -191,7 +191,7 @@ class HoraryElectionRunners:
     def _run_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
         # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
-        topic_id = f"{payload.get('topicId') or payload.get('topic') or 'marriage'}".strip() or "marriage"
+        topic_id = f"{payload.get('topicId') or 'marriage'}".strip() or "marriage"  # `topic` 在入口按别名读成 topicId（经词表）
         # natal（可选，本命出生资料）：先验全再起任何盘——缺字段是输入错，不许半途静默少段。
         natal_spec = self._election_natal_spec(payload)
         params = self._divination_params(payload)

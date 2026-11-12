@@ -48,6 +48,8 @@ FIELD_ALIASES: dict[str, str] = {
     "house_system": "hsys", "houseSystem": "hsys", "houses": "hsys",
     "sex": "gender",
     "birth_date": "date", "birthDate": "date", "birth_time": "time", "birthTime": "time",
+    # 择日主题：runner 曾私下 `topicId or topic` 读它，不经词表、入口却说「没有哪个设置读它」（深审余项）。
+    "topic": "topicId",
 }
 # 不是技法参数、但合法出现在载荷里的键（入口 / 闸门 / 派生）：不报「未知参数」。
 NON_TECHNIQUE_KEYS = frozenset({
@@ -485,8 +487,8 @@ def _lift_nested_party(out: dict[str, Any], fields: frozenset[str]) -> None:
 
 def _apply_aliases(out: dict[str, Any], *, path: str, fields: frozenset[str] | None) -> None:
     for alias, canonical in FIELD_ALIASES.items():
-        if alias not in out or (fields is not None and alias in fields):
-            continue
+        if alias not in out or (fields is not None and (alias in fields or canonical not in fields)):
+            continue  # 模型自己声明了别名键，或根本没有规范键（改名只会把「没人读」的提示换成另一个名字）
         value = out.pop(alias)
         if canonical in out and out[canonical] is not None and out[canonical] != value:
             F.add_input_note(f"`{path}{alias}` 与 `{path}{canonical}` 都给了且不同：按 `{canonical}`，`{alias}` 已忽略。",
