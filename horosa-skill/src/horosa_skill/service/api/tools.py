@@ -27,7 +27,13 @@ from horosa_skill.knowledge import (
     read_knowledge_entry,
 )
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
-from horosa_skill.service._context import _degrade_collector, _memory_save_failed, _run_query_scope
+from horosa_skill.service._context import (
+    _degrade_collector,
+    _memory_save_failed,
+    _run_query_scope,
+    _run_tool_scope,
+    without_presentation_keys,
+)
 from horosa_skill.service.api.place import place_resolution_note
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.envelope import (
@@ -524,7 +530,11 @@ class ToolsAPI:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
+        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), _run_tool_scope() as depth:
+            nested = depth > 1
+            if nested:
+                # runner 拼子盘的调用：展示键不是算法输入，摘掉再算（见 _context.PRESENTATION_KEYS）。
+                payload = without_presentation_keys(payload)
             input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
@@ -562,8 +572,10 @@ class ToolsAPI:
             if save_result:
                 self._persist_tool_result(call, envelope, run_id=run_id, query_text=query_text, evaluation_case_id=evaluation_case_id)
 
-            # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。
-            envelope = _apply_response_view(envelope, call.input_normalized)
+            # response_view 视图裁剪在存档之后：memory 保全量，返回体按需精简。只裁最外层：子调用的信封是
+            # runner 的原料（择日读展示盘的 snapshot_text），裁了就是把算出来的东西丢掉。
+            if not nested:
+                envelope = _apply_response_view(envelope, call.input_normalized)
             trace["success"] = envelope.ok
             trace["input_normalized"] = call.input_normalized
             trace["summary"] = envelope.summary

@@ -30,6 +30,36 @@ def _run_query_scope(query_text: str | None) -> Iterator[None]:
         _RUN_QUERY_TEXT.reset(token)
 
 
+# ---- 调用深度与展示键（v0.50.0-dev，F4）----
+# runner 会拿自己的载荷再调一次 `run_tool` 拼子盘（择日的展示盘、三式合一的奇门 / 太乙、七政的果老盘）。
+# 「返回体长什么样」的键不是算法输入：跟着载荷进了子调用，子信封就被裁掉快照，外层读到空串（黄历择日
+# 14 段里 7 段变成占位文字）。规则只有一条、只在一处：进入嵌套的 run_tool 时摘掉这些键，视图只裁最外层的信封。
+PRESENTATION_KEYS: tuple[str, ...] = ("response_view",)
+_RUN_TOOL_DEPTH: contextvars.ContextVar[int] = contextvars.ContextVar("horosa_run_tool_depth", default=0)
+
+
+@contextlib.contextmanager
+def _run_tool_scope() -> Iterator[int]:
+    """一次 run_tool 的作用域；给出深度（1 = 调用方直接调的那一次，>1 = runner 里拼子盘的调用）。"""
+    depth = _RUN_TOOL_DEPTH.get() + 1
+    token = _RUN_TOOL_DEPTH.set(depth)
+    try:
+        yield depth
+    finally:
+        _RUN_TOOL_DEPTH.reset(token)
+
+
+def run_tool_depth() -> int:
+    return _RUN_TOOL_DEPTH.get()
+
+
+def without_presentation_keys(payload: Any) -> Any:
+    """子调用的载荷：去掉只管返回体形状的键（非 dict 原样返回，交给后面的校验去报错）。"""
+    if not isinstance(payload, dict) or not any(key in payload for key in PRESENTATION_KEYS):
+        return payload
+    return {key: value for key, value in payload.items() if key not in PRESENTATION_KEYS}
+
+
 def _degrade(fmt: str, *args: Any, note: str | None = None) -> str:
     """记一次优雅降级：日志一句 + 当前工具调用的收集器一条（→ envelope.warnings）。返回给调用方的说明。"""
     message = (fmt % args) if args else fmt
