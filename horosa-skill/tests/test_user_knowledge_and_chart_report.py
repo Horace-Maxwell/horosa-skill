@@ -394,7 +394,7 @@ def _chart_run(service: HorosaSkillService, **extra):
     return service.run_tool("chart", {**build_sample_payloads()["chart"], **extra}, save_result=True)
 
 
-def test_chart_style_report_renders_every_section_without_an_ai_answer(tmp_path: Path, monkeypatch) -> None:
+def test_chart_style_report_renders_every_section_without_an_ai_answer(tmp_path: Path, monkeypatch, font_host: str) -> None:
     _seed(tmp_path / "kb")
     service = _service(tmp_path)
     run = _chart_run(service, knowledge="通用")
@@ -423,7 +423,8 @@ def test_chart_style_report_renders_every_section_without_an_ai_answer(tmp_path:
     # 自备资料只列引用（标题 / 条目 / 字数），正文不随报告印出。
     assert "自备参考资料" in texts and "通用" in joined and "先看盘面再看资料。" not in joined
     assert "完整排盘报告" in joined
-    assert not any(t in joined for t in ("False", "True", "aiExport", "settings v"))  # 附录不漏机器值
+    # 附录不漏机器值。按整词找：没有中文 TrueType 时封面写明「装一款中文 TrueType 字体」，子串 True 不是漏出来的布尔值
+    assert not re.search(r"\b(?:False|True)\b|aiExport|settings v", joined), re.findall(r".{0,20}\b(?:False|True)\b.{0,20}", joined)
     # 没有 AI 解读就不出 AI 章节，也不出内部字样。
     assert not any(t in texts for t in ("核心结论", "起盘依据", "解盘步骤", "总览摘要"))
     assert not any(term in joined for term in ("Run ID", "report_metadata", "Horosa Skill"))

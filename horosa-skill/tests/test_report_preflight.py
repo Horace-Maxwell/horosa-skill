@@ -339,7 +339,8 @@ def test_a_report_never_replaces_the_runs_own_stored_files(tmp_path: Path) -> No
     assert service.report_render({"run_id": run_id, "format": "json", "style": "chart"})["ok"] is True
 
 
-def test_an_existing_file_of_the_users_is_kept_but_a_report_can_be_rewritten(tmp_path: Path) -> None:
+@pytest.mark.parametrize("font_host", ["host", "no_cjk_font"], indirect=True)  # 补字链与这里无关：两种现场就够
+def test_an_existing_file_of_the_users_is_kept_but_a_report_can_be_rewritten(tmp_path: Path, font_host: str) -> None:
     service = _service(tmp_path)
     run_id = _run(service)
     mine = tmp_path / "runs" / "我的笔记.json"
@@ -366,7 +367,12 @@ def test_an_existing_file_of_the_users_is_kept_but_a_report_can_be_rewritten(tmp
     sr = service.run_tool("solarreturn", build_sample_payloads()["solarreturn"], save_result=True).memory_ref.run_id
     with pytest.raises(ToolValidationError) as png:
         service.report_render({"run_id": sr, "format": "png", "output_path": "x.png"})
-    assert png.value.details["reason"] == "existing_file"
+    from horosa_skill.reports.renderers import SIMPLIFIED, _drawing_font_files
+
+    if _drawing_font_files(SIMPLIFIED) is None:  # 没有中文 TrueType（CI ubuntu）：PNG 先因字体被拒，同样一个文件都不写
+        assert png.value.code == "report.png_font_unavailable"
+    else:
+        assert png.value.details["reason"] == "existing_file"
     assert not (tmp_path / "runs" / "x.png").exists() and not (tmp_path / "runs" / "x_1.png").exists()
     assert (tmp_path / "runs" / "x_2.png").read_bytes() == b"not a report"
 

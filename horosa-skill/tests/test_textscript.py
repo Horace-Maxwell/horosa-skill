@@ -720,7 +720,7 @@ def test_traditional_reports_pick_a_font_that_has_traditional_glyphs() -> None:
             assert name == "MSung-Light"  # 繁体 CID 回退，不是简体的 STSong-Light
         assert _docx_font_name(script) in {
             "Microsoft JhengHei", "PingFang TC", "PingFang HK", "Songti TC", "Arial Unicode MS",
-            "Noto Sans CJK TC", "Noto Sans CJK HK", "Arial"}
+            "Noto Sans CJK TC", "Noto Sans CJK HK"}  # 本机一款都没有时也是 Microsoft JhengHei，不再是没有中文字形的 Arial
 
 
 def test_report_language_follows_the_setting_unless_the_caller_set_it() -> None:

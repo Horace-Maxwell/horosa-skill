@@ -859,6 +859,28 @@
         "horosa-skill/src/horosa_skill/reports/markdown.py",
         "horosa-skill/pyproject.toml"
       ]
+    },
+    {
+      "id": "github-runner-images.ubuntu-fonts",
+      "subject": "github-runner-images",
+      "fact": "The ubuntu-24.04 (ubuntu-latest) toolset installs no CJK font: the only font package named in apt.common_packages / apt.cmd_packages is fonts-noto-color-emoji, so /usr/share/fonts/opentype/noto/NotoSansCJK-*.ttc is absent and report PDFs fall back to reportlab's non-embedded CID fonts there (the CI `test` job failed 6 font-dependent tests on v0.50.0 that were green on macOS).",
+      "source_url": "https://github.com/actions/runner-images/blob/main/images/ubuntu/toolsets/toolset-2404.json",
+      "verified_on": "2026-11-12",
+      "affects": [
+        "horosa-skill/tests/conftest.py",
+        "horosa-skill/src/horosa_skill/reports/renderers.py"
+      ]
+    },
+    {
+      "id": "adobe.cid-character-collections",
+      "subject": "reportlab",
+      "fact": "reportlab's built-in CID fonts STSong-Light (Adobe-GB1, UniGB-UCS2-H) and MSung-Light (Adobe-CNS1, UniCNS-UCS2-H) are never embedded and carry no cmap (CIDTypeFace has no charToGlyph). Adobe-GB1 Supplement 2 covers GBK (GB 13000.1) and Supplement 4 GB 18030-2000; Adobe-CNS1 covers Big Five and Hong Kong SCS 1999/2001/2004/2008/2016. The renderer therefore treats a code point as drawable in those fonts iff it encodes in Python's `gbk` / `big5hkscs` codec.",
+      "source_url": "https://github.com/adobe-type-tools/Adobe-GB1",
+      "verified_on": "2026-11-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/renderers.py",
+        "horosa-skill/src/horosa_skill/reports/app_charts.py"
+      ]
     }
   ]
 }

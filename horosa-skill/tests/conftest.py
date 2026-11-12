@@ -103,6 +103,35 @@ def _never_touch_the_users_real_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path_f
     monkeypatch.setattr(config, "_default_runtime_root", lambda: base / "runtime")
 
 
+# ---- 字体环境（v0.50.0-dev，docs/LESSONS.md「macOS 绿 ≠ CI 绿」）----------------------------------------------------
+# 报告渲染按本机字体走不同分支：维护机 macOS 有中文 TrueType 与 Apple Symbols，CI 的 ubuntu 一款中文 TrueType 都没有
+# （PDF 退到 reportlab 自带、不嵌入的 CID 字体，DOCX 没有可探测的中文字体，PNG 拒绝出图）。只在本机字体上写过断言的用例
+# 因此本机绿、CI 红——而且 CI 红的往往是真问题（v0.50.0 一次红了 6 条，其中 3 条是产品缺陷）。凡是断言跟字体有关的用例
+# 都用 `font_host`：每台机器把三种现场都跑一遍。
+#   host         本机实际字体
+#   no_cjk_font  没有中文 TrueType（补字链照本机）：CI ubuntu 的形状
+#   no_fonts     连补字字体（Apple Symbols / Segoe UI Symbol / DejaVu…）也没有：精简容器的形状
+FONT_HOSTS = ("host", "no_cjk_font", "no_fonts")
+
+
+def simulate_fonts(monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
+    if kind == "host":
+        return
+    from horosa_skill.reports import app_charts, renderers
+
+    monkeypatch.setattr(renderers, "_PDF_FONT_CANDIDATES", {"sc": [], "tc": []})
+    monkeypatch.setattr(renderers, "_DOCX_FONT_CANDIDATES", ())
+    if kind == "no_fonts":
+        monkeypatch.setattr(renderers, "_PDF_GLYPH_FALLBACK_CANDIDATES", {"sc": (), "tc": ()})
+        monkeypatch.setattr(app_charts, "_SYMBOL_CHAIN", None)  # 进程级缓存：按模拟的字体重算，用例结束还原
+
+
+@pytest.fixture(params=FONT_HOSTS)
+def font_host(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    simulate_fonts(monkeypatch, request.param)
+    return request.param
+
+
 
 # ---- skip reasons carry a tag (tests/skips.py; v0.50.0-dev, C-18 #2 / #10) ----------------------------------------
 # An untagged skip is turned into a failure, and the run ends with the skips counted per tag. The hooks live in

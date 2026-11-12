@@ -48,6 +48,24 @@ class TaggingCanvas(Canvas):
 
     # ── 画的时候 ──────────────────────────────────────────────────────────
 
+    # 空字符串什么也不画，但 CID 字体（本机没有中文 TrueType 时的回退）照样写一个 `() Tj`——版式表里的空格子由此成了
+    # 标签之外的绘制运算符（v0.50.0-dev，CI Linux 红；TrueType 字体下 reportlab 本来就不写）。空串直接不画。
+    def drawString(self, x: float, y: float, text: Any, *args: Any, **kwargs: Any) -> None:
+        if text != "":
+            super().drawString(x, y, text, *args, **kwargs)
+
+    def drawRightString(self, x: float, y: float, text: Any, *args: Any, **kwargs: Any) -> None:
+        if text != "":
+            super().drawRightString(x, y, text, *args, **kwargs)
+
+    def drawCentredString(self, x: float, y: float, text: Any, *args: Any, **kwargs: Any) -> None:
+        if text != "":
+            super().drawCentredString(x, y, text, *args, **kwargs)
+
+    def drawAlignedString(self, x: float, y: float, text: Any, *args: Any, **kwargs: Any) -> None:
+        if text != "":
+            super().drawAlignedString(x, y, text, *args, **kwargs)
+
     def _page_index(self) -> int:
         return self.getPageNumber() - 1
 
