@@ -401,7 +401,7 @@ def test_place_inside_dispatch_birth_and_relative_parties(tmp_path: Path) -> Non
 # ── 旧 runtime：缺 place_search 工具 / 缺 tz-lookup ───────────────────────────────────────────────────
 
 
-def _engine_copy(tmp_path: Path, *, drop_tool: bool = False, drop_dependency: bool = False) -> Path:
+def _engine_copy(tmp_path: Path, *, drop_tool: bool = False, drop_dependency: bool = False, drop_resolver: bool = False) -> Path:
     root = tmp_path / "stale-core-js"
     shutil.copytree(CORE_JS / "bin", root / "bin")
     shutil.copytree(CORE_JS / "src", root / "src")
@@ -415,16 +415,19 @@ def _engine_copy(tmp_path: Path, *, drop_tool: bool = False, drop_dependency: bo
     if drop_dependency:
         shutil.rmtree(root / "node_modules" / "tz-lookup")
         assert not (root / "node_modules" / "tz-lookup").exists()
+    if drop_resolver:  # v0.50.0 的接受规则数据缺了（半个 runtime）：place_search 整个加载不起来
+        shutil.rmtree(root / "src" / "tools" / "placeData")
     return root
 
 
 @requires_engine
-@pytest.mark.parametrize("stale", ["drop_tool", "drop_dependency"])
+@pytest.mark.parametrize("stale", ["drop_tool", "drop_dependency", "drop_resolver"])
 def test_a_stale_runtime_degrades_with_a_clear_code(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stale: str) -> None:
     """已装 runtime 只有旧 core-js（不认 place_search）或旧 node_modules（缺 tz-lookup）：报 place.runtime_outdated + 升级命令，
     不是 js_engine.execution_failed 的一团堆栈，也不静默。其余 JS 技法照常（tools/index.js 懒加载）。
     负向对照：_STALE_ENGINE 正则改成永不命中 → 两例都变成 js_engine.execution_failed，红（实跑过）。"""
-    root = _engine_copy(tmp_path, drop_tool=stale == "drop_tool", drop_dependency=stale == "drop_dependency")
+    root = _engine_copy(tmp_path, drop_tool=stale == "drop_tool", drop_dependency=stale == "drop_dependency",
+                        drop_resolver=stale == "drop_resolver")
     client = HorosaJsEngineClient(_settings(tmp_path))
     monkeypatch.setattr(client, "_candidate_engine_roots", lambda: [root])
     service = _service(tmp_path, js_client=client)

@@ -52,7 +52,11 @@ _DEFAULT_LIMIT = 5
 _MAX_LIMIT = 10
 ENGINE_LABEL = "horosa-core-js place_search: upstream resolvePlaceOffline + dstAwareZoneAt (tz-lookup 6.1.25)"
 # 已装 runtime 比本包旧时 JS 侧的两种报错：老 core-js 不认这个工具；新代码配了旧 node_modules（缺 tz-lookup）。
-_STALE_ENGINE = re.compile(r"Unsupported horosa-core-js tool: place_search|Cannot find (?:package|module) '[^']*(?:tz-lookup|vendor[\\/]place)")
+# v0.50.0 起还有接受规则（tools/placeResolve.js + tools/placeData/*.json）：缺了同样是「runtime 半新半旧」。
+_STALE_ENGINE = re.compile(
+    r"Unsupported horosa-core-js tool: place_search"
+    r"|Cannot find (?:package|module) '[^']*(?:tz-lookup|vendor[\\/]place|tools[\\/]placeResolve|tools[\\/]placeData)"
+)
 # 引擎 verdict 的状态 → 是否「要用户从候选里选 / 确认」。
 _ASK_STATUSES = ("ambiguous", "confirm", "near", "qualifier_mismatch")
 # 提示语里举的写法：每一条都必须真能唯一解析（tests/test_place_acceptance.py 逐条跑引擎核对）。
