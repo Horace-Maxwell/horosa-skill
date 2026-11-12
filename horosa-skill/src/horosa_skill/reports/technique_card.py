@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from horosa_skill.contracts_locator import contract_path
@@ -23,6 +24,8 @@ from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from typing import Any
 
 TECHNIQUE_CARD_SCHEMA = "horosa.skill.technique_card.v1"
+# 不起盘的工具所在的域（知识库检索 / 导出注册表与解析）：不挂技法卡。
+CARDLESS_DOMAINS = frozenset({"knowledge", "export"})
 
 _PROVENANCE_PATH = contract_path("technique_provenance.json")  # 源码树 / wheel 内副本（contracts_locator，v0.40.0 P1）
 
@@ -108,42 +111,184 @@ def _measured_compute(response_data: dict[str, Any]) -> dict[str, Any]:
     return measured
 
 
+# ---- 结果敏感设置的全表（v0.50.0 深审 F10）：从闸门指引表推出来，不另列 -------------------------------------------------
+# 「闸门会问的设置」= TOOL_GUIDANCE[tool] 的 ask_if_missing（带选项的问题；自由文本问题是事实 / 输入，不是设置）+ safe_defaults。
+# 时刻 / 地点类键（出生数据、起课时刻）不算设置：卡片另有起盘时刻与 place_resolution。伪名按闸门同一张别名表展开，
+# 纯确认类（「技法设置是否沿用默认」）没有对应的键，不列。闸门不拦的问题（NON_BLOCKING：只筛输出 / 只作标注）不算改结果。
+_MOMENT_KEYS = frozenset({"date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "place", "location", "datetime"})
+SOURCE_TEXT = {"user": "用户给定", "profile": "命主档案", "place": "按地点推得", "default": "缺省"}
+SOURCE_TEXT_EN = {"user": "given by the user", "profile": "from the saved profile", "place": "derived from the place", "default": "default"}
+_UNSENT = "未下发，引擎按自己的缺省算"
+# 指引表里没有中文问题文字可取的键（只出现在 safe_defaults）：给读者的叫法。
+_EXTRA_LABELS = {
+    "ad": "纪年", "lifespanMethod": "寿命格局取主法", "gender": "性别", "sex": "性别", "timeAlg": "时间算法",
+    "zeriSnapshotMaxRows": "命中清单行数", "zeriSnapshotExplainRows": "判读树行数", "seed": "起卦种子",
+}
+
+
+def _field_keys(tool_name: str, field: str) -> list[str]:
+    from horosa_skill.agent_guidance.questions import _ALIASES, CONFIRM_ONLY_PARTS
+
+    keys: list[str] = []
+    for alternative in field.split(" / "):
+        for part in (piece.strip() for piece in re.split(r"/|\+", alternative)):
+            if not part or part in CONFIRM_ONLY_PARTS:
+                continue
+            expanded = [key for group in _ALIASES.get(part, ((part,),)) for key in group]
+            for key in expanded:
+                key = key.lstrip("@")
+                if key not in _MOMENT_KEYS and key != "location" and key not in keys:
+                    keys.append(key)
+    return keys
+
+
+@lru_cache(maxsize=None)
+def result_setting_specs(tool_name: str) -> tuple[dict[str, Any], ...]:
+    """这个技法会改变结果的设置（闸门指引表推出）：每项 {key, options?, values?, default?, meaning?}。"""
+    from horosa_skill.agent_guidance.policies import FREE_TEXT_GATE_FIELDS
+    from horosa_skill.agent_guidance.questions import NON_BLOCKING
+    from horosa_skill.agent_guidance.tool_table import TOOL_GUIDANCE
+
+    policy = TOOL_GUIDANCE.get(tool_name) or {}
+    specs: dict[str, dict[str, Any]] = {}
+    for question in policy.get("ask_if_missing") or []:
+        field_text = str((question or {}).get("field") or "").strip()
+        if not field_text or field_text in FREE_TEXT_GATE_FIELDS or (tool_name, field_text) in NON_BLOCKING:
+            continue
+        keys = _field_keys(tool_name, field_text)
+        for key in keys:
+            spec = specs.setdefault(key, {"key": key})
+            if len(keys) == 1 and question.get("question"):
+                spec.setdefault("label", re.split(r"[？?（(，,；]", str(question["question"]))[0][:16])
+            if len(keys) == 1 and isinstance(question.get("options"), list) and isinstance(question.get("values"), list):
+                spec.setdefault("options", list(question["options"]))
+                spec.setdefault("values", list(question["values"]))
+    for default in policy.get("safe_defaults") or []:
+        for key in _field_keys(tool_name, str((default or {}).get("field") or "")):
+            spec = specs.setdefault(key, {"key": key})
+            if "value" in default and "default" not in spec:
+                spec["default"] = default["value"]
+                spec["meaning"] = default.get("meaning")
+    return tuple(specs.values())
+
+
+def _lookup(payload: dict[str, Any], key: str) -> Any:
+    node: Any = payload
+    for part in key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def _same(a: Any, b: Any) -> bool:
+    if isinstance(a, bool) or isinstance(b, bool):
+        return str(int(a) if isinstance(a, bool) else a).lower() == str(int(b) if isinstance(b, bool) else b).lower()
+    return str(a) == str(b)
+
+
+def setting_text(key: str, value: Any, spec: dict[str, Any] | None = None) -> str:
+    """一项设置的人读写法：闸门问题的选项（值对得上时）> 缺省值的说明 > 报告的码表（宫制 / 性别 / 布尔）> 原值。"""
+    from horosa_skill.reports.source import setting_reader_text
+
+    spec = spec or {}
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return _UNSENT
+    # 性别的 true / false 是 男 / 女，不是 是 / 否（紫微的 `gender: false` 曾原样印在卡上）。
+    mapped = setting_reader_text(key, str(value).lower() if key in ("gender", "sex") else value, standalone=True)
+    if mapped and mapped != str(value):
+        return mapped  # 码表（宫制 / 黄道 / 时间算法 / 性别 / 布尔）
+    if "default" in spec and spec.get("meaning") and _same(spec["default"], value):
+        return str(spec["meaning"])
+    for option, candidate in zip(spec.get("options") or [], spec.get("values") or []):
+        if candidate is not None and _same(candidate, value):
+            return str(option)
+    return str(value)
+
+
 def _settings_used(
     input_normalized: dict[str, Any], response_data: dict[str, Any], domain: str | None, tool_name: str | None = None
 ) -> dict[str, Any]:
     used: dict[str, Any] = {}
+    labels = {field: label for field, label, _domains in _RESULT_SENSITIVE_FIELDS}
+    if tool_name:
+        from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS, gender_required
+
+        for spec in result_setting_specs(tool_name):
+            key = spec["key"]
+            if key in ("gender", "sex") and tool_name in GENDER_FACT_TOOLS and not gender_required(tool_name, input_normalized):
+                continue  # 这次调用不依赖性别（如神数正传·铁算心易）：不印
+            if tool_name in _FIELD_DEAD_FOR_TOOLS.get(key, ()):
+                continue
+            value = _lookup(input_normalized, key)
+            sent = value is not None and not (isinstance(value, str) and not value.strip())
+            if not sent and "default" in spec:
+                value = spec["default"]
+            used[key] = {"label": labels.get(key) or _EXTRA_LABELS.get(key) or spec.get("label") or key, "value": value, "text": setting_text(key, value, spec), "source": "default"}
     for field, label, domains in _RESULT_SENSITIVE_FIELDS:
         if domains is not None and (domain or "") not in domains:
             continue
         if tool_name in _FIELD_DEAD_FOR_TOOLS.get(field, ()):
             continue
         if field in input_normalized and input_normalized[field] is not None:
-            used[field] = {"label": label, "value": input_normalized[field]}
+            used[field] = {"label": label, "value": input_normalized[field],
+                           "text": setting_text(field, input_normalized[field], _spec(tool_name, field)), "source": "default"}
         elif field in ("after23NewDay", "lateZiHourUseNextDay") and tool_name in _DAY_BOUNDARY_DEFAULT_TOOLS:
-            used[field] = {"label": f"{label}（缺省）", "value": 1}
+            used[field] = {"label": f"{label}（缺省）", "value": 1, "text": setting_text(field, 1, _spec(tool_name, field)), "source": "default"}
     # 时区口径（v0.40 F17，上游 utils/timezone.js unifyCnZone）：Asia/Urumqi 归并北京时间时回显，
     # 否则读者看到 +08:00 不知道这是法定北京时间口径、不是新疆当地惯用的 +06:00。
     if input_normalized.get("zoneAdvisory") == "cn-unified":
-        used["zoneAdvisory"] = {
-            "label": "时区口径",
-            "value": f"北京时间统一（{input_normalized.get('geoZone') or 'Asia/Urumqi'}→Asia/Shanghai）",
-        }
+        unified = f"北京时间统一（{input_normalized.get('geoZone') or 'Asia/Urumqi'}→Asia/Shanghai）"
+        used["zoneAdvisory"] = {"label": "时区口径", "value": unified, "text": unified, "source": "place"}
     # 岁差/恒星黄道：西占与印占**字段名不同**（AGENTS §4），必须分别读，且不许硬编码岁差名。
     chart = response_data.get("chart") if isinstance(response_data.get("chart"), dict) else {}
-    if isinstance(chart.get("siderealAyanamsa"), (str, int, float)):
-        used["siderealAyanamsa"] = {"label": "岁差（西占）", "value": chart["siderealAyanamsa"]}
+    # 引擎回报空串（回归黄道时不报岁差）不覆盖上面按指引表补的缺省岁差——v0.49 卡上印的是「岁差=」。
+    if isinstance(chart.get("siderealAyanamsa"), (str, int, float)) and str(chart["siderealAyanamsa"]).strip():
+        value = chart["siderealAyanamsa"]
+        used["siderealAyanamsa"] = {"label": "岁差（西占）", "value": value,
+                                    "text": setting_text("siderealAyanamsa", value, _spec(tool_name, "siderealAyanamsa")),
+                                    "source": (used.get("siderealAyanamsa") or {}).get("source", "default")}
+    elif "siderealAyanamsa" in used:
+        used["siderealAyanamsa"]["label"] = "岁差（西占）"
     if isinstance(chart.get("siderealModeKey"), (str, int, float)):
-        used["siderealModeKey"] = {"label": "岁差模式（印占）", "value": chart["siderealModeKey"]}
+        used["siderealModeKey"] = {"label": "岁差模式（印占）", "value": chart["siderealModeKey"],
+                                   "text": str(chart["siderealModeKey"]), "source": "default"}
         if chart.get("ayanamsaValue") is not None:
-            used["ayanamsaValue"] = {"label": "岁差值（印占）", "value": chart["ayanamsaValue"]}
+            used["ayanamsaValue"] = {"label": "岁差值（印占）", "value": chart["ayanamsaValue"],
+                                     "text": str(chart["ayanamsaValue"]), "source": "default"}
     # runner 实际钉住的口径（sync311 F16）：调用方没给、却由 skill 按上游缺省**替它定下**的值——
     # 起筮种子（时刻派生）、「今年」流年/大运年、演法农历月……不回显就无从解释「同样输入明年结果为何变」。
     applied = response_data.get("settings_applied")
     if isinstance(applied, dict):
         for field, item in applied.items():
             if isinstance(item, dict) and "value" in item:
-                used[str(field)] = {"label": str(item.get("label") or field), "value": item["value"]}
+                # runner 替调用方钉下的值（今年、时刻派生的起筮种子…）：来源是缺省（skill 按上游规则定的）。
+                used[str(field)] = {"label": str(item.get("label") or field), "value": item["value"],
+                                    "text": setting_text(str(field), item["value"], _spec(tool_name, str(field))), "source": "default"}
     return used
+
+
+def _spec(tool_name: str | None, key: str) -> dict[str, Any] | None:
+    return next((spec for spec in result_setting_specs(tool_name) if spec["key"] == key), None) if tool_name else None
+
+
+def annotate_setting_sources(
+    card: dict[str, Any], *, explicit_paths: set[str] | frozenset[str], profile_keys: set[str], place_keys: set[str],
+) -> None:
+    """技法卡每项设置的来源：用户给的 / 命主档案 / 地点推得 / 缺省。run_tool 在知道这些之后补（卡在存档之前挂好、同一份存进 memory）。"""
+    for key, item in (card.get("settings") or {}).items():
+        if not isinstance(item, dict) or item.get("source") == "place":
+            continue
+        top = key.split(".")[0]
+        if top in profile_keys:
+            source = "profile"
+        elif top in place_keys:
+            source = "place"
+        elif key in explicit_paths:
+            source = "user"
+        else:
+            source = "default"
+        item["source"] = source
 
 
 def _gate_state(input_normalized: dict[str, Any]) -> dict[str, Any]:
@@ -256,12 +401,15 @@ def render_technique_card_markdown(card: dict[str, Any], *, reader: bool = False
 
         if card.get("moment"):
             lines.append(f"- 盘：{card['moment']}")
-        words = [(item["label"], setting_reader_text(key, item.get("value"), standalone=True)) for key, item in settings.items()]
+        words = [(item["label"], item.get("text") or setting_reader_text(key, item.get("value"), standalone=True)) for key, item in settings.items()]
         rendered = "；".join(f"{label}：{text}" for label, text in words if text)
         if rendered:
             lines.append(f"- 口径：{rendered}")
     elif settings:
-        rendered = "；".join(f"{item['label']}={item['value']}" for item in settings.values())
+        rendered = "；".join(
+            f"{item['label']}：{item.get('text') or item['value']}" + (f"（{SOURCE_TEXT[item['source']]}）" if item.get("source") in SOURCE_TEXT else "")
+            for item in settings.values()
+        )
         lines.append(f"- 口径：{rendered}")
     gate = card.get("gate") or {}
     if gate and not reader:

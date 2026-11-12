@@ -274,11 +274,15 @@ def test_the_technique_report_speaks_words_not_codes(tmp_path) -> None:
     )
     report = build_technique_report(cards=[{**card, "moment": "起盘时刻 2028-04-06 09:33（时区 +08:00）"}], scope="run", scope_id="r")
     text = render_technique_report_markdown(report)
-    assert "口径：古典口径：否；预测数据：是；黄道制：回归黄道；分宫制：Alcabitus" in text
-    assert "=False" not in text and "=0" not in text and "岁差" not in text  # 空值不列
+    for words in ("古典口径：否", "预测数据：是", "黄道制：回归黄道", "分宫制：Alcabitus"):
+        assert words in text, words
+    assert "=False" not in text and "=0" not in text
+    # 深审 F10：引擎回报的岁差是空串时，卡上写缺省岁差及其适用条件（v0.49 前「空值不列」= 岁差在哪里都没写）。
+    assert "岁差（西占）：恒星黄道缺省 Lahiri（仅 zodiacal=1 生效）" in text
     assert "设置确认" not in text and "self-check" not in text
     assert "- 盘：起盘时刻 2028-04-06 09:33（时区 +08:00）" in text
-    assert "古典口径=False" in render_technique_card_markdown(card)  # 工具结果里的卡（给 AI 贴在回答后）不变
+    # 工具结果里的卡（给 AI 贴在回答后）：每项写字 + 来源（深审 F10），不再是「古典口径=False」。
+    assert "古典口径：否（缺省）" in render_technique_card_markdown(card)
 
     service = _service(tmp_path)
     run = service.run_tool("chart", build_sample_payloads()["chart"], save_result=True)

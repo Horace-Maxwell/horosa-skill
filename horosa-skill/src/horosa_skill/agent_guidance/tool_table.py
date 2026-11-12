@@ -698,6 +698,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "lateZiHourUseNextDay", "value": 1, "meaning": "晚子时时干按次日日干起（不发送 = 后端默认 = 星阙出厂全局默认）"},
             {"field": "liuyaoSettings.school", "value": "default", "meaning": "通用（卜筮正宗口径），上游 DEFAULT_LIUYAO_SETTINGS"},
             {"field": "liuyaoSettings.askType", "value": "self", "meaning": "自身/综合运势；问事明确时应按所问改"},
+            {"field": "gender", "value": 1, "meaning": "求测人性别缺省男（上游 buildCaseSnapshotFields gender ?? 1；只随盘记录在[起盘信息]）"},
             {"field": "gender", "value": 1, "meaning": "求测人性别：只印进 [起盘信息]「求测人性别」行、不改取用神（婚占男女看 askType）；缺省 1=男 = 上游 buildCaseSnapshotFields gender ?? 1"},
         ],
         do_not_assume=["lines", "gua_code", "question"],

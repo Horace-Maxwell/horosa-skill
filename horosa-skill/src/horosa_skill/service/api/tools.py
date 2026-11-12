@@ -33,6 +33,7 @@ from horosa_skill.service._context import (
     _run_tool_scope,
     without_presentation_keys,
 )
+from horosa_skill.reports.technique_card import annotate_setting_sources
 from horosa_skill.service.api.place import place_caveat_notes, place_resolution_note
 from horosa_skill.service.text.predictive import _PERIOD_PREDICTIVE_TOOLS
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
@@ -73,6 +74,20 @@ from horosa_skill.agent_guidance.questions import gender_required  # noqa: E402
 
 # 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。
 _INSIDE_TECHNIQUE: ContextVar[bool] = ContextVar("horosa_inside_technique", default=False)
+
+
+def _key_paths(payload: Any) -> frozenset[str]:
+    """载荷里写了的键路径（顶层 + 嵌套一层：`liuyaoSettings.askType`）。值为空的不算写了。"""
+    if not isinstance(payload, dict):
+        return frozenset()
+    paths: set[str] = set()
+    for key, value in payload.items():
+        if value is None or value == "" or value == []:
+            continue
+        paths.add(str(key))
+        if isinstance(value, dict):
+            paths.update(f"{key}.{inner}" for inner, item in value.items() if item is not None and item != "")
+    return frozenset(paths)
 
 
 def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
@@ -148,6 +163,8 @@ class _ToolCall:
     place_records: list[dict[str, Any]] = field(default_factory=list)
     # 入参解读说明（input_fields.add_input_note：别名改名、东八区 → +08:00、未知参数…）：成功 / 失败信封的 warnings 都回显。
     input_notes: list[str] = field(default_factory=list)
+    # 调用方（或档案 / 地名）写进载荷的键路径（`a`、`a.b`）：技法卡逐项设置的来源（用户 / 档案 / 地点 / 缺省）按它判。
+    explicit_paths: frozenset[str] = frozenset()
 
     @property
     def place_notes(self) -> list[str]:
@@ -391,8 +408,8 @@ class ToolsAPI:
 
     def _validated_tool_input(
         self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]
-    ) -> tuple[dict[str, Any], Any, list[Any], list[dict[str, Any]]]:
-        """(规范化入参, 自备知识库点名, 并进来的命主档案, 地名解析记录)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。
+    ) -> tuple[dict[str, Any], Any, list[Any], list[dict[str, Any]], frozenset[str]]:
+        """(规范化入参, 自备知识库点名, 并进来的命主档案, 地名解析记录, 调用方写了的键路径)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。
         先并档案、再解析地名：档案只存 place 文字标签、不进载荷，所以两者不会互相覆盖；载荷自己的 place 照常解析。"""
         tool_name = definition.name
         # 命主档案在归一化与校验**之前**并进来：显式字段逐键优先，模型缺省值不会冒充「显式」压掉档案里的值。
@@ -437,6 +454,7 @@ class ToolsAPI:
             knowledge_selection,
             profile_uses,
             place_records,
+            _key_paths(payload),
         )
 
     def _compute_tool_result(self, call: _ToolCall) -> dict[str, Any]:
@@ -506,6 +524,15 @@ class ToolsAPI:
         # 地名解析一行紧跟标题行（标题仍是 summary[0]：dispatch 只取每个子结果的 summary[:1]）。
         summary = [*summary[:1], *call.place_notes, *summary[1:]]
         warnings: list[str] = [*call.input_notes, *call.place_caveats]
+        if isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
+            # 每项设置的来源（深审 F10）：用户给的 / 命主档案 / 地点推得 / 缺省。
+            annotate_setting_sources(
+                response_data["technique_card"], explicit_paths=call.explicit_paths,
+                profile_keys={key for use in call.profile_uses if not use.slot for key in use.filled},
+                place_keys={key for record in call.place_records if not record.get("spot")
+                            for key in ("lat", "lon", "gpsLat", "gpsLon", "zone", "pos", "geoZone", "zoneAdvisory")
+                            if key != "zone" or record.get("zone_source") in ("place_and_date", "place_and_query_date", "coordinates_and_date")},
+            )
         if call.place_records and isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
             # 技法卡在存档之前就挂好了（_compute_tool_result）；这里补上「地点是怎么来的」，同一份存进 memory。
             response_data["technique_card"]["place_resolution"] = [
@@ -631,10 +658,11 @@ class ToolsAPI:
             if nested:
                 # runner 拼子盘的调用：展示键不是算法输入，摘掉再算（见 _context.PRESENTATION_KEYS）。
                 payload = without_presentation_keys(payload)
-            input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
+            input_normalized, knowledge_selection, profile_uses, place_records, explicit_paths = self._validated_tool_input(
+                definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
-                profile_uses=profile_uses, place_records=place_records, input_notes=input_notes,
+                profile_uses=profile_uses, place_records=place_records, input_notes=input_notes, explicit_paths=explicit_paths,
             )
             try:
                 inside = _INSIDE_TECHNIQUE.set(True)
