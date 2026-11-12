@@ -175,21 +175,41 @@ def _pick_section_data(title: str, *, input_normalized: dict[str, Any], response
 _SOLSTICE_EQUINOX = ("春分", "夏至", "秋分", "冬至")
 
 
-def _sections_not_requested(technique: str, input_normalized: dict[str, Any], preset_sections: list[str]) -> set[str]:
-    """节气盘：二分二至的盘段只在这次要了那个节气时才出（`jieqis` 缺省 = 四个都要；`seedOnly` = 只要节气表）。
-    段名取自 preset 本身（以分至名开头的段），不另列。"""
-    if technique != "jieqi":
-        return set()
-    terms = input_normalized.get("jieqis")
-    wanted = set(_SOLSTICE_EQUINOX) if not terms else {str(term).strip() for term in terms} & set(_SOLSTICE_EQUINOX)
-    if input_normalized.get("seedOnly"):
-        wanted = set()
-    return {title for title in preset_sections if title[:2] in _SOLSTICE_EQUINOX and title[:2] not in wanted}
+_DEFAULT_OFF_REASON = "默认关段（上游 AI_EXPORT_DEFAULT_OFF_SECTIONS：体量大 / 教义型，缺省不导出；要它请在 sections 里点名）"
+
+
+def _sections_not_requested(
+    technique: str, input_normalized: dict[str, Any], preset_sections: list[str], *, tool_name: str | None = None,
+    produced: set[str] | frozenset[str] = frozenset(),
+) -> dict[str, str]:
+    """这次调用本来就不产的预设段 → {段: 理由}：不选、不占位、不算缺（以前印「本次本地计算结果未返回…」，读起来像失败）。
+
+    - 节气盘：二分二至的盘段只在这次要了那个节气时才出（`jieqis` 缺省 = 四个都要；`seedOnly` = 只要节气表）。
+    - 这个工具按设计永不产出的段（exports.registry.SECTIONS_NOT_PRODUCED_BY_DESIGN，逐段带理由）——只在确实缺席时归入。
+    - 默认关段缺席时（上游 AI_EXPORT_DEFAULT_OFF_SECTIONS）。"""
+    from horosa_skill.exports.registry import AI_EXPORT_DEFAULT_OFF_SECTIONS, SECTIONS_NOT_PRODUCED_BY_DESIGN
+
+    out: dict[str, str] = {}
+    if technique == "jieqi":
+        terms = input_normalized.get("jieqis")
+        wanted = set(_SOLSTICE_EQUINOX) if not terms else {str(term).strip() for term in terms} & set(_SOLSTICE_EQUINOX)
+        if input_normalized.get("seedOnly"):
+            wanted = set()
+        out.update({title: "这次没要这个节气的盘（jieqis / seedOnly）"
+                    for title in preset_sections if title[:2] in _SOLSTICE_EQUINOX and title[:2] not in wanted})
+    for title, reason in SECTIONS_NOT_PRODUCED_BY_DESIGN.get(tool_name or "", {}).items():
+        if title in preset_sections and title not in produced:
+            out[title] = reason
+    for title in AI_EXPORT_DEFAULT_OFF_SECTIONS.get(technique, []):
+        if title in preset_sections and title not in produced:
+            out.setdefault(title, _DEFAULT_OFF_REASON)
+    return out
 
 
 def _build_generated_export_snapshot(
     *,
     technique: str,
+    tool_name: str | None = None,
     input_normalized: dict[str, Any],
     response_data: dict[str, Any],
     snapshot_text: str | None = None,
@@ -235,7 +255,8 @@ def _build_generated_export_snapshot(
         missing_selected_sections = list(parsed_snapshot.get("missing_selected_sections", []) or [])
 
     # 这次调用没要的段（节气盘只查「立春」/ seedOnly：二分二至的盘本就不算）：不选、不占位、不算缺（深审 F13）。
-    not_requested = _sections_not_requested(technique, input_normalized, preset_sections)
+    produced = {title for title, section in parsed_sections_by_title.items() if f"{section.get('body') or ''}".strip()}
+    not_requested = _sections_not_requested(technique, input_normalized, preset_sections, tool_name=tool_name, produced=produced)
     if not_requested:
         selected_sections = [title for title in selected_sections if title not in not_requested]
         settings_used["sections"][technique] = selected_sections
@@ -287,7 +308,9 @@ def _build_generated_export_snapshot(
         "selected_sections": selected_sections,
         "unknown_detected_sections": unknown_detected_sections,
         "missing_selected_sections": missing_selected_sections,
-        **({"not_requested_sections": [title for title in preset_sections if title in not_requested]} if not_requested else {}),
+        **({"not_requested_sections": [title for title in preset_sections if title in not_requested],
+            "not_requested_reasons": {title: not_requested[title] for title in preset_sections if title in not_requested}}
+           if not_requested else {}),
         "sections": sections,
         "export_text": export_text,
         "format_source": "snapshot_parser" if parsed_snapshot else "generated_template",
@@ -342,6 +365,7 @@ def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], re
             parsed_snapshot = None
     export_contract = _build_generated_export_snapshot(
         technique=technique,
+        tool_name=tool_name,
         input_normalized=input_normalized,
         response_data=augmented,
         snapshot_text=snapshot_text,
