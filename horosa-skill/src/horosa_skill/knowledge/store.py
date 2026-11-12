@@ -481,7 +481,10 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
-    domain = canonical_domain(payload.get("domain"))
+    # with_user=True：horosa_knowledge_read 的 domain 也收 user（service 层先接走自备知识库），认不出时可用清单要把它列上。
+    domain = canonical_domain(payload.get("domain"), with_user=True)
+    if domain == USER_DOMAIN:
+        raise unknown_domain_error(payload.get("domain"), with_user=False)  # 直接调本函数读不了自备知识库：只有 service 入口能
     category = f"{payload.get('category') or ''}".strip()
     key = f"{payload.get('key') or ''}".strip()
     if bundles[domain].get("schema") == "horosa.knowledge.helpdoc.v1":
