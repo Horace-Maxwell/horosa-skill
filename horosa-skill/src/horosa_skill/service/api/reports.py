@@ -389,7 +389,7 @@ class ReportsAPI:
                 row = conn.execute(
                     "SELECT 1 FROM artifacts WHERE path = ? AND kind LIKE 'report\\_%' ESCAPE '\\' LIMIT 1", (str(path),)
                 ).fetchone()
-        except Exception:  # noqa: BLE001 — 记忆库坏了 / 被锁：保守地不替换
+        except Exception:  # noqa: BLE001 — 记忆库坏了 / 被锁：保守地不替换（探针，False 即答案：调用方随后收到 existing_file 拒绝，不是静默）
             return False
         return row is not None
 

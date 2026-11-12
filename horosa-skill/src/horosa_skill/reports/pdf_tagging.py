@@ -177,7 +177,7 @@ class TaggingCanvas(Canvas):
         for name in getattr(self._doc, "fontMapping", {}) or {}:
             try:
                 font = pdfmetrics.getFont(name)
-            except Exception:  # noqa: BLE001 - 认不出的字体：当作不嵌入（不声称比错误声称安全）
+            except Exception:  # noqa: BLE001 - 认不出的字体：当作不嵌入（探针，False 即答案：结果是不写 PDF/UA 声明，不声称比错误声称安全）
                 return False
             if not isinstance(font, TTFont):
                 return False

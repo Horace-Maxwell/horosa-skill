@@ -239,6 +239,9 @@ def _pdf_story_text(path, document, monkeypatch) -> str:
     def _collect(flowable) -> None:
         if hasattr(flowable, "getPlainText"):
             captured.append(flowable.getPlainText())
+        # 容器（标题与第一块合成的 KeepTogether、卡片的 CardPiece、兜底 Guarded）：看里面（v0.50.0 起标题自己分组）
+        for item in getattr(flowable, "_content", None) or []:
+            _collect(item)
         for row in getattr(flowable, "_cellvalues", None) or []:
             for cell in row:
                 for item in cell if isinstance(cell, (list, tuple)) else [cell]:
