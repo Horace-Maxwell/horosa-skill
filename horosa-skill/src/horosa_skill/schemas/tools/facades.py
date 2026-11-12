@@ -210,20 +210,27 @@ class AgentGuidanceInput(FlexibleModel):
 
 class MemoryAnswerInput(FlexibleModel):
     run_id: str
+    # 不传 = 沿用已存的问题（此前会被重置成原始 query）。
     user_question: str | None = None
-    ai_answer: str
+    # 读取面（memory_query / show）一直叫 ai_answer_text；写入面此前叫 ai_answer。新名为准，旧名再收一个版本（v0.50 起隐藏）。
+    ai_answer_text: str | None = Field(default=None, description="The answer to store (required). A different earlier answer is kept in answer_history.")
+    ai_answer: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
     ai_answer_structured: dict[str, Any] | list[Any] | None = None
     answer_meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class MemoryQueryInput(FlexibleModel):
     run_id: str | None = None
+    group_id: str | None = None
     tool: str | None = None
     entity: str | None = None
     text: str | None = None
     artifact_kind: str | None = None
     after: str | None = None
     before: str | None = None
+    # 只给日期时按哪个时区的一天（+08:00 / Asia/Shanghai）；不给 = 本机时区，结果的 applied_filters.time 说用了哪个。
+    zone: str | None = None
+    # 上限 100（service/api/memory.py QUERY_LIMIT_MAX）：超了按上限回并在 summary 里说。
     limit: int = 20
     # 分页偏移：跳过前 N 条命中（与 limit 搭配翻页）。
     offset: int = 0

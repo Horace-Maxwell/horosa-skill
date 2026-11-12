@@ -383,9 +383,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         title="回写 AI 结论 / record answer",
         annotations=_ANN_RENDER,
         doc=(
-            "Attach your final AI answer to a stored run (by run_id) without rendering a report. "
+            "Attach your final AI answer (ai_answer_text) to a stored run (by run_id) without rendering a report. "
             "Use this only when you are NOT calling horosa_report_render — that one already writes "
-            "the ai_report back to memory itself."
+            "the ai_report back to memory itself. Omitting user_question keeps the stored question; an empty answer is refused."
         ),
     )
 
@@ -397,13 +397,14 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         annotations=_ANN_QUERY,
         doc=(
             "Search past Horosa runs stored locally (every tool call is recorded). Filters combine with AND:\n"
-            "  text — question and answer of every stored run, plus the chart text of recent runs (Chinese substrings "
-            "match, no word segmentation needed); `not_scanned` counts older runs whose chart text was not searched\n"
-            "  entity — the subject a run is about, i.e. a person's name (e.g. \"张三\")\n"
-            "  tool — technique tool name (e.g. \"qimen\", \"bazi_birth\")\n"
-            "  artifact_kind — stored artifact type: report_json / report_docx / report_pdf / snapshot\n"
-            "  after / before — ISO dates bounding when the run happened; limit + offset paginate\n"
-            "Examples: {\"entity\": \"张三\", \"tool\": \"bazi_birth\", \"limit\": 5} · "
+            "  text — words a person would search (question, answer, technique, names, chart text); space-separated words "
+            "must all match; 繁/简 fold\n"
+            "  entity — the person a run is about (\"张三\"; a saved profile's name or alias finds all its runs)\n"
+            "  tool — technique key, MCP name or Chinese name (\"bazi_birth\", \"八字\")\n"
+            "  artifact_kind — tool_result / dispatch_result / report_pdf / report_docx / report_json\n"
+            "  after / before — 2026-11-11 (that whole day in `zone`, default machine zone) or ISO date-time; "
+            "group_id — one session; limit ≤ 100 + offset paginate\n"
+            "Examples: {\"entity\": \"张三\", \"tool\": \"八字\", \"limit\": 5} · "
             "{\"text\": \"事业\", \"after\": \"2026-01-01\"}\n"
             "Returns run summaries with run_id — pass that to horosa_memory_show or horosa_report_render."
         ),

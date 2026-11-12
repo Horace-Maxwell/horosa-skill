@@ -86,12 +86,12 @@ app = _HorosaApp(
         "上手三步：`install`（装离线 runtime）→ `selfcheck`（活体验证）→ `serve`（起 MCP 接 AI 客户端）。\n"
         "客户端注册：`client config --format claude-code|claude-desktop|codex`。\n"
         "Use `ask` / `dispatch` for natural-language orchestration, `tool run` for direct method calls, "
-        "and `memory show/query/answer` for local record management. "
+        "and `memory query/show/answer/rebuild/delete/export` for local record management. "
         "OpenClaw path: `client openclaw-setup`."
     )
 )
 tool_app = typer.Typer(help="Direct atomic method calls such as chart, qimen, liureng, and bazi.")
-memory_app = typer.Typer(help="Inspect local records, show a single run, or attach the AI's final answer.")
+memory_app = typer.Typer(help="Local run records: search, show one run, attach the AI's answer, rebuild the index from runs/, delete or export runs.")
 export_app = typer.Typer(help="Inspect the Xingque AI export registry and parse exported text into structured JSON.")
 knowledge_app = typer.Typer(help="Read bundled Xingque hover knowledge such as 星盘释义、大六壬地支提示、奇门象意。")
 place_app = typer.Typer(help="Offline place lookup: name → coordinates + UTC offset on a date (星阙 city library). 地名 → 坐标 + 时区。")
@@ -229,7 +229,7 @@ UNLOCALIZED_COMMANDS = PROTOCOL_OPERATIONS | frozenset({
     "jev_status", "jev_events", "uninstall", "doctor", "setup", "selfcheck", "runtime_status",
     "runtime_start", "runtime_restart", "tool_list", "benchmark_run", "benchmark_faithfulness", "trace_latest",
     "client_check", "client_skill", "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check",
-    "memory_prune", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
+    "memory_prune", "memory_rebuild", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
     "knowledge_index",
 })
 
@@ -1397,50 +1397,54 @@ def report_from_tool(
     _print_json(_localized(result))
 
 
-@memory_app.command("query", help='Search stored runs by run id, tool, entity, text or date range. 检索本地运行记录。')
+@memory_app.command("query", help='Search stored runs by run id, tool, person, words or date range; prints a JSON list. 检索本地运行记录。')
 def memory_query(
     run_id: str | None = typer.Option(None, help="Filter by exact run id."),
-    tool: str | None = typer.Option(None, help="Filter by tool name."),
-    entity: str | None = typer.Option(None, help="Filter by entity name."),
-    text: str | None = typer.Option(None, help="Search query text, user question, AI answer, subject, tool, artifact path, or artifact kind."),
-    artifact_kind: str | None = typer.Option(None, help="Filter by artifact kind, for example report_json, report_docx, report_pdf, or tool_result."),
-    after: str | None = typer.Option(None, help="Only return runs created after this ISO timestamp."),
-    before: str | None = typer.Option(None, help="Only return runs created before this ISO timestamp."),
-    limit: int = typer.Option(20, help="Maximum runs to return."),
+    tool: str | None = typer.Option(None, help="Technique: registry key, MCP name or Chinese name (bazi_birth / horosa_cn_bazi_birth / 八字)."),
+    entity: str | None = typer.Option(None, help="Person the run is about; a saved profile's name or alias finds all its runs."),
+    text: str | None = typer.Option(None, help="Words to find in the question, answer, technique, names or chart text; all words must match."),
+    artifact_kind: str | None = typer.Option(None, help="Artifact kind: tool_result, dispatch_result, report_json, report_docx, report_pdf."),
+    after: str | None = typer.Option(None, help="From this date (2026-11-11 = that whole day) or ISO date-time."),
+    before: str | None = typer.Option(None, help="Up to this date (inclusive) or ISO date-time."),
+    zone: str | None = typer.Option(None, help="Zone for date-only bounds (+08:00 / Asia/Shanghai); default: this machine's zone."),
+    group_id: str | None = typer.Option(None, "--group-id", help="Only runs of one session (group id)."),
+    limit: int = typer.Option(20, help="Maximum runs to return (at most 100)."),
+    offset: int = typer.Option(0, help="Skip this many matches (paging)."),
     include_payload: bool = typer.Option(True, "--include-payload/--no-include-payload", help="Embed saved JSON payloads in the query output."),
     worthy_only: bool = typer.Option(False, "--worthy-only", help="只留召回语料级条目（有产物/答案/成功调用；空失败 run 滤除）。"),
 ) -> None:
     service = _service()
-    scan: dict[str, Any] = {}
-    data = service.store.query_runs(
-        run_id=run_id,
-        tool=tool,
-        entity=entity,
-        text=text,
-        artifact_kind=artifact_kind,
-        after=after,
-        before=before,
-        limit=limit,
-        include_payload=include_payload,
-        scan_report=scan,
-    )
+    try:
+        result = service.query_memory({
+            "run_id": run_id, "tool": tool, "entity": entity, "text": text, "artifact_kind": artifact_kind, "after": after,
+            "before": before, "zone": zone, "group_id": group_id, "limit": limit, "offset": offset, "include_payload": include_payload,
+        })
+    except ToolValidationError as exc:
+        _refuse(exc)
+    data = result["results"]
     if worthy_only:
         data = [record for record in data if service.store.is_memory_worthy(record)]
-    if scan.get("not_scanned"):  # stdout 的列表形状是对外契约，说明走 stderr
-        typer.echo(f"另有 {scan['not_scanned']} 条较早的记录只按问题与答案检索过，盘面正文没有搜。", err=True)
+    # stdout 的列表形状是对外契约，说明与警告走 stderr
+    for line in [*result["summary"][1:], *result.get("warnings", [])]:
+        typer.echo(_localized(line), err=True)
     _print_json(_localized(data))
 
 
-@memory_app.command("show", help='Show one stored run in full (envelope, artifacts, recorded AI answer). 查看单条运行记录。')
+@memory_app.command("show", help='Show one stored run in full (envelope, artifacts, recorded AI answer and earlier answers). 查看单条运行记录。')
 def memory_show(
     run_id: str = typer.Argument(..., help="Exact run id to display."),
     include_payload: bool = typer.Option(True, "--include-payload/--no-include-payload", help="Embed saved JSON payloads in the output."),
 ) -> None:
-    service = _service()
-    data = service.store.query_runs(run_id=run_id, limit=1, include_payload=include_payload)
-    if not data:
-        _emit_refusal("memory.run.not_found", f"Run not found: {run_id}")
-    _print_json(_localized(data[0]))
+    try:
+        result = _service().show_memory({"run_id": run_id, "include_payload": include_payload})
+    except ToolValidationError as exc:
+        _refuse(exc)
+    if not result.get("ok"):
+        _emit_refusal(result["code"], result["message"], result.get("details"))
+    if not result.get("complete", True):  # stdout 仍是这条记录本身；缺了什么走 stderr
+        for line in result.get("summary", []):
+            typer.echo(_localized(line), err=True)
+    _print_json(_localized(result["result"]))
 
 
 @memory_app.command("prune", help="清理长期未点用的 run（默认 dry-run 只打印计划；--yes 才删）。Prune runs never recalled within N days.")
@@ -1452,19 +1456,121 @@ def memory_prune(
     _print_json(service.store.prune_unused(unused_days=unused_days, yes=yes))
 
 
-@memory_app.command("answer", help="Attach the AI's final answer to a stored run: JSON {run_id, ai_answer[, user_question]}. 把 AI 解读写回运行记录。")
+@memory_app.command("answer", help="Attach the AI's final answer to a stored run: JSON {run_id, ai_answer_text[, user_question]}. 把 AI 解读写回运行记录。")
 def memory_answer(
     stdin: bool = typer.Option(False, "--stdin", help="Read a JSON object from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read a JSON object from a file."),
 ) -> None:
     payload = _load_payload(stdin=stdin, input_file=input_file)
-    service = _service()
     try:
-        result = service.record_ai_answer(payload)
+        result = _service().record_ai_answer(payload)
     except ToolValidationError as exc:
         _refuse(exc)
-    except ValueError as exc:
-        _emit_refusal("memory.answer.unknown_run", str(exc))
+    _print_json(_localized(result))
+
+
+def _memory_store_refusal(service: HorosaSkillService, exc: BaseException) -> NoReturn:
+    from horosa_skill.service.api.memory import store_unavailable
+
+    _refuse(store_unavailable(service, exc))
+
+
+@memory_app.command(
+    "rebuild",
+    help="Rebuild the memory index from the files under runs/ (only adds; safe on a healthy store). --sweep also removes stale "
+    "temp files and empty runs. 照 runs/ 里的产物重建记忆索引。",
+)
+def memory_rebuild(
+    sweep: bool = typer.Option(False, "--sweep", help="Also delete crash leftovers: temp files no writer owns and empty runs older than an hour."),
+) -> None:
+    import sqlite3
+
+    from horosa_skill.memory.rebuild import rebuild_from_artifacts
+
+    service = _service()
+    try:
+        _print_json(rebuild_from_artifacts(service.store, sweep=sweep))
+    except (sqlite3.Error, OSError) as exc:
+        _memory_store_refusal(service, exc)
+
+
+def _memory_selection(service: HorosaSkillService, run_id: list[str] | None, entity: str | None, before: str | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    from horosa_skill.memory import manage, timefilter
+    from horosa_skill.service.api.memory import expand_entity
+
+    if not run_id and not entity and not before:
+        _emit_refusal("memory.selection.missing", bilingual("要给 --run-id、--entity 或 --before 至少一个。", "Give at least one of --run-id, --entity or --before."))
+    criteria: dict[str, Any] = {}
+    names, entity_note = expand_entity(service, entity)
+    if entity_note:
+        criteria["entity"] = entity_note
+    bound = None
+    if before:
+        try:
+            bound, source = timefilter.parse_bound(before, field="before", end=False, zone=None)
+        except timefilter.TimeFilterError as exc:
+            _emit_refusal("memory.query.invalid_time", bilingual(f"--before {before!r} 不是能认的时间。", f"--before {before!r} is not a recognised time."),
+                          {"accepted_forms": list(timefilter.ACCEPTED_FORMS), "reason": exc.reason})
+        criteria["before"] = {"utc": bound, "zone_source": source, "rule": "created strictly before this instant"}
+    selected = manage.select_runs(service.store, run_ids=list(run_id or []), entities=names, before=bound)
+    return selected, criteria
+
+
+@memory_app.command(
+    "delete",
+    help="Delete stored runs by --run-id / --entity / --before (AND). Dry run by default: lists what would go; --yes deletes rows, "
+    "search entries, artifacts and manifests. Rendered reports are listed, never deleted. 删除本机存档（默认只列出）。",
+)
+def memory_delete(
+    run_id: Optional[list[str]] = typer.Option(None, "--run-id", help="Run id to delete (repeatable)."),
+    entity: str | None = typer.Option(None, help="Person: every run about them (a saved profile's name or alias covers all its names)."),
+    before: str | None = typer.Option(None, help="Runs created before this date / ISO date-time (machine zone for a bare date; that day itself is kept)."),
+    yes: bool = typer.Option(False, "--yes", help="Really delete. Without it nothing is touched."),
+) -> None:
+    import sqlite3
+
+    from horosa_skill.memory import manage
+
+    service = _service()
+    try:
+        selected, criteria = _memory_selection(service, run_id, entity, before)
+        result = manage.delete_runs(service.store, selected, yes=yes)
+    except (sqlite3.Error, OSError) as exc:
+        _memory_store_refusal(service, exc)
+    result["criteria"] = criteria
+    if result.get("quarantined_copies"):
+        result["note"] = bilingual(
+            "记忆库曾经损坏并被隔离（quarantined_copies）：那些隔离文件里可能还有这些记录，删不删由你决定。",
+            "Quarantined copies of an earlier damaged database (quarantined_copies) may still contain these runs; delete them yourself if needed.",
+        )
+    _print_json(_localized(result))
+
+
+@memory_app.command(
+    "export",
+    help="Export stored runs (--run-id / --entity) into a folder a person can read: index.md + per run run.md, manifest, artifacts, reports. "
+    "导出本机存档。",
+)
+def memory_export(
+    out: Path = typer.Option(..., "--out", help="Empty or new folder to write into."),
+    run_id: Optional[list[str]] = typer.Option(None, "--run-id", help="Run id to export (repeatable)."),
+    entity: str | None = typer.Option(None, help="Person: every run about them."),
+) -> None:
+    import sqlite3
+
+    from horosa_skill.memory import manage
+
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        _emit_refusal("memory.export.target_invalid", bilingual(f"--out {out} 已存在且不是空文件夹。", f"--out {out} exists and is not an empty folder."))
+    if not run_id and not entity:
+        _emit_refusal("memory.selection.missing", bilingual("要给 --run-id 或 --entity。", "Give --run-id or --entity."))
+    service = _service()
+    try:
+        selected, criteria = _memory_selection(service, run_id, entity, None)
+        result = manage.export_runs(service.store, selected, out)
+    except (sqlite3.Error, OSError) as exc:
+        _memory_store_refusal(service, exc)
+    result["criteria"] = criteria
     _print_json(_localized(result))
 
 

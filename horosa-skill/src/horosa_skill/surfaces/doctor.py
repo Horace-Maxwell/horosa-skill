@@ -103,6 +103,10 @@ _DOCTOR_WARNING_CODES = (
     "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
 )
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
+    "memory:needs_attention": {
+        "user_summary": "本机存档有要处理的事：坏库被隔离过、有 run 文件不在记忆库里，或上次重建没做完（详见 memory_db.health）。",
+        "next_action": "跑 `horosa-skill memory rebuild`（只增不删）；隔离出来的 .bak 文件确认记录都在后可以自己删。",
+    },
     "runtime.manifest_invalid": {
         "user_summary": "已装 runtime 的 runtime-manifest.json 缺失或损坏，doctor 无法信任这份安装。",
         "next_action": "重跑 `horosa-skill install --force`（会重新解包并写回清单）。",
@@ -543,6 +547,15 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
 
         _store = _MemoryStore(settings)
         report["memory_db"] = {"path": str(settings.db_path), **_store.integrity_check(), "usage": _store.storage_usage()}
+        # 存档健康（v0.50.0-dev）：隔离出来的坏库、没进库的 run 文件、崩溃残留、上次重建没做完——清点整棵 runs/，只报不改。
+        from horosa_skill.memory.rebuild import store_health as _store_health
+
+        report["memory_db"]["health"] = _store_health(_store, full=True)
+        report["warnings"] = [
+            *(report.get("warnings") or []),
+            *({"code": "memory:needs_attention", "detail": line, "fix": "horosa-skill memory rebuild"}
+              for line in report["memory_db"]["health"].get("warnings") or []),
+        ]
     except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
         report["memory_db"] = {"path": str(settings.db_path), "ok": False, "detail": [f"{exc}"]}
     # 可选向量检索：依赖看的是**跑 doctor 的这个环境**，客户端的 server 可能在另一个环境里（setup 的探针查的才是那边）。

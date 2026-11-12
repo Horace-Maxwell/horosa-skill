@@ -9,6 +9,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -165,12 +166,13 @@ def test_the_store_has_no_in_place_writes() -> None:
 # ── 存储自身出问题：构造不许炸，写时才暴露的坏页要能自愈 ───────────────────────────────────
 
 
-def _damage_runs_table(store: MemoryStore) -> None:
-    """只毁 runs 表的根页，库头完好：构造时看不出来，要等真去写它才报 malformed。"""
+def _damage_table(store: MemoryStore, table: str = "tool_calls") -> None:
+    """只毁一张表的根页，库头完好。建库期会读 runs / entities / run_search（补检索文档），读不到 tool_calls：
+    毁 tool_calls 时构造看不出来，要等真去写它才报 malformed。"""
     with store.connect() as conn:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         page_size = conn.execute("PRAGMA page_size").fetchone()[0]
-        root = conn.execute("SELECT rootpage FROM sqlite_master WHERE name = 'runs'").fetchone()[0]
+        root = conn.execute("SELECT rootpage FROM sqlite_master WHERE name = ?", (table,)).fetchone()[0]
     with open(store.db_path, "r+b") as handle:
         handle.seek((root - 1) * page_size)
         handle.write(os.urandom(page_size))
@@ -178,25 +180,39 @@ def _damage_runs_table(store: MemoryStore) -> None:
 
 def test_corruption_found_on_write_is_quarantined_and_the_next_write_works(tmp_path: Path) -> None:
     """2026-11-06 实测：只坏中间页时构造照常通过，之后每次存档都抛 malformed，重启也一样，只能手动搬走库。"""
-    store, _, _ = _stored_run(tmp_path)
-    _damage_runs_table(store)
+    store, run_id, _ = _stored_run(tmp_path)
+    _damage_table(store)
 
     reopened = MemoryStore(_settings(tmp_path))
     assert reopened.corruption_recovery is None, "前提：构造时看不出这种损坏，这正是要在写时处理的原因"
 
     with pytest.raises(sqlite3.DatabaseError):
-        reopened.create_run(entrypoint="tool", query_text="坏库上的第一次写", group_id="g")
+        reopened.record_tool_result(run_id=run_id, tool_name="chart", ok=True, input_normalized={}, envelope_dict={"ok": True},
+                                    summary=[], warnings=[], error=None)
 
     assert reopened.corruption_recovery is not None
     assert Path(reopened.corruption_recovery["backup"]).exists()
     assert reopened.create_run(entrypoint="tool", query_text="隔离后的下一次写", group_id="g")
     assert reopened.integrity_check()["ok"] is True
+    # 隔离之后立刻照 runs/ 重建：坏库里的那条 run 回来了（M8）
+    assert reopened.corruption_recovery["rebuild"]["complete"] is True
+    assert [r["run_id"] for r in reopened.query_runs(run_id=run_id, include_payload=False)] == [run_id]
+
+
+def test_corruption_seen_at_construction_is_quarantined_and_rebuilt(tmp_path: Path) -> None:
+    store, run_id, _ = _stored_run(tmp_path)
+    _damage_table(store, "runs")
+    reopened = MemoryStore(_settings(tmp_path))
+    assert reopened.corruption_recovery is not None and reopened.init_error is None
+    restored = reopened.query_runs(run_id=run_id, include_payload=False)
+    assert [r["run_id"] for r in restored] == [run_id]
+    assert restored[0]["tool_calls"] and restored[0]["artifacts"]
 
 
 def test_a_read_that_hits_corruption_moves_nothing(tmp_path: Path) -> None:
     """读到坏页不隔离：搬走整个库只为救写路径，查询失败不值这个代价。"""
     store, _, _ = _stored_run(tmp_path)
-    _damage_runs_table(store)
+    _damage_table(store)
     with pytest.raises(sqlite3.DatabaseError):
         store.query_runs(limit=5)
     assert store.db_path.exists() and store.corruption_recovery is None
@@ -276,14 +292,21 @@ def test_a_store_whose_directory_appears_later_recovers(tmp_path: Path) -> None:
 
 
 def test_the_quarantine_notice_promises_no_tool_that_does_not_exist(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """此前日志说「可用 memory 工具重建索引」，这样的工具不存在。"""
+    """此前日志说「可用 memory 工具重建索引」，这样的工具不存在。现在日志指向 `horosa-skill memory rebuild`：那条命令必须真的在。"""
+    from typer.main import get_command
+
+    from horosa_skill.surfaces.cli import app
+
     db = tmp_path / "memory.db"
     db.write_bytes(b"this is not a sqlite database " * 20)
     with caplog.at_level("WARNING", logger="horosa_skill.memory.store"):
         store = MemoryStore(_settings(tmp_path))
     assert store.corruption_recovery is not None
     assert "已隔离" in caplog.text
-    assert "重建索引" not in caplog.text.replace("没有重建索引", "")
+    promised = set(re.findall(r"horosa-skill memory (\w+)", caplog.text))
+    assert promised, "日志要告诉用户接下来跑什么"
+    memory_group = get_command(app).commands["memory"]  # type: ignore[attr-defined]
+    assert promised <= set(memory_group.commands), promised
 
 
 # ── 增长：省得下的先省，答过的不算没用过，用了多少看得见 ──────────────────────────────────

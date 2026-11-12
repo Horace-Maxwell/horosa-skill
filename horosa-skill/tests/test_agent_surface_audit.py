@@ -169,7 +169,8 @@ def test_record_answer_without_ai_answer_is_agent_fixable_end_to_end(tmp_path) -
     with pytest.raises(ToolValidationError) as caught:
         service.record_ai_answer({"run_id": "missing"})
     recovery = caught.value.details["agent_recovery"]
-    assert recovery["must_ask_user"] is False and recovery["fix_fields"][0]["field"] == "ai_answer"
+    # v0.50.0-dev 起写入面与读取面同名 ai_answer_text（旧名 ai_answer 再收一个版本）
+    assert recovery["must_ask_user"] is False and recovery["fix_fields"][0]["field"] == "ai_answer_text"
 
 
 # --- 4. compact-surface instructions -----------------------------------------------------------------------------

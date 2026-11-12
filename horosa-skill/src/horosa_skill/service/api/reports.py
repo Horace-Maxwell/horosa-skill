@@ -19,15 +19,13 @@ from horosa_skill.reports.chart_png import PngFontUnavailable, render_figure_png
 from horosa_skill.reports.renderers import _labeler, write_artifact
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.tools import (
-    MemoryAnswerInput,
-    MemoryQueryInput,
-    MemoryShowInput,
     ReportFromToolInput,
     ReportRenderInput,
     ReportTemplateInput,
     TechniqueReportInput,
 )
 from horosa_skill.service import _clock
+from horosa_skill.service.api import memory as memory_api
 from horosa_skill.service.export import TOOL_EXPORT_TECHNIQUE_MAP
 from horosa_skill.textscript import REPORT_LANGUAGE, TRADITIONAL_HK, parse_script
 from horosa_skill.textscript.localize import localize_document
@@ -96,132 +94,18 @@ def _render_outcome_notes(rendered: dict[str, Any]) -> list[str]:
 
 
 class ReportsAPI:
+    # 记忆三门面：入参归一、错误成形、结果瘦身都在 service/api/memory.py。
     def record_ai_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
-        with self.tracer.span(
-            workflow_name="memory.answer",
-            metadata={"entrypoint": "memory.answer", "payload": payload},
-        ) as trace:
-            try:
-                request = MemoryAnswerInput.model_validate(payload)
-            except ValidationError as exc:
-                trace["error_code"] = "memory.answer.invalid_payload"
-                errors = validation_errors(exc)
-                raise ToolValidationError(
-                    "Invalid payload for memory answer record.",
-                    code="memory.answer.invalid_payload",
-                    details={
-                        "errors": errors,
-                        "agent_recovery": build_validation_recovery(operation_name="memory_record_answer", errors=errors),
-                    },
-                ) from exc
-
-            result = self.store.attach_ai_response(
-                run_id=request.run_id,
-                user_question=request.user_question,
-                ai_answer=request.ai_answer,
-                ai_answer_structured=request.ai_answer_structured,
-                answer_meta=request.answer_meta,
-            )
-            result["summary"] = ["已将 AI 回答写回对应 run 记录，并同步更新本地 manifest 与 artifact。"]
-            result["trace_id"] = trace["trace_id"]
-            result["group_id"] = trace["group_id"]
-            trace["run_id"] = request.run_id
-            return result
+        with self.tracer.span(workflow_name="memory.answer", metadata={"entrypoint": "memory.answer", "payload": payload}) as trace:
+            return memory_api.record_ai_answer(self, payload, trace)
 
     def query_memory(self, payload: dict[str, Any]) -> dict[str, Any]:
-        with self.tracer.span(
-            workflow_name="memory.query",
-            metadata={"entrypoint": "memory.query", "payload": payload},
-        ) as trace:
-            try:
-                request = MemoryQueryInput.model_validate(payload)
-            except ValidationError as exc:
-                trace["error_code"] = "memory.query.invalid_payload"
-                errors = validation_errors(exc)
-                raise ToolValidationError(
-                    "Invalid payload for memory query.",
-                    code="memory.query.invalid_payload",
-                    details={
-                        "errors": errors,
-                        "agent_recovery": build_validation_recovery(operation_name="memory_query", errors=errors),
-                    },
-                ) from exc
-
-            scan: dict[str, Any] = {}
-            results = self.store.query_runs(
-                run_id=request.run_id,
-                tool=request.tool,
-                entity=request.entity,
-                text=request.text,
-                artifact_kind=request.artifact_kind,
-                after=request.after,
-                before=request.before,
-                limit=max(1, request.limit),
-                offset=max(0, getattr(request, "offset", 0) or 0),
-                include_payload=request.include_payload,
-                scan_report=scan,
-            )
-            trace["result_count"] = len(results)
-            not_scanned = int(scan.get("not_scanned") or 0)
-            summary = [f"已检索到 {len(results)} 条本地 run 记录。"]
-            if not_scanned:
-                summary.append(
-                    f"另有 {not_scanned} 条较早的记录只按问题与答案检索过，盘面正文没有搜；"
-                    "用 after / before / tool / entity 缩小范围后可以搜到。"
-                )
-            return {
-                "ok": True,
-                "count": len(results),
-                "results": results,
-                "not_scanned": not_scanned,
-                "trace_id": trace["trace_id"],
-                "group_id": trace["group_id"],
-                "summary": summary,
-            }
+        with self.tracer.span(workflow_name="memory.query", metadata={"entrypoint": "memory.query", "payload": payload}) as trace:
+            return memory_api.query_memory(self, payload, trace)
 
     def show_memory(self, payload: dict[str, Any]) -> dict[str, Any]:
-        with self.tracer.span(
-            workflow_name="memory.show",
-            metadata={"entrypoint": "memory.show", "payload": payload},
-        ) as trace:
-            try:
-                request = MemoryShowInput.model_validate(payload)
-            except ValidationError as exc:
-                trace["error_code"] = "memory.show.invalid_payload"
-                errors = validation_errors(exc)
-                raise ToolValidationError(
-                    "Invalid payload for memory show.",
-                    code="memory.show.invalid_payload",
-                    details={
-                        "errors": errors,
-                        "agent_recovery": build_validation_recovery(operation_name="memory_show", errors=errors),
-                    },
-                ) from exc
-
-            results = self.store.query_runs(
-                run_id=request.run_id,
-                limit=1,
-                include_payload=request.include_payload,
-            )
-            if not results:
-                trace["error_code"] = "memory.run.not_found"
-                return {
-                    "ok": False,
-                    "code": "memory.run.not_found",
-                    "message": f"Run not found: {request.run_id}",
-                    "details": {},
-                    "trace_id": trace["trace_id"],
-                    "group_id": trace["group_id"],
-                }
-
-            trace["run_id"] = request.run_id
-            return {
-                "ok": True,
-                "result": results[0],
-                "trace_id": trace["trace_id"],
-                "group_id": trace["group_id"],
-                "summary": ["已读取对应 run 的本地完整记录。"],
-            }
+        with self.tracer.span(workflow_name="memory.show", metadata={"entrypoint": "memory.show", "payload": payload}) as trace:
+            return memory_api.show_memory(self, payload, trace)
 
     def _report_style(self, request: Any) -> str:
         style = str(getattr(request, "style", "") or "analysis").strip().lower()
