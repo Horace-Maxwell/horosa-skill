@@ -28,7 +28,7 @@ from horosa_skill.decisions.surfaces.routing import (
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
 from horosa_skill.engine.router import select_tools
-from horosa_skill.errors import DispatchResolutionError, ToolValidationError, validation_errors
+from horosa_skill.errors import DispatchResolutionError, ToolValidationError, lift_failures, validation_errors
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
@@ -582,6 +582,16 @@ class DispatchAPI:
                 group_id=trace["group_id"],
                 decision_layer=self._decision_layer_view(decision_records_out),
             )
+            # MCP-08（surface 批）：有技法失败时把码 / 消息 / 恢复说明抬到顶层（ok:false 必有 code、message、agent_recovery）。
+            lifted = lift_failures({
+                name: (result.code or (result.error.code if result.error else "tool.internal_error"),
+                       result.message or (result.error.message if result.error else ""),
+                       result.details if result.details is not None else (result.error.details if result.error else None))
+                for name, result in results.items() if not result.ok
+            })
+            if lifted is not None:
+                envelope.code, envelope.message, envelope.details = lifted
+                envelope.error = ErrorInfo(code=lifted[0], message=lifted[1], details=lifted[2])
 
             if request.save_result and run_id is not None:
                 try:

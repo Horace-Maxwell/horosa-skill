@@ -36,6 +36,7 @@ from horosa_skill.errors import (
     ToolTransportError,
     ToolValidationError,
     bilingual,
+    tool_code,
 )
 from horosa_skill.service import _clock
 from horosa_skill.service._common import (
@@ -159,7 +160,7 @@ class PredictiveRunners:
             raise ToolValidationError(
                 f"{endpoint} 没有返回可排版的{technique}时间线（上游此时显示「缺失」）{f'：{js_error}' if js_error else ''}"
                 f" / {endpoint} returned no {technique} timeline to format",
-                code=f"tool.{technique}_empty",
+                code=tool_code(technique, "empty"),
                 details={"tool": technique, "endpoint": endpoint, "options": options, "js_error": js_error},
             )
         result: dict[str, Any] = {"options": options, "raw": response, "snapshot_text": snapshot_text}
@@ -369,7 +370,7 @@ class PredictiveRunners:
             raise ToolValidationError(
                 f"{endpoint} 没有返回可排版的{technique}结果（上游此时显示「缺失」）{f'：{js_error}' if js_error else ''}"
                 f" / {endpoint} returned no {technique} result to format",
-                code=f"tool.{technique}_empty",
+                code=tool_code(technique, "empty"),
                 details={"tool": technique, "endpoint": endpoint, "settings": settings, "js_error": js_error},
             )
         result: dict[str, Any] = {

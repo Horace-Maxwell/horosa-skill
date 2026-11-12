@@ -53,6 +53,7 @@ from horosa_skill.surfaces.mcp_elicitation import (
 )
 from horosa_skill.surfaces.mcp_errors import (
     _agent_preflight_error,
+    _ensure_error_contract,
     _gate_to_dispatch_envelope,
     _gate_to_envelope,
     _mcp_error_envelope,
@@ -291,7 +292,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     )(horosa_dispatch)
 
     def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str,
-                                 meta: dict[str, Any] | None = None, gate: str | None = None, raw: bool = False) -> None:
+                                 meta: dict[str, Any] | None = None, gate: str | None = None, raw: bool = False,
+                                 envelope: bool = False) -> None:
         """门面工具 = 归一化入参 → service.<method>(payload)，统一兜底、签名、注解（v0.41.1 起表驱动）。
 
         method 按名在**调用时**取（`getattr(service, method)`）：测试会在建好 server 之后替换实例上的方法。
@@ -310,7 +312,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
                 return await _guarded_facade(mcp, name, _call)
 
-            return await _gated_run(mcp, gate=gate, payload=_merge_mcp_arguments(kwargs), run=_run, refuse=_as_is, operation=name)
+            result = _ensure_error_contract(
+                await _gated_run(mcp, gate=gate, payload=_merge_mcp_arguments(kwargs), run=_run, refuse=_as_is, operation=name)
+            )
+            if envelope and isinstance(result, dict) and "ok" not in result:
+                # MCP-08：成功结果也带 ok（与其余工具同形）；原有字段一个不少，只是多一个 ok:true 在最前面。
+                result = {"ok": True, **result}
+            return result
 
         facade.__name__ = facade.__qualname__ = name
         facade.__doc__ = doc
@@ -330,7 +338,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 guidance["server_profile"] = _server_profile(settings)
             return guidance
 
-        return await _guarded_facade(mcp, "horosa_agent_guidance", _run)
+        return _ensure_error_contract(await _guarded_facade(mcp, "horosa_agent_guidance", _run))
     horosa_agent_guidance.__doc__ = (
         "Return machine-readable guidance for agents before calling Horosa tools. "
         "Use this to decide which user settings must be clarified instead of silently defaulted."
@@ -371,6 +379,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         name="horosa_place_search",
         method="place_search",
         model=PlaceSearchInput,
+        envelope=True,
         title="地名检索 / place search",
         annotations=_ANN_QUERY,
         doc=(
@@ -520,8 +529,10 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 mcp, "horosa_report_from_tool", lambda: service.report_from_tool(_normalize_mcp_request(body, ReportFromToolInput))
             )
 
-        return await _gated_run(mcp, gate=tool_name if gated else None, payload=technique_payload, run=_run, refuse=_as_is,
-                                operation="horosa_report_from_tool")
+        return _ensure_error_contract(await _gated_run(
+            mcp, gate=tool_name if gated else None, payload=technique_payload, run=_run, refuse=_as_is,
+            operation="horosa_report_from_tool",
+        ))
     horosa_report_from_tool.__doc__ = (
         "One-shot: run a technique tool AND prepare its report. NOTE this re-casts the chart — if you "
         "already called the tool and hold a run_id, use horosa_report_render instead (avoids a duplicate "

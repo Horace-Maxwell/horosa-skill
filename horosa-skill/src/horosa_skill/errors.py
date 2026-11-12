@@ -6,6 +6,42 @@ class HorosaSkillError(Exception):
         super().__init__(message)
         self.code = code
         self.details = details or {}
+        _assert_registered_under_pytest(code)
+
+
+class UnregisteredErrorCode(BaseException):
+    """测试里，包内代码抛出了一个登记表落不到的错误码（A-5）。
+
+    继承 BaseException 而不是 Exception：工具层的 `except Exception` 兜底会把普通异常收成 tool.internal_error 信封，
+    测试照样绿——这条检查就白做了。BaseException 穿过兜底，让触发它的那条测试当场红。
+    """
+
+
+def _assert_registered_under_pytest(code: str) -> None:
+    """只在 pytest 里查（`PYTEST_CURRENT_TEST`）、只查包内代码抛的码（测试自己造的假码不算）。
+
+    🔴 C-13：`code=f"tool.{tool}_inverted_window"` 这种拼出来的码，`verify_error_recovery.py` 的正则看不见，
+    `classify_code` 落不到任何规则 → 信封里没有 agent_recovery。静态扫描管字面量，这里管运行期真抛出来的。
+    """
+    import os
+    import sys
+
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    if classify_code(code)[0] is not None:
+        return
+    frame = sys._getframe(2)
+    while frame is not None and frame.f_code.co_filename == __file__:
+        frame = frame.f_back
+    while frame is not None and frame.f_code.co_name == "__init__" and "self" in frame.f_locals \
+            and isinstance(frame.f_locals.get("self"), HorosaSkillError):
+        frame = frame.f_back  # 子类自己的 __init__
+    module = (frame.f_globals.get("__name__") if frame is not None else "") or ""
+    if module.startswith("horosa_skill."):
+        raise UnregisteredErrorCode(
+            f"error code {code!r} raised from {module} has no recovery rule: add it to errors.RECOVERY_TABLE, use a "
+            "registered family via errors.tool_code(tool, family), or name it with a classifiable suffix"
+        )
 
 
 class ToolTransportError(HorosaSkillError):
@@ -13,7 +49,14 @@ class ToolTransportError(HorosaSkillError):
 
 
 class ToolValidationError(HorosaSkillError):
-    pass
+    """入参 / 设置不对。没给 code 时是 `tool.invalid_input`（kind=input）。
+
+    🔴 MCP-08：旧缺省码是基类的 `horosa_skill_error`，后缀规则把它归成 retry_or_doctor——`Invalid date for tool
+    huangli: 'not-a-date'` 这种明摆着的入参错误，agent 拿到的恢复说明是「重试一次，不行跑 doctor」。
+    """
+
+    def __init__(self, message: str, *, code: str = "tool.invalid_input", details: dict | None = None) -> None:
+        super().__init__(message, code=code, details=details)
 
 
 class DispatchResolutionError(HorosaSkillError):
@@ -593,7 +636,131 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "next_action": "fix_input_per_validation_errors",
     },
     "agent_guidance.required": {"kind": "input", "next_action": "ask_user_then_confirm"},
+    # MCP-08：每个 ok:false 都要落到一条恢复规则（tests/test_mcp_error_contract.py 扫全部工具）。
+    "tool.invalid_input": {"kind": "input", "next_action": "fix_input_per_message"},
+    "tool.internal_error": {
+        "kind": "retry_or_doctor",
+        "prompt_to_user": bilingual(
+            f"工具内部出了意外错误（不是你的输入问题）。可重试一次；仍失败请执行 `{DOCTOR_CMD}`，并把 details.exception_type 一并报告。",
+            f"The tool hit an unexpected internal error (not an input problem). Retry once; if it persists run `{DOCTOR_CMD}` "
+            "and report details.exception_type.",
+        ),
+        "next_action": "retry_then_doctor",
+    },
+    "memory.run.not_found": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "没有这个 run_id 的存档。用 horosa_memory_query 找到正确的 run_id 再试。",
+            "No stored run has that run_id: find the right one with horosa_memory_query and retry.",
+        ),
+        "next_action": "query_memory_for_run_id",
+    },
+    "report.format_unsupported": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "报告格式不支持：从 details.accepted 里选一个（json / docx / pdf / png / ics）。",
+            "Unsupported report format: pick one of details.accepted (json / docx / pdf / png / ics).",
+        ),
+        "next_action": "pick_supported_format",
+    },
+    "knowledge.unknown_domain": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "知识库 domain 缺失或不认识：从 details.accepted 里选一个（\"user\" = 你自己的笔记）；不确定先用 horosa_knowledge_search。",
+            "Missing or unknown knowledge domain: pick one of details.accepted (\"user\" = your own notes); unsure? use horosa_knowledge_search first.",
+        ),
+        "next_action": "pick_domain_from_accepted",
+    },
+    # dispatch 选中的技法全部 / 部分失败：顶层给一个码，恢复说明沿用第一个失败技法的（见 lift_failures）。
+    "dispatch.tools_failed": {"kind": "retry_or_doctor", "next_action": "see_failed_tools"},
 }
+
+# ---------------------------------------------------------------------------------------------
+# A-5 / C-13：按技法生成的错误码（`tool.<技法>_<族>`）走登记过的「族」，不再在调用处用 f-string 拼。
+# 拼出来的码有两个毛病：静态扫描（verify_error_recovery.py）看不见它；族名不在后缀规则里（`inverted_window`、
+# `span_too_large`）时 classify_code 落不到任何一条 → 信封没有 agent_recovery。码的拼写不变（技法名仍在码里，
+# 也在 details.tool 里）：调用方、测试与 skill 文档引用的 `tool.qimenzeri_span_too_large` 这类码照旧有效。
+# 引擎（horosa-core-js）回报的子码也在这里登记（它们是有限集合，见 horosa-core-js/src 里的 `code: '…'`）；
+# 没登记的子码落到 `engine_failed`，原值放进 details.engine_code。
+# ---------------------------------------------------------------------------------------------
+TOOL_CODE_FAMILIES: dict[str, dict[str, _Any]] = {
+    "bad_window": {"kind": "input", "next_action": "fix_window_dates"},
+    "inverted_window": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "搜索窗倒置：结束日期早于起始日期。把 startDate / endDate 对调后重试。",
+            "The search window is inverted (end before start): swap startDate / endDate and retry.",
+        ),
+        "next_action": "swap_window_bounds",
+    },
+    "span_too_large": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "搜索窗超过这个技法的天数上限（details.max_span_days）。把窗口拆成几段分别搜索；上限只能调低不能调高。",
+            "The search window exceeds this technique's day limit (details.max_span_days): split it into shorter ranges; the cap cannot be raised.",
+        ),
+        "next_action": "split_window",
+    },
+    "cast_geo_required": {"kind": "input", "next_action": "ask_user_for_place"},
+    "invalid_option": {"kind": "input"},
+    "invalid_setting": {"kind": "input"},
+    "invalid_conditions": {"kind": "input"},
+    "invalid_datetime": {"kind": "input"},
+    "missing_window": {"kind": "input"},
+    "missing_conditions": {"kind": "input"},
+    "missing_inputs": {"kind": "input"},
+    "missing_data": {"kind": "input"},
+    "missing_chart": {"kind": "input"},
+    "missing_explain_tree": {"kind": "retry_or_doctor"},
+    "unknown_kind": {"kind": "input"},
+    "unknown_region": {"kind": "input"},
+    "unknown_region_candidate": {"kind": "input"},
+    "incomplete_four_pillars": {"kind": "input"},
+    "bad_nodetype": {"kind": "input"},
+    "bad_lilithtype": {"kind": "input"},
+    "empty": {"kind": "input"},
+    "empty_snapshot": {"kind": "retry_or_doctor"},
+    "empty_star_dignity": {"kind": "retry_or_doctor"},
+    "empty_sihua_lines": {"kind": "retry_or_doctor"},
+    "empty_period_lines": {"kind": "retry_or_doctor"},
+    "base_chart_failed": {"kind": "retry_or_doctor"},
+    "snapshot_failed": {"kind": "retry_or_doctor"},
+    "scan_failed": {"kind": "retry_or_doctor"},
+    "split_failed": {"kind": "retry_or_doctor"},
+    "stitch_failed": {"kind": "retry_or_doctor"},
+    "explain_section_failed": {"kind": "retry_or_doctor"},
+    "star_dignity_build_failed": {"kind": "retry_or_doctor"},
+    "sihua_build_failed": {"kind": "retry_or_doctor"},
+    "period_build_failed": {"kind": "retry_or_doctor"},
+    "card_builder_failed": {"kind": "retry_or_doctor"},
+    "analysis_builder_failed": {"kind": "retry_or_doctor"},
+    "engine_failed": {"kind": "retry_or_doctor"},
+}
+_TOOL_FAMILY_ORDER = tuple(sorted(TOOL_CODE_FAMILIES, key=len, reverse=True))  # 最长族名先配（scan_failed 先于 failed）
+
+
+def tool_code(tool: str, family: str) -> str:
+    """`tool.<tool>_<family>`；族必须登记过（拼错族名在这里就 KeyError，而不是变成一个落不到恢复规则的码）。"""
+    if family not in TOOL_CODE_FAMILIES:
+        raise KeyError(f"unregistered tool error-code family {family!r}: add it to errors.TOOL_CODE_FAMILIES")
+    return f"tool.{tool}_{family}"
+
+
+def engine_tool_code(tool: str, engine_code: _Any, default: str) -> str:
+    """引擎回报的子码 → 登记过的族（未登记的落 `engine_failed`；原值请放进 details.engine_code）。"""
+    family = f"{engine_code or ''}".strip()
+    return tool_code(tool, family if family in TOOL_CODE_FAMILIES else (default if not family else "engine_failed"))
+
+
+def _tool_family(code: str) -> str | None:
+    if not code.startswith("tool."):
+        return None
+    body = code[len("tool."):]
+    for family in _TOOL_FAMILY_ORDER:
+        if body.endswith(f"_{family}") and len(body) > len(family) + 1:
+            return family
+    return None
+
 
 RECOVERY_PREFIX_KINDS: tuple[tuple[str, str], ...] = (
     ("runtime.", "runtime"),
@@ -608,13 +775,16 @@ _RETRY_SUFFIX = _re.compile(r"(failed|unavailable|timeout|not_found|_error$|^err
 
 
 def classify_code(code: str) -> tuple[str | None, str | None]:
-    """错误码 → (kind, 来源)；来源 ∈ exact / prefix / suffix；三层都落不到 → (None, None)。"""
+    """错误码 → (kind, 来源)；来源 ∈ exact / family / prefix / suffix；都落不到 → (None, None)。"""
     text = f"{code or ''}".strip()
     if not text:
         return None, None
     entry = RECOVERY_TABLE.get(text)
     if entry is not None:
         return str(entry.get("kind") or "input"), "exact"
+    family = _tool_family(text)
+    if family is not None:
+        return str(TOOL_CODE_FAMILIES[family]["kind"]), "family"
     # 基础设施前缀优先于通用后缀：js_engine.node_unavailable 要的是「装 runtime/设 HOROSA_NODE_BIN」，
     # 不是泛泛的「重试再体检」；runtime.* 同理（安装/体检语义比后缀更具体）。
     for prefix, kind in RECOVERY_PREFIX_KINDS:
@@ -644,7 +814,7 @@ def recovery_for(code: str, details: dict[str, _Any] | None) -> dict[str, _Any]:
     if kind is None:
         return result
     base = dict(RECOVERY_KINDS.get(kind) or RECOVERY_KINDS["input"])
-    exact = RECOVERY_TABLE.get(f"{code}".strip(), {})
+    exact = RECOVERY_TABLE.get(f"{code}".strip()) or TOOL_CODE_FAMILIES.get(_tool_family(f"{code}".strip()) or "", {})
     recovery = {**base, **{k: v for k, v in exact.items() if k != "kind"}, "kind": kind, "code": f"{code}".strip(), "source": source}
     if "agent_recovery" not in result:
         result["agent_recovery"] = recovery
@@ -654,3 +824,29 @@ def recovery_for(code: str, details: dict[str, _Any] | None) -> dict[str, _Any]:
     result.setdefault("hint", recovery["prompt_to_user"])
     result.setdefault("next_action", recovery["next_action"])
     return result
+
+
+def lift_failures(failures: dict[str, tuple[str, str, dict[str, _Any] | None]]) -> tuple[str, str, dict[str, _Any]] | None:
+    """多技法结果（dispatch）里的失败 → 顶层的 (code, message, details)。
+
+    🔴 MCP-08：dispatch 选中的技法全部失败（例如引擎没起），旧信封顶层 ok:false 而 code / message 都是 null——
+    agent 得自己翻 results.<tool>.error 才知道发生了什么。现在：失败的码都一样 → 原样抬到顶层（同一条恢复说明）；
+    码不一样 → `dispatch.tools_failed`，恢复说明沿用第一个失败的技法，details.failed_tools 列出每个技法的码。
+    """
+    if not failures:
+        return None
+    codes = {code for code, _message, _details in failures.values()}
+    first_tool, (first_code, first_message, first_details) = next(iter(failures.items()))
+    failed_tools = {tool: code for tool, (code, _m, _d) in failures.items()}
+    if len(codes) == 1:
+        details = recovery_for(first_code, {**(first_details or {}), "failed_tools": failed_tools})
+        return first_code, first_message, details
+    inherited = recovery_for(first_code, first_details).get("agent_recovery")
+    details = recovery_for("dispatch.tools_failed", {
+        "failed_tools": failed_tools, **({"agent_recovery": inherited} if inherited else {}),
+    })
+    message = bilingual(
+        f"{len(failures)} 个技法失败，原因不同（见 details.failed_tools）；第一个是 {first_tool}：{first_message}",
+        f"{len(failures)} techniques failed for different reasons (see details.failed_tools); first: {first_tool}: {first_message}",
+    )
+    return "dispatch.tools_failed", message, details

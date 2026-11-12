@@ -9,6 +9,8 @@ from horosa_skill.errors import (
     ToolTransportError,
     ToolValidationError,
     bilingual,
+    engine_tool_code,
+    tool_code,
 )
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.envelope import _build_compact_subresult_contract
@@ -657,7 +659,7 @@ class SanshiRunners:
             raise ToolTransportError(
                 bilingual(f"三式合一快照构建失败：{error.get('message') or '未知错误'}",
                           "sanshiunited: building the united snapshot failed (see details.error)."),
-                code=f"tool.sanshiunited_{error.get('code') or 'snapshot_failed'}",
+                code=engine_tool_code("sanshiunited", error.get("code"), "snapshot_failed"),
                 details={"error": error},
             )
         for note in data.get("warnings") or []:

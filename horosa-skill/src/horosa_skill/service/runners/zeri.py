@@ -11,6 +11,8 @@ from horosa_skill.errors import (
     ToolTransportError,
     ToolValidationError,
     bilingual,
+    engine_tool_code,
+    tool_code,
 )
 from horosa_skill.service._context import _degrade, _progress_tick
 from horosa_skill.service.options_cn import _qimen_effective_options
@@ -60,7 +62,7 @@ class ZeriRunners:
             error = data.get("error") or {}
             raise ToolTransportError(
                 f"天星择日 JS 层 {stage} 失败：{error.get('message') or '未知错误'}",
-                code=f"tool.tianxing_{error.get('code') or f'{stage}_failed'}",
+                code=engine_tool_code("tianxing", error.get("code"), f"{stage}_failed"),
                 details={"stage": stage, "error": error},
             )
         return {**data, "snapshot_text": result.get("snapshot_text")}
@@ -253,7 +255,7 @@ class ZeriRunners:
             error = js_data.get("error") or {}
             raise ToolTransportError(
                 f"七政择日快照渲染失败：{error.get('message') or '未知错误'}",
-                code=f"tool.qizhengelection_{error.get('code') or 'snapshot_failed'}",
+                code=engine_tool_code("qizhengelection", error.get("code"), "snapshot_failed"),
                 details={"error": error},
             )
         text = result.get("snapshot_text")
@@ -476,7 +478,7 @@ class ZeriRunners:
             error = scan_data.get("error") or {}
             raise ToolValidationError(
                 f"奇门择日搜索失败：{error.get('message') or '未知错误'}",
-                code=f"tool.qimenzeri_{error.get('code') or 'scan_failed'}",
+                code=engine_tool_code("qimenzeri", error.get("code"), "scan_failed"),
                 details={"error": error},
             )
         intervals = scan_data.get("intervals") or []
@@ -716,14 +718,14 @@ class ZeriRunners:
         if not start_date or not end_date:
             raise ToolValidationError(
                 f"{label}需要搜索时间窗（startDate/endDate）。",
-                code=f"tool.{tool_name}_missing_window",
+                code=tool_code(tool_name, "missing_window"),
                 details={"startDate": start_date, "endDate": end_date},
             )
         conditions = payload.get("conditions")
         if not conditions:
             raise ToolValidationError(
                 f"{label}需要择日条件树（conditions）。",
-                code=f"tool.{tool_name}_missing_conditions",
+                code=tool_code(tool_name, "missing_conditions"),
                 details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
             )
         max_span = _clamped_max_span(
@@ -775,7 +777,7 @@ class ZeriRunners:
             error = scan_data.get("error") or {}
             raise ToolValidationError(
                 f"{label}搜索失败：{error.get('message') or '未知错误'}",
-                code=f"tool.{tool_name}_{error.get('code') or 'scan_failed'}",
+                code=engine_tool_code(tool_name, error.get("code"), "scan_failed"),
                 details={"error": error},
             )
         intervals = scan_data.get("intervals") or []
@@ -818,7 +820,7 @@ class ZeriRunners:
             raise ToolTransportError(
                 f"{label}的展示盘（{spec['base_tool']}）铸盘失败，命中区间已算出但无法出盘："
                 f"{(base_err.message if base_err else '') or '未知错误'}",
-                code=f"tool.{tool_name}_base_chart_failed",
+                code=tool_code(tool_name, "base_chart_failed"),
                 details={"base_tool": spec["base_tool"], "pan_moment": pan_moment,
                          "base_error": {"code": base_err.code, "message": base_err.message} if base_err else None,
                          "hint": f"先单独调 {spec['base_tool']} 同刻复现：它也红 = 基底技法/环境问题"
@@ -971,7 +973,7 @@ class ZeriRunners:
             if value not in ("mean", "true"):
                 raise ToolValidationError(
                     f"{tool_name} 的 {key} 只接受 mean（平，缺省）或 true（真）。",
-                    code=f"tool.{tool_name}_bad_{key.lower()}",
+                    code=tool_code(tool_name, f"bad_{key.lower()}"),
                     details={key: merged[key], "allowed": ["mean", "true"]},
                 )
             merged[key] = value
@@ -984,14 +986,14 @@ class ZeriRunners:
         if not start_date or not end_date:
             raise ToolValidationError(
                 f"{label}需要搜索时间窗（startDate/endDate）。",
-                code=f"tool.{tool_name}_missing_window",
+                code=tool_code(tool_name, "missing_window"),
                 details={"startDate": start_date, "endDate": end_date},
             )
         conditions = payload.get("conditions")
         if not conditions:
             raise ToolValidationError(
                 f"{label}需要择时条件树（conditions）。",
-                code=f"tool.{tool_name}_missing_conditions",
+                code=tool_code(tool_name, "missing_conditions"),
                 details={"hint": "条件类键与参数见本工具的 agent_guidance。"},
             )
         max_span = _clamped_max_span(payload, self._ZERI_BACKEND_MAX_SPAN_DAYS)
@@ -1017,7 +1019,7 @@ class ZeriRunners:
                 pass
             raise ToolValidationError(
                 f"{label}条件树不合法：{error.get('message') or '未知错误'}",
-                code=f"tool.{tool_name}_invalid_conditions",
+                code=tool_code(tool_name, "invalid_conditions"),
                 details=details,
             )
         compiled = compile_data.get("compiled")

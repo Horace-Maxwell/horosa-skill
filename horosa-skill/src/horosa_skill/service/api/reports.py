@@ -653,7 +653,14 @@ class ReportsAPI:
     def _normalize_report_format(self, value: str) -> str:
         normalized = str(value or "").lower().strip()
         if normalized not in _REPORT_FORMATS:
-            raise ValueError(f"format must be one of: {', '.join(_REPORT_FORMATS)}")
+            # MCP-08（surface 批，最小改动）：格式不对是入参错误——专用码 report.format_unsupported（kind=input，给可选值），
+            # 不再落进下面 `except ValueError` 的 report.render.failed（retry_or_doctor）。
+            raise ToolValidationError(
+                bilingual(f"format 只能是 {' / '.join(_REPORT_FORMATS)}（收到 {value!r}）。",
+                          f"format must be one of: {', '.join(_REPORT_FORMATS)} (got {value!r})."),
+                code="report.format_unsupported",
+                details={"format": value, "accepted": list(_REPORT_FORMATS)},
+            )
         return normalized
 
     def _render_engine_only(
