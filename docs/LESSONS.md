@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-12) | v0.50.0 发版提交在 CI ubuntu 上红 8 条、维护机 macOS 全绿：doctor「新机器」用例只在有载荷的平台写过断言；报告用例只在有中文 TrueType 的机器写过断言——6 条里 3 条是真缺陷（CID 回退不补字 ✓☯🎉 进 PDF、空格子标签外 `() Tj`、DOCX 中文字体退成 Arial），另有无载荷平台 advice 叫人「装 730 MB」 | 按本机环境分支的用例在每台机器上把各支都跑：`conftest.font_host`（host / no_cjk_font / no_fonts）、doctor 用例的 `host` fixture 钉 `_platform_key`；CID 字体按 Adobe 字符集合（gbk / big5hkscs）量覆盖；推前在 Linux 容器里跑一遍受影响的用例 |
 | v0.50.0-dev (2026-11-12) | JS 引擎只随 darwin / win32 两个 runtime 归档走：Linux、Intel Mac、Docker、pip 网关、没跑 install 的人一个都没有，八字 / 六爻 / 六壬 / 河洛 / 参评等全部 js_engine.cli_missing；install 在这些平台上只报「不支持」，Docker 镜像连 node 都没有 | 平台无关资产 `horosa-core-js-v<ver>.tar.gz`（确定性构建）随发布上 draft、进清单顶层 `core_js`、[GAP] 与 completeness 查缺件 / 摘要；install 在无载荷平台自动只装它、`--engine-only` 任何平台；Docker 自带钉版本 Node + 引擎 |
 | v0.50.0-dev (2026-11-12) | 客户端文档跟不上十三批改动：SKILL.md 说 profile 的 place 不解析（其实解析）、门面 13 写成 14 / 11、`warnings` 非空 = 不完整、确认标记万能、dispatch 什么都能接；示例从没对过 schema，`response_sections` 广告成字符串而服务自己的续读调用给整数 | SKILL.md 按弱客户端重写（45 KB → 27 KB，细节进 references）；示例一律 ```call 块，`tests/test_skill_examples.py` 离线逐条对工具面 / 字段 / 逐字段校验 / 闸门，文档批对共享引擎逐条真跑 |
 | v0.50.0-dev (2026-11-12) | 深审余项：缺 zone 时小六壬 KeyError、占时四技法 HTTP 500、神数 / 本地八字链悄悄按 +08:00；命主的 ad=-1 把择日窗口 / 流年 / 起课读成公元前；择日入参问题报「重试 / doctor」；卦义不认卦名；日子馆印 undefined；十年大运印英文星名；按设计不出的段印失败式占位 | 时地缺什么报什么（`place_fields_required`）、`ad` 只跟它配对的日期（`_ad_of_date`，源码扫描守卫）、`zeri_engine_input_error` 逐字段、`SECTIONS_NOT_PRODUCED_BY_DESIGN` 走 not_requested |
@@ -246,6 +247,28 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-12 — macOS 绿 ≠ CI 绿（又一次）：按本机字体 / 平台分支的用例只在维护机那一支写过断言
+
+- **症状**：v0.50.0 发版提交（45af5eaa）推上去，CI `test`（ubuntu-latest）红 8 条，`run_ci_gates.py` 在维护机 macOS 上 25 步全绿。
+  doctor 两条「新机器」用例期望 next_action 里有 `horosa-skill install`，CI 上拿到的是网关那句；报告 6 条：标签外的 `() Tj`、DOCX 字体表没有
+  `<w:altName`、预检用例 `KeyError: 'reason'`、`'CIDTypeFace' object has no attribute 'charToGlyph'`、排盘报告「附录漏了 True」。
+- **根因**：两类「本机环境决定走哪一支」的代码，用例只在维护机那一支上写过断言。① 平台：CI 的 ubuntu 是没有离线载荷的平台，doctor 按 E-02 设计走
+  「引擎 + 网关」；用例没钉平台。顺着查到真问题：那一支的 `advice[runtime:not_installed]` 照抄「运行 install（约 730 MB）」，而 install 在那里只装
+  7 MB 的 JS 引擎；引擎缺着时下一步只说网关、命令埋在结论里。② 字体：ubuntu-latest 一款中文 TrueType 都没有（toolset 只装 fonts-noto-color-emoji），
+  PDF 退到 reportlab 自带、不嵌入的 CID 字体，DOCX 探测不到中文字体。这一支此前只有 `test_cid_fallback_*` 一条在本机模拟过。6 条里 3 条是**产品缺陷**：
+  CID 字体没有 `charToGlyph`，`_pdf_glyph_fallback` 于是「不补字」，✓ ☯ 🎉 原样进 PDF（印成方块 / 乱码）；CID 字体对空字符串也写 `() Tj`，版式表空格子
+  成了标签外的绘制；DOCX 的 w:eastAsia 退成 Arial（没有中文字形，模板字体表里本来就有它，替身信息加不进去）。另 2 条是**用例假设**：「TrueType」里的
+  子串 True 被当成漏出的布尔值；PNG 在无字体机器上先因字体被拒，没有 reason。符号用例本想在 CID 支 skip，判据（`face is None`）写错——CID 字体也有 face。
+- **修复**：doctor advice 按平台给、引擎缺着时 next_action 先给 `install --engine-only`；CID 字体按 Adobe 字符集合量覆盖（Adobe-GB1 ⊇ GBK、
+  Adobe-CNS1 ⊇ 大五码 + HKSCS → Python `gbk` / `big5hkscs` 编得出即画得出，`renderers._font_coverage`，app 图同用）；`TaggingCanvas` 空串不画；
+  DOCX 字体名改成候选表 `_DOCX_FONT_CANDIDATES`，本机一款都没有时写 Microsoft YaHei / JhengHei。UA 声明的判据从「有 /FontFile2」改成
+  「正文不是 CID」（补字链的 TrueType 是嵌入的）。
+- **守卫**：`tests/conftest.py` 的 `font_host`（host / no_cjk_font / no_fonts）——字体相关的 6 条用例在每台机器上三种现场都跑；`test_doctor_modes.py` 的
+  `host` fixture 钉 `_platform_key`（darwin-arm64 / linux-x64）+ 引擎缺着的一条。负向对照：四处修复各自还原，模拟现场的那几格红（doctor 3 条、
+  空 Tj 2 条、DOCX 2 条、补字 2 条）。在 Linux 容器（python:3.12-slim，无字体 / DejaVu 两种镜像）里复现了 CI 的 8 条红，修后全绿。
+- **规则**：用例的结论取决于本机环境（字体、平台、已装工具）时，把环境当参数：fixture 模拟每一支、每台机器都跑，`[host]` skip 只留给模拟不出来的；
+  「CI 上走另一支」不是 skip 的理由，常常正是缺陷所在。推之前怀疑是平台分支，就在 Linux 容器里先跑一遍受影响的用例。
 
 ### v0.50.0-dev / 2026-11-12 — JS 引擎只随两个平台的 runtime 归档走：其它机器一个都没有（E-02）
 
