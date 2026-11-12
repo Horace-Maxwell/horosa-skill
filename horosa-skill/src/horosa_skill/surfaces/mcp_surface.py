@@ -176,5 +176,29 @@ def _tool_title(tool_name: str) -> str | None:
     head = _TITLE_TAIL_PAREN.sub("", head).strip()
     if not head or head.isascii():  # 纯英文描述 → 交回 FastMCP 默认（用 name）
         return None
-    return head[:24]
+    return _word_safe(head, TITLE_LIMIT)
+
+
+TITLE_LIMIT = 24
+_TITLE_BREAKS = "，、：；／/（(· "
+
+
+def _word_safe(text: str, limit: int) -> str:
+    """标题不切在词中间（MCP-11：旧写法 `head[:24]` 切出「…结构化 JSO」「…domain+」）。
+
+    超长时退到上限内最后一个分隔符（，、：；/ 括号 空格）之前；上限内没有分隔符就退到最后一个非 ASCII 字母数字之后，
+    英文词整个留下或整个去掉。
+    """
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if text[limit] in _TITLE_BREAKS:  # 上限正好落在词界上
+        return cut.rstrip(" ，、：；/／(（·")
+    breaks = [cut.rfind(ch) for ch in _TITLE_BREAKS]
+    best = max(breaks)
+    if best >= limit // 2:
+        return cut[:best].rstrip(" ，、：；/／(（·")
+    while cut and cut[-1].isascii() and cut[-1].isalnum() and len(cut) < len(text) and text[len(cut)].isascii() and text[len(cut)].isalnum():
+        cut = cut[:-1]
+    return cut.rstrip()
 

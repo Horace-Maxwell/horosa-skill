@@ -537,7 +537,8 @@ def test_profile_tool_is_on_both_surfaces_and_technique_schemas_gain_no_bytes(tm
     assert geomancy.index("profile") == geomancy.index("includeCatalog") + 1, "地占广告层按自己的声明顺序（逐字节不变）"
     # 「另 N 个高级旋钮」不把档案键算进去：本来没有隐藏旋钮的技法不会凭空多一句。
     chart_request = full["horosa_astro_chart"].input_schema["properties"]["request"]["description"]
-    assert "另 " in chart_request and full["horosa_cn_xiaoliuren"].input_schema["properties"]["request"]["description"] == "整包载荷"
+    # MCP-11 起没有描述的技法旋钮不广告（计入隐藏数），小六壬因此也有了隐藏旋钮；换一个仍然没有隐藏旋钮的技法来证「档案键不计数」
+    assert "另 " in chart_request and full["horosa_shenshu_wangji"].input_schema["properties"]["request"]["description"] == "整包载荷"
 
 
 def test_mcp_save_stores_the_values_the_user_gave(tmp_path: Path, _no_elicit) -> None:

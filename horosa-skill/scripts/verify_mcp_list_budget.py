@@ -53,6 +53,22 @@ def oversized_tool_schemas(tools: list[dict], cap: int = TOOL_INPUT_SCHEMA_CAP_B
     """[(name, bytes)] for every tool whose inputSchema serialises above `cap` — pure, so the test can feed a fat tool."""
     return sorted(((str(t.get("name")), input_schema_bytes(t)) for t in tools if input_schema_bytes(t) > cap), key=lambda x: -x[1])
 
+def undescribed_properties(tools: list[dict]) -> list[str]:
+    """广告层里没有描述的属性（含嵌套对象的字段）：`工具.字段` 列表。MCP-11 起必须为空。"""
+    found: list[str] = []
+
+    def walk(props: dict, where: str) -> None:
+        for name, prop in (props or {}).items():
+            if not isinstance(prop, dict) or not str(prop.get("description") or "").strip():
+                found.append(f"{where}.{name}")
+            if isinstance(prop, dict) and isinstance(prop.get("properties"), dict):
+                walk(prop["properties"], f"{where}.{name}")
+
+    for tool in tools:
+        walk((tool.get("inputSchema") or {}).get("properties") or {}, str(tool.get("name")))
+    return found
+
+
 def measure() -> dict[str, int]:
     from horosa_skill.config import Settings
     from horosa_skill.memory.store import MemoryStore
@@ -72,6 +88,7 @@ def measure() -> dict[str, int]:
             biggest = max(tools, key=input_schema_bytes)
             sizes[key.replace("_bytes", "_max_tool_input_schema_bytes")] = input_schema_bytes(biggest)
             sizes.setdefault("_oversized", {})[key] = oversized_tool_schemas(tools)  # type: ignore[assignment]
+            sizes.setdefault("_undescribed", {})[key] = undescribed_properties(tools)  # type: ignore[assignment]
     return sizes
 
 
@@ -81,6 +98,7 @@ def main() -> int:
     args = ap.parse_args()
     sizes = measure()
     oversized = sizes.pop("_oversized", {})
+    undescribed = sizes.pop("_undescribed", {})
 
     if args.update_baseline:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +127,12 @@ def main() -> int:
         return 1
     base = json.loads(BASELINE.read_text(encoding="utf-8"))
     errors: list[str] = []
+    for key, names in undescribed.items():
+        if names:
+            errors.append(
+                f"{key}: {len(names)} advertised propert{'y' if len(names) == 1 else 'ies'} without a description "
+                f"({', '.join(names[:8])}{' …' if len(names) > 8 else ''}) — add it to surfaces/mcp_field_docs.py or stop advertising it"
+            )
     for key, fat in oversized.items():
         for name, size in fat:
             errors.append(f"{key}: {name} inputSchema {size} B > {TOOL_INPUT_SCHEMA_CAP_BYTES} B (Codex tool_input_schema_max_bytes default — descriptions would be stripped)")

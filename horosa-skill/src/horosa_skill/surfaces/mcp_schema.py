@@ -193,15 +193,56 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
         keep = [f for f in model.model_fields if f in props and f not in unadvertised]
     # `knowledge`（自备知识库）与 `profile`（命主档案名）是全技法通用的附加参数，不是本技法的旋钮：不计数，否则 44 个原本没有
     # 隐藏旋钮的技法平白多一句「另 1 个高级旋钮」（全量面 +2.9 KB）。它们在 SKILL.md、tool_run 的 schema 与 server_profile 里说明。
-    hidden = sorted(set(props) - set(keep) - {"request", "knowledge", PROFILE_KEY})
+    docs = _field_docs()
     out: dict[str, Any] = {}
     for key in keep:
         if key in CORE_DOC:
             out[key] = _core_property(key, tool_name, key in required)
-        else:
-            out[key] = _own_property(key, props[key], key in required)
+            continue
+        prop = _own_property(key, props[key], key in required)
+        bare = str(prop.get("description") or "").removeprefix("[required]").strip()
+        if not bare:
+            if key in docs:
+                prop["description"] = ("[required] " if key in required else "") + docs[key]
+            elif key not in required and key not in _SHAPED_DOC:
+                continue  # MCP-11：说不清是什么的旋钮不广告（照样按名接受、计入隐藏旋钮数，全表见 guidance）
+        out[key] = _shaped(key, prop)
+    hidden = sorted(set(props) - set(out) - {"request", "knowledge", PROFILE_KEY})
     out["request"] = _request_property(hidden, tool_name)
     return {"type": "object", "properties": out, "additionalProperties": True, "x-horosa-hidden-knobs": len(hidden)}
+
+
+def _field_docs() -> dict[str, str]:
+    global _FIELD_DOCS
+    if _FIELD_DOCS is None:
+        from horosa_skill.surfaces.mcp_field_docs import field_docs
+
+        _FIELD_DOCS = field_docs()
+    return _FIELD_DOCS
+
+
+_FIELD_DOCS: dict[str, str] | None = None
+
+# 嵌套的一方（合盘 inner / outer）：广告成带 properties 的对象，模型才知道里面放什么（MCP-11：旧广告是一个无形状的值）。
+_PARTY_KEYS = ("date", "time", "zone", "lat", "lon", "ad", "name")
+_SHAPED_DOC = {"inner": "内圈一方：date/time/zone/lat/lon（同顶层口径）", "outer": "外圈一方：date/time/zone/lat/lon（同顶层口径）"}
+
+
+def _shaped(key: str, prop: dict[str, Any]) -> dict[str, Any]:
+    if key not in _SHAPED_DOC:
+        return prop
+    required = str(prop.get("description") or "").startswith("[required]")
+    return {
+        "type": "object",
+        "x-horosa-shaped": True,  # 只有登记过形状的对象保留 properties（portable_property）
+        "description": ("[required] " if required else "") + _SHAPED_DOC[key],
+        "properties": {name: {"type": _scalar(CORE_TYPE.get(name, "string")), "description": CORE_DOC.get(name, name)}
+                       for name in _PARTY_KEYS},
+    }
+
+
+def _scalar(kind: Any) -> str:
+    return kind[0] if isinstance(kind, list) else str(kind)
 
 
 def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
@@ -279,7 +320,7 @@ def advertised_description(tool_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 # 允许在属性里出现的键；其余（default/title/format/x-*/$…）一律剔除。
-_PORTABLE_PROP_KEYS = frozenset({"type", "enum", "items", "description"})
+_PORTABLE_PROP_KEYS = frozenset({"type", "enum", "items", "description", "properties"})
 
 
 def _portable_type(prop: dict[str, Any], name: str) -> str:
@@ -316,6 +357,11 @@ def portable_property(name: str, prop: dict[str, Any]) -> dict[str, Any]:
             out["items"] = {k: v for k, v in items.items() if k in {"type", "enum"}}
     else:
         out.pop("items", None)
+    if out["type"] == "object" and prop.get("x-horosa-shaped") and isinstance(out.get("properties"), dict):
+        # 嵌套对象的字段同样可移植化（合盘 inner / outer）；其余对象不带 properties（形状由技法自己校验）。
+        out["properties"] = {str(k): portable_property(str(k), v if isinstance(v, dict) else {}) for k, v in out["properties"].items()}
+    else:
+        out.pop("properties", None)
     if not str(out.get("description") or "").strip():
         out.pop("description", None)
     return out
@@ -376,12 +422,45 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
     # 此前只有技法 + dispatch/hecan 被重写，门面直接把 pydantic 的原始 schema
     # （anyOf:[…,{null}] / default:null / title / $ref）发上线；而在精简面下门面**就是**全部工具。
     # 门面不走技法的广告白名单，基类上的隐藏字段（`knowledge`）也要在这里摘掉，否则每个门面各漏一个无描述属性。
+    docs = _field_docs()
     for tool in manager.list_tools():
         params = tool.parameters or {}
         props = params.get("properties")
         if isinstance(props, dict):
             params = {**params, "properties": {
-                k: v for k, v in props.items() if not (isinstance(v, dict) and v.get("x-horosa-hidden"))
+                k: v for k, v in props.items()
+                if not (isinstance(v, dict) and v.get("x-horosa-hidden"))
+                # MCP-11：不过闸的门面不广告闸门三键（它们在那里什么也不做，只会让模型以为要先确认）
+                and not (k in GATE_KEYS and tool.name in UNGATED_FACADES)
             }}
-        tool.parameters = portable_schema(params)
+        params = portable_schema(params)
+        # 门面字段缺描述的，从共享词典补（一个字段名一句）。
+        params["properties"] = {
+            k: ({**v, "description": docs[k]} if not str(v.get("description") or "").strip() and k in docs else v)
+            for k, v in params["properties"].items()
+        }
+        _enum_closed_sets(tool.name, params["properties"])
+        tool.parameters = params
     return hidden
+
+
+# 不过澄清闸的门面（report_from_tool 的闸门看的是 payload 里那份技法入参，顶层三键同样不起作用）。
+UNGATED_FACADES = frozenset({
+    "horosa_agent_guidance", "horosa_knowledge_search", "horosa_place_search", "horosa_profile",
+    "horosa_memory_record_answer", "horosa_memory_query", "horosa_memory_show", "horosa_report_template",
+    "horosa_report_render", "horosa_technique_report", "horosa_report_from_tool",
+})
+# 闭集取值进 enum（MCP-11）：模型照着 enum 填，不用从描述里猜。
+_REPORT_FORMATS = ["json", "docx", "pdf", "png", "ics"]
+_CLOSED_SETS: dict[tuple[str, str], list[Any]] = {
+    ("horosa_report_render", "format"): _REPORT_FORMATS,
+    ("horosa_report_from_tool", "format"): _REPORT_FORMATS,
+    ("horosa_report_render", "style"): ["analysis", "chart"],
+    ("horosa_technique_report", "format"): ["markdown", "json", "docx", "pdf"],
+}
+
+
+def _enum_closed_sets(tool_name: str, props: dict[str, Any]) -> None:
+    for (owner, field), values in _CLOSED_SETS.items():
+        if owner == tool_name and isinstance(props.get(field), dict):
+            props[field] = {**props[field], "type": "string", "enum": list(values)}
