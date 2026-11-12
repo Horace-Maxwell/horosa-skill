@@ -34,8 +34,11 @@ class TaggingCanvas(Canvas):
 
     ua_claim = True  # 渲染器在字体退回 CID 时置 False
     dest_labels: ClassVar[dict[str, str]] = {}  # 渲染器每次渲染换成自己的字典（子类属性）
+    initial_font: ClassVar[str | None] = None  # 渲染器设成报告字体：reportlab 每页开头会 setFont 一次，缺省是不嵌入的 Helvetica
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if self.initial_font and not kwargs.get("initialFontName"):  # 文档模板会显式传 initialFontName=None
+            kwargs["initialFontName"] = self.initial_font
         super().__init__(*args, **kwargs)
         self._elems: list[dict[str, Any]] = []
         self._mcid: dict[int, int] = {}
@@ -159,9 +162,26 @@ class TaggingCanvas(Canvas):
         self.setViewerPreference("DisplayDocTitle", "true")
         metadata = pdfdoc.PDFStream(pdfdoc.PDFDictionary({"Type": pdfdoc.PDFName("Metadata"),
                                                           "Subtype": pdfdoc.PDFName("XML")}),
-                                    _xmp(doc.info.title or "", ua=self.ua_claim).encode("utf-8"), filters=[])
+                                    _xmp(doc.info.title or "", ua=self.ua_claim and self.fonts_all_embedded()).encode("utf-8"),
+                                    filters=[])
         doc.Reference(metadata, "HorosaXMP")
         catalog.Metadata = ref("HorosaXMP")
+
+
+    def fonts_all_embedded(self) -> bool:
+        """这份 PDF 引用到的每一款字体都是嵌入的 TrueType（PDF/UA-1 7.21.4.1）。标准 14 字体、CID 字体都不嵌入：
+        有一款就不声称 PDF/UA（评审 R-15：此前只看主字体，表格空格子与每页开头的 Helvetica 不嵌入却照样声称）。"""
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        for name in getattr(self._doc, "fontMapping", {}) or {}:
+            try:
+                font = pdfmetrics.getFont(name)
+            except Exception:  # noqa: BLE001 - 认不出的字体：当作不嵌入（不声称比错误声称安全）
+                return False
+            if not isinstance(font, TTFont):
+                return False
+        return True
 
 
 def _xmp(title: str, *, ua: bool) -> str:
@@ -264,6 +284,10 @@ class TaggedFigure(Flowable):
     def draw(self) -> None:
         canvas = self.canv
         tagging = isinstance(canvas, TaggingCanvas) and canvas._suppress == 0
+        font = getattr(canvas, "initial_font", None)
+        if font and not getattr(self.drawing, "initialFontName", None):
+            # reportlab 画矢量图时先按缺省状态 setFont 一次 Times-Roman（不嵌入），哪怕图里一个字都不用它：起始字体换成报告字体。
+            self.drawing.initialFontName = font
         if tagging:
             canvas.tag_begin("Figure", alt=self.alt, bbox=None)
         self.drawing.drawOn(canvas, 0, 0)

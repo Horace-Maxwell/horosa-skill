@@ -88,7 +88,7 @@ def _run_stamp(run: dict[str, Any]) -> datetime:
 
 def _render_outcome_fields(rendered: dict[str, Any]) -> dict[str, Any]:
     """render_report 如实报告的「没按要求写成」：降级成 TXT / 目标被占用另存。此前这里全部丢弃，调用方只看到「已生成 PDF」和一个 .txt 路径。"""
-    return {key: rendered[key] for key in ("degraded_from", "degrade_reason", "requested_output_path") if key in rendered}
+    return {key: rendered[key] for key in ("degraded_from", "degrade_reason", "requested_output_path", "warnings") if key in rendered}
 
 
 def _render_outcome_notes(rendered: dict[str, Any]) -> list[str]:
@@ -97,6 +97,7 @@ def _render_outcome_notes(rendered: dict[str, Any]) -> list[str]:
         notes.append(f"未能生成 {str(rendered['degraded_from']).upper()}，已退化为纯文本（全文都在）：{rendered.get('degrade_reason')}")
     if rendered.get("requested_output_path"):
         notes.append(f"{rendered['requested_output_path']} 正被别的程序占用（多半开着上一版），新报告另存为 {rendered['path']}；旧文件没动。")
+    notes.extend(str(item) for item in rendered.get("warnings") or [])
     return notes
 
 
