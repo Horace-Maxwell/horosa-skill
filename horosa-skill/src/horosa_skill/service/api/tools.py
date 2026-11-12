@@ -64,13 +64,10 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
     return envelope
 
 
-# 结果随性别而变（大运 / 大限 / 行年顺逆、条文分男女）的技法：没有性别不起盘（v0.50.0，tool.missing_gender）。旧行为是悄悄按男命
-# 排（紫微 / 八字直断 / 六壬行年的 schema 缺省 True；八字、河洛、参评、一掌经走上游「未知(按男排)」；神数五支后端缺省男）。
-# 太乙不在内：它多用于事件局，性别只进命法段，闸门照常追问（tool_table 的 sex 选项含「事件局/不指定」）。
-GENDER_DEPENDENT_TOOLS = frozenset({
-    "bazi_birth", "bazi_direct", "ziwei_birth", "liureng_runyear", "heluo", "canping", "yizhangjing",
-    "tieban", "shaozi", "xianqin", "cetian", "qizhengkin",
-})
+# 结果随性别而变的技法：没有性别不起盘（v0.50.0，tool.missing_gender），旧行为是悄悄按男命排。名单只有一份，与澄清闸的
+# 「事实」同源（agent_guidance.questions.GENDER_FACT_TOOLS，1 / 0 两种性别逐行实测）——合并深审两批时曾是两份：入口 12 个、
+# 闸门 17 个，正传 / 北极 / 南极 / 紫微择日缺性别时 CLI 与直调照样按男排（实测这四个的大运 / 条文 / 命局随性别变）。
+from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS as GENDER_DEPENDENT_TOOLS  # noqa: E402
 
 
 # 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。

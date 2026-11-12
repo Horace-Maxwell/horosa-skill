@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-12) | 并行九批各自全绿，合进集成分支后撞出七处衔接：闸门看不到入参批的别名 / 嵌套提升、缺性别名单两份（12 / 17）、同一错误码登记两次、两个码表达同一件事、可选值键 accepted / allowed / valid_domains 三种、密钥判定子串误报 MAX_TOKENS、tools/list 量尺把线上不发的 null 计入撞硬顶 | 合并后在集成分支重跑全量门禁；同一事实只留一份（名单、错误码、详情键、归一化载荷）；预算守卫量线上真发的形状 |
 | v0.50.0-dev (2026-11-12) | MCP 结果把原始引擎树当正文交给模型：114 技法中位 17 万字符、72 个超过 Claude Code 5 万字符落盘线；调度两技法 290 万字符；`include_all` 指引 126 万字符；3 MB 澄清备注原样回显两遍 | MCP 缺省改阅读视图（正文一遍 + 段索引 + 依据卡），模型预算按段裁并给照抄可用的续读调用，JSON 不缩进，调度 / 合参 / 存档读回同一视图；整表体积守卫 |
 | v0.50.0-dev (2026-11-12) | `response_view` 跟着载荷进了 runner 的子调用：择日先算的展示盘快照被清空，黄历择日 14 段丢 7 段、多一条假的「结果不完整」（7 个择日技法同病） | `run_tool` 记调用深度，嵌套调用摘掉展示键、不套视图；整表对照每种视图与原始结果的段与告警 |
 | v0.50.0-dev (2026-11-12) | 新机器、网关可达、网关不可达三种现场 doctor 给同一份报告：12 条 `missing:*` + 「not installed yet」+ 去配 OpenClaw，`uv run` 写死，中英混杂；网关永远到不了 ready | 先定 deployment 再出 issues；summary 中英成对；命令只从 `hints.cli_command` 来；OpenClaw 只给确知的人；js_engine 一节 + selfcheck 跑 JS |
@@ -234,6 +235,32 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-12 — 并行九批合并的衔接坑
+
+- **现象**：深审第一阶段九个修复批次各在自己的 worktree 改一块、各自 25 道门禁全绿；依次合进 `improve/deep-review-work` 时撞出七处，
+  每一处单独看两边都没错：
+  1. 澄清闸（dispatch 批 `agent_guidance.questions`）在 `_gated_run` 里看原始参数，入参批的别名改名（`sex`→`gender`）与嵌套 `birth`
+     提升在 `run_tool` 里才做 → `{"sex": "女"}`、`{"birth": {...}}` 被闸门当成缺性别拒掉。
+  2. 「缺性别就拒」两份名单：入参批 `GENDER_DEPENDENT_TOOLS` 12 个（技法入口），闸门批 `GENDER_FACT_TOOLS` 17 个（MCP 闸）——正传 / 北极 /
+     南极 / 紫微择日经 CLI 与直调缺性别时照样按男排。共享引擎 1 / 0 两性逐行对比：这四个的大运 / 条文 / 命局随性别变（正传 230 行）。
+  3. `memory.run.not_found` 被 surface 批与 memory 批各登记一次（字典字面量后一个静默覆盖前一个，`test_no_duplicate_dict_keys` 抓到）。
+  4. 「报告格式不对」两个码：`report.invalid_format`（报告批，`details.allowed`）与 `report.format_unsupported`（surface 批，`details.accepted`）。
+  5. 「值不在可选表里」的详情键三种写法：`accepted` / `allowed` / `valid_domains`。
+  6. `env_carry.is_secret_env_name` 子串匹配把阅读视图的 `HOROSA_MCP_RESULT_MAX_TOKENS` 当成密钥（不写进客户端配置）。
+  7. tools/list 预算：入参批给每个收地点的技法广告 `place`、surface 批给全部字段写说明，合起来 263,498 B 撞 256 KiB 硬顶；而量尺用
+     `model_dump(by_alias=True)` 把每个工具没设的 `_meta` / `icons` / `outputSchema` / `annotations.title` 的 null 也算进去——SDK 写线上
+     用 `exclude_unset=True`（`mcp/server/stdio.py`），实测 stdio 一次 tools/list 的 tools 数组 252,621 B。
+- **根因**：批次按文件分，事实却跨文件：同一个判断（性别名单）、同一个契约（错误码 / 详情键）、同一个载荷（闸门与执行）各批各写一份，
+  只有合在一起跑才看得见；预算守卫量的不是线上真发的东西。
+- **修**（全在集成分支的合并提交里）：`surfaces/mcp_requests.gate_view_arguments`（闸门看同一次归一化之后的载荷）；`service/api/tools.py`
+  的 `GENDER_DEPENDENT_TOOLS` 直接取 `agent_guidance.questions.GENDER_FACT_TOOLS`；删重复登记；保留 `report.format_unsupported`；
+  可选值一律给 `accepted`（旧键并存一版）；密钥判定按下划线分段；`verify_mcp_list_budget.py` 与 `test_mcp_list_budget.py` 按
+  `exclude_unset` 量并重锁基线（仍是上界：量尺 259 KB，线上 252.6 KB）。
+- **守卫**：`test_mcp_input_arguments.py::test_alias_keys_are_read_and_noted` / `test_nested_birth_on_a_technique_tool_is_lifted`
+  （去掉 `gate_view_arguments` 那一行即红）；`test_gender_requirement_has_one_source_for_gate_and_entry`（把入口名单改回 12 个即红）；
+  `test_no_duplicate_dict_keys`；`test_mcp_error_contract`（读 `accepted`）；`test_client_env_carry`。
+- **规则**：并行批次合并后在集成分支重跑全量门禁；交叉处按「同一事实只有一份」收口；预算类守卫量线上真发的形状（AGENTS §2）。
 
 ### v0.50.0-dev / 2026-11-12 — MCP 结果把原始引擎树当正文交给模型
 

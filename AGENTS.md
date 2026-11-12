@@ -74,6 +74,9 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
      版本号用 `horosa-skill/scripts/bump_version.py <new>`（站点一处清单 `SITES`）；工具数用 `bump_version.py --tool-counts`，它只改判官（`verify_docs_sync.COUNT_DOCS`）读得到的形状。
    - 会话交接：多会话 / 多模型接力的工作，用 [`docs/templates/HANDOFF_TEMPLATE.md`](./docs/templates/HANDOFF_TEMPLATE.md)
      生成 `HANDOFF-<主题>.local.md`（gitignored），会话开始先读、结束前更新；本机 memory 的索引行同步。
+   - 并行批次（多个 worktree 各改一块）**各自全绿不等于合起来全绿**：合并后必须在集成分支上重跑全量门禁，交叉处按「同一事实只有一份」收口——
+     同一判断（如哪些技法缺性别就拒）、同一错误码、同一错误详情键（可选值一律 `accepted`）、闸门与执行看同一份归一化载荷；量预算的守卫按线上真发的形状量。
+     v0.50.0-dev 九批合并时撞出七处（台账 2026-11-12「并行九批合并的衔接坑」）。
 
 **Self-audit gate（每次发布 + 每次 "check for bugs"）**：重读本文各主题章节，确认每条仍成立、本轮所学已按五件套落盘；
 跑 `scripts/verify_docs_sync.py`（含四把文档制度守卫）。未记录的复发问题按回归对待。

@@ -172,3 +172,12 @@ def test_gender_dependent_techniques_refuse_without_gender(tmp_path: Path, tool_
         service.run_tool(tool_name, {**payload, **CONFIRM}, save_result=False)
     assert caught.value.code == "tool.missing_gender"
     assert caught.value.details["agent_recovery"]["must_ask_user"] is True
+
+
+def test_gender_requirement_has_one_source_for_gate_and_entry() -> None:
+    """技法入口（tool.missing_gender）与澄清闸（事实问题）用同一份名单：合并深审两批时曾分成 12 / 17 两份，
+    正传 / 北极 / 南极 / 紫微择日缺性别时直调照样按男排。名单内容由 1 / 0 两种性别逐行实测定（见 LESSONS）。"""
+    from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS
+
+    assert GENDER_DEPENDENT_TOOLS == GENDER_FACT_TOOLS
+    assert {"zhengchuan", "beiji", "nanji", "ziweizeri"} <= GENDER_DEPENDENT_TOOLS

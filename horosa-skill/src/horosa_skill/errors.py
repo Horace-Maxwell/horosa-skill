@@ -968,14 +968,6 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "retry_then_doctor",
     },
-    "memory.run.not_found": {
-        "kind": "input",
-        "prompt_to_user": bilingual(
-            "没有这个 run_id 的存档。用 horosa_memory_query 找到正确的 run_id 再试。",
-            "No stored run has that run_id: find the right one with horosa_memory_query and retry.",
-        ),
-        "next_action": "query_memory_for_run_id",
-    },
     "report.format_unsupported": {
         "kind": "input",
         "prompt_to_user": bilingual(
