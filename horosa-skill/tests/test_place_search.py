@@ -469,7 +469,7 @@ def test_run_tool_records_place_resolution_on_the_card_and_in_summary(tmp_path: 
     monkeypatch.setattr(service, "_run_local_tool", fake_local)
     envelope = service.run_tool("xiaoliuren", {"date": "1988-07-01", "time": "08:00", "place": "上海"}, save_result=False)
     assert seen["lat"] == "31n13" and seen["zone"] == "+09:00" and "place" not in seen and "placeResolution" not in seen
-    assert any("上海" in line and "+09:00" in line for line in envelope.summary), envelope.summary
+    assert "上海" in envelope.summary[1] and "+09:00" in envelope.summary[1], envelope.summary  # 紧跟标题行
     assert not any("上海" in w for w in envelope.warnings), envelope.warnings
     card = envelope.data.get("technique_card") or {}
     record = card["place_resolution"][0]

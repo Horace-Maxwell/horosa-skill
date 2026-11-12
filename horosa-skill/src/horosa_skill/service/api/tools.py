@@ -412,7 +412,8 @@ class ToolsAPI:
             summary = [*summary, birth_profiles.profile_summary_line(call.profile_uses)]
         # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
-        summary = [*summary, *call.place_notes]
+        # 地名解析一行紧跟标题行（标题仍是 summary[0]：dispatch 只取每个子结果的 summary[:1]）。
+        summary = [*summary[:1], *call.place_notes, *summary[1:]]
         warnings: list[str] = list(call.place_caveats)
         if call.place_records and isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
             # 技法卡在存档之前就挂好了（_compute_tool_result）；这里补上「地点是怎么来的」，同一份存进 memory。
