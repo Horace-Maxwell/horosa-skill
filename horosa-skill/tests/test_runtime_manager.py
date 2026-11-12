@@ -45,6 +45,9 @@ def _managed_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         "horosa_skill.runtime.manager.classify_endpoint",
         lambda url, **kwargs: EndpointIdentity("ours", "identity.nonce_match", url),
     )
+    # 同理：起启动器前的 socket 层占用检查（v0.50.0-dev，E-07）。不钉的话维护机上 9999/8899 正跑着桌面端 →
+    # 每个 start 用例都撞 runtime.port_taken（还会去连用户的桌面端）；CI 上又没人听 → 绿。测占用的用例自己覆盖。
+    monkeypatch.setattr("horosa_skill.runtime.manager.port_taken", lambda port: None)
 
 
 def create_runtime_archive(tmp_path: Path) -> Path:

@@ -59,6 +59,18 @@ def _doctor_port_holders(report: dict[str, Any]) -> list[dict[str, Any]]:
             "holders": identity.get("holders") or [],
             "will_not_kill": "本工具不会终止不属于自己的进程。",
         })
+    # E-07：HTTP 上没应答、socket 上却有人占着的端口（不说 HTTP 的服务 / 只 accept 不应答）—— start 会因此超时。
+    for taker in report.get("port_takers") or []:
+        conflicts.append({
+            "label": taker.get("label"),
+            "url": taker.get("url"),
+            "port": taker.get("port"),
+            "verdict": "silent_listener",
+            "evidence": "socket.accepting" if taker.get("accepting") else "socket.bind_refused",
+            "app": None,
+            "holders": taker.get("holders") or [],
+            "will_not_kill": "本工具不会终止不属于自己的进程。",
+        })
     return conflicts
 
 
@@ -484,13 +496,12 @@ def _probe_uv() -> dict[str, Any]:
 
 
 def _probe_port(port: int) -> dict[str, Any]:
-    """端口占用探测：区分空闲 / 被占（被占时是否是本产品由 doctor 的可达性检查判断）。"""
-    import socket
+    """端口占用探测：区分空闲 / 被占，被占时点名监听进程（与 start 起启动器前用的是同一个 `ports.port_taken`，E-07）。
+    被占的是不是本产品由 doctor 的身份判定（endpoints / port_conflicts）回答。"""
+    from horosa_skill.runtime.ports import port_taken
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(0.5)
-        occupied = sock.connect_ex(("127.0.0.1", port)) == 0
-    return {"port": port, "occupied": occupied}
+    taken = port_taken(port)
+    return {"port": port, "occupied": taken is not None, **({"accepting": taken["accepting"], "holders": taken["holders"]} if taken else {})}
 
 
 def _doctor_environment_context(settings: Settings) -> dict[str, Any]:
@@ -610,6 +621,9 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
                 report["endpoints"] = manager.endpoint_identities()
         except Exception as exc:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废，但失败本身要如实入报告（v0.41.1）
             report["endpoints_error"] = f"{type(exc).__name__}: {exc}"
+        if report.get("mode") == "managed" and report.get("endpoints"):
+            with _budget.timed("port_takers"):
+                report["port_takers"] = manager._ports_taken_by_others(report["endpoints"])
     report["port_conflicts"] = _doctor_port_holders(report)
     # 监听范围（v0.38.0 B1）：绑 0.0.0.0 的服务不是"坏"，但 Windows 上会弹防火墙、暴露到局域网 —— 进 warnings 而非 issues。
     report["listener_scope"] = _doctor_listener_scope(settings)

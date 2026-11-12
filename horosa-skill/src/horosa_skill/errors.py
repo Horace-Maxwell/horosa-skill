@@ -551,6 +551,18 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "pass_a_64_hex_sha256",
     },
+    # 端口被 HTTP 探针看不见的监听者占着（E-07）：不是「没装 / 去体检」，是换端口或关进程。
+    "runtime.port_taken": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "本机服务要用的端口被别的进程占着（details.port_takers 点名了端口与进程），所以没有启动。关掉那个进程，"
+            "或设 HOROSA_PORTS=auto 让本工具换到空闲端口。本工具不会去终止它。",
+            "A port the local services need is held by another process (details.port_takers names the port and the "
+            "process), so nothing was started. Stop that process, or set HOROSA_PORTS=auto to move to free ports. This "
+            "tool will not stop it for you.",
+        ),
+        "next_action": "free_the_port_or_set_horosa_ports_auto",
+    },
     # 清单条目没有摘要 = 下载来的归档无从校验（C-15 / E-15：旧行为是一声不吭地不校验）。
     "runtime.install_sha256_missing": {
         "kind": "environment",

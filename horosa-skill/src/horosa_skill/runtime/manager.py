@@ -41,7 +41,7 @@ from horosa_skill.runtime.pidlock import (
     try_pid_lock,
 )
 from horosa_skill.runtime.procs import pid_alive, process_start_token
-from horosa_skill.runtime.ports import port_holders
+from horosa_skill.runtime.ports import port_holders, port_taken
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.runtime.windows_jar_patch import WindowsBootJarPatchMixin
 from horosa_skill.runtime.mac_launcher_patch import MacLauncherPatchMixin
@@ -239,6 +239,15 @@ def _parse_manifest_text(text: str) -> tuple[dict[str, Any] | None, str | None]:
     if not isinstance(payload, dict) or not isinstance(payload.get("platforms"), dict):
         return None, "the JSON has no `platforms` object (an API error body, or some other file?)"
     return payload, None
+
+
+def _describe_takers(takers: list[dict[str, Any]]) -> str:
+    """`java_backend :9999 ← pid 123 (nc -l 9999)`；点不出进程时如实说不知道是谁。"""
+    parts = []
+    for taker in takers:
+        holders = ", ".join(f"pid {h.get('pid')} ({str(h.get('command') or '?')[:60]})" for h in taker.get("holders") or [])
+        parts.append(f"{taker.get('label')} :{taker.get('port')} ← {holders or 'unknown process / 查不出进程'}")
+    return "; ".join(parts)
 
 
 def _is_local_location(value: str) -> bool:
@@ -1564,6 +1573,10 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
 
                     self._update_runtime_state(_remember_nonce)
 
+                    # 🔴 E-07：HTTP 探针看不见的监听者（不说 HTTP / 只 accept 不应答）也占着端口：现在就点名，
+                    # 别起了启动器再让用户等满预算拿一个 conflicts 为空的 runtime.start_timeout。
+                    self._require_ports_free_of_others(initial_status)
+
                     env = self._launcher_env()
                     env["HOROSA_LAUNCH_NONCE"] = launch_nonce
 
@@ -1665,13 +1678,20 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             },
                         )
                     if not readiness["ready"]:
+                        taken = self._ports_taken_by_others(readiness["endpoints"])
                         raise RuntimeInstallError(
-                            "Local Horosa runtime did not become ready in time.",
+                            bilingual(
+                                "本机 Horosa runtime 没有在时限内就绪。"
+                                + (f"端口被别的进程占着：{_describe_takers(taken)}。" if taken else ""),
+                                "The local Horosa runtime did not become ready in time."
+                                + (f" A port is held by another process: {_describe_takers(taken)}." if taken else ""),
+                            ),
                             code="runtime.start_timeout",
                             details={
                                 "command": command,
                                 "timeout_seconds": self.settings.runtime_start_timeout_seconds,
                                 "endpoints": readiness["endpoints"],
+                                "port_takers": taken,
                                 **self._start_failure_context(manifest),
                             },
                         )
@@ -2944,6 +2964,57 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     "will_not_kill": "本工具不会终止不属于自己的进程。",
                 },
             )
+
+    def _ports_taken_by_others(self, endpoints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """HTTP 上没应答、socket 上却有监听者、且证明不了是我们自己的那些端点（E-07）。
+
+        「我们自己的」= 监听进程是注册表里记的 service_pids，或映像 / 命令行住在本 runtime 根下（启动到一半的自家服务，
+        交给启动器自己的「pid files already exist → 先停再起」处理）。点不出监听进程时不算我们的。
+        """
+        from horosa_skill.runtime.identity import _holder_evidence, _port_of
+
+        state = self.load_runtime_state() or {}
+        own_pids = {int(p) for p in state.get("service_pids") or [] if isinstance(p, int) or str(p).isdigit()}
+        takers: list[dict[str, Any]] = []
+        for entry in endpoints:
+            if entry.get("reachable"):
+                continue  # 答得上来的已经由身份握手判过了
+            port = _port_of(str(entry.get("url") or ""))
+            if port is None:
+                continue
+            taken = port_taken(port)
+            if not taken:
+                continue
+            holders = taken.get("holders") or []
+            if any(h.get("pid") in own_pids for h in holders):
+                continue
+            if any(_holder_evidence(int(h["pid"]), self.runtime_root, need_name=False)[0] for h in holders if h.get("pid")):
+                continue
+            takers.append({"label": entry.get("label"), "url": entry.get("url"), **taken})
+        return takers
+
+    def _require_ports_free_of_others(self, endpoints: list[dict[str, Any]]) -> None:
+        takers = self._ports_taken_by_others(endpoints)
+        if not takers:
+            return
+        raise RuntimeInstallError(
+            bilingual(
+                f"本机服务要用的端口被别的进程占着：{_describe_takers(takers)}。没有启动（也不会去终止它）。",
+                f"A port the local services need is held by another process: {_describe_takers(takers)}. Nothing was "
+                "started (and that process will not be stopped by this tool).",
+            ),
+            code="runtime.port_taken",
+            details={
+                "port_takers": takers,
+                "next_action": bilingual(
+                    "关掉占端口的进程，或换端口：HOROSA_PORTS=auto 自动挑空闲端口，或设 HOROSA_LOCAL_BACKEND_PORT / "
+                    "HOROSA_LOCAL_CHART_PORT。",
+                    "Stop the process holding the port, or move ports: HOROSA_PORTS=auto picks free ones, or set "
+                    "HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT.",
+                ),
+                "will_not_kill": "本工具不会终止不属于自己的进程。",
+            },
+        )
 
     def _service_status_settled(self) -> list[dict[str, Any]]:
         """doctor 用：一边通、一边不通时短暂复探，别把一次抖动报成「某服务没起」（tests/test_doctor_partial_reprobe.py）。
