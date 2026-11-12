@@ -154,8 +154,9 @@ def test_invalid_tool_payload_returns_agent_recovery_prompt(tmp_path) -> None:
     assert exc_info.value.code == "tool.invalid_payload"
     recovery = exc_info.value.details["agent_recovery"]
     assert recovery["must_ask_user"] is True
-    assert "调用 `chart` 前需要先确认" in recovery["prompt_to_user"]
-    assert any(item["field"] == "date/time/place" for item in recovery["ask_if_missing"])
+    # v0.50：只问校验卡住的字段（不拿空载荷重放整份问卷），双语、点名技法。
+    assert "`date`" in recovery["prompt_to_user"] and "「本命盘」" in recovery["prompt_to_user"] and " / " in recovery["prompt_to_user"]
+    assert "date" in [item["field"] for item in recovery["ask_if_missing"]]
 
 
 def test_service_starts_runtime_before_first_remote_call_when_probe_fails(tmp_path) -> None:

@@ -199,9 +199,10 @@ def test_gate_asks_zone_where_year_month_pillars_depend_on_it(tmp_path) -> None:
     for tool in ("tieban", "shaozi", "chunzi", "taixuan"):
         asked = {i["field"] for i in validate_agent_preflight(tool, {"date": "1990-01-01", "time": "12:00:00"})["ask_if_missing"]}
         assert "zone" in asked, tool
-        given = {i["field"] for i in validate_agent_preflight(tool, {"date": "1990-01-01", "time": "12:00:00", "zone": "+08:00"})["ask_if_missing"]}
+        # v0.50：问题全答了闸门就放行（结果里没有 ask_if_missing）。
+        given = {i["field"] for i in validate_agent_preflight(tool, {"date": "1990-01-01", "time": "12:00:00", "zone": "+08:00"}).get("ask_if_missing", [])}
         assert "zone" not in given, tool
-    assert "zone" not in {i["field"] for i in validate_agent_preflight("xianqin", {"date": "1990-01-01"})["ask_if_missing"]}
+    assert "zone" not in {i["field"] for i in validate_agent_preflight("xianqin", {"date": "1990-01-01"}).get("ask_if_missing", [])}
 
 
 # ---------------------------------------------------------------- F6：options 键表 / 回执 / 类型
