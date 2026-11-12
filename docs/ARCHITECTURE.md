@@ -48,6 +48,14 @@ flowchart TD
 - `src/horosa_skill/agent_guidance/`（v0.41.1 起是包，导入路径 `horosa_skill.agent_guidance.X` 不变）
   - 澄清闸策略（族策略 + 工具专属策略、`PREFLIGHT_EXEMPT_TOOLS`）——`agent_guidance.required` 从这里出；
     `base` 常量与敏感设置表 → `policies` 族策略 → `tool_table` 逐工具指引 → `contracts` 输入契约 → `catalog` 汇总 → `preflight` 闸门判定
+- `src/horosa_skill/input_fields.py` + `input_normalization.py`（v0.50.0）
+  - 逐字段校验：日期 / 时刻 / 时区 / 经纬度 / 性别的解析器与设置词表（`Vocabulary`；技法域词表在 `western_vocab.py` / `cn_vocab.py`），
+    读得懂的写法记一条读法说明进 `warnings`，读不懂的按字段结构化拒（`tool.invalid_*` / `tool.invalid_option`）；所有技法与嵌套当事人共用
+- `src/horosa_skill/engine/`：`router.py` + `intents.py`（问句先归一再按意图路由）、`time_roles.py`（每个技法要的时刻是谁的：
+  natal / moment / natal+target / window / year / two_party …）、`dispatch_plan.py`（按角色逐技法拼载荷：起课类只读 `context`）、
+  `hecan_select.py`（合参选技法：闸门与服务共用，按领域缺省配对）
+- `src/horosa_skill/result_view.py`（v0.50.0）
+  - MCP 结果的阅读视图与模型预算（纯函数，CLI 与存档不经过）：正文一遍 + 段索引 + 依据卡，超预算按段裁并给续读调用
 - `src/horosa_skill/decisions/`
   - 可选云端决策层（TypeSafe Jev，默认关）：`policy.py`（scope / surfaces）、`redact.py`、`ledger.py`、`eval.py`（`contracts/jev_thresholds.json` 阈值锁）、`fake.py`（离线替身）
 - `src/horosa_skill/contracts_locator.py`
@@ -63,14 +71,20 @@ flowchart TD
 
 ## 数据流
 
-- tool run
-  - 输入 schema 校验
+- tool run（MCP 面经 `surfaces/mcp_server.py::_gated_run`）
+  - 确认标记必须是 JSON 布尔 + 逐字段校验（`precheck_arguments`，先于闸门）
+  - 命主档案并入、`place` 解析成坐标与时区（闸门看解析之后的载荷）
+  - 澄清闸（`agent_guidance`）：只问还没回答的问题；事实（钟点 / 性别 / 另一方 / 起课此刻）确认标记代替不了
   - runtime / local engine 执行
-  - export_snapshot（export_text + sections，唯一导出契约）+ technique_card（算源卡）
+  - export_snapshot（export_text + sections，唯一导出契约）+ technique_card（每项设置带来源；knowledge / export 域不附）
   - trace 记录
-  - artifact / manifest 写入
+  - artifact / manifest 写入（完整信封）
+  - MCP 返回前按 `response_view` 整形（缺省阅读视图）
 - dispatch
-  - 自然语言选工具
-  - 共享 group_id
-  - 子工具各自 trace_id
-  - 汇总 export contract
+  - 问句归一（繁 / 全角 / 英文 / 拼音）→ 意图路由；多种技法都合适或不在目录时结构化拒绝
+  - 闸门 = 选中技法问题的并集；按时间角色逐技法拼载荷（起课类读 `context`，推运读问句年份 / `context`），`time_basis` 写回结果
+  - 共享 group_id，子工具各自 trace_id
+  - 各技法结果在 MCP 上是阅读视图、共用一份预算
+- hecan
+  - `tools` 里的 `run_id` 原样复用，其余技法按 dispatch 同一路径起盘；没给 `tools` 按领域配一对
+  - 少于两个技法算成 = 不是合参（`cross_validation: false`）；每技法带有上限的正文节选；合参自己落一条 run（`child_runs`）

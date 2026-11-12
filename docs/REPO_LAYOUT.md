@@ -107,7 +107,10 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   - `registry.py` — `TOOL_DEFINITIONS` (name → domain/action/endpoint/`execution`/input model), the facade / compact tool counts, and the tool-family sets guidance and the service both read.
   - `client.py` — HTTP clients (`HorosaApiClient`, `HorosaPlainJsonClient`) for `:9999` / `:8899`.
   - `js_client.py` — `HorosaJsEngineClient`: runs `horosa-core-js` via the bundled Node; raises on JS failure.
-  - `router.py` / `synonyms.py` — natural-language dispatch across tools (shared group/trace ids); corpus in `contracts/router_corpus.json`.
+  - `router.py` / `synonyms.py` / `intents.py` / `query_text.py` — natural-language dispatch across tools (the query is folded to Simplified first, then routed by intent class; shared group/trace ids); corpus in `contracts/router_corpus.json`.
+  - `time_roles.py` (whose moment each technique needs: natal / moment / natal+target / window / year / two_party) → `dispatch_plan.py`
+    (per-technique payloads for dispatch / hecan: cast techniques read only `context`; `time_basis` per tool) and `hecan_select.py`
+    (hecan technique choice and domain default pairs, shared by the gate and the service).
   - `decennials.py` — standalone Python 十年大运 port.
 - `exports/` — `registry.py` (the `aiExport.js`-mirroring `AI_EXPORT_PRESET_SECTIONS` per technique,
   `AI_EXPORT_SETTINGS_VERSION` / `MIRRORED_UPSTREAM_AIEXPORT_VERSION`) + `parser.py` (parse snapshot text into
@@ -118,7 +121,9 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
 - `runtime/` — `manager.py` (install / upgrade / doctor / start / stop; the post-install payload patches it applies live in
   `windows_jar_patch.py` and `mac_launcher_patch.py`, mixed into `HorosaRuntimeManager`), `identity.py` (endpoint ownership evidence),
   `registry.py` (atomic state file), `ports.py` / `procs.py` / `pidlock.py` / `mirrors.py`.
-- `memory/store.py` — SQLite + JSON artifacts + run manifests + AI-answer write-back.
+- `memory/` — `store.py` (SQLite + JSON artifacts + run manifests + AI-answer write-back with `answer_history`; one search document per run),
+  `rebuild.py` (`memory rebuild`: re-index from the files under `runs/`, auto-run after a damaged database is quarantined),
+  `manage.py` (`memory delete` / `memory export`), `search.py` / `timefilter.py` (query filters: text, person, technique names, `after` / `before`).
 - `knowledge/` — bundled Xingque knowledge (`store.py` + `data/`), the user's own notes (`user.py`, indexed by `index.py`, optional `vectors.py`), the shared retrieval rules (`retrieval.py`), and the cross-corpus search (`search.py`).
 - `reports/` — JSON / DOCX / PDF reports. `builder.py` orders the document; `source.py` reads the stored run; `question.py`, `default_report.py`, `gates.py`, `search_index.py` and `template.py` each own one part; `layout.py` sets the printed order; `renderers.py`, `figures.py` and `pdf_tagging.py` draw it.
 - `surfaces/` — `mcp_server.py` (`create_mcp_server`: registers the tools / resources / prompts; server instructions;
@@ -140,9 +145,12 @@ an instance named explicitly via `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROO
   `technique_provenance.json`.
 - `astro_rulers.py`, `astro_sidereal.py`, `time_basis.py`, `predictive_text.py`, `shenshu_options.py`,
   `western_options_doc.py` — ported upstream helpers (rulers, ayanamsa, time-basis labels, option docs).
-- `tracing.py`, `errors.py`, `evaluation_lock.py`, `input_normalization.py`, `testing_payloads.py`,
-  `client_tools.py`, `jsonc.py`, `benchmark/` — tracing, typed errors + recovery table, eval gating, input
-  normalization, sample payloads, the callable-tool client layer, JSONC tolerance, and benchmarking.
+- `input_fields.py` + `input_normalization.py` — per-field parsing and validation (date / time / zone / coordinates / gender, setting
+  vocabularies via `Vocabulary`; technique vocabularies in `western_vocab.py` / `cn_vocab.py`): readable forms are kept with a note in
+  `warnings`, unreadable ones refused field by field. `result_view.py` — the MCP reading view and per-result model budget.
+- `tracing.py`, `errors.py`, `evaluation_lock.py`, `testing_payloads.py`,
+  `client_tools.py`, `jsonc.py`, `benchmark/` — tracing, typed errors + recovery table, eval gating,
+  sample payloads, the callable-tool client layer, JSONC tolerance, and benchmarking.
 
 ### contracts/ (machine-readable truth, 19 files)
 

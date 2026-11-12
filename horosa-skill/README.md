@@ -185,11 +185,15 @@ uv run horosa-skill client openclaw-check --workspace ~/.openclaw/workspace
 
 ```bash
 echo '{
-  "query":"请综合奇门、六壬和星盘分析当前状态",
-  "birth":{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"},
-  "save_result": true
+  "agent_confirmed_settings": true,
+  "clarification_notes": "用户确认：1990-01-01 12:00 上海出生；此刻 2026-11-12 16:40 在上海；按星阙默认。",
+  "query": "请用奇门和六壬看看我现在的状况",
+  "birth": {"date": "1990-01-01", "time": "12:00", "place": "上海"},
+  "context": {"date": "2026-11-12", "time": "16:40", "place": "上海"}
 }' | uv run horosa-skill ask --stdin
 ```
+
+奇门、六壬这类起课技法按 `context` 里的「此刻」起盘（出生数据代替不了），缺了会被拦下并说明缺什么；结果的 `time_basis` 写明每个技法用了哪个时刻。`agent_confirmed_settings` 只在用户真的确认过设置之后才带。
 
 ### 3. 查看某一次完整记录
 
@@ -203,7 +207,7 @@ uv run horosa-skill memory show <run_id>
 echo '{
   "run_id":"<run_id>",
   "user_question":"我接下来事业走势如何？",
-  "ai_answer":"先稳后升，宜先整理资源再扩张。",
+  "ai_answer_text":"先稳后升，宜先整理资源再扩张。",
   "ai_answer_structured":{"trend":"up_later"}
 }' | uv run horosa-skill memory answer --stdin
 ```
@@ -221,9 +225,11 @@ uv run horosa-skill report render --run-id <run_id> --tool chart --format pdf
 也可以一次性调用某个技法并直接生成报告：
 
 ```bash
-echo '{"date":"2028-04-06","time":"09:33","zone":"8","lat":"31n13","lon":"121e28"}' \
-  | uv run horosa-skill report from-tool qimen --stdin --format pdf --question "请生成奇门结构化报告"
+echo '{"date":"2028-04-06","time":"09:33","place":"上海","question":"这次签约顺不顺","agent_confirmed_settings":true,"clarification_notes":"用户确认：此刻与地点、所问之事；奇门设置按星阙默认。"}' \
+  | uv run horosa-skill report from-tool qimen --stdin --format pdf --style chart
 ```
+
+`--style chart` 出不含 AI 解读的完整排盘报告；要解读报告就用 `--ai-answer-file` / `--ai-report-file` 把写好的解读一起传进来。
 
 ## 常用命令
 
@@ -236,9 +242,11 @@ uv run horosa-skill tool list
 ### 直接运行单个方法
 
 ```bash
-echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28"}' \
+echo '{"date":"1990-01-01","time":"12:00","zone":"8","lat":"31n14","lon":"121e28","defaults_accepted":true,"clarification_notes":"用户接受星阙默认（Alcabitus 宫制、回归黄道）。"}' \
   | uv run horosa-skill tool run chart --stdin
 ```
+
+没带确认、又有会改结果的设置没回答时，命令以退出码 2 结束，stderr 的 JSON 是 `agent_guidance.required` 与可直接转给用户的追问。
 
 ### 运行本地 Phase 2 技法
 
@@ -292,7 +300,10 @@ echo '{"domain":"astro","category":"planet","key":"Sun"}' \
 - `uv run horosa-skill memory query`
 - `uv run horosa-skill memory query --text "事业走势" --artifact-kind report_pdf`
 - `uv run horosa-skill memory show <run_id>`
-- `uv run horosa-skill memory answer --stdin`
+- `uv run horosa-skill memory answer --stdin`（再写一次不会盖掉上一次，旧答案留在 `answer_history`）
+- `uv run horosa-skill memory delete --entity 妈妈`（也可 `--run-id` / `--before`；默认只列出，`--yes` 才删，已交付的报告文件只列不删）
+- `uv run horosa-skill memory export --entity 妈妈 --out <空文件夹>`（导出成人能直接读的文件夹）
+- `uv run horosa-skill memory rebuild`（照 `runs/` 里的产物重建检索库，只增不删）
 - `uv run horosa-skill report template --run-id <run_id>`
 - `uv run horosa-skill report render --run-id <run_id> --format pdf`
 
@@ -319,6 +330,7 @@ cp .env.example .env
 - `HOROSA_SKILL_HOST`
 - `HOROSA_SKILL_PORT`
 - `HOROSA_MCP_COMPACT`（=1 精简面 14 个工具）/ `HOROSA_TOOLSETS`（按域裁剪全量面）
+- `HOROSA_MCP_RESULT_VIEW`（MCP 结果缺省视图，缺省 `reading` 阅读视图；`full` = 完整信封）/ `HOROSA_MCP_RESULT_MAX_CHARS` / `HOROSA_MCP_RESULT_MAX_TOKENS`（单次结果预算）
 - `HOROSA_MCP_TOKEN` / `HOROSA_MCP_ALLOWED_HOSTS`（streamable-http 的 Bearer 与 Host 白名单）
 - `HOROSA_REPORT_OUTPUT_ROOTS`（报告 `output_path` 允许写入的目录白名单）
 - `HOROSA_RUNTIME_MIRROR`（离线 runtime 下载镜像）
