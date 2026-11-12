@@ -58,6 +58,14 @@ Include as much as possible:
 - **Western chart family (v0.40.0)**: the export text now mirrors 星阙's `buildAstroSnapshotContent` byte-for-byte — GFM tables
   for 宫位宫头 / 星与虚点 / 相位 / 行星 / 希腊点 / 12分度, the [起盘信息] 古典口径 / 命主星 / 日主星·时主星 lines, and
   `strongRecption` defaults to `0` like 星阙 (explicit values win). `relative` and `jieqi_year` [X宿盘] follow the upstream builders.
+- **Classical calibre keys and other enum settings (v0.50.0)**: every key behind the 古典口径 line (`termsVariant`, `triplicity`,
+  `westNodeType`, `westLilithType`, `sectBuffer`, `vocMode`, `orbSystem`, `lotProjection` …) and the enum knobs of `decennials`,
+  `qizhengelection`, `planet_cycles`, `horary` / `election` (`category`, `topicId`, `school`) are read through one vocabulary:
+  canonical values, case variants, Chinese names (`真交点`, `托勒密`, `月食`) and booleans where they mean something are read as the
+  canonical value (noted in warnings); anything else is refused with `tool.invalid_option` and the full list in `details.options` —
+  pick from that list, don't drop the setting. Orbs (`cazimiOrb` / `combustOrb` / `underBeamsOrb` / `antisciaOrb` / `starOrb`) also take
+  any number in range; `harmonic` must be a whole number 1–360 (no clamping). [古典格局] is attached to `chart` and `relocation` only
+  (relocation: analysed at the birth place, as 星阙); `chart13` / `chart12` / `hellen_chart` / `harmonic` / `draconic` carry no natal analysis.
 - **神数 (14 tools)**: inputs use `date` (YYYY-MM-DD) + `time` (HH:mm:ss) strings like every other
   technique (the skill splits them into engine y/m/d/h/m internally), plus 晚子时 switches and a **typed**
   `options` object: each tool accepts exactly the keys listed in
