@@ -472,8 +472,13 @@ birth / subject / context、natal、davison）、`horosa_tool_run`、dispatch / 
 **中式技法的入口形态（v0.50.0，台账 2026-11-12「中式技法：同一个输入…」）**：日界两开关写在顶层或 options / 三式合一三层口径里都行，入口
 `_lift_day_switches` 合成**一个**顶层值（不同 → `tool.field_conflict`，只收 1 / 0）；远端只发显式值（缺省 = 引擎缺省 1 / 1），快照 / JS 标签吃
 `options_cn._resolved_day_switches` 补了缺省的同一值——盘头与正文由 live 全目录守卫对拍。公元前只有一种写法：`_fold_era` 把 `ad=-1` + 不带负号的日期改成
-带负号日期（`ad` 只收 1 / -1）。中式枚举设置进 `cn_vocab.py`（规范值锚到 adapter / 上游选项源码），别在 adapter 写 `x === 'a' ? 'a' : 缺省`；
+带负号日期（`ad` 只收 1 / -1）；`ad` 只属于出生日期——窗口 / 起课 / 流年 / 派生盘的纪元由那个日期自己的负号定（`_ad_of_date`，窗口恒 ad=1），
+守卫 `tests/test_era_pairing.py` 扫源码。中式枚举设置进 `cn_vocab.py`（规范值锚到 adapter / 上游选项源码），别在 adapter 写 `x === 'a' ? 'a' : 缺省`；
 起课输入（nums / counts / 卦名）给了用不了就 `tool.<技法>_invalid_cast`，结果带 `cast_method`；本地历法域外 `tool.date_range_unsupported`。
+**缺时地**：模型里 zone 可选的技法逐个归属（`agent_guidance.questions`：`ZONE_FACT_TOOLS` / `place_fields_required` 占时起课 / `ZONE_FREE_TOOLS` 附理由 /
+`ZONE_DOCUMENTED_DEFAULTS` 照用并进 warnings），缺了由 `_require_result_facts` 逐字段报（`tool.missing_field`，提示「或传 place」）——绝不让引擎按 +08:00 兜底。
+**择日的失败先问是不是入参**：`options_zeri.zeri_engine_input_error` 把窗口 / 条件树 / 坐标 / 历法域外映射成逐字段错误，本地扫描窗口越出公元 1–9999 扫描前拒；
+展示盘只吃择日技法声明的键。共用段表的工具按设计不出的段登记在 `exports.registry.SECTIONS_NOT_PRODUCED_BY_DESIGN`（带理由，走 not_requested，不留占位）。
 西占 / 推运 / 七政择日的词表集中在 `western_vocab.py`（v0.50.0-dev）：古典口径键值域取自 `CLASSICAL_PARAM_SPEC_NON_DEFAULT`、挂在 BirthInput，规范值同时是
 后端请求值、口径行、`[古典格局]` 请求体的唯一来源；数值类用 `Vocabulary(numeric=True)`（按数比，绝不落进别名表）；容许度类收量程内任意数；
 上游靠页面下拉框兜住的值域，headless 入口一律自己兜（`tests/test_western_vocab.py` 的性质测试：变体写法要么读成规范值且整份入参相同，要么拒）。
@@ -1063,8 +1068,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    本 Mac 首次 0-skip 全量 live 全绿）。`_java_result_code_hint` 已按此三分判别，
    认不出的 9999 只给中性提示（v0.26.1+ 台账）。
    **缺 lat 的失败会「时好时坏」**：Java 农历结果按**年**缓存，任何一次带 lat 的请求会焐热该年，
-   此后同年无 lat 请求全部成功——复现必须换**冷年份**（v0.26.1 已给五个占时工具加
-   `tool.<name>_cast_geo_required` 前置闸，缺谁报谁）。
+   此后同年无 lat 请求全部成功——复现必须换**冷年份**（五个占时工具入口按 `place_fields_required`
+   逐字段报缺 date / time / zone / lat / lon，`tool.missing_field`）。
 6. **`pkill` 法则**：bundled 与 live 星阙都跑 `webchartsrv.py`——`pkill -f webchartsrv.py` 会连星阙
    `:8899` 一起杀。按端口/PID 停；stop 脚本已按 runtime root 限定 kill 范围，保持住。
 

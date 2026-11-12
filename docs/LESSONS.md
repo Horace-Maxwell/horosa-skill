@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-12) | 深审余项：缺 zone 时小六壬 KeyError、占时四技法 HTTP 500、神数 / 本地八字链悄悄按 +08:00；命主的 ad=-1 把择日窗口 / 流年 / 起课读成公元前；择日入参问题报「重试 / doctor」；卦义不认卦名；日子馆印 undefined；十年大运印英文星名；按设计不出的段印失败式占位 | 时地缺什么报什么（`place_fields_required`）、`ad` 只跟它配对的日期（`_ad_of_date`，源码扫描守卫）、`zeri_engine_input_error` 逐字段、`SECTIONS_NOT_PRODUCED_BY_DESIGN` 走 not_requested |
 | v0.50.0-dev (2026-11-12) | 中式技法同一个输入多种读法：太乙缺省日界盘头写 24 点、日柱按 23 点，options 里的日界只到快照（盘头辛酉正文壬戌）；`ad=-1` 被正传 / 小六壬 / 神数 ×14 等丢掉、太乙一半用；飞宫只认字面 female；小六壬「道家」、地占未知传本、紫微 timeAlg=2、河洛 / 一掌经十余旋钮认不出就换缺省；小六壬 nums / 灵棋 counts 用不了就悄悄以时起；河洛 / 参评公元前出空盘 ok=true | 入口只留一种形态（日界合到顶层、`ad=-1` 改写成带负号日期、派生盘 ad 随自己的时刻）；`cn_vocab` 词表挂 schema；给了用不了就拒并回 `cast_method`；本地历法域外 `tool.date_range_unsupported` |
 | v0.50.0-dev (2026-11-12) | 十把守卫红不了：live lane 跳过原因是黑名单、归档防穿越零测试、旋钮接线按子串、分层豁免空循环、并发测的是 sleep 桩、值金标认标题和注释、闸门自测住在被测数据里、约 50 条要上游检出的测试有的猜路径、错误码「有测试」认注释；selfcheck 中途 await 之后的 async 失败退出码 0 | 每把守卫配一个它声称要抓的变异体实跑红；跳过原因带标签、live lane 白名单；字面量 / 调用 / 代码记号才算证据；期望搬出被测物 |
 | v0.50.0-dev (2026-11-12) | 每次 JS spawn 静态加载全部 51 个技法模块（0.13 s，天星择日一次 7 次 = 1.1 s）；create_mcp_server 1.9 s（别名整词判断每次重编大字符类正则、每个默认值建 TypeAdapter） | tools/index.js 按需 import（0.04 s/次，129 次调用 stdout 逐字节相同）；正则只编一次、默认值短路、签名按进程缓存（tools/list 逐字节相同，0.9 s） |
@@ -243,6 +244,45 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-12 — 深审余项：缺时区、纪元串到别的日期、择日入参报「重试」、按设计不出的段读成失败
+
+- **症状**（共享引擎实测，全目录探查）：
+  - 缺 `zone`：小六壬占时起课 → `tool.internal_error`（KeyError 'zone'）；飞宫时支起 / 小成图占时 / 轨策占时 / 神数正传 → `transport.http_error`
+    （/nongli/time 收到 null）。参评 / 河洛 / 一掌经（vendored baziLunarLocal：`parseZoneHours` 缺省 8）与八个读时区的神数
+    （taixuan / fendjing / beiji / nanji / chunzi / xianqin / cetian / qizhengkin：后端 `timezone_to_float(zone, 8.0)`）悄悄按 +08:00 算；
+    世运盘悄悄按上游缺省地点起盘、不说。
+  - 公元前生人 `ad=-1`（入口已折进出生日期的负号）：天星 / 七政 / 印度择时把 2028 年的窗口读成公元前 2028 年（印度直接 electionscan_failed）；
+    七政四余 [流年流曜] 乙亥（应丙午）；六壬行年没给 guaAd 时起课盘也成了公元前。
+  - 择日入参问题报成引擎故障（恢复建议「重试，再不行跑 doctor」）：印度择时公元前窗口 `electionscan_failed`、奇门 / 八字 / 太乙 / 六壬择时
+    `scan_failed`、黄历择吉 `engine_failed`「须给起止日期」；紫微 / 三式择时在 lunar-javascript 域外照样出结果；黄历择吉多给的 `hour=25`
+    入口说「没有哪个设置读它」，却流进展示盘、崩成 `base_chart_failed`（transport）。
+  - 卦义查询把认不出的名字原样发给后端（只认六位码）：「不存在卦：无」、乾 / 屯 / 既濟什么都不印，ok=true。
+  - 日子馆不传 role：快照「undefined（甲）」，合婚行整行缺席（按 self / spouse 找人）。十年大运印「起运主星：Jupiter」「AI输出模式：l1_all」「宫制：1」。
+  - election 的 `topic`：runner 私下 `topicId or topic` 读、不经词表，入口却报「没有哪个设置读它」。
+  - `_vocab_key` 去掉「-」「.」：'-1' 与 '1'、'1.0' 与 '10' 同键（纪元只能绕开词表另写；dayunLength 会把 1.0 读成 10）。
+  - 13 宫盘 [古典格局] / [占星地图]、卦义三段断卦、紫微规则库六段命盘、没要的默认关段：印「本次本地计算结果未返回…」，读起来像失败。
+  - dispatch 说明行「原文见 results.<tool>.warnings」在 memory_show 阅读视图里指向空（占位只有 {ok, see}）。
+- **根因**：可选字段（有免起课路径、沿用神数基类）缺了没人判，引擎各自兜底；`ad` 被当成「这次调用的纪元」到处转发，而它只属于出生日期；
+  择日的错误分类只看「哪一层失败」，不看「失败的是不是入参」；共用导出键的工具没法说「这段我本来就不出」。
+- **修复 / 守卫**：
+  1. `agent_guidance.questions`：`ZONE_FACT_TOOLS` + `place_fields_required`（占时起课只在按时刻起课那条路要 date/time/zone/lat/lon）+
+     `ZONE_FREE_TOOLS`（附理由）+ `ZONE_DOCUMENTED_DEFAULTS`（世运盘：照用、进 warnings）；入口 `_require_result_facts` 逐字段报缺
+     （`input_normalization.missing_fields_error`，与 pydantic 缺字段同一份条目、提示「或传 place」）。旧码族 `cast_geo_required` 并入删除。
+     守卫 `tests/test_zone_requirement.py`（每个 zone 可选的技法都要有归属；live 换两个时区逐字节证明「无关」）。
+  2. `ad` 只跟它配对的日期：窗口恒 ad=1（日期自带负号，上游天星同），起课 / 流年 / 四柱取数 `_ad_of_date(那个日期)`。守卫
+     `tests/test_era_pairing.py`（源码扫描：读载荷 ad 的请求体，date 必须是同一载荷的 date；例外逐个写理由）+ live。
+  3. `options_zeri.window_field_error` / `zeri_engine_input_error`：本地扫描窗口越出公元 1–9999 → 扫描前 `tool.date_range_unsupported`；
+     引擎回报的窗口 / 条件树 / 坐标 / 域外问题（本地 JS 与后端 /…scan 信封）→ 逐字段错误；搜索窗三种坏法逐字段；展示盘只吃择日技法自己声明的键，
+     展示盘因入参被拒时原样带出输入错误。守卫 `tests/test_zeri_input_errors.py`。
+  4. 卦义：`data/gua64_names.json`（vendored Gua64 生成，node 在场时对拍）；日子馆角色词表（第一个人缺省本人，其后缺了就问）；十年大运照上游
+     `utils/decennials.js` 取星名；`topic` 进全局别名（只在模型真有规范键时改名）；`_vocab_key` 数字按数值规范化、`parse_with` 只留 input_fields 一份。
+  5. `exports.registry.SECTIONS_NOT_PRODUCED_BY_DESIGN`（工具 → 段 → 理由）与缺席的默认关段走 not_requested（`not_requested_reasons`）。
+     守卫 `tests/test_sections_not_produced.py`（live 照样例跑）。memory_show 阅读视图的调度占位留 warnings（`tests/test_dispatch_notes_pointer.py`）。
+- **规则**：缺用户事实不许由引擎兜底——模型里可选的字段由 `place_fields_required` 这类「这次调用要什么」的谓词判；`ad` 永远不跨日期转发；
+  择日 / 引擎回报的失败先问「是不是入参」，是就逐字段；共用段表的工具按设计不出的段登记理由，不留失败式占位。
+- **报告不修**：金口诀 [用神强弱]「当令旺」与四位表「水死」不一致、「空亡：子丑」而 ken xunKong 为空——vendored 上游 JinKouCalc.normalizeKinjinkouData
+  的行为（强弱用本地四位旺衰表 fallback.wangShuai、表行用 ken 后端月令；xunKong 空时回落本地旬空），vendored 文件与 pin v3.13.2 只差 import，只报上游。
 
 ### v0.50.0-dev / 2026-11-12 — 中式技法：同一个输入，盘头一种读法、正文另一种（日界 · 公元前 · 设置词表 · 起课输入）
 
