@@ -114,7 +114,8 @@ tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput �
 
 **`warnings` 非空 = 结果不完整**（`ok` 仍为 true）：「降级：…」是某个子引擎/可选后端本次失败、对应段缺席；
 「结果不完整：预设 N 段中 M 段未产出」列出缺了哪些段。报告里必须如实转述，不得把缺席的段当成「该技法没有此项」，
-也不得自行补算；dispatch 的 `warnings` 只汇总哪些工具带说明，细节在 `results.<tool>.warnings`。
+也不得自行补算；dispatch 的 `warnings` 按类汇总各技法的说明（降级 / 缺段、地点解析、其他），细节在 `results.<tool>.warnings`；
+dispatch 自己的 warnings 还会说明「这句话没点名技法、缺省选了某技法」和「哪些设置没有技法接受」——照实告诉用户。
 
 **每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
 它是确定性元数据，`response_view` 精简时也在。要文件就调 `horosa_technique_report`（`run_id` 单次、
@@ -188,8 +189,21 @@ Allowed shortcuts:
 
 Runtime enforcement (the gate is in code, not just policy):
 
-- Calculation tools, `horosa_dispatch` and `horosa_hecan` reject unconfirmed calls with `agent_guidance.required`
-  (one confirmation covers every technique a `dispatch` / `hecan` call selects).
+- Calculation tools, `horosa_dispatch` and `horosa_hecan` refuse with `agent_guidance.required` while a
+  result-changing question is still open for the payload they would actually run (one confirmation covers every
+  technique a `dispatch` / `hecan` call selects). A question the payload already answers is not asked, and a call
+  with nothing open runs without a flag (`huangli {"date": …}`).
+- Items marked `fact: true` (gender where the result depends on it, the question's moment, the second person,
+  the target year, a gua name) are facts only the user has: `agent_confirmed_settings` / `defaults_accepted`
+  cannot stand in for them. Ask, put the value in the payload (`details.agent_recovery.example_payload` shows
+  where), retry.
+- `horosa_dispatch` / `horosa_hecan`: put the current moment in `context` (`date`, `time`, `zone`, `place` or
+  `lat`/`lon`) — cast techniques (奇门 / 六壬 / 六爻 / 塔罗 / 黄历 …) use it, never the birth data, and the server
+  does not assume its own clock is the user's. Each result's `time_basis` says which moment each technique used.
+  Routing refusals: `dispatch.technique_choice_required` (several techniques fit: relay the prompt, let the user
+  pick), `dispatch.out_of_scope` (not in the catalogue: say so; `details.covers` lists what is),
+  `dispatch.no_matching_tool` (`reason: not_in_catalogue` = recognised but not offered, with the nearest tools).
+  Unsure which technique? `horosa_agent_guidance {"intent": "<the user's words>"}` returns the few relevant ones.
 - After the user answers, include `agent_confirmed_settings: true`. If the user explicitly accepts
   defaults, include `defaults_accepted: true`. Add `clarification_notes` summarizing what was confirmed
   (e.g. `"user accepted Xingque defaults for guirengType and automatic day/night noble-person"`).

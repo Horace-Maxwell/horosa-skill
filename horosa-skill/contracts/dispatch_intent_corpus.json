@@ -2006,6 +2006,14 @@
    }
   },
   {
+   "query": "which Gregorian date is the 15th day of the 8th lunar month",
+   "birth": true,
+   "expect": {
+    "code": "dispatch.no_matching_tool",
+    "reason": "not_in_catalogue"
+   }
+  },
+  {
    "query": "请分析一下",
    "birth": true,
    "expect": {
