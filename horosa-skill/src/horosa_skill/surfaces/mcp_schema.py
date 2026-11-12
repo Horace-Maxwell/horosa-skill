@@ -372,10 +372,10 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
             tool.parameters = advertised_dispatch_schema(hecan=tool.name == "horosa_hecan")
         elif tool.name == "horosa_tool_run":
             tool.parameters = _with_tool_run_docs(tool.parameters or {})
-    # 🔴 最后对**全部**工具跑一遍可移植化 —— 包括 8 个门面与 horosa_tool_run。
+    # 🔴 最后对**全部**工具跑一遍可移植化 —— 包括门面工具与 horosa_tool_run。
     # 此前只有技法 + dispatch/hecan 被重写，门面直接把 pydantic 的原始 schema
     # （anyOf:[…,{null}] / default:null / title / $ref）发上线；而在精简面下门面**就是**全部工具。
-    # 门面不走技法的广告白名单，基类上的隐藏字段（`knowledge`）也要在这里摘掉，否则 8 个门面各漏一个无描述属性。
+    # 门面不走技法的广告白名单，基类上的隐藏字段（`knowledge`）也要在这里摘掉，否则每个门面各漏一个无描述属性。
     for tool in manager.list_tools():
         params = tool.parameters or {}
         props = params.get("properties")

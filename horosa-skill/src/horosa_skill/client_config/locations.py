@@ -28,7 +28,7 @@ _CLIENT_RESTART_HINTS = {
 
 # 各客户端的工具总数上限（实测/官方文档，2026-09）：Cursor 全局约 40 个**静默丢弃**超出部分；
 # VS Code Copilot 与 OpenAI 兼容端 128（跨所有 server 共享）；Windsurf 100；Codex 无工具搜索，
-# 116 个工具的定义每轮都进上下文（约 7 万 token）。这些客户端默认发精简面（11 个门面工具，
+# 全量面（门面 + 全部技法）的工具定义每轮都进上下文（约 7 万 token）。这些客户端默认发精简面（只有门面工具，
 # 全部技法仍可经 horosa_tool_run 按名直达）；Claude Code / Claude Desktop 有工具搜索且无硬上限，
 # 保持全量平铺（按名可见 = 更好的发现性）。`--surface full|compact` 可覆盖。
 _CLIENT_COMPACT_DEFAULT = {

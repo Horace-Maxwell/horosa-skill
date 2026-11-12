@@ -64,7 +64,7 @@ def _request_object(raw_request: Any) -> dict[str, Any]:
         except json.JSONDecodeError as exc:
             # 🔴 这两条以前抛 JSONDecodeError / ValueError，而它们发生在**每个工具的 try 之前** ——
             # lowlevel server 把裸异常转成 `isError: true` + 原始字符串，绕过整个 agent_recovery 契约。
-            # 影响面是全部 116 个工具：任何把参数字符串化的客户端（Gemini CLI、旧版 Cursor、
+            # 影响面是全部工具：任何把参数字符串化的客户端（Gemini CLI、旧版 Cursor、
             # n8n/Dify 的模板渲染）传坏一次 JSON，拿到的就是一条模型无从恢复的裸报错。
             raise ToolValidationError(
                 "request 不是合法的 JSON 对象字符串。",

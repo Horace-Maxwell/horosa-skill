@@ -142,7 +142,7 @@ _JEV_TRIMS = (
 
 
 # 精简面（HOROSA_MCP_COMPACT=1）的 instructions：Cursor / VS Code / Codex / Gemini / Windsurf / Cline / Zed 默认就是
-# 精简面——多数客户端读到的说明书若写「120 tools」，而 tools/list 只给 11 个，模型就不知道技法该怎么到达。
+# 精简面——多数客户端读到的说明书若写全量的工具数，而 tools/list 只给精简面那几个，模型就不知道技法该怎么到达。
 # 这里把「覆盖面」一行与末段换成精简面的真实用法（同样受 2048 字节预算约束，测试两态都锁）。
 _FULL_COVERS = f"WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)"
 _COMPACT_COVERS = f"WHAT IT COVERS ({COMPACT_SURFACE_TOOL_COUNT} tools: {len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
@@ -540,7 +540,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
     toolsets = plan["resolved"]["effective"]
     if plan["tool_run"]:
-        # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
+        # 精简模式（门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT 个工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证全部技法（len(TOOL_DEFINITIONS)）可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 是路由参数、不是载荷：合并之前取走。未显式给出的公共字段是 None，由 `_merge_mcp_arguments`
