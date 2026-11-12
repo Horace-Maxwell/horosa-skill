@@ -1,0 +1,1601 @@
+{
+	"_provenance": {
+		"countries": "CLDR 48.0 via Node v26.7.0 Intl.DisplayNames (en/zh/zh-Hant, long+short) for every ISO 3166-1 code in citiesFull.json; plus hand-written aliases (names only).",
+		"subdivisions": "ISO 3166-2 first-level codes + common English/Chinese names, hand-written (names only, no coordinates). Not verifiable against the library: its GeoNames rows carry a country code only.",
+		"generator": "horosa-skill/scripts/gen_place_regions.mjs"
+	},
+	"countries": {
+		"AD": [
+			"Andorra",
+			"安道尔",
+			"安道爾"
+		],
+		"AE": [
+			"United Arab Emirates",
+			"阿拉伯联合酋长国",
+			"阿拉伯聯合大公國",
+			"UAE",
+			"U.A.E.",
+			"Emirates",
+			"阿联酋"
+		],
+		"AF": [
+			"Afghanistan",
+			"阿富汗"
+		],
+		"AG": [
+			"Antigua & Barbuda",
+			"安提瓜和巴布达",
+			"安地卡及巴布達"
+		],
+		"AL": [
+			"Albania",
+			"阿尔巴尼亚",
+			"阿爾巴尼亞"
+		],
+		"AM": [
+			"Armenia",
+			"亚美尼亚",
+			"亞美尼亞"
+		],
+		"AO": [
+			"Angola",
+			"安哥拉"
+		],
+		"AR": [
+			"Argentina",
+			"阿根廷"
+		],
+		"AS": [
+			"American Samoa",
+			"美属萨摩亚",
+			"美屬薩摩亞"
+		],
+		"AT": [
+			"Austria",
+			"奥地利",
+			"奧地利",
+			"Österreich"
+		],
+		"AU": [
+			"Australia",
+			"澳大利亚",
+			"澳洲"
+		],
+		"AW": [
+			"Aruba",
+			"阿鲁巴",
+			"荷屬阿魯巴"
+		],
+		"AX": [
+			"Åland Islands",
+			"奥兰群岛",
+			"奧蘭群島"
+		],
+		"AZ": [
+			"Azerbaijan",
+			"阿塞拜疆",
+			"亞塞拜然"
+		],
+		"BA": [
+			"Bosnia & Herzegovina",
+			"Bosnia",
+			"波斯尼亚和黑塞哥维那",
+			"波士尼亞與赫塞哥維納"
+		],
+		"BB": [
+			"Barbados",
+			"巴巴多斯",
+			"巴貝多"
+		],
+		"BD": [
+			"Bangladesh",
+			"孟加拉国",
+			"孟加拉"
+		],
+		"BE": [
+			"Belgium",
+			"比利时",
+			"比利時"
+		],
+		"BF": [
+			"Burkina Faso",
+			"布基纳法索",
+			"布吉納法索"
+		],
+		"BG": [
+			"Bulgaria",
+			"保加利亚",
+			"保加利亞"
+		],
+		"BH": [
+			"Bahrain",
+			"巴林"
+		],
+		"BI": [
+			"Burundi",
+			"布隆迪",
+			"蒲隆地"
+		],
+		"BJ": [
+			"Benin",
+			"贝宁",
+			"貝南"
+		],
+		"BM": [
+			"Bermuda",
+			"百慕大",
+			"百慕達"
+		],
+		"BN": [
+			"Brunei",
+			"文莱",
+			"汶萊"
+		],
+		"BO": [
+			"Bolivia",
+			"玻利维亚",
+			"玻利維亞"
+		],
+		"BQ": [
+			"Caribbean Netherlands",
+			"荷属加勒比区",
+			"荷蘭加勒比區"
+		],
+		"BR": [
+			"Brazil",
+			"巴西"
+		],
+		"BS": [
+			"Bahamas",
+			"巴哈马",
+			"巴哈馬"
+		],
+		"BT": [
+			"Bhutan",
+			"不丹"
+		],
+		"BW": [
+			"Botswana",
+			"博茨瓦纳",
+			"波札那"
+		],
+		"BY": [
+			"Belarus",
+			"白俄罗斯",
+			"白俄羅斯"
+		],
+		"BZ": [
+			"Belize",
+			"伯利兹",
+			"貝里斯"
+		],
+		"CA": [
+			"Canada",
+			"加拿大"
+		],
+		"CD": [
+			"Congo - Kinshasa",
+			"刚果（金）",
+			"剛果（金夏沙）"
+		],
+		"CF": [
+			"Central African Republic",
+			"中非共和国",
+			"中非共和國"
+		],
+		"CG": [
+			"Congo - Brazzaville",
+			"刚果（布）",
+			"剛果（布拉薩）"
+		],
+		"CH": [
+			"Switzerland",
+			"瑞士",
+			"Schweiz",
+			"Suisse"
+		],
+		"CI": [
+			"Côte d’Ivoire",
+			"科特迪瓦",
+			"象牙海岸",
+			"Ivory Coast"
+		],
+		"CK": [
+			"Cook Islands",
+			"库克群岛",
+			"庫克群島"
+		],
+		"CL": [
+			"Chile",
+			"智利"
+		],
+		"CM": [
+			"Cameroon",
+			"喀麦隆",
+			"喀麥隆"
+		],
+		"CN": [
+			"China",
+			"中国",
+			"中國",
+			"PRC",
+			"People's Republic of China",
+			"Mainland China",
+			"中华人民共和国",
+			"中國大陸",
+			"中国大陆",
+			"大陆"
+		],
+		"CO": [
+			"Colombia",
+			"哥伦比亚",
+			"哥倫比亞"
+		],
+		"CR": [
+			"Costa Rica",
+			"哥斯达黎加",
+			"哥斯大黎加"
+		],
+		"CU": [
+			"Cuba",
+			"古巴"
+		],
+		"CV": [
+			"Cape Verde",
+			"佛得角",
+			"維德角"
+		],
+		"CW": [
+			"Curaçao",
+			"库拉索",
+			"庫拉索"
+		],
+		"CY": [
+			"Cyprus",
+			"塞浦路斯",
+			"賽普勒斯"
+		],
+		"CZ": [
+			"Czechia",
+			"捷克",
+			"Czech Republic"
+		],
+		"DE": [
+			"Germany",
+			"德国",
+			"德國",
+			"Deutschland"
+		],
+		"DJ": [
+			"Djibouti",
+			"吉布提",
+			"吉布地"
+		],
+		"DK": [
+			"Denmark",
+			"丹麦",
+			"丹麥"
+		],
+		"DM": [
+			"Dominica",
+			"多米尼克"
+		],
+		"DO": [
+			"Dominican Republic",
+			"多米尼加共和国",
+			"多明尼加共和國"
+		],
+		"DZ": [
+			"Algeria",
+			"阿尔及利亚",
+			"阿爾及利亞"
+		],
+		"EC": [
+			"Ecuador",
+			"厄瓜多尔",
+			"厄瓜多"
+		],
+		"EE": [
+			"Estonia",
+			"爱沙尼亚",
+			"愛沙尼亞"
+		],
+		"EG": [
+			"Egypt",
+			"埃及"
+		],
+		"EH": [
+			"Western Sahara",
+			"西撒哈拉"
+		],
+		"ER": [
+			"Eritrea",
+			"厄立特里亚",
+			"厄利垂亞"
+		],
+		"ES": [
+			"Spain",
+			"西班牙",
+			"España",
+			"Espana"
+		],
+		"ET": [
+			"Ethiopia",
+			"埃塞俄比亚",
+			"衣索比亞"
+		],
+		"FI": [
+			"Finland",
+			"芬兰",
+			"芬蘭"
+		],
+		"FJ": [
+			"Fiji",
+			"斐济",
+			"斐濟"
+		],
+		"FM": [
+			"Micronesia",
+			"密克罗尼西亚",
+			"密克羅尼西亞"
+		],
+		"FO": [
+			"Faroe Islands",
+			"法罗群岛",
+			"法羅群島"
+		],
+		"FR": [
+			"France",
+			"法国",
+			"法國"
+		],
+		"GA": [
+			"Gabon",
+			"加蓬",
+			"加彭"
+		],
+		"GB": [
+			"United Kingdom",
+			"UK",
+			"英国",
+			"英國",
+			"U.K.",
+			"Britain",
+			"Great Britain",
+			"大不列颠",
+			"英伦"
+		],
+		"GE": [
+			"Georgia",
+			"格鲁吉亚",
+			"喬治亞"
+		],
+		"GF": [
+			"French Guiana",
+			"法属圭亚那",
+			"法屬圭亞那"
+		],
+		"GG": [
+			"Guernsey",
+			"根西岛",
+			"根息"
+		],
+		"GH": [
+			"Ghana",
+			"加纳",
+			"迦納"
+		],
+		"GI": [
+			"Gibraltar",
+			"直布罗陀",
+			"直布羅陀"
+		],
+		"GL": [
+			"Greenland",
+			"格陵兰",
+			"格陵蘭"
+		],
+		"GM": [
+			"Gambia",
+			"冈比亚",
+			"甘比亞"
+		],
+		"GN": [
+			"Guinea",
+			"几内亚",
+			"幾內亞"
+		],
+		"GP": [
+			"Guadeloupe",
+			"瓜德罗普",
+			"瓜地洛普"
+		],
+		"GQ": [
+			"Equatorial Guinea",
+			"赤道几内亚",
+			"赤道幾內亞"
+		],
+		"GR": [
+			"Greece",
+			"希腊",
+			"希臘"
+		],
+		"GT": [
+			"Guatemala",
+			"危地马拉",
+			"瓜地馬拉"
+		],
+		"GU": [
+			"Guam",
+			"关岛",
+			"關島"
+		],
+		"GW": [
+			"Guinea-Bissau",
+			"几内亚比绍",
+			"幾內亞比索"
+		],
+		"GY": [
+			"Guyana",
+			"圭亚那",
+			"蓋亞那"
+		],
+		"HK": [
+			"Hong Kong SAR China",
+			"Hong Kong",
+			"中国香港特别行政区",
+			"香港",
+			"中國香港特別行政區",
+			"Hong Kong SAR",
+			"HKSAR",
+			"香港特区",
+			"香港特别行政区"
+		],
+		"HN": [
+			"Honduras",
+			"洪都拉斯",
+			"宏都拉斯"
+		],
+		"HR": [
+			"Croatia",
+			"克罗地亚",
+			"克羅埃西亞"
+		],
+		"HT": [
+			"Haiti",
+			"海地"
+		],
+		"HU": [
+			"Hungary",
+			"匈牙利"
+		],
+		"ID": [
+			"Indonesia",
+			"印度尼西亚",
+			"印尼"
+		],
+		"IE": [
+			"Ireland",
+			"爱尔兰",
+			"愛爾蘭"
+		],
+		"IL": [
+			"Israel",
+			"以色列"
+		],
+		"IM": [
+			"Isle of Man",
+			"马恩岛",
+			"曼島"
+		],
+		"IN": [
+			"India",
+			"印度"
+		],
+		"IQ": [
+			"Iraq",
+			"伊拉克"
+		],
+		"IR": [
+			"Iran",
+			"伊朗"
+		],
+		"IS": [
+			"Iceland",
+			"冰岛",
+			"冰島"
+		],
+		"IT": [
+			"Italy",
+			"意大利",
+			"義大利",
+			"Italia"
+		],
+		"JE": [
+			"Jersey",
+			"泽西岛",
+			"澤西島"
+		],
+		"JM": [
+			"Jamaica",
+			"牙买加",
+			"牙買加"
+		],
+		"JO": [
+			"Jordan",
+			"约旦",
+			"約旦"
+		],
+		"JP": [
+			"Japan",
+			"日本",
+			"日本国"
+		],
+		"KE": [
+			"Kenya",
+			"肯尼亚",
+			"肯亞"
+		],
+		"KG": [
+			"Kyrgyzstan",
+			"吉尔吉斯斯坦",
+			"吉爾吉斯"
+		],
+		"KH": [
+			"Cambodia",
+			"柬埔寨"
+		],
+		"KI": [
+			"Kiribati",
+			"基里巴斯",
+			"吉里巴斯"
+		],
+		"KM": [
+			"Comoros",
+			"科摩罗",
+			"葛摩"
+		],
+		"KN": [
+			"St. Kitts & Nevis",
+			"圣基茨和尼维斯",
+			"聖克里斯多福及尼維斯"
+		],
+		"KP": [
+			"North Korea",
+			"朝鲜",
+			"北韓",
+			"DPRK",
+			"北朝鲜"
+		],
+		"KR": [
+			"South Korea",
+			"韩国",
+			"南韓",
+			"Korea",
+			"Republic of Korea",
+			"ROK",
+			"南韩",
+			"南朝鲜",
+			"大韩民国"
+		],
+		"KW": [
+			"Kuwait",
+			"科威特"
+		],
+		"KY": [
+			"Cayman Islands",
+			"开曼群岛",
+			"開曼群島"
+		],
+		"KZ": [
+			"Kazakhstan",
+			"哈萨克斯坦",
+			"哈薩克"
+		],
+		"LA": [
+			"Laos",
+			"老挝",
+			"寮國"
+		],
+		"LB": [
+			"Lebanon",
+			"黎巴嫩"
+		],
+		"LC": [
+			"St. Lucia",
+			"圣卢西亚",
+			"聖露西亞"
+		],
+		"LI": [
+			"Liechtenstein",
+			"列支敦士登",
+			"列支敦斯登"
+		],
+		"LK": [
+			"Sri Lanka",
+			"斯里兰卡",
+			"斯里蘭卡"
+		],
+		"LR": [
+			"Liberia",
+			"利比里亚",
+			"賴比瑞亞"
+		],
+		"LS": [
+			"Lesotho",
+			"莱索托",
+			"賴索托"
+		],
+		"LT": [
+			"Lithuania",
+			"立陶宛"
+		],
+		"LU": [
+			"Luxembourg",
+			"卢森堡",
+			"盧森堡"
+		],
+		"LV": [
+			"Latvia",
+			"拉脱维亚",
+			"拉脫維亞"
+		],
+		"LY": [
+			"Libya",
+			"利比亚",
+			"利比亞"
+		],
+		"MA": [
+			"Morocco",
+			"摩洛哥"
+		],
+		"MC": [
+			"Monaco",
+			"摩纳哥",
+			"摩納哥"
+		],
+		"MD": [
+			"Moldova",
+			"摩尔多瓦",
+			"摩爾多瓦"
+		],
+		"ME": [
+			"Montenegro",
+			"黑山",
+			"蒙特內哥羅"
+		],
+		"MG": [
+			"Madagascar",
+			"马达加斯加",
+			"馬達加斯加"
+		],
+		"MH": [
+			"Marshall Islands",
+			"马绍尔群岛",
+			"馬紹爾群島"
+		],
+		"MK": [
+			"North Macedonia",
+			"北马其顿",
+			"北馬其頓"
+		],
+		"ML": [
+			"Mali",
+			"马里",
+			"馬利"
+		],
+		"MM": [
+			"Myanmar (Burma)",
+			"Myanmar",
+			"缅甸",
+			"緬甸",
+			"Burma"
+		],
+		"MN": [
+			"Mongolia",
+			"蒙古"
+		],
+		"MO": [
+			"Macao SAR China",
+			"Macao",
+			"中国澳门特别行政区",
+			"澳门",
+			"中國澳門特別行政區",
+			"澳門",
+			"Macau",
+			"Macau SAR",
+			"Macao SAR",
+			"澳门特区",
+			"澳门特别行政区"
+		],
+		"MP": [
+			"Northern Mariana Islands",
+			"北马里亚纳群岛",
+			"北馬利安納群島"
+		],
+		"MQ": [
+			"Martinique",
+			"马提尼克",
+			"馬丁尼克"
+		],
+		"MR": [
+			"Mauritania",
+			"毛里塔尼亚",
+			"茅利塔尼亞"
+		],
+		"MT": [
+			"Malta",
+			"马耳他",
+			"馬爾他"
+		],
+		"MU": [
+			"Mauritius",
+			"毛里求斯",
+			"模里西斯"
+		],
+		"MV": [
+			"Maldives",
+			"马尔代夫",
+			"馬爾地夫"
+		],
+		"MW": [
+			"Malawi",
+			"马拉维",
+			"馬拉威"
+		],
+		"MX": [
+			"Mexico",
+			"墨西哥"
+		],
+		"MY": [
+			"Malaysia",
+			"马来西亚",
+			"馬來西亞"
+		],
+		"MZ": [
+			"Mozambique",
+			"莫桑比克",
+			"莫三比克"
+		],
+		"NA": [
+			"Namibia",
+			"纳米比亚",
+			"納米比亞"
+		],
+		"NC": [
+			"New Caledonia",
+			"新喀里多尼亚",
+			"新喀里多尼亞"
+		],
+		"NE": [
+			"Niger",
+			"尼日尔",
+			"尼日"
+		],
+		"NG": [
+			"Nigeria",
+			"尼日利亚",
+			"奈及利亞"
+		],
+		"NI": [
+			"Nicaragua",
+			"尼加拉瓜"
+		],
+		"NL": [
+			"Netherlands",
+			"荷兰",
+			"荷蘭",
+			"Holland",
+			"The Netherlands"
+		],
+		"NO": [
+			"Norway",
+			"挪威"
+		],
+		"NP": [
+			"Nepal",
+			"尼泊尔",
+			"尼泊爾"
+		],
+		"NR": [
+			"Nauru",
+			"瑙鲁",
+			"諾魯"
+		],
+		"NZ": [
+			"New Zealand",
+			"新西兰",
+			"紐西蘭",
+			"Aotearoa"
+		],
+		"OM": [
+			"Oman",
+			"阿曼"
+		],
+		"PA": [
+			"Panama",
+			"巴拿马",
+			"巴拿馬"
+		],
+		"PE": [
+			"Peru",
+			"秘鲁",
+			"秘魯"
+		],
+		"PF": [
+			"French Polynesia",
+			"法属波利尼西亚",
+			"法屬玻里尼西亞"
+		],
+		"PG": [
+			"Papua New Guinea",
+			"巴布亚新几内亚",
+			"巴布亞紐幾內亞"
+		],
+		"PH": [
+			"Philippines",
+			"菲律宾",
+			"菲律賓",
+			"Philippine Islands"
+		],
+		"PK": [
+			"Pakistan",
+			"巴基斯坦"
+		],
+		"PL": [
+			"Poland",
+			"波兰",
+			"波蘭"
+		],
+		"PR": [
+			"Puerto Rico",
+			"波多黎各"
+		],
+		"PS": [
+			"Palestinian Territories",
+			"Palestine",
+			"巴勒斯坦领土",
+			"巴勒斯坦",
+			"巴勒斯坦自治區"
+		],
+		"PT": [
+			"Portugal",
+			"葡萄牙"
+		],
+		"PW": [
+			"Palau",
+			"帕劳",
+			"帛琉"
+		],
+		"PY": [
+			"Paraguay",
+			"巴拉圭"
+		],
+		"QA": [
+			"Qatar",
+			"卡塔尔",
+			"卡達"
+		],
+		"RE": [
+			"Réunion",
+			"留尼汪",
+			"留尼旺"
+		],
+		"RO": [
+			"Romania",
+			"罗马尼亚",
+			"羅馬尼亞"
+		],
+		"RS": [
+			"Serbia",
+			"塞尔维亚",
+			"塞爾維亞"
+		],
+		"RU": [
+			"Russia",
+			"俄罗斯",
+			"俄羅斯",
+			"Russian Federation",
+			"俄国"
+		],
+		"RW": [
+			"Rwanda",
+			"卢旺达",
+			"盧安達"
+		],
+		"SA": [
+			"Saudi Arabia",
+			"沙特阿拉伯",
+			"沙烏地阿拉伯",
+			"KSA"
+		],
+		"SB": [
+			"Solomon Islands",
+			"所罗门群岛",
+			"索羅門群島"
+		],
+		"SC": [
+			"Seychelles",
+			"塞舌尔",
+			"塞席爾"
+		],
+		"SD": [
+			"Sudan",
+			"苏丹",
+			"蘇丹"
+		],
+		"SE": [
+			"Sweden",
+			"瑞典"
+		],
+		"SG": [
+			"Singapore",
+			"新加坡"
+		],
+		"SI": [
+			"Slovenia",
+			"斯洛文尼亚",
+			"斯洛維尼亞"
+		],
+		"SK": [
+			"Slovakia",
+			"斯洛伐克"
+		],
+		"SL": [
+			"Sierra Leone",
+			"塞拉利昂",
+			"獅子山"
+		],
+		"SM": [
+			"San Marino",
+			"圣马力诺",
+			"聖馬利諾"
+		],
+		"SN": [
+			"Senegal",
+			"塞内加尔",
+			"塞內加爾"
+		],
+		"SO": [
+			"Somalia",
+			"索马里",
+			"索馬利亞"
+		],
+		"SR": [
+			"Suriname",
+			"苏里南",
+			"蘇利南"
+		],
+		"SS": [
+			"South Sudan",
+			"南苏丹",
+			"南蘇丹"
+		],
+		"ST": [
+			"São Tomé & Príncipe",
+			"圣多美和普林西比",
+			"聖多美普林西比"
+		],
+		"SV": [
+			"El Salvador",
+			"萨尔瓦多",
+			"薩爾瓦多"
+		],
+		"SX": [
+			"Sint Maarten",
+			"荷属圣马丁",
+			"荷屬聖馬丁"
+		],
+		"SY": [
+			"Syria",
+			"叙利亚",
+			"敘利亞"
+		],
+		"SZ": [
+			"Eswatini",
+			"斯威士兰",
+			"史瓦帝尼"
+		],
+		"TC": [
+			"Turks & Caicos Islands",
+			"特克斯和凯科斯群岛",
+			"土克斯及開科斯群島"
+		],
+		"TD": [
+			"Chad",
+			"乍得",
+			"查德"
+		],
+		"TG": [
+			"Togo",
+			"多哥"
+		],
+		"TH": [
+			"Thailand",
+			"泰国",
+			"泰國"
+		],
+		"TJ": [
+			"Tajikistan",
+			"塔吉克斯坦",
+			"塔吉克"
+		],
+		"TL": [
+			"Timor-Leste",
+			"东帝汶",
+			"東帝汶"
+		],
+		"TM": [
+			"Turkmenistan",
+			"土库曼斯坦",
+			"土庫曼"
+		],
+		"TN": [
+			"Tunisia",
+			"突尼斯",
+			"突尼西亞"
+		],
+		"TO": [
+			"Tonga",
+			"汤加",
+			"東加"
+		],
+		"TR": [
+			"Türkiye",
+			"土耳其",
+			"Turkey"
+		],
+		"TT": [
+			"Trinidad & Tobago",
+			"特立尼达和多巴哥",
+			"千里達及托巴哥"
+		],
+		"TV": [
+			"Tuvalu",
+			"图瓦卢",
+			"吐瓦魯"
+		],
+		"TW": [
+			"Taiwan",
+			"台湾",
+			"台灣",
+			"ROC",
+			"臺灣"
+		],
+		"TZ": [
+			"Tanzania",
+			"坦桑尼亚",
+			"坦尚尼亞"
+		],
+		"UA": [
+			"Ukraine",
+			"乌克兰",
+			"烏克蘭"
+		],
+		"UG": [
+			"Uganda",
+			"乌干达",
+			"烏干達"
+		],
+		"US": [
+			"United States",
+			"美国",
+			"美國",
+			"USA",
+			"U.S.",
+			"U.S.A.",
+			"America",
+			"United States of America",
+			"美利坚合众国",
+			"美利坚"
+		],
+		"UY": [
+			"Uruguay",
+			"乌拉圭",
+			"烏拉圭"
+		],
+		"UZ": [
+			"Uzbekistan",
+			"乌兹别克斯坦",
+			"烏茲別克"
+		],
+		"VA": [
+			"Vatican City",
+			"梵蒂冈",
+			"梵蒂岡",
+			"Vatican",
+			"Holy See"
+		],
+		"VC": [
+			"St. Vincent & Grenadines",
+			"圣文森特和格林纳丁斯",
+			"聖文森及格瑞那丁"
+		],
+		"VE": [
+			"Venezuela",
+			"委内瑞拉",
+			"委內瑞拉"
+		],
+		"VG": [
+			"British Virgin Islands",
+			"英属维尔京群岛",
+			"英屬維京群島"
+		],
+		"VI": [
+			"U.S. Virgin Islands",
+			"美属维尔京群岛",
+			"美屬維京群島"
+		],
+		"VN": [
+			"Vietnam",
+			"越南",
+			"Viet Nam"
+		],
+		"VU": [
+			"Vanuatu",
+			"瓦努阿图",
+			"萬那杜"
+		],
+		"WS": [
+			"Samoa",
+			"萨摩亚",
+			"薩摩亞"
+		],
+		"XK": [
+			"Kosovo",
+			"科索沃"
+		],
+		"YE": [
+			"Yemen",
+			"也门",
+			"葉門"
+		],
+		"YT": [
+			"Mayotte",
+			"马约特",
+			"馬約特島"
+		],
+		"ZA": [
+			"South Africa",
+			"南非",
+			"RSA"
+		],
+		"ZM": [
+			"Zambia",
+			"赞比亚",
+			"尚比亞"
+		],
+		"ZW": [
+			"Zimbabwe",
+			"津巴布韦",
+			"辛巴威"
+		]
+	},
+	"subdivisions": {
+		"US": [
+			[
+				"AL",
+				"Alabama",
+				"阿拉巴马"
+			],
+			[
+				"AK",
+				"Alaska",
+				"阿拉斯加"
+			],
+			[
+				"AZ",
+				"Arizona",
+				"亚利桑那"
+			],
+			[
+				"AR",
+				"Arkansas",
+				"阿肯色"
+			],
+			[
+				"CA",
+				"California",
+				"Calif",
+				"加州",
+				"加利福尼亚",
+				"加利福尼亚州"
+			],
+			[
+				"CO",
+				"Colorado",
+				"科罗拉多"
+			],
+			[
+				"CT",
+				"Connecticut",
+				"康涅狄格"
+			],
+			[
+				"DE",
+				"Delaware",
+				"特拉华"
+			],
+			[
+				"DC",
+				"District of Columbia",
+				"哥伦比亚特区"
+			],
+			[
+				"FL",
+				"Florida",
+				"佛罗里达",
+				"佛州"
+			],
+			[
+				"GA",
+				"Georgia",
+				"佐治亚",
+				"乔治亚州"
+			],
+			[
+				"HI",
+				"Hawaii",
+				"夏威夷"
+			],
+			[
+				"ID",
+				"Idaho",
+				"爱达荷"
+			],
+			[
+				"IL",
+				"Illinois",
+				"伊利诺伊",
+				"伊利诺伊州"
+			],
+			[
+				"IN",
+				"Indiana",
+				"印第安纳"
+			],
+			[
+				"IA",
+				"Iowa",
+				"艾奥瓦",
+				"爱荷华"
+			],
+			[
+				"KS",
+				"Kansas",
+				"堪萨斯"
+			],
+			[
+				"KY",
+				"Kentucky",
+				"肯塔基"
+			],
+			[
+				"LA",
+				"Louisiana",
+				"路易斯安那"
+			],
+			[
+				"ME",
+				"Maine",
+				"缅因"
+			],
+			[
+				"MD",
+				"Maryland",
+				"马里兰"
+			],
+			[
+				"MA",
+				"Massachusetts",
+				"Mass",
+				"马萨诸塞",
+				"麻省"
+			],
+			[
+				"MI",
+				"Michigan",
+				"密歇根"
+			],
+			[
+				"MN",
+				"Minnesota",
+				"明尼苏达"
+			],
+			[
+				"MS",
+				"Mississippi",
+				"密西西比"
+			],
+			[
+				"MO",
+				"Missouri",
+				"密苏里"
+			],
+			[
+				"MT",
+				"Montana",
+				"蒙大拿"
+			],
+			[
+				"NE",
+				"Nebraska",
+				"内布拉斯加"
+			],
+			[
+				"NV",
+				"Nevada",
+				"内华达"
+			],
+			[
+				"NH",
+				"New Hampshire",
+				"新罕布什尔"
+			],
+			[
+				"NJ",
+				"New Jersey",
+				"新泽西"
+			],
+			[
+				"NM",
+				"New Mexico",
+				"新墨西哥"
+			],
+			[
+				"NY",
+				"New York",
+				"New York State",
+				"纽约州"
+			],
+			[
+				"NC",
+				"North Carolina",
+				"北卡罗来纳",
+				"北卡"
+			],
+			[
+				"ND",
+				"North Dakota",
+				"北达科他"
+			],
+			[
+				"OH",
+				"Ohio",
+				"俄亥俄"
+			],
+			[
+				"OK",
+				"Oklahoma",
+				"俄克拉何马"
+			],
+			[
+				"OR",
+				"Oregon",
+				"俄勒冈"
+			],
+			[
+				"PA",
+				"Pennsylvania",
+				"宾夕法尼亚",
+				"宾州"
+			],
+			[
+				"RI",
+				"Rhode Island",
+				"罗德岛"
+			],
+			[
+				"SC",
+				"South Carolina",
+				"南卡罗来纳",
+				"南卡"
+			],
+			[
+				"SD",
+				"South Dakota",
+				"南达科他"
+			],
+			[
+				"TN",
+				"Tennessee",
+				"田纳西"
+			],
+			[
+				"TX",
+				"Texas",
+				"得克萨斯",
+				"德克萨斯",
+				"德州"
+			],
+			[
+				"UT",
+				"Utah",
+				"犹他"
+			],
+			[
+				"VT",
+				"Vermont",
+				"佛蒙特"
+			],
+			[
+				"VA",
+				"Virginia",
+				"弗吉尼亚"
+			],
+			[
+				"WA",
+				"Washington",
+				"Washington State",
+				"华盛顿州"
+			],
+			[
+				"WV",
+				"West Virginia",
+				"西弗吉尼亚"
+			],
+			[
+				"WI",
+				"Wisconsin",
+				"威斯康星"
+			],
+			[
+				"WY",
+				"Wyoming",
+				"怀俄明"
+			],
+			[
+				"PR",
+				"Puerto Rico",
+				"波多黎各"
+			]
+		],
+		"CA": [
+			[
+				"AB",
+				"Alberta",
+				"阿尔伯塔"
+			],
+			[
+				"BC",
+				"British Columbia",
+				"不列颠哥伦比亚",
+				"卑诗省"
+			],
+			[
+				"MB",
+				"Manitoba",
+				"曼尼托巴"
+			],
+			[
+				"NB",
+				"New Brunswick",
+				"新不伦瑞克"
+			],
+			[
+				"NL",
+				"Newfoundland and Labrador",
+				"Newfoundland",
+				"纽芬兰"
+			],
+			[
+				"NS",
+				"Nova Scotia",
+				"新斯科舍"
+			],
+			[
+				"ON",
+				"Ontario",
+				"安大略",
+				"安大略省"
+			],
+			[
+				"PE",
+				"Prince Edward Island",
+				"爱德华王子岛"
+			],
+			[
+				"QC",
+				"Quebec",
+				"Québec",
+				"魁北克"
+			],
+			[
+				"SK",
+				"Saskatchewan",
+				"萨斯喀彻温"
+			],
+			[
+				"NT",
+				"Northwest Territories"
+			],
+			[
+				"NU",
+				"Nunavut"
+			],
+			[
+				"YT",
+				"Yukon"
+			]
+		],
+		"AU": [
+			[
+				"NSW",
+				"New South Wales",
+				"新南威尔士"
+			],
+			[
+				"VIC",
+				"Victoria",
+				"Victoria State",
+				"维多利亚州"
+			],
+			[
+				"QLD",
+				"Queensland",
+				"昆士兰"
+			],
+			[
+				"WA",
+				"Western Australia",
+				"西澳"
+			],
+			[
+				"SA",
+				"South Australia",
+				"南澳"
+			],
+			[
+				"TAS",
+				"Tasmania",
+				"塔斯马尼亚"
+			],
+			[
+				"ACT",
+				"Australian Capital Territory"
+			],
+			[
+				"NT",
+				"Northern Territory"
+			]
+		],
+		"GB": [
+			[
+				"ENG",
+				"England",
+				"英格兰"
+			],
+			[
+				"SCT",
+				"Scotland",
+				"苏格兰"
+			],
+			[
+				"WLS",
+				"Wales",
+				"威尔士"
+			],
+			[
+				"NIR",
+				"Northern Ireland",
+				"北爱尔兰"
+			]
+		]
+	},
+	"cn_admin_aliases": {
+		"Inner Mongolia": "内蒙古自治区",
+		"Tibet": "西藏自治区",
+		"Shaanxi": "陕西省",
+		"Hong Kong": "香港特别行政区",
+		"Hong Kong SAR": "香港特别行政区",
+		"Macau": "澳门特别行政区",
+		"Macao": "澳门特别行政区",
+		"Taiwan": "台湾省"
+	},
+	"cn_admin_codes": {
+		"香港特别行政区": "HK",
+		"澳门特别行政区": "MO",
+		"台湾省": "TW"
+	}
+}

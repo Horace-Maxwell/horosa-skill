@@ -175,11 +175,11 @@ class KnowledgeSearchInput(FlexibleModel):
 class ProfileInput(FlexibleModel):
     """horosa_profile：命主档案（profiles.py）。广告层只有四个键 + request（tools/list 余量 ~1.9 KB）。"""
 
-    action: Literal["save", "get", "list", "delete"] = Field(description="save / get / list / delete")
+    action: Literal["save", "get", "list", "delete", "rename"] = Field(description="save/get/list/delete/rename")
     name: str | None = Field(default=None, description="档案名（save/get/delete 必填）")
     data: dict[str, Any] | None = Field(
         default=None,
-        description="save：date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes；按名合并，null 删字段",
+        description="save：date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes；按名合并，null 删字段；rename：new_name",
     )
     detail: bool | None = Field(default=None, description="list 时连出生信息一起给")
     # 档案不过澄清闸（不起盘）：基类的闸门三键不进广告层。

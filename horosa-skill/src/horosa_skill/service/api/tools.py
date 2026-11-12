@@ -34,7 +34,7 @@ from horosa_skill.service._context import (
     _run_tool_scope,
     without_presentation_keys,
 )
-from horosa_skill.service.api.place import place_resolution_note
+from horosa_skill.service.api.place import place_caveat_notes, place_resolution_note
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.envelope import (
     _apply_response_view,
@@ -76,12 +76,17 @@ class _ToolCall:
     degrade_notes: list[str]
     # 这次并进载荷的命主档案（profiles.ProfileUse）：技法卡 `profiles` 与 summary 一行读它；不带 notes。
     profile_uses: list[Any] = field(default_factory=list)
-    # 载荷里 `place` 的解析记录（service/api/place.py）：成功 / 失败信封的 warnings 与技法卡都回显，不进引擎请求。
+    # 载荷里 `place` 的解析记录（service/api/place.py）：技法卡 place_resolution（结构化）+ summary 一行（中性说明），
+    # 只有要提醒的事（旧称 / 核对不了的限定词 / 没补上的时区）进 warnings——warnings 在 dispatch 里算「降级」。不进引擎请求。
     place_records: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def place_notes(self) -> list[str]:
         return [place_resolution_note(record) for record in self.place_records]
+
+    @property
+    def place_caveats(self) -> list[str]:
+        return [note for record in self.place_records for note in place_caveat_notes(record)]
 
     @property
     def tool_name(self) -> str:
@@ -96,8 +101,8 @@ def _failure_envelope(call: _ToolCall, *, summary: str, code: str, message: str,
         version=__version__,
         input_normalized=call.input_normalized,
         data={},
-        summary=[summary, *([profile_line] if profile_line else [])],
-        warnings=[*call.place_notes, *call.degrade_notes],
+        summary=[summary, *([profile_line] if profile_line else []), *call.place_notes],
+        warnings=[*call.place_caveats, *call.degrade_notes],
         memory_ref=None,
         error=ErrorInfo(code=code, message=message, details=details),
         code=code,
@@ -256,13 +261,14 @@ class ToolsAPI:
         return store
 
     def profile(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """门面 horosa_profile：命主档案 save / get / list / delete（CLI `profile` 走同一个函数）。"""
+        """门面 horosa_profile：命主档案 save / get / list / delete / rename（CLI `profile` 走同一个函数；export / import 只在 CLI）。"""
         payload, resolution = self._profile_place_coordinates(payload)
         result = birth_profiles.run_action(self.profiles, payload)
         if resolution is not None:
             # 存下的坐标 / 时区来自地名：结果里回显，让 AI 念给用户确认（与技法载荷的 place 同一条解析、同一套回显）。
-            result = {**result, "place_resolution": resolution,
-                      "warnings": [*result.get("warnings", []), place_resolution_note(resolution)]}
+            result = {**result, "place_resolution": {k: v for k, v in resolution.items() if k != "caveat_notes"},
+                      "place_note": place_resolution_note(resolution),
+                      "warnings": [*result.get("warnings", []), *place_caveat_notes(resolution)]}
         return result
 
     def _profile_place_coordinates(self, payload: Any) -> tuple[Any, dict[str, Any] | None]:
@@ -277,10 +283,11 @@ class ToolsAPI:
             return payload, None
         if any(data.get(key) not in (None, "") for key in ("lat", "lon", "gpsLat", "gpsLon")):
             return payload, None
-        previous = next(
-            (p for p in self.profiles.all() if birth_profiles.name_key(p.name) == birth_profiles.name_key(payload.get("name") or "")),
-            None,
-        )
+        rows = self.profiles.all()
+        wanted = payload.get("name") or ""
+        # 与 save 同一套「同一个人」：精确名优先，再繁简折叠（媽媽 = 妈妈）。
+        previous = next((p for p in rows if birth_profiles.name_key(p.name) == birth_profiles.name_key(wanted)), None) or next(
+            (p for p in rows if birth_profiles.store_key(p.name) == birth_profiles.store_key(wanted)), None)
         if previous is not None and previous.place == label and any(k in previous.fields for k in ("lat", "gpsLat")):
             return payload, None
         dated = {**(previous.fields if previous is not None else {}), **{k: v for k, v in data.items() if v is not None}}
@@ -411,10 +418,14 @@ class ToolsAPI:
             summary = [*summary, birth_profiles.profile_summary_line(call.profile_uses)]
         # 工具内部经 `_warnings` 上抛的降级说明（如子引擎不可用）落入 envelope.warnings，
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
-        warnings: list[str] = list(call.place_notes)
+        # 地名解析一行紧跟标题行（标题仍是 summary[0]：dispatch 只取每个子结果的 summary[:1]）。
+        summary = [*summary[:1], *call.place_notes, *summary[1:]]
+        warnings: list[str] = list(call.place_caveats)
         if call.place_records and isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
             # 技法卡在存档之前就挂好了（_compute_tool_result）；这里补上「地点是怎么来的」，同一份存进 memory。
-            response_data["technique_card"]["place_resolution"] = [dict(record) for record in call.place_records]
+            response_data["technique_card"]["place_resolution"] = [
+                {key: value for key, value in record.items() if key != "caveat_notes"} for record in call.place_records
+            ]
         if isinstance(response_data, dict):
             raised = response_data.pop("_warnings", None)
             if isinstance(raised, list):

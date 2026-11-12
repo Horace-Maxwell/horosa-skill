@@ -27,6 +27,7 @@
 | v0.50.0-dev (2026-11-12) | `uninstall --purge-data --yes` 在知识库 / 档案都不在时 rmtree 整个 HOROSA_SKILL_DATA_DIR，连同里面不是本工具写的文件；dry-run 只印一行目录名 | `purge.OWNED_NAMES` 白名单 + `left_in_place` + 只 rmdir；家目录 / 根 / 包着 runtime 根时整条拒绝 |
 | v0.50.0-dev (2026-11-12) | 文档教 `curl -o runtime.zip` 存 macOS 的 tar.gz 资产再 `install --archive`：BadZipFile traceback；代理登录页、半截下载同样 traceback | 魔数认格式；坏归档 `runtime.install_archive_invalid`；`install --sha256`；文档配方按原文真跑 |
 | v0.50.0-dev (2026-11-12) | runtime 根只读时 `runtime start` 回「别的进程正在启动」，永远等不到；启动锁里的 pid 被回收给无关进程后锁永不回收 | 只有 FileExistsError 算持锁；`LockDirNotWritableError` → `runtime.root_not_writable`；锁记 `start_token` 认出回收的 pid |
+| v0.50.0-dev (2026-11-12) | 地名「唯一命中」照收上游 high：NYC → 银川、HK → 海口（拼音首字母算精确）、St. Petersburg → 佛州（地区半截提示）、照样起盘；限定写法（北京市朝阳区、London, UK、Taipei, Taiwan）全找不到；提示语推荐的写法自己也不能用 | skill 自己的接受规则（placeResolve.js verdict）：本名 / 英文名 / 全拼 / 行政区词干 / 别名相等才收，同名多地一律问；551 条语料 + 全库 50 077 条「本名, 本地区」性质测试；档案名繁简同键、rename、CLI 导出导入 |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -347,6 +348,32 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   锁里记 `start_token`（Linux /proc stat 第 22 列、macOS libproc `proc_bsdinfo` 的启动时刻、Windows `GetProcessTimes`），pid 活着但口令不同 = 已被回收；
   口令取不到 / 取法不同 / 旧格式按「不知道」走原规则（宁可多等，不抢真在启动的锁）。doctor 只读报 `runtime:root_not_writable`。
 - **守卫**：`tests/test_runtime_lock_identity.py`（19 条）。负向对照见该文件各条注释。
+### v0.50.0-dev / 2026-11-12 — 地名：上游的 high 不等于「对的城市」；写法、提示语与档案名
+
+- **现象**（深度审计 PL-1…PL-4、IN-14、PR-1，冷客户端 N1 复现）：`place:"NYC"` 起盘落在银川、`HK` 落在海口、`St. Petersburg`
+  落在美国佛州，都是 `confidence: high`、照常出盘。反过来 `北京市朝阳区`、`上海, 中国`、`London, UK`、`Taipei, Taiwan`、`台中`、`北平`
+  全是「找不到」或「歧义」，而 `place.not_found` 的提示正推荐「带省 / 国家，或英文名」——这些写法当时一个也不通。坐标写进 place
+  （`31.2,121.5`）当地名查；只有一个候选也说「对应不止一个地点」；`horosa_place_search` 的 time 写坏静默忽略、limit 被截断不说。
+  地名解析成功的说明只在 `warnings`，dispatch 把它算成「降级」。档案：「媽媽」另存成第二个人；写坏的出生字段让 AI「请补充
+  horosa_profile_data 所需参数」（字段不缺，工具也不存在）。
+- **根因**：v0.48.0 的自动补全把「唯一命中」定义为上游 `resolvePlaceOffline` 的 `confidence == "high"`。上游 `cityMatch.js` 把拼音
+  首字母（`c._pi === q`）与本名、英文名并列为 score 0 的「精确」；`place.js` 的头尾回退里，地区提示只要在任一字段里出现（`St.` 在
+  `St. Petersburg` 的英文名里）就取 `exact[0]` 判 high；不拆逗号、不去「市 / 区」后缀，限定写法整串去比。这是上游 AI 助手的
+  检索评分，不是「何时可以不问用户」的判据；skill 把它当成了后者。提示语是照「应该能用」写的，没人跑过。
+- **修**：skill 自己的接受规则放在上游之后（`horosa-core-js/src/tools/placeResolve.js`，上游字段原样留在回包，裁决另放 `verdict`）：
+  条目本名 / 英文名 / 全拼 / 行政区词干（朝阳区 → 朝阳、北京城区 → 北京）/ skill 别名（`placeData/aliases.json`：缩写、台湾城市中文名、
+  外文旧译、旧称、昵称，每条指向库里唯一一条，坐标从条目取）等于规范化查询才 resolved；限定词（国家、中国行政区上级链）能核对就
+  拿来缩小，州 / 省一级库里核对不了的只核国家并说明；同名多地一律问用户，**不**加「挑大城市」规则（留维护者）。拆分只在用户写的
+  分隔符上做，跨逗号不把词粘成一个键（`León, ES` 粘起来是 `leones` = 阿根廷 Leones）。新码 `place.too_broad` /
+  `place.looks_like_coordinates`；单候选措辞是「请确认」；找不到给拼写相近的建议；place + 经纬度不给 zone 时按坐标补 zone；
+  解析说明进 `summary`，只有旧称 / 核对不了的限定词 / 没补上时区进 `warnings`。档案名身份键折繁简（显示名不改写；旧库两条照旧
+  各取各的），加 rename、CLI export / import，出生字段写坏时说「写法不对」并点名 `horosa_profile`。
+- **守卫**：`tests/test_place_acceptance.py`——551 条语料逐条期望（人工审过，不是快照）；全库 50 077 条「本名, 本地区」必须回到自己
+  （负向对照：去掉「跨逗号不粘连」→ 9 条解析到别处，红）；别名目标在库里唯一；提示语与 errors.py 里 place.* 引起来的每个写法都跑引擎
+  核对能解析；旧 runtime（回包无 verdict）只收与条目名逐字相同的地名。负向对照：精确键加回拼音首字母 → 语料与 P0 用例红；
+  接受改回只看上游 high → NYC 落银川，红。
+- **教训**：上游给的「置信度」是它自己场景的评分，借来当「可以不问用户」的判据之前，要先拿真用户的写法量一遍；提示语里的例子
+  就是接口，必须有测试跑过。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 

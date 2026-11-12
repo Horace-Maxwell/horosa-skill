@@ -526,7 +526,7 @@ def test_profile_tool_is_on_both_surfaces_and_technique_schemas_gain_no_bytes(tm
     for tools in (full, compact):
         tool = tools["horosa_profile"]
         assert set(tool.input_schema["properties"]) == {"request", "action", "name", "data", "detail"}
-        assert tool.input_schema["properties"]["action"]["enum"] == ["save", "get", "list", "delete"]
+        assert tool.input_schema["properties"]["action"]["enum"] == ["save", "get", "list", "delete", "rename"]  # v0.50.0 rename
         assert tool.annotations.destructive_hint is True and tool.annotations.read_only_hint is False
     assert "horosa_profile" in UNLOCALIZED_TOOLS
     assert "profile" in compact["horosa_tool_run"].input_schema["properties"]
@@ -687,3 +687,109 @@ def test_runs_with_a_profile_are_findable_by_the_profile_name(tmp_path: Path) ->
     service.run_tool("ziwei_birth", {**DAD, **CONFIRM})
     found = service.query_memory({"entity": "妈妈"})
     assert [item["run_id"] for item in found["results"]] == [run.memory_ref.run_id]
+
+
+# ── v0.50.0：繁简同名、改名、导出 / 导入、写坏字段的说法（PR-1）────────────────────────────────
+
+
+def test_traditional_and_simplified_names_are_one_profile(tmp_path: Path) -> None:
+    """「媽媽」存进已有的「妈妈」（显示名不改写），不再新建第二条。负向对照：save 回到按 name_key 定位 → 两条，红（实跑过）。"""
+    store = _store(tmp_path)
+    _save(store, "妈妈", {"date": "1962-03-05"})
+    merged = _save(store, "媽媽", {"time": "06:00"})
+    assert merged["created"] is False and merged["profile"]["name"] == "妈妈"
+    assert merged["profile"]["payload"]["time"] == "06:00:00" and any("同一份档案" in w for w in merged["warnings"])
+    assert store.names() == ["妈妈"]
+    assert P.run_action(store, {"action": "get", "name": "媽媽"})["profile"]["name"] == "妈妈"
+
+
+def test_a_store_that_already_holds_both_scripts_keeps_working(tmp_path: Path) -> None:
+    """v0.50.0 前的库可能同时有「妈妈」「媽媽」两条（各自的键）：精确名照旧各取各的、各存各的，不自动合并；
+    只有既不精确匹配哪条、折叠后又两条都像的写法才报歧义。"""
+    import sqlite3
+
+    store = _store(tmp_path)
+    _save(store, "妈妈", {"date": "1962-03-05"})
+    with sqlite3.connect(store.path) as db:  # 旧版写法：键 = name_key（不折繁简）
+        db.execute("INSERT INTO profiles (key, name, fields_json, aliases_json, place, notes, created_at, updated_at)"
+                   " VALUES ('媽媽', '媽媽', '{\"date\": \"1961-01-01\"}', '[]', NULL, NULL, '2026-01-01', '2026-01-01')")
+    assert sorted(store.names()) == ["妈妈", "媽媽"]
+    assert P.run_action(store, {"action": "get", "name": "媽媽"})["profile"]["payload"]["date"] == "1961-01-01"
+    assert P.run_action(store, {"action": "get", "name": "妈妈"})["profile"]["payload"]["date"] == "1962-03-05"
+    updated = _save(store, "媽媽", {"time": "07:00"})
+    assert updated["profile"]["name"] == "媽媽" and updated["profile"]["payload"]["date"] == "1961-01-01"
+    assert len(store.names()) == 2
+    assert _code(lambda: _save(store, "妈媽", {"time": "08:00"})).code == "profile.ambiguous"
+    assert P.run_action(store, {"action": "delete", "name": "媽媽"})["deleted"]["name"] == "媽媽"
+    assert store.names() == ["妈妈"]
+
+
+def test_rename_keeps_the_birth_data_and_refuses_to_merge_two_people(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    _save(store, "妈妈", {**MOM})
+    _save(store, "爸爸", {"date": "1960-11-20"})
+    renamed = P.run_action(store, {"action": "rename", "name": "我妈", "data": {"new_name": "母亲"}})
+    assert renamed["previous_name"] == "妈妈" and renamed["profile"]["name"] == "母亲"
+    got = P.run_action(store, {"action": "get", "name": "母亲"})["profile"]
+    assert got["payload"]["date"] == "1962-03-05" and got["aliases"] == ["我妈", "Mom"] and got["notes"] == MOM["notes"]
+    assert _code(lambda: P.run_action(store, {"action": "get", "name": "妈妈"})).code == "profile.not_found"
+    assert _code(lambda: P.run_action(store, {"action": "rename", "name": "母亲", "data": {"new_name": "爸爸"}})).code == "profile.invalid_payload"
+    assert _code(lambda: P.run_action(store, {"action": "rename", "name": "母亲"})).code == "profile.invalid_payload"
+    script_only = P.run_action(store, {"action": "rename", "name": "母亲", "data": {"new_name": "母親"}})
+    assert script_only["profile"]["name"] == "母親" and sorted(store.names()) == ["母親", "爸爸"]
+
+
+def test_malformed_birth_field_says_malformed_and_names_the_real_tool(tmp_path: Path) -> None:
+    """以前：agent_recovery 说「请补充 `data.time`，这是 `horosa_profile_data` 继续执行所需的参数」——字段并不缺、工具也不存在。"""
+    store = _store(tmp_path)
+    err = _code(lambda: _save(store, "x", {"date": "1990-13-40", "time": "25:00"}))
+    recovery = err.details["agent_recovery"]
+    text = json.dumps(recovery, ensure_ascii=False)
+    assert "horosa_profile_data" not in text and "horosa_profile" in text
+    assert "写法不对" in text and "malformed" in text and "请补充" not in text
+    assert {item["field"] for item in recovery["ask_if_missing"]} == {"data.date", "data.time"}
+    missing = _code(lambda: _save(store, "y", {"time": "08:00"}))
+    assert "缺 `date`" in json.dumps(missing.details["agent_recovery"], ensure_ascii=False)
+
+
+def test_cli_export_then_import_round_trips_every_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from typer.testing import CliRunner
+
+    from horosa_skill.surfaces import cli
+
+    source = _service(tmp_path / "a")
+    _save(source.profiles, "妈妈", {**MOM})
+    _save(source.profiles, "爸爸", {k: v for k, v in DAD.items()})
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "_service", lambda: source)
+    out = tmp_path / "profiles.json"
+    exported = runner.invoke(cli.app, ["profile", "export", "--output", str(out)])
+    assert exported.exit_code == 0 and json.loads(exported.stdout)["count"] == 2
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["format"] == "horosa-birth-profiles" and document["version"] == 1
+
+    target = _service(tmp_path / "b")
+    _save(target.profiles, "爸爸", {"date": "1999-01-01"})
+    monkeypatch.setattr(cli, "_service", lambda: target)
+    first = json.loads(runner.invoke(cli.app, ["profile", "import", "--input", str(out)]).stdout)
+    assert first["imported"] == ["妈妈"] and first["skipped"][0]["name"] == "爸爸"
+    assert P.run_action(target.profiles, {"action": "get", "name": "爸爸"})["profile"]["payload"]["date"] == "1999-01-01"
+    again = json.loads(runner.invoke(cli.app, ["profile", "import", "--input", str(out), "--overwrite"]).stdout)
+    assert sorted(again["imported"]) == ["妈妈", "爸爸"]
+    for name in ("妈妈", "爸爸"):
+        a = P.run_action(source.profiles, {"action": "get", "name": name})["profile"]
+        b = P.run_action(target.profiles, {"action": "get", "name": name})["profile"]
+        assert {k: a[k] for k in ("name", "aliases", "payload")} == {k: b[k] for k in ("name", "aliases", "payload")}
+        assert a.get("place") == b.get("place") and a.get("notes") == b.get("notes")
+
+
+def test_import_writes_nothing_when_any_entry_is_bad(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    document = {"format": "horosa-birth-profiles", "version": 1, "profiles": [
+        {"name": "好的", "payload": {"date": "1990-01-01"}},
+        {"name": "坏的", "payload": {"date": "1990-02-30"}},
+    ]}
+    err = _code(lambda: P.import_profiles(store, document))
+    assert err.code == "profile.invalid_payload" and [p["name"] for p in err.details["problems"]] == ["坏的"]
+    assert store.names() == []
+    assert _code(lambda: P.import_profiles(store, {"profiles": []})).code == "profile.invalid_payload"

@@ -813,6 +813,18 @@
         "horosa-skill/horosa-core-js/app-charts/adapters/tarot.js",
         "horosa-skill/src/horosa_skill/reports/app_charts.py"
       ]
+    },
+    {
+      "id": "cldr.region-names-48",
+      "subject": "cldr",
+      "fact": "Country names used as place qualifiers (horosa-core-js/src/tools/placeData/regions.json) come from CLDR 48.0 through Node 26.7.0's ICU 78.3 (process.versions.cldr / icu): Intl.DisplayNames type 'region', locales en / zh / zh-Hant, styles long + short, for every ISO 3166-1 alpha-2 code that citiesFull.json uses (227). Examples read locally: US → 'United States' / 'US' / '美国' / '美國'; GB short → 'UK'; HK → 'Hong Kong SAR China' / 'Hong Kong' / '中国香港特别行政区'; TW → 'Taiwan' / '台湾' / '台灣'; KR zh-Hant → '南韓'. A different Node/ICU may spell some names differently, so scripts/gen_place_regions.mjs --check is a maintainer tool, not a CI gate; the committed JSON is what ships.",
+      "source_url": "https://cldr.unicode.org/downloads/cldr-48",
+      "verified_on": "2026-11-12",
+      "affects": [
+        "horosa-skill/scripts/gen_place_regions.mjs",
+        "horosa-skill/horosa-core-js/src/tools/placeData/regions.json",
+        "horosa-skill/horosa-core-js/src/tools/placeResolve.js"
+      ]
     }
   ]
 }

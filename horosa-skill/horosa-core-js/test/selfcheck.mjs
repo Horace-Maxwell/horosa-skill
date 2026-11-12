@@ -1487,7 +1487,17 @@ try {
   assert(ur.zone === '+08:00' && ur.advisory === 'cn-unified' && ur.geoZone === 'Asia/Urumqi', JSON.stringify(ur));
   const urLocal = (await runPlaceSearch({ query: '乌鲁木齐', date: '2000-01-01', cnUnified: false })).data.match;
   assert(urLocal.zone === '+06:00' && urLocal.iana === 'Asia/Urumqi', JSON.stringify(urLocal));
-  console.log('  ok   placeSearch 上海 DST / 朝阳歧义 / 乌鲁木齐统一北京时间');
+  // skill 接受规则（v0.50.0，placeResolve.js）：上游字段原样（NYC 仍是上游的银川 high），裁决另放 verdict。
+  const nyc = (await runPlaceSearch({ query: 'NYC', date: '1988-07-01' })).data;
+  assert(nyc.match && nyc.match.name === '银川' && nyc.confidence === 'high', 'upstream fields stay verbatim');
+  assert(nyc.verdict.status === 'resolved' && nyc.verdict.match.name === '纽约' && nyc.verdict.match.zone === '-04:00', JSON.stringify(nyc.verdict));
+  const spb = (await runPlaceSearch({ query: 'St. Petersburg', date: '1988-07-01' })).data.verdict;
+  assert(spb.status === 'ambiguous' && spb.candidates.length === 2, JSON.stringify(spb));
+  const point = (await runPlaceSearch({ point: { gpsLat: 31.2304, gpsLon: 121.4737 }, date: '1988-07-01' })).data.point;
+  assert(point.zone === '+09:00' && point.iana === 'Asia/Shanghai', JSON.stringify(point));
+  const batch = (await runPlaceSearch({ queries: ['HK', '31.2,121.5'] })).data.batch;
+  assert(batch[0].status === 'resolved' && batch[0].match.name === '香港' && batch[1].status === 'coordinates', JSON.stringify(batch));
+  console.log('  ok   placeSearch 上海 DST / 朝阳歧义 / 乌鲁木齐统一北京时间 / 接受规则 verdict / point / batch');
 } catch (err) {
   failures += 1;
   console.error(`  FAIL placeSearch: ${err.message}`);
