@@ -10,7 +10,7 @@ description: >-
 license: AGPL-3.0-only
 compatibility: Requires the local Horosa Skill MCP server/CLI (Python 3.12 + uv + installed offline runtime)
 metadata:
-  version: "0.50.0"
+  version: "0.50.1"
 ---
 
 # Horosa client guide
@@ -356,8 +356,8 @@ Only when no `horosa` tools are available. Replace `cursor` with the user's clie
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source "$HOME/.local/bin/env"   # puts uvx on PATH in this shell
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 **Windows (PowerShell)**
@@ -365,8 +365,8 @@ uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.
 ```powershell
 irm https://astral.sh/uv/install.ps1 | iex
 $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # the installer updates PATH for new shells only
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl" horosa-skill setup --client cursor
-uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl" horosa-skill selfcheck
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl" horosa-skill setup --client cursor
+uvx --from "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl" horosa-skill selfcheck
 ```
 
 Intel Macs and Linux have no offline runtime: `setup` / `install` there installs only the JS engine (local JS techniques; needs

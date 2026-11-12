@@ -124,7 +124,7 @@ uv run horosa-skill serve        # 启动本地 MCP（默认 http://127.0.0.1:87
 `HOROSA_RUNTIME_MIRROR` 对 wheel 与 runtime 一并生效：
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # 装离线 runtime（同上）
 uvx --from "$WHL" horosa-skill doctor                     # 体检
 uvx --from "$WHL" horosa-skill setup --client cursor       # 零安装一条命令接入（自动选 `--launcher uvx-wheel`，配置里写 wheel URL）
@@ -136,13 +136,13 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 
 > [!NOTE]
 > **Linux / Intel Mac / Docker（实验）**：离线 runtime 只发布 macOS(arm64) / Windows(x64) 两个 payload。其它平台上
-> `horosa-skill install` 自 0.50.0 起改装**平台无关的 JS 引擎资产**（`horosa-core-js-v<版本>.tar.gz`，约 7 MB，装到 runtime 根下的 `core-js/`；
+> `horosa-skill install` 自 0.50.1 起改装**平台无关的 JS 引擎资产**（`horosa-core-js-v<版本>.tar.gz`，约 7 MB，装到 runtime 根下的 `core-js/`；
 > 需要系统里有 Node.js ≥ 20.10，没有时引擎照装、结果里说明装什么）：八字、六爻、大六壬、河洛、参评、一掌经、塔罗、黄历等本地 JS 技法因此可用；
 > 任何平台都可以用 `install --engine-only` 只装它，`uninstall --engine-only` 只删它。要 Java / chart 服务算的技法（紫微、西占、三式、神数等）
 > 走 **MCP 网关**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向宿主机或另一台装了 runtime 的机器即可。
 > 仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`（网关镜像：自带钉版本的 Node 与 JS 引擎，容器内没有离线 runtime，
 > 必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
-> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
+> 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
 
 <details>
 <summary><b>安装排障与升级 / 卸载</b></summary>
@@ -172,7 +172,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 ## 接入 AI 客户端
 
 `setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime →（`--vectors` 时）准备向量检索 → 写配置（自动定位、
-只动 horosa 条目、内容没变不写、首次改写前把原文件存为 `.horosa-bak`、原子替换并保留权限；终端里设的引擎 / 数据目录变量写进条目 env）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.50.0；
+只动 horosa 条目、内容没变不写、首次改写前把原文件存为 `.horosa-bak`、原子替换并保留权限；终端里设的引擎 / 数据目录变量写进条目 env）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.50.1；
 多数客户端读共享的 `~/.agents/skills`；`--no-skill` 跳过、`--skill-dir` 指定）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
 stdio server 并数工具** → 打印下一步。失败时 stderr 给出结构化失败包（`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`），退出码 2；写配置之前失败保证 `config_untouched: true`。只想看配置不落盘用 `client config`：
@@ -242,8 +242,8 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | macOS arm64 | ✅ 官方载荷 | 主力平台 |
 | Windows x64 | ✅ 官方载荷 | 见 [Windows 说明](./docs/OFFLINE_RUNTIME_RELEASES.md) |
 | Windows ARM（骁龙本 / Surface 等） | ✅ 自动装 x64 载荷走仿真（自 0.38.0） | Windows 11 的 x64 仿真下 Java / Python / Node 都能起（GitHub `windows-11-arm` 真机 lane 验证）；`install` 报 `runtime.platform_emulated`、`doctor` 报 `emulated: true`（`payload_platform: win32-x64`） |
-| Linux | ⚠️ 无载荷（实验）；JS 引擎可装（自 0.50.0） | `install` 自动只装平台无关的 JS 引擎（需 Node.js ≥ 20.10），本地 JS 技法可用；其余技法走**网关模式**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向一台受支持的机器 |
-| Intel Mac | ❌ 不支持载荷；JS 引擎可装（自 0.50.0） | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷。`install` 自动只装 JS 引擎（需 Node.js ≥ 20.10），其余技法走网关模式 |
+| Linux | ⚠️ 无载荷（实验）；JS 引擎可装（自 0.50.1） | `install` 自动只装平台无关的 JS 引擎（需 Node.js ≥ 20.10），本地 JS 技法可用；其余技法走**网关模式**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向一台受支持的机器 |
+| Intel Mac | ❌ 不支持载荷；JS 引擎可装（自 0.50.1） | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷。`install` 自动只装 JS 引擎（需 Node.js ≥ 20.10），其余技法走网关模式 |
 
 > [!TIP]
 > 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 14 个门面工具（含按名直调的 `horosa_tool_run`，114 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；认不出的值会被忽略，问题写在 stderr、`horosa_agent_guidance` 的 `server_profile` 与 `doctor` 里；一个合法值都没有时只注册门面工具 + `horosa_tool_run`，不会悄悄变成全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
@@ -452,7 +452,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.50.0",
+  "ok": true, "tool": "qimen", "version": "0.50.1",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -488,7 +488,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 }
 ```
 
-闸门怎么判（v0.50.0）：
+闸门怎么判（v0.50.1）：
 
 - **只问还没回答的问题。** 载荷已经回答的不再问，跟这次无关的不问（上海出生不问南半球月令）；什么都不缺就直接起盘，不用确认标记（如 `huangli {"date": "2026-11-12"}`）。
 - **事实与设置分开。** 出生 / 起课的钟点、性别（八字、紫微、六壬行年、参评、河洛、一掌经、神数正传与各神数等 17 种技法缺性别会单独问）、合盘的另一个人、起课的「此刻」是只有用户知道的事实：`agent_confirmed_settings` / `defaults_accepted` 代替不了，得把值放进载荷。宫制、流派、起局方式这类设置，用户回答或明说「按星阙默认」后才带确认标记（必须是 JSON `true`，`"true"` / `1` 会得到专门的错误）。
@@ -594,7 +594,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | HorosaBench | 120 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.50.0`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时只装平台无关的 JS 引擎资产（自 0.50.0，本地 JS 技法可用），其余技法指向网关模式 |
+| Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.50.1`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时只装平台无关的 JS 引擎资产（自 0.50.1，本地 JS 技法可用），其余技法指向网关模式 |
 
 第一次 clone 后确认非空壳的最小验证：
 
