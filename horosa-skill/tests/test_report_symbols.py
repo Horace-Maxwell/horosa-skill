@@ -54,7 +54,24 @@ def _drawn_chars(markup: str, primary: str) -> list[tuple[str, str]]:
     return out
 
 
-def test_no_symbol_reaches_the_pdf_that_its_font_cannot_draw(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+# reportlab 自带 CID 字体的字符集合（Adobe-GB1 / Adobe-CNS1）按 GBK / 大五码 + HKSCS 收字；它们不带 cmap，只能这样量。
+_CID_CHARSETS = {"STSong-Light": "gbk", "MSung-Light": "big5hkscs"}
+
+
+def _covers(font, code: int) -> bool:
+    glyphs = getattr(getattr(font, "face", None), "charToGlyph", None)
+    if glyphs is not None:
+        return code in glyphs
+    try:
+        chr(code).encode(_CID_CHARSETS[font.fontName])
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def test_no_symbol_reaches_the_pdf_that_its_font_cannot_draw(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, font_host: str) -> None:
+    """三种字体现场都量（conftest.font_host）。此前 CID 回退（CI ubuntu）这一支本想 skip，判据却写错（CID 字体也有 face），
+    在 CI 上崩成 AttributeError——而产品在那一支确实不补字，✓ ☯ 🎉 原样进 PDF。"""
     from reportlab.pdfbase import pdfmetrics
 
     service = _service(tmp_path)
@@ -65,13 +82,11 @@ def test_no_symbol_reaches_the_pdf_that_its_font_cannot_draw(tmp_path: Path, mon
     target = [p for p in paragraphs if "太极" in p.text]
     assert target, "解读段落进了 PDF"
     primary_name = target[0].style.fontName
-    face = getattr(pdfmetrics.getFont(primary_name), "face", None)
-    if face is None:
-        pytest.skip("[host] 本机没有中文 TrueType，PDF 用不嵌入的 CID 字体：量不了 cmap（R-16 另有说明）")
+    if font_host != "host":
+        assert primary_name in _CID_CHARSETS, primary_name  # 模拟生效：真走到了 CID 回退
     for paragraph in target:
         for ch, font in _drawn_chars(paragraph.text, primary_name):
-            covered = pdfmetrics.getFont(font).face.charToGlyph
-            if ord(ch) in covered:
+            if _covers(pdfmetrics.getFont(font), ord(ch)):
                 continue
             assert not renderers._is_symbol(ch), f"{ch!r} U+{ord(ch):04X} 在 {font} 里画不出来"
     text = "\n".join(p.text for p in target)

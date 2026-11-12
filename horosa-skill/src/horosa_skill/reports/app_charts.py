@@ -463,12 +463,16 @@ def _symbol_chain() -> list[tuple[str, str, int, frozenset[int]]]:
     return _SYMBOL_CHAIN
 
 
-def _charset(font_name: str) -> frozenset[int] | None:
+def _charset(font_name: str) -> Any | None:
+    """正文字体画得出的码位（支持 `in`）。CID 回退字体按字符集合量（renderers._font_coverage）：此前一律 None = 不补字，
+    图里的 ℞ 等符号在没有中文 TrueType 的机器上照样交给 CID 字体，印成方块。"""
     from reportlab.pdfbase import pdfmetrics
 
+    from horosa_skill.reports.renderers import _font_coverage
+
     try:
-        return frozenset(pdfmetrics.getFont(font_name).face.charToGlyph)
-    except Exception:  # noqa: BLE001 - CID 回退字体没有 face：不补字（探针，None 即答案）
+        return _font_coverage(pdfmetrics.getFont(font_name))
+    except Exception:  # noqa: BLE001 - 字体没注册：不补字（探针，None 即答案）
         return None
 
 
@@ -488,7 +492,7 @@ def _swap_text_fonts(node: Any, text_font: str, bold_font: str) -> None:
                 continue
             child.fontName = bold_font if role == "bold" else text_font
             charset = covered.get(child.fontName)
-            missing = {ord(ch) for ch in child.text if not ch.isspace()} - charset if charset is not None else set()
+            missing = {ord(ch) for ch in child.text if not ch.isspace() and ord(ch) not in charset} if charset is not None else set()
             if missing:
                 need = {ord(ch) for ch in child.text if not ch.isspace()}
                 font = next((name for name, _path, _index, glyphs in chain if need <= glyphs), None)

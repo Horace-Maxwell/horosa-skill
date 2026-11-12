@@ -67,8 +67,9 @@ def test_report_pdf_has_a_structure_tree_language_and_ua_identifier(tmp_path: Pa
     pdf = _report(tmp_path)
     assert b"/StructTreeRoot" in pdf and b"/MarkInfo" in pdf and b"/Marked true" in pdf
     assert b"/Lang (zh-CN)" in pdf and b"/DisplayDocTitle true" in pdf
-    # 嵌入了 TrueType 字体才声称 PDF/UA-1；CI 的 Linux 镜像没有中文 TTF，走 CID 退回那一支（下一个测试两支都钉住）。
-    assert (b"<pdfuaid:part>1</pdfuaid:part>" in pdf) == (b"/FontFile2" in pdf)
+    # 正文字体嵌入了才声称 PDF/UA-1；CI 的 Linux 镜像没有中文 TTF，走不嵌入的 CID 退回那一支（下一个测试钉住）。
+    # 不能拿「有没有 /FontFile2」当判据：CID 那一支画不了的符号由补字链里的 TrueType 补，那款是嵌入的。
+    assert (b"<pdfuaid:part>1</pdfuaid:part>" in pdf) == (b"/STSong-Light" not in pdf)
     for tag in (b"/S /Document", b"/S /H1", b"/S /P", b"/S /Table", b"/S /TH", b"/S /TD", b"/S /Figure", b"/S /Link"):
         assert tag in pdf, tag
     assert b"/Alt (" in pdf or b"/Alt <" in pdf  # 盘图有替代文字
@@ -81,12 +82,13 @@ def test_cid_fallback_keeps_the_tags_but_drops_the_ua_claim(tmp_path: Path, monk
 
     monkeypatch.setattr(renderers, "_PDF_FONT_CANDIDATES", {"sc": [], "tc": []})
     pdf = _report(tmp_path)
-    assert b"/STSong-Light" in pdf and b"/FontFile2" not in pdf
+    assert b"/STSong-Light" in pdf  # 补字链里的符号字体照样嵌入（/FontFile2），正文的 CID 字体不嵌入 → 不声称 UA
     assert b"/StructTreeRoot" in pdf and b"/Lang (zh-CN)" in pdf
     assert b"pdfuaid" not in pdf
 
 
-def test_every_painted_thing_is_tagged_or_an_artifact(tmp_path: Path) -> None:
+def test_every_painted_thing_is_tagged_or_an_artifact(tmp_path: Path, font_host: str) -> None:
+    """三种字体现场都查（conftest.font_host）：CID 回退字体下空格子会写一个标签外的 `() Tj`，TrueType 下不会——此前只在本机 TrueType 上查过。"""
     streams = _content_streams(_report(tmp_path))
     assert streams
     offenders = [line for stream in streams for line in _untagged_paint(stream)]

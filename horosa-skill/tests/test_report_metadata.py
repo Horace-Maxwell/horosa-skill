@@ -19,8 +19,9 @@ from horosa_skill.reports import renderers
 _STANDARD_14 = rb"/BaseFont\s*/(Helvetica|Times-Roman|Times-Bold|Courier|Symbol|ZapfDingbats)\b"
 
 
+@pytest.mark.parametrize("font_host", ["host", "no_cjk_font"], indirect=True)  # 补字链与这里无关：两种现场就够
 @pytest.mark.parametrize(("language", "lang"), [("zh-CN", "zh-CN"), ("zh-TW", "zh-TW")])
-def test_docx_metadata_language_and_font_fallback(tmp_path: Path, language: str, lang: str) -> None:
+def test_docx_metadata_language_and_font_fallback(tmp_path: Path, language: str, lang: str, font_host: str) -> None:
     service = _service(tmp_path)
     run_id = _chart_run(service).memory_ref.run_id
     rendered = service.report_render({"run_id": run_id, "format": "docx", "language": language, "ai_answer_text": "今年宜守。"})
@@ -36,6 +37,8 @@ def test_docx_metadata_language_and_font_fallback(tmp_path: Path, language: str,
     assert keywords.split(", ")[0] in {"星盘", "星盤"}
     assert set(re.findall(r'<w:lang w:val="([^"]+)" w:eastAsia="([^"]+)"', styles)) == {(lang, lang)}
     font = re.search(r'<w:rFonts [^>]*w:eastAsia="([^"]+)"', styles).group(1)
+    # 本机一款中文字体都没有时写读者最可能有的那款，不是没有中文字形的 Arial（此前 CI ubuntu 上就是 Arial，替身信息也加不进去）
+    assert font not in {"Arial", "Calibri", "Times New Roman"}, font
     entry = re.search(rf'<w:font w:name="{re.escape(font)}">(.*?)</w:font>', fonts, re.S)
     assert entry and "<w:altName " in entry.group(1)
     assert f'w:charset w:val="{"86" if lang == "zh-CN" else "88"}"' in entry.group(1)
@@ -46,7 +49,7 @@ def test_pdf_references_only_embedded_fonts_and_claims_ua_only_then(tmp_path: Pa
     run_id = _chart_run(service).memory_ref.run_id
     rendered = service.report_render({"run_id": run_id, "format": "pdf", "style": "chart"})
     data = Path(rendered["artifact_path"]).read_bytes()
-    if not re.search(rb"/FontFile2", data):
+    if re.search(rb"/(STSong|MSung)-Light", data):  # 正文走了不嵌入的 CID 字体（补字链的 TrueType 照样嵌入，不能拿 /FontFile2 判）
         pytest.skip("[host] 本机没有中文 TrueType：CID 字体分支见 test_no_embeddable_cjk_font_is_said_out_loud")
     assert not re.search(_STANDARD_14, data), re.findall(_STANDARD_14, data)
     assert b"pdfuaid:part" in data

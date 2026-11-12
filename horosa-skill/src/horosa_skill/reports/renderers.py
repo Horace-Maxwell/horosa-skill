@@ -2316,40 +2316,31 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     return [font_note] if font_note else []
 
 
+# DOCX 的中文字体名候选：(本机探测的文件, 简体名, 繁体名, 香港名)。DOCX 不嵌入字体，名字写给**打开文档的那台电脑**看；
+# 本机有哪款就写哪款（异机打开时 Word 再按字体表里的备用名 / 字符集找替身，见 _DOCX_FONT_FALLBACK）。
+_DOCX_FONT_CANDIDATES: tuple[tuple[tuple[str, ...], str, str, str], ...] = (
+    (("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyh.ttf"), "Microsoft YaHei", "", ""),
+    (("C:/Windows/Fonts/msjh.ttc", "C:/Windows/Fonts/msjh.ttf"), "", "Microsoft JhengHei", "Microsoft JhengHei"),
+    (("/System/Library/Fonts/PingFang.ttc",), "PingFang SC", "PingFang TC", "PingFang HK"),
+    (("/System/Library/Fonts/Supplemental/Songti.ttc",), "Songti SC", "Songti TC", "Songti TC"),
+    (("/System/Library/Fonts/Supplemental/Arial Unicode.ttf",), "Arial Unicode MS", "Arial Unicode MS", "Arial Unicode MS"),
+    (("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"),
+     "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK HK"),
+)
+# 本机一款中文字体都没有（CI 的 ubuntu、精简的 Linux 服务器）：写一款读者那边最可能有的中文字体。
+# 🔴 此前退成 "Arial"——w:eastAsia 指向一款没有中文字形的字体，而 Arial 本来就在模板字体表里，字体替身信息
+# （altName / charset 86 / 88）也就加不进去：异机打开只能乱猜（v0.50.0-dev，CI Linux 红、本机绿）。
+_DOCX_PORTABLE_FONT = {"sc": "Microsoft YaHei", "tc": "Microsoft JhengHei", "hk": "Microsoft JhengHei"}
+
+
 def _docx_font_name(script: str = SIMPLIFIED) -> str:
-    if script != SIMPLIFIED:
-        return _docx_traditional_font_name(script)
-    # 中文字体候选（按平台常见优先级）：Win 微软雅黑 → Mac 苹方/宋体 → Arial Unicode → Noto CJK。
-    # 返回的字体名同时用于 w:eastAsia，确保 CJK 字形真实存在，异机打开不豆腐。
-    if Path("C:/Windows/Fonts/msyh.ttc").exists() or Path("C:/Windows/Fonts/msyh.ttf").exists():
-        return "Microsoft YaHei"
-    if Path("/System/Library/Fonts/PingFang.ttc").exists():
-        return "PingFang SC"
-    if Path("/System/Library/Fonts/Supplemental/Songti.ttc").exists():
-        return "Songti SC"
-    if Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf").exists():
-        return "Arial Unicode MS"
-    for noto in ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"):
-        if Path(noto).exists():
-            return "Noto Sans CJK SC"
-    return "Arial"
-
-
-def _docx_traditional_font_name(script: str) -> str:
-    # 繁体用繁体字形的字体（简体字体也能显示多数繁体字，但字形是大陆规范，台港读者一眼看出不对）。
-    hk = script == TRADITIONAL_HK
-    if Path("C:/Windows/Fonts/msjh.ttc").exists() or Path("C:/Windows/Fonts/msjh.ttf").exists():
-        return "Microsoft JhengHei"
-    if Path("/System/Library/Fonts/PingFang.ttc").exists():
-        return "PingFang HK" if hk else "PingFang TC"
-    if Path("/System/Library/Fonts/Supplemental/Songti.ttc").exists():
-        return "Songti TC"
-    if Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf").exists():
-        return "Arial Unicode MS"
-    for noto in ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"):
-        if Path(noto).exists():
-            return "Noto Sans CJK HK" if hk else "Noto Sans CJK TC"
-    return "Arial"
+    """正文与 w:eastAsia 用的中文字体名。繁体用繁体字形的字体（简体字体也能显示多数繁体字，但字形是大陆规范，台港读者一眼看出不对）。"""
+    column = 0 if script == SIMPLIFIED else 2 if script == TRADITIONAL_HK else 1
+    for paths, *names in _DOCX_FONT_CANDIDATES:
+        name = names[column]
+        if name and any(Path(path).exists() for path in paths):
+            return name
+    return _DOCX_PORTABLE_FONT["sc" if script == SIMPLIFIED else "hk" if script == TRADITIONAL_HK else "tc"]
 
 
 _INTERNAL_KEYWORD_RE = re.compile(r"^(?:[a-z0-9]+(?:[_\-][a-z0-9]+)*|[0-9a-f]{16,})$")
@@ -2506,16 +2497,63 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
     return "".join(out)
 
 
+class _AllOf:
+    """几份覆盖都含这个码位（`in`）。"""
+
+    __slots__ = ("parts",)
+
+    def __init__(self, *parts: Any) -> None:
+        self.parts = parts
+
+    def __contains__(self, code: object) -> bool:
+        return all(code in part for part in self.parts)
+
+
+class _EncodableCoverage:
+    """CID 字体的「能画哪些字」：码位能用该字符集合对应的国标编码编出来（`code in coverage`，与 TTF 的 cmap 集合同用法）。"""
+
+    __slots__ = ("codec",)
+
+    def __init__(self, codec: str) -> None:
+        self.codec = codec
+
+    def __contains__(self, code: object) -> bool:
+        try:
+            chr(code).encode(self.codec)  # type: ignore[arg-type]
+        except (TypeError, ValueError):  # UnicodeEncodeError 是 ValueError；代理码位 / 非整数同样「画不了」
+            return False
+        return True
+
+
+# reportlab 自带的两款 CID 字体（本机没有中文 TrueType 时的回退，CI 的 ubuntu 就是）不嵌入、也不带 cmap，
+# face 上没有 charToGlyph。它们的字符集合 Adobe-GB1 / Adobe-CNS1 是照 GBK（GB 18030）/ 大五码 + HKSCS 收字的：
+# 用对应编码编得出来 = 阅读器有字形。此前这一支直接「不补字」，✓ ☯ 🎉 这类符号原样进 PDF，印成方块或乱码（v0.50.0-dev，CI Linux 红）。
+_CID_FONT_CHARSETS = {"STSong-Light": "gbk", "MSung-Light": "big5hkscs"}
+
+
+def _font_coverage(font: Any) -> Any | None:
+    """字体画得出的码位（支持 `in`）：TrueType 用真实 cmap；reportlab 自带 CID 字体按字符集合；都不是返回 None。"""
+    glyphs = getattr(getattr(font, "face", None), "charToGlyph", None)
+    if glyphs is not None:
+        return set(glyphs)
+    codec = _CID_FONT_CHARSETS.get(str(getattr(font, "fontName", "")))
+    return _EncodableCoverage(codec) if codec else None
+
+
 def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_name: str, script: str) -> Any:
-    """返回给 Paragraph 标记补字的函数；主字体不是 TTF（reportlab 自带 CID 回退）或本机没有补字字体时返回原样函数。"""
+    """返回给 Paragraph 标记补字的函数；量不出主字体能画哪些字时返回原样函数。"""
     identity = lambda markup: markup  # noqa: E731
     try:
-        primary = set(pdfmetrics.getFont(font_name).face.charToGlyph)
-        bold = set(pdfmetrics.getFont(bold_font_name).face.charToGlyph) if bold_font_name != font_name else primary
-    except Exception:  # noqa: BLE001 - CID 字体没有 face/charToGlyph：不补字（探针，原样即答案）
+        primary = _font_coverage(pdfmetrics.getFont(font_name))
+        bold = primary if bold_font_name == font_name else _font_coverage(pdfmetrics.getFont(bold_font_name))
+    except Exception:  # noqa: BLE001 - 字体没注册：不补字（探针，原样即答案）
+        return identity
+    if primary is None or bold is None:
         return identity
     kind = "sc" if script == SIMPLIFIED else "tc"
-    drawable = primary & bold  # 常规体与粗体都有的字才不需要补
+    # 常规体与粗体都有的字才不需要补（CID 回退时两者是同一款）
+    drawable = primary if bold is primary else (primary & bold if isinstance(primary, set) and isinstance(bold, set)
+                                                else _AllOf(primary, bold))
     chain: list[tuple[str, Any]] = []
     for index, path in enumerate(_PDF_GLYPH_FALLBACK_CANDIDATES[kind]):
         font = _load_ttf(TTFont, f"HorosaGlyph{kind.upper()}{index}", path, None)
