@@ -78,7 +78,7 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
     target = payload.get("datetime")
     if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
         # 只给年份的目标时刻只对「有那一年含义」的技法成立（返照 / 流年 / 小限 / 太阳弧，见 enrich._apply_yearly_target）。
-        raise field_issues_error([{
+        raise field_issues_error(tool_name=tool_name, issues=[{
             "field": "datetime", "code": "tool.invalid_datetime", "got": target,
             "expected": bilingual("YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS", "YYYY-MM-DD or YYYY-MM-DD HH:MM:SS"), "example": f"{target}-01-01 12:00:00",
             "ask_user": False, "message": bilingual(f"`{tool_name}` 的目标时刻要具体到日期：只给年份「{target}」不知道是哪一天。",
@@ -92,12 +92,13 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
         try:
             parse_gender(options["gender"])
         except FieldIssue as issue:
-            raise field_issues_error([{"field": "options.gender", "code": issue.code, "got": options["gender"],
-                                       "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
-                                       "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
+            raise field_issues_error(tool_name=tool_name, issues=[{
+                "field": "options.gender", "code": issue.code, "got": options["gender"],
+                "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
+                "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
         return
     if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None and not _INSIDE_TECHNIQUE.get():
-        raise field_issues_error([{
+        raise field_issues_error(tool_name=tool_name, issues=[{
             "field": "gender", "code": "tool.missing_gender", "got": None,
             "expected": bilingual("1 / 男 / 乾造 = 男；0 / 女 / 坤造 = 女", "1 / 男 / male = male; 0 / 女 / female = female"),
             "example": 1, "ask_user": True, "options": [{"value": 1, "label": "男 / male"}, {"value": 0, "label": "女 / female"}],
@@ -414,7 +415,7 @@ class ToolsAPI:
         try:
             # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
             # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。
-            payload = normalize_request_payload(payload, model=definition.input_model)
+            payload = normalize_request_payload(payload, model=definition.input_model, tool_name=tool_name)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
             knowledge_selection = None
             if isinstance(payload, dict) and "knowledge" in payload:

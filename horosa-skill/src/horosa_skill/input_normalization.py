@@ -77,13 +77,34 @@ def _jsonable(value: Any) -> Any:
     return repr(value)
 
 
-def normalize_request_payload(payload: Any, *, model: Any = None) -> Any:
+def normalize_request_payload(payload: Any, *, model: Any = None, tool_name: str | None = None) -> Any:
     """归一 + 校验。读不懂的字段一次全部列出：抛 `ToolValidationError`（见 `field_issues_error`）。`model` 给了就按它的字段集
-    报「未知参数」并把 datetime / year 拆到声明了的字段上。"""
+    报「未知参数」并把 datetime / year 拆到声明了的字段上。`tool_name` 给了，追问开头点名是哪个技法的输入。"""
     normalized, issues = normalize_collecting_issues(payload, model=model)
     if issues:
-        raise field_issues_error(issues)
+        raise field_issues_error(issues, tool_name=tool_name or _model_tool_name(model))
     return normalized
+
+
+def _model_tool_name(model: Any) -> str | None:
+    """技法模型 → 注册表键（一个模型只被一个技法用时）；门面模型 / 共享模型 → None。"""
+    if model is None:
+        return None
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+
+    names = [name for name, definition in TOOL_DEFINITIONS.items() if definition.input_model is model]
+    return names[0] if len(names) == 1 else None
+
+
+def technique_heading(tool_name: str | None) -> str | None:
+    """逐字段追问的开头一行：「八字排盘（bazi_birth）的输入：」——几个技法一起跑（dispatch / 合参）时，用户得知道问的是哪一个的。"""
+    if not tool_name:
+        return None
+    from horosa_skill.engine.synonyms import display_name
+
+    label = display_name(tool_name)
+    named = f"{label}（{tool_name}）" if label != tool_name else tool_name
+    return bilingual(f"{named}的输入：", f"Input for {tool_name}:")
 
 
 def normalize_collecting_issues(payload: Any, *, model: Any = None) -> tuple[Any, list[dict[str, Any]]]:
@@ -436,16 +457,21 @@ def _report_unknown_keys(out: dict[str, Any], fields: frozenset[str]) -> None:
     )
 
 
-def field_issues_error(issues: list[dict[str, Any]], *, extra_details: dict[str, Any] | None = None) -> ToolValidationError:
-    """逐字段问题表 → 一个 ToolValidationError。code = 第一个问题的码；每个字段一条恢复条目（不是整份闸门问卷）。"""
+def field_issues_error(
+    issues: list[dict[str, Any]], *, extra_details: dict[str, Any] | None = None, tool_name: str | None = None,
+) -> ToolValidationError:
+    """逐字段问题表 → 一个 ToolValidationError。code = 第一个问题的码；每个字段一条恢复条目（不是整份闸门问卷）。
+    `tool_name` 给了：消息与 prompt_to_user 开头点名技法（显示名 + 注册表键），details.tool 记键。"""
     first = issues[0]
     must_ask = any(item.get("ask_user") for item in issues)
-    message = "\n".join(item["message"] for item in issues)
+    heading = technique_heading(tool_name)
+    message = "\n".join([*([heading] if heading else []), *(item["message"] for item in issues)])
     fix_fields = [{key: item[key] for key in ("field", "code", "got", "expected", "example", "options") if key in item} for item in issues]
     details: dict[str, Any] = {
         "field": first["field"], "got": first["got"], "expected": first["expected"], "example": first["example"],
         **({"options": first["options"]} if first.get("options") else {}),
         "fields": issues,
+        **({"tool": tool_name} if tool_name else {}),
         **(extra_details or {}),
         "agent_recovery": {
             "kind": "input", "must_ask_user": must_ask, "reason": "invalid_field",
@@ -487,12 +513,10 @@ def tool_error_from_validation(exc: Any, *, tool_name: str, payload: dict[str, A
         issues.append({"field": "(payload)", "code": "tool.invalid_payload", "got": None, "expected": None, "example": None,
                        "ask_user": False, "message": bilingual(f"`{tool_name}` 的入参不合法。", f"Invalid payload for `{tool_name}`.")})
     codes = {item["code"] for item in issues}
-    error = field_issues_error(issues, extra_details={"errors": validation_errors(exc)})
+    error = field_issues_error(issues, extra_details={"errors": validation_errors(exc)}, tool_name=tool_name)
     if len(codes) > 1 or codes & {"tool.invalid_payload", "tool.missing_field"}:
-        error = ToolValidationError(
-            bilingual(f"`{tool_name}` 的入参不合法：", f"Invalid payload for tool `{tool_name}`:") + "\n" + str(error),
-            code="tool.invalid_payload", details=error.details,
-        )
+        # 开头已点名技法（field_issues_error）；这里只把码收成一个。
+        error = ToolValidationError(str(error), code="tool.invalid_payload", details=error.details)
     return error
 
 

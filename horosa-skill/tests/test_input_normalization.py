@@ -133,3 +133,27 @@ def test_normalize_request_payload_normalizes_utc_designators_to_zero_offset() -
     # UTC with an explicit offset must still parse, not collapse to +00:00.
     assert normalize_request_payload({"zone": "UTC+8"})["zone"] == "+08:00"
     assert normalize_request_payload({"zone": "GMT+05:30"})["zone"] == "+05:30"
+
+
+def test_per_field_prompt_names_the_technique(tmp_path) -> None:
+    """逐字段追问开头点名技法（显示名 + 注册表键）：dispatch / 合参一次跑几个技法时，「zone 认不出」得知道是哪一个的。"""
+    from fakes import FakeClient, FakeJsClient
+
+    from horosa_skill.config import Settings
+    from horosa_skill.memory.store import MemoryStore
+    from horosa_skill.service import HorosaSkillService
+
+    settings = Settings(server_root="http://127.0.0.1:9", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+    payload = {"date": "1990-05-03", "time": "08:00:00", "zone": "火星时间", "lat": "31n13", "lon": "121e28",
+               "agent_confirmed_settings": True}
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool("chart", payload, save_result=False)
+    error = caught.value
+    assert str(error).startswith("本命盘（chart）的输入： / Input for chart:"), str(error)
+    assert error.details["agent_recovery"]["prompt_to_user"].startswith("本命盘（chart）的输入")
+    assert error.details["tool"] == "chart"
+    # 不带技法名的归一（门面 / 共享模型）照旧不加开头。
+    with pytest.raises(ToolValidationError) as bare:
+        normalize_request_payload({"zone": "火星时间"})
+    assert not str(bare.value).startswith("Input for") and "tool" not in bare.value.details

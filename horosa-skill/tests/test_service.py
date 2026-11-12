@@ -3635,3 +3635,16 @@ def test_bazi_inverse_rejects_bad_pillars(tmp_path) -> None:
     assert result.ok is False and result.error.code == "tool.bazi_inverse_invalid_pillars"
     assert result.error.details["invalid"] == ["庚"]
     assert result.error.details["agent_recovery"]["kind"] == "input"
+
+
+def test_stored_inputs_carry_no_empty_internal_keys(tmp_path) -> None:
+    """奇门的 `context` 是三式合一内部给奇门盘的展示时刻：缺省 None，存档 input 不再带一个空的 "context": {}（ledger 跟进项）。
+    全表守：任何技法的 input_normalized 都不许出现空 dict 的 context。"""
+    service = _service(tmp_path)
+    samples = build_sample_payloads()
+    result = service.run_tool("qimen", {**samples["qimen"], "agent_confirmed_settings": True}, save_result=False)
+    assert result.ok and "context" not in result.input_normalized
+    for name, definition in TOOL_DEFINITIONS.items():
+        field = definition.input_model.model_fields.get("context")
+        if field is not None:
+            assert field.get_default(call_default_factory=True) in (None,), f"{name}.context 缺省不能是空 dict"

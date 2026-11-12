@@ -570,3 +570,25 @@ def test_cli_place_search(tmp_path: Path, capsys: pytest.CaptureFixture[str], mo
     cli.place_search("New York", date="2026-01-15", time=None, limit=None)
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] is True and out["match"]["zone"] == "-05:00" and out["match"]["iana"] == "America/New_York"
+
+
+@requires_engine
+def test_context_place_without_a_date_takes_the_zone_from_the_date_the_query_names(tmp_path: Path) -> None:
+    """「2027年立春」+ context 只给了「北京」：时区按问句里的日子取（只有年份 = 当年 1 月 1 日），不再回头问时区；
+    问句没有日期也没有 birth 时照旧不补（时区未补，由载荷规划要）。"""
+    service = _service(tmp_path)
+    resolved = service.resolve_place_fields({"query": "2027年立春是什么时候", "context": {"place": "北京"}}, tool_name="dispatch")
+    expected = service.place_search({"query": "北京", "date": "2027-01-01"})["match"]
+    assert resolved["context"]["zone"] == expected["zone"]
+    record = resolved["context"]["placeResolution"]
+    assert record["zone_source"] == "place_and_query_date" and record["date"] == "2027-01-01"
+    # 1988-07-01 在北京夏令时内：问句里的完整日期优先于 birth 的日期（期望值取自引擎同一天的 place_search）。
+    dated = service.resolve_place_fields({"query": "1988-07-01 那天的黄历", "birth": {"date": "1995-01-01", "time": "08:00"},
+                                          "context": {"place": "北京"}}, tool_name="dispatch")
+    assert dated["context"]["zone"] == service.place_search({"query": "北京", "date": "1988-07-01"})["match"]["zone"] == "+09:00"
+    bare = service.resolve_place_fields({"query": "看看黄历", "context": {"place": "北京"}}, tool_name="dispatch")
+    assert "zone" not in bare["context"] and bare["context"]["placeResolution"]["zone_source"] == "not_filled_no_date"
+    # 载荷规划不再报「缺时区」（这里没有引擎服务，技法本身跑不了；看的是规划出的载荷）。
+    planned = service.dispatch({"query": "2027年立春是什么时候", "context": {"place": "北京"}, "save_result": False})
+    assert planned.code != "agent_guidance.required", planned.message
+    assert planned.normalized_inputs["jieqi_year"]["zone"] == expected["zone"]
