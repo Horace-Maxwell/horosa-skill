@@ -319,11 +319,23 @@ def test_ambiguous_place_is_refused_with_candidates(tmp_path: Path) -> None:
 
 
 @requires_engine
-def test_medium_confidence_is_not_auto_filled(tmp_path: Path) -> None:
-    """上游 medium（前缀唯一最优）自己也要求「向用户复述确认」：不自动补。负向对照：自动补全也收 medium → 红（实跑过）。"""
+def test_prefix_only_match_is_not_auto_filled(tmp_path: Path) -> None:
+    """只是前缀近似（上游 medium 或更弱）：不自动补，按「最接近的名字，请确认」问用户。v0.50.0 前这里用「辽宁朝阳」——
+    那是上游头尾回退给的 medium；现在 skill 的限定词规则能核对「辽宁」，它唯一解析为朝阳市（见下一条），所以换成真的
+    只有前缀可依的「shangh」。负向对照：接受规则对 near 也放行 → 红（实跑过）。"""
     with pytest.raises(ToolValidationError) as exc:
-        _service(tmp_path).resolve_place_fields({"date": "1988-07-01", "time": "08:00", "place": "辽宁朝阳"}, tool_name="chart")
-    assert exc.value.code == "place.ambiguous" and exc.value.details["confidence"] == "medium"
+        _service(tmp_path).resolve_place_fields({"date": "1988-07-01", "time": "08:00", "place": "shangh"}, tool_name="chart")
+    assert exc.value.code == "place.ambiguous" and exc.value.details["status"] == "near"
+    assert exc.value.details["candidates"] and "不止一个" not in exc.value.details["agent_recovery"]["prompt_to_user"]
+
+
+@requires_engine
+def test_province_qualifier_settles_a_shared_name(tmp_path: Path) -> None:
+    """「辽宁朝阳」：朝阳市（辽宁省）与它下辖的朝阳县是一处；北京 / 长春的朝阳区不在辽宁 → 唯一。"""
+    out = _service(tmp_path).resolve_place_fields({"date": "1988-07-01", "time": "08:00", "place": "辽宁朝阳"}, tool_name="chart")
+    record = out["placeResolution"]
+    assert (record["name"], record["region"], record["matched_by"]) == ("朝阳市", "辽宁省", "stem")
+    assert record["qualifiers"] == [{"text": "辽宁", "verified": True}]
 
 
 @requires_engine
@@ -441,7 +453,9 @@ def test_other_engine_failures_keep_their_own_code(tmp_path: Path) -> None:
 
 
 @requires_engine
-def test_run_tool_records_place_resolution_on_the_card_and_in_warnings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_tool_records_place_resolution_on_the_card_and_in_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """解析结果是说明不是降级：一行进 summary，结构化的一份进技法卡；warnings 留给真要提醒的事（dispatch 把带 warnings
+    的结果算作「降级」）。v0.50.0 前这一行在 warnings。"""
     service = _service(tmp_path)
     seen: dict[str, Any] = {}
 
@@ -452,9 +466,13 @@ def test_run_tool_records_place_resolution_on_the_card_and_in_warnings(tmp_path:
     monkeypatch.setattr(service, "_run_local_tool", fake_local)
     envelope = service.run_tool("xiaoliuren", {"date": "1988-07-01", "time": "08:00", "place": "上海"}, save_result=False)
     assert seen["lat"] == "31n13" and seen["zone"] == "+09:00" and "place" not in seen and "placeResolution" not in seen
-    assert any("上海" in w and "+09:00" in w for w in envelope.warnings), envelope.warnings
+    assert any("上海" in line and "+09:00" in line for line in envelope.summary), envelope.summary
+    assert not any("上海" in w for w in envelope.warnings), envelope.warnings
     card = envelope.data.get("technique_card") or {}
-    assert card.get("place_resolution") and card["place_resolution"][0]["name"] == "上海"
+    record = card["place_resolution"][0]
+    assert (record["query"], record["name"], record["zone"], record["zone_source"], record["matched_by"]) == (
+        "上海", "上海", "+09:00", "place_and_date", "name")
+    assert record["where"] == ["中国"] and record["gpsLat"] == 31.2304 and "caveat_notes" not in record
 
 
 @requires_engine

@@ -49,7 +49,7 @@ def test_place_only_save_fills_coordinates_and_zone_from_the_birth_date(tmp_path
     assert (fields["lat"], fields["lon"], fields["zone"]) == ("31n13", "121e28", "+09:00")  # 1988 年夏令时
     assert _stored(service, "妈妈")["place"] == "上海"  # 标签照留
     assert result["place_resolution"]["status"] == "resolved" and result["place_resolution"]["zone_source"] == "place_and_date"
-    assert any("上海" in note for note in result["warnings"])
+    assert "上海" in result["place_note"] and not any("上海" in note for note in result.get("warnings", []))
 
 
 @requires_engine

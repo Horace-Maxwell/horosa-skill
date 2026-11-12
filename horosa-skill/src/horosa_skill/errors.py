@@ -236,21 +236,47 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     },
     # 地名 → 坐标（v0.48.0，service/api/place.py）：歧义 / 找不到 / 切换日时区不唯一都是「问用户」，details.agent_recovery 带候选；
     # not_found 的后缀会被通用规则判成「重试再体检」，必须精确登记。旧 runtime 缺这项能力 = 升级 runtime，不是重试。
+    # v0.50.0 接受规则：同名多地 / 只有近似名 / 一个候选但州省限定词核对不了，都是 place.ambiguous（details.status 区分
+    # ambiguous / near / confirm / qualifier_mismatch，单候选措辞是「请确认」）；只给地区 = place.too_broad；坐标写进 place =
+    # place.looks_like_coordinates。提示里举的写法必须真能解析（tests/test_place_acceptance.py 逐条跑引擎核对）。
     "place.ambiguous": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "这个地名对应多个地点（details.candidates）。把候选念给用户选一个，不要替用户挑；选定后用那一条的 lat / lon / zone 重试。",
-            "That place name matches several places (details.candidates). Let the user pick one — never choose yourself — then retry with its lat/lon/zone.",
+            "这个地名不能自动确定（details.status：同名多地 / 只有近似匹配 / 限定词核对不了），候选在 details.candidates。"
+            "把候选念给用户确认或选一个，不要替用户挑；选定后用那一条的 lat / lon / zone 重试，或改传带省 / 国家的写法（如「辽宁朝阳」「London, UK」）。",
+            "The place cannot be settled automatically (details.status: several places share the name / only approximate matches / "
+            "a qualifier the library cannot check); candidates are in details.candidates. Let the user confirm or pick one — never "
+            "choose yourself — then retry with its lat/lon/zone, or a form with province/country (e.g. 'London, UK').",
         ),
         "next_action": "ask_user_to_pick_a_candidate",
     },
     "place.not_found": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "城市库里没有这个地名。请用户给更具体的写法（带省 / 国家，或英文名）或直接给经纬度。",
-            "The place is not in the city library. Ask the user for a more specific name (with province/country, or English) or coordinates.",
+            "城市库里没有这个地名（details.suggestions 是拼写相近的条目）。请用户确认，或给带省 / 国家的写法（如「北京市朝阳区」「美国纽约」"
+            "「Taipei, Taiwan」），或直接给经纬度。",
+            "The place is not in the city library (details.suggestions lists similar spellings). Ask the user, or for a form with "
+            "province/country (e.g. 'Taipei, Taiwan', 'London, UK'), or coordinates.",
         ),
         "next_action": "ask_user_for_specific_place_or_coordinates",
+    },
+    "place.too_broad": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "给的是国家 / 省 / 州（details.regions），不是一个地点：请用户给出生 / 事件所在的城市（如「美国纽约」「台湾台北」），或直接给经纬度。",
+            "That is a country / province / state (details.regions), not a place: ask the user for the city (e.g. 'Los Angeles, CA'), "
+            "or coordinates.",
+        ),
+        "next_action": "ask_user_for_city",
+    },
+    "place.looks_like_coordinates": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "place 里写的是经纬度。把纬度、经度分别传给 lat 与 lon（再给 zone），不要放进 place；哪个数是纬度不要猜，不确定就问用户。",
+            "place holds coordinates. Pass latitude and longitude separately as lat and lon (plus zone), not in place; do not guess "
+            "which number is the latitude — ask the user if unsure.",
+        ),
+        "next_action": "pass_lat_lon_fields",
     },
     "place.zone_ambiguous": {
         "kind": "input",

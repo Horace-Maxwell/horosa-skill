@@ -24,7 +24,7 @@ const NEAR_DEG = 0.25; // same proximity upstream place.js uses to merge one cit
 const CN_ROOT = '中华人民共和国';
 const ISO = /^[A-Z]{2}$/;
 const CJK = /[㐀-鿿豈-﫿]/;
-const SEPARATORS = /[,，、;；/|·・]+/;
+const SEPARATORS = /[,，、;；/|·・()（）\[\]【】「」]+/;
 
 // ---------------------------------------------------------------- keys
 
@@ -336,7 +336,7 @@ function tokenize(query) {
 	for (const seg of `${query}`.normalize('NFKC').split(SEPARATORS)) {
 		for (const t of seg.trim().split(/\s+/)) if (t) out.push(t);
 	}
-	return out.slice(0, 8);
+	return out.slice(0, 12);
 }
 
 // Split a run of tokens into known qualifier phrases (each 1–4 tokens; a CJK token may also split into several
@@ -393,7 +393,10 @@ function applyQualifiers(pool, quals) {
 // All readings of the query: [{phrase, quals}] — whole query first, then every contiguous token range as the place
 // with the rest as qualifiers, then (for an unseparated CJK token) every head|tail split with the head as qualifiers.
 function readings(ix, query) {
-	const out = [{ phrase: query, quals: [] }];
+	// The whole query glued into one key ("New York" = "newyork") — but not across a separator the user typed:
+	// "León, ES" glued is "leones" (= Leones, Argentina) and "Tāl, IN" is "talin" (= 塔林 Tallinn). Across a comma only
+	// a skill alias may match the whole text ("Washington, D.C.").
+	const out = [{ phrase: query, quals: [], aliasOnly: SEPARATORS.test(query) }];
 	const tokens = tokenize(query);
 	const n = tokens.length;
 	for (let i = 0; i < n; i++) {
@@ -415,14 +418,16 @@ function readings(ix, query) {
 	return out;
 }
 
-// Query-side suffix: 台北市 / 台中市 → also try 台北 / 台中 when the full form names nothing.
-function phrasePool(ix, phrase) {
+// Query-side suffix: 台北市 / 高雄市 / "Tainan City" → also try the bare name when the full form names nothing.
+function phrasePool(ix, phrase, aliasOnly = false) {
 	const key = placeKey(phrase);
+	if (aliasOnly) return (ix.aliases.get(key) || []).map((h) => ({ e: h.e, via: 'alias', alias: h.alias, tier: 1 }));
 	let pool = poolFor(ix, key);
 	if (!pool.length && CJK.test(phrase)) {
 		const m = phrase.match(/(市|县|區|区|縣)$/);
 		if (m && [...phrase].length >= 3) pool = poolFor(ix, placeKey(phrase.slice(0, -1)));
 	}
+	if (!pool.length && /\s(city|shi)$/i.test(phrase.trim())) pool = poolFor(ix, placeKey(phrase.trim().replace(/\s(city|shi)$/i, '')));
 	return pool;
 }
 
@@ -511,9 +516,10 @@ const COORDINATES = /^\s*[-+]?\d{1,3}(?:[.,]\d+)?\s*°?\s*[NSnsEeWw北南东西]
 
 // Decide. `upstream` is resolvePlaceOffline's own result for the same query (its candidates are the "closest
 // matches" offered when the rule accepts nothing).
-export async function decidePlace(query, { upstream = null, limit = 5 } = {}) {
+export async function decidePlace(query, { upstream = null, limit = 5, allCandidates = false } = {}) {
 	const ix = await placeIndex();
-	const cap = Math.max(1, Math.min(10, Number(limit) || 5));
+	// allCandidates: the whole-library property test needs every candidate, not the 10 a client is shown.
+	const cap = allCandidates ? Infinity : Math.max(1, Math.min(10, Number(limit) || 5));
 	const raw = `${query ?? ''}`.trim();
 	const base = { policy: POLICY, query: raw, key: placeKey(raw) };
 	if (!base.key) return { ...base, status: 'not_found', candidates: [], total: 0, suggestions: [] };
@@ -530,7 +536,7 @@ export async function decidePlace(query, { upstream = null, limit = 5 } = {}) {
 	const results = [];
 	const mismatched = [];
 	for (const r of readings(ix, raw)) {
-		const pool = phrasePool(ix, r.phrase);
+		const pool = phrasePool(ix, r.phrase, r.aliasOnly);
 		if (!pool.length) continue;
 		const { hits, unverified } = applyQualifiers(pool, r.quals);
 		if (!hits.length) { mismatched.push({ ...r, pool }); continue; }
@@ -566,7 +572,7 @@ export async function decidePlace(query, { upstream = null, limit = 5 } = {}) {
 	if (sameAll) {
 		const r = singles.find((x) => x.quals.length === 0) || singles[0];
 		const h = r.pool[0];
-		if (isProvince(h.e)) return { ...base, status: 'too_broad', candidates: [view(h)], total: 1, suggestions: [] };
+		if (isProvince(h.e)) return { ...base, status: 'too_broad', regions: [h.e.name], candidates: [view(h)], total: 1, suggestions: [] };
 		const caveats = [];
 		if (h.alias && ['historical', 'nickname', 'approximate'].includes(h.alias.kind)) caveats.push({ code: `alias_${h.alias.kind}`, alias: h.alias.text, used: h.e.name });
 		if (r.unverified.length) caveats.push({ code: 'qualifier_unverified', qualifiers: r.unverified });
