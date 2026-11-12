@@ -203,7 +203,7 @@ def test_paging_never_repeats_or_skips_while_usage_changes(tmp_path: Path) -> No
     for page in range(3):
         rows = store.query_runs(text="八字", limit=3, offset=page * 3, include_payload=False)
         seen += _ids(rows)
-        store.query_runs(run_id=rows[-1]["run_id"])  # 翻页之间点开这一页最后一条
+        store.query_runs(run_id=ids[page])  # 翻页之间点开一条还没翻到的（最老的几条）
     assert seen == list(reversed(ids))
 
 
