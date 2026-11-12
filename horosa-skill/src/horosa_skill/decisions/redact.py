@@ -23,7 +23,6 @@ MAX_INPUT_CHARS——此前 `\\s*` 前缀的模式在 8 万个空格上要 43 �
 from __future__ import annotations
 
 import json
-import os
 import re
 import threading
 import unicodedata
@@ -261,22 +260,21 @@ _PLACE_CACHE: dict[str, Lexicon] = {}
 def place_library_dir() -> Path:
     """星阙地名库所在目录：与 JS 引擎找 horosa-core-js 同一套候选（HOROSA_CORE_JS_ROOT → 已装 runtime → 源码树）。"""
     candidates: list[Path] = []
-    override = os.environ.get("HOROSA_PLACE_LIBRARY_DIR")
-    if override:
-        candidates.append(Path(override).expanduser())
+    lookup_error = ""
     try:
         from horosa_skill.config import Settings
         from horosa_skill.engine.js_client import HorosaJsEngineClient
 
         candidates.extend(root / _PLACE_DIR for root in HorosaJsEngineClient(Settings.from_env())._candidate_engine_roots())
-    except Exception:  # noqa: BLE001 - 配置读不了也照样试源码树
-        pass
+    except Exception as exc:  # noqa: BLE001 - 配置读不了也照样试源码树；都找不到时原因随下面的错误交给调用方
+        lookup_error = f"{type(exc).__name__}: {exc}"
     candidates.append(Path(__file__).resolve().parents[3] / "horosa-core-js" / _PLACE_DIR)
     for candidate in candidates:
         if all((candidate / name).is_file() for name in _PLACE_FILES):
             return candidate
+    detail = f"（{lookup_error}）" if lookup_error else ""
     raise PlaceLibraryUnavailable(
-        "找不到星阙地名库（horosa-core-js/src/vendor/place/data），无法保证地名不离机：这一问不发给决策层。 / "
+        f"找不到星阙地名库（horosa-core-js/src/vendor/place/data）{detail}，无法保证地名不离机：这一问不发给决策层。 / "
         "The Horosa place library (horosa-core-js/src/vendor/place/data) was not found, so place names cannot be kept "
         "local: the decision layer is not asked."
     )
