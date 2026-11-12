@@ -241,6 +241,13 @@ def _parse_manifest_text(text: str) -> tuple[dict[str, Any] | None, str | None]:
     return payload, None
 
 
+def _contextualize(text: str) -> str:
+    """提示里的 `horosa-skill …` 按本机安装方式改写（hints.contextualize；E-06）。"""
+    from horosa_skill.runtime.hints import contextualize
+
+    return contextualize(text)
+
+
 def _describe_takers(takers: list[dict[str, Any]]) -> str:
     """`java_backend :9999 ← pid 123 (nc -l 9999)`；点不出进程时如实说不知道是谁。"""
     parts = []
@@ -330,6 +337,9 @@ WINDOWS_PATH_LIMIT = 259
 DOCTOR_ISSUE_CODES = (
     "runtime.manifest_invalid",
     "runtime.state_invalid",
+    "runtime:not_installed",
+    "runtime:root_not_writable",
+    "external:unreachable",
     "missing:*",
     "services:java_backend_not_running",
     "services:chart_not_running",
@@ -839,7 +849,10 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 **integrity,
                 "asset": asset_meta or {},
                 "release_manifest": manifest_data or {},
-                "next_action": "接下来：`uv run horosa-skill doctor` 确认体检，`uv run horosa-skill serve` 启动 MCP，或把本服务注册到你的 AI 客户端（见 README「接入 AI 客户端」）。",
+                "next_action": _contextualize(bilingual(
+                    "接下来：`horosa-skill doctor` 确认体检，`horosa-skill setup --client <你的客户端>` 把本服务接进 AI 客户端。",
+                    "Next: `horosa-skill doctor` to check, then `horosa-skill setup --client <your-client>` to connect your AI client.",
+                )),
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -1317,14 +1330,27 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             stop_script = self._relative_manifest_path(manifest, "services", "stop_script")
             endpoints = self._service_status_settled()
 
+            # 🔴 E-05 / E-06：先定模式，再让每条 issue 从模式里推出来。旧实现不分模式地逐个比对 12 个载荷文件：
+            # 网关（external）用户永远 12 条 missing:* + 「重新解包」，一台什么都没装的新机器也是 12 条 missing:*。
+            mode = self.runtime_mode()
+            deployment = "external" if mode == "external" else ("managed" if installed else "not_installed")
             issues = []
-            if manifest_issue:
+            if manifest_issue and deployment == "managed":
                 issues.append(manifest_issue["code"])
             if runtime_state_issue:
                 issues.append(runtime_state_issue["code"])
-            for entry in files:
-                if not entry["exists"]:
-                    issues.append(f"missing:{entry['label']}")
+            if deployment == "managed":
+                for entry in files:
+                    if not entry["exists"]:
+                        issues.append(f"missing:{entry['label']}")
+            elif deployment == "not_installed":
+                issues.append("runtime:not_installed")
+            elif not self._all_services_reachable(endpoints):
+                issues.append("external:unreachable")
+            # E-08：runtime 根写不了时 install / start 会被拒（runtime.root_not_writable）。doctor 只读：不建目录、不落文件。
+            write_problem = self.runtime_root_write_problem(probe=False) if deployment != "external" else None
+            if write_problem:
+                issues.append("runtime:root_not_writable")
             # macOS Gatekeeper（v0.38.0 B6）：浏览器下载的归档解出来的二进制带 com.apple.quarantine，
             # 首次执行被系统拦下时症状是「起不来 + 无日志」。只报不动：修复命令交给用户。
             quarantine = self._quarantine_report(manifest) if installed else {"checked": [], "flagged": [], "fix": None}
@@ -1335,7 +1361,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 issues.append("windows:runtime_root_not_ascii")
             degraded: str | None = None
             java_diagnostics: dict[str, Any] | None = None
-            if installed and not self._all_services_reachable(endpoints):
+            if deployment == "managed" and not self._all_services_reachable(endpoints):
                 if self._chart_only_degraded(endpoints):
                     # Issue #14: name the half that is down and surface WHY — a silently dead
                     # Java backend was previously indistinguishable from "nothing running".
@@ -1357,6 +1383,9 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             return {
                 "ok": not issues,
                 "installed": installed,
+                # managed（本机 runtime 由本工具启停）/ external（网关：HOROSA_SERVER_ROOT 指到别处，只探不起）/ not_installed
+                "deployment": deployment,
+                "runtime_root_writable": {"ok": write_problem is None, "problem": write_problem},
                 "platform": host_platform,
                 # v0.38.0 A4: host vs payload — Windows on ARM runs the win32-x64 payload under emulation.
                 "host_platform": host_platform,
@@ -1642,7 +1671,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                                 "Java backend (:9999) did not become ready; running degraded on the chart service only. "
                                 "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) stay available; "
                                 "Java-side ones (nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers. "
-                                "Run `uv run horosa-skill doctor` for the captured Java boot error."
+                                + _contextualize("Run `horosa-skill doctor` for the captured Java boot error.")
                             ),
                             "details": {
                                 "command": command,

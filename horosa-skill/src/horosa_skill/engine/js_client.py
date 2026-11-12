@@ -255,6 +255,61 @@ class HorosaJsEngineClient:
         rows.append({"source": "source_checkout", "path": str(source_root), "present": (source_root / "bin" / "cli.mjs").is_file()})
         return rows
 
+    def diagnose(self) -> dict[str, Any]:
+        """doctor 的 JS 引擎一节：在不在、为什么、怎么修（E-02 / E-11）。只读：会 spawn 一次 `node --version`（有缓存），不跑技法。"""
+        searched = self.engine_root_report()
+        engine_root = next((root for root in self._candidate_engine_roots() if (root / "bin" / "cli.mjs").is_file()), None)
+        source = None
+        if engine_root is not None:
+            resolved = str(engine_root.resolve())
+            source = next((row["source"] for row in searched if row.get("path") and str(Path(row["path"]).expanduser().resolve()) == resolved), "other")
+        node = self.node_choice().as_dict()
+        if engine_root is None:
+            state = "absent"
+        elif node["problem"] == "node_bin_missing":
+            state = "node_bin_missing"
+        elif node["problem"] == "not_found":
+            state = "node_missing"
+        elif node["problem"] == "too_old":
+            state = "node_too_old"
+        else:
+            state = "ready"
+        fixes = {
+            "ready": None,
+            "absent": bilingual(
+                "装离线 runtime（自带引擎与 node），或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录（还要 node ≥ 20.10）。",
+                "Install the offline runtime (it ships the engine and node), or set HOROSA_CORE_JS_ROOT to a horosa-core-js "
+                "directory (node >= 20.10 is needed too).",
+            ),
+            "node_bin_missing": bilingual(
+                f"HOROSA_NODE_BIN 指向的 {node['path']} 不存在：改成真实的 node，或删掉这个变量。",
+                f"HOROSA_NODE_BIN points at {node['path']}, which does not exist: point it at a real node or unset it.",
+            ),
+            "node_missing": bilingual(
+                "找不到 node：装离线 runtime（自带 node），或装 Node.js ≥ 20.10，或设 HOROSA_NODE_BIN。",
+                "No node found: install the offline runtime (it ships node), install Node.js >= 20.10, or set HOROSA_NODE_BIN.",
+            ),
+            "node_too_old": bilingual(
+                f"node {node['version']} 太旧（要 {node['required']}）：装离线 runtime，或把 HOROSA_NODE_BIN 指向更新的 node。",
+                f"node {node['version']} is too old (needs {node['required']}): install the offline runtime, or point "
+                "HOROSA_NODE_BIN at a newer node.",
+            ),
+        }
+        return {
+            "state": state,
+            "ok": state == "ready",
+            "engine_root": str(engine_root) if engine_root else None,
+            "engine_source": source,
+            "searched": searched,
+            "node": node,
+            "affects": bilingual(
+                "本地 JS 引擎算的技法：八字、紫微、奇门、太乙、金口诀、六壬、河洛、参评、六爻等，以及地名检索",
+                "techniques computed by the local JS engine: BaZi, Ziwei, Qimen, Taiyi, Jinkou, Liuren, Heluo, Canping, "
+                "Liuyao and others, plus place search",
+            ),
+            "fix": fixes[state],
+        }
+
     def _resolve_engine_root(self) -> Path:
         return self._candidate_engine_roots()[0]
 
