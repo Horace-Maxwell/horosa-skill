@@ -221,7 +221,7 @@ class MemoryAnswerInput(FlexibleModel):
 
 class MemoryQueryInput(FlexibleModel):
     run_id: str | None = None
-    group_id: str | None = None
+    group_id: str | None = Field(default=None, description="Only runs of one session.")
     tool: str | None = None
     entity: str | None = None
     text: str | None = None
@@ -229,7 +229,7 @@ class MemoryQueryInput(FlexibleModel):
     after: str | None = None
     before: str | None = None
     # 只给日期时按哪个时区的一天（+08:00 / Asia/Shanghai）；不给 = 本机时区，结果的 applied_filters.time 说用了哪个。
-    zone: str | None = None
+    zone: str | None = Field(default=None, description="Zone for date-only after/before (+08:00, Asia/Shanghai); default: machine zone.")
     # 上限 100（service/api/memory.py QUERY_LIMIT_MAX）：超了按上限回并在 summary 里说。
     limit: int = 20
     # 分页偏移：跳过前 N 条命中（与 limit 搭配翻页）。

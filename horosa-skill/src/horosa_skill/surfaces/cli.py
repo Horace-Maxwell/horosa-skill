@@ -1452,8 +1452,13 @@ def memory_prune(
     unused_days: int = typer.Option(90, "--unused-days", help="判据：创建/最后点用早于 N 天且从未点用（usage_count=0）。"),
     yes: bool = typer.Option(False, "--yes", help="真正删除（含磁盘产物文件）。缺省只打印将删清单。"),
 ) -> None:
+    import sqlite3
+
     service = _service()
-    _print_json(service.store.prune_unused(unused_days=unused_days, yes=yes))
+    try:
+        _print_json(service.store.prune_unused(unused_days=unused_days, yes=yes))
+    except (sqlite3.Error, OSError) as exc:
+        _memory_store_refusal(service, exc)
 
 
 @memory_app.command("answer", help="Attach the AI's final answer to a stored run: JSON {run_id, ai_answer_text[, user_question]}. 把 AI 解读写回运行记录。")

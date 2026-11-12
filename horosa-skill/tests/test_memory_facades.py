@@ -539,6 +539,17 @@ def test_cli_query_keeps_printing_a_list_and_refuses_bad_input(tmp_path: Path) -
     assert json.loads(unknown.stderr)["code"] == "memory.run.not_found"
 
 
+@pytest.mark.parametrize("args", [["memory", "query"], ["memory", "show", "f" * 32], ["memory", "prune"], ["memory", "rebuild"],
+                                  ["memory", "delete", "--entity", "x"]])
+def test_every_cli_memory_command_refuses_with_a_code_when_the_store_cannot_open(tmp_path: Path, args: list[str]) -> None:
+    """M15 同类：CLI 的每条 memory 命令遇到打不开的库都给 memory.store_unavailable，不冒 traceback。"""
+    data = tmp_path / "data"
+    (data / "memory.db").mkdir(parents=True)  # 路径是目录：sqlite 打不开
+    result = _cli(tmp_path, *args)
+    assert result.exit_code == 2, result.output
+    assert json.loads(result.stderr)["code"] == "memory.store_unavailable"
+
+
 def test_cli_rebuild_runs_on_a_healthy_store(tmp_path: Path) -> None:
     _run(_cli_service(tmp_path))
     result = _cli(tmp_path, "memory", "rebuild")
