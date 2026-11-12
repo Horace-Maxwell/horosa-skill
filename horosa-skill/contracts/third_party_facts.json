@@ -597,6 +597,16 @@
       ]
     },
     {
+      "id": "sqlite.fts5-trigram-detail-none",
+      "subject": "sqlite",
+      "fact": "FTS5 trigram tables created with `detail=none` keep no position lists (about half the size of `detail=full` for chart text: 2000 bazi bodies 23 MB vs 47 MB) but refuse multi-trigram phrase queries in MATCH (\"phrase queries are not supported (detail!=full)\"); `col GLOB '*term*'` and `col LIKE '%term%'` with a term of 3+ characters are still answered through the index (query plan `INDEX 0:G0` / `L0`). Re-checked by experiment on SQLite 3.45.3.",
+      "source_url": "https://www.sqlite.org/fts5.html#the_trigram_tokenizer",
+      "verified_on": "2026-11-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/memory/store.py"
+      ]
+    },
+    {
       "id": "mcp-spec.resource-link",
       "subject": "mcp-spec",
       "fact": "The `resource_link` content block (uri, name, mimeType, size) in tool results entered the MCP specification with revision 2025-06-18; servers should only send it to clients that negotiated that revision or later. Current revision 2026-07-28 (MRTR `input_required` replaces server-initiated elicitation; needs SDK 2.x).",

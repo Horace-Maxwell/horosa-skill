@@ -196,7 +196,7 @@ Runtime enforcement (the gate is in code, not just policy):
 - If a response carries `details.agent_recovery` with `must_ask_user: true`, stop and ask the user with
   `details.agent_recovery.prompt_to_user`. Do not retry the same tool, and do not call another
   calculation tool as a workaround, until the user answers or accepts defaults.
-- `must_ask_user: false` (memory / report calls missing `run_id`, `ai_answer`, `format` …) means the fields are
+- `must_ask_user: false` (memory / report calls missing `run_id`, `ai_answer_text`, `format` …) means the fields are
   yours: fix what `fix_fields` lists and retry. Never ask the user for them; look run ids up with the memory tools.
 - **Never set `agent_confirmed_settings: true` yourself without a real user answer.**
 
