@@ -298,6 +298,9 @@ def attach_app_svgs(
         result = results[position] if results else None
         if result and result.get("ok") and isinstance(result.get("svg"), str):
             out[index].update(renderer="app", app_kind=request["kind"], app_svg=result["svg"])
+            if isinstance(result.get("note"), str) and result["note"].strip():
+                # adapter 交回的图下说明（如金口诀没有行年时右下格为什么空着）：进规格的 lines，PDF / DOCX / PNG 都印在图下
+                out[index]["lines"] = [*(out[index].get("lines") or []), result["note"].strip()]
             if request.get("title"):
                 out[index]["title"] = request["title"]  # app 的这张盘与自绘图不是同一种（三式：自绘六壬天地盘 → app 三式合一盘）
         else:
