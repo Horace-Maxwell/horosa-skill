@@ -5636,6 +5636,10 @@ pattern 等于只守了一半。
   unparseable date (wrong-moment chart, no error). Now it raises `tool.shenshu_bad_date`; `_run_shenshu_tool`
   raises `transport.shenshu_snapshot_unavailable` on a no-snapshot (old-backend) response; horary/election/
   progextra log + attach `snapshot_error` instead of a bare `except: pass`.
+  *(v0.50.0 supersedes the progextra half: `_run_progextra_js_tool` — balbillus / triplicityrulers / keypoints /
+  yearsystem129 — no longer returns ok=true with placeholder sections when the JS builder fails; it raises
+  `tool.<technique>_empty_snapshot` like its siblings, and re-raises `js_engine.*` untouched so the install /
+  `HOROSA_CORE_JS_ROOT` recovery survives. Guard: `test_progextra_failure_is_a_structured_error_not_a_placeholder`.)*
 - **persiandirected dates differ from 星阙 by ≤1 day** (~40% of rows). Root cause: 星阙's moment
   `add(N,'days')` TRUNCATES the fractional day (JS `Date.setDate` floors), AND `arc % 360` has JS↔Python
   float noise that rounds to the same 2-dp age but flips a day at the integer boundary. Matching the truncation

@@ -935,12 +935,26 @@ class PredictiveRunners:
         chart_payload.pop("dirLat", None)
         chart_payload.pop("dirLon", None)
         response = self._call_remote("/chart", chart_payload)
-        snapshot_text, moment_lines = "", []
         try:
             js = self.js_client.run("progextra", self._progextra_payload(technique, response, options))
-            snapshot_text, moment_lines, _ = self._progextra_unpack(technique, js)
-        except Exception as exc:
-            _degrade("progextra JS engine failed (technique=%s): %s", technique, exc)
+        except ToolTransportError as exc:
+            if f"{exc.code}".startswith("js_engine."):
+                raise  # 引擎缺失 / node 过旧：原码自带安装与 HOROSA_CORE_JS_ROOT 的恢复提示，原样上抛
+            js, js_error = None, f"{exc}"
+        except Exception as exc:  # noqa: BLE001 — builder 内部异常同样按「没算出」报，不吞成占位
+            js, js_error = None, f"{exc}"
+        snapshot_text, moment_lines = "", []
+        if js is not None:
+            snapshot_text, moment_lines, js_error = self._progextra_unpack(technique, js)
+        if not snapshot_text:
+            # 此前这里返回 ok=true + 每段占位（W-6）：与兄弟技法（agepoint / distributions / 推运图族）不一致，
+            # 也违反「勿落 generated_template 假导出」（AGENTS §5.9）。现在同样结构化报错。
+            raise ToolValidationError(
+                f"{technique} 的本地 JS 推运引擎没有算出结果{f'：{js_error}' if js_error else ''}"
+                f" / the local JS engine returned no {technique} result",
+                code=tool_code(technique, "empty_snapshot"),
+                details={"tool": technique, "options": options, "js_error": js_error},
+            )
         return {
             "chart": response.get("chart"),
             "options": options,

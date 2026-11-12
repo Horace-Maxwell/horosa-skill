@@ -15,6 +15,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from fakes import FakeClient, FakeJsClient
 
 from horosa_skill import predictive_text as P
@@ -496,6 +497,41 @@ def test_progextra_locator_lines_land_in_current_moment(tmp_path) -> None:
 
     text = _service(tmp_path, RecordingClient(), LocatorJs()).run_tool("balbillus", dict(BIRTH), save_result=False).data["snapshot_text"]
     assert _section(text, "当前时点").splitlines()[-1] == "当前主限：日（起 2026-06-02，时长 15.35 年）"
+
+
+@pytest.mark.parametrize("technique", ["balbillus", "triplicityrulers", "keypoints", "yearsystem129"])
+@pytest.mark.parametrize("failure", ["builder_not_ok", "builder_raises"])
+def test_progextra_failure_is_a_structured_error_not_a_placeholder(tmp_path, technique: str, failure: str) -> None:
+    # W-6：progextra 四技法 JS 失败时此前 ok=true、每段占位（与兄弟技法 / §5.9 不一致）——现在结构化报错。
+    class FailingJs(RecordingJsClient):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            if tool_name != "progextra":
+                return super().run(tool_name, payload)
+            if failure == "builder_raises":
+                raise RuntimeError("builder blew up")
+            return {"tool": "progextra", "technique": technique, "data": {"ok": False, "reason": "no data"}, "snapshot_text": ""}
+
+    result = _service(tmp_path, RecordingClient(), FailingJs()).run_tool(technique, dict(BIRTH), save_result=False)
+    assert result.ok is False
+    assert result.error.code == {
+        "balbillus": "tool.balbillus_empty_snapshot", "triplicityrulers": "tool.triplicityrulers_empty_snapshot",
+        "keypoints": "tool.keypoints_empty_snapshot", "yearsystem129": "tool.yearsystem129_empty_snapshot",
+    }[technique]
+    assert ("builder blew up" if failure == "builder_raises" else "no data") in result.error.details["js_error"]
+
+
+def test_progextra_missing_engine_keeps_its_own_recovery_code(tmp_path) -> None:
+    # 引擎缺失的原码（js_engine.*）带安装 / HOROSA_CORE_JS_ROOT 恢复提示，不能被改写成 empty_snapshot。
+    from horosa_skill.errors import ToolTransportError
+
+    class MissingJs(RecordingJsClient):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            if tool_name == "progextra":
+                raise ToolTransportError("missing", code="js_engine.cli_missing", details={})
+            return super().run(tool_name, payload)
+
+    result = _service(tmp_path, RecordingClient(), MissingJs()).run_tool("balbillus", dict(BIRTH), save_result=False)
+    assert result.ok is False and result.error.code == "js_engine.cli_missing"
 
 
 # ── F15 [寿命格局] 取主法 ─────────────────────────────────────────────────────────────────────
