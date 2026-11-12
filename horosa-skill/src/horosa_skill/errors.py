@@ -592,6 +592,82 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_input_per_validation_errors",
     },
+    # v0.50.0 逐字段入参校验（input_fields / input_normalization）：details.fields 每个出问题的字段一条
+    # {field, got, expected, example, options}；agent_recovery 已带 must_ask_user / fix_fields，这里只是表内兜底文字。
+    "tool.invalid_zone": {"kind": "input", "prompt_to_user": bilingual(
+        "时区读不懂：按 details.expected 改成 ±HH:MM 偏移或 IANA 名；缩写有多种含义时从 details.options 里请用户选。",
+        "The time zone was not understood: pass an ±HH:MM offset or an IANA name (details.expected); for an ambiguous abbreviation ask the user to pick from details.options."),
+        "next_action": "fix_field_and_retry"},
+    "tool.zone_ambiguous": {"kind": "input", "prompt_to_user": bilingual(
+        "这个钟点在该时区不唯一或不存在（夏令时切换）。请用户从 details.options 的两个偏移里选一个，带 zone 重试。",
+        "That wall time is ambiguous or nonexistent in the zone (a DST switch). Ask the user to pick one of the two offsets in details.options and retry with zone."),
+        "next_action": "ask_user_for_zone"},
+    "tool.invalid_time": {"kind": "input", "prompt_to_user": bilingual(
+        "钟点读不懂或越界：改成 24 小时制 HH:MM:SS（details.expected）；有多种读法时请用户选。",
+        "The time was not understood or is out of range: pass a 24-hour HH:MM:SS (details.expected); ask the user when it reads more than one way."),
+        "next_action": "fix_field_and_retry"},
+    "tool.time_unknown": {"kind": "input", "prompt_to_user": bilingual(
+        "没有钟点（空、或「不详」）。钟点决定时柱、上升与宫位，不能默认成 0 点：请向用户问钟点。",
+        "The clock time is missing or unknown. It decides the hour pillar, Ascendant and houses and must not default to midnight: ask the user."),
+        "next_action": "ask_user_for_time"},
+    "tool.time_is_shichen": {"kind": "input", "prompt_to_user": bilingual(
+        "给的是时辰（两小时一段），不是钟点：请向用户问具体钟点，不要替用户挑一个。",
+        "A double-hour (时辰) was given, not a clock time: ask the user for the exact time instead of picking one."),
+        "next_action": "ask_user_for_time"},
+    "tool.invalid_date": {"kind": "input", "prompt_to_user": bilingual(
+        "日期读不懂或不存在：改成公历 YYYY-MM-DD（details.expected）；年份含糊时从 details.options 里请用户选。",
+        "The date was not understood or does not exist: pass a Gregorian YYYY-MM-DD (details.expected); ask the user to pick from details.options when the year is ambiguous."),
+        "next_action": "fix_field_and_retry"},
+    "tool.ambiguous_date": {"kind": "input", "prompt_to_user": bilingual(
+        "日期有「月/日」与「日/月」两种读法：请用户从 details.options 里选，按 YYYY-MM-DD 重试。",
+        "The date reads both month/day and day/month: ask the user to pick from details.options and retry as YYYY-MM-DD."),
+        "next_action": "ask_user_for_date"},
+    "tool.lunar_date_unsupported": {"kind": "input", "prompt_to_user": bilingual(
+        "给的是农历日期：先用 horosa_cn_calendar_month 查到对应的公历日（或向用户问公历生日），再按 YYYY-MM-DD 起盘。",
+        "A lunar-calendar date was given: find the Gregorian day with horosa_cn_calendar_month (or ask the user for it), then retry with YYYY-MM-DD."),
+        "next_action": "convert_lunar_date_then_retry"},
+    "tool.invalid_coordinate": {"kind": "input", "prompt_to_user": bilingual(
+        "经纬度读不懂或越界：纬度 31n13 / 31.22（±90）、经度 121e28 / 121.47（±180）；方向字母与字段不符时多半是经纬传反了。",
+        "The coordinate was not understood or is out of range: latitude 31n13 / 31.22 (±90), longitude 121e28 / 121.47 (±180); a hemisphere letter that does not fit the field usually means lat and lon are swapped."),
+        "next_action": "fix_field_and_retry"},
+    "tool.invalid_gender": {"kind": "input", "prompt_to_user": bilingual(
+        "性别读不懂：请向用户确认男 / 女，传 1（男）或 0（女）。",
+        "The gender was not understood: confirm male / female with the user and pass 1 (male) or 0 (female)."),
+        "next_action": "ask_user_for_gender"},
+    "tool.missing_gender": {"kind": "input", "prompt_to_user": bilingual(
+        "这个技法的结果随性别而变（大运 / 大限顺逆、条文分男女），没有性别不起盘：请向用户问性别。",
+        "This technique's result depends on gender (direction of luck cycles, gendered verses); ask the user for it before casting."),
+        "next_action": "ask_user_for_gender"},
+    "tool.missing_field": {"kind": "input", "prompt_to_user": bilingual(
+        "缺必填字段：details.fields 逐项列出（用户才知道的事实去问用户，不要猜）。",
+        "A required field is missing: details.fields lists each one (ask the user for facts only they know; never guess)."),
+        "next_action": "fix_field_and_retry"},
+    "tool.invalid_datetime": {"kind": "input", "prompt_to_user": bilingual(
+        "推运目标时刻读不懂：传 YYYY（那一年）、YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS；时区放 dirZone。",
+        "The target datetime was not understood: pass YYYY (that year), YYYY-MM-DD or YYYY-MM-DD HH:MM:SS; put the zone in dirZone."),
+        "next_action": "fix_field_and_retry"},
+    "tool.field_conflict": {"kind": "input", "prompt_to_user": bilingual(
+        "同一件事在两个字段里给了不同的值：只在一处给（details.options 是两个候选）。",
+        "Two fields give different values for the same thing: give it in one place only (details.options holds both candidates)."),
+        "next_action": "fix_field_and_retry"},
+    "tool.invalid_house_system": {"kind": "input", "prompt_to_user": bilingual(
+        "宫制读不懂：传 details.options 里的索引或名称（如 3 / Placidus、0 / 整宫制）。",
+        "The house system was not understood: pass an index or name from details.options (e.g. 3 / Placidus, 0 / whole sign)."),
+        "next_action": "fix_field_and_retry"},
+    "tool.invalid_zodiacal": {"kind": "input", "prompt_to_user": bilingual(
+        "黄道制读不懂：0 = 回归黄道 tropical，1 = 恒星黄道 sidereal。", "The zodiac was not understood: 0 = tropical, 1 = sidereal."),
+        "next_action": "fix_field_and_retry"},
+    "tool.invalid_option": {"kind": "input", "prompt_to_user": bilingual(
+        "设置值不在可选范围内：从 details.options（全表）里选一个。", "The setting value is not one of the accepted values: pick one from details.options (the full list)."),
+        "next_action": "fix_field_and_retry"},
+    "tool.confirmation_flag_not_boolean": {"kind": "input", "prompt_to_user": bilingual(
+        "agent_confirmed_settings / defaults_accepted 必须是 JSON 布尔值 true（不是 \"true\"、1 或 \"yes\"），且只在用户真的确认后才传。",
+        "agent_confirmed_settings / defaults_accepted must be the JSON boolean true (not \"true\", 1 or \"yes\"), and only after the user really confirmed."),
+        "next_action": "fix_field_and_retry"},
+    "tool.sixyao_invalid_cast": {"kind": "input", "prompt_to_user": bilingual(
+        "六爻手动起卦的输入读不懂：lines 给六爻（自下而上，0/1 或 6/7/8/9），或 gua_code 给六位 0/1 或卦名；都不给就按时间起卦。",
+        "The manual six-line cast was not understood: give six lines (bottom to top, 0/1 or 6/7/8/9) or gua_code as six 0/1 digits or a hexagram name; give neither to cast by time."),
+        "next_action": "fix_field_and_retry"},
     "agent_guidance.required": {"kind": "input", "next_action": "ask_user_then_confirm"},
 }
 

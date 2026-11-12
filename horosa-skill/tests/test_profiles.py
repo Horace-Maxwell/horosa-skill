@@ -140,7 +140,7 @@ def MOM_FIELDS() -> dict:
         ({"date": "1962-02-30"}, "date"),
         ({"date": "0000-01-01"}, "date"),  # 没有公元 0 年
         ({"date": "1582-10-10"}, "date"),  # 改历缺口
-        ({"date": "1962年3月5日"}, "date"),
+        ({"date": "1962年13月5日"}, "date"),  # v0.50.0：1962年3月5日 读得懂（同技法），不存在的月份才拒
         ({"time": "25:00"}, "time"),
         ({"lat": "95n00"}, "lat"),
         ({"lat": "121e28"}, "lat"),  # 半球字母与轴不符
@@ -159,7 +159,7 @@ def test_bad_birth_fields_are_refused_at_save_time(tmp_path: Path, patch: dict, 
     assert store.all() == [], "校验失败什么都不存"
 
 
-@pytest.mark.parametrize("zone", ["Mars/Base", "+16:00", "东八区"])
+@pytest.mark.parametrize("zone", ["Mars/Base", "+16:00", "CST", "480"])  # v0.50.0：东八区读得懂；一词多义的缩写、分钟数拒
 def test_unrecognized_zones_use_the_existing_zone_error(tmp_path: Path, zone: str) -> None:
     error = _code(lambda: _save(_store(tmp_path), "x", {**MOM_FIELDS(), "zone": zone}))
     assert error.code == "tool.invalid_zone" and error.details["zone"] == zone

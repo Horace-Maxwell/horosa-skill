@@ -25,7 +25,8 @@ class ZiWeiBirthInput(FlexibleModel):
     zone: str
     lat: str
     lon: str
-    gender: bool | None = Field(default=True, description="性别：true/1=男（默认），false/0=女；'男'/'女'/'M'/'F' 会自动归一。")
+    # v0.50.0：缺省不再是男（旧 default=True 让没给性别的女命按男命排大限）——没给就拒绝并请 agent 问用户（tool.missing_gender）。
+    gender: bool | None = Field(default=None, description="性别（必给）：1/男/乾造=男，0/女/坤造=女。")
     # 日界（F2）：上游出厂缺省 1=23 点换日（utils/dayBoundary.js:29-35 defaultAfter23NewDay）。缺省不发送 →
     # Java /ziwei/birth 缺省 1（ZiWeiController.java:87）；本地引擎档由 runner 显式补 1（ZiWeiMain.js:680-681）。
     after23NewDay: bool | None = Field(default=None, description="日界 1=23点换日(默认) 0=24点")
@@ -127,7 +128,7 @@ class BaZiBirthInput(FlexibleModel):
     # 「性别：未知」、大运顺逆无法判定；CLI/tool_run/dispatch 不受影响（FlexibleModel extra=allow）。
     gender: int | str | None = Field(
         default=None,
-        description="性别：1/'男'/'M'/true=男；0/'女'/'F'/false=女；缺省=未指定（大运/流年顺逆无法判定）。",
+        description="性别（必给）：1/男/乾造=男，0/女/坤造=女；没给会拒绝（大运顺逆由它定）。",
     )
     response_view: str | None = Field(
         default=None,
@@ -144,7 +145,7 @@ class BaZiBirthInput(FlexibleModel):
 
 
 class BaZiDirectInput(BaZiBirthInput):
-    gender: bool | None = True
+    gender: bool | None = None  # v0.50.0：缺省不再是男，没给就拒绝（tool.missing_gender）
     # 十进制坐标别名（与 BirthInput 同：后端载荷候选会回退到 gpsLat/gpsLon；此前 MCP 扁平面静默丢弃）。
     gpsLat: float | None = None
     gpsLon: float | None = None

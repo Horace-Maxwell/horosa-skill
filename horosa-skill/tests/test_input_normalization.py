@@ -1,3 +1,6 @@
+import pytest
+
+from horosa_skill.errors import ToolValidationError
 from horosa_skill.input_normalization import normalize_request_payload
 
 
@@ -44,7 +47,8 @@ def test_normalize_request_payload_pads_decimal_coordinate_birth_inputs() -> Non
 def test_normalize_request_payload_coordinate_formats_full_compat() -> None:
     # 坐标格式全兼容哨兵：十进制串（含带号/留白）、compact DMS、数值直通 —— 全部归一到
     # compact + gps 十进制；科学计数暗雷（121e30 是东经 121°30′ 不是 1.21e+32）由 compact
-    # 分支先行匹配锁死。特殊带秒格式（12W30:00）不在归一集内 → 原样透传由后端解析。
+    # 分支先行匹配锁死。带秒的罗盘串（12W30:00）v0.50.0 起就地读懂；方向字母与字段不符（纬度写 W）拒绝——
+    # 旧断言「原样透传后端」恰是缺陷：后端把 12W30:00 当纬度读，盘悄悄落在别处。
     n = normalize_request_payload({"lat": "-31.2", "lon": "+121.5"})
     assert n["lat"] == "31s12" and n["lon"] == "121e30"
     assert n["gpsLat"] == -31.2 and n["gpsLon"] == 121.5
@@ -59,8 +63,11 @@ def test_normalize_request_payload_coordinate_formats_full_compat() -> None:
     assert n["lon"] == "121e30"
     assert n["gpsLon"] == 121.5  # 绝不是 1.21e+32
 
-    n = normalize_request_payload({"lat": "12W30:00"})
-    assert n["lat"] == "12W30:00"  # 透传后端 toFloat
+    n = normalize_request_payload({"lon": "12W30:00"})
+    assert n["lon"] == "12w30" and n["gpsLon"] == -12.5
+    with pytest.raises(ToolValidationError) as caught:
+        normalize_request_payload({"lat": "12W30:00"})
+    assert caught.value.code == "tool.invalid_coordinate"
 
 
 def test_normalize_request_payload_gender_labels_to_int() -> None:
@@ -73,11 +80,13 @@ def test_normalize_request_payload_gender_labels_to_int() -> None:
     assert normalize_request_payload({"gender": "男"})["gender"] == 1
     assert normalize_request_payload({"gender": "male"})["gender"] == 1
     assert normalize_request_payload({"gender": "乾"})["gender"] == 1
-    # int / None / 未识别串 原样保留（零回归）。
     assert normalize_request_payload({"gender": 0})["gender"] == 0
     assert normalize_request_payload({"gender": 1})["gender"] == 1
     assert normalize_request_payload({"gender": None})["gender"] is None
-    assert normalize_request_payload({"gender": "其他"})["gender"] == "其他"
+    # v0.50.0：认不出的性别拒绝（旧断言「原样保留」= 下游 Number('其他') → NaN → 恒按男命排，正是要修的缺陷）。
+    with pytest.raises(ToolValidationError) as caught:
+        normalize_request_payload({"gender": "其他"})
+    assert caught.value.code == "tool.invalid_gender"
 
 
 def test_normalize_request_payload_converts_iana_timezones_from_event_datetime() -> None:
@@ -99,23 +108,22 @@ def test_normalize_request_payload_converts_iana_timezones_from_event_datetime()
     assert normalized["guaZone"] == "-05:00"
 
 
-def test_normalize_request_payload_leaves_unknown_iana_zone_when_datetime_is_missing() -> None:
-    normalized = normalize_request_payload({"zone": "America/Los_Angeles"})
-
-    assert normalized["zone"] == "America/Los_Angeles"
+def test_normalize_request_payload_refuses_iana_zone_when_datetime_is_missing() -> None:
+    # v0.50.0：没有日期时刻就换算不了偏移；旧行为把 IANA 名原样交给后端（后端拒或按别的口径读）。
+    with pytest.raises(ToolValidationError) as caught:
+        normalize_request_payload({"zone": "America/Los_Angeles"})
+    assert caught.value.code == "tool.invalid_zone"
 
 
 def test_normalize_request_payload_does_not_crash_on_calendar_invalid_date_with_iana_zone() -> None:
     # Regression: the date/time regexes accept digit-shaped but calendar-invalid values
     # (e.g. 2020-02-30). With an IANA zone name this used to reach datetime() and raise
     # ValueError straight out of normalization. It must degrade, not crash.
-    normalized = normalize_request_payload(
-        {"zone": "Asia/Shanghai", "date": "2020-02-30", "time": "12:00:00"}
-    )
-
-    assert normalized["date"] == "2020-02-30"
-    # Could not derive a reference instant, so the IANA name is left for the backend to reject.
-    assert normalized["zone"] == "Asia/Shanghai"
+    # v0.50.0: the nonexistent date is now refused as such (one issue, for `date`), not passed through.
+    with pytest.raises(ToolValidationError) as caught:
+        normalize_request_payload({"zone": "Asia/Shanghai", "date": "2020-02-30", "time": "12:00:00"})
+    assert caught.value.code == "tool.invalid_date"
+    assert [item["field"] for item in caught.value.details["fields"]] == ["date"]
 
 
 def test_normalize_request_payload_normalizes_utc_designators_to_zero_offset() -> None:

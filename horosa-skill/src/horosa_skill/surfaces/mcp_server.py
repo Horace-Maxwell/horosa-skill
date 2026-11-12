@@ -62,6 +62,7 @@ from horosa_skill.profiles import gate_view as _profile_gate_view
 from horosa_skill.surfaces.mcp_requests import (
     _mcp_payload,
     _merge_mcp_arguments,
+    precheck_arguments,
     _normalize_mcp_request,
     _request_object,
     _signature_for_input_model,
@@ -189,6 +190,9 @@ async def _gated_run(
     这个工具的返回形状（信封或 dict）；闸门放行或用户在表单里答完之后，`run` 收到的是最终载荷。
     elicit 必须在任何副作用之前：MRTR 的重试会重放整个工具函数。
     """
+    precheck = precheck_arguments(gate, payload)  # 确认位类型 + 逐字段校验先于闸门（mcp_requests.precheck_arguments）
+    if precheck is not None:
+        return refuse(_mcp_error_payload(precheck))
     if gate is not None and isinstance(payload, dict):
         # 闸门看并进命主档案之后的载荷：档案里已有的出生信息不再追问（拦不拦仍由闸门定）；认不出的档案名在这里就拒。
         try:

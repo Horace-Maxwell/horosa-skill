@@ -38,7 +38,7 @@ class LiuRengGodsInput(FlexibleModel):
 
 
 class LiuRengRunYearInput(LiuRengGodsInput):
-    gender: bool | None = True
+    gender: bool | None = None  # v0.50.0：行年男女起点不同，缺省不再是男，没给就拒绝（tool.missing_gender）
     guaYearGanZi: str | None = None
     guaDate: str | None = None
     guaTime: str | None = None

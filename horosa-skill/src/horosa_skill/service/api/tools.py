@@ -9,19 +9,17 @@ from typing import Any
 from pydantic import ValidationError
 
 from horosa_skill import __version__
-from horosa_skill.agent_guidance import (
-    build_tool_input_contract,
-    build_validation_recovery,
-)
+from horosa_skill.agent_guidance import build_tool_input_contract
 from horosa_skill.decisions.layer import decision_records
 from horosa_skill.engine.registry import (
     TOOL_DEFINITIONS,
     ToolDefinition,
     resolve_tool_name,
 )
-from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual, validation_errors
+from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.exports import build_export_registry, parse_export_content
-from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.input_fields import input_notes_scope
+from horosa_skill.input_normalization import field_issues_error, normalize_request_payload, tool_error_from_validation
 from horosa_skill.knowledge import (
     build_knowledge_registry,
     read_knowledge_entry,
@@ -58,6 +56,28 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
     return envelope
 
 
+# 结果随性别而变（大运 / 大限 / 行年顺逆、条文分男女）的技法：没有性别不起盘（v0.50.0，tool.missing_gender）。旧行为是悄悄按男命
+# 排（紫微 / 八字直断 / 六壬行年的 schema 缺省 True；八字、河洛、参评、一掌经走上游「未知(按男排)」；神数五支后端缺省男）。
+# 太乙不在内：它多用于事件局，性别只进命法段，闸门照常追问（tool_table 的 sex 选项含「事件局/不指定」）。
+GENDER_DEPENDENT_TOOLS = frozenset({
+    "bazi_birth", "bazi_direct", "ziwei_birth", "liureng_runyear", "heluo", "canping", "yizhangjing",
+    "tieban", "shaozi", "xianqin", "cetian", "qizhengkin",
+})
+
+
+def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
+    if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None:
+        raise field_issues_error([{
+            "field": "gender", "code": "tool.missing_gender", "got": None,
+            "expected": bilingual("1 / 男 / 乾造 = 男；0 / 女 / 坤造 = 女", "1 / 男 / male = male; 0 / 女 / female = female"),
+            "example": 1, "ask_user": True, "options": [{"value": 1, "label": "男 / male"}, {"value": 0, "label": "女 / female"}],
+            "message": bilingual(
+                f"`{tool_name}` 的结果随性别而变（大运 / 大限顺逆、条文分男女），没有性别不起盘：请向用户问性别，不要默认成男。",
+                f"`{tool_name}` depends on gender (direction of the luck cycles, gendered verses); ask the user instead of assuming male.",
+            ),
+        }])
+
+
 @dataclass
 class _ToolCall:
     """一次 run_tool 的现场。`input_normalized` 放这里而不是局部变量：计算途中它会被重新绑定（上游推运缺省、印度流派预设），
@@ -72,10 +92,13 @@ class _ToolCall:
     profile_uses: list[Any] = field(default_factory=list)
     # 载荷里 `place` 的解析记录（service/api/place.py）：成功 / 失败信封的 warnings 与技法卡都回显，不进引擎请求。
     place_records: list[dict[str, Any]] = field(default_factory=list)
+    # 入参解读说明（input_fields.add_input_note：别名改名、东八区 → +08:00、未知参数…）：成功 / 失败信封的 warnings 都回显。
+    input_notes: list[str] = field(default_factory=list)
 
     @property
     def place_notes(self) -> list[str]:
-        return [place_resolution_note(record) for record in self.place_records]
+        """入口说明（入参解读 + 地名解析），两种信封的 warnings 都以它开头。"""
+        return [*self.input_notes, *(place_resolution_note(record) for record in self.place_records)]
 
     @property
     def tool_name(self) -> str:
@@ -311,31 +334,28 @@ class ToolsAPI:
             trace["error_code"] = exc.code
             raise
         payload, place_records = self.pop_place_records(payload)
+        raw_payload = payload if isinstance(payload, dict) else {}
         try:
-            payload = normalize_request_payload(payload)
+            # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
+            # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。
+            payload = normalize_request_payload(payload, model=definition.input_model)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
             knowledge_selection = None
             if isinstance(payload, dict) and "knowledge" in payload:
                 payload = dict(payload)
                 knowledge_selection = payload.pop("knowledge")
             validated = definition.input_model.model_validate(payload)
+        except ToolValidationError as exc:
+            trace["error_code"] = exc.code
+            raise
         except ValidationError as exc:
-            trace["error_code"] = "tool.invalid_payload"
-            errors = validation_errors(exc)
-            raise ToolValidationError(
-                f"Invalid payload for tool `{tool_name}`.",
-                code="tool.invalid_payload",
-                details={
-                    "errors": errors,
-                    "agent_recovery": build_validation_recovery(
-                        operation_name=f"tool.{tool_name}",
-                        tool_name=tool_name,
-                        errors=errors,
-                    ),
-                },
-            ) from exc
+            error = tool_error_from_validation(exc, tool_name=tool_name, payload=raw_payload)
+            trace["error_code"] = error.code
+            raise error from exc
+        input_normalized = validated.model_dump(exclude_none=True)
+        _require_result_facts(tool_name, input_normalized)
         return (
-            _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)),
+            _apply_chart_request_defaults(tool_name, input_normalized),
             knowledge_selection,
             profile_uses,
             place_records,
@@ -524,11 +544,11 @@ class ToolsAPI:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text):
+        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), input_notes_scope() as input_notes:
             input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
-                profile_uses=profile_uses, place_records=place_records,
+                profile_uses=profile_uses, place_records=place_records, input_notes=list(input_notes),
             )
             try:
                 envelope = self._success_envelope(call, self._compute_tool_result(call))

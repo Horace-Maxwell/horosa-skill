@@ -180,14 +180,22 @@ def test_bulk_sets_equal_upstream() -> None:
 
 def test_compact_text_round_trips_unchanged() -> None:
     """31n13 这类整数分输入：解析成十进制再换算回来必须原样（上游往返同样成立，见 whole_minutes 集）。"""
+    # v0.50.0：只在合法值域里往返（纬度 ≤ 90°、经度 ≤ 180°）；域外的罗盘串（90n01、180e01）现在拒绝，见 test_input_fields。
     for d in range(181):
         for m in range(60):
             for lat_h, lon_h in (("n", "e"), ("s", "w")):
                 text_lat, text_lon = f"{d}{lat_h}{m:02d}", f"{d}{lon_h}{m:02d}"
-                out = normalize_request_payload({"lat": text_lat, "lon": text_lon})
+                payload = {"lon": text_lon} if d * 60 + m > 180 * 60 else {"lat": text_lat, "lon": text_lon}
+                if d * 60 + m > 90 * 60:
+                    payload.pop("lat", None)
+                if not payload:
+                    continue
+                out = normalize_request_payload(payload)
                 expect_lat = text_lat if (d or m or lat_h == "n") else f"{d}n{m:02d}"  # 0s00 是 -0 → 0n00（上游同）
                 expect_lon = text_lon if (d or m or lon_h == "e") else f"{d}e{m:02d}"
-                assert (out["lat"], out["lon"]) == (expect_lat, expect_lon), (text_lat, text_lon)
+                if "lat" in payload:
+                    assert out["lat"] == expect_lat, text_lat
+                assert out["lon"] == expect_lon, text_lon
 
 
 def test_every_coordinate_key_goes_through_the_upstream_formatter() -> None:
@@ -205,12 +213,15 @@ def test_non_finite_coordinates_are_refused_not_turned_into_zero(tmp_path: Path)
     from horosa_skill.memory.store import MemoryStore
     from horosa_skill.service import HorosaSkillService
 
-    out = normalize_request_payload({"lat": math.nan, "lon": math.inf})
-    assert math.isnan(out["lat"]) and out["lon"] == math.inf and "gpsLat" not in out  # 原样留给校验层
+    # v0.50.0：非有限值在归一化这一步就拒（tool.invalid_coordinate），不再原样留给模型校验。
+    with pytest.raises(ToolValidationError) as caught:
+        normalize_request_payload({"lat": math.nan, "lon": math.inf})
+    assert caught.value.code == "tool.invalid_coordinate"
+    assert [item["field"] for item in caught.value.details["fields"]] == ["lat", "lon"]
     settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", runtime_root=tmp_path / "rt",
                         db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
     service = HorosaSkillService(settings, store=MemoryStore(settings))
     with pytest.raises(ToolValidationError) as exc:
         service.run_tool("chart", {"date": "1990-01-01", "time": "12:00", "zone": "+08:00", "lat": math.nan, "lon": 121.5},
                          save_result=False)
-    assert exc.value.code == "tool.invalid_payload"
+    assert exc.value.code == "tool.invalid_coordinate"

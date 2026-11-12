@@ -10,27 +10,44 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, WithJsonSchema
 
+from pydantic import ValidationError
+
+from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import ToolValidationError, bilingual
-from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.input_normalization import normalize_request_payload, tool_error_from_validation
 from horosa_skill.profiles import carries_profile
 
 # 一次工具调用里 `request` 与顶层参数的冲突说明：合并发生在工具函数体里，警告要等结果出门时才有地方放，
 # 所以由 `HorosaMCPServer.call_tool` 开作用域、把这张表并进 warnings。
 _REQUEST_NOTES: ContextVar[list[str] | None] = ContextVar("horosa_mcp_request_notes", default=None)
+# 客户端发来的原始参数（v0.50.0）：SDK 按签名生成的 arg model 会在函数体之前丢掉未声明的顶层键（`place`、`name`、别名键、
+# 嵌套 `birth`…）。`call_tool` 把原始参数放在这里，`_merge_mcp_arguments` 把签名之外的键接回来，交给归一化去认或报「未知参数」。
+_RAW_ARGUMENTS: ContextVar[dict[str, Any] | None] = ContextVar("horosa_mcp_raw_arguments", default=None)
+# 技法输入模型：这一层只校验、原样交给 run_tool（它再归一化一次并把解读说明写进 warnings）。
+_TECHNIQUE_MODELS = frozenset(definition.input_model for definition in TOOL_DEFINITIONS.values())
 
 
 @contextmanager
-def request_conflict_scope() -> Iterator[list[str]]:
+def request_conflict_scope(arguments: dict[str, Any] | None = None) -> Iterator[list[str]]:
     notes: list[str] = []
     token = _REQUEST_NOTES.set(notes)
+    raw_token = _RAW_ARGUMENTS.set(dict(arguments) if isinstance(arguments, dict) else None)
     try:
         yield notes
     finally:
+        _RAW_ARGUMENTS.reset(raw_token)
         _REQUEST_NOTES.reset(token)
 
 
-def _normalize_mcp_request(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
-    normalized = model.model_validate(normalize_request_payload(_request_object(raw_request)))
+def _normalize_mcp_request(raw_request: Any, model: type[BaseModel], *, tool_name: str | None = None) -> dict[str, Any]:
+    body = _request_object(raw_request)
+    try:
+        normalized = model.model_validate(normalize_request_payload(body, model=model))
+    except ValidationError as exc:
+        if model not in _TECHNIQUE_MODELS:
+            raise
+        # 技法模型：与 run_tool 同一份逐字段错误（每个字段一条恢复条目），不是整份闸门问卷。
+        raise tool_error_from_validation(exc, tool_name=tool_name or model.__name__, payload=body) from exc
     return normalized.model_dump(exclude_none=True)
 
 
@@ -38,11 +55,57 @@ def _mcp_payload(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:
     """MCP 参数 → 交给 service 的载荷。带命主档案名的载荷**不在这一层校验**，原样交下去：
 
     这一层的 `model_dump` 会把模型缺省值写成显式值（ad=1、紫微 gender=true），档案里存的同名字段就被缺省值压掉了；
-    run_tool / dispatch 先并档案、再归一化与校验（错误照样是带 agent_recovery 的 tool.invalid_payload）。"""
+    run_tool / dispatch 先并档案、再归一化与校验（错误照样是带 agent_recovery 的 tool.invalid_payload）。
+
+    技法模型（v0.50.0）：这一层只做校验（坏入参在这里就是结构化错误），交下去的是**原载荷**——run_tool 自己归一化，
+    「东八区 → +08:00」这类解读说明才进得了结果的 warnings（归一化过的值再归一化一次不会再产生说明）。"""
     body = _request_object(raw_request)
     if carries_profile(body, model):
         return body
-    return _normalize_mcp_request(body, model)
+    validated = _normalize_mcp_request(body, model)
+    return body if model in _TECHNIQUE_MODELS else validated
+
+
+_CONFIRMATION_FLAGS = ("agent_confirmed_settings", "defaults_accepted")
+
+
+def precheck_arguments(gate: str | None, payload: Any) -> ToolValidationError | None:
+    """闸门之前的两道检查（v0.50.0，`_gated_run` 第一步）：
+
+    1. 确认位必须是 JSON 布尔：`"true"` / 1 / `"yes"` 以前会被闸门当成「没确认」反复追问，模型不知道错在哪（闸门读 `is True`）。
+    2. 技法载荷的逐字段校验先于闸门：「东八区」读不懂、`zone=480`、`time=辰时` 这类错误直接回逐字段的恢复条目，
+       不先走一轮「请确认设置」的问卷。带命主档案名的载荷跳过（档案并进来之后 run_tool 再校验）。"""
+    if not isinstance(payload, dict):
+        return None
+    for key in _CONFIRMATION_FLAGS:
+        value = payload.get(key)
+        if value is not None and not isinstance(value, bool):
+            return ToolValidationError(
+                bilingual(f"`{key}` 必须是 JSON 布尔值 true（收到 {value!r}）：只在用户真的确认之后传 true。",
+                          f"`{key}` must be the JSON boolean true (got {value!r}); pass true only after the user really confirmed."),
+                code="tool.confirmation_flag_not_boolean",
+                details={"field": key, "got": value if isinstance(value, (str, int, float)) else repr(value), "expected": "true", "example": True,
+                         "agent_recovery": {"kind": "input", "must_ask_user": False, "reason": "invalid_field", "next_action": "fix_field_and_retry",
+                                            "fix_fields": [{"field": key, "got": value if isinstance(value, (str, int, float)) else repr(value),
+                                                            "expected": "JSON boolean true", "example": True}]}},
+            )
+    definition = TOOL_DEFINITIONS.get(gate or "")
+    if definition is not None:
+        model: Any = definition.input_model
+    elif gate in ("dispatch", "hecan"):
+        from horosa_skill.schemas.tools.facades import DispatchInput
+
+        model = DispatchInput
+    else:
+        return None
+    if carries_profile(payload, model):
+        return None
+    try:
+        # dispatch / hecan：只判当事人位置上的字段（birth / subject / context），不按门面模型报「未知参数」。
+        normalize_request_payload(payload, model=model if definition is not None else None)
+    except ToolValidationError as exc:
+        return exc
+    return None
 
 
 def _request_object(raw_request: Any) -> dict[str, Any]:
@@ -212,16 +275,24 @@ def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:
     `horosa_tool_run` 的描述就教这种写法（公共字段放顶层、技法专属字段进 `request`）。曾经 `request` 一出现就整体替换，
     `horosa_astro_chart(hsys=3, request={…})` 回 ok=True 而盘按 hsys=1 起，没有一句话。
     """
+    declared = set(kwargs)
     request = kwargs.pop("request", None)
     # 每个参数现在都以 None 为默认值出现在 kwargs 里；把它们喂进 extra="allow" 的模型会凭空造出
     # 几十个 None 字段，也会让澄清闸误判「用户已提供该设置」。未显式给出的一律剔除。
     flat = {key: value for key, value in kwargs.items() if value is not None}
+    # 签名之外的顶层键（SDK 已经丢了）从原始参数里接回来：顶层与 `request` 同等对待（schema 写的就是
+    # additionalProperties: true）。认得的由归一化接住（place / name / 别名键），认不得的进 warnings。
+    raw = _RAW_ARGUMENTS.get() or {}
+    for key, value in raw.items():
+        if key not in declared and key != "tool_name" and value is not None:
+            flat.setdefault(key, value)
+    flat = _unwrap(flat, declared)
     if request is None:
         return flat
     if not flat:
-        return request
+        return _unwrap(request, declared)
     try:
-        body = _request_object(request)
+        body = _unwrap(_request_object(request), declared)
     except ToolValidationError:
         # 调用点都在各工具的 try 之外：这里不抛，坏 request 原样往下走，由 _normalize_mcp_request 报 tool.invalid_payload。
         return request
@@ -232,6 +303,25 @@ def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:
         notes.append(bilingual(f"`request` 与顶层参数同名不同值（{names}），已按 `request` 的值起盘。",
                                f"`request` and top-level arguments disagree on {', '.join(conflicts)}; the `request` value was used."))
     return {**flat, **body}
+
+
+_WRAPPER_KEYS = ("payload", "arguments", "params", "input")
+
+
+def _unwrap(body: Any, declared: set[str]) -> Any:
+    """`{"payload": {...}}` / `{"arguments": {...}}` 这类客户端包装层（工具没声明这个键时）→ 拆开，里层键优先级低于外层显式键。"""
+    if not isinstance(body, dict):
+        return body
+    for key in _WRAPPER_KEYS:
+        inner = body.get(key)
+        if key in declared or not isinstance(inner, dict):
+            continue
+        rest = {k: v for k, v in body.items() if k != key}
+        body = {**inner, **rest}
+        notes = _REQUEST_NOTES.get()
+        if notes is not None:
+            notes.append(bilingual(f"`{key}` 包装层已拆开，里面的字段按顶层参数读。", f"The `{key}` wrapper was unpacked; its fields were read as top-level arguments."))
+    return body
 
 
 # `horosa_tool_run` 的公共字段：覆盖绝大多数技法的起盘输入 + 闸门确认位。
@@ -250,7 +340,8 @@ _TOOL_RUN_COMMON_FIELDS: tuple[tuple[str, Any, str], ...] = (
     ("ad", int | None, "1=公元 -1=公元前"),
     ("gender", str | int | None, "1/男 0/女"),
     ("name", str | None, "当事人姓名（透传盘头）"),
-    ("pos", str | None, "地点显示名"),
+    ("pos", str | None, "地点显示名（只显示；要解析坐标传 place）"),
+    ("place", str | None, "地名（解析出坐标与时区，可代替 lat/lon/zone）"),
     ("datetime", str | None, "推运目标时刻"),
     ("dirZone", str | None, "推运目标地时区"),
     ("dirLat", str | float | None, "推运目标地纬度"),
