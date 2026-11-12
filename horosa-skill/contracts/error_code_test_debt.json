@@ -38,7 +38,6 @@
     "runtime.install_archive_type_mismatch",
     "runtime.install_manifest_missing",
     "runtime.install_missing_url",
-    "runtime.install_path_traversal",
     "runtime.start_script_missing",
     "runtime.stop_script_missing",
     "runtime.windows_patch_invalid_archive",
