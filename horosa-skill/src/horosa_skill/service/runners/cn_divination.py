@@ -16,7 +16,6 @@ from horosa_skill.service.options_cn import (
     _ken_datetime_parts,
     _zhengchuan_xinyi_query,
 )
-from horosa_skill.service.options_zeri import _require_cast_geo
 from horosa_skill.service.text.chinese import (
     _derive_changed_gua_code,
     _derive_gua_code,
@@ -69,7 +68,6 @@ class CnDivinationRunners:
                               example=[5, 20, 7])
         cast_method = "nums" if nums not in (None, []) else "time"
         if cast_method == "time":
-            _require_cast_geo(payload, tool="xiaoliuren")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -137,7 +135,6 @@ class CnDivinationRunners:
         time_lines: list[str] = []
         need_hour = qi_mode == "hour" and not payload.get("qiZhi") and not hour_zhi
         if (not day_gan or not day_zhi or need_hour) and payload.get("date"):
-            _require_cast_geo(payload, tool="feigong")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -224,7 +221,6 @@ class CnDivinationRunners:
             "timeLines": [],
         }
         if fa == "time":
-            _require_cast_geo(payload, tool="xiaochengtu")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -295,7 +291,6 @@ class CnDivinationRunners:
         request["askEvent"] = payload.get("askEvent") or payload.get("question") or ""
         time_lines: list[str] = []
         if payload.get("date"):
-            _require_cast_geo(payload, tool="guice")
             nongli = self._call_remote(
                 "/nongli/time",
                 {
@@ -363,7 +358,6 @@ class CnDivinationRunners:
         if school == "xinyi":
             request.update(_zhengchuan_xinyi_query(payload))
         else:
-            _require_cast_geo(payload, tool="zhengchuan")
             # 时间算法一处定、两处用：四柱（/nongli/time）与大定推运表（JS buildLocalBaziResult）必须同口径 ——
             # 上游两路都是一次 buildLocalBaziResult 同出四柱与推运表（aiAnalysisContext.buildChartShusuanBazi:1948-1979，
             # 无头缺省 timeAlg = record.timeAlg ?? 0 真太阳时，buildFieldObject:603）。此前四柱走后端缺省 0、推运表走

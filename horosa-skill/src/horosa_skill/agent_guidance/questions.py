@@ -70,6 +70,63 @@ def gender_required(tool: str, payload: dict[str, Any]) -> bool:
     return True
 
 
+# ───────────── 时区 / 时地：入参模型里不是必填、结果却随它变的技法（v0.50.0 深审余项）─────────────
+# 模型把 zone 列为必填的 80 多个技法由 pydantic 拦（缺 → tool.missing_field，提示「或传 place」）。下面这些技法模型里 zone 可选
+# （有免起课路径，或沿用了神数基类），以前缺 zone 时：占时起课把 `zone: null` 发给 /nongli/time → HTTP 500 / KeyError；本地八字链与
+# 神数后端则悄悄按 +08:00 算（beijingTimeShift.parseZoneHours / timezone_to_float(…, 8.0)，上游页面总有 zone、从不走到这一步）。
+# 现在缺什么报什么（每个字段一条恢复条目、可改传 place），绝不替用户选 +08:00。
+ZONE_FACT_TOOLS: frozenset[str] = frozenset({
+    # 本地八字链（baziLunarLocal：真太阳时与节气交接按时区换算）
+    "canping", "heluo", "yizhangjing",
+    # 神数后端读 zone 定农历 / 节气（webxianqinsrv / webcetiansrv / webqizhengkinsrv / webtaixuansrv / webfendjingsrv /
+    # webbeijisrv / webnanjisrv / webchunzisrv：timezone_to_float(zone, 8.0)）
+    "xianqin", "cetian", "qizhengkin", "taixuan", "fendjing", "beiji", "nanji", "chunzi",
+})
+CAST_PLACE_FIELDS = ("date", "time", "zone", "lat", "lon")
+# zone 可选、且结果与时区无关的技法（守卫 tests/test_zone_requirement.py 要求每个技法都有归属；live 用例逐个证明换时区结果不变）。
+ZONE_FREE_TOOLS: dict[str, str] = {
+    "wangji": "后端按日期 / 钟点直接取干支，不读时区（webwangjisrv 无 zone）",
+    "wuzhao": "同上（webwuzhaosrv 无 zone）",
+    "jingjue": "同上（webjingjuesrv 无 zone）",
+    "shenyishu": "同上（webshenyishusrv 无 zone）",
+    "shaozi": "同上（webshaozisrv 无 zone）",
+    "tieban": "同上（webtiebansrv 无 zone）",
+}
+# zone 可选、上游有成文缺省、用了就在 warnings 里说明的技法：技法 → (缺省说明 中, 英)。
+ZONE_DOCUMENTED_DEFAULTS: dict[str, tuple[str, str]] = {
+    "mundane": (
+        ("没给 {missing}：世运盘按上游世运页缺省起盘（MundaneMain：时区 +08:00、入宫盘地点 116e23 / 23n26）——入宫时刻全球同一，"
+         "宫位随地点变；要某地的盘请给 place 或 zone + lat + lon。"),
+        ("{missing} not given: the mundane chart uses the upstream page default (MundaneMain: zone +08:00, ingress chart at "
+         "116e23 / 23n26). The ingress moment is global but the houses depend on the place; give place, or zone + lat + lon, for a specific place."),
+    ),
+}
+
+
+def place_fields_required(tool: str, payload: dict[str, Any]) -> tuple[str, ...]:
+    """这次调用起盘要的时地字段（只管入参模型里不必填的那几个；空 = 不要）。技法入口按它逐字段报缺（tool.missing_field）。
+
+    占时起课的五个技法只在「按时刻起课」那条路上要 date / time / zone / lat / lon：显式 nums / 干支 / 股价 / 卦等免起课输入不要。"""
+    if tool in ZONE_FACT_TOOLS:
+        return ("zone",)
+    def text(key: str) -> str:
+        return str(payload.get(key) or "").strip()
+
+    if tool == "xiaoliuren":
+        return CAST_PLACE_FIELDS if not payload.get("nums") else ()
+    if tool == "feigong":
+        need_hour = text("qiMode") in ("", "hour") and not text("qiZhi") and not text("hourZhi")
+        return CAST_PLACE_FIELDS if (not text("dayGan") or not text("dayZhi") or need_hour) else ()
+    if tool == "xiaochengtu":
+        return CAST_PLACE_FIELDS if text("qiguaFa") == "time" else ()
+    if tool == "guice":
+        # 给了 date 就按占时四柱起（缺 date 时走 yearZhi / pillars 等免起课路径，JS 自己报「所需之输入未足」）。
+        return CAST_PLACE_FIELDS if text("date") else ()
+    if tool == "zhengchuan":
+        return () if text("school").lower() == "xinyi" else CAST_PLACE_FIELDS
+    return ()
+
+
 # 选项超过这么多就不在追问里逐条列出（除非请求本身碰了这个设置）：说缺省值和怎么改。
 MAX_SPELLED_OPTIONS = 8
 

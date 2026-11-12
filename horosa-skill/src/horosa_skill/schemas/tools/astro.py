@@ -406,7 +406,8 @@ class MundaneInput(FlexibleModel):
     year: int | str = Field(description="年份：入宫盘的入宫年；mundaneType=region（地区盘）时为推运目标年（[地区盘推运] 盘龄 = year − 建置年）。")
     ingressTerm: str | None = "春分"  # 春分 / 夏至 / 秋分 / 冬至 (the four cardinal ingresses)
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
-    zone: str | None = "+08:00"
+    # 不给 → runner 按上游世运页缺省（+08:00、116e23 / 23n26）起盘并在 warnings 里说明（questions.ZONE_DOCUMENTED_DEFAULTS）。
+    zone: str | None = None
     lat: str | None = None
     lon: str | None = None
     gpsLat: float | None = None
