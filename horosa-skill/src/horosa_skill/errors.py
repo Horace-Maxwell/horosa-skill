@@ -738,6 +738,44 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "query_memory_for_run_id",
     },
+    # 记忆库（v0.50.0-dev）：not_found 的后缀会被通用规则判成「重试再体检」，必须精确登记；store_unavailable 是环境问题。
+    "memory.run.not_found": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "没有这个 run_id 的记录。先用 horosa_memory_query 找到要的那一条，再用它的 run_id。",
+            "No run with this run_id. Use horosa_memory_query to find the run first, then use its run_id.",
+        ),
+        "next_action": "query_memory_for_run_id",
+    },
+    "memory.query.invalid_time": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "after / before 要写成日期或 ISO 时间（details.accepted_forms）；「昨天」「上周」先换算成日期，时区放 zone。",
+            "Write after / before as a date or ISO date-time (details.accepted_forms); turn 'yesterday' / 'last week' into dates"
+            " first and put the time zone in zone.",
+        ),
+        "next_action": "rewrite_time_filter",
+    },
+    "memory.answer.empty": {"kind": "input", "next_action": "send_non_empty_answer"},
+    "memory.answer.too_large": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "写回的答案超过上限（details.limits）。写回结论与要点；完整长文用 horosa_report_render 出报告文件。",
+            "The answer exceeds the limits in details.limits. Write back the conclusions and key points; render the long text"
+            " as a report with horosa_report_render.",
+        ),
+        "next_action": "shorten_answer_or_render_report",
+    },
+    "memory.store_unavailable": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            f"本机记忆库打不开或写不了（details.path / details.error：只读目录、权限、磁盘满）。起盘照常可用；请用户检查数据目录，或跑 `{DOCTOR_CMD}`。",
+            "The local memory store cannot be opened or written (details.path / details.error: read-only directory, permissions,"
+            f" full disk). Chart tools still work; ask the user to check the data directory, or run `{DOCTOR_CMD}`.",
+        ),
+        "next_action": "check_data_dir_then_doctor",
+        "commands": [DOCTOR_CMD],
+    },
     "report.output_path_not_allowed": {
         "kind": "input",
         "prompt_to_user": bilingual(

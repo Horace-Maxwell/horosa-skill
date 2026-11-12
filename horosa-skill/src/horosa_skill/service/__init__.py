@@ -38,6 +38,7 @@ from horosa_skill.service.endpoints import (
 )
 from horosa_skill.service.enrich import EnrichMixin
 from horosa_skill.service.envelope import (
+    _extract_entities,
     _missing_sections_warning,
     _with_operational_recovery,
 )
@@ -156,7 +157,9 @@ class HorosaSkillService(
         self.settings = settings
         self.client = client or HorosaApiClient(settings.server_root)
         self.chart_client = chart_client or (client if client is not None else HorosaPlainJsonClient(settings.chart_server_root))
-        self.store = store or MemoryStore(settings)
+        self.store = store or MemoryStore(settings, entity_extractor=_extract_entities)
+        if getattr(self.store, "entity_extractor", None) is None:  # 外面传进来的 store：重建时也要能从产物抽实体
+            self.store.entity_extractor = _extract_entities
         self.js_client = js_client or HorosaJsEngineClient(settings)
         self.runtime_manager = runtime_manager or HorosaRuntimeManager(settings)
         self.tracer = TraceRecorder(settings)

@@ -210,7 +210,7 @@ Runtime enforcement (the gate is in code, not just policy):
 - If a response carries `details.agent_recovery` with `must_ask_user: true`, stop and ask the user with
   `details.agent_recovery.prompt_to_user`. Do not retry the same tool, and do not call another
   calculation tool as a workaround, until the user answers or accepts defaults.
-- `must_ask_user: false` (memory / report calls missing `run_id`, `ai_answer`, `format` …) means the fields are
+- `must_ask_user: false` (memory / report calls missing `run_id`, `ai_answer_text`, `format` …) means the fields are
   yours: fix what `fix_fields` lists and retry. Never ask the user for them; look run ids up with the memory tools.
 - Field errors (`tool.invalid_zone` / `invalid_time` / `time_is_shichen` / `time_unknown` / `invalid_date` / `ambiguous_date` /
   `lunar_date_unsupported` / `invalid_coordinate` / `invalid_gender` / `missing_gender` / `zone_ambiguous` …) list one entry per

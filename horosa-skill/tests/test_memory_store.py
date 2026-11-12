@@ -173,16 +173,19 @@ def test_usage_count_bumps_on_targeted_fetch_not_listing(tmp_path) -> None:
     assert after[0]["last_used_at"]
 
 
-def test_text_recall_ranks_used_runs_first(tmp_path) -> None:
-    settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
+def test_text_results_are_newest_first_whatever_the_usage(tmp_path) -> None:
+    """v0.33.0 起 text 结果按点用次数重排；那让翻页在两次请求之间点开一条就重复 / 漏掉一条（v0.50.0-dev，M12）。
+    顺序现在只看时间；usage_count / last_used_at 仍在每一行里，调用方要按它排可以自己排。"""
+    settings = Settings(server_root="http://127.0.0.1:9", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
     store = MemoryStore(settings)
     old_used = store.create_run(entrypoint="tool", query_text="八字 甲", group_id="g")
     newer = store.create_run(entrypoint="tool", query_text="八字 乙", group_id="g")
     store.query_runs(run_id=old_used)  # 老 run 被点用过
     hits = store.query_runs(text="八字", limit=10, include_payload=False)
-    assert [h["run_id"] for h in hits][:2] == [old_used, newer], "点用过的排前（无 text 浏览仍纯新近序）"
+    assert [h["run_id"] for h in hits][:2] == [newer, old_used]
+    assert hits[1]["usage_count"] == 1
     browse = store.query_runs(limit=10, include_payload=False)
-    assert browse[0]["run_id"] == newer, "浏览列表保持新近序零回归"
+    assert browse[0]["run_id"] == newer, "浏览列表保持新近序"
 
 
 def test_is_memory_worthy_dual_predicate(tmp_path) -> None:

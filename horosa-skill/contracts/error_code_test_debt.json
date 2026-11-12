@@ -26,8 +26,6 @@
     "knowledge.user_bad_range",
     "knowledge.user_too_large",
     "memory.answer.invalid_payload",
-    "memory.query.invalid_payload",
-    "memory.show.invalid_payload",
     "openclaw.native_config.invalid_json",
     "openclaw.native_config.invalid_shape",
     "place.engine_failed",

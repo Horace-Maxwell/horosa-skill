@@ -1892,8 +1892,10 @@ def test_service_can_build_report_template_and_render_json_docx_pdf(tmp_path) ->
     assert report_pdf_runs[0]["artifact_summary"]["counts_by_kind"]["report_pdf"] == 1
     assert report_pdf_runs[0]["artifact_summary"]["latest_report"]["kind"] == "report_pdf"
 
+    # v0.50.0-dev：检索搜检索文档（问题、答案含结构化答案、技法、人名、盘面正文），不再读报告文件的字节；
+    # 「逐章解释覆盖矩阵」是每份报告都有的机器章节名，搜它此前命中全部报告。按 AI 写的字找它所在的 run。
     report_json_plain_text_runs = store.query_runs(
-        text="逐章解释覆盖矩阵",
+        text="宫位宫头 后天宫位",
         artifact_kind="report_json",
         include_payload=False,
     )

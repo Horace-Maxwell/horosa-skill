@@ -99,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `5091 / 5091 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 133 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `5167 / 5167 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 133 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
@@ -369,9 +369,14 @@ Local data defaults to `~/.horosa-skill/` (Windows: `%APPDATA%/HorosaSkill/`). E
 ```bash
 uv run horosa-skill memory query                 # query history by tool / entity / run_id
 uv run horosa-skill memory show <run_id>          # replay one full call
-echo '{"run_id":"<run_id>","user_question":"...","ai_answer":"...","ai_answer_structured":{}}' \
-  | uv run horosa-skill memory answer --stdin     # write the final AI answer back to a record
+echo '{"run_id":"<run_id>","user_question":"...","ai_answer_text":"...","ai_answer_structured":{}}' \
+  | uv run horosa-skill memory answer --stdin     # write the final AI answer back to a record (earlier answers are kept)
+uv run horosa-skill memory delete --entity Mom    # list what would be deleted; add --yes to delete
+uv run horosa-skill memory export --entity Mom --out ./mom-runs   # a folder a person can read
+uv run horosa-skill memory rebuild                # rebuild the index from the files under runs/ (only adds)
 ```
+
+Search covers what a person would look for (question, answer, technique key / MCP name / Chinese name, names, chart text), never paths or JSON keys; space-separated words must all match and 繁/简 fold. `entity` also finds a saved profile's runs by any of its aliases; dates in `after` / `before` mean that whole day in `zone` (default: this machine's zone). **Deleting and exporting are CLI-only**: `memory delete` (by `--run-id`, `--entity` or `--before`) is a dry run unless `--yes`, removes rows, search entries, artifacts and manifests, and lists rendered reports without deleting them; deleting a birth profile does not delete stored runs, but tells you how many mention the person and the command to remove them. The database is only an index of the files under `runs/`: a damaged database is set aside as `memory.db.corrupt-<time>.bak` (never deleted automatically) and rebuilt from those files; `memory query` and `doctor` warn while runs are missing from the index.
 
 **Full chart report**: `report render --style chart` (or `report_render {style:"chart"}`) lays out every section of the technique's chart as a PDF / DOCX without any AI interpretation — cover, basic data, chart figures taken from the engine data (wheel / synastry bi-wheel, Zi Wei, Qimen, Da Liu Ren, hexagram, Taiyi sixteen palaces, Qi Zheng Si Yu, South Indian square, 90° Uranian dial; election results draw the chosen moment; Western wheels, synastry, Zi Wei, Qi Zheng Si Yu, Taiyi, Da Liu Ren, Liu Yao, the 90° Uranian dial, Jin Kou Jue, Su Zhan, Babylonian, Fei Gong, the Michon dual zodiac, the Kin Qi Zheng wheel, Ce Tian and Yan Qin are drawn by the 星阙 app's own chart code, and Qimen, the South Indian square, Ba Zi, geomancy, Xiao Liu Ren, Xiao Cheng Tu, Gui Ce, Ling Qi, Wu Zhao, Yi Zhang Jing, Tong She Fa and the San Shi united board are redrawn in the app's layout and colours, and the ACG map uses the app's own map code, so colors and glyphs match the app), clickable contents and bookmarks, "page N of M", and a technique-basis appendix.
 
@@ -582,7 +587,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 5091 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 5167 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

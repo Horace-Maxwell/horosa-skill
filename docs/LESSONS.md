@@ -36,6 +36,10 @@
 | v0.50.0-dev (2026-11-12) | `.horosa-bak` 每次覆盖（第二次跑完原文件就没了）、0600 配置写成 0644、Codex TOML 直写、OpenClaw 主配置无备份 | 单一落盘口 `_commit_config`：不变不写、首份备份永不覆盖 + 时间戳备份 5 份、原子替换保权限；逐格式测试 |
 | v0.50.0-dev (2026-11-12) | ok:false 信封不统一：无码的校验错误缺省 `horosa_skill_error` → 「重试 / 跑 doctor」；f-string 拼的错误码静态扫描看不见、两个族落不到恢复规则；dispatch 全失败顶层 code 为 null | 127 工具 × 三组坏参数机检不变量；ToolValidationError 缺省 `tool.invalid_input`；码族登记表 + pytest 下未登记码以 BaseException 红；每个码要有测试（债务表只减） |
 | v0.50.0-dev (2026-11-12) | `HOROSA_TOOLSETS` 拼错 = 悄悄全量；`all` = 128；说明书恒写 127；`serve --host 0.0.0.0` 横幅给出连不上的地址、局域网来连 421 不提变量；非 ASCII 令牌 500；485 个广告属性无描述；注释里的工具数全过期 | 写错往精简面倒并三处可见；说明书按注册计划生成；横幅 / 421 按 SDK 同一判据列可连地址与要加的那一行；令牌按字节比；共享字段词典 + 无描述不广告；字面量工具数守卫 |
+| v0.50.0-dev (2026-11-12) | 记忆检索搜的是文件字节：run id、路径、`json` / `ok` 都「命中」，`王 小明` / `婚姻 李四` 0 条，繁简不通，日期写法不同就找不到，`%` `_` 当通配符，深翻页 1.7 s，翻页之间点开一条就重复一条 | 每个 run 一份检索文档（人会搜的字），空白 AND、知识库同款折叠、EXISTS + 全序 SQL 分页；老库迁移 + 正文按预算回填；不再按点用重排 |
+| v0.50.0-dev (2026-11-12) | 记忆过滤条件各认各的：`tool` 只认注册表键（`八字` / MCP 名 0 条），`after` / `before` 按字面比（`昨天` 照收），`group_id` 被丢，档案别名找不到人，列表行带整份载荷（4 行 15 KB） | 过滤在 service 归一（技法名、档案别名、时刻 + 时区），认不出就拒收并给可用写法；列表行 subject 只留认人字段 |
+| v0.50.0-dev (2026-11-12) | 写回答案：第二次覆盖第一次、不带问题就把问题重置、空答案清空、未知 run 冒裸 ValueError、8 MiB 照收；show 产物缺了还说「完整记录」；只读目录上查询冒 sqlite 原始异常 | 旧答案进历史、问题保留、空 / 超长拒收、结构化 not_found；show 如实列缺失；存储错误一律 `memory.store_unavailable`，只读时退到不可变只读连接 |
+| v0.50.0-dev (2026-11-12) | 坏库隔离之后静悄悄：新库是空的，检索只是「没有结果」，别的进程更不知道；可 `runs/` 里每个 run 都有完整副本 | 库是产物的索引：`memory rebuild` 照 manifest / 产物找回；隔离后自动跑；查询与 doctor 提醒 `.bak` 与没进库的文件；崩溃残留只报不删；CLI delete / export |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -473,6 +477,81 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   ≤ 2048 B）；`surfaces/mcp_hosts.py` 用与 SDK 逐条相同的判据列出能连 / 会被拒的地址与要加的那一行，421 回包同样；令牌按 UTF-8 字节比；
   `surfaces/mcp_field_docs.py` 一个字段名一句，说不清的技法旋钮不广告（照样按名接受）；`tests/test_catalogue_count_literals.py`。
 - **守卫**：每条修复都有负向对照（换回旧写法即红），见各提交说明。
+### v0.50.0-dev / 2026-11-12 — 记忆检索搜的是文件字节，不是人会搜的字
+
+- **症状**（深度评审，状态审计复现，`audit-1111/state/`）：`memory_query` 的 `text` 把整份产物文件、路径、run id、时间戳、JSON 当字符串比：
+  搜 `json`、`ok`、用户名、日期前缀都「命中」每一条；`王 小明`、`婚姻 李四` 0 条（整串当一个子串）；存成「事业」的搜「事業」0 条；
+  entity `1990/5/3` 找不到 `1990-05-03`，`%` / `_` 当通配符；10k 条时 `offset 9000` 1.7 s；text 结果按点用次数重排，两页之间点开一条，下一页就重复一条。
+- **根因**：v0.47.2-dev 的「两层」只把问题与答案放进索引，盘面正文靠窗口内逐个读文件比字节；窗口与 Python 侧过滤让 SQL 分页不可用，
+  候选取 `JOIN + DISTINCT` 再切片；排序键里有会变的 `usage_count`。
+- **修复**：`run_search` 每个 run 一行检索文档：`head` 是库里的字（问题、答案与结构化答案的字符串值、旧答案、技法键 / MCP 名 / 中文名、实体、去掉填充行的摘要），
+  `body` 是产物里的 `export_text`（一个都没有才取 `snapshot_text`，两者是同一份正文）；路径、id、时间戳、JSON 键不进。两栏与查询都过
+  `knowledge.retrieval.normalize`。空白 / 中文逗号分词，词间 AND；≥3 码点走 FTS5 trigram（`detail=none`，用 GLOB：detail=none 不支持多 trigram 的 MATCH 短语，
+  见 `third_party_facts.json` `sqlite.fts5-trigram-detail-none`），短词与缺 FTS5 走 `instr`。写路径在同一事务里维护文档；`stamp` 对不上 `runs.updated_at`
+  的文档（旧版本进程写的、测试直接 INSERT 的）查询前补 head。老库迁移：撤 `runs_fts` 与三个触发器，建表，补实体 `search_key`（10k 条开库 1.6 s）；
+  正文不在开库时读，带 text 的查询每次最多读 2 s（10k 条三次读完），没读完的条数仍走 `not_scanned`，`memory rebuild` 一次读完。
+  `query_runs` 改 EXISTS 子查询 + `created_at DESC, rowid DESC` 全序 + SQL `LIMIT/OFFSET`。
+- **刻意改的旧行为**：text 结果不再按点用次数排前（v0.33.0 批 II-4 的召回排序，LESSONS 没有把它记成刻意选择，只有代码注释与
+  `test_text_recall_ranks_used_runs_first`）：会变的排序键与 offset 分页不相容。`usage_count` / `last_used_at` 仍在每一行里。
+  `test_service.py` 搜报告的机器章节名「逐章解释覆盖矩阵」那条改成搜 AI 写的字：那个断言要的正是「读报告文件字节」，它在每份报告里都有。
+- **数字**（10k 条，`t6_growth.py`）：浏览 11 → 11 ms，`offset 9000` 1713 → 9 ms，tool 11 → 4 ms，entity 4 → 5 ms；text（正文读完后，全库）30–130 ms
+  （之前 13–211 ms 且只搜窗口）；库 18.6 → 185 MB（夹具正文每条约 4.8 千字）。真实 14 种技法每条的检索文档约 18 KB 正文 + 约 28 KB 索引。
+- **守卫**：`tests/test_memory_search.py`、`tests/test_memory_facades.py`。负向对照（`mem-work/negctl.py`，34 条全红）：把整份信封 JSON 当正文、只用第一个词、
+  不折叠、按点用排序、entity 换回 LIKE、日期不统一、不撤旧索引、不回填正文、不看 stamp、head 不收结构化答案、`not_scanned` 不数。
+  翻页守卫第一版（翻页之间点开**这一页**最后一条）在按点用排序时碰巧也不重不漏，没红；改成点开还没翻到的那条才红。
+- **法则**：检索的语料要先定义「人会搜什么」，再决定从哪里取；搜不全时说搜了多少；分页的排序键不能会变。
+
+### v0.50.0-dev / 2026-11-12 — 记忆过滤条件各认各的；列表行带整份载荷
+
+- **症状**：`tool: "horosa_cn_bazi_birth"` / `"BAZI_BIRTH"` / `"八字"` 都是 0 条（冷启动 AI 两次都这么写），而工具面别处三种都认；
+  `after: "昨天"` / `"11/11/2026"` 照收，静默返回全部或空；`after` 带 `+08:00` 与 UTC 串按字典序比，差八小时；`group_id` 被丢；
+  「上次跟我妈说了什么」entity `我妈` 对存成「妈妈」的 run 0 条；列表每行带整份归一化载荷当 `subject`（4 行 15 KB）；`limit` 不设上限。
+- **修复**：`service/api/memory.py`：`tool` → `resolve_tool_name` → 不分大小写的键 / MCP 名 → `search.tools_named`（中文名繁简都行，「八字」= 两个技法）
+  → 库里真有的名字 → `tool.unknown`（带全部合法名）；`entity` 有命主档案时连名字与全部别名一起找（`profiles.resolve_in`，歧义时全部候选）；
+  `memory/timefilter.py` 把边界解析成 UTC 时刻，只给日期 = `zone`（缺省本机时区，含当天夏令时）的那一整天，结果的 `applied_filters.time` 说用了谁的时区；
+  认不出 → `memory.query.invalid_time`（双语、列出可用写法）。`subject` 只留 name / date / time / zone / place / 坐标 / gender；`limit` 封顶 100 并在 summary 说明。
+- **N4.3 的存储一侧**：技法载荷的 `name`（输入批次正把它声明成公共参数）已由 `_extract_entities` 落成 subject / person 实体，`search_key` 让繁体与档案别名都找得到
+  （`test_a_person_named_by_the_common_name_parameter_is_found_by_name_alias_and_script`）。MCP 面此前会丢未声明的顶层键，所以那条路上的 `name` 到不了这里。
+- **守卫**：`tests/test_memory_facades.py`；负向对照各红（去掉中文名、去掉档案展开、时间不解析、带偏移不换算（service 与 store 两层都去掉才红）、
+  丢 group_id、不瘦身、不封顶）。
+- **法则**：同一个东西在工具面有几种写法，每个接受它的入口都要认全部写法，认不出就说怎么写。
+
+### v0.50.0-dev / 2026-11-12 — 写回答案抹掉旧的；show 说「完整」；存储错误冒原始异常
+
+- **症状**：第二次 `memory_record_answer` 覆盖第一次；不带 `user_question` 时已存的问题被重置成原始 query；空答案把已存答案清空；
+  未知 run 抛裸 `ValueError`（MCP 面成了 internal error，CLI 另起一个 `memory.answer.unknown_run`）；8 MiB 答案照收，写进库也写进每份产物；
+  产物文件缺失或写了一半时 `memory_show` 仍说「已读取对应 run 的本地完整记录」；只读数据目录上 `memory_query` 冒 `sqlite3.OperationalError`。
+- **修复**：store：空答案 `EmptyAnswerError`、未知 run `UnknownRunError`（都是 `ValueError` 子类，老调用方照样接得住）；问题沿用已存的；
+  不同的旧答案连同结构化内容与元数据进 `runs.answer_history_json`（≤20 条；报告渲染重写同一答案不进），manifest 与 show 可见、仍可搜；
+  `_refresh_run_artifacts` 返回改写了哪些、哪些没改成。service：两个名字都没给 → `memory.answer.invalid_payload`（与字段校验同一份可自修恢复），
+  空 → `memory.answer.empty`，超长 → `memory.answer.too_large`（答案 100 000 字、结构化 256 KB、问题 10 000 字），未知 → `memory.run.not_found`（精确登记：
+  `not_found` 后缀会被判成「重试再体检」）；写入字段改名 `ai_answer_text`，`ai_answer` 隐藏但再收一个版本；show 带 `complete` 与 `missing_artifacts`；
+  三个门面与 CLI 的存储异常一律 `memory.store_unavailable`。读路径在只读目录退到 `mode=ro&immutable=1`，查询照常。
+- **守卫**：`tests/test_memory_facades.py`、`tests/test_agent_surface_audit.py`（缺答案的恢复字段名跟着改）；负向对照各红。
+- **法则**：写回是追加不是覆盖；「成功」的话只说做成了的事；存储层的异常在门面边界变成码。
+
+### v0.50.0-dev / 2026-11-12 — 坏库隔离之后静悄悄；库没有办法从产物重建
+
+- **症状**：坏库被隔离后建了空库，`memory_query` 只是「没有结果」，没有任何提醒，别的进程（另一个客户端的 server）更无从得知；
+  日志说旧记录「不再出现在记忆检索里」。可 `runs/` 里每个 run 都有 manifest 与带 `record_meta` / `conversation` 的产物。
+  SIGKILL 8 路写入后还会留下没有行的产物（审计 5 份）、没有 manifest 的 run（18）、临时文件（1）。
+- **修复**：`memory/rebuild.py`：`rebuild_from_artifacts` 照 manifest（缺了照产物）整条找回没有行的 run，给有行的 run 收下漏记的产物与调用、修指错的路径、
+  补写缺的 manifest；只增不删、幂等；60 s 内的文件不收（另一个进程可能刚写完文件还没提交）；找回的 run 记作刚用过（不然 `prune` 会把整批当成久未使用）；
+  调用 id 尽量沿用文件名里的，`sqlite_sequence` 抬到磁盘上最大的 id 之上。坏库隔离后自动跑（20 s 预算、不读正文），`store_meta` 记 `quarantine` / `last_rebuild`。
+  `store_health`：查询时便宜检查（有 `.bak`、库空而 `runs/` 有文件、上次重建没做完）可疑才清点整棵树（进程内缓存 60 s），doctor 每次清点；警告双语，
+  说找回了多少、跑什么、`.bak` 可以自己删（工具永不删）。崩溃残留只报，`memory rebuild --sweep` 才删，且只删写者进程已不在的临时文件与一小时前的空 run。
+  manifest 的调用带 `id`、产物带 `tool_call_id`；老 manifest 按技法与文件名序号配对。重建时从产物抽实体要用 service 的 `_extract_entities`：memory 层不许导入 service
+  （`test_layering`），由 service 构造时注入 `store.entity_extractor`。
+- **删除与导出（M6，只在 CLI）**：`memory delete --run-id / --entity / --before`（AND，默认只列出，`--yes` 才删）先删产物与 manifest 文件、再删行：
+  反过来中途断了，`memory rebuild` 会把删掉的 run 找回来；报告文件只列不删；提醒隔离副本里可能还有。`memory export` 每个 run 一个人能读的文件夹。
+  删命主档案不连带删存档，结果里说还有几条提到这个人、用哪条命令删。删除的 MCP 工具与自动保留 / 压缩留给维护者定。
+- **数字**：8 路 × 40 条并发写 320 / 320 一致、manifest 与库零不一致、零临时文件（2.5 s，基线 1.4 s：每次写多维护一行检索文档；单进程每条写中位数 9.5 vs 10.5 ms）。
+  SIGKILL 12 轮 × 4 写者（窗口 1.6–2.1 s）：2380 条，库完好；重建收下 2 份无行产物、补 4 份 manifest，之后磁盘与库一一对应，再跑一次什么都不加；
+  删掉库从文件重建 1.6 s 找回全部 2371 个有文件的 run（另 9 条在第一次写产物前被杀，没有可找回的东西）。
+- **守卫**：`tests/test_memory_facades.py` 的重建 / 清点 / 隔离 / CLI 用例，`tests/test_memory_durability.py`（隔离后自动找回；日志里提到的
+  `horosa-skill memory …` 子命令必须在 CLI 里真的存在）；负向对照各红。原来的「写时坏页」用例毁的是 `runs` 根页，现在建库期补检索文档会读到它、在构造时就隔离，
+  前提不再成立，改毁 `tool_calls` 根页，另加一条「构造时发现并找回」。
+- **法则**：数据库是产物的索引，就必须能从产物重建；自愈之后要让以后的每个进程都看得见发生过什么。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 

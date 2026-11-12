@@ -109,6 +109,27 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
                 f"`{tool_name}` depends on gender (direction of the luck cycles, gendered verses); ask the user instead of assuming male.",
             ),
         }])
+def _profile_runs_notice(store: Any, deleted: dict[str, Any]) -> dict[str, Any]:
+    """删档案不连带删存档（那是另一件事，要用户自己决定）：告诉用户存档里还有几条提到这个人、用哪条命令删。"""
+    from horosa_skill.memory.manage import count_runs_mentioning
+
+    names = [name for name in [deleted.get("name"), *(deleted.get("aliases") or [])] if isinstance(name, str) and name.strip()]
+    if not names:
+        return {}
+    count = count_runs_mentioning(store, names)
+    if not count:
+        return {"stored_runs_mentioning": 0}
+    command = f'horosa-skill memory delete --entity "{names[0]}"'
+    return {
+        "stored_runs_mentioning": count,
+        "warnings": [
+            bilingual(
+                f"档案已删，但本机存档里还有 {count} 条记录提到「{names[0]}」，没有一起删。要删它们：`{command}`（先列出，加 --yes 才删）。",
+                f"The profile is deleted, but {count} stored runs still mention '{names[0]}' and were kept. To remove them: `{command}`"
+                " (lists first; add --yes to delete).",
+            )
+        ],
+    }
 
 
 @dataclass
@@ -314,6 +335,8 @@ class ToolsAPI:
         """门面 horosa_profile：命主档案 save / get / list / delete / rename（CLI `profile` 走同一个函数；export / import 只在 CLI）。"""
         payload, resolution = self._profile_place_coordinates(payload)
         result = birth_profiles.run_action(self.profiles, payload)
+        if result.get("action") == "delete":
+            result = {**result, **_profile_runs_notice(self.store, result.get("deleted") or {})}
         if resolution is not None:
             # 存下的坐标 / 时区来自地名：结果里回显，让 AI 念给用户确认（与技法载荷的 place 同一条解析、同一套回显）。
             result = {**result, "place_resolution": {k: v for k, v in resolution.items() if k != "caveat_notes"},

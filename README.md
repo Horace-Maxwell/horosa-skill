@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-5091_passed-3e7c6f?style=flat-square" alt="5091 passed" />
+  <img src="https://img.shields.io/badge/测试-5167_passed-3e7c6f?style=flat-square" alt="5167 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -529,7 +529,9 @@ TypeSafe 的 Jev（System One 决策模型，只回类型化的选择/概率，�
 
 本地数据默认写入 `~/.horosa-skill/`（Windows：`%APPDATA%/HorosaSkill/`）。每次 run 沉淀：run 元信息、tool call 记录、entity 索引、JSON artifact、run manifest、原始 `query_text`、用户问题、AI 最终回答与可选结构化回答。
 
-- SQLite 全文检索（trigram，中文子串可命中）+ 热路径索引 + WAL 并发；按人名 / 技法 / 日期区间 / 全文组合检索，支持分页。
+- SQLite 全文检索（trigram，中文子串可命中，繁简互通，空格分开的词都要中）+ 热路径索引 + WAL 并发；按人名（命主档案的别名也算）/ 技法（键、MCP 名、中文名）/ 日期区间 / 全文组合检索，支持分页。搜的是问题、答案、技法、人名与盘面正文，不搜路径与 JSON 键。
+- **删除与导出（只在命令行）**：`horosa-skill memory delete --entity 妈妈`（或 `--run-id …` / `--before 2026-01-01`）先列出会删的记录，加 `--yes` 才删库里的行、检索条目、产物与 manifest；已经交付的报告文件只列出、不删。`horosa-skill memory export --entity 妈妈 --out <空文件夹>` 导出成人能直接读的文件夹（`index.md` + 每条一个 `run.md`、manifest、产物与报告副本）。删除命主档案不会连带删存档，结果会告诉你还有几条记录提到这个人、用哪条命令删。
+- **记忆库坏了不丢记录**：数据库只是 `runs/` 里产物文件的索引。坏库被隔离为 `memory.db.corrupt-<时间>.bak`（永不自动删除）后会照产物自动重建；`horosa-skill memory rebuild` 随时可以手动重建（只增不删，`--sweep` 另清崩溃留下的临时文件与空记录），`memory query` 与 `doctor` 会提醒还有没进库的记录。
 - `report_render` 生成 DOCX / PDF / JSON：Markdown 表格渲染为真 Word 表格（跨页重复表头）、导航大纲、目录、页码、中文字体，异常自动降级保全文。
 - `report technique` 生成技法依据报告（机器元数据），与咨询报告（AI 终稿）分轨，互不混入。
 - **完整排盘报告**：`report render --style chart`（或 `report_render {style:"chart"}`）不经 AI 解读，直接把该技法的全部盘面段落排成 PDF / DOCX——封面、基本信息、盘图（星盘轮 / 合盘双圈 / 紫微十二宫 / 奇门九宫 / 六壬天地盘 / 六爻卦图 / 太乙十六宫 / 七政四余方盘 / 南印方盘 / 量化盘 90° 度盘；择日结果画选中时刻的盘；全部取自引擎数据；西洋盘、合盘、紫微、七政四余、太乙、大六壬、六爻、90° 度盘、金口诀、宿占、巴比伦、飞宫、米雄双黄道、坚七政、策天、演禽直接用星阙 app 自己的绘图代码画；奇门、南印、八字、地占、小六壬、小成图、轨策、灵棋、五兆、一掌经、统摄法、三式合一照 app 的版式与配色重画，天文地图直接用 app 的地图代码，配色、星体符号与 app 一致）、可点击目录与书签、「第 N 页 / 共 M 页」、技法依据附录。
@@ -568,7 +570,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **5091 / 5091 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **5167 / 5167 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -584,7 +586,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 5091 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 5167 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 
