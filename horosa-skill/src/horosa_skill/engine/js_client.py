@@ -183,7 +183,7 @@ class HorosaJsEngineClient:
             node_bin = self._resolve_node_binary()
             self._require_node_new_enough(node_bin)
         except ToolTransportError:
-            return None
+            return None  # 探针：None 就是答案（没有能用的 node → 调用方保留自己画的图；原因由 doctor 的 js_engine 节报）
         try:
             completed = subprocess.run(
                 [str(node_bin), str(roots[0] / "bin" / "cli.mjs"), "render-charts"],
