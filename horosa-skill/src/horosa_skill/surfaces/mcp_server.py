@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Any
@@ -17,12 +18,13 @@ from horosa_skill.agent_guidance import (
 )
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import (
-    COMPACT_SURFACE_TOOL_COUNT,  # noqa: F401 - 脚本与测试从这里读
+    COMPACT_SURFACE_TOOL_COUNT,
     FACADE_TOOL_COUNT,
     TOOL_DEFINITIONS,
     resolve_tool_name,
 )
 from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.profiles import gate_view as _profile_gate_view
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import (
     AgentGuidanceInput,
@@ -40,12 +42,12 @@ from horosa_skill.schemas.tools import (
     TechniqueReportInput,
 )
 from horosa_skill.service import HorosaSkillService
-from horosa_skill.surfaces.mcp_catalog import register_prompts, register_resources
 from horosa_skill.surfaces.mcp_auth import (
     StaticTokenVerifier,
     build_auth_settings,
     build_transport_security,
 )
+from horosa_skill.surfaces.mcp_catalog import register_prompts, register_resources
 from horosa_skill.surfaces.mcp_elicitation import (
     _maybe_elicit_gate,
 )
@@ -58,7 +60,6 @@ from horosa_skill.surfaces.mcp_errors import (
     _mcp_internal_error_payload,
     _validation_error,
 )
-from horosa_skill.profiles import gate_view as _profile_gate_view
 from horosa_skill.surfaces.mcp_requests import (
     _mcp_payload,
     _merge_mcp_arguments,
@@ -82,11 +83,11 @@ from horosa_skill.surfaces.mcp_surface import (
     _ANN_REPORT_WRITE,
     _SERVER_ICON,
     _return_type,
-    _selected_toolsets,
     _server_profile,
     _tool_annotations,
     _tool_meta,
     _tool_title,
+    surface_plan,
 )
 
 # Server instructions：客户端把它当「这台服务器是干什么的」说明书常驻上下文。自 Claude Code 起
@@ -144,20 +145,32 @@ _JEV_TRIMS = (
 # 精简面——多数客户端读到的说明书若写「120 tools」，而 tools/list 只给 11 个，模型就不知道技法该怎么到达。
 # 这里把「覆盖面」一行与末段换成精简面的真实用法（同样受 2048 字节预算约束，测试两态都锁）。
 _FULL_COVERS = f"WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)"
-_COMPACT_COVERS = f"WHAT IT COVERS ({len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
+_COMPACT_COVERS = f"WHAT IT COVERS ({COMPACT_SURFACE_TOOL_COUNT} tools: {len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
 _FULL_TAIL = (
     f"HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} "
     "(horosa_tool_run reaches any technique\nby name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."
 )
 _COMPACT_TAIL = (
-    "horosa_tool_run(tool_name=…, request={…}); names: horosa://catalog/techniques or the\n"
-    "error of a wrong name. chart / horosa_astro_chart both work."
+    "horosa_tool_run(tool_name=…, request={…}) reaches every technique; names: horosa://catalog/\n"
+    "techniques (chart = horosa_astro_chart)."
 )
 
 
-def _server_instructions(*, decision_layer_on: bool, compact: bool = False) -> str:
+def _subset_covers(plan: dict[str, Any]) -> str:
+    groups = ",".join(plan["domains"])
+    if len(groups) > 20:  # 2048 字节预算：点名太长就只给组数（组名单在 horosa_agent_guidance 的 server_profile 里）
+        groups = f"{len(plan['domains'])} groups of"
+    return f"WHAT IT COVERS ({plan['total_tools']} tools; {groups or 'no'} techniques listed)"
+
+
+def _server_instructions(*, decision_layer_on: bool, compact: bool = False, plan: dict[str, Any] | None = None) -> str:
+    """initialize 说明书。`plan`（mcp_surface.surface_plan）给了就按**实际注册的**工具面写数目与通道（MCP-07）：
+    旧实现只分「全量 / 精简」两态，`HOROSA_TOOLSETS=astro` 时照样写「127 tools」，而 tools/list 只给几十个、
+    也没说剩下的技法经 horosa_tool_run 可达。"""
     text = _SERVER_INSTRUCTIONS
-    if compact:
+    if plan is not None and not plan["compact"] and plan["tool_run"]:
+        text = text.replace(_FULL_COVERS, _subset_covers(plan)).replace(_FULL_TAIL, _COMPACT_TAIL)
+    elif compact or (plan is not None and plan["compact"]):
         text = text.replace(_FULL_COVERS, _COMPACT_COVERS).replace(_FULL_TAIL, _COMPACT_TAIL)
     if not decision_layer_on:
         return text
@@ -220,11 +233,16 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     # SDK 2.x：全部按关键字传（位置参数里插进了 title / description——位置传的 instructions 会落成 serverInfo.title，
     # 模型就收不到说明书了）；host / port / 路径 / transport_security 改到 run() 上传（见 run_mcp_server）。
     # version 直接给构造器：1.x 的 FastMCP 不透传，serverInfo.version 曾回落成 SDK 自己的版本号（「Horosa Skill 1.29.0」）。
+    plan = surface_plan(settings)
+    if plan["resolved"]["problem"]:
+        # stdio 的协议流在 stdout；stderr 这一行进客户端的 MCP 日志（用户能看到），同一句话也在 server_profile 与 doctor 里。
+        sys.stderr.write(f"[horosa] {plan['resolved']['problem']}\n")
+        sys.stderr.flush()
     mcp = HorosaMCPServer(
         name="Horosa Skill",
         version=__version__,
         instructions=_server_instructions(
-            decision_layer_on=getattr(service, "decision_layer", None) is not None, compact=bool(settings.mcp_compact)
+            decision_layer_on=getattr(service, "decision_layer", None) is not None, plan=plan,
         ),
         website_url="https://github.com/Horace-Maxwell/horosa-skill",
         icons=[_SERVER_ICON],
@@ -520,8 +538,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     register_resources(mcp, settings)
     register_prompts(mcp)
 
-    toolsets = _selected_toolsets()
-    if settings.mcp_compact or toolsets is not None:
+    toolsets = plan["resolved"]["effective"]
+    if plan["tool_run"]:
         # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证全部技法（len(TOOL_DEFINITIONS)）可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:

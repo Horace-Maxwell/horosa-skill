@@ -12,6 +12,12 @@ from mcp import types as mcp_types
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 
+# HOROSA_TOOLSETS 的解析与「这一进程注册哪些工具」的计划在 surfaces/toolsets.py（不依赖 MCP SDK：doctor 也要读它）。
+from horosa_skill.surfaces.toolsets import (  # noqa: F401 - _resolve_toolsets 供测试 / 旧调用方
+    _resolve_toolsets,
+    surface_plan,
+)
+
 logger = logging.getLogger("horosa_skill.surfaces.mcp_server")  # 拆分前的日志名，不变
 
 
@@ -102,62 +108,6 @@ def _return_type(annotation: Any) -> Any:
     return annotation if _structured_output_enabled() else Signature.empty
 
 
-def _selected_toolsets() -> set[str] | None:
-    """`HOROSA_TOOLSETS=astro,cn` → 只平铺这些 domain 的技法工具（门面工具永远注册）。
-
-    动机：Claude Code 已用工具搜索解决了全量技法工具的上下文膨胀，但 Cursor 一类客户端仍有较紧的工具数
-    上限，全量平铺会被静默截断。分组白名单是注册期过滤，不触碰 service 层。
-    `HOROSA_TOOLSETS=none` == 精简模式（等价 HOROSA_MCP_COMPACT=1 的技法面）。
-    """
-    return _resolve_toolsets(os.environ.get("HOROSA_TOOLSETS", ""))["effective"]
-
-
-# HOROSA_TOOLSETS 合法域 + 别名（v0.36.0 B2：此前拼错一个 token = 零技法且无 tool_run 直呼，客户端只剩门面）。
-# 🔴 从注册表派生，不手抄：手抄那份漏了 `export` 与 `knowledge` 两个域，于是 5 个工具
-# （export_registry / export_parse / knowledge_registry / knowledge_read / knowledge_xuanshi）
-# 经**任何** HOROSA_TOOLSETS 取值都到不了，而 `all` 只给 112 个而非 116 ——「all」不是 all。
-# 未知 token 的告警路径也永远不会为它们触发（它们是**合法**域，只是不在白名单里）。
-_TOOLSET_DOMAINS: frozenset[str] = frozenset(
-    str(definition.domain).lower() for definition in TOOL_DEFINITIONS.values()
-)
-_TOOLSET_ALIASES: dict[str, frozenset[str]] = {
-    "western": frozenset({"astro", "predict", "chart"}),
-    "chinese": frozenset({"cn", "shenshu"}),
-    "reference": frozenset({"export", "knowledge"}),
-    "all": _TOOLSET_DOMAINS,
-    "none": frozenset(),
-}
-
-
-def _resolve_toolsets(raw: str) -> dict[str, Any]:
-    """`HOROSA_TOOLSETS` 文本 → {requested, effective(set|None), unknown}；未知 token 告警丢弃，全空回落全量。"""
-    tokens = [part.strip().lower() for part in f"{raw or ''}".split(",") if part.strip()]
-    if not tokens:
-        return {"requested": [], "effective": None, "unknown": []}
-    effective: set[str] = set()
-    unknown: list[str] = []
-    saw_none = False
-    for token in tokens:
-        if token in _TOOLSET_ALIASES:
-            effective |= _TOOLSET_ALIASES[token]
-            saw_none = saw_none or token == "none"
-        elif token in _TOOLSET_DOMAINS:
-            effective.add(token)
-        else:
-            unknown.append(token)
-    if unknown:
-        # 启动期配置通知，无工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
-        logger.log(
-            logging.WARNING,
-            "HOROSA_TOOLSETS 含未知 token %s（合法：%s + 别名 %s）——已忽略；%s",
-            unknown, sorted(_TOOLSET_DOMAINS), sorted(_TOOLSET_ALIASES),
-            "回落全量平铺" if not effective and not saw_none else "只平铺已识别的域",
-        )
-    if not effective and not saw_none:
-        return {"requested": tokens, "effective": None, "unknown": unknown}
-    return {"requested": tokens, "effective": effective, "unknown": unknown}
-
-
 def _user_knowledge_profile(settings: Settings) -> dict[str, Any]:
     from horosa_skill.knowledge import user as user_knowledge
 
@@ -186,19 +136,18 @@ def _birth_profiles(settings: Settings) -> dict[str, Any]:
 
 def _server_profile(settings: Settings) -> dict[str, Any]:
     """本进程实际暴露了什么（经 horosa_agent_guidance 可查；_SERVER_INSTRUCTIONS 没预算放它）。"""
-    resolved = _resolve_toolsets(os.environ.get("HOROSA_TOOLSETS", ""))
+    plan = surface_plan(settings)
+    resolved = plan["resolved"]
     effective = resolved["effective"]
-    compact = bool(settings.mcp_compact)
-    registered = (
-        0 if compact else sum(1 for d in TOOL_DEFINITIONS.values() if effective is None or d.domain.lower() in effective)
-    )
     return {
-        "compact": compact,
+        "compact": plan["compact"],
         "toolsets_requested": resolved["requested"],
         "toolsets_effective": None if effective is None else sorted(effective),
         "toolsets_unknown": resolved["unknown"],
-        "technique_tools_registered": registered,
-        "tool_run_registered": compact or effective is not None,
+        **({"toolsets_problem": resolved["problem"]} if resolved["problem"] else {}),
+        "tools_registered": plan["total_tools"],
+        "technique_tools_registered": len(plan["technique_tools"]),
+        "tool_run_registered": plan["tool_run"],
         # 结果里给人读的字段用哪种文字（zh-Hans / zh-Hant / zh-Hant-HK）；选项、设置值、段名入参始终是简体。
         "output_script": settings.output_script,
         # 自备知识库：有几条、在哪；计算时传 knowledge=[条目 / #标签 / auto] 才会带进结果（缺省不带）。
