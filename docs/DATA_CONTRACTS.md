@@ -57,6 +57,21 @@
 - `provenance`
 - `citation`
 
+## MCP 结果视图（v0.50.0）
+
+MCP 工具调用的返回体由 `horosa_skill/result_view.py` 整形（CLI 与存档不经过这一层，仍是完整信封）。调用参数 `response_view`：
+
+- `reading`（缺省，`HOROSA_MCP_RESULT_VIEW` 可改）：`data.export_snapshot` 只留 `technique` {key,label}、`export_text`（正文一遍）、
+  `sections[]` 段索引 {index,title,chars[,shown,from,to]}、`missing_selected_sections` / `unknown_detected_sections` / `citation`；
+  `data.snapshot_text` 与引擎原始子树（`data.chart` / `data.pan` / `data.bazi` …）不带，`data.response_view` =
+  {view, raw_fields_omitted[], full}（取全量的调用）；`technique_card`、`compute_sources`、`route`、`knowledge_context`、`file(s)` 与小值原样。
+- `sections`：同上，但正文在 `sections[].body`，没有 `export_text`；`titles`：只有段索引；`full`（别名 `raw`）：完整信封（v0.49.0 的缺省）。
+- 模型预算（`HOROSA_MCP_RESULT_MAX_TOKENS` 缺省 20 000 估算 token、`HOROSA_MCP_RESULT_MAX_CHARS` 缺省 48 000 字符）：超了按段裁，
+  `warnings` 写明续读调用 `horosa_memory_show(run_id, response_tool, response_sections=[…], response_offset=N)`。
+- 调度 / 合参：`results.<tool>` 各自是阅读视图，共用一份预算；调度的 `result_export_contracts` 在阅读视图里为空（段索引已在各结果里）。
+- `horosa_memory_show`：技法产物载荷同样成阅读视图；调度产物只留各技法的指向；运行清单不带载荷。
+- 线上 JSON 不缩进；`full` 视图仍受 900 KB 线上预算管（调度的 `results.<tool>` 一起裁）。
+
 ## Local Record Payload
 
 artifact 顶层包含：

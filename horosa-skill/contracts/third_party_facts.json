@@ -732,6 +732,18 @@
       ]
     },
     {
+      "id": "claude-code.mcp-result-size",
+      "subject": "claude-code",
+      "fact": "Claude Code writes an MCP tool result longer than 50,000 characters to a file in the session's tool-results directory and gives the model only a short reference to it (unless the tool declares a larger `_meta[\"anthropic/maxResultSizeChars\"]`, accepted up to 500,000); results above 10k tokens warn and are capped at MAX_MCP_OUTPUT_TOKENS (25,000). Horosa's MCP default (reading view) keeps every result under 48,000 characters and ~20,000 estimated tokens and declares no larger maxResultSizeChars: the raw engine tree (`response_view: \"full\"`) is better spilled to a file than put in context. Verified by the 2026-11-11 deep-review audit from the source page.",
+      "source_url": "https://code.claude.com/docs/en/mcp",
+      "verified_on": "2026-11-11",
+      "affects": [
+        "horosa-skill/src/horosa_skill/result_view.py",
+        "horosa-skill/src/horosa_skill/surfaces/mcp_runner.py",
+        "horosa-skill/src/horosa_skill/config.py"
+      ]
+    },
+    {
       "id": "claude-api.vision-limits",
       "subject": "claude-api",
       "fact": "Images are at most 8000x8000 px; a request with more than 20 images applies a stricter per-image limit (keep each side <= 3000 px); standard-tier models use a native long edge of 1568 px (1568 visual tokens), Claude 4.7+ 2576 px (4784); cost is ceil(w/28) x ceil(h/28) visual tokens; per-image size 10 MB base64 on the Claude API, 5 MB on Bedrock.",

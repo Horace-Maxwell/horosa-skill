@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-12) | MCP 结果把原始引擎树当正文交给模型：114 技法中位 17 万字符、72 个超过 Claude Code 5 万字符落盘线；调度两技法 290 万字符；`include_all` 指引 126 万字符；3 MB 澄清备注原样回显两遍 | MCP 缺省改阅读视图（正文一遍 + 段索引 + 依据卡），模型预算按段裁并给照抄可用的续读调用，JSON 不缩进，调度 / 合参 / 存档读回同一视图；整表体积守卫 |
+| v0.50.0-dev (2026-11-12) | `response_view` 跟着载荷进了 runner 的子调用：择日先算的展示盘快照被清空，黄历择日 14 段丢 7 段、多一条假的「结果不完整」（7 个择日技法同病） | `run_tool` 记调用深度，嵌套调用摘掉展示键、不套视图；整表对照每种视图与原始结果的段与告警 |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -201,6 +203,39 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-12 — MCP 结果把原始引擎树当正文交给模型
+
+- **现象**（深审 MCP-02/03/06/13，共享引擎 v0.49.0 实测）：114 个技法的 MCP 缺省结果中位 17.4 万字符 / 约 8.2 万估算 token，
+  72 / 111 超过 Claude Code 的 5 万字符落盘线（超了客户端把结果写进文件，模型只看到一句提示），最大 72.5 万（draconic）。
+  `horosa_dispatch` 八字 + 紫微 292 万字符、无任何告警（v0.46.1 的线上预算只认 `data` 与记忆两种形状，调度落在中间）；
+  `horosa_agent_guidance(include_all=true)` 126 万字符；3 MB 的 `clarification_notes` 原样回显进 `input_normalized` 与技法卡，结果 600 万字符，
+  存档也是 6 MB；`horosa_memory_show` 读回的八字只剩占位——存下的正文经 MCP 拿不回来。
+- **根因**：结果形状是「给程序的信封」：正文两遍（`snapshot_text` + `export_text`）+ 分段正文一遍 + 整棵引擎树，SDK 再按 `indent=2`
+  序列化（三成是空格）。模型要读的只有正文那几千字，体积上限只按线上 1 MiB 设计，没有「模型能读多少」这条线。
+- **修**：`horosa_skill/result_view.py`（纯函数）+ `HorosaMCPServer.call_tool`：视图参数（`response_view` / `response_sections` /
+  `response_offset` / `response_tool`）进工具前取走；缺省阅读视图；模型预算（`HOROSA_MCP_RESULT_MAX_TOKENS` 20 000 / `_MAX_CHARS` 48 000）
+  按段裁，`warnings` 给照抄可用的 `horosa_memory_show(...)` 续读；调度 / 合参的 `results.<tool>` 各成阅读视图、共用预算（合参在 MCP 面
+  另附各技法信封）；`horosa_memory_show` 同一视图；`include_all` 回索引；自由文本截断（备注 2 000 / 问题 4 000 字）；JSON 不缩进
+  （`HOROSA_OUTPUT_SCHEMA=1` 的 structuredContent 照旧）；`full` 视图的线上预算也管调度。CLI 输出与存档不变。
+- **守卫**：`tests/test_result_view.py`（规则；续读调用照抄回放、拼回原文逐字一致）、`tests/test_result_view_catalogue.py`（整张技法表 +
+  调度 + 合参，简繁两种输出，缺省结果 ≤ 5 万字符 / 预算 token / 线上预算；正文与原始结果逐字一致；live 变体打共享引擎）、
+  `test_dispatch_results_are_fitted_across_techniques`。负向对照：不调 shape_result / render 不看额度 / 恢复缩进 / 去掉调度裁剪 /
+  不出索引 / 不截断 → 各自红。
+- **规则**：工具结果先问「模型读的是哪一段」，体积上限按客户端的落盘线与 token 上限定，不只按传输层；裁剪必须告诉模型下一次怎么拿到其余部分。
+
+### v0.50.0-dev / 2026-11-12 — `response_view` 跟着载荷进了 runner 的子调用
+
+- **现象**（冷客户端审计 F4）：`horosa_cn_huanglizeri` 带 `response_view:"sections"` 返回 7 段「本次本地计算结果未返回…细项」并多一条假的
+  「结果不完整：预设 14 段中 7 段未产出」；不带视图时完整。离线整表复现：黄历 / 八字 / 太乙 / 紫微 / 六壬 / 三式 / 七政择日在 `sections` 与
+  `titles` 下都坏。
+- **根因**：择日 runner 先用自己的载荷再调一次 `run_tool` 算展示盘，再读子信封的 `snapshot_text`；载荷的排除表里没有 `response_view`，子信封
+  照样被视图裁剪（`snapshot_text` 清空），外层读到空串。视图是「返回体长什么样」，不是算法输入，却走了算法输入的通道。
+- **修**：`service/_context.py` 的 `_run_tool_scope` 记调用深度；`run_tool` 深度 > 1 时先摘掉 `PRESENTATION_KEYS`、存档后也不套视图——
+  一处管所有 runner（择日、三式合一、七政、报告补算），不在各 runner 的排除表里补。
+- **守卫**：`tests/test_result_view_catalogue.py::test_service_views_never_change_what_was_computed`（整张技法表，每种视图的段序号 / 标题 /
+  正文与告警与原始结果一致）+ 嵌套调用看不到展示键的断言 + 十个择日的 live 变体。负向对照：深度判断恒为 False → 两条红。
+- **规则**：只影响返回体形状的参数在入口摘一次，子调用永远拿原料；「去掉哪些键」不要散在各 runner 的排除表里。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 

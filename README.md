@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-3487_passed-3e7c6f?style=flat-square" alt="3487 passed" />
+  <img src="https://img.shields.io/badge/测试-3513_passed-3e7c6f?style=flat-square" alt="3513 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -64,7 +64,7 @@
 - **31 域方法论知识库，引必带出处。** 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库（21 类口诀）共 416 条，逐条带上游文件与版本出处；没有出处的解读必须明说是通则推理。
 - **盘面事实忠实性评测。** 确定性校验器把 AI 解读逐句对盘面机读真值，判 supported / invented / contradicted；喂错盘与诱导复述判红；106 条基准用例与工具注册表锁步。
 - **一问多技法合参。** `horosa_hecan` 并行起盘 + 合参模板：每条结论必须绑定真实段落，收敛与分歧分开填，**分歧必须披露、不许平均**。
-- **精简的响应体量。** 导出契约单份化，同一份快照不再重复；大盘单次响应体量较早期显著下降。可用 `response_view=titles|sections` 仅取段标题或指定段，完整快照始终已归档。
+- **精简的响应体量。** MCP 结果缺省是阅读视图：正文一遍 + 段索引 + 技法依据卡，不带引擎原始树；正文过长按段裁，`warnings` 写明续读调用。`response_view=sections|titles|full` 改取分段正文 / 只要段标题 / 带原始树，完整结果始终已归档。
 - **主限法可推至 3000 年。** 逐位核验的核5方位法 + 22 项时间钥匙 + In Zodiaco / In Mundo + 宿命点(Vertex)应星 + 映点 / 界作迫星，多圈复发行。
 - **完整的本地记录系统。** SQLite 全文检索（trigram，中文子串可命中）+ JSON artifact 归档；按人名 / 技法 / 日期区间 / 全文组合检索，跨会话找回历史。
 - **结构化报告导出。** 一条命令生成 DOCX / PDF / JSON；Markdown 表格渲染为真 Word 表格，含导航大纲、目录、页码与中文字体；`style=chart` 不经 AI 直接出完整排盘报告。
@@ -97,7 +97,7 @@ headless JS 层 horosa-core-js（把结果重排成 `aiExport.js` 段结构）�
 
 1. **澄清闸兜底**：缺时区 / 宫制等结果敏感设置时，工具返回追问文本，agent 先向用户确认，而不是自行补参。
 2. **起盘**：确认后带 `agent_confirmed_settings: true` 调用技法工具，返回统一 envelope，含 `memory_ref.run_id` 与 `data.export_snapshot`。
-3. **读盘**：读 `export_snapshot.export_text` / `sections` 撰写解读（想省 token 可传 `response_view: "titles"` 只取段标题，完整快照已归档）。
+3. **读盘**：读 `export_snapshot.export_text` 撰写解读（MCP 缺省只给正文与段索引；被裁的段按 `warnings` 里的 `horosa_memory_show` 调用续读；要原始树传 `response_view: "full"`）。
 4. **溯源尾注**：把 `data.technique_card` 转述成尾注——用了什么技法、什么口径、谁算的、段落全不全、版本链。
 5. **出报告**：`report_render` 生成解读终稿 DOCX（自动写回记忆）；`horosa_technique_report` 另出「技法依据报告」。
 6. **跨会话找回**：`memory_query` 按人名 / 技法 / 日期检索，`memory_show` 取完整记录。
@@ -462,7 +462,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 - 落库到 JSON artifact 后结构不丢。
 
 > [!NOTE]
-> 自 v0.21.0 起契约单份化，同一份快照不再重复存放；可传 `response_view=titles|sections` 仅返回段标题或段标题 + 正文，完整快照始终已归档，可用 `memory_show(run_id)` 取回。字段全表见 [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) 与 [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)。
+> 自 v0.21.0 起契约单份化，同一份快照不再重复存放；MCP 缺省返回阅读视图（正文一遍 + 段索引 + 依据卡），`response_view=sections|titles|full` 改取分段正文 / 段标题 / 带原始树的完整信封；完整结果始终已归档，可用 `memory_show(run_id)` 取回。字段全表见 [`docs/DATA_CONTRACTS.md`](./docs/DATA_CONTRACTS.md) 与 [`docs/INPUT_CONTRACTS.md`](./docs/INPUT_CONTRACTS.md)。
 
 ### 调用前的澄清闸
 
@@ -568,7 +568,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **3487 / 3487 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 122 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **3513 / 3513 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -584,7 +584,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 3487 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 3513 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

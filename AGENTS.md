@@ -403,6 +403,13 @@ SDK 去掉了 `mcp.get_context()`——请求上下文由 `HorosaMCPServer.call_
 requestState，我们再核对问题摘要）；更早修订且声明了 elicitation → 服务端发起 `ctx.elicit`；都不行 → 结构化闸门错误。
 elicit 必须在任何副作用之前（MRTR 的重试会重放整个工具函数）。
 
+**MCP 结果视图（v0.50.0，`horosa_skill/result_view.py`，在 `HorosaMCPServer.call_tool` 里、转字形之前）**：MCP 缺省返回**阅读视图**——
+正文一遍（`export_snapshot.export_text`）+ 段索引 + 技法卡 + run_id，不带原始树、不带 `snapshot_text`；`full`（别名 `raw`）才是完整信封。
+模型预算（估算 token：非 ASCII ×1.5、ASCII ÷3；字符 48 000 < Claude Code 5 万落盘线）超了按段裁，告警里的续读调用必须**照抄可用**
+（测试照抄回放）。视图参数在进工具前就取走，服务层 / 存档 / CLI 都见不到；`HOROSA_MCP_RESULT_VIEW` 切缺省。**展示键不是算法输入**：
+runner 里嵌套的 `run_tool` 由 `_context._run_tool_scope` 摘掉 `PRESENTATION_KEYS`、不套视图（黄历择日曾因子调用的快照被清空丢 7 段）。
+新加结果形状（新的门面 / 嵌套结果）先想好它在阅读视图里长什么样，再进 `tests/test_result_view_catalogue.py` 的整表守卫。
+
 **Node 地板 ≥ 20.10**：数算 JSON 走 `import X from './x.json' with { type: 'json' }`；`src/tools/index.js`
 顶层 import 使旧 Node **语法级**炸掉整个模块图（qimen/taiyi/jinkou/tongshefa 全挂，不只数算）。bundled
 runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 raw-node JSON import 继续用

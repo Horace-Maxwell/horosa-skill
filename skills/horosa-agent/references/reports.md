@@ -34,7 +34,8 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据，可显式 `tools`，上限 `max_tools`）。与 `horosa_dispatch` 同闸：先问用户，带 `agent_confirmed_settings` / `defaults_accepted` 再调。
 它返回**合参模板**，不是终稿：
 
-1. 逐技法读全量段落（`horosa_memory_show(run_id)`——响应里只有证据指针，不背全文）。
+1. 逐技法读段落：MCP 返回的 `results.<tool>` 就是各技法的阅读视图（正文 + 段索引）；被预算裁掉的段按 `warnings` 里的
+   `horosa_memory_show(run_id=…, response_tool=…, response_sections=[…])` 续读（CLI 的合参只给证据指针，用 `memory show` 取全文）。
 2. 填 `synthesis_contract.ai_fillable`：每技法一条结论（必须绑定该技法真实段落）、
    `convergence`（仅多技法独立同判）、`divergence`（**逐条披露，不许平均、不许只挑一边**）、
    `final_answer`（先直答，再依据与边界）。
@@ -67,11 +68,12 @@ is still deliverable, so report those gaps rather than padding them.
 JSON report carries deterministic text, for section coverage.
 
 **Reading runs back.** `horosa_memory_query` returns summaries (`run_id`, question, tools, artifact paths); pass
-`include_payload: true` only when you need stored payloads in the result. `horosa_memory_show` returns the run in
-full. Both stay inside one MCP message: past about 900 KB the largest raw engine subtrees become
-`{"omitted": "too_large_for_mcp", ...}` placeholders and a line appears in `warnings`. `snapshot_text` and
-`export_snapshot` are kept, so the sections you read are still there; the full copy stays on disk
-(`horosa-skill memory show <run_id>`).
+`include_payload: true` only when you need stored payloads in the result. `horosa_memory_show` returns the run with
+each technique result in the reading view (reader text + section index, same budget as a fresh call); page a long
+text with `response_tool` + `response_sections` (+ `response_offset`), and pass `response_view: "full"` for the stored
+raw engine data. In the full view a result stays inside one MCP message: past about 900 KB the largest raw engine
+subtrees become `{"omitted": "too_large_for_mcp", ...}` placeholders and a line appears in `warnings`; the full copy
+stays on disk (`horosa-skill memory show <run_id>`).
 
 `text` searches questions and answers across all runs, but the chart text inside artifacts only in the newest
 runs (400 at the default `limit`). When the result says `not_scanned: N`, N older runs were not searched for chart

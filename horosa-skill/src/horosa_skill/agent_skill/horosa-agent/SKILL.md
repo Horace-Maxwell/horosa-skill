@@ -101,7 +101,7 @@ Cline / Zed 默认拿到它（`setup --surface full|compact` 可改；Claude Cod
 tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput 长尾旋钮（`orbSystem`/`extraBodies`/`termsVariant`…）
 **顶层按名直接传即可、不会被丢**，全表用 `horosa_agent_guidance(tool_name=…)` 查（v0.36.0 两层 schema）。
 
-省 token：技法工具可传 `response_view:"titles"`（只回段标题）或 `"sections"`；完整快照始终已存档（`horosa_memory_show(run_id)` 取回）；`horosa_memory_query` 缺省只回摘要，要载荷传 `include_payload: true`。`export_snapshot.sections[*]` 只含 `body`；机读数据在 `data.<key>`（`data.pan` / `data.chart` / `data.liureng` …）只出现一次，别去段里找。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
+**MCP 结果缺省是阅读视图**（v0.50.0）：`data.export_snapshot.export_text` 是正文（只出现一次），`export_snapshot.sections[*]` 是段索引（`index` / `title` / `chars`），加 `data.technique_card` 与 `memory_ref.run_id`；引擎原始树（`data.pan` / `data.chart` / `data.bazi` …）不带，`data.response_view.raw_fields_omitted` 列出略去了哪些。正文太长时按段裁：段索引标 `shown: full / partial / none`，`warnings` 写着照抄就能用的续读调用（`horosa_memory_show(run_id=…, response_tool=…, response_sections=[…], response_offset=N)`）——**先续读再下结论，别把没读到的段当成没有**。要原始树：`response_view:"full"`（同一次调用或 `horosa_memory_show`）；`"sections"` = 分段正文，`"titles"` = 只要段索引。`horosa_dispatch` / `horosa_hecan` 的 `results.<tool>` 也是各技法的阅读视图（共用一份预算）。`horosa_memory_query` 缺省只回摘要，要载荷传 `include_payload: true`。CLI 输出不变（完整信封）。注意 `horosa_report_from_tool` 会重新起盘——已有 run_id 用 `report_render`。
 
 出错时看 `details.agent_recovery`：`kind` 说谁能修——`input`（问用户 / 修入参）、`retry_or_doctor`（重试一次再让用户跑
 `uv run horosa-skill doctor`）、`transport`（冷启动 ≤ ~45 s，等几秒重试一次）、`runtime` / `js_engine`（装 runtime 或设 HOROSA_NODE_BIN）、
@@ -117,7 +117,7 @@ tools/list 只广告每个工具的域核心字段 + 自有字段；BirthInput �
 也不得自行补算；dispatch 的 `warnings` 只汇总哪些工具带说明，细节在 `results.<tool>.warnings`。
 
 **每次给出结论后，把 `data.technique_card` 原样转述成一段技法尾注**（技法 / 口径 / 算源 / 段落 / 版本）——
-它是确定性元数据，`response_view` 精简时也在。要文件就调 `horosa_technique_report`（`run_id` 单次、
+它是确定性元数据，任何 `response_view` 下都在。要文件就调 `horosa_technique_report`（`run_id` 单次、
 `group_id` 整场，后者还会检出跨技法口径冲突）。细则与两种报告的分界：[`references/reports.md`](./references/reports.md)。
 
 ## Core Rule
@@ -371,7 +371,8 @@ platform and code page — decode them as UTF-8.
 - Gate flow: stderr `code: "agent_guidance.required"` → show `details.agent_recovery.prompt_to_user` to the user,
   then rerun with `agent_confirmed_settings: true` + `clarification_notes` (or `defaults_accepted: true` only when
   the user explicitly accepts defaults) added to the payload. Never set the flag without a real answer.
-- Envelope keys: `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
+- Envelope keys (CLI = full envelope; MCP defaults to the reading view above, `response_view:"full"` for this shape):
+  `ok`, `tool`, `version`, `input_normalized`, `data` (`export_snapshot`, `technique_card`, the engine
   object once under `data.<key>`), `summary`, `warnings` (non-empty = incomplete result), `memory_ref` (`run_id`; `null` with a `memory.save_failed` warning means the
   result is complete but was not stored, so there is no `run_id` to report on — relay it and suggest `doctor`),
   `error`. `dispatch` wraps per-tool envelopes under `results.<tool>`. An unrecognized `zone` is refused with
