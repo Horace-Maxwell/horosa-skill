@@ -218,6 +218,15 @@ class ACGInput(BirthInput):
     clickLon: float | None = Field(default=None, description="落点经度（十进制，西经为负）")
     pointOrb: float | None = Field(default=None, description="落点命中容许度（度，缺省 2.0）")
     pointHsys: str | None = Field(default=None, description="落点/宫尖线宫制（缺省 placidus）")
+
+    @field_validator("pointHsys", mode="before")
+    @classmethod
+    def _point_hsys_vocabulary(cls, value: Any) -> Any:
+        # v0.50.0：后端 ACGraph.hsys_code 认不出的名静默按整宫（western_vocab.ACG_POINT_HSYS，上游 AstroAcg.js HSYS_OPTIONS）。
+        from horosa_skill.western_vocab import ACG_POINT_HSYS, parse_with
+
+        return parse_with(ACG_POINT_HSYS, "pointHsys", value)
+
     # 事件时刻（/location/acgevent）：给 eventKind 时加产 [事件时刻] 段（CCG 事件线时刻）。
     eventKind: str | None = Field(
         default=None,

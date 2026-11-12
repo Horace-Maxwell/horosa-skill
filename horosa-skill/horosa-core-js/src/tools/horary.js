@@ -11,6 +11,7 @@ import { runHorary } from '../vendor/divination/horary/horaryEngine.js';
 import { buildHorarySnapshot } from '../vendor/divination/horary/horarySnapshot.js';
 import { CATEGORY_DEF } from '../vendor/divination/horary/significators.js';
 import { horaryJudgeOpts, horaryBackendFields, HORARY_SCHOOLS, HORARY_PARAM_BY_KEY } from '../vendor/divination/horary/horarySchools.js';
+import { checkSpecValue } from './specOptions.js';
 import { judgeLayerFromPlain } from '../vendor/utils/judgeLayerHeadless.js';
 
 // 起盘阵营（上游 HoraryMain CAMP_OPTIONS 的三个值；buildHorarySnapshot 只认 querent / 其它非 astrologer 值）。
@@ -46,14 +47,18 @@ function collectOverrides(input) {
   const judge = {};
   const backend = {};
   const ignored = [];
+  const invalid = [];
   Object.keys(raw).forEach((k) => {
     const spec = HORARY_PARAM_BY_KEY[k];
     if (!spec) { ignored.push(k); return; }
-    judge[k] = raw[k];
+    // 值域按引擎词表判（specOptions.js）：认不出的不进任何一层（不静默按缺省），回执 invalid。
+    const checked = checkSpecValue(spec, raw[k]);
+    if (!checked.ok) { invalid.push({ key: k, value: raw[k], allowed: checked.allowed }); return; }
+    judge[k] = checked.value;
     // horaryBackendFields 只收 sendToBackend 键 + tripSystem（→ triplicity 随档下发）。
-    if (spec.sendToBackend || k === 'tripSystem') backend[k] = raw[k];
+    if (spec.sendToBackend || k === 'tripSystem') backend[k] = checked.value;
   });
-  return { judge, backend, ignored };
+  return { judge, backend, ignored, invalid };
 }
 
 export function runHoraryTool(payload) {
@@ -61,7 +66,7 @@ export function runHoraryTool(payload) {
   // 流派决定两段的有无：[偶然尊贵满分表] 只在 accidentalMode==='lilly' 出、[阿拉伯点全集] 只在
   // lotsSet==='core15' 出（见 horarySchools.js），两者都是 renaissance/medieval 档才给的口径。
   const school = resolveSchool(input);
-  const { judge: overrides, backend: backendOverrides, ignored: ignoredParams } = collectOverrides(input);
+  const { judge: overrides, backend: backendOverrides, ignored: ignoredParams, invalid: invalidOverrides } = collectOverrides(input);
   if (input.action === 'backend_fields') {
     return {
       tool: 'horary',
@@ -71,6 +76,7 @@ export function runHoraryTool(payload) {
         school,
         backendFields: horaryBackendFields(school, Object.keys(backendOverrides).length ? backendOverrides : null),
         backend_overrides: Object.keys(backendOverrides).sort(),
+        invalid_inputs: invalidOverrides,
       },
     };
   }
@@ -81,6 +87,7 @@ export function runHoraryTool(payload) {
   }
   // 全局层（第 2 层）：请求顶层古典键 → judgeLayerOverrides 同形（只含改过的键；认不出的枚举值回执 invalid）。
   const { overrides: globals, invalid } = judgeLayerFromPlain(paramsOf(input));
+  invalid.push(...invalidOverrides);
   const castingCamp = `${input.castingCamp || 'astrologer'}`;
   if (CASTING_CAMPS.indexOf(castingCamp) < 0) {
     invalid.push({ key: 'castingCamp', value: input.castingCamp, allowed: CASTING_CAMPS });

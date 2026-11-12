@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from horosa_skill.engine import astro_snapshot as snap
 from horosa_skill.schemas.tools import BirthInput
-from horosa_skill.schemas.tools.astro import HarmonicInput, MundaneInput, PlanetCyclesInput
+from horosa_skill.schemas.tools.astro import ACGInput, HarmonicInput, MundaneInput, PlanetCyclesInput
 from horosa_skill.schemas.tools.cn_divination import SuZhanInput
 from horosa_skill.schemas.tools.election import ElectionInput, HoraryInput, QizhengElectionInput
 from horosa_skill.schemas.tools.predictive import DecennialsInput
@@ -98,6 +98,7 @@ _VOCAB_CASES: list[tuple[type, dict[str, Any] | None, str, list[tuple[Any, Any]]
     (ElectionInput, None, "school", [("persian", "persian"), ("波斯-阿拉伯", "persian")], ["bogus"]),
     (SuZhanInput, None, "houseStartMode", [(1, 1), ("1", 1), (True, 1), ("上升", 1), (0, 0)], [2, -1]),
     (MundaneInput, _M, "mhKind", [("weather", "weather"), ("物价", "price")], ["bogus", "election"]),
+    (ACGInput, None, "pointHsys", [("koch", "koch"), ("P", "placidus"), ("整宫", "whole"), ("Whole Sign", "whole")], ["bogus", "Z"]),
 ]
 
 

@@ -236,6 +236,23 @@ PLANET_CYCLE_VOCABULARIES["center"] = Vocabulary(
 )
 
 
+# ───────────────────────── 占星地图落点宫制（上游 AstroAcg.js HSYS_OPTIONS；后端 ACGraph.hsys_code）─────────────────────────
+
+# 后端 `HSYS_MAP.get(name, b'W')`：认不出的宫制名静默按整宫（连缺省 placidus 都不是）。单字母 swe 码后端原样收，这里读成名。
+_ACG_HSYS: tuple[tuple[str, str, str], ...] = (
+    ("placidus", "普拉西德", "P"), ("koch", "柯赫", "K"), ("whole", "整宫", "W"), ("equal", "等宫(ASC)", "A"), ("equalmc", "等宫(MC)", "D"),
+    ("vehlow", "维洛", "V"), ("aries", "0°白羊等宫", "N"), ("porphyry", "波菲利", "O"), ("regiomontanus", "雷乔蒙", "R"),
+    ("campanus", "坎帕努斯", "C"), ("alcabitius", "阿卡比特", "B"), ("topocentric", "站心", "T"), ("meridian", "子午宫", "X"),
+    ("morinus", "莫林", "M"), ("krusinski", "克鲁辛斯基", "U"), ("apc", "APC", "Y"), ("horizon", "地平宫", "H"), ("gauquelin", "高奎林", "G"),
+    ("carter", "卡特", "F"), ("sunshine", "Sunshine", "I"), ("sripati", "Sripati", "S"), ("pullensd", "Pullen SD", "L"), ("pullensr", "Pullen SR", "Q"),
+)
+ACG_POINT_HSYS = Vocabulary(
+    "pointHsys",
+    {name: (cn, code, *({"whole": ("wholesign", "整宫制"), "equal": ("equalasc",), "meridian": ("axial",)}.get(name, ()))) for name, cn, code in _ACG_HSYS},
+    labels={name: cn + ("（缺省）" if name == "placidus" else "") for name, cn, _code in _ACG_HSYS},
+)
+
+
 # ───────────────────────── 宿占 / 世运卜卦 ─────────────────────────
 
 # 宿占人事十二宫起法（上游 SuZhanMain.js:312-316 0=八字公式 / 1=ASC）：runner 曾 `in (1, True, "1") else 0`——2 静默按 0。

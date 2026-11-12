@@ -11,6 +11,7 @@ import { buildFacts } from '../vendor/divination/engine/chartFacts.js';
 import { SIGN_ORDER } from '../vendor/divination/data/signs.js';
 import { CLASSICAL_PLANETS } from '../vendor/divination/data/planets.js';
 import { judgeLayerFromPlain } from '../vendor/utils/judgeLayerHeadless.js';
+import { checkSpecValue } from './specOptions.js';
 
 // 买卖方向（上游 ElectionMain.js:379-384 下拉三档：''=不指定 / sell / buy）。
 const TRADE_SIDES = ['', 'sell', 'buy'];
@@ -84,8 +85,13 @@ export function runElectionTool(payload) {
   });
   const electionParams = {};
   const ignoredParams = [];
+  const invalidParams = [];
   Object.keys(rawParams).forEach((k) => {
-    if (ELECTION_PARAM_BY_KEY[k]) { electionParams[k] = rawParams[k]; } else { ignoredParams.push(k); }
+    const spec = ELECTION_PARAM_BY_KEY[k];
+    if (!spec) { ignoredParams.push(k); return; }
+    // 值域按引擎词表判（specOptions.js）：认不出的不进第 4 层（不静默按缺省），回执 invalid。
+    const checked = checkSpecValue(spec, rawParams[k]);
+    if (checked.ok) { electionParams[k] = checked.value; } else { invalidParams.push({ key: k, value: rawParams[k], allowed: checked.allowed }); }
   });
   // 有效口径（四层合并）：Python 取「主限命中」时要用 eff.pdTimeKey —— 上游 ElectionMain.fetchPdHits
   // 正是 resolveElectionParams(westSchool, {}, electionParams).pdTimeKey（ElectionMain.js:234）。
@@ -94,6 +100,7 @@ export function runElectionTool(payload) {
   // `...judgeLayerOverrides()` 展进 runElection 的 opts（ElectionJudgment.js:296 / ElectionMain.js:497 /
   // aiAnalysisContext.js:2358-2363），resolveElectionParams 按 GLOBAL_JUDGE_KEYS 白名单收编进第 2 层。
   const { overrides: globals, invalid } = judgeLayerFromPlain(paramsOf(input));
+  invalid.push(...invalidParams);
   if (input.action === 'resolve_params') {
     const effective = resolveElectionParams(westSchool, globals, electionParams);
     const sc = schoolOf(westSchool);
