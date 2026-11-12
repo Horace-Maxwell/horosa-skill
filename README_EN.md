@@ -99,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `5904 / 5904 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 189 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `5904 / 5904 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 188 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |

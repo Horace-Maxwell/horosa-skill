@@ -571,7 +571,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **5904 / 5904 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 189 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **5904 / 5904 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 188 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
