@@ -1241,7 +1241,11 @@ class ReportsAPI:
                     continue
                 card = (payload.get("data") or {}).get("technique_card")
                 if isinstance(card, dict):
-                    cards.append(card)
+                    # 报告里每个技法下面印起盘时刻 / 地点（评审 R-09）：取这次存档的入参，只加在报告用的副本上，不改存档里的卡。
+                    from horosa_skill.reports.source import moment_text
+
+                    moment = moment_text(payload.get("input_normalized") or (payload.get("meta") or {}).get("input_normalized"))
+                    cards.append({**card, **({"moment": moment} if moment else {})})
                     # query_runs 的键是 `run_id`（不是 `id`）。读错键 + `str(None)` = 报告标题和
                     # 文件名里出现字面 "None" —— f-string None 陷阱的同族（AGENTS §5 步骤 10）：
                     # 先取值判空，别把 None 直接格式化。

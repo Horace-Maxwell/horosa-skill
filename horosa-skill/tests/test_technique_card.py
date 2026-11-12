@@ -254,3 +254,31 @@ def _pdf_story_text(path, document, monkeypatch) -> str:
         result = render_report(document, output_path=path, format_name="pdf")
     assert result["format"] == "pdf"
     return "\n".join(captured)
+
+
+def test_the_technique_report_speaks_words_not_codes(tmp_path) -> None:
+    """评审 R-09：技法依据报告此前印 `古典口径=False；黄道制=0；分宫制=1；岁差（西占）=`、开发者的「设置确认：已与用户确认设置=True；
+    澄清备注=…」，没有起盘时刻与地点。现在与完整报告共用 source.setting_reader_text；机读 JSON 里的卡片不变。"""
+    from test_user_knowledge_and_chart_report import _service
+
+    from horosa_skill.testing_payloads import build_sample_payloads
+
+    card = build_technique_card(
+        tool_name="chart", technique_key="chart",
+        input_normalized={"tradition": False, "predictive": True, "zodiacal": 0, "hsys": 1, "siderealAyanamsa": "",
+                          "agent_confirmed_settings": True, "clarification_notes": "self-check"},
+        response_data={"export_snapshot": {}}, skill_version="0", envelope_schema=TOOL_ENVELOPE_SCHEMA_VERSION, domain="astro",
+    )
+    report = build_technique_report(cards=[{**card, "moment": "起盘时刻 2028-04-06 09:33（时区 +08:00）"}], scope="run", scope_id="r")
+    text = render_technique_report_markdown(report)
+    assert "口径：古典口径：否；预测数据：是；黄道制：回归黄道；分宫制：Alcabitus" in text
+    assert "=False" not in text and "=0" not in text and "岁差" not in text  # 空值不列
+    assert "设置确认" not in text and "self-check" not in text
+    assert "- 盘：起盘时刻 2028-04-06 09:33（时区 +08:00）" in text
+    assert "古典口径=False" in render_technique_card_markdown(card)  # 工具结果里的卡（给 AI 贴在回答后）不变
+
+    service = _service(tmp_path)
+    run = service.run_tool("chart", build_sample_payloads()["chart"], save_result=True)
+    rendered = service.technique_report({"run_id": run.memory_ref.run_id, "format": "markdown"})
+    markdown = Path(rendered["artifact_path"]).read_text(encoding="utf-8")
+    assert "- 盘：起盘时刻 2028-04-06 09:33:00（时区 +08:00）；地点 Shanghai（北纬 31°13′，东经 121°28′）" in markdown

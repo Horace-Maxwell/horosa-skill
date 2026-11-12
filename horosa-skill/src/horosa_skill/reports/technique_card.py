@@ -229,8 +229,11 @@ def build_technique_card(
     }
 
 
-def render_technique_card_markdown(card: dict[str, Any]) -> str:
-    """把卡片渲染成一段可直接贴进回答尾部的 Markdown。"""
+def render_technique_card_markdown(card: dict[str, Any], *, reader: bool = False) -> str:
+    """把卡片渲染成一段可直接贴进回答尾部的 Markdown。
+
+    reader=True（技法依据报告，给人读）：设置写成字（与完整报告同一个 source.setting_reader_text），空值不列；
+    「设置确认」与运行 id 这类开发者记录不印（机读 JSON 里照旧都在）；有起盘时刻 / 地点就加一行（评审 R-09）。"""
     technique = card.get("technique") or {}
     label = technique.get("label") or technique.get("key") or card.get("tool")
     compute = card.get("compute") or {}
@@ -248,11 +251,20 @@ def render_technique_card_markdown(card: dict[str, Any]) -> str:
         + ("" if compute.get("matches_declaration") is not False else "　⚠ 与声明不一致，请核对"),
     ]
     settings = card.get("settings") or {}
-    if settings:
+    if reader:
+        from horosa_skill.reports.source import setting_reader_text
+
+        if card.get("moment"):
+            lines.append(f"- 盘：{card['moment']}")
+        words = [(item["label"], setting_reader_text(key, item.get("value"), standalone=True)) for key, item in settings.items()]
+        rendered = "；".join(f"{label}：{text}" for label, text in words if text)
+        if rendered:
+            lines.append(f"- 口径：{rendered}")
+    elif settings:
         rendered = "；".join(f"{item['label']}={item['value']}" for item in settings.values())
         lines.append(f"- 口径：{rendered}")
     gate = card.get("gate") or {}
-    if gate:
+    if gate and not reader:
         rendered = "；".join(f"{item['label']}={item['value']}" for item in gate.values())
         lines.append(f"- 设置确认：{rendered}")
     profiles = [item for item in card.get("profiles") or [] if isinstance(item, dict)]
@@ -277,7 +289,7 @@ def render_technique_card_markdown(card: dict[str, Any]) -> str:
         version_bits.append(f"runtime {versions['runtime']}")
     lines.append(f"- 版本：{'　·　'.join(version_bits)}")
     refs = card.get("refs") or {}
-    if refs.get("run_id"):
+    if refs.get("run_id") and not reader:
         lines.append(f"- 本次运行：`{refs['run_id']}`")
     return "\n".join(lines)
 
@@ -405,7 +417,7 @@ def render_technique_report_markdown(report: dict[str, Any]) -> str:
         technique = card.get("technique") or {}
         lines.append(f"## {technique.get('label') or technique.get('key') or card.get('tool')}")
         lines.append("")
-        lines.append(render_technique_card_markdown(card))
+        lines.append(render_technique_card_markdown(card, reader=True))
         compute = card.get("compute") or {}
         if compute.get("notes"):
             lines.append(f"- 算源说明：{compute['notes']}")
