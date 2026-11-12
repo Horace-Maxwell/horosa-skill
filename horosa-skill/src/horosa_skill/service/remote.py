@@ -175,9 +175,14 @@ class RemoteMixin:
                         "runtime_target": "python_chart" if use_chart_server else "java_backend",
                         "payload_preview": payload_preview,
                         "attempted_payloads": attempted_payloads,
-                        "hint": (
-                            "Use timezone like `+08:00` and compact coordinates like `31n13` / `121e28`, or send decimal "
-                            "coordinates so Horosa Skill can normalize them automatically."
+                        # v0.50.0：不再猜格式（入口的逐字段校验已经把 date / time / zone / 经纬度 判过）——如实回显发出去的是哪些
+                        # 已声明字段、取什么值，让调用方对照；能走到这里的多半是引擎自己的值域（报给维护者）。
+                        "fields_sent": sorted(payload_preview),
+                        "hint": bilingual(
+                            f"后端拒绝了这组参数（已通过本仓的逐字段校验）：发出去的是 {', '.join(f'{k}={v!r}' for k, v in payload_preview.items()) or '（无出生字段）'}。"
+                            "请对照 details.payload_preview 与用户核对取值；值都对就把 details 原样报给维护者。",
+                            f"The backend refused these values (they passed the skill's field validation): sent {', '.join(f'{k}={v!r}' for k, v in payload_preview.items()) or '(no birth fields)'}. "
+                            "Check details.payload_preview against what the user said; if the values are right, report the details to the maintainer.",
                         ),
                     },
                 ) from exc

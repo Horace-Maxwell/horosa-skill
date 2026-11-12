@@ -20,7 +20,7 @@ from horosa_skill.service.options_zeri import _require_cast_geo
 from horosa_skill.service.text.chinese import (
     _derive_changed_gua_code,
     _derive_gua_code,
-    _gua_code_lines,
+    resolve_sixyao_cast,
     _normalize_gua_lines,
 )
 from horosa_skill.service.text.divination import (
@@ -739,8 +739,10 @@ class CnDivinationRunners:
                 code="tool.sixyao_invalid_gender",
                 details={"gender": gender},
             )
+        # 起卦方式先定（v0.50.0）：给了却用不了的 lines / gua_code / numbers 一律报错，不再悄悄改成以时起卦。
+        cast = resolve_sixyao_cast(payload)
         nongli = self._call_remote("/nongli/time", nongli_request)
-        lines = _normalize_gua_lines(payload.get("lines")) or _gua_code_lines(payload.get("gua_code"), payload.get("changed_code"))
+        lines = cast["lines"]
         # 六爻层（core-js tools/liuyao.js）= 上游 AI 挂载无头路径 regenerateSixyaoSnapshot
         # （aiAnalysisContext.js:1739-1760）：未手动摇卦（lines 空）→ vendored buildTimeGua(nongli) 以时起卦
         # （年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）；齿轮 liuyaoSettings（上游 24 键扁平形）按
@@ -755,6 +757,9 @@ class CnDivinationRunners:
         js_request: dict[str, Any] = {"nongli": nongli, "nongliParams": nongli_request, "record": record}
         if lines:
             js_request["lines"] = lines
+        for key in ("gua_name", "changed_name", "changed_bits"):
+            if cast.get(key) is not None:
+                js_request[key] = cast[key]
         if isinstance(liuyao_settings, dict):
             js_request["liuyaoSettings"] = liuyao_settings
         try:
@@ -780,6 +785,14 @@ class CnDivinationRunners:
                 details={"reason": str(exc)},
             ) from exc
         struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
+        if struct_data.get("gua_name_invalid"):
+            field = "gua_code" if struct_data["gua_name_invalid"] == "gua_name" else "changed_code"
+            raise ToolValidationError(
+                bilingual(f"认不出卦名：{payload.get(field)!r}（全名如「火天大有」、简名如「大有」「乾」，或六位 0/1 码）。",
+                          f"Unrecognized hexagram: {payload.get(field)!r} (full name such as 火天大有, short name such as 大有 / 乾, or six 0/1 digits)."),
+                code="tool.sixyao_invalid_cast",
+                details={"field": field, "got": payload.get(field), "expected": "hexagram name or six 0/1 digits", "example": "火天大有"},
+            )
         if struct_data.get("lines_invalid"):
             raise ToolValidationError(
                 bilingual(
@@ -789,6 +802,8 @@ class CnDivinationRunners:
                 code="tool.sixyao_invalid_lines",
                 details={"lines": len(lines)},
             )
+        if cast["method"] == "gua_name":
+            lines = _normalize_gua_lines(struct.get("lines"))
         if not lines:
             lines = _normalize_gua_lines(struct.get("lines"))
             if len(lines) != 6:
@@ -803,8 +818,8 @@ class CnDivinationRunners:
         else:
             # 手动摇卦：回显 JS 实际装卦的逐爻（缺省爻名已按 setupYao 取该卦 yaoname）。
             lines = _normalize_gua_lines(struct.get("lines")) or lines
-        current_code = payload.get("gua_code") or _derive_gua_code(lines)
-        changed_code = payload.get("changed_code") or _derive_changed_gua_code(lines)
+        current_code = _derive_gua_code(lines)
+        changed_code = _derive_changed_gua_code(lines)
         # 卦辞原文：上游无头卦不带 guaDesc，[卦辞与断语] 只有段头（GuaZhanMain.js:475-506 + :62-63）；
         # /gua/desc 照旧取来放 data.descriptions（结构化数据面，不进快照）。
         descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
@@ -820,6 +835,8 @@ class CnDivinationRunners:
             )
         result = {
             "nongli": nongli,
+            # 起卦方式（v0.50.0）：manual 手动六爻 / gua_code 六位码 / gua_name 卦名 / time 以时起卦。
+            "cast_method": cast["method"],
             "current_code": current_code,
             "changed_code": changed_code,
             "lines": lines,
@@ -829,7 +846,7 @@ class CnDivinationRunners:
         }
         if struct_data.get("settings"):
             result["liuyao_settings"] = struct_data["settings"]
-        warnings: list[str] = []
+        warnings: list[str] = list(cast["notes"])
         if struct_data.get("settings_ignored"):
             warnings.append(
                 f"liuyaoSettings 中这些键不是六爻判读口径，已忽略：{struct_data['settings_ignored']}"

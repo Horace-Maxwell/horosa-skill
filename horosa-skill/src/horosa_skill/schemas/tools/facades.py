@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from horosa_skill.schemas.tools.astro import RelativePartyInput
 from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel
@@ -121,6 +121,56 @@ class HecanInput(DispatchInput):
     # （ai_fillable：各技法结论槽 + 相互印证/分歧槽），分歧必须披露、不许平均——AI 填完即合参报告。
     tools: list[str] | None = None
     max_tools: int | None = 5
+
+    @field_validator("tools", mode="before")
+    @classmethod
+    def _technique_names(cls, value: Any) -> Any:
+        """v0.50.0（IN-15）：`tools` 也收逗号串（"bazi_birth,ziwei_birth" / "八字、紫微"）与中文技法名（按技法同义词表解析），
+        认不出的名字报错并给最接近的技法名——以前逗号串是 list_type 错误，中文名是 tool.unknown。"""
+        from horosa_skill.input_fields import field_validator_for
+
+        return field_validator_for(resolve_technique_names, "tools")(value)
+
+
+def resolve_technique_names(value: Any) -> Any:
+    """技法名列表 / 逗号串 → 注册表键列表（注册表键、MCP 名、中英文同义词都认）。"""
+    import difflib
+    import re as _re
+
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+    from horosa_skill.engine.synonyms import TOOL_SYNONYMS
+    from horosa_skill.input_fields import FieldIssue, Parsed, clean_text
+    from horosa_skill.textscript import fold_to_simplified
+
+    items = [part for part in _re.split(r"[,，、;；\s]+", value) if part] if isinstance(value, str) else value
+    if not isinstance(items, list):
+        raise FieldIssue("tool.invalid_option", f"tools 要是技法名列表或逗号串，收到 {value!r}。", f"tools must be a list or a comma-separated string; got {value!r}.",
+                         expected_zh="技法名列表，如 [\"bazi_birth\", \"ziwei_birth\"] 或 \"八字,紫微\"", expected_en="technique names, e.g. [\"bazi_birth\", \"ziwei_birth\"]",
+                         example=["bazi_birth", "ziwei_birth"])
+    by_word: dict[str, str] = {}
+    for name, words in TOOL_SYNONYMS.items():
+        if name in TOOL_DEFINITIONS:
+            for word in words:
+                by_word.setdefault(fold_to_simplified(word).lower(), name)
+    resolved: list[str] = []
+    notes: list[str] = []
+    for item in items:
+        text = clean_text(item)
+        hit = resolve_tool_name(text) or by_word.get(fold_to_simplified(text).lower())
+        if hit is None:
+            close = difflib.get_close_matches(text, [*TOOL_DEFINITIONS, *by_word], n=3, cutoff=0.5)
+            options = list(dict.fromkeys(by_word.get(c, c) for c in close))
+            raise FieldIssue("tool.invalid_option", f"认不出技法名 {item!r}" + (f"（是不是 {' / '.join(options)}？）" if options else "。"),
+                             f"Unknown technique name {item!r}" + (f" (did you mean {' / '.join(options)}?)" if options else "."),
+                             expected_zh="技法注册名（如 bazi_birth）、MCP 名或中文名（八字、紫微…）", expected_en="a technique name (bazi_birth), MCP name or Chinese name",
+                             example="bazi_birth", options=options)
+        if hit != text:
+            notes.append(f"{item}→{hit}")
+        if hit not in resolved:
+            resolved.append(hit)
+    if notes or isinstance(value, str):
+        return Parsed(resolved, "tools 按技法名读：" + "、".join(notes or resolved) + "。", "tools were read as: " + ", ".join(notes or resolved) + ".")
+    return Parsed(resolved)
 
 
 class ExportRegistryInput(FlexibleModel):

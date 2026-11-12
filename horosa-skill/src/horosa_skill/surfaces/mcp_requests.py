@@ -266,7 +266,26 @@ def _signature_for_input_model(model: type[BaseModel], *, return_type: Any = Sig
             )
         )
 
+    if model in _TECHNIQUE_MODELS:
+        # 全技法通用的两个入口参数（v0.50.0）：`place` = 地名（service.resolve_place_fields 解析成坐标 + 时区，可代替 lat / lon / zone）、
+        # `name` = 当事人（存档按人查找用；也收 subject.name）。声明在签名上是为了 SDK 不丢它；广告层只广告 place（预算）。
+        for common, doc in COMMON_TECHNIQUE_PARAMS.items():
+            if common in model.model_fields or (common == "place" and not _takes_location(model)):
+                continue
+            parameters.append(Parameter(common, kind=Parameter.KEYWORD_ONLY, default=None,
+                                        annotation=Annotated[Any, WithJsonSchema({"type": "string", "description": doc})]))
     return Signature(parameters=parameters, return_annotation=return_type)
+
+
+COMMON_TECHNIQUE_PARAMS: dict[str, str] = {
+    "place": "地名（解析出坐标与时区，可代替 lat/lon/zone）",
+    "name": "当事人姓名（存档按人查找）",
+}
+
+
+def _takes_location(model: type[BaseModel]) -> bool:
+    fields = model.model_fields
+    return "lat" in fields or "lon" in fields or "inner" in fields
 
 
 def _merge_mcp_arguments(kwargs: dict[str, Any]) -> dict[str, Any] | str | None:

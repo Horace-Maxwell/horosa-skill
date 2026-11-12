@@ -271,10 +271,10 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     "tool.backend_param_error": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "后端拒绝了本次参数。请核对 date=YYYY-MM-DD、time=HH:mm:ss、zone=+08:00、lat=31n13、lon=121e28 这类格式后重试；details.hint 里有具体建议。",
-            "The backend rejected the parameters. Check formats like date=YYYY-MM-DD, time=HH:mm:ss, zone=+08:00, lat=31n13, lon=121e28 and retry; details.hint has specifics.",
+            "后端拒绝了这组参数（它们已通过本仓的逐字段校验）。details.payload_preview 是发出去的值：与用户核对；值都对就把 details 报给维护者，不要改格式重试。",
+            "The backend refused these values (they passed the skill's field validation). details.payload_preview shows what was sent: check it with the user; if right, report the details to the maintainer instead of reformatting.",
         ),
-        "next_action": "fix_input_format",
+        "next_action": "check_values_with_user_or_report",
     },
     "tool.unknown": {
         "kind": "input",

@@ -30,7 +30,7 @@ from horosa_skill.profiles import PROFILE_KEY, owns_profile_key
 from horosa_skill.schemas.tools import BirthInput
 from horosa_skill.schemas.tools.advertised_types import UNTYPED_FIELD_TYPES
 from horosa_skill.schemas.tools.base import advertise_hidden_fields
-from horosa_skill.surfaces.mcp_requests import tool_run_field_docs
+from horosa_skill.surfaces.mcp_requests import COMMON_TECHNIQUE_PARAMS, tool_run_field_docs
 
 GATE_KEYS: tuple[str, ...] = ("agent_confirmed_settings", "defaults_accepted", "clarification_notes")
 # name/pos（显示名）已声明、顶层照收，但不进广告层：两字段 × 80 工具 ≈ 10 KB，只是盘头文字。
@@ -60,9 +60,10 @@ CORE_DOC: dict[str, str] = {
     "siderealAyanamsa": "恒星黄道岁差制（zodiacal=1 时）",
     "name": "当事人姓名（透传盘头）",
     "pos": "地点显示名",
+    "place": "地名",
     "gender": "1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
-    "response_view": "裁剪（全文已存档）",
+    "response_view": "裁剪",  # 全文照存档（v0.50.0 起短写，给 place 让出预算）
     "agent_confirmed_settings": "用户已确认设置→true",
     "defaults_accepted": "用户接受默认→true",
     "clarification_notes": "确认摘要",
@@ -70,7 +71,7 @@ CORE_DOC: dict[str, str] = {
 CORE_TYPE: dict[str, Any] = {
     "date": "string", "time": "string", "zone": "string", "lat": ["string", "number"], "lon": ["string", "number"],
     "ad": "integer", "hsys": "integer", "zodiacal": "integer", "siderealAyanamsa": "string", "name": "string",
-    "pos": "string", "gender": ["integer", "string"], "timeAlg": "integer", "response_view": "string",
+    "pos": "string", "place": "string", "gender": ["integer", "string"], "timeAlg": "integer", "response_view": "string",
     "agent_confirmed_settings": "boolean", "defaults_accepted": "boolean", "clarification_notes": "string",
 }
 # 两个截断上限 v0.46.x 收紧（72→64、200→150）：推运图族四法 +4 工具后全量面逼近 256 KB 硬顶，截掉的只是广告层的长尾文字，
@@ -193,7 +194,11 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
         keep = [f for f in model.model_fields if f in props and f not in unadvertised]
     # `knowledge`（自备知识库）与 `profile`（命主档案名）是全技法通用的附加参数，不是本技法的旋钮：不计数，否则 44 个原本没有
     # 隐藏旋钮的技法平白多一句「另 1 个高级旋钮」（全量面 +2.9 KB）。它们在 SKILL.md、tool_run 的 schema 与 server_profile 里说明。
-    hidden = sorted(set(props) - set(keep) - {"request", "knowledge", PROFILE_KEY})
+    # `place` / `name`（v0.50.0，mcp_requests.COMMON_TECHNIQUE_PARAMS）同理不计数；模型自己声明的 name 照旧计入。
+    common_added = {key for key in COMMON_TECHNIQUE_PARAMS if key not in model.model_fields}
+    hidden = sorted(set(props) - set(keep) - {"request", "knowledge", PROFILE_KEY} - common_added)
+    if "place" in props and "place" not in model.model_fields and "place" not in keep:
+        keep.append("place")  # 地名是给位置的首选写法（SKILL.md），广告给每个收地点的技法
     out: dict[str, Any] = {}
     for key in keep:
         if key in CORE_DOC:

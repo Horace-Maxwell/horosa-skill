@@ -169,12 +169,68 @@ function manualGua(lines, nongli) {
   };
 }
 
+// 卦名 / 六位码 → 卦（v0.50.0）：本卦 / 之卦可用卦名（全名「火天大有」或简名「大有」；八纯卦简名为首字「乾」，也认「乾卦」）。
+// Python 侧已把繁体折成简体；查的就是 vendored 上游 Gua64 表本身，不另立卦名表。
+function guaByName(name) {
+  if (Array.isArray(name)) {
+    // Python 送 [原文, 繁→简折叠后]：折叠会把「乾」折成「干」，所以原文先试。
+    for (const candidate of name) {
+      const hit = guaByName(candidate);
+      if (hit) {
+        return hit;
+      }
+    }
+    return null;
+  }
+  const key = `${name ?? ''}`.trim().replace(/卦$/, '');
+  if (!key) {
+    return null;
+  }
+  if (/^[01]{6}$/.test(key)) {
+    return Gua64.find((g) => g.value.join('') === key) || null;  // 六位码（初→上，1 阳）
+  }
+  for (let i = 0; i < Gua64.length; i++) {
+    const full = Gua64[i].name;
+    const short = full.includes('为') ? full[0] : full.slice(2);
+    if (key === full || key === short) {
+      return Gua64[i];
+    }
+  }
+  return null;
+}
+
+function namedLines(input) {
+  const base = guaByName(input.gua_name);
+  if (!base) {
+    return { invalid: 'gua_name' };
+  }
+  let moving = [false, false, false, false, false, false];
+  if (input.changed_name) {
+    const changed = guaByName(input.changed_name);
+    if (!changed) {
+      return { invalid: 'changed_name' };
+    }
+    moving = base.value.map((v, i) => v !== changed.value[i]);
+  } else if (Array.isArray(input.changed_bits) && input.changed_bits.length === 6) {
+    moving = base.value.map((v, i) => v !== input.changed_bits[i]);
+  }
+  return { lines: base.value.map((v, i) => ({ value: v, change: moving[i], god: null, name: null })) };
+}
+
 export async function runLiuyao(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
   const warnings = [];
   const gear = input.liuyaoSettings && typeof input.liuyaoSettings === 'object' ? input.liuyaoSettings : null;
   const report = liuyaoSettingsReport(gear);
   const nongli = withYearGzByLunar(input.nongli && typeof input.nongli === 'object' ? input.nongli : {}, input.nongliParams, warnings);
+  if (input.gua_name) {
+    const named = namedLines(input);
+    if (named.invalid) {
+      return { lines: [], time_cast: false, current_gua: null, snapshot_text: '',
+        data: { gua_name_invalid: named.invalid, settings_ignored: report.ignored, settings_invalid: report.invalid, warnings } };
+    }
+    input.lines = named.lines;
+  }
 
   // 卦：手动摇卦（lines 六爻俱全）按页面 state 同形（currentGua = Gua64 序、yao 自下而上、爻名取卦 yaoname）；
   // 否则以时起卦 = 上游无头路径 buildTimeGua(nongli)。
@@ -191,6 +247,7 @@ export async function runLiuyao(payload) {
   const castInfo = {
     lines,
     time_cast: !hasLines,
+    cast_method: input.gua_name ? 'gua_name' : (hasLines ? 'manual' : 'time'),
     current_gua: gua && Gua64[gua.currentGua] ? { index: gua.currentGua, name: Gua64[gua.currentGua].name } : null,
   };
   if (!gua) {

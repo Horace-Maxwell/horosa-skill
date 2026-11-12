@@ -27,6 +27,7 @@ from horosa_skill.knowledge import (
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
 from horosa_skill.service._context import _degrade_collector, _memory_save_failed, _run_query_scope
 from horosa_skill.service.api.place import place_resolution_note
+from horosa_skill.service.text.predictive import _PERIOD_PREDICTIVE_TOOLS
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.envelope import (
     _apply_response_view,
@@ -66,6 +67,15 @@ GENDER_DEPENDENT_TOOLS = frozenset({
 
 
 def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
+    target = payload.get("datetime")
+    if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
+        # 只给年份的目标时刻只对「有那一年含义」的技法成立（返照 / 流年 / 小限 / 太阳弧，见 enrich._apply_yearly_target）。
+        raise field_issues_error([{
+            "field": "datetime", "code": "tool.invalid_datetime", "got": target,
+            "expected": bilingual("YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS", "YYYY-MM-DD or YYYY-MM-DD HH:MM:SS"), "example": f"{target}-01-01 12:00:00",
+            "ask_user": False, "message": bilingual(f"`{tool_name}` 的目标时刻要具体到日期：只给年份「{target}」不知道是哪一天。",
+                                                   f"`{tool_name}` needs a target date, not just the year '{target}'."),
+        }])
     if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None:
         raise field_issues_error([{
             "field": "gender", "code": "tool.missing_gender", "got": None,
@@ -548,7 +558,7 @@ class ToolsAPI:
             input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
-                profile_uses=profile_uses, place_records=place_records, input_notes=list(input_notes),
+                profile_uses=profile_uses, place_records=place_records, input_notes=input_notes,
             )
             try:
                 envelope = self._success_envelope(call, self._compute_tool_result(call))

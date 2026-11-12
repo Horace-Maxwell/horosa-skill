@@ -39,6 +39,26 @@ class FlexibleModel(BaseModel):
     # 自己声明了 `profile` 的技法模型（天文地占的传本流派）照旧按它自己的意思（profiles.owns_profile_key）。
     profile: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
+    # v0.50.0：宫制 / 黄道在校验层就判（input_fields.parse_house_system / parse_zodiacal，`Vocabulary` 机制的同族）：
+    # 名称（Placidus / 整宫制 / whole sign / 整宮制…）→ 索引并进 warnings，越出引擎表的索引拒（tool.invalid_house_system，
+    # options 是全表）。印占模型的索引表不同（3=KP/Placidus、8=Alcabitus）：类上设 HSYS_FAMILY = "india"。
+    HSYS_FAMILY: ClassVar[str] = "astro"
+
+    @field_validator("hsys", "indiaHsys", mode="before", check_fields=False)
+    @classmethod
+    def _house_system_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.input_fields import field_validator_for, parse_house_system
+
+        family = "india" if info.field_name == "indiaHsys" else cls.HSYS_FAMILY
+        return field_validator_for(lambda v: parse_house_system(v, family=family), info.field_name)(value)
+
+    @field_validator("zodiacal", mode="before", check_fields=False)
+    @classmethod
+    def _zodiac_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.input_fields import field_validator_for, parse_zodiacal
+
+        return field_validator_for(parse_zodiacal, info.field_name)(value)
+
 
 def _unadvertised() -> Any:
     """已声明（MCP 顶层按名可传、进 pydantic 校验层）但不进 tools/list 广告层的旋钮（长词表 → 预算）。
@@ -74,9 +94,9 @@ class BirthInput(FlexibleModel):
     hsys: int | None = Field(
         default=1,
         description=(
-            "宫制索引 0–24（缺省 1 Alcabitus = 星阙 DefaultHouseSystem；上游 AstroConst.HOUSE_SYSTEM_OPTIONS）："
+            "宫制：索引 0–24 或名称（Placidus / 整宫制 / whole sign…，按下表换成索引）："
             + " ".join(f"{k}={v}" for k, v in HOUSE_SYSTEM_LABELS.items())
-            + "。缺省 0=整宫 Whole Sign（上游页面缺省 1 Alcabitus）。注意 1 不是 Placidus（Placidus=3）。"
+            + "。缺省 1=Alcabitus（星阙 DefaultHouseSystem；七政 / 节气 / 择日 / 世运 / 印占等技法缺省 0=整宫）。注意 1 不是 Placidus（Placidus=3）。"
         ),
     )
     # 地点显示名：进 [起盘信息]/配置段与搜索请求（样例载荷一直带它，此前 MCP 扁平面静默丢弃）。

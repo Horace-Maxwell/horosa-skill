@@ -506,6 +506,15 @@ _MISSING_TEXT: dict[str, tuple[str, str, Any]] = {
 def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     zh, en, example = _MISSING_TEXT.get(leaf, (f"`{leaf}`", f"`{leaf}`", None))
     ask = leaf in USER_FACT_FIELDS
+    if leaf in ("lat", "lon") and not F.is_blank(payload.get("pos")) and F.is_blank(payload.get("place")):
+        zh += f"（`pos`={payload.get('pos')!r} 只是盘头显示名，不解析坐标：要按地名起盘请传 `place`）"
+        en += f" (`pos`={payload.get('pos')!r} is a display label only and is not resolved; pass `place` to resolve a place name)"
+    if leaf in ("inner", "outer"):
+        others = [key for key, value in payload.items() if isinstance(value, dict) and key not in ("inner", "outer")]
+        zh = "合盘两人：inner = 第一人（本人）、outer = 第二人，各带 {date, time, zone, lat, lon}" + (f"；收到的 {others} 不是这两个键" if others else "")
+        en = "the two people: inner = the first person, outer = the second, each {date, time, zone, lat, lon}" + (f"; {others} are not these keys" if others else "")
+        example = {"date": "1990-05-03", "time": "08:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+        ask = False
     code = "tool.missing_field"
     if leaf == "time" and "time" in payload and F.is_blank(payload.get("time")):
         code = "tool.time_unknown"
