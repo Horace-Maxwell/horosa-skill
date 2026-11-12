@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import tarfile
 from pathlib import Path
 
 
@@ -22,6 +23,35 @@ def _classify_archive_type(path: Path) -> str:
     if name.endswith(".tar.xz"):
         return "tar.xz"
     return path.suffix.lstrip(".") or "tar.gz"
+
+
+def core_js_entry(archive: Path, url: str, version: str, spec: dict[str, object]) -> dict[str, object]:
+    """The manifest's top-level `core_js` entry (v0.50.0-dev, E-02), read from the archive itself.
+
+    The node floor and the version come from the archive's own package.json — the bytes users install, not a value typed
+    here — and must agree with the release version; the root directory must be the contract's.
+    """
+    root = str(spec.get("root") or "horosa-core-js")
+    try:
+        with tarfile.open(archive, "r:gz") as tar:
+            handle = tar.extractfile(f"{root}/package.json")
+            package = json.loads(handle.read().decode("utf-8")) if handle else None
+    except (OSError, KeyError, tarfile.TarError, ValueError) as exc:
+        raise SystemExit(f"{archive.name}: cannot read {root}/package.json ({type(exc).__name__}: {exc})") from exc
+    if not isinstance(package, dict) or package.get("version") != version:
+        raise SystemExit(f"{archive.name}: {root}/package.json version {(package or {}).get('version')!r} != release {version!r}")
+    node_floor = (package.get("engines") or {}).get("node")
+    if not isinstance(node_floor, str) or not node_floor.strip():
+        raise SystemExit(f"{archive.name}: {root}/package.json has no engines.node")
+    return {
+        "url": url,
+        "sha256": sha256_file(archive),
+        "archive_type": _classify_archive_type(archive),
+        "size": archive.stat().st_size,
+        "version": version,
+        "node_floor": node_floor.strip(),
+        "root": root,
+    }
 
 
 def main() -> None:
@@ -47,6 +77,14 @@ def main() -> None:
             "from the manifest alone (v0.38.0 A3). `releases/latest/download` bases are accepted but not recommended."
         ),
     )
+    parser.add_argument(
+        "--core-js-archive",
+        help=(
+            "Path to the platform-independent JS engine asset (horosa-core-js-v<ver>.tar.gz, scripts/build_core_js_asset.py). "
+            "Written under the top-level `core_js` key — never under `platforms` (v0.50.0-dev, E-02)."
+        ),
+    )
+    parser.add_argument("--core-js-url", help="URL for the JS engine asset (default: --url-base/<archive name>).")
     parser.add_argument("--output", required=True, help="Output manifest JSON path.")
     parser.add_argument(
         "--platforms-contract",
@@ -56,9 +94,12 @@ def main() -> None:
     args = parser.parse_args()
 
     contract_platforms: dict[str, dict[str, object]] = {}
+    contract_core_js: dict[str, object] = {}
     contract_path = Path(args.platforms_contract).expanduser()
     if contract_path.is_file():
-        contract_platforms = json.loads(contract_path.read_text(encoding="utf-8")).get("platforms") or {}
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        contract_platforms = contract.get("platforms") or {}
+        contract_core_js = contract.get("core_js") or {}
 
     platforms: dict[str, dict[str, object]] = {}
 
@@ -88,10 +129,18 @@ def main() -> None:
     if not platforms:
         parser.error("At least one platform archive (darwin, windows, or linux) must be provided.")
 
-    manifest = {
+    manifest: dict[str, object] = {
         "version": args.version,
         "platforms": platforms,
     }
+    if args.core_js_archive:
+        core_js_archive = Path(args.core_js_archive).expanduser().resolve()
+        core_js_url = args.core_js_url or (f"{args.url_base.rstrip('/')}/{core_js_archive.name}" if args.url_base else None)
+        if not core_js_url:
+            parser.error(f"{core_js_archive.name}: give --core-js-url or --url-base")
+        manifest[str(contract_core_js.get("manifest_key") or "core_js")] = core_js_entry(
+            core_js_archive, core_js_url, args.version, contract_core_js
+        )
     output = Path(args.output).expanduser()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")

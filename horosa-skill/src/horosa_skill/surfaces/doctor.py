@@ -152,7 +152,7 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
     },
     "js_engine:unavailable": {
         "user_summary": "本地 JS 引擎不可用（js_engine.state 说明原因）：八字 / 紫微 / 奇门 / 太乙 / 六壬等本地 JS 技法会失败，其余照常。",
-        "next_action": "按 js_engine.fix 处理：装离线 runtime，或设 HOROSA_CORE_JS_ROOT（并有 node ≥ 20.10）。",
+        "next_action": "按 js_engine.fix 处理：`horosa-skill install --engine-only`（任何平台，只装 JS 引擎），或装离线 runtime，或设 HOROSA_CORE_JS_ROOT（都要 node ≥ 20.10）。",
     },
     "missing:": {
         "user_summary": "已装 runtime 缺文件（解包不完整、被安全软件隔离或手动删过）。",
@@ -445,15 +445,22 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
     # ── 还没装：一句话，不是 12 条 missing:* ──
     if deployment == "not_installed":
         if report.get("platform_supported") is False:
+            # E-02：没有载荷的平台也能有本地 JS 引擎（engine-only 资产）；结论按引擎在不在分两句。
+            engine_ok = bool(js) and js.get("ok") is True
+            engine_zh = ("本地 JS 引擎已就位（八字、六爻、大六壬等本地 JS 技法可用）。" if engine_ok else
+                         f"本地 JS 引擎也还没有：`{cli_command('install --engine-only')}` 装上它（约 7 MB，需 Node.js ≥ 20.10）。")
+            engine_en = ("The local JS engine is in place (BaZi, Liuyao, Liuren and the other local JS techniques work)." if engine_ok else
+                         f"The local JS engine is missing too: `{cli_command('install --engine-only')}` installs it (about 7 MB; "
+                         "needs Node.js >= 20.10).")
             return result(
                 "needs_attention",
                 "本机平台没有离线 runtime 载荷 —— 只发 darwin-arm64 与 win32-x64（Windows on ARM 自动装 x64 载荷走仿真；"
-                "Intel Mac 与 Linux 没有载荷）。",
+                f"Intel Mac 与 Linux 没有载荷）。{engine_zh}",
                 "There is no offline runtime payload for this platform — only darwin-arm64 and win32-x64 are published "
-                "(Windows on ARM installs the x64 payload under emulation; Intel Macs and Linux have none).",
-                "走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
-                "Use gateway mode: run the runtime on a supported machine and point HOROSA_SERVER_ROOT and "
-                "HOROSA_CHART_SERVER_ROOT at it.",
+                f"(Windows on ARM installs the x64 payload under emulation; Intel Macs and Linux have none). {engine_en}",
+                "其余技法走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
+                "For the other techniques use gateway mode: run the runtime on a supported machine and point HOROSA_SERVER_ROOT "
+                "and HOROSA_CHART_SERVER_ROOT at it.",
             )
         hint = install_command()
         if "runtime:root_not_writable" in issues:

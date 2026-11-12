@@ -136,9 +136,13 @@ def test_cli_missing_names_the_real_remedies(tmp_path: Path, monkeypatch: pytest
         client.run("bazi_birth", {})
     error = excinfo.value
     assert error.code == "js_engine.cli_missing"
-    assert {row["source"] for row in error.details["searched"]} == {"env:HOROSA_CORE_JS_ROOT", "runtime", "source_checkout"}
+    assert [row["source"] for row in error.details["searched"]] == [
+        "env:HOROSA_CORE_JS_ROOT", "runtime", "engine_asset", "source_checkout"]
     prompt = recovery_for(error.code, error.details)["agent_recovery"]["prompt_to_user"]
     assert "HOROSA_CORE_JS_ROOT" in prompt and "HOROSA_CORE_JS_ROOT" in str(error)
+    # E-02：任何平台都有一条装引擎的路，错误与恢复说明都要点名它
+    assert "install --engine-only" in prompt and "install --engine-only" in str(error)
+    assert any("install --engine-only" in command for command in error.details["commands"])
 
 
 def test_the_floor_matches_the_engines_package_json() -> None:

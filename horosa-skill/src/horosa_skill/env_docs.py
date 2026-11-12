@@ -42,7 +42,7 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_STRICT_CONFIG": "`1` = an unknown HOROSA_* variable is an error instead of a warning.",
     # ── JS 引擎 ──
     "HOROSA_NODE_BIN": "Node executable for the local JS engine (default: the runtime's bundled node, else node on PATH). Must exist and be >= 20.10.",
-    "HOROSA_CORE_JS_ROOT": "A horosa-core-js directory to use instead of the runtime's copy (needed for BaZi / Ziwei / Qimen … without the offline runtime).",
+    "HOROSA_CORE_JS_ROOT": "A horosa-core-js directory to use before the runtime's copy and the `install --engine-only` asset (the Docker image sets it).",
     "HOROSA_JS_ENGINE_TIMEOUT_SECONDS": "Wall-clock limit for one JS-engine call (default 60 s; long election searches raise it for themselves).",
     # ── MCP 面 ──
     "HOROSA_MCP_COMPACT": "`1` = expose the 14 facade tools instead of every technique tool.",

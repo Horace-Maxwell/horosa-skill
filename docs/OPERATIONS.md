@@ -103,8 +103,8 @@ Runtime release 采用「轻仓库 + 重 release 资产」模式；v0.38.0 起�
 # 0. 前提：main 已推送且 ci.yml 绿；上游 pin 已在上游公开远端；版本已 bump（python scripts/bump_version.py X.Y.Z → uv lock → run_ci_gates）
 HOROSA_SOURCE_ROOT=… uv run python scripts/preflight_release.py           # 全绿；若重写了 provenance 就提交它
 git tag vX.Y.Z && git push origin vX.Y.Z
-bash horosa-skill/scripts/publish_release.sh --draft --dispatch           # seed / .mcpb / wheel / SBOM 上 DRAFT；dispatch release-runtime.yml
-#    → 派生 Windows 半 → assemble（双平台清单钉 tag + size、SHA256SUMS、SBOM、attestation）→ runtime-matrix 三台真机（真下载 + 25 个客户端 + HTTP 握手）
+bash horosa-skill/scripts/publish_release.sh --draft --dispatch           # seed / JS 引擎资产 / .mcpb / wheel / SBOM 上 DRAFT；dispatch release-runtime.yml
+#    → 派生 Windows 半 → assemble（双平台清单钉 tag + size + 顶层 core_js 条目、SHA256SUMS、SBOM、attestation）→ runtime-matrix 三台真机（真下载 + 25 个客户端 + HTTP 握手）
 git add server.json && git commit -m "chore(release): pin mcpb sha" && git push   # mcpb sha 必须来自这一次 --draft 构建（打包不可复现）
 python horosa-skill/scripts/sync_windows_release.py --check --tag vX.Y.Z --draft   # 必须 [OK]；[GAP] 才是权威
 gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true -f run_matrix=true -f arm_nonblocking=false -f dry_run=false
@@ -112,7 +112,7 @@ gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true -f run_matr
 #    mcp-registry job（v0.41.0）：翻 latest 之后才跑（草稿资产匿名 404）→ 从公开 SHA256SUMS 渲染 server.json → 已登记则跳过 → OIDC 发布
 python horosa-skill/scripts/sync_windows_release.py --check              # 公开 latest [OK]
 curl -s "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Horace-Maxwell%2Fhorosa-skill/versions/X.Y.Z" | head -c 200   # 注册表已列出
-gh release view vX.Y.Z --json assets                                     # 两个归档 + manifest + SHA256SUMS + sbom + mcpb + whl
+gh release view vX.Y.Z --json assets                                     # 两个归档 + JS 引擎资产 + manifest + SHA256SUMS + sbom + mcpb + whl
 ```
 
 要点：`publish=true` 必须带 `run_matrix=true`（resolve 直接 fail）；官方 MCP Registry 版本不可变，名字大小写必须与 GitHub owner 一致
@@ -123,7 +123,26 @@ Windows 半边由 `build_runtime_release_windows.py --seed` 在 windows-latest �
 
 - 必要资产：`horosa-runtime-darwin-arm64-v<version>.tar.gz`、`horosa-runtime-win32-x64-v<version>.zip`、`runtime-manifest.json`、
   `SHA256SUMS.txt`、`horosa-skill-sbom.json`、`horosa_skill-<version>-py3-none-any.whl`（零安装：`uvx --from <URL> horosa-skill …`）、
-  `horosa-skill-<version>.mcpb`（Claude Desktop 一键包；`server.json` 的 mcpb package 直指它）。
+  `horosa-skill-<version>.mcpb`（Claude Desktop 一键包；`server.json` 的 mcpb package 直指它）、
+  `horosa-core-js-v<version>.tar.gz`（0.50.0 起：平台无关的 JS 引擎资产，见下节）。
+
+### JS 引擎资产（horosa-core-js，0.50.0 起）
+
+没有离线 runtime 的机器（Linux、Intel Mac、Docker、pip / wheel 网关安装、没跑 `install` 的人）靠它拿到本地 JS 引擎；
+`horosa-skill install` 在清单里没有本平台时自动只装它，`install --engine-only` 在任何平台显式装它（`<runtime 根>/core-js/`，不碰 `current/`）。
+
+- **谁产出**：`publish_release.sh` 第 [2/9] 步 `scripts/build_core_js_asset.py`——已跟踪的 `horosa-core-js/` 树（工作树必须等于 HEAD）+
+  `package-lock.json` 的生产依赖闭包（从刚 `npm install --omit=dev` 过的 node_modules 逐版本核对后拷入；`--npm-ci` 在临时目录新装），
+  排除集与载荷的 `RSYNC_FILTERS` 锁步；确定性归档（同一棵树同一份字节）。本机单独试：`python3 horosa-skill/scripts/build_core_js_asset.py --out-dir /tmp/x`。
+- **谁写清单**：`generate_release_manifest.py --core-js-archive`（维护机的 darwin 清单与 assemble 的最终双平台清单都写）——顶层 `core_js`
+  条目 `{url（钉 tag）, sha256, size, archive_type, version, node_floor, root}`，node 下限与版本从归档自己的 `package.json` 读；**永不进 `platforms`**。
+- **谁拦**：`verify_runtime_release.py`（`core_js.since` 起缺条目即拒；给了归档就核字节 / 必需条目 / 依赖 / 越界成员）；
+  resolve 作业先查 draft 上有这件资产；`sync_windows_release.py --check` 对缺资产、缺条目、未钉本 tag、sha 与 GitHub digest（退路 SHA256SUMS）
+  不符、size 不符都报 `[GAP]`；`release-completeness.yml`（`verify_published_release.py`）对公开 latest 同样五项。
+- **Node 不随资产走**：用户机器上要有 Node ≥ 20.10（`engines.node`，`contracts/release_platforms.json` 的 `core_js.node_floor` 锁步）；
+  缺了引擎照装，install 结果与 doctor 的 `js_engine` 节说清楚装什么。Docker 镜像自带钉版本的 Node（与 `runtime_toolchain.json` 同版本）。
+- **出事了**：`[GAP: JS engine asset …]` = draft 上缺件 → 重跑 `publish_release.sh --draft`（它与 seed 同批上传）；
+  `[GAP: core_js manifest sha256 … != published …]` = 清单与上传的字节不是同一次构建 → 重跑流水线让 assemble 从 draft 重取。
 
 ### 矩阵 lane 红了怎么看
 

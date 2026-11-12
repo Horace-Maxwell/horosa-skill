@@ -4,8 +4,9 @@ name: release-runtime
 # .mcpb / SBOM) and puts it on a DRAFT release (`publish_release.sh --draft`). This workflow then:
 #   resolve        — the draft (or, for dry runs, the public release) carries the seed
 #   build-windows  — windows-latest derives the win32-x64 payload from the seed (build_runtime_release_windows.py --seed)
-#   assemble       — dual-platform manifest (tag-pinned URLs + size), SHA256SUMS, SBOM, release verifier, provenance
-#                    attestation; uploads to the draft — the manifest reaches the release only with BOTH halves
+#   assemble       — dual-platform manifest (tag-pinned URLs + size) + the `core_js` entry for the platform-independent JS
+#                    engine asset publish_release.sh put on the draft (v0.50.0-dev E-02), SHA256SUMS, SBOM, release verifier,
+#                    provenance attestation; uploads to the draft — the manifest reaches the release only with BOTH halves
 #   matrix         — runtime-matrix.yml installs the assembled assets on three real machines and runs the runtime
 #   publish        — sync_windows_release.py --check on the draft must say [OK]; only then `gh release edit --draft=false --latest`
 #   mcp-registry   — publish-mcp-registry.yml lists the now-public release on the official MCP Registry (v0.41.0)
@@ -59,6 +60,7 @@ jobs:
       tag: ${{ steps.info.outputs.tag }}
       seed: ${{ steps.info.outputs.seed }}
       windows_zip: ${{ steps.info.outputs.windows_zip }}
+      core_js: ${{ steps.info.outputs.core_js }}
     steps:
       - uses: actions/checkout@v5
       - name: Resolve tag, seed asset, and the release's draft state
@@ -84,12 +86,22 @@ jobs:
           if [ "${HAS_SEED}" != "True" ]; then
             echo "::error::${TAG} has no ${SEED} — run publish_release.sh --draft on the maintainer Mac first"; exit 1
           fi
+          # v0.50.0-dev E-02: the JS engine asset rides on the draft with the seed (publish_release.sh [2/9]); from the contract's
+          # core_js.since on, assemble writes it into the manifest, so a draft without it stops here, not 40 minutes later.
+          CORE_JS="horosa-core-js-${TAG}.tar.gz"
+          CORE_JS_REQUIRED="$(python3 -c 'import json,re,sys; s=json.load(open("horosa-skill/contracts/release_platforms.json"))["core_js"]["since"]; v=lambda x: tuple(int(p) for p in re.findall(r"\d+", x)[:3]); print(str(v(s) <= v(sys.argv[1])).lower())' "${VERSION}")"
+          HAS_CORE_JS="$(echo "${INFO}" | python3 -c "import json,sys; print(any(a['name']=='${CORE_JS}' for a in json.load(sys.stdin)['assets']))")"
+          echo "core_js=${CORE_JS} required=${CORE_JS_REQUIRED} present=${HAS_CORE_JS}"
+          if [ "${CORE_JS_REQUIRED}" = "true" ] && [ "${HAS_CORE_JS}" != "True" ]; then
+            echo "::error::${TAG} has no ${CORE_JS} — publish_release.sh --draft uploads it with the seed (step [2/9])"; exit 1
+          fi
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${IS_DRAFT}" != "true" ]; then
             echo "::error::${TAG} is already public; the pipeline only fills DRAFT releases (use dry_run=true to exercise it)"; exit 1
           fi
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "seed=${SEED}" >> "${GITHUB_OUTPUT}"
           echo "windows_zip=horosa-runtime-win32-x64-${TAG}.zip" >> "${GITHUB_OUTPUT}"
+          echo "core_js=${CORE_JS}" >> "${GITHUB_OUTPUT}"
 
   build-windows:
     needs: resolve
@@ -156,7 +168,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist/runtime
           gh release download "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" -D dist/runtime --clobber \
-            -p "${{ needs.resolve.outputs.seed }}" -p '*.mcpb' -p '*.whl' || true
+            -p "${{ needs.resolve.outputs.seed }}" -p "${{ needs.resolve.outputs.core_js }}" -p '*.mcpb' -p '*.whl' || true
           test -f "dist/runtime/${{ needs.resolve.outputs.seed }}"
       - uses: actions/download-artifact@v7
         with:
@@ -172,20 +184,32 @@ jobs:
           set -euo pipefail
           TAG="${{ needs.resolve.outputs.tag }}"
           VERSION="${TAG#v}"
+          CORE_JS="${{ needs.resolve.outputs.core_js }}"
+          # The JS engine asset the draft carries (same bytes publish_release.sh built; never rebuilt here). A dry run of a
+          # release older than core_js.since has none — verify_runtime_release.py decides from the contract whether that is allowed.
+          CORE_JS_ARGS=()
+          if [ -f "dist/runtime/${CORE_JS}" ]; then CORE_JS_ARGS=(--core-js-archive "dist/runtime/${CORE_JS}"); fi
           uv run python scripts/generate_release_manifest.py \
             --version "${VERSION}" \
             --darwin-archive "dist/runtime/${{ needs.resolve.outputs.seed }}" \
             --windows-archive "dist/runtime/${{ needs.resolve.outputs.windows_zip }}" \
+            "${CORE_JS_ARGS[@]}" \
             --url-base "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}" \
             --output dist/runtime/runtime-manifest.json
-          ( cd dist/runtime && sha256sum "${{ needs.resolve.outputs.seed }}" "${{ needs.resolve.outputs.windows_zip }}" $(ls *.mcpb *.whl 2>/dev/null || true) > SHA256SUMS.txt && cat SHA256SUMS.txt )
+          ( cd dist/runtime && sha256sum "${{ needs.resolve.outputs.seed }}" "${{ needs.resolve.outputs.windows_zip }}" $(ls horosa-core-js-*.tar.gz *.mcpb *.whl 2>/dev/null || true) > SHA256SUMS.txt && cat SHA256SUMS.txt )
           uv run python scripts/generate_sbom.py --project-root . --runtime-manifest dist/runtime/runtime-manifest.json --output dist/runtime/horosa-skill-sbom.json
-      - name: Verify the release set (entries, embedded manifests, native arch, size, exact platform set)
+      - name: Verify the release set (entries, embedded manifests, native arch, size, exact platform set, JS engine asset)
         working-directory: ./horosa-skill
+        shell: bash
         run: |
+          set -euo pipefail
+          CORE_JS="dist/runtime/${{ needs.resolve.outputs.core_js }}"
+          CORE_JS_ARGS=()
+          if [ -f "${CORE_JS}" ]; then CORE_JS_ARGS=(--core-js-archive "${CORE_JS}"); fi
           uv run python scripts/verify_runtime_release.py \
             --darwin-archive "dist/runtime/${{ needs.resolve.outputs.seed }}" \
             --windows-archive "dist/runtime/${{ needs.resolve.outputs.windows_zip }}" \
+            "${CORE_JS_ARGS[@]}" \
             --manifest dist/runtime/runtime-manifest.json \
             --expect-platforms darwin-arm64,win32-x64
       - name: Upload the assembled release set (the matrix installs from this)
@@ -197,6 +221,7 @@ jobs:
           path: |
             horosa-skill/dist/runtime/${{ needs.resolve.outputs.seed }}
             horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
+            horosa-skill/dist/runtime/${{ needs.resolve.outputs.core_js }}
             horosa-skill/dist/runtime/runtime-manifest.json
             horosa-skill/dist/runtime/SHA256SUMS.txt
             horosa-skill/dist/runtime/horosa-skill-sbom.json
@@ -216,6 +241,7 @@ jobs:
           subject-path: |
             horosa-skill/dist/runtime/${{ needs.resolve.outputs.seed }}
             horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
+            horosa-skill/dist/runtime/${{ needs.resolve.outputs.core_js }}
             horosa-skill/dist/runtime/runtime-manifest.json
             horosa-skill/dist/runtime/SHA256SUMS.txt
 

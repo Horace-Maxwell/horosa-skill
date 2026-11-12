@@ -29,6 +29,8 @@ from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
 from horosa_skill.runtime import archives
+from horosa_skill.runtime import engine_asset
+from horosa_skill.runtime.engine_asset import EngineAssetMixin
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, holders_outside_runtime_root, trust_unknown_ports
 from horosa_skill.runtime.pidlock import (
@@ -552,7 +554,7 @@ def _reprobe_sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
-class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
+class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.runtime_root = settings.runtime_root
@@ -627,13 +629,20 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         force: bool = False,
         progress: Any | None = None,
         sha256: str | None = None,
+        engine_only: bool = False,
     ) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="runtime.install",
-            metadata={"entrypoint": "runtime.install", "archive": archive, "manifest_url": manifest_url, "force": force},
+            metadata={"entrypoint": "runtime.install", "archive": archive, "manifest_url": manifest_url, "force": force,
+                      "engine_only": engine_only},
         ) as trace:
             platform_name = platform_key or self.settings.runtime_platform or _platform_key()
             self._last_download = None
+            if engine_only:
+                # v0.50.0-dev E-02：只装平台无关的 JS 引擎资产（任何平台；`current/` 不动）。
+                result = self.install_engine_only(archive=archive, manifest_url=manifest_url, force=force, progress=progress,
+                                                  sha256=sha256, reason="requested", platform_name=platform_name)
+                return {**result, "trace_id": trace["trace_id"], "group_id": trace["group_id"]}
             # 下载 730 MB 之前就拒：装进去 Java 也起不来（只剩 chart），而修法只是换个路径。
             self._require_ascii_runtime_root()
             self._require_writable_runtime_root()
@@ -676,6 +685,20 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                         logger.log(logging.WARNING, "no %s payload; installing %s under %s", platform_name, fallback[0], fallback[1])
                         platform_name = fallback[0]
                         asset_meta = platforms[platform_name]
+                if not isinstance(asset_meta, dict) and engine_asset.manifest_has_engine_asset(manifest_data):
+                    # v0.50.0-dev E-02：本平台没有 runtime 归档（Linux / Intel Mac / 发布缺这一半），但清单带着平台无关的 JS 引擎资产：
+                    # 装它，而不是报「不支持」——此前这里一失败，这些机器上所有本地 JS 技法都是 js_engine.cli_missing。
+                    result = self.install_engine_only(
+                        manifest_url=manifest_location, force=force, progress=progress, sha256=pinned_sha256,
+                        manifest_data=manifest_data, manifest_location=manifest_location,
+                        # 支持的平台却不在清单里 = 这次发布不完整（不是「本平台没有载荷」），告警要说对原因。
+                        reason="manifest_lacks_platform" if platform_has_payload(platform_name) else "no_payload_for_platform",
+                        platform_name=platform_name, warnings=install_warnings,
+                    )
+                    advice = _platform_dead_end_advice(platform_name)
+                    return {**result, "platform_fallback": fallback_note, "supported_platforms": sorted(k for k in platforms if isinstance(k, str)),
+                            "gateway_advice": advice.get("next_action"),
+                            "trace_id": trace["trace_id"], "group_id": trace["group_id"]}
                 if not isinstance(asset_meta, dict):
                     raise RuntimeInstallError(
                         f"Runtime manifest does not include platform `{platform_name}`.",
@@ -1171,7 +1194,8 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         }
 
     def uninstall(
-        self, *, purge_data: bool = False, purge_knowledge: bool = False, purge_profiles: bool = False, yes: bool = False
+        self, *, purge_data: bool = False, purge_knowledge: bool = False, purge_profiles: bool = False, yes: bool = False,
+        engine_only: bool = False,
     ) -> dict[str, Any]:
         """卸载离线 runtime：默认 dry-run 返回将删清单；yes=True 才执行（先停服务再删）。
 
@@ -1182,8 +1206,19 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         """
         from horosa_skill.runtime import purge
 
+        if engine_only:
+            if purge_data or purge_knowledge or purge_profiles:
+                raise RuntimeInstallError(
+                    bilingual("--engine-only 只删 JS 引擎资产，不能和 --purge-* 一起用。",
+                              "--engine-only removes the JS engine asset only and cannot be combined with --purge-*."),
+                    code="runtime.uninstall_engine_only_conflict",
+                    details={"purge_data": purge_data, "purge_knowledge": purge_knowledge, "purge_profiles": purge_profiles},
+                )
+            return self.uninstall_engine_only(yes=yes)
         runtime_paths: list[Path] = []
-        for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads"):
+        # v0.50.0-dev E-02：engine-only 的 JS 引擎资产（core-js/、core-js.previous/）也是 runtime 根下本工具装的东西。
+        for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads",
+                     *engine_asset.engine_paths(self.runtime_root)):
             if path.exists():
                 runtime_paths.append(path)
         runtime_paths.extend(path for path in sorted(self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*")) if path.is_dir())

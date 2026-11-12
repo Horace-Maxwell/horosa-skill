@@ -1,0 +1,8 @@
+# Build context hygiene for the gateway image (v0.50.0-dev E-02). The image installs the engine's npm dependencies from the
+# lock inside the build (`npm ci --omit=dev`); a host node_modules (with dev deps, or a symlink) must never reach it.
+**/node_modules
+.venv
+build
+dist/runtime
+**/__pycache__
+**/.pytest_cache

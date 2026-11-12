@@ -287,12 +287,18 @@ _ENTRY_HELP = (
 )
 
 
-def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str, sha256: str | None = None) -> None:
+def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str, sha256: str | None = None,
+                 engine_only: bool = False) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
-    typer.echo("正在解析 runtime 版本与资产…（约 730MB 下载、解压后约 2GB，请留足磁盘）", err=True)
+    typer.echo(
+        "正在解析 JS 引擎资产…（约 7MB，任何平台）" if engine_only else
+        "正在解析 runtime 版本与资产…（约 730MB 下载、解压后约 2GB，请留足磁盘；没有 runtime 归档的平台只装 JS 引擎，约 7MB）",
+        err=True,
+    )
     try:
-        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer(), sha256=sha256)
+        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer(),
+                                 sha256=sha256, engine_only=engine_only)
     except RuntimeError as exc:
         _refuse(exc)
     except OSError as exc:
@@ -309,8 +315,12 @@ def install(
     manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
     force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
     sha256: str | None = typer.Option(None, "--sha256", help="Expected SHA-256 of the archive (64 hex digits). Use it with --archive for a hand-downloaded file: the digest is in the release's runtime-manifest.json. 手工下载的归档用它核对。"),
+    engine_only: bool = typer.Option(
+        False, "--engine-only",
+        help="Install only the platform-independent JS engine (horosa-core-js, ~7MB; needs Node.js >= 20.10 on PATH) under the runtime root — any OS. Platforms without a runtime archive (Linux, Intel Mac) get it automatically. 只装 JS 引擎（任何平台）。",
+    ),
 ) -> None:
-    _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256))
+    _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256), engine_only=bool(_opt(engine_only, False)))
 
 
 @app.command(help="Version-aware install alias: skips the 730MB download when already up to date. 升级（已最新则秒退）。")
@@ -327,11 +337,13 @@ def uninstall(
     purge_knowledge: bool = typer.Option(False, "--purge-knowledge", help="With --purge-data: also delete your own knowledge notes and their trash. 连自备知识库一起删（不可恢复）。"),
     purge_profiles: bool = typer.Option(False, "--purge-profiles", help="With --purge-data: also delete your saved birth profiles (horosa_profile). 连命主档案一起删（不可恢复）。"),
     yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
+    engine_only: bool = typer.Option(False, "--engine-only", help="Remove only the standalone JS engine asset (`install --engine-only`); the offline runtime and your data stay. 只删 JS 引擎资产。"),
 ) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     try:
-        result = manager.uninstall(purge_data=purge_data, purge_knowledge=purge_knowledge, purge_profiles=purge_profiles, yes=yes)
+        result = manager.uninstall(purge_data=purge_data, purge_knowledge=purge_knowledge, purge_profiles=purge_profiles, yes=yes,
+                                   engine_only=bool(_opt(engine_only, False)))
     except RuntimeError as exc:
         _refuse(exc)
     _print_json(result)

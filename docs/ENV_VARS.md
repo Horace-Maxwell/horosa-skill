@@ -70,7 +70,7 @@ ignored (`HOROSA_STRICT_CONFIG=1` makes it an error). A value that cannot be par
 | Variable | What it does |
 | --- | --- |
 | `HOROSA_CDS_TRAIN_PORT` | Port of the one-off AppCDS training JVM on first start (upstream hard-codes 39997); change it if that port is taken. |
-| `HOROSA_CORE_JS_ROOT` | A horosa-core-js directory to use instead of the runtime's copy (needed for BaZi / Ziwei / Qimen … without the offline runtime). |
+| `HOROSA_CORE_JS_ROOT` | A horosa-core-js directory to use before the runtime's copy and the `install --engine-only` asset (the Docker image sets it). |
 | `HOROSA_JEV` | Optional TypeSafe Jev decision layer: `off` (default), `shadow` or `enforce`. |
 | `HOROSA_JEV_API_KEY` | API key for the decision layer. Never printed. |
 | `HOROSA_JEV_BASE_URL` | Decision-layer API base URL. |

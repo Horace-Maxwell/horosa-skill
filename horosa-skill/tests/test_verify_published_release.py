@@ -30,11 +30,21 @@ def _complete() -> tuple[dict, str, dict]:
         }
         sums.append(f"{sha}  {asset}")
         digests[asset] = sha
-    return {"version": VERSION, "platforms": platforms}, "\n".join(sums) + "\n", digests
+    manifest = {"version": VERSION, "platforms": platforms}
+    # v0.50.0-dev E-02: from core_js.since on a complete release also carries the JS engine asset (its checks:
+    # tests/test_core_js_release_wiring.py).
+    spec = CONTRACT["core_js"]
+    asset = spec["asset"].format(version=VERSION)
+    sha = "ee" * 32
+    manifest["core_js"] = {"url": f"https://github.com/o/r/releases/download/{TAG}/{asset}", "sha256": sha, "archive_type": "tar.gz",
+                           "size": 77, "node_floor": spec["node_floor"], "version": VERSION, "root": spec["root"]}
+    sums.append(f"{sha}  {asset}")
+    digests[asset] = sha
+    return manifest, "\n".join(sums) + "\n", digests
 
 
 def _probe_ok(manifest: dict):
-    sizes = {e["url"]: e["size"] for e in manifest["platforms"].values()}
+    sizes = {e["url"]: e["size"] for e in [*manifest["platforms"].values(), manifest.get("core_js") or {"url": None, "size": 0}]}
     return lambda url: (200, str(sizes[url]))
 
 

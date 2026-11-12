@@ -119,6 +119,57 @@ def manifest_problems(
                 errors.append(f"{key} archive url is not reachable ({exc}): {url}")
         if asset not in sums:
             errors.append(f"SHA256SUMS.txt does not list {asset}")
+    errors.extend(core_js_problems(tag, manifest, contract, sums, digests, probe))
+    return errors
+
+
+def core_js_problems(
+    tag: str,
+    manifest: dict,
+    contract: dict,
+    sums: str,
+    digests: dict[str, str],
+    probe: Callable[[str], tuple[int, str | None]] = head,
+) -> list[str]:
+    """The JS engine asset (v0.50.0-dev, E-02): Linux / Intel Mac / Docker / pip users get the engine only from it."""
+    spec = contract.get("core_js") or {}
+    version = tag.lstrip("v")
+    if not spec or version_tuple(spec["since"]) > version_tuple(version):
+        return []
+    key = spec.get("manifest_key") or "core_js"
+    asset = spec["asset"].format(version=version)
+    entry = manifest.get(key)
+    if not isinstance(entry, dict):
+        return [f"manifest has no `{key}` entry: Linux / Intel Mac installs cannot get the JS engine ({asset})"]
+    errors: list[str] = []
+    for field in ("url", "sha256", "archive_type", "node_floor"):
+        val = entry.get(field)
+        if not isinstance(val, str) or not val.strip():
+            errors.append(f"{key}.{field} is missing or empty")
+    if entry.get("node_floor") and entry.get("node_floor") != spec.get("node_floor"):
+        errors.append(f"{key}.node_floor is {entry.get('node_floor')!r}, contract says {spec.get('node_floor')!r}")
+    url = str(entry.get("url") or "")
+    sha = str(entry.get("sha256") or "").lower()
+    if url:
+        pinned = re.search(r"/releases/download/(v[^/]+)/", url)
+        if not url.endswith("/" + asset) or (pinned and pinned.group(1) != tag):
+            errors.append(f"{key} url must be this tag's {asset} (pin-forward otherwise): {url}")
+        try:
+            status, length = probe(url)
+            if status != 200:
+                errors.append(f"{key} url returned HTTP {status}: {url}")
+            size = entry.get("size")
+            if isinstance(size, int) and length and int(length) != size:
+                errors.append(f"{key} manifest size {size} != Content-Length {length} for {url}")
+        except Exception as exc:  # noqa: BLE001 - any failure means the asset is not downloadable
+            errors.append(f"{key} url is not reachable ({exc}): {url}")
+    listed = {parts[1].lstrip("*"): parts[0].lower() for parts in (line.split() for line in sums.splitlines()) if len(parts) == 2}
+    if asset not in listed:
+        errors.append(f"SHA256SUMS.txt does not list {asset}")
+    elif sha and listed[asset] != sha:
+        errors.append(f"{key}.sha256 {sha[:12]}… != SHA256SUMS.txt {listed[asset][:12]}… for {asset}")
+    if sha and asset in digests and digests[asset].lower() != sha:
+        errors.append(f"{key}.sha256 {sha[:12]}… != the uploaded asset's digest {digests[asset][:12]}…")
     return errors
 
 
@@ -139,7 +190,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"::error::  - {e}")
         return 1
     expected = expected_platforms(contract, args.tag.lstrip("v"))
-    print(f"OK: latest release {args.tag} carries every contracted platform {expected}, archives reachable, sizes/tags/checksums consistent.")
+    spec = contract.get("core_js") or {}
+    core = " + the JS engine asset" if spec and version_tuple(spec["since"]) <= version_tuple(args.tag.lstrip("v")) else ""
+    print(f"OK: latest release {args.tag} carries every contracted platform {expected}{core}, archives reachable, sizes/tags/checksums consistent.")
     return 0
 
 
