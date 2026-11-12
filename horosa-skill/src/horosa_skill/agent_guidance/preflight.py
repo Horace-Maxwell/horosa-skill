@@ -56,8 +56,8 @@ def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], 
         ]
     if facts:
         lines += [
-            "这些是只有用户知道的事实，确认默认设置代替不了它们：",
-            "These are facts only the user knows; accepting defaults cannot stand in for them:",
+            f"{label}还缺这些只有用户知道的信息（确认默认设置代替不了它们）：",
+            f"{label} still needs these facts only the user knows (accepting defaults cannot stand in for them):",
         ]
     for index, item in enumerate([*facts, *settings][:8], start=1):
         question = str(item.get("question") or item.get("field") or "请补充这个参数。")
@@ -276,6 +276,7 @@ def _validation_questions(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
         out.append({
             "field": field,
             "question": bilingual(f"`{field}` 缺失或不合法（{problem}）：请提供 / 改正。", f"`{field}` is missing or invalid ({problem}): please provide / fix it."),
+            "fact": True,  # 缺的是数据本身：确认标记补不了它
         })
     return out[:8]
 

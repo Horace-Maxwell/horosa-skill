@@ -98,8 +98,14 @@ def _present(value: Any) -> bool:
 
 
 def _date_parts(value: Any) -> tuple[int, int, int] | None:
-    match = re.match(r"\s*(\d{4})-(\d{1,2})-(\d{1,2})", str(value or ""))
+    """「YYYY-MM-DD」（年可带负号、可超过四位：dateStrSafe.leadingYearOf 口径）→ (年, 月, 日)。"""
+    match = re.match(r"\s*(-?\d{4,})[-/](\d{1,2})[-/](\d{1,2})", str(value or ""))
     return (int(match.group(1)), int(match.group(2)), int(match.group(3))) if match else None
+
+
+def _fmt_date(year: int, month: int, day: int) -> str:
+    sign = "-" if year < 0 else ""
+    return f"{sign}{abs(year):04d}-{month:02d}-{day:02d}"
 
 
 def _shift_day(date_text: str, days: int) -> str | None:
@@ -241,8 +247,8 @@ def _target_for(tool: str, inputs: PlanInputs) -> tuple[dict[str, Any], dict[str
     if explicit:
         date, year, source = explicit.get("date"), explicit.get("year"), explicit["source"]
     elif _date_parts(inputs.context.get("date")):
-        date = str(inputs.context["date"])[:10]
-        year = int(date[:4])
+        year, month, day = _date_parts(inputs.context["date"])
+        date = _fmt_date(year, month, day)
         time_text = inputs.context.get("time")
         source = "context"
     if year is None:
@@ -259,7 +265,7 @@ def _target_for(tool: str, inputs: PlanInputs) -> tuple[dict[str, Any], dict[str
         month, day = birth_parts[1], birth_parts[2]
         if month == 2 and day == 29:
             day = 28
-        return f"{target_year:04d}-{month:02d}-{day:02d}"
+        return _fmt_date(target_year, month, day)
 
     note = None
     if date is None:
@@ -267,7 +273,7 @@ def _target_for(tool: str, inputs: PlanInputs) -> tuple[dict[str, Any], dict[str
         if style in ("startYear", "timelineStartYear"):
             pass
         elif style == "startDate":
-            date = f"{year:04d}-01-01"
+            date = _fmt_date(year, 1, 1)
             note = "year → Jan 1"
         elif tool in ("lunarreturn", "liureng_runyear"):
             return {}, None, [_fact(

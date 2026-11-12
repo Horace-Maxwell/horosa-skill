@@ -33,7 +33,7 @@ def _validated(model: Any, payload: dict[str, Any]) -> Any | None:
             return model.model_validate(normalize_request_payload(payload))
         except ValidationError:
             return None
-    except Exception:  # noqa: BLE001 - 闸门判定不许因为奇形载荷崩；交给校验去报
+    except (TypeError, ValueError):  # 奇形载荷：交给执行时的校验逐字段报
         return None
 
 

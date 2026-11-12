@@ -99,11 +99,11 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 - 技法名两种写法都收（`chart` / `horosa_astro_chart`）：`engine/registry.resolve_tool_name` 是唯一解析点，CLI `tool run`、
   `horosa_tool_run`、`report_from_tool`、hecan `tools`、澄清闸、input contract 全走它；**闸门必须先解析再判**（闸门只拦已登记的名字，
   只在执行层认 MCP 名就等于换个写法绕过闸门）。dispatch / hecan 收顶层平铺的出生信息（`DispatchInput._lift_flat_birth`）。
-- **闸门逐题判定（v0.50）**：每个问题由 `agent_guidance/questions.py` 解析成「哪些键回答它（伪名展开、逐技法覆盖）+ 谓词 +
+- **闸门逐题判定（v0.50.0）**：每个问题由 `agent_guidance/questions.py` 解析成「哪些键回答它（伪名展开、逐技法覆盖）+ 谓词 +
   是否事实」。未确认：只拦开着的问题，全答了就放行（`mode: nothing_to_confirm`）；确认 / 接受默认只回答**设置**，回答不了
   **事实**（结果依赖的性别、起课时刻、第二个人、目标年、卦名）——事实缺就拦并逐条点名。新问题必须有英文
   （`data/gate_questions_en.json`）且回答键是该技法字段（`tests/test_gate_questions.py`）；有几个合法取值的设置仍须确认或明确接受默认。
-- **dispatch / hecan 载荷按时间角色规划（v0.50）**：新技法必须在 `engine/time_roles.py` 登记角色；起课类只读 `context`，
+- **dispatch / hecan 载荷按时间角色规划（v0.50.0）**：新技法必须在 `engine/time_roles.py` 登记角色；起课类只读 `context`，
   出生数据永不顶替、服务端不拿自己的钟当用户的此刻；路由先归一（`normalize_query`）再匹配，路由表只写归一形态；没点名技法
   按意图类分流（`engine/intents.py`），缺省选中的技法必须在 warnings 披露，出生数据不参与选技法。语料
   `contracts/dispatch_intent_corpus.json` 全部必过。闸门先路由再取选中技法问题并集（`agent_guidance/dispatch_gate.py`）。
