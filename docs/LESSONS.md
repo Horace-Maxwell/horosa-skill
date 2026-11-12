@@ -429,6 +429,9 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   7. tools/list 预算：入参批给每个收地点的技法广告 `place`、surface 批给全部字段写说明，合起来 263,498 B 撞 256 KiB 硬顶；而量尺用
      `model_dump(by_alias=True)` 把每个工具没设的 `_meta` / `icons` / `outputSchema` / `annotations.title` 的 null 也算进去——SDK 写线上
      用 `exclude_unset=True`（`mcp/server/stdio.py`），实测 stdio 一次 tools/list 的 tools 数组 252,621 B。
+  8. 第二阶段西占批给卜卦 / 择日的判读层 `options` 加了值域检查（`shared/specOptions.js`），只在离线门禁里验过：1 / 0 两档的 `tradition`
+     按字符串比，`true` ≠ `'1'` 被拒，卜卦样例与 live 用例全红；另有两条 live 用例仍钉着「认不出的问类 / 用事静默按缺省」——批次只跑离线门禁，
+     live 才看得见。修：1 / 0 两档的 select 认 JSON 布尔（selfcheck 守卫，去掉即红）；两条用例改成断言拒绝（不碰引擎，转为离线用例）。
 - **根因**：批次按文件分，事实却跨文件：同一个判断（性别名单）、同一个契约（错误码 / 详情键）、同一个载荷（闸门与执行）各批各写一份，
   只有合在一起跑才看得见；预算守卫量的不是线上真发的东西。
 - **修**（全在集成分支的合并提交里）：`surfaces/mcp_requests.gate_view_arguments`（闸门看同一次归一化之后的载荷）；`service/api/tools.py`

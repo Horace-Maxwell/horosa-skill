@@ -6,7 +6,11 @@
 export function checkSpecValue(spec, value, legacy = []) {
   if (value === '' || value === null || value === undefined || legacy.indexOf(value) >= 0) return { ok: true, value };
   if (spec && spec.type === 'select' && Array.isArray(spec.options) && spec.options.length) {
-    const hit = spec.options.find((o) => o.value === value || `${o.value}` === `${value}`);
+    // 档值正好是 1 / 0 的开关式 select（如卜卦 tradition）：JSON 布尔照读（true → 1、false → 0）。合并深审时 live 抓到：
+    // 样例与客户端都写 `tradition: true`，按字符串比 'true' ≠ '1' 被拒。
+    const binary = spec.options.length === 2 && spec.options.every((o) => o.value === 0 || o.value === 1);
+    const probe = binary && typeof value === 'boolean' ? (value ? 1 : 0) : value;
+    const hit = spec.options.find((o) => o.value === probe || `${o.value}` === `${probe}`);
     return hit ? { ok: true, value: hit.value } : { ok: false, allowed: spec.options.map((o) => o.value) };
   }
   if (spec && spec.type === 'switch') {

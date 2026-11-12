@@ -1621,6 +1621,20 @@ try {
   console.error(`  FAIL zeriConditions: ${err.message}`);
 }
 
+// 判读层覆写值的值域检查（shared/specOptions.js）：1 / 0 两档的 select 认 JSON 布尔（卜卦 tradition: true），表外值仍拒。
+try {
+  const { checkSpecValue } = await import('../src/shared/specOptions.js');
+  const binary = { type: 'select', options: [{ value: 1 }, { value: 0 }] };
+  assert(checkSpecValue(binary, true).ok && checkSpecValue(binary, true).value === 1, 'true → 1');
+  assert(checkSpecValue(binary, false).value === 0, 'false → 0');
+  assert(!checkSpecValue(binary, 'bogus').ok, 'bogus refused');
+  assert(!checkSpecValue({ type: 'select', options: [{ value: 2 }, { value: 3 }] }, true).ok, 'bool not read for non-binary select');
+  console.log('  ok   specOptions 1/0 档认布尔、表外值拒');
+} catch (err) {
+  failures += 1;
+  console.error(`  FAIL specOptions: ${err.message}`);
+}
+
 // 🔴 收尾前再等一次：中途那句 `await Promise.all(pending)` 之后登记的 async check，其失败会在「all passed」打印之后才到，
 // 退出码照样 0（v0.50.0-dev 加 qimenzeri 金标时撞上：变异体打印了 FAIL，进程却以 0 退出）。
 await Promise.all(pending);

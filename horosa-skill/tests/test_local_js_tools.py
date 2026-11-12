@@ -19,6 +19,7 @@ import pytest
 
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient
+from horosa_skill.errors import ToolValidationError
 from horosa_skill.exports.registry import AI_EXPORT_SETTINGS_VERSION
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
@@ -1447,18 +1448,17 @@ def test_horary_runs_via_chart_service(tmp_path) -> None:
     _assert_clean_export(result)
 
 
-@requires_chart
-def test_horary_unknown_category_falls_back_to_general(tmp_path) -> None:
-    # An unrecognized category must degrade to 'general', never crash the engine.
+def test_horary_unknown_category_is_refused_with_the_choices(tmp_path) -> None:
+    # v0.50.0（深审西占批）：认不出的问类不再静默按 general 起卦（旧测试钉的正是那个缺陷），而是拒绝并列出可选值；不碰引擎。
     service = make_service(tmp_path)
-    result = service.run_tool(
-        "horary",
-        {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "category": "no_such_category"},
-        save_result=False,
-    )
-    assert result.ok is True, result.error
-    assert result.data["category"] == "general"
-    assert "[起卦信息]" in result.data["snapshot_text"]
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool(
+            "horary",
+            {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "category": "no_such_category"},
+            save_result=False,
+        )
+    assert caught.value.code == "tool.invalid_option"
+    assert "general" in repr(caught.value.details)
 
 
 @requires_chart
@@ -1486,18 +1486,17 @@ def test_election_runs_via_chart_service(tmp_path) -> None:
     _assert_clean_export(result)
 
 
-@requires_chart
-def test_election_unknown_topic_falls_back_to_marriage(tmp_path) -> None:
-    # An unrecognized topicId must degrade to 'marriage', never crash the engine.
+def test_election_unknown_topic_is_refused_with_the_choices(tmp_path) -> None:
+    # v0.50.0（深审西占批）：认不出的用事不再静默按 marriage 择日（旧测试钉的正是那个缺陷），而是拒绝并列出可选值；不碰引擎。
     service = make_service(tmp_path)
-    result = service.run_tool(
-        "election",
-        {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "topicId": "no_such_topic"},
-        save_result=False,
-    )
-    assert result.ok is True, result.error
-    assert result.data["topicId"] == "marriage"
-    assert "[起盘信息]" in result.data["snapshot_text"]
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool(
+            "election",
+            {"date": "2026-06-02", "time": "14:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "hsys": 0, "tradition": 1, "topicId": "no_such_topic"},
+            save_result=False,
+        )
+    assert caught.value.code == "tool.invalid_option"
+    assert "marriage" in repr(caught.value.details)
 
 
 # All 14 神数: (first section, a reliably-emitted later section). The 5 standalone work against any
