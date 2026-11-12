@@ -125,7 +125,12 @@ def _client_config_locations(
     codex_home = Path(env["CODEX_HOME"]) if env.get("CODEX_HOME") else home / ".codex"
     cline_tail = Path("globalStorage") / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"
     table: dict[str, list[Path]] = {
-        "claude-code": [home / ".claude.json", project / ".mcp.json"],
+        # 用户级状态文件跟着 CLAUDE_CONFIG_DIR 走（Claude Code 2.1.304 实测：设了它，`claude mcp add --scope user` 写的是
+        # `$CLAUDE_CONFIG_DIR/.claude.json`）；不认它的话 setup 注册成功、紧接着的回读却说「没配」。
+        "claude-code": [
+            (Path(env["CLAUDE_CONFIG_DIR"]).expanduser() if (env.get("CLAUDE_CONFIG_DIR") or "").strip() else home) / ".claude.json",
+            project / ".mcp.json",
+        ],
         "claude-desktop": [claude_desktop],
         "cursor": [home / ".cursor" / "mcp.json", project / ".cursor" / "mcp.json"],
         "vscode": [code_user / "mcp.json", project / ".vscode" / "mcp.json"],

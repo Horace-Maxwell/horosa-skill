@@ -12,6 +12,7 @@ from typing import Any
 import typer
 
 from horosa_skill import clients_extra
+from horosa_skill.client_config import claude_cli, env_carry
 from horosa_skill.client_config.audit import (
     _client_check_report,
     _normalize_client_entry,
@@ -19,6 +20,7 @@ from horosa_skill.client_config.audit import (
 from horosa_skill.client_config.locations import (
     _CLIENT_NAMES,
     _CLIENT_RESTART_HINTS,
+    _client_config_locations,
     _codex_env_roots,
     _preferred_config_path,
     _project_root,
@@ -76,7 +78,11 @@ _CODEX_PASSTHROUGH_ENV = (
 
 
 def _client_probe_env(client_key: str, extra_env: dict[str, str]) -> dict[str, str]:
-    """stdio 探针用的环境：Codex 形状 = 最小系统变量 ∪ 配置里的 env 表；其余客户端继承整个环境。"""
+    """stdio 探针用的环境 = 客户端真会给 server 的那份：系统变量 ∪ 配置条目里写着的 env，**没有** shell 里的 `HOROSA_*`。
+
+    🔴 旧写法让非 Codex 客户端「继承整个环境」：shell 里设了 HOROSA_RUNTIME_ROOT 而条目里没写，探针照样绿，
+    客户端（GUI 不读 shell 配置）起的 server 却用另一个 runtime 根 / 另一份记忆库。只因 shell 才能跑的配置必须在这里红。
+    """
     if client_key == "codex":
         base = {key: os.environ[key] for key in _CODEX_PASSTHROUGH_ENV if key in os.environ}
         return {**base, **extra_env}
@@ -84,26 +90,65 @@ def _client_probe_env(client_key: str, extra_env: dict[str, str]) -> dict[str, s
     narrowed = clients_extra.probe_env(client_key, extra_env)
     if narrowed is not None:
         return narrowed
-    return {**os.environ, **extra_env}
+    return {**env_carry.minimal_client_env(), **extra_env}
+
+
+def _probe_env_shape(client_key: str) -> str:
+    """探针环境的形状名（进 `steps.stdio_probe.env_shape`）：`codex` / `passthrough`（只转发点名的变量）/ `minimal`。"""
+    if client_key == "codex":
+        return "codex"
+    return "passthrough" if clients_extra.probe_env(client_key, {}) is not None else "minimal"
+
+
+def _probe_runtime_differences(probe: dict[str, Any], settings: Settings) -> list[dict[str, str]]:
+    """探针读到的 `horosa://runtime/status` 与宿主 settings 逐项比：runtime 根、数据目录、两个引擎地址。
+
+    每一项都决定「客户端起的 server 用哪套引擎、读写哪份记忆库」；任何一项对不上 = 终端里的环境变量没有传到客户端。
+    状态里没有的项不比（老 server 只报 runtime_root，更老的没有这个资源）。
+    """
+    status = probe.get("runtime_status")
+    if not isinstance(status, dict):
+        return []
+
+    def same_path(theirs: str, ours: Path) -> tuple[str, str] | None:
+        try:
+            left, right = Path(theirs).expanduser().resolve(), ours.expanduser().resolve()
+        except OSError:
+            return None
+        return None if left == right else (str(left), str(right))
+
+    def same_url(theirs: str, ours: str) -> tuple[str, str] | None:
+        left, right = theirs.strip().rstrip("/"), str(ours).strip().rstrip("/")
+        return None if left == right else (left, right)
+
+    checks = (
+        ("runtime_root", "HOROSA_RUNTIME_ROOT", "runtime 根", lambda v: same_path(v, settings.runtime_root)),
+        ("data_dir", "HOROSA_SKILL_DATA_DIR", "数据目录", lambda v: same_path(v, settings.data_dir)),
+        ("server_root", "HOROSA_SERVER_ROOT", "后端地址", lambda v: same_url(v, settings.server_root)),
+        ("chart_server_root", "HOROSA_CHART_SERVER_ROOT", "星盘引擎地址", lambda v: same_url(v, settings.chart_server_root)),
+    )
+    differences: list[dict[str, str]] = []
+    for field, variable, label, compare in checks:
+        value = status.get(field)
+        if not value:
+            continue
+        differing = compare(str(value))
+        if differing:
+            differences.append({"field": field, "env": variable, "label": label, "client": differing[0], "host": differing[1]})
+    return differences
 
 
 def _probe_runtime_mismatch(probe: dict[str, Any], settings: Settings) -> str | None:
-    """探针读到的 `horosa://runtime/status` 与宿主 settings 对不上 → 客户端起的 server 用的是另一套目录。"""
-    status = probe.get("runtime_status")
-    if not isinstance(status, dict) or not status.get("runtime_root"):
+    """上面那份差异的一句话版本（没有差异 → None）。"""
+    differences = _probe_runtime_differences(probe, settings)
+    if not differences:
         return None
-    try:
-        theirs = Path(str(status["runtime_root"])).expanduser().resolve()
-        ours = settings.runtime_root.expanduser().resolve()
-    except OSError:
-        return None
-    if theirs != ours:
-        return (
-            f"客户端将要起的 server 算出的 runtime 根是 {theirs}，而本机（终端）用的是 {ours}：环境变量没有传到客户端"
-            "（Codex 不转发 shell 环境；GUI 客户端不读 shell 配置）。请把 HOROSA_RUNTIME_ROOT / HOROSA_SKILL_DATA_DIR"
-            " 写进该客户端配置的 env 表，或统一用默认目录。"
-        )
-    return None
+    listed = "；".join(f"{item['label']}是 {item['client']}，而本机（终端）用的是 {item['host']}" for item in differences)
+    return (
+        f"客户端将要起的 server 算出的{listed}：环境变量没有传到客户端"
+        "（Codex 不转发 shell 环境；GUI 客户端不读 shell 配置）。请把 "
+        f"{' / '.join(item['env'] for item in differences)} 写进该客户端配置的 env 表，或统一用默认值。"
+    )
 
 
 def _configured_client_env(client_key: str, payload: dict[str, Any], surface_env: dict[str, str], *, root_key: str | None, server_name: str) -> dict[str, str]:
@@ -313,8 +358,8 @@ def _knowledge_index_command(stdio_command: list[str]) -> list[str]:
     return [*stdio_command[:stdio_command.index("serve")], "knowledge", "index", "--vectors"]
 
 
-def _claude_mcp_add(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """执行 `claude mcp add …`（单独成函数：测试用替身，不真调 claude）。"""
+def _run_claude(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """执行一条 `claude mcp …`（add / remove / add-json；单独成函数：测试用替身，不真调 claude）。"""
     return subprocess.run(
         command, capture_output=True, text=True, timeout=60, check=False, encoding="utf-8", errors="replace"
     )
@@ -432,7 +477,7 @@ def _run_setup(
     skill_dir: Path | None = None,
     vectors: bool | None = None,
 ) -> dict[str, Any]:
-    from horosa_skill.runtime.manager import host_platform_key
+    from horosa_skill.runtime.manager import _platform_dead_end_advice, host_platform_key, platform_has_payload
 
     client_key = client.strip().lower()
     if client_key not in _CLIENT_NAMES:
@@ -489,12 +534,36 @@ def _run_setup(
             )
 
     # ---- 2 install
+    platform_key = settings.runtime_platform or host_platform_key()
+    # 🔴 E-12：没有离线载荷可装的两种情形不是「安装失败」，是「这台机器不装 runtime」：
+    #   · 外部引擎模式（HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指到别处）——装了也不会用；
+    #   · 本平台没有载荷（Linux / Intel Mac）——旧实现在这里死掉，retry_command 原样重复同一次失败。
+    # 跳过安装、照写配置（两个地址由 env_carry 写进条目），doctor 降为提示；出路写进 next_steps。
+    # 接缝：平台判定用 runtime.manager.platform_has_payload；清单里缺本平台（发布不全）时 install 抛的
+    # runtime.install_missing_platform 也按同一条路走。runtime 侧若改成返回「无载荷」结果，只需改这里的两个判断。
+    no_runtime_reason: str | None = None
     if dry_run or skip_install:
         steps["install"] = {
             "ok": True, "skipped": True, "reason": "dry-run" if dry_run else "--skip-install",
             "would_install_from": archive or manifest_location,
-            "platform": settings.runtime_platform or host_platform_key(), "runtime_root": str(settings.runtime_root),
+            "platform": platform_key, "runtime_root": str(settings.runtime_root),
         }
+    elif not archive and manager.runtime_mode() == "external":
+        no_runtime_reason = "external_engine"
+        steps["install"] = {
+            "ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
+            "server_root": settings.server_root, "chart_server_root": settings.chart_server_root,
+            "explanation": bilingual(
+                "引擎地址指向本机 runtime 之外（外部引擎 / 网关模式）：本机不装也不起离线 runtime，工具调用直连这两个地址。",
+                "The engine addresses point outside the local runtime (external engine / gateway mode): nothing is installed "
+                "or started here; tool calls go straight to those addresses.",
+            ),
+        }
+    elif not archive and not platform_has_payload(platform_key):
+        no_runtime_reason = "no_payload_for_platform"
+        advice = _platform_dead_end_advice(platform_key)
+        steps["install"] = {"ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
+                            "why": advice.get("reason"), "next_action": advice.get("next_action")}
     else:
         announce("install", "安装 / 校验离线 runtime（已是最新版则秒退；约 730MB 下载、解压后约 2GB）…")
         try:
@@ -502,15 +571,24 @@ def _run_setup(
                 lambda: manager.install(archive=archive, manifest_url=manifest_url, progress=_install_progress_printer())
             )
         except RuntimeError as exc:
-            fail("install", exc.code, str(exc), exc.details)
+            if exc.code != "runtime.install_missing_platform":
+                fail("install", exc.code, str(exc), exc.details)
+            # 清单里没有本平台：与「本平台没有载荷」同一条路（跳过、照写配置），不让重试命令重复同一次失败。
+            no_runtime_reason = "no_payload_for_platform"
+            result, seconds = None, 0.0
+            details = exc.details or {}
+            steps["install"] = {"ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
+                                "manifest_url": manifest_location, "supported_platforms": details.get("supported_platforms"),
+                                "why": details.get("reason") or str(exc), "next_action": details.get("next_action")}
         except OSError as exc:
             fail("install", "runtime.install_io_error", str(exc), {})
-        steps["install"] = {
-            "ok": True, "seconds": seconds, "changed": result.get("changed"),
-            "skipped_download": bool(result.get("skipped_download")), "platform": result.get("platform"),
-            "platform_fallback": result.get("platform_fallback"), "warnings": result.get("warnings") or [],
-            "version": (result.get("manifest") or {}).get("version"), "runtime_root": result.get("runtime_root"),
-        }
+        if result is not None:
+            steps["install"] = {
+                "ok": True, "seconds": seconds, "changed": result.get("changed"),
+                "skipped_download": bool(result.get("skipped_download")), "platform": result.get("platform"),
+                "platform_fallback": result.get("platform_fallback"), "warnings": result.get("warnings") or [],
+                "version": (result.get("manifest") or {}).get("version"), "runtime_root": result.get("runtime_root"),
+            }
 
     # ---- 3 vectors / 4 config：先生成配置（不落盘），向量验证过了才写——写上 `[vectors]` 而依赖装不上，server 就起不来了。
     announce("config", f"生成 {client_key} 配置（launcher={launcher_key}）…")
@@ -576,10 +654,9 @@ def _run_setup(
             target = project_mcp
         else:
             # 用户级注册走官方命令（可 `claude mcp remove` 回退），不去手改 ~/.claude.json 这份状态文件。
+            # 命令怎么拼（名字必须在 `-e` 前）、已有条目怎么办（读 → 比 → 换）都在 client_config/claude_cli.py。
             mode = "claude-mcp-add"
-            claude_bin = shutil.which("claude")
-            env_flags = [item for key, value in surface_env.items() for item in ("-e", f"{key}={value}")]
-            add_command = [claude_bin or "claude", "mcp", "add", "--scope", "user", *env_flags, server_name, "--", *stdio_command]
+            add_command = claude_cli.add_command("claude", server_name, stdio_command, surface_env)
     elif target is None and payload.get("config_mode") == "printed":
         # v0.41.0：没有文档化用户级配置文件的客户端（TRAE）——打印一键导入链接与可粘贴 JSON，不猜路径写文件。
         mode = "printed"
@@ -592,8 +669,10 @@ def _run_setup(
     }
     if payload.get("warnings"):
         config_step["warnings"] = payload["warnings"]
+    # 终端里的 HOROSA_*：哪些写进了条目的 env（carried_env）、哪些会改行为却没写（shell_only_env）。只有名字。
+    config_step.update({key: payload[key] for key in ("carried_env", "shell_only_env") if payload.get(key)})
     if add_command is not None:
-        config_step["command"] = _format_cli_command(add_command)
+        config_step["command"] = claude_cli.shell_text(add_command)
     if mode == "printed" and add_command is None:
         config_step.update({key: payload[key] for key in ("deep_link", "deep_link_cn", "paste_json", "note") if key in payload})
     if dry_run or not write:
@@ -609,20 +688,27 @@ def _run_setup(
                 "note": "`claude` 不在 PATH 上：把 command 复制到装了 Claude Code 的终端里执行即可（或加 --scope project 写项目 .mcp.json）。",
             })
         else:
-            try:
-                completed, seconds = _timed_call(lambda: _claude_mcp_add(add_command))
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                fail("config", "setup.claude_mcp_add_failed", f"`claude mcp add` 没跑起来：{exc}", {"command": config_step["command"]})
-            state["config_untouched"] = False
-            rollback = f"claude mcp remove --scope user {server_name}"
-            if completed.returncode != 0:
+            # 🔴 `claude mcp add` 只会新增：同名条目在时它（和 add-json）以 "already exists" 退出码 1 结束。
+            # 重跑 setup 因此必须先读已有条目：一致 → 不动；不同 → remove + add（add 失败把旧条目装回去）。
+            outcome, seconds = _timed_call(lambda: claude_cli.register_user_server(
+                claude_bin=shutil.which("claude") or "claude", server_name=server_name, stdio_command=stdio_command,
+                env=surface_env, run=_run_claude, config_path=_client_config_locations("claude-code")[0],
+            ))
+            state["config_untouched"] = not outcome["touched"]
+            if not outcome["ok"]:
+                restored = outcome.get("restored_previous")
                 fail(
-                    "config", "setup.claude_mcp_add_failed", "`claude mcp add` 退出码非 0。",
-                    {"command": config_step["command"], "returncode": completed.returncode,
-                     "stdout": (completed.stdout or "")[-500:], "stderr": (completed.stderr or "")[-500:], "rollback": rollback},
+                    "config", "setup.claude_mcp_add_failed",
+                    f"`{outcome['failed_command']}` 没成功（退出码 {outcome['returncode']}）。"
+                    + ("原来的注册已装回去，没有变化。" if restored
+                       else "原来的注册已被移除且没能装回去：执行 details.restore_command 可恢复。" if restored is False
+                       else ""),
+                    {key: outcome[key] for key in ("command", "commands", "failed_command", "returncode", "stdout", "stderr",
+                                                   "restored_previous", "restore_command", "rollback_redacted") if key in outcome},
                 )
-            config_step.update({"ok": True, "executed": True, "seconds": seconds, "rollback": rollback,
-                                "stdout": (completed.stdout or "").strip()[-500:]})
+            config_step.update({"ok": True, "seconds": seconds, **{
+                key: outcome[key] for key in ("status", "executed", "commands", "changes", "rollback", "rollback_redacted",
+                                              "previous_entry_unreadable", "stdout") if key in outcome}})
     else:
         assert target is not None
         try:
@@ -631,7 +717,8 @@ def _run_setup(
             fail("config", "setup.config_merge_refused", str(exc), {"path": str(target)})
         state["config_untouched"] = False
         state["backup_path"] = written.get("backup")
-        config_step.update({"ok": True, "seconds": seconds, "written": written, "backup": written.get("backup")})
+        config_step.update({"ok": True, "seconds": seconds, "written": written, "changed": written.get("changed"),
+                            "backup": written.get("backup")})
     steps["config"] = config_step
 
     # ---- 4 skill
@@ -649,7 +736,8 @@ def _run_setup(
         and report.get("platform_supported") is not False
         and not (report.get("port_conflicts") or [])
     )
-    advisory = dry_run or skip_install  # 没装就不该因为「没装」失败；结果照报
+    # 没装就不该因为「没装」失败；结果照报。这台机器本就不装 runtime（外部引擎 / 无载荷）同理。
+    advisory = dry_run or skip_install or no_runtime_reason is not None
     steps["doctor"] = {
         "ok": bool(ready or advisory), "ready": bool(ready), "advisory": advisory, "seconds": seconds,
         "status": report.get("status"), "installed": installed, "issues": issues,
@@ -691,7 +779,7 @@ def _run_setup(
         announce("stdio_probe", "用客户端将要执行的命令真起一次 MCP server（stdio，不起离线 runtime）…")
         expected = int(payload["tool_surface"]["tools"])
         probe_args = [*stdio_command[1:], "--skip-runtime-start"]
-        # 🔴 v0.38.1 C14：按**客户端的形状**起——Codex 只给最小环境（∪ 配置里的 env 表），其余客户端继承整个环境；
+        # 🔴 v0.38.1 C14：按**客户端的形状**起——系统变量 ∪ 配置里的 env 表，shell 里的 HOROSA_* 一个不带（见 _client_probe_env）；
         # cwd = 项目根（uv 形态 = Codex 的 cwd）。再读 horosa://runtime/status，抓「server 算出的 runtime 根 ≠ 终端里的」。
         probe_env = _client_probe_env(client_key, configured_env)
         probe, seconds = _timed_call(
@@ -700,12 +788,13 @@ def _run_setup(
         )
         mismatch = _probe_runtime_mismatch(probe, settings) if probe.get("ok") else None
         probe_ok = probe.get("ok") is True and probe.get("tools") == expected and mismatch is None
-        steps["stdio_probe"] = {"ok": probe_ok, "seconds": seconds, "expected_tools": expected, "env_shape": client_key if client_key == "codex" else "inherit",
+        steps["stdio_probe"] = {"ok": probe_ok, "seconds": seconds, "expected_tools": expected, "env_shape": _probe_env_shape(client_key),
                                 "cwd": probe_cwd, "command": _format_cli_command([stdio_command[0], *probe_args]), **probe}
         if mismatch:
             steps["stdio_probe"]["runtime_mismatch"] = mismatch
             fail("stdio_probe", "setup.stdio_probe_runtime_mismatch", mismatch,
-                 {**probe, "host_runtime_root": str(settings.runtime_root), "command": steps["stdio_probe"]["command"]})
+                 {**probe, "host_runtime_root": str(settings.runtime_root), "command": steps["stdio_probe"]["command"],
+                  "mismatched": _probe_runtime_differences(probe, settings)})
         if probe_ok and vectors_on and not steps["vectors"].get("skipped"):
             # 准备步骤跑在全环境里；客户端给 server 的环境可能更窄（Codex）。server 自己报 ready 才算开着。
             served = (probe.get("runtime_status") or {}).get("knowledge_vectors")
@@ -741,7 +830,28 @@ def _run_setup(
             f"向量检索已开（{steps['vectors'].get('model')}）：本次向量化 {steps['vectors'].get('embedded')} 段，之后新增 / 改动的笔记自动补上。"
             "换了说法也能搜到；关闭：重跑 setup 加 --no-vectors。"
         )
-    if issues == ["services:not_running"]:
+    if config_step.get("carried_env"):
+        next_steps.append(
+            f"终端里设着的 {'、'.join(config_step['carried_env'])} 已写进该客户端条目的 env（客户端不读你的 shell 环境）；"
+            "以后改了这些值，重跑本命令即可。"
+        )
+    if config_step.get("shell_only_env"):
+        next_steps.append(
+            f"终端里设着的 {'、'.join(config_step['shell_only_env'])} 没有写进配置：客户端起的 server 看不到它们，"
+            "要生效请自己加进条目的 env 表。"
+        )
+    if no_runtime_reason == "external_engine":
+        next_steps.append(
+            f"外部引擎模式：工具调用直连 {settings.server_root} 与 {settings.chart_server_root}（地址已写进客户端配置），"
+            "本机不装也不起离线 runtime；那两个地址上的服务要一直开着。"
+        )
+    elif no_runtime_reason == "no_payload_for_platform":
+        next_steps.append(
+            f"这台机器（{platform_key}）没有离线载荷，runtime 没装：走网关模式——在 darwin-arm64 / win32-x64 机器上跑 runtime，"
+            f"然后 `HOROSA_SERVER_ROOT=http://<那台机器>:9999 HOROSA_CHART_SERVER_ROOT=http://<那台机器>:8899 "
+            f"{_setup_command_text(client_key, launcher=launcher_key, config=config)}` 重跑本命令（两个地址会写进客户端配置）。"
+        )
+    elif issues == ["services:not_running"]:
         next_steps.append(f"离线 runtime 已装好，客户端首次调用时自动启动（冷启动 10–45 s）；想现在就起：`{prefix} runtime start`。")
     elif not installed:
         next_steps.append(f"离线 runtime 还没装：`{prefix} install`（或不带 --skip-install 重跑 setup）。")
@@ -760,11 +870,15 @@ def _run_setup(
 
     install_text = (
         "runtime 未处理（dry-run）" if dry_run else "runtime 未处理（--skip-install）" if skip_install
+        else "runtime 不在本机（外部引擎模式）" if no_runtime_reason == "external_engine"
+        else f"runtime 未安装（{platform_key} 没有离线载荷，见 next_steps）" if no_runtime_reason == "no_payload_for_platform"
         else "runtime 已是最新" if steps["install"].get("skipped_download") else "runtime 已安装"
     )
     config_text = (
         f"配置计划写到 {target}" if (dry_run or not write) and target is not None
         else f"配置已写入 {target}" if mode == "merge" and target is not None
+        else "Claude Code 用户级注册已是最新（未改动）" if mode == "claude-mcp-add" and steps["config"].get("status") == "unchanged"
+        else "已更新 Claude Code 用户级注册（remove + add）" if mode == "claude-mcp-add" and steps["config"].get("status") == "updated"
         else "已执行 claude mcp add（用户级）" if mode == "claude-mcp-add" and steps["config"].get("executed")
         else "注册命令已打印（claude 不在 PATH）" if mode == "printed" and client_key == "claude-code"
         else "导入链接 / 粘贴 JSON 已打印（该客户端没有可写的配置文件）" if mode == "printed"

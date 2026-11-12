@@ -9,6 +9,7 @@ from typing import Any
 import typer
 
 from horosa_skill import __version__, clients_extra
+from horosa_skill.client_config import env_carry
 from horosa_skill.client_config.locations import (
     _CLIENT_COMPACT_DEFAULT,
     _CLIENT_COMPACT_REASON,
@@ -254,10 +255,15 @@ def _build_client_config_payload(
     script = parse_script(output_script)
     if script is None:
         raise typer.BadParameter("`--output-script` must be `zh-Hans`, `zh-Hant` or `zh-Hant-HK`.")
-    # 输出文字与工具面走同一条 env 通道：每家客户端写 env 的方式（JSON env / TOML 表 / CLI -e）已经在下面分好了。
+    # 输出文字、工具面、以及终端里显式设着的「用哪套引擎 / 哪份数据」变量走同一条 env 通道：每家客户端写 env 的方式
+    # （JSON env / TOML 表 / CLI -e）已经在下面分好了。🔴 客户端不会把你终端里的 HOROSA_* 交给 server——不写进条目，
+    # server 就在默认目录找 runtime、连默认端口（哪些写、哪些不写、为什么：client_config/env_carry.py）。
+    carried_env = env_carry.carried_env()
+    shell_only_env = env_carry.shell_only()
     surface_env = {
         **({"HOROSA_MCP_COMPACT": "1"} if use_compact else {}),
         **({"HOROSA_OUTPUT_SCRIPT": script} if script != SIMPLIFIED else {}),
+        **carried_env,
     }
     tool_surface = {
         "mode": "compact" if use_compact else "full",
@@ -357,8 +363,13 @@ def _build_client_config_payload(
                 # 不写 `env_vars`：老版本 Codex 对未知键 deny_unknown_fields，会整块拒收这个 server。
                 + f"HOROSA_RUNTIME_ROOT = {json.dumps(str(_codex_env_roots()['HOROSA_RUNTIME_ROOT']))}\n"
                 + f"HOROSA_SKILL_DATA_DIR = {json.dumps(str(_codex_env_roots()['HOROSA_SKILL_DATA_DIR']))}\n"
+                # 终端里显式设着的其余「哪套引擎 / 哪份数据」变量（两个根上面恒写）：
+                + "".join(
+                    f"{name} = {json.dumps(value)}\n" for name, value in carried_env.items()
+                    if name not in {"HOROSA_RUNTIME_ROOT", "HOROSA_SKILL_DATA_DIR"}
+                )
                 + "# Codex 不把 shell 环境交给 server——任何 HOROSA_* 必须在这里显式声明才可见，例如：\n"
-                f"# HOROSA_MCP_COMPACT = \"1\"          # 12 门面模式（Codex 无工具搜索，{len(TOOL_DEFINITIONS)} 技法全量较重）\n"
+                f"# HOROSA_MCP_COMPACT = \"1\"          # {COMPACT_SURFACE_TOOL_COUNT} 个门面工具的精简面（Codex 无工具搜索，{len(TOOL_DEFINITIONS)} 技法全量较重）\n"
                 "# HOROSA_TOOLSETS = \"astro,cn\"      # 或按域裁剪\n"
                 )
             ),
@@ -455,6 +466,21 @@ def _build_client_config_payload(
         warnings.append(f"{key} 的配置不带 env：繁体输出请在启动 serve 的环境里设 HOROSA_OUTPUT_SCRIPT={script}。")
     if vectors and key in {"mcporter", "openclaw"}:
         warnings.append(f"{key} 的配置走源码 checkout，不带 [vectors]：在该 checkout 里跑 `uv sync --extra vectors` 后依赖才在。")
+    if carried_env and key in {"mcporter", "openclaw"}:
+        # 这两种格式的条目没有 env 字段（走 HTTP 网关 / 现有 serve）：变量只能设在启动 serve 的那个环境里。
+        warnings.append(
+            f"{key} 的配置不带 env：{'、'.join(carried_env)} 没有写进配置，请在启动 serve 的环境里设同样的值，"
+            "否则 server 用默认目录 / 默认端口。"
+        )
+    elif carried_env:
+        # 只给名字：值就在上面的条目里。
+        payload["carried_env"] = list(carried_env)
+    if shell_only_env:
+        payload["shell_only_env"] = shell_only_env
+        warnings.append(
+            f"当前终端里设着 {'、'.join(shell_only_env)}：它们会改变 server 的行为，但**没有**写进配置"
+            "（客户端起的 server 看不到）。要它生效，请自己加进该客户端条目的 env 表。"
+        )
     if warnings:
         payload["warnings"] = warnings
     return payload, stdio_command, surface_env

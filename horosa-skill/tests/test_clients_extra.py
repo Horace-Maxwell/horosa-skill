@@ -63,7 +63,10 @@ def test_opencode_command_is_one_array_with_environment(tmp_path: Path) -> None:
     _setup("opencode", config, "--no-skill")
     entry = json.loads(config.read_text(encoding="utf-8"))["mcp"]["horosa"]
     assert entry["type"] == "local" and isinstance(entry["command"], list) and "args" not in entry
-    assert entry["command"][-2:] == ["--transport", "stdio"] and entry["environment"] == {"HOROSA_MCP_COMPACT": "1"}
+    assert entry["command"][-2:] == ["--transport", "stdio"] and entry["environment"]["HOROSA_MCP_COMPACT"] == "1"
+    # 其余键是本文件夹具在「终端」里设的引擎 / 数据变量（MCP-05：它们必须进条目，OpenCode 的字段名是 environment）
+    assert {"HOROSA_RUNTIME_ROOT", "HOROSA_SKILL_DATA_DIR"} <= set(entry["environment"])
+    assert all(name.startswith("HOROSA_") for name in entry["environment"])
     assert entry["timeout"] >= 600000
 
 

@@ -116,7 +116,15 @@ def test_client_config_launcher_uvx_emits_absolute_command_when_found(monkeypatc
     assert server["args"] == ["horosa-skill", "serve", "--transport", "stdio"]
     assert "warnings" not in payload
     claude_code = _payload("--format", "claude-code", "--launcher", "uvx-git")
-    assert claude_code["command"].startswith("claude mcp add horosa -- /opt/uv/bin/uvx --from git+https://github.com/")
+    # 名字紧跟在 `add` 后面、`-e` 在名字之后（`-e` 是可变参数，排在名字前会把名字吞掉）；`--` 之后才是启动命令。
+    # 中间有没有 `-e`、有几个，取决于跑测试的终端里设着哪些引擎 / 数据变量（MCP-05），所以按结构断言。
+    import shlex
+
+    words = shlex.split(claude_code["command"])
+    assert words[:4] == ["claude", "mcp", "add", "horosa"]
+    between, launch = words[4:words.index("--")], words[words.index("--") + 1:]
+    assert between[0::2] == ["-e"] * (len(between) // 2) and all("=" in item for item in between[1::2])
+    assert launch[:2] == ["/opt/uv/bin/uvx", "--from"] and launch[2].startswith("git+https://github.com/")
     assert claude_code["mcpServers"]["horosa"]["command"] == "/opt/uv/bin/uvx"
 
 

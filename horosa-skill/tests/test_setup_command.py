@@ -9,8 +9,11 @@
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 import tomllib
@@ -19,6 +22,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from fake_claude import FakeClaude
 from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT
 from horosa_skill.surfaces import runtime_helpers as runtime_helpers
 from horosa_skill.surfaces import setup_flow as setup_flow
@@ -155,15 +159,72 @@ def test_full_offline_flow_is_idempotent(tmp_path: Path) -> None:
     assert first["steps"]["client_check"]["configured"] is True and first["steps"]["client_check"]["problems"] == 0
     written = json.loads(config.read_text(encoding="utf-8"))
     assert "stdio" in written["mcpServers"]["horosa"]["args"]
-    assert written["mcpServers"]["horosa"]["env"] == {"HOROSA_MCP_COMPACT": "1"}
+    env = written["mcpServers"]["horosa"]["env"]
+    assert env["HOROSA_MCP_COMPACT"] == "1"
+    # 本文件的夹具在「终端」里设了非默认的 runtime 根 / 数据目录 / 端口：客户端不读终端环境，所以它们必须写进条目（MCP-05）。
+    assert env["HOROSA_RUNTIME_ROOT"] == str((tmp_path / "runtime-root").resolve())
+    assert env["HOROSA_SKILL_DATA_DIR"] == str((tmp_path / "data").resolve())
+    assert (env["HOROSA_LOCAL_BACKEND_PORT"], env["HOROSA_LOCAL_CHART_PORT"]) == ("39997", "39898")
+    assert not [name for name in env if "TOKEN" in name or "KEY" in name]
+    assert set(first["steps"]["config"]["carried_env"]) == set(env) - {"HOROSA_MCP_COMPACT"}
     first_bytes = config.read_bytes()
 
     second = _stdout_json(_run(*args))
     assert second["ok"] is True
     assert second["steps"]["install"]["changed"] is False, "同一载荷第二次不该重装"
     assert config.read_bytes() == first_bytes, "第二次写出的配置必须逐字节相同"
-    assert config.with_name("mcp.json.horosa-bak").exists(), "覆盖前必须备份"
-    assert second["steps"]["config"]["backup"].endswith("mcp.json.horosa-bak")
+    # MCP-12：旧断言是「第二次也留了 mcp.json.horosa-bak」——那份「备份」是我们自己第一次写的内容，而且每跑一次就把上一份
+    # 覆盖掉：用户真正的原文件（如果有）第二次就没了。内容没变就不写、不备份，才是重跑应有的样子。
+    assert second["steps"]["config"]["changed"] is False and second["steps"]["config"]["backup"] is None
+    assert not list(tmp_path.glob("mcp.json.horosa-bak*")), "本来就没有原文件：没什么可备份的"
+
+
+def _manifest_without(tmp_path: Path, platform: str) -> str:
+    """本地清单：只有 darwin-arm64（不碰网络；`platform` 只是为了文件名好认）。"""
+    manifest = tmp_path / f"manifest-no-{platform}.json"
+    manifest.write_text(json.dumps({"version": "1.2.3", "platforms": {"darwin-arm64": {
+        "url": (tmp_path / "missing.tar.gz").resolve().as_uri(), "sha256": "0" * 64}}}), encoding="utf-8")
+    return manifest.resolve().as_uri()
+
+
+@pytest.mark.parametrize("platform", ["linux-x64", "win32-x64"])
+def test_setup_on_a_platform_without_a_payload_writes_the_config_instead_of_dying(
+    platform: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """E-12：没有离线载荷可装（Linux 根本没有 / 清单里缺本平台）不是「安装失败」。
+
+    旧实现死在 install，retry_command 原样重复同一次失败，配置一个字没写——用户连网关模式都接不上。
+    linux-x64：平台本就没有载荷，不去下载；win32-x64：平台有载荷但这份清单里没有（发布不全）。
+    """
+    monkeypatch.setenv("HOROSA_RUNTIME_PLATFORM", platform)
+    config = tmp_path / "mcp.json"
+
+    report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--manifest-url", _manifest_without(tmp_path, platform),
+                               "--no-probe-network", "--no-stdio-probe"))
+
+    install = report["steps"]["install"]
+    assert (install["skipped"], install["reason"], install["platform"]) == (True, "no_payload_for_platform", platform)
+    assert "HOROSA_SERVER_ROOT" in install["next_action"], "出路（网关模式）跟着跳过的原因一起给"
+    assert "horosa" in json.loads(config.read_text(encoding="utf-8"))["mcpServers"], "配置照写"
+    assert report["steps"]["doctor"]["advisory"] is True
+    gateway = [item for item in report["next_steps"] if "网关模式" in item]
+    assert gateway and "HOROSA_CHART_SERVER_ROOT=" in gateway[0] and "setup --client cursor" in gateway[0]
+    assert platform in report["summary"]
+
+
+def test_setup_in_external_engine_mode_skips_install_and_carries_the_addresses(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """引擎地址指到本机 runtime 之外：不装、不起；两个地址写进条目，客户端起的 server 才连得到同一处。"""
+    monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://127.0.0.1:18861")
+    monkeypatch.setenv("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:18862")
+    config = tmp_path / "mcp.json"
+
+    report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--manifest-url", _manifest_without(tmp_path, "x"),
+                               "--no-probe-network", "--no-stdio-probe"))
+
+    assert (report["steps"]["install"]["skipped"], report["steps"]["install"]["reason"]) == (True, "external_engine")
+    env = json.loads(config.read_text(encoding="utf-8"))["mcpServers"]["horosa"]["env"]
+    assert (env["HOROSA_SERVER_ROOT"], env["HOROSA_CHART_SERVER_ROOT"]) == ("http://127.0.0.1:18861", "http://127.0.0.1:18862")
+    assert report["steps"]["doctor"]["advisory"] is True and "外部引擎" in report["summary"]
 
 
 def test_setup_installs_the_skill_where_the_client_reads_it(tmp_path: Path) -> None:
@@ -330,34 +391,192 @@ def test_claude_code_auto_scope_picks_the_project_file_when_present(tmp_path: Pa
     assert set(merged["mcpServers"]) == {"other", "horosa"}
 
 
-def test_claude_code_user_scope_runs_claude_mcp_add(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)  # 没有 .mcp.json → auto = user scope
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    fake_claude = tmp_path / "claude"
+def _claude_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """claude-code 用户级用例的隔离：cwd 与 HOME 都在 tmp 里（状态文件 = <home>/.claude.json）。"""
+    home = tmp_path / "home dir"  # 带空格：打印出来的命令要能原样粘回终端
+    home.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    return home
+
+
+def _in_process_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state_file: Path, **options) -> FakeClaude:
+    fake = FakeClaude(state_file, **options)
     real_which = shutil.which
-    monkeypatch.setattr(shutil, "which", lambda name, *a, **k: str(fake_claude) if name == "claude" else real_which(name, *a, **k))
-    seen: dict[str, list[str]] = {}
+    monkeypatch.setattr(shutil, "which", lambda name, *a, **k: str(tmp_path / "bin" / "claude") if name == "claude" else real_which(name, *a, **k))
+    monkeypatch.setattr(setup_flow, "_run_claude", fake.run)
+    return fake
 
-    def fake_add(command: list[str]):
-        seen["command"] = command
-        # 模拟 claude 把用户级条目写进 ~/.claude.json
-        server = command[command.index("--") + 1:]
-        (tmp_path / ".claude.json").write_text(
-            json.dumps({"mcpServers": {"horosa": {"command": server[0], "args": server[1:]}}}), encoding="utf-8"
-        )
-        return subprocess.CompletedProcess(command, 0, stdout="Added stdio MCP server horosa", stderr="")
 
-    monkeypatch.setattr(setup_flow, "_claude_mcp_add", fake_add)
+_CLAUDE_ARGS = ("--client", "claude-code", "--skip-install", "--no-probe-network", "--no-stdio-probe")
 
-    report = _stdout_json(_run("--client", "claude-code", "--skip-install", "--no-probe-network", "--no-stdio-probe"))
+
+def _replay(fake: FakeClaude, text: str) -> None:
+    """把 setup 打印的一行命令（可能用 `&&` 连着两条）原样喂回替身：打印出来的必须是能跑的命令。"""
+    for part in text.split(" && "):
+        completed = fake.run(shlex.split(part))
+        assert completed.returncode == 0, (part, completed.stderr)
+
+
+def test_claude_code_user_scope_registers_through_the_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home = _claude_home(tmp_path, monkeypatch)
+    fake = _in_process_claude(tmp_path, monkeypatch, home / ".claude.json")
+
+    report = _stdout_json(_run(*_CLAUDE_ARGS))
 
     assert report["config_mode"] == "claude-mcp-add"
-    assert seen["command"][:6] == [str(fake_claude), "mcp", "add", "--scope", "user", "horosa"]
-    assert seen["command"][6] == "--" and "stdio" in seen["command"][7:]
-    assert report["steps"]["config"]["executed"] is True
-    assert report["steps"]["config"]["rollback"] == "claude mcp remove --scope user horosa"
+    command = fake.calls[0]
+    assert command[:6] == [str(tmp_path / "bin" / "claude"), "mcp", "add", "--scope", "user", "horosa"]
+    assert "--" in command and "stdio" in command[command.index("--"):]
+    config = report["steps"]["config"]
+    assert (config["status"], config["executed"]) == ("created", True)
+    assert config["rollback"] == "claude mcp remove --scope user horosa"
     assert report["steps"]["client_check"]["configured"] is True, "回读的是 claude 真写的 ~/.claude.json"
+    _replay(fake, config["rollback"])
+    assert fake.entry("horosa") is None
+
+
+def test_claude_code_user_scope_rerun_is_idempotent_and_an_update_replaces_the_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MCP-04：`claude mcp add` 只会新增（同名即 "already exists"、退出码 1）。重跑 = 不动；参数变了 = remove + add。
+
+    旧实现每次都直接 `add`：第二次必失败，打印的 retry_command 是同一条命令（再失败一次）；精简面 / 繁体输出还把
+    `-e K=V` 排在名字前面，名字被当成第二个环境变量吞掉，**第一次**就失败。
+    """
+    home = _claude_home(tmp_path, monkeypatch)
+    state = home / ".claude.json"
+    fake = _in_process_claude(tmp_path, monkeypatch, state)
+
+    first = _stdout_json(_run(*_CLAUDE_ARGS))
+    assert first["steps"]["config"]["status"] == "created"
+    calls_after_first, bytes_after_first = len(fake.calls), state.read_bytes()
+
+    second = _stdout_json(_run(*_CLAUDE_ARGS))
+    assert second["ok"] is True
+    assert (second["steps"]["config"]["status"], second["steps"]["config"]["executed"]) == ("unchanged", False)
+    assert len(fake.calls) == calls_after_first, "一致就一条命令都不跑"
+    assert state.read_bytes() == bytes_after_first
+    assert "未改动" in second["summary"]
+
+    previous = fake.entry("horosa")
+    third = _stdout_json(_run(*_CLAUDE_ARGS, "--surface", "compact", "--output-script", "zh-Hant"))
+    config = third["steps"]["config"]
+    assert config["status"] == "updated" and config["executed"] is True
+    assert {"field": "env.HOROSA_MCP_COMPACT", "change": "added"} in config["changes"]
+    assert {"field": "env.HOROSA_OUTPUT_SCRIPT", "change": "added"} in config["changes"]
+    entry = fake.entry("horosa")
+    assert entry["env"]["HOROSA_MCP_COMPACT"] == "1" and entry["env"]["HOROSA_OUTPUT_SCRIPT"] == "zh-Hant"
+    assert entry["command"] == previous["command"] and entry["args"] == previous["args"], "名字没有被 -e 吞掉、命令没有错位"
+    assert third["steps"]["client_check"]["configured"] is True
+    assert "已更新" in third["summary"]
+
+    # 打印的 rollback 是能跑的命令，跑完回到上一次的条目
+    _replay(fake, config["rollback"])
+    assert fake.entry("horosa") == previous
+
+
+def test_claude_code_first_registration_with_env_puts_the_name_before_the_env_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = _claude_home(tmp_path, monkeypatch)
+    fake = _in_process_claude(tmp_path, monkeypatch, home / ".claude.json")
+
+    report = _stdout_json(_run(*_CLAUDE_ARGS, "--surface", "compact"))
+
+    assert report["steps"]["config"]["status"] == "created"
+    assert fake.entry("horosa")["env"]["HOROSA_MCP_COMPACT"] == "1"
+    # 没装 claude 时打印的那条命令也得是同一个顺序
+    printed = shlex.split(report["steps"]["config"]["command"])
+    assert printed[:6] == ["claude", "mcp", "add", "--scope", "user", "horosa"] and printed[6] == "-e"
+
+
+def test_claude_code_failed_update_puts_the_old_entry_back_and_never_prints_its_secrets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = _claude_home(tmp_path, monkeypatch)
+    state = home / ".claude.json"
+    old_entry = {"type": "stdio", "command": "/old/uv", "args": ["run", "horosa-skill", "serve"],
+                 "env": {"MY_API_KEY": "sk-do-not-print", "HOROSA_MCP_COMPACT": "1"}}
+    state.write_text(json.dumps({"numStartups": 3, "mcpServers": {"horosa": old_entry, "other": {"command": "x"}}}), encoding="utf-8")
+    fake = _in_process_claude(tmp_path, monkeypatch, state, fail_add_times=1)
+
+    result = _run(*_CLAUDE_ARGS)
+    failure = _stderr_json(result)
+
+    assert failure["code"] == "setup.claude_mcp_add_failed" and failure["step"] == "config"
+    assert failure["details"]["restored_previous"] is True
+    assert failure["config_untouched"] is True, "旧条目已装回去：用户的注册没有变化"
+    assert fake.entry("horosa") == old_entry, "装回去的是原值（含密钥），不是打印用的占位"
+    assert json.loads(state.read_text(encoding="utf-8"))["mcpServers"]["other"] == {"command": "x"}
+    assert "sk-do-not-print" not in result.stderr and "sk-do-not-print" not in result.stdout
+    assert failure["details"]["rollback_redacted"] == ["MY_API_KEY"]
+    assert "<MY_API_KEY>" in failure["details"]["restore_command"]
+    # retry_command 不再是「同一条必失败的命令」：替身恢复正常后重跑就是一次 updated
+    retried = _stdout_json(_run(*_CLAUDE_ARGS))
+    assert retried["steps"]["config"]["status"] == "updated"
+    assert retried["steps"]["config"]["rollback_redacted"] == ["MY_API_KEY"]
+    assert "sk-do-not-print" not in json.dumps(retried)
+
+
+def test_claude_code_registration_reads_claude_config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CLAUDE_CONFIG_DIR` 设了，状态文件就在它里面：读（判一致）和回读（client_check）都得跟过去。"""
+    _claude_home(tmp_path, monkeypatch)
+    config_dir = tmp_path / "claude 配置"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_dir))
+    fake = _in_process_claude(tmp_path, monkeypatch, config_dir / ".claude.json")
+
+    first = _stdout_json(_run(*_CLAUDE_ARGS))
+    second = _stdout_json(_run(*_CLAUDE_ARGS))
+
+    assert first["steps"]["config"]["status"] == "created" and first["steps"]["client_check"]["configured"] is True
+    assert second["steps"]["config"]["status"] == "unchanged" and len(fake.calls) == 1
+
+
+def test_claude_code_replaces_an_entry_it_could_not_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """状态文件不在我们找的地方（读不到旧条目）而 `add` 说 already exists：照样 remove + add，并如实说没读到旧值。"""
+    home = _claude_home(tmp_path, monkeypatch)
+    elsewhere = tmp_path / "elsewhere" / ".claude.json"
+    fake = _in_process_claude(tmp_path, monkeypatch, elsewhere)
+    fake.run(["claude", "mcp", "add", "--scope", "user", "horosa", "--", "/old/uv", "serve"])
+    monkeypatch.setattr(setup_flow, "_client_check_report", lambda clients, path: {
+        "problems": 0, "clients": [{"findings": [{"entry": {"command": "uv"}}], "searched": [str(home / ".claude.json")]}]})
+
+    report = _stdout_json(_run(*_CLAUDE_ARGS))
+
+    config = report["steps"]["config"]
+    assert config["status"] == "updated" and config["previous_entry_unreadable"] is True
+    assert [call[2] for call in fake.calls[1:]] == ["add", "remove", "add"]
+    assert fake.entry("horosa")["command"] != "/old/uv"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="用 shebang 脚本当 claude；Windows 上由进程内替身的用例覆盖")
+def test_claude_code_rerun_against_a_real_executable_that_rejects_duplicates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """同一件事，不打任何补丁：PATH 上放一个行为照真 CLI 抄的 `claude` 可执行文件，setup 连跑三次。
+
+    负向对照用的就是这一条——它不依赖本仓任何内部函数名，把 setup_flow 的 claude-code 分支换回旧写法，第二次就红。
+    """
+    home = _claude_home(tmp_path, monkeypatch)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    script = bin_dir / "claude"
+    script.write_text(
+        f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(Path(__file__).with_name('fake_claude.py')))} \"$@\"\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+
+    first = _stdout_json(_run(*_CLAUDE_ARGS))
+    second = _stdout_json(_run(*_CLAUDE_ARGS))
+    third = _stdout_json(_run(*_CLAUDE_ARGS, "--surface", "compact"))
+
+    assert [r["steps"]["config"]["status"] for r in (first, second, third)] == ["created", "unchanged", "updated"]
+    entry = json.loads((home / ".claude.json").read_text(encoding="utf-8"))["mcpServers"]["horosa"]
+    assert entry["env"]["HOROSA_MCP_COMPACT"] == "1" and "stdio" in entry["args"]
+    assert third["steps"]["client_check"]["configured"] is True
 
 
 def test_claude_code_without_claude_on_path_prints_the_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -365,14 +584,15 @@ def test_claude_code_without_claude_on_path_prints_the_command(tmp_path: Path, m
     real_which = shutil.which
     monkeypatch.setattr(shutil, "which", lambda name, *a, **k: None if name == "claude" else real_which(name, *a, **k))
     calls: list[list[str]] = []
-    monkeypatch.setattr(setup_flow, "_claude_mcp_add", lambda command: calls.append(command))
+    monkeypatch.setattr(setup_flow, "_run_claude", lambda command: calls.append(command))
 
     report = _stdout_json(_run("--client", "claude-code", "--skip-install", "--no-probe-network", "--no-stdio-probe"))
 
     assert calls == [], "claude 不在 PATH 就绝不能去跑"
     assert report["config_mode"] == "printed"
     assert report["steps"]["config"]["executed"] is False
-    assert report["steps"]["config"]["command"].startswith("claude mcp add --scope user horosa -- ")
+    assert report["steps"]["config"]["command"].startswith("claude mcp add --scope user horosa ")
+    assert " -- " in report["steps"]["config"]["command"]
     assert report["steps"]["client_check"]["skipped"] is True
     assert report["next_steps"][0].startswith("先执行：claude mcp add")
 
@@ -389,7 +609,7 @@ def test_stdio_probe_spawns_the_client_shaped_command_and_counts_tools(tmp_path:
     assert probe["ok"] is True and probe["tools"] == COMPACT_SURFACE_TOOL_COUNT == probe["expected_tools"], probe
     assert probe["command"].endswith("serve --transport stdio --skip-runtime-start")
     assert probe["server_name"] == "Horosa Skill"
-    assert probe["env_shape"] == "inherit" and Path(probe["cwd"]).is_dir()
+    assert probe["env_shape"] == "minimal" and Path(probe["cwd"]).is_dir()
     status = probe["runtime_status"]
     assert isinstance(status, dict) and status["installed"] == report["steps"]["doctor"]["installed"], probe
     assert "runtime_mismatch" not in probe
@@ -417,13 +637,27 @@ def test_manifest_probe_handles_file_urls_without_network(tmp_path: Path) -> Non
 # ---------------------------------------------------------------- v0.38.1 C14 / C15
 
 
+def _names_and(env: dict[str, str], *wanted: str) -> tuple[set[str], dict[str, str | None]]:
+    """只把**名字**和点名要看的几个值交给断言：环境字典一旦进了 pytest 的失败回显，终端里的真密钥就跟着打印出来了。"""
+    return set(env), {name: env.get(name) for name in wanted}
+
+
 def test_codex_probe_env_is_minimal_and_carries_only_the_configured_horosa_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOROSA_RUNTIME_ROOT", "/from/shell")
-    monkeypatch.setenv("HOROSA_MCP_TOKEN", "secret")
-    codex = setup_flow._client_probe_env("codex", {"HOROSA_RUNTIME_ROOT": "/from/config"})
-    assert codex["HOROSA_RUNTIME_ROOT"] == "/from/config" and "HOROSA_MCP_TOKEN" not in codex and "PATH" in codex
-    inherit = setup_flow._client_probe_env("cursor", {"HOROSA_MCP_COMPACT": "1"})
-    assert inherit["HOROSA_MCP_TOKEN"] == "secret" and inherit["HOROSA_MCP_COMPACT"] == "1"
+    monkeypatch.setenv("HOROSA_MCP_TOKEN", "placeholder")
+    names, picked = _names_and(setup_flow._client_probe_env("codex", {"HOROSA_RUNTIME_ROOT": "/from/config"}), "HOROSA_RUNTIME_ROOT")
+    assert picked == {"HOROSA_RUNTIME_ROOT": "/from/config"}
+    assert "PATH" in names and "HOROSA_MCP_TOKEN" not in names
+    # 其余客户端同理（MCP-05 / E-03）。旧断言在这里写的是「cursor 的探针环境里有终端的 HOROSA_MCP_TOKEN」——把缺陷本身
+    # 当成了契约（探针继承终端环境 → 只因终端才通的配置也绿）。GUI 客户端不读 shell 环境，探针就不该带。
+    monkeypatch.setenv("PYTHONPATH", "/from/shell/src")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:3128")
+    names, picked = _names_and(setup_flow._client_probe_env("cursor", {"HOROSA_MCP_COMPACT": "1"}), "HOROSA_MCP_COMPACT", "HTTPS_PROXY")
+    assert picked == {"HOROSA_MCP_COMPACT": "1", "HTTPS_PROXY": "http://proxy.invalid:3128"}, "条目自己的 env 在；装依赖要走的代理留着"
+    assert "PATH" in names
+    leaked = sorted(names & {"HOROSA_MCP_TOKEN", "HOROSA_RUNTIME_ROOT", "PYTHONPATH"})
+    assert leaked == [], "终端里的 HOROSA_* / PYTHONPATH 不该进探针"
+    assert [setup_flow._probe_env_shape(c) for c in ("codex", "cursor", "copilot-cli")] == ["codex", "minimal", "passthrough"]
 
 
 def test_runtime_mismatch_is_detected_when_the_server_computes_another_root(tmp_path: Path) -> None:
