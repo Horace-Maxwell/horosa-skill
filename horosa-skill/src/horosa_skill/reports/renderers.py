@@ -610,7 +610,8 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     _LIST_STYLES = {(False, 0): "List Bullet", (False, 1): "List Bullet 2", (False, 2): "List Bullet 3",
                     (True, 0): "List Number", (True, 1): "List Number 2", (True, 2): "List Number 3"}
 
-    def add_markdown(text: str, target: Any = None, *, depth: int = 0, quote: bool = False, tables: list[Any] | None = None) -> None:
+    def add_markdown(text: str, target: Any = None, *, depth: int = 0, quote: bool = False, tables: list[Any] | None = None,
+                     toc: bool = False) -> None:
         # 调用方 Markdown 的块树（reports/markdown.py，PDF 画同一棵）。target = 文档或卡片格子；卡片里的表格交给 tables，排在卡片下方。
         from horosa_skill.reports import markdown as md
 
@@ -627,6 +628,8 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
                 elif isinstance(block, md.Heading):
                     p = target.add_paragraph()
                     p.paragraph_format.space_before = Pt(6)
+                    if toc and block.level <= 2 and not depth and not quote:
+                        set_outline_level(p, 1)  # 解读正文的一、二级标题进 Word 目录（与 PDF 同）
                     add_spans(p, block.spans, size=11, bold=True, color="0F766E")
                 elif isinstance(block, md.ListBlock):
                     style_name = _LIST_STYLES[(block.ordered, min(depth, 2))]
@@ -839,7 +842,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         elif block.kind == "heading":
             add_heading_block(block.text, level=_DOCX_HEADING_LEVELS[block.role])
         elif block.kind == "body":  # 调用方写的（解读正文 / 摘要）：Markdown 块树
-            add_markdown(block.body)
+            add_markdown(block.body, toc=True)
         elif block.kind == "part":
             doc.add_page_break()
             add_heading_block(block.text)
@@ -1711,10 +1714,10 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             return flowable
 
         def add_part(text: str, *, new_page: bool = True) -> None:
-            # 「完整盘面」另起一页；「附录」通常只有几行，够地方就接着排，不为它空出半页。
-            story.append(PageBreak() if new_page else CondPageBreak(70 * mm))
-            if not new_page:
-                story.append(Spacer(1, 12))
+            # 「完整盘面」「AI 解读」原则上另起一页；但上一页只印了寥寥几行（所问 + 一句结论）时就接着排，不留一页大半空白
+            # （评审 R-17：解读报告第 3 页只有两行）。「附录」通常只有几行，够地方就接着排。
+            story.append(CondPageBreak(frame_height * 0.62) if new_page else CondPageBreak(70 * mm))
+            story.append(Spacer(1, 12))
             block = Table(
                 [[Paragraph(_esc(text), part_style)]],
                 colWidths=[content_width],
@@ -1986,7 +1989,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 else:
                     add_text(payload)
 
-        def md_flowables(blocks: list[Any], indent: float = 0.0, quote: bool = False, depth: int = 0) -> list[Any]:
+        def md_flowables(blocks: list[Any], indent: float = 0.0, quote: bool = False, depth: int = 0, toc: bool = False) -> list[Any]:
             """调用方 Markdown 的块树 → flowable（reports/markdown.py；DOCX 画同一棵树）。不做键值对照表、不改数字。"""
             from horosa_skill.reports import markdown as md
 
@@ -2002,7 +2005,11 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                         out.append(Paragraph(_md_spans_markup(group, cite_anchors), style))
                 elif isinstance(block, md.Heading):
                     sub = Paragraph(_md_spans_markup(block.spans, cite_anchors), md_style("HorosaMdHeading", inner_heading, indent, quote))
-                    sub._horosa_outline = (2, md.plain(block.spans))  # 段内小标题：书签第三级，不进目录
+                    if toc and block.level <= 2 and not indent and not quote:
+                        # 解读正文自己的一、二级标题进目录（第二级）：读者翻解读报告要找的就是这些（评审 R-17）
+                        mark(sub, 1, md.plain(block.spans))
+                    else:
+                        sub._horosa_outline = (2, md.plain(block.spans))  # 更细的小标题：书签第三级，不进目录
                     out.append(keep_with_next(sub))
                 elif isinstance(block, md.ListBlock):
                     item_style = md_style("HorosaMdItem", bullet_style, indent + 14, quote, bullet_at=indent + 3)
@@ -2042,10 +2049,10 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 md_styles[key] = ParagraphStyle(f"{name}{len(md_styles)}", parent=parent, **extra)
             return md_styles[key]
 
-        def add_markdown(text: str) -> None:
+        def add_markdown(text: str, *, toc: bool = False) -> None:
             from horosa_skill.reports import markdown as md
 
-            story.extend(md_flowables(md.parse(text)))
+            story.extend(md_flowables(md.parse(text), toc=toc))
 
         def add_note_card(title_text: str, body_text: str, *, accent: Any = green) -> None:
             # 卡片 = 标题 + 正文各块，每块包一层 CardPiece 画框与左侧色条：块与块之间、一段长文内部都能照常跨页
@@ -2153,7 +2160,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             elif block.kind == "heading":
                 add_heading(block.text, level=_PDF_HEADING_LEVELS[block.role])
             elif block.kind == "body":  # 调用方写的（解读正文 / 摘要）：Markdown 块树
-                add_markdown(block.body)
+                add_markdown(block.body, toc=True)
             elif block.kind == "part":
                 # 「完整盘面」另起一页；「附录」通常只有几行，够地方就接着排。
                 add_part(block.text, new_page=block.role != "appendix")

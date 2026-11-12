@@ -135,3 +135,19 @@ def test_the_callers_reading_has_a_documented_size_limit(tmp_path: Path) -> None
     with pytest.raises(ToolValidationError) as from_tool:
         service.report_from_tool({"tool_name": "chart", "payload": {}, "format": "pdf", "ai_answer_text": "字" * (AI_REPORT_MAX_CHARS + 1)})
     assert from_tool.value.code == "report.ai_report_too_large"
+
+
+def test_reading_headings_are_in_the_toc_and_short_pages_are_not_left_mostly_empty(tmp_path: Path, monkeypatch) -> None:
+    """评审 R-17：解读正文自己的一、二级标题不在目录里（目录只有「完整解盘正文」一行）；所问 + 一句结论之后强制换页，
+    解读报告第 3 页只印两行。"""
+    from test_user_knowledge_and_chart_report import _chart_run, _PdfSpy, _service
+
+    service = _service(tmp_path)
+    run_id = _chart_run(service).memory_ref.run_id
+    spy = _PdfSpy(monkeypatch)
+    reading = "## 一、依据\n\n日主甲木。\n\n### 细节\n\n略。\n\n## 二、建议\n\n宜守。"
+    service.report_render({"run_id": run_id, "format": "pdf", "ai_answer_text": reading})
+    toc = [entry for entry, _page in spy.toc()]
+    assert "一、依据" in toc and "二、建议" in toc and "细节" not in toc
+    pages = {title: page for title, _level, page in spy.outline}
+    assert pages["完整盘面"] == pages["解读目标"], pages

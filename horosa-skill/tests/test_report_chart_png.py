@@ -65,6 +65,9 @@ def _png_size(path: Path) -> tuple[int, int]:
     assert data.startswith(PNG_SIGNATURE)
     with Image.open(io.BytesIO(data)) as image:
         assert image.format == "PNG"
+        # 带物理分辨率（pHYs）：每 pt 放大 scale 倍画，dpi = 72 × scale；不写时排版软件按 72 dpi 读，盘图被当成半米宽（评审 R-17）
+        dpi = image.info.get("dpi")
+        assert dpi and round(dpi[0]) == round(dpi[1]) and 72 < round(dpi[0]) <= 216, dpi
         return image.size
 
 

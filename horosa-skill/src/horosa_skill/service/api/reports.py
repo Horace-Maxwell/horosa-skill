@@ -997,7 +997,7 @@ class ReportsAPI:
         paths, reserved = self._claim_output(output_request, default, len(images))
         claimed.extend(reserved)
         outputs = [write_artifact(image["png"], output_path=path, format_name="png") for image, path in zip(images, paths)]
-        figure_list = [{"title": image["title"], "kind": image["kind"], "width": image["width"], "height": image["height"],
+        figure_list = [{"title": image["title"], "kind": image["kind"], "width": image["width"], "height": image["height"], "dpi": image["dpi"],
                         "path": rendered["path"]} for image, rendered in zip(images, outputs)]
         return outputs, {"title": f"{chart['label']} · 盘图", "figures": figure_list,
                          "headline": f"已生成 PNG 盘图 {len(outputs)} 张：{'、'.join(r['path'] for r in outputs)}",
