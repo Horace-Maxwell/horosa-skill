@@ -500,7 +500,7 @@ def _cap_per_entry(resolved: list[Hit], entries: dict[str, Any], terms: tuple[st
     hidden: dict[str, list[Chunk]] = {}
     for entry_id, group in groups.items():
         keep = group[:per_entry]
-        if len(group) > per_entry and per_entry > 0:
+        if len(group) > per_entry > 0:
             defining = _defining(group, entries[entry_id], terms)
             if defining is not None and defining not in keep:
                 keep = [*keep[: per_entry - 1], defining]
