@@ -43,6 +43,14 @@ Include as much as possible:
   `gpsLat` / `gpsLon` are decimal degrees. Provide both when you have them.
 - **Timezone**: `zone` / `timezone` accept `+08:00`; `Z` / `UTC` / `GMT` normalize to `+00:00`; IANA
   zone names convert using the chart date (DST-correct).
+- **BC dates**: write the date with a leading minus (`-0500-03-21`), or keep the unsigned date and pass `ad: -1` — the entry
+  rewrites the second form into the first, so every technique reads the same year. `ad` takes only `1` / `-1`. Techniques on
+  the local lunar-javascript calendar (老黄历 / 通书 / 河洛 / 参评 / 一掌经) cover AD 1–9999 only and refuse other years
+  with `tool.date_range_unsupported`.
+- **Casting inputs**: a supplied cast (小六壬 `nums`, 灵棋 `counts`, 六爻 `lines` / `gua_code`, 梅花卦义 trigram codes) is
+  used as given or refused (`tool.<tool>_invalid_cast` / `tool.invalid_option`) — never silently replaced by a time cast.
+  `data.cast_method` says how the result was cast. Unrecognised setting values (流派 / 口径 / 传本…) are refused with the
+  accepted list in `details.options`.
 - **Gender**: include `gender` for gender-sensitive tools (Ziwei, Bazi direct/luck flow, LiuReng
   runyear, 演禽/策天/七政四余·张果, gendered reports).
 - **Bazi/Ziwei timing options**: include `timeAlg`, `after23NewDay`, `lateZiHourUseNextDay`, and
