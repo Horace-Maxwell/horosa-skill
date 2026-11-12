@@ -5,6 +5,7 @@
 - `with sqlite3.connect(...) as conn:` 只提交、不关连接：Windows 上那个库（和 -wal / -shm）就删不掉、挪不走（WinError 32，4 红）。
   一律 `with closing(sqlite3.connect(...)) as conn[, conn]:`。
 - 开着的文件改名 / 删除：tests/winsim.py 在本机按 Windows 的规则拒绝（conftest 让每条用例都在它下面跑）；这里证明它真的会拒。
+- `os.kill(pid, 0)` 当存活探针：Windows 上信号 0 = CTRL_C_EVENT，发的是控制台 Ctrl+C。只许 runtime/procs.py 的 POSIX 分支用。
 """
 from __future__ import annotations
 
@@ -69,7 +70,34 @@ def test_sqlite_connections_are_closed_not_just_committed() -> None:
                         "改成 `with closing(sqlite3.connect(...)) as conn, conn:` → " + ", ".join(hits))
 
 
+def os_kill_calls(source: str) -> list[int]:
+    return [node.lineno for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute) and node.func.attr in {"kill", "killpg"}
+            and isinstance(node.func.value, ast.Name) and node.func.value.id == "os"]
+
+
+def test_only_the_posix_branch_of_procs_signals_a_pid() -> None:
+    src = PKG_ROOT / "src" / "horosa_skill"
+    hits = [f"{path.relative_to(src).as_posix()}:{line}" for path in sorted(src.rglob("*.py"))
+            for line in os_kill_calls(path.read_text(encoding="utf-8")) if path.relative_to(src).as_posix() != "runtime/procs.py"]
+    assert hits == [], "进程在不在用 runtime.procs.pid_alive（Windows 上 os.kill(pid, 0) 是 Ctrl+C）→ " + ", ".join(hits)
+
+
+def test_the_temp_file_sweep_asks_procs_and_never_signals(monkeypatch: pytest.MonkeyPatch) -> None:
+    from horosa_skill.memory import rebuild
+    from horosa_skill.runtime import procs
+
+    def no_signals(*_args: object) -> None:
+        raise AssertionError("os.kill 不是存活探针")
+
+    monkeypatch.setattr(os, "kill", no_signals)
+    for answer, alive in (("dead", False), ("alive", True), ("unknown", True)):
+        monkeypatch.setattr(procs, "pid_alive", lambda pid, answer=answer: answer)
+        assert rebuild._pid_alive(4242) is alive
+
+
 def test_the_source_guards_can_go_red() -> None:
+    assert os_kill_calls("import os\nos.kill(pid, 0)\n") == [2]
     assert str_of_relative_to("key = str(path.relative_to(root))\nmsg = f'{path.relative_to(root)}'\n") == [1]
     assert str_of_relative_to("key = path.relative_to(root).as_posix()\n") == []
     assert bare_sqlite_context("import sqlite3\nwith sqlite3.connect(p) as c:\n    pass\n") == [2]
