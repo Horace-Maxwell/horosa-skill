@@ -390,8 +390,8 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
             zh += f" 但本地 JS 引擎不可用（{js.get('state')}）：{str(js.get('affects') or '').split(' / ')[0]}会失败。"
             en += f" The local JS engine is unavailable ({js.get('state')}), so {str(js.get('affects') or '').split(' / ')[-1]} will fail."
             fix = str(js.get("fix") or "")
-            next_zh = f"{fix.split(' / ')[0]}；{next_zh}" if fix else next_zh
-            next_en = f"{fix.split(' / ')[-1]}; {next_en}" if fix else next_en
+            next_zh = f"{fix.split(' / ')[0].rstrip('。')}；{next_zh}" if fix else next_zh
+            next_en = f"{fix.split(' / ')[-1].rstrip('.')}; {next_en}" if fix else next_en
         return {
             "status": status, "ready_for_openclaw": ready, "deployment": deployment,
             "user_summary": bilingual(zh, en), "next_action": bilingual(next_zh, next_en),

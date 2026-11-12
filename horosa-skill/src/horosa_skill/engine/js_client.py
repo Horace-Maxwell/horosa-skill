@@ -303,9 +303,8 @@ class HorosaJsEngineClient:
             "searched": searched,
             "node": node,
             "affects": bilingual(
-                "本地 JS 引擎算的技法：八字、紫微、奇门、太乙、金口诀、六壬、河洛、参评、六爻等，以及地名检索",
-                "techniques computed by the local JS engine: BaZi, Ziwei, Qimen, Taiyi, Jinkou, Liuren, Heluo, Canping, "
-                "Liuyao and others, plus place search",
+                "八字、紫微、奇门、太乙、金口诀、六壬、河洛、参评、六爻等本地 JS 技法，以及地名检索",
+                "BaZi, Ziwei, Qimen, Taiyi, Jinkou, Liuren, Heluo, Canping, Liuyao and the other local-JS techniques, plus place search",
             ),
             "fix": fixes[state],
         }
