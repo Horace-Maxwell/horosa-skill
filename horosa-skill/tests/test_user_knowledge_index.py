@@ -123,8 +123,11 @@ def test_index_syncs_incrementally_and_stores_no_note_text(tmp_path: Path) -> No
         return b"".join(p.read_bytes() for p in kindex.index_path(settings).parent.glob("index.sqlite*"))
 
     # 索引里不存正文（FTS5 contentless + 只记字符区间）：连切好的双字串（存进普通 FTS 表时的样子）都找不到。
+    # contentless_delete 要 SQLite ≥ 3.43；更旧的（Debian 12 / Ubuntu 22.04 的系统 Python）退回普通 FTS 表，会在用户自己的
+    # 数据目录里多存一份切好的笔记正文——那一支如实断言「存了」，免得这条名字在旧 SQLite 上说假话（v0.50.0 Linux 容器里查出）。
     secret = "独一无二的私密句子"
-    assert " ".join(kindex.grams(secret)).encode() not in index_bytes() and secret.encode() not in index_bytes()
+    stored = " ".join(kindex.grams(secret)).encode() in index_bytes()
+    assert stored is (sqlite3.sqlite_version_info < (3, 43, 0)) and secret.encode() not in index_bytes()
     (tmp_path / "data" / "knowledge" / "b.md").unlink()
     assert uk.indexed_catalog(settings).index_report["removed"] == 1
     # 删掉的条目：索引里它的块与倒排一并删掉（不只是检索时被目录过滤掉）。
