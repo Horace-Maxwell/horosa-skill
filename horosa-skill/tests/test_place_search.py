@@ -410,8 +410,9 @@ def _engine_copy(tmp_path: Path, *, drop_tool: bool = False, drop_dependency: bo
     if drop_tool:
         index = root / "src" / "tools" / "index.js"
         source = index.read_text(encoding="utf-8")
-        assert "  place_search: runPlaceSearch,\n" in source  # 否则「旧 core-js」没造出来，测试会因错误的原因通过
-        index.write_text(source.replace("  place_search: runPlaceSearch,\n", ""), encoding="utf-8")
+        entry = "  place_search: lazy('./placeSearch.js', 'runPlaceSearch'),\n"
+        assert entry in source  # 否则「旧 core-js」没造出来，测试会因错误的原因通过
+        index.write_text(source.replace(entry, ""), encoding="utf-8")
     if drop_dependency:
         shutil.rmtree(root / "node_modules" / "tz-lookup")
         assert not (root / "node_modules" / "tz-lookup").exists()

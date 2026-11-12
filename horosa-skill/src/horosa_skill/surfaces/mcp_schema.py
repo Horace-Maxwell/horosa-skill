@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import inspect
 import re
 from typing import Any
@@ -287,9 +288,33 @@ GUIDANCE_TAIL = "旋钮/输出段：horosa_agent_guidance"
 _WORD_CHAR = r"0-9A-Za-z\u3400-\u9fff\uf900-\ufaff"
 
 
+_WORD_CHAR_RE = re.compile(rf"[{_WORD_CHAR}]", flags=re.IGNORECASE)
+
+
+@functools.lru_cache(maxsize=None)
+def _term_regex(term: str) -> re.Pattern[str]:
+    return re.compile(re.escape(term), flags=re.IGNORECASE)
+
+
 def _appears_as_term(term: str, text: str) -> bool:
-    pattern = rf"(?<![{_WORD_CHAR}]){re.escape(term)}(?![{_WORD_CHAR}])"
-    return re.search(pattern, text, flags=re.IGNORECASE) is not None
+    """`(?<![词字符])term(?![词字符])` 的等价写法（忽略大小写）。
+
+    合成一条正则时，每个别名都要重编一遍带整段汉字区间的字符类（IGNORECASE 下尤其慢）：393 次 0.78 s，是
+    create_mcp_server 最大的一块（C-20）。字符类只编一次，逐个候选位置检查两侧；候选从每次命中的下一格接着找，
+    与 lookaround 的逐位置扫描同一结果（自重叠的词也不漏）。
+    """
+    pattern = _term_regex(term)
+    pos = 0
+    while (match := pattern.search(text, pos)) is not None:
+        start, end = match.span()
+        before_ok = start == 0 or _WORD_CHAR_RE.fullmatch(text[start - 1]) is None
+        after_ok = end == len(text) or _WORD_CHAR_RE.fullmatch(text[end]) is None
+        if before_ok and after_ok:
+            return True
+        if start >= len(text):
+            break
+        pos = start + 1
+    return False
 
 
 def advertised_aka(tool_name: str, head: str) -> list[str]:

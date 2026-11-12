@@ -127,3 +127,60 @@ def test_shared_fields_cost_at_most_their_cap_per_copy(full_tools) -> None:
         if widest[name] > cap
     }
     assert not over, f"共享字段单份变胖，全量面按份数放大：{over}"
+
+
+# ---------------------------------------------------------------- create_mcp_server 提速后的等价性（C-20，v0.50.0-dev）
+
+
+def _appears_as_term_oracle(term: str, text: str) -> bool:
+    """提速前的写法：一条带 lookaround 的正则。新实现必须与它逐例同答。"""
+    from horosa_skill.surfaces.mcp_schema import _WORD_CHAR
+
+    pattern = rf"(?<![{_WORD_CHAR}]){re.escape(term)}(?![{_WORD_CHAR}])"
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
+
+
+def test_appears_as_term_answers_like_the_lookaround_regex() -> None:
+    """全部别名 × 全部技法描述，加上边界病例（自重叠、大小写折叠、空词、首尾、标点）。
+    负向对照：把「从命中的下一格接着找」改成「从命中末尾接着找」，自重叠的 `··` 在 `x···` 里即红（实跑过）。"""
+    from horosa_skill.engine.synonyms import synonyms_for
+    from horosa_skill.surfaces.mcp_schema import _appears_as_term
+
+    texts = [definition.description for definition in TOOL_DEFINITIONS.values()]
+    terms = sorted({s for name in TOOL_DEFINITIONS for s in synonyms_for(name)})
+    mismatches = [(t, x[:30]) for t in terms for x in texts if _appears_as_term(t, x) != _appears_as_term_oracle(t, x)]
+    assert not mismatches, mismatches[:5]
+    edge = [("ab", "aab ab"), ("aa", "aaa"), ("aa", "aaa aa"), ("a a", "a a a"), ("·", "x·y"), ("K", "K"),
+            ("s", "ſ"), ("", ""), ("", "abc"), ("", "a b"), ("星盘", "西洋星盘"), ("星盘", "西洋 星盘。"),
+            ("Chart", "natal chart/"), ("x", "x"), ("x", "xx x"), ("ab", "abab ab"), ("··", "x···"), ("-a-", "b-a-a- ")]
+    assert [(_appears_as_term(t, x), t, x) for t, x in edge] == [(_appears_as_term_oracle(t, x), t, x) for t, x in edge]
+
+
+def test_plain_defaults_generator_is_byte_identical_to_pydantics() -> None:
+    """`_PlainDefaultsJsonSchema` 只短路 JSON 原生默认值的编码：每个技法输入模型的 schema 必须与默认生成器逐字节相同。
+    负向对照：int 默认值改成按字符串编码，本例即红（实跑过）。"""
+    from horosa_skill.surfaces.mcp_requests import _PlainDefaultsJsonSchema
+
+    for name, definition in TOOL_DEFINITIONS.items():
+        model = definition.input_model
+        fast = json.dumps(model.model_json_schema(schema_generator=_PlainDefaultsJsonSchema), sort_keys=True, ensure_ascii=False)
+        assert fast == json.dumps(model.model_json_schema(), sort_keys=True, ensure_ascii=False), name
+
+
+def test_cached_signatures_build_the_same_tools_list_as_a_cold_build(tmp_path) -> None:
+    """签名按进程缓存：第二次起不重算。缓存命中的构建必须与清空缓存后的冷构建逐字节相同——广告层若原地改了缓存里的
+    schema，第二次构建就会不同。负向对照：`_factory` 每次构建都往缓存签名的字段 schema 里原地追加一个字符，本例即红（实跑过）。"""
+    from horosa_skill.surfaces.mcp_requests import _signature_for_input_model
+
+    settings = Settings(db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs", mcp_compact=False)
+    service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
+
+    def build() -> str:
+        tools = asyncio.run(create_mcp_server(service, settings).list_tools())
+        return json.dumps([t.model_dump(mode="json", exclude_unset=True) for t in tools], ensure_ascii=False, sort_keys=True)
+
+    _signature_for_input_model.cache_clear()
+    cold = build()
+    assert _signature_for_input_model.cache_info().currsize > 100
+    assert build() == cold
+    assert build() == cold

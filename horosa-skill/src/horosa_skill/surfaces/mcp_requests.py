@@ -1,7 +1,9 @@
 """MCP 请求的入参：各家客户端的参数形状归一（request 字符串 / 平铺 / 嵌套）、按输入模型生成工具签名（数值字段放宽）、horosa_tool_run 的公共字段。"""
 from __future__ import annotations
 
+import functools
 import json
+import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -9,6 +11,7 @@ from inspect import Parameter, Signature
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, WithJsonSchema
+from pydantic.json_schema import GenerateJsonSchema
 
 from pydantic import ValidationError
 
@@ -239,6 +242,21 @@ def _widen(field_name: str, schema: dict[str, Any]) -> dict[str, Any]:
     return widened
 
 
+class _PlainDefaultsJsonSchema(GenerateJsonSchema):
+    """与 pydantic 默认生成器逐字节同形，只把「编码一个 JSON 原生默认值」短路掉。
+
+    默认实现为**每个**字段默认值新建一个 TypeAdapter 再 dump（114 个输入模型约 9500 次，占 create_mcp_server 的三成）；
+    None / bool / int / str / 有限 float 的 JSON 形式就是它自己，结果相同。其余类型（Enum、容器、模型）照走父类。
+    """
+
+    def encode_default(self, dflt: Any) -> Any:
+        kind = type(dflt)
+        if dflt is None or kind in (bool, int, str) or (kind is float and math.isfinite(dflt)):
+            return dflt
+        return super().encode_default(dflt)
+
+
+@functools.lru_cache(maxsize=None)
 def _signature_for_input_model(model: type[BaseModel], *, return_type: Any = Signature.empty) -> Signature:
     """Build the advertised MCP signature: **faithful schema, loose validation**.
 
@@ -248,8 +266,13 @@ def _signature_for_input_model(model: type[BaseModel], *, return_type: Any = Sig
     permissive annotation (so nothing is rejected before normalization, and the documented `request={…}`
     escape hatch actually works), while the per-field JSON schema — description, enum, required-ness as
     a `[required]` marker — is still advertised verbatim so the model sees the real contract.
+
+    Cached per process (C-20): the signature is a pure function of the model class, and every `create_mcp_server`
+    after the first (tests, the HTTP transport's per-session servers) reuses it. Signature / Parameter are immutable;
+    the advertising layer replaces `Tool.parameters` with new dicts and never edits these schemas in place
+    (`tests/test_mcp_list_slim.py` compares a second build in the same process byte-for-byte).
     """
-    json_schema = model.model_json_schema()
+    json_schema = model.model_json_schema(schema_generator=_PlainDefaultsJsonSchema)
     defs = json_schema.get("$defs", {})
     properties = json_schema.get("properties", {})
     required = set(json_schema.get("required", []))
