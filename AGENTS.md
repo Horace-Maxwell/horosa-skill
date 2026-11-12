@@ -346,6 +346,20 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
   - **检索质量有下限（v0.47.2）**：`tests/test_knowledge_eval.py` + `contracts/knowledge_eval.json`。dev 集可以看失败、可以调；**heldout 只报数，不许按它调**（写的时候没看过结果）；看过未命中清单就挪走改作 dev，换一批新的。
     自检索不靠人挑；唯一名字才算 hit@1（「总览」27 本手册共用，没有唯一答案）。改排序先跑 `scripts/eval_knowledge_search.py`。数字见 LESSONS v0.47.2-dev。
   - **领域点名（v0.47.2）**：查询里出现 `_DOMAIN_WORDS` 的词（「六爻起卦」的「六爻」）时，该手册里命中其余词的条目相关度加倍。结果太少（< 3）又没有点名命中时也改写，原命中留在前面、只补不换。
+    **领域词只加权、不计分（v0.50.0-dev）**：「八字断语库」标题里的「八字」曾让一行口诀压过「格局用神」。
+  - **切词用语料自己的词表（v0.50.0-dev，K-1）**：`store.search_vocabulary()`（条目名 / 小节名 / 加粗 / 引号词）一段 1，只是出现过的 1.75；孤立单字丢，
+    连着两个以上的才作弱线索（「塔罗 读 牌」是记录过的取舍）。问句语料 `contracts/knowledge_question_rewrite.json`（≥100，简繁英）逐条测；
+    `store.rewrite_query` 是不依赖命中数的改写入口。自备笔记用自己的标题 / 小节名 / 标签。
+  - **排序附则（v0.50.0-dev，K-2）**：裸词时只在正文顺带提到的界面页（`_UI_KEY_WORDS` / `_UI_DOMAINS`）与一行口诀 × `_ASIDE_FACTOR`，词在条目名 / 分类名里的不降；
+    名字以该词开头的同档 +5；多词时全含（或条目名正好是其中一词）的排前，没有全含 → `match_mode: any` + 双语 warning。相关度集
+    `relevance_2026_11_11`（top 1 / 3）下限在 `tests/test_knowledge_rewrite.py`。改排序先跑 dev / seen / heldout 三套：「多词也降界面页」试过，dev 掉线，没采用。
+  - **英文与零命中（v0.50.0-dev，K-3）**：`TERM_ALIASES` 只收语料自己中英对照、中文一侧是语料标题 / 小节名的词（测试逐条核对），不替语料编译名；
+    零命中带 `suggestions` 与双语 `no_match`（英文查询说明语料是中文写的）。
+  - **说出来，不吭声（v0.50.0-dev，K-4 / K-U1 / N2 / N3）**：`domain` 认 id / 显示名 / 繁体 / 任意大小写（`store.canonical_domain`），认不出给双语错误 +
+    `valid_domains`；`limit` / `offset` 越界写 warnings；不读的文件进 `not_indexed`（注册表 + 每次检索）；同一笔记封顶两段时留下讲这个词的那段，
+    其余写 `more_in_note`（带 read 参数）+ `total_passages`；空库带 `library`；`how_to_read` 按 `settings.mcp_compact` 点当前面真有的工具。
+  - **笔记原文出服务器只经 `user.untrusted()`（v0.50.0-dev，K-U2）**：`untrusted: true` 排在正文字段之前、正文夹在固定双语围栏里、笔记自带的 ⟦⟧ 换掉；
+    检索摘要 / 精读 / knowledge_context 三处；内置知识不标。新加一处带笔记原文的输出，先走它（MCP 工具体一层有测试）。
 
 ### 4.4 MCP 面、决策层与错误信封
 
@@ -376,7 +390,8 @@ idempotent=False——默认写一条本地 run 记录，必须如实标注，�
 默认，铁律 2 不动）、S3 门类分错只多一段向导；③ 失败一律**关闭式**回确定性路径并经 `_degrade` 进 `envelope.warnings`
 （三连败熔断 60 s，一窗一报）；④ 每次真调用自陈：`technique_card.decisions[]` / `DispatchEnvelope.decision_layer` /
 开启时 instructions 改口（两态 ≤2048 字节由测试锁）；⑤ 数据边界：一档 `meta` 只送**本地脱敏**后的问题文本（日期/时刻/
-坐标/地名/号码→占位符），二档 `snapshot` 才许导出快照且只给 S4/S5；出生数据永不以原值离机；key 只在调用时读、
+坐标/地名/号码→占位符；v0.50.0-dev 起**按构造**：任何数字串一律 `<数字>`、星阙地名库全集 + 档案名 + 引导词人名 + 干支时辰，地名库找不到就抛、不发；
+线性时间——空白先压、量词有上界、输入先截，`\s*` 开头的模式曾在 8 万空格上跑 43 s；改脱敏会让 `contracts/jev_eval/cache.jsonl` 的回放失配，晋升的 τ 要重测），二档 `snapshot` 才许导出快照且只给 S4/S5；出生数据永不以原值离机；key 只在调用时读、
 永不入日志/异常/信封/生成配置；⑥ 阈值只认自家中文标注集测出的数——`enforce` 需 `contracts/jev_thresholds.json`
 该面 `promoted` 且模型 id 一致，否则退 shadow；钉版 `jev-1.13.0`，`jev-latest` 只许影子，返回 id 不符本轮降影子。
 问题构造点唯一（`decisions/surfaces/*`：instructions 英文为主（≤30% CJK，允许中文线索词）、选项键 ASCII、必带弃权项
@@ -1287,7 +1302,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **校验族按「最常调 × 最易编」排优先级；评测器必须有 bench 入口。** faithfulness v3 = 11 族（四柱/落座/身宫/
   三传/紫微主星/卦名动爻/塔罗/奇门值符值使九宫/择日命中区间/推运时段边界/词元兜底），每族至少三条对抗测试；
   HorosaBench `faithfulness` 类 case 跑工具→抽真值→判答案（`expect_ok`/`expect_min_flagged`）。新技法上架时
-  若其结果有可抽的机读真值，同批加族或加 case（v0.36.0）。
+  若其结果有可抽的机读真值，同批加族或加 case（v0.36.0）。**三种结论（v0.50.0-dev）**：零断言 = `not_assessed`（ok=null、
+  ratio=null、CLI 退出 3），不是通过；新族只认引擎明写的值（日主 / 英文四柱 / 格局 / 大运；用神多派对照不判），永不推算。
+  bench 报告结论旁写 `coverage`，`pass_rate` 分母是全部 case；手写片段对仓里录下的真实导出离线核对（app 形样例停在旧版式，不算）。
 - **节气种子只来自 lunar-javascript 精确表，禁近似公式（v0.40.0）。** `vendor/utils/localNongliAdapter.js` verbatim（`buildLocalJieqiYearSeed(year, zone)` 折成当地钟表，
   域外年返 null 走后端实算）；`src/shared/` 不得再出现与上游同名的自写件（allowlist 守卫）。selfcheck 用 2026 立春 04:02:08 vs 旧公式 10:16:32 做负向对照。
 - **bespoke vendor 件的每一处偏离都要在文件内标明出处与理由，并有两向测试（v0.40.0）。** `baziSnapshot.js` 的「闰闰」修法 = 只在 month 未带「闰」时加前缀，
