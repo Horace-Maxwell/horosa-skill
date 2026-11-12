@@ -29,7 +29,7 @@ from horosa_skill.service import HorosaSkillService
 CORE_JS = Path(__file__).resolve().parents[1] / "horosa-core-js"
 LIVE_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sync311_sanshi_live.json"
 LR_FIXTURE = CORE_JS / "test" / "fixtures" / "chart_liureng.json"
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 # ─────────────────────────────── 录制 / 回放 ───────────────────────────────
 

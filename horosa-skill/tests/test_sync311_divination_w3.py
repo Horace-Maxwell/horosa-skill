@@ -40,7 +40,7 @@ def read_facade_source(path: Path) -> str:
     files = [path, *sorted(folder.glob("*.js"))] if folder.is_dir() else [path]
     return "\n".join(f.read_text(encoding="utf-8") for f in files)
 requires_upstream = pytest.mark.skipif(
-    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="HOROSA_SOURCE_ROOT (upstream checkout) not set"
+    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
 
 CONFIRM = {"agent_confirmed_settings": True}

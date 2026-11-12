@@ -37,10 +37,10 @@ CORE_JS_SRC = CORE_JS / "src"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sync313_historical_upstream.json"
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" if _UPSTREAM_ROOT else None
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 requires_upstream = pytest.mark.skipif(
     UPSTREAM_UI is None or not (UPSTREAM_UI / "node_modules" / "@babel" / "parser").is_dir(),
-    reason="HOROSA_SOURCE_ROOT (upstream checkout with node_modules) not set",
+    reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout with node_modules) not set",
 )
 
 NOW_MS = 1793318400000  # 2026-10-30T00:00:00Z：所有「此刻」冻结在这一刻
@@ -524,7 +524,7 @@ def test_small_date_string_helpers_match_vendored() -> None:
 
 
 @requires_node
-@pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset 只在 POSIX 上有（本进程钉 TZ=UTC 比对；mac / Linux lane 覆盖）")
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="[platform] time.tzset 只在 POSIX 上有（本进程钉 TZ=UTC 比对；mac / Linux lane 覆盖）")
 def test_civil_instant_ms_matches_vendored_in_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     """civilInstantMsOfStr（主限「表中距今最近行」的时刻轴）：钟面按 parseDateTimeMs（严格 ISO 纯日期 = UTC 0 点、其余本机钟面）
     + 民用历与外推格里历同一标签之差。两侧都钉在 TZ=UTC 比（本机时区只影响「本机钟面」那一项）。

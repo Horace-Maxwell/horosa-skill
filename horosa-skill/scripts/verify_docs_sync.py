@@ -922,6 +922,47 @@ def check_knowledge_counts() -> None:
                     err(f"{rel}: 知识库 {key} 写 {got}，store 实际 {truth[key]}（/{pattern}/）")
 
 
+# HorosaBench 的用例数（手写 + 注册表生成）。README 曾同时写 105 与 106，而 runner 实际跑 120（C-18 尾巴）：
+# 每个措辞都要找得到（改了措辞同步改这里），且写的数等于 runner 合并后的用例数。
+BENCHMARK_CLAIMS: tuple[tuple[str, str], ...] = (
+    ("README.md", r"(\d+) 条基准用例与工具注册表锁步。"),
+    ("README.md", r"HorosaBench (\d+) 条基准用例"),
+    ("README.md", r"\| HorosaBench \| (\d+) 条基准用例"),
+    ("README_EN.md", r"\| HorosaBench \| (\d+) registry-locked benchmark cases"),
+    ("README_EN.md", r"HorosaBench: (\d+) benchmark cases"),
+)
+# 任何「N 条基准用例 / N … benchmark cases」都必须被上表的某条认领：新写一处数字而不登记，同样红。
+_BENCHMARK_ANY = re.compile(r"(\d+) 条基准用例|(\d+) (?:[a-z-]+ )?benchmark cases")
+
+
+def benchmark_case_count() -> int:
+    from horosa_skill.benchmark.runner import benchmark_dataset
+
+    return len(benchmark_dataset()["cases"])
+
+
+def benchmark_count_problems(texts: dict[str, str], expected: int) -> list[str]:
+    problems: list[str] = []
+    claimed: dict[str, int] = {}
+    for rel, pattern in BENCHMARK_CLAIMS:
+        found = re.findall(pattern, texts.get(rel, ""))
+        if not found:
+            problems.append(f"{rel}: HorosaBench 用例数措辞没找到（改了措辞就同步改 BENCHMARK_CLAIMS）: /{pattern}/")
+        claimed[rel] = claimed.get(rel, 0) + len(found)
+        problems += [f"{rel}: HorosaBench 写 {got} 条用例，runner 实际 {expected}（/{pattern}/）" for got in found if int(got) != expected]
+    for rel, text in texts.items():
+        mentions = len(_BENCHMARK_ANY.findall(text))
+        if mentions > claimed.get(rel, 0):
+            problems.append(f"{rel}: 有 {mentions} 处写了基准用例数，BENCHMARK_CLAIMS 只认领 {claimed.get(rel, 0)} 处——新措辞登记进去")
+    return problems
+
+
+def check_benchmark_counts() -> None:
+    texts = {rel: read(ROOT / rel) for rel in sorted({rel for rel, _ in BENCHMARK_CLAIMS})}
+    for problem in benchmark_count_problems(texts, benchmark_case_count()):
+        err(problem)
+
+
 def check_root_manifest_version() -> None:
     """MCPB manifest 的 version 必须与包版本锁步（曾停在 0.32.0 两个版本无人察觉）。
 
@@ -1307,6 +1348,7 @@ def main() -> None:
     check_export_contract_versions()
     check_gate_counts()
     check_knowledge_counts()
+    check_benchmark_counts()
     check_root_manifest_version()
     check_doc_map()
     check_lessons_distilled()

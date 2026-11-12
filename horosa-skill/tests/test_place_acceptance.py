@@ -35,7 +35,7 @@ TZ_LOOKUP = CORE_JS / "node_modules" / "tz-lookup" / "tz.js"
 
 requires_engine = pytest.mark.skipif(
     shutil.which("node") is None or not TZ_LOOKUP.is_file(),
-    reason="node + horosa-core-js node_modules (npm ci --omit=dev) required",
+    reason="[host] node + horosa-core-js node_modules (npm ci --omit=dev) required",
 )
 
 

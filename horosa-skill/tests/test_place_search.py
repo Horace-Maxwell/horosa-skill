@@ -34,14 +34,14 @@ _ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_SRC = Path(_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _ROOT else None
 TZ_LOOKUP = CORE_JS / "node_modules" / "tz-lookup" / "tz.js"
 
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 requires_engine = pytest.mark.skipif(
     shutil.which("node") is None or not TZ_LOOKUP.is_file(),
-    reason="node + horosa-core-js node_modules (npm ci --omit=dev) required",
+    reason="[host] node + horosa-core-js node_modules (npm ci --omit=dev) required",
 )
 requires_upstream = pytest.mark.skipif(
     UPSTREAM_SRC is None or not (UPSTREAM_SRC / "utils" / "aiTools" / "normalize" / "place.js").is_file() or not TZ_LOOKUP.is_file(),
-    reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) + core-js node_modules required",
+    reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) + core-js node_modules required",
 )
 
 # 固定查询集：简体 / 全拼 / 首字母 / 繁体 / 英文（含重音与去空格）/ 地区 / 「省+市」/ 找不到。
@@ -410,8 +410,9 @@ def _engine_copy(tmp_path: Path, *, drop_tool: bool = False, drop_dependency: bo
     if drop_tool:
         index = root / "src" / "tools" / "index.js"
         source = index.read_text(encoding="utf-8")
-        assert "  place_search: runPlaceSearch,\n" in source  # 否则「旧 core-js」没造出来，测试会因错误的原因通过
-        index.write_text(source.replace("  place_search: runPlaceSearch,\n", ""), encoding="utf-8")
+        entry = "  place_search: lazy('./placeSearch.js', 'runPlaceSearch'),\n"
+        assert entry in source  # 否则「旧 core-js」没造出来，测试会因错误的原因通过
+        index.write_text(source.replace(entry, ""), encoding="utf-8")
     if drop_dependency:
         shutil.rmtree(root / "node_modules" / "tz-lookup")
         assert not (root / "node_modules" / "tz-lookup").exists()

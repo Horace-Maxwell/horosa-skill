@@ -22,7 +22,7 @@ from horosa_skill.schemas.tools import BaZiBirthInput, BaZiDirectInput
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.time_basis import TIME_ALG_LABEL, time_basis_label
 
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 _SYD = {"date": "1990-07-15", "time": "14:30:00", "zone": "+10:00", "lat": "33s52", "lon": "151e12", "gender": 1,
         "agent_confirmed_settings": True}

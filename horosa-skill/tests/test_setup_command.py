@@ -553,7 +553,7 @@ def test_claude_code_replaces_an_entry_it_could_not_read(tmp_path: Path, monkeyp
     assert fake.entry("horosa")["command"] != "/old/uv"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="用 shebang 脚本当 claude；Windows 上由进程内替身的用例覆盖")
+@pytest.mark.skipif(os.name == "nt", reason="[platform] 用 shebang 脚本当 claude；Windows 上由进程内替身的用例覆盖")
 def test_claude_code_rerun_against_a_real_executable_that_rejects_duplicates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """同一件事，不打任何补丁：PATH 上放一个行为照真 CLI 抄的 `claude` 可执行文件，setup 连跑三次。
 

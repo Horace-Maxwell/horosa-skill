@@ -205,7 +205,7 @@ def _digest(text: str) -> str:
 def test_live_day_boundary_header_and_body_agree(tmp_path, tool: str) -> None:
     samples = build_sample_payloads()
     if tool not in samples:
-        pytest.skip(f"no sample payload for {tool}")
+        pytest.skip(f"[not-applicable] no sample payload for {tool}")
     service = make_service(tmp_path)
     base = {k: v for k, v in samples[tool].items() if k not in ("after23NewDay", "lateZiHourUseNextDay")}
     base["time"] = "23:30:00"

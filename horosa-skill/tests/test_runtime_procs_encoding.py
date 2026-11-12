@@ -71,7 +71,7 @@ def test_run_text_treats_a_missing_codec_as_no_answer(monkeypatch: pytest.Monkey
     assert procs._run_text(["tasklist"], 1.0, encoding="oem") == ""
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX 上映像路径交给 ps -o command=")
+@pytest.mark.skipif(os.name == "nt", reason="[platform] POSIX 上映像路径交给 ps -o command=")
 def test_process_image_path_is_none_off_windows() -> None:
     assert procs.process_image_path(os.getpid()) is None
 

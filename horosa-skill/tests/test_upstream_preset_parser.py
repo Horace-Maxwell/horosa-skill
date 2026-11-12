@@ -63,7 +63,7 @@ def test_member_assignment_in_a_comment_is_ignored() -> None:
     assert "ghost" not in up.parse_preset_sections(text)
 
 
-@pytest.mark.skipif(not _VENDORED_AIEXPORT.exists(), reason="vendored runtime-source not present")
+@pytest.mark.skipif(not _VENDORED_AIEXPORT.exists(), reason="[upstream-checkout] vendored runtime-source not present")
 def test_qimenzeri_seen_with_qimen_plus_three_sections() -> None:
     """The real regression: upstream declares qimenzeri outside the literal (aiExport.js:735).
 

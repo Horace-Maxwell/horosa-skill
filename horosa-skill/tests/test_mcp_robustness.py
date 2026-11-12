@@ -452,3 +452,63 @@ def test_facades_resolve_the_service_method_at_call_time(tmp_path, tool_name, me
 
     payload = json.loads(_text(anyio.run(_call)))
     assert seen == [method] and payload.get("replaced") == method, payload
+
+
+# --------------------------------------------------------------------------------------
+# 真技法并发（C-18 第 7 项）：上面三条把 service.run_tool 换成了 sleep 桩，量的是「事件循环让不让路」，
+# 看不见真调用路径上的串扰——共享的归一化 / 闸门 contextvar、JS 子进程的 stdin/stdout、存档写入。
+# 这里用本机就能算的 JS 技法（不需要后端）走真的 MCP 客户端 → 工具函数体 → service → node，并发打。
+# --------------------------------------------------------------------------------------
+
+# 六个纯本地 JS 技法 × 两份输入 = 12 份不同的输入；每份答案都不同（下面先断言），串了就对不上。
+_MOMENTS = ({"date": "1990-05-17", "time": "14:30:00"}, {"date": "2024-02-10", "time": "03:05:00"})
+_LOCAL_JS = {
+    "horosa_cn_huangli": ("huangli", _MOMENTS), "horosa_cn_bazi_birth": ("bazi_birth", _MOMENTS),
+    "horosa_cn_yizhangjing": ("yizhangjing", _MOMENTS), "horosa_cn_canping": ("canping", _MOMENTS),
+    "horosa_cn_heluo": ("heluo", _MOMENTS), "horosa_cn_xiaoliuren": ("xiaoliuren", ({"nums": [5, 20, 7]}, {"nums": [3, 8, 11]})),
+}
+
+
+def test_real_local_techniques_run_concurrently_without_cross_talk(tmp_path) -> None:
+    """24 次真调用（12 份输入各两次）在 4 路并发上限下同时跑：每个结果必须与同一输入串行跑出的快照逐字相同，
+    每次存档各有自己的 run_id。负向对照：让 JS 客户端经一个模块级变量交接子进程结果（并发时互相覆盖），12 份输入里 16 次答错、本例即红（实跑过）。"""
+    from mcp.client import Client
+
+    from horosa_skill.testing_payloads import build_sample_payloads
+
+    settings = Settings(db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs", runtime_root=tmp_path / "rt",
+                        data_dir=tmp_path / "data")
+    svc = HorosaSkillService(settings, store=MemoryStore(settings))
+    samples = build_sample_payloads()
+    inputs = [(mcp_name, index, {**samples[tool], **variant, "agent_confirmed_settings": True})
+              for mcp_name, (tool, variants) in _LOCAL_JS.items() for index, variant in enumerate(variants)]
+    expected = {}
+    for mcp_name, index, payload in inputs:
+        envelope = svc.run_tool(_LOCAL_JS[mcp_name][0], payload, save_result=False)
+        assert envelope.ok, (mcp_name, envelope.error)
+        expected[(mcp_name, index)] = envelope.data["snapshot_text"]
+    assert len(set(expected.values())) == len(expected), "输入之间的答案必须互不相同，否则串扰看不出来"
+
+    mcp = M.create_mcp_server(svc, settings)
+    results: list[tuple[str, str, dict]] = []
+
+    async def _storm():
+        async with Client(mcp) as client:
+            async def one(mcp_name: str, index: int, payload: dict) -> None:
+                result = await client.call_tool(mcp_name, {**payload, "response_view": "full"})
+                results.append((mcp_name, index, json.loads(result.content[0].text)))
+
+            async with anyio.create_task_group() as tg:
+                for mcp_name, index, payload in inputs * 2:
+                    tg.start_soon(one, mcp_name, index, payload)
+
+    started = time.perf_counter()
+    anyio.run(_storm)
+    elapsed = time.perf_counter() - started
+    assert len(results) == 2 * len(inputs)
+    wrong = [(name, index) for name, index, body in results
+             if not body.get("ok") or body["data"]["snapshot_text"] != expected[(name, index)]]
+    assert wrong == [], wrong
+    run_ids = [body.get("memory_ref", {}).get("run_id") for _n, _d, body in results]
+    assert all(run_ids) and len(set(run_ids)) == len(run_ids)
+    assert elapsed < 60, f"24 次本地 JS 调用用了 {elapsed:.1f} s"

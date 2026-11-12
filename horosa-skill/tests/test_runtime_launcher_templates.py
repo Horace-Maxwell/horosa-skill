@@ -46,13 +46,13 @@ def test_launcher_template_keeps_non_ascii_inside_comments(name: str) -> None:
     assert offenders == [], f"{name} 的非注释行含非 ASCII 字符（BOM 一旦丢失即 parse error）: {offenders}"
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell 5.1 只在 Windows 上可用")
+@pytest.mark.skipif(os.name != "nt", reason="[platform] Windows PowerShell 5.1 只在 Windows 上可用")
 @pytest.mark.parametrize("name", LAUNCHERS)
 def test_launcher_template_parses_under_windows_powershell(name: str) -> None:
     """真解析：用 runtime manager 实际调用的那个 `powershell`（5.1），不是 pwsh 7。"""
     powershell = shutil.which("powershell")
     if not powershell:
-        pytest.skip("powershell.exe not on PATH")
+        pytest.skip("[platform] powershell.exe not on PATH")
     target = TEMPLATE_ROOT / name
     probe = (
         "$errors = $null; $tokens = $null; "
@@ -172,12 +172,12 @@ def test_legacy_raw_string_embed_breaks_on_these_paths(value: str) -> None:
     ast.parse(ok)
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell 5.1 只在 Windows 上可用")
+@pytest.mark.skipif(os.name != "nt", reason="[platform] Windows PowerShell 5.1 只在 Windows 上可用")
 def test_windows_bootstrap_renders_under_real_powershell(tmp_path: Path) -> None:
     """The real engine: PowerShell 5.1 expands the here-string with a spaced+CJK root, CPython must compile it."""
     powershell = shutil.which("powershell")
     if not powershell:
-        pytest.skip("powershell.exe not on PATH")
+        pytest.skip("[platform] powershell.exe not on PATH")
     body = _bootstrap_body(_start_text())
     assignments = "\n".join(f"${name} = '{value}'" for name, value in _SPACED_CJK.items())
     out = tmp_path / "bootstrap.py"
@@ -338,14 +338,14 @@ print(json.dumps(out))
 """
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Swiss Ephemeris state is thread-local only on Windows builds (sweodef.h)")
+@pytest.mark.skipif(sys.platform != "win32", reason="[platform] Swiss Ephemeris state is thread-local only on Windows builds (sweodef.h)")
 def test_se_ephe_path_reaches_threads_that_never_set_a_path() -> None:
     """The real payload binaries (the lane's runtime, or the one installed under the default root): with SE_EPHE_PATH a
     fresh thread reads the bundled planet file; without it, it does not (Moshier on a clean machine, or whatever sits in
     \\sweph\\ephe\\ on the current drive) - the negative control that proves the variable is what makes the difference."""
     payload = _installed_windows_payload()
     if payload is None:
-        pytest.skip("no installed Windows runtime payload (python.exe + swefiles) under the configured runtime root")
+        pytest.skip("[platform] no installed Windows runtime payload (python.exe + swefiles) under the configured runtime root")
     python, swefiles = payload
 
     def probe(with_env: bool) -> dict:

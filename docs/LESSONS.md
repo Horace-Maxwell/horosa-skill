@@ -17,6 +17,8 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.50.0-dev (2026-11-12) | 中式技法同一个输入多种读法：太乙缺省日界盘头写 24 点、日柱按 23 点，options 里的日界只到快照（盘头辛酉正文壬戌）；`ad=-1` 被正传 / 小六壬 / 神数 ×14 等丢掉、太乙一半用；飞宫只认字面 female；小六壬「道家」、地占未知传本、紫微 timeAlg=2、河洛 / 一掌经十余旋钮认不出就换缺省；小六壬 nums / 灵棋 counts 用不了就悄悄以时起；河洛 / 参评公元前出空盘 ok=true | 入口只留一种形态（日界合到顶层、`ad=-1` 改写成带负号日期、派生盘 ad 随自己的时刻）；`cn_vocab` 词表挂 schema；给了用不了就拒并回 `cast_method`；本地历法域外 `tool.date_range_unsupported` |
+| v0.50.0-dev (2026-11-12) | 十把守卫红不了：live lane 跳过原因是黑名单、归档防穿越零测试、旋钮接线按子串、分层豁免空循环、并发测的是 sleep 桩、值金标认标题和注释、闸门自测住在被测数据里、约 50 条要上游检出的测试有的猜路径、错误码「有测试」认注释；selfcheck 中途 await 之后的 async 失败退出码 0 | 每把守卫配一个它声称要抓的变异体实跑红；跳过原因带标签、live lane 白名单；字面量 / 调用 / 代码记号才算证据；期望搬出被测物 |
+| v0.50.0-dev (2026-11-12) | 每次 JS spawn 静态加载全部 51 个技法模块（0.13 s，天星择日一次 7 次 = 1.1 s）；create_mcp_server 1.9 s（别名整词判断每次重编大字符类正则、每个默认值建 TypeAdapter） | tools/index.js 按需 import（0.04 s/次，129 次调用 stdout 逐字节相同）；正则只编一次、默认值短路、签名按进程缓存（tools/list 逐字节相同，0.9 s） |
 | v0.50.0-dev (2026-11-12) | 并行九批各自全绿，合进集成分支后撞出七处衔接：闸门看不到入参批的别名 / 嵌套提升、缺性别名单两份（12 / 17）、同一错误码登记两次、两个码表达同一件事、可选值键 accepted / allowed / valid_domains 三种、密钥判定子串误报 MAX_TOKENS、tools/list 量尺把线上不发的 null 计入撞硬顶 | 合并后在集成分支重跑全量门禁；同一事实只留一份（名单、错误码、详情键、归一化载荷）；预算守卫量线上真发的形状 |
 | v0.50.0-dev (2026-11-12) | MCP 结果把原始引擎树当正文交给模型：114 技法中位 17 万字符、72 个超过 Claude Code 5 万字符落盘线；调度两技法 290 万字符；`include_all` 指引 126 万字符；3 MB 澄清备注原样回显两遍 | MCP 缺省改阅读视图（正文一遍 + 段索引 + 依据卡），模型预算按段裁并给照抄可用的续读调用，JSON 不缩进，调度 / 合参 / 存档读回同一视图；整表体积守卫 |
 | v0.50.0-dev (2026-11-12) | `response_view` 跟着载荷进了 runner 的子调用：择日先算的展示盘快照被清空，黄历择日 14 段丢 7 段、多一条假的「结果不完整」（7 个择日技法同病） | `run_tool` 记调用深度，嵌套调用摘掉展示键、不套视图；整表对照每种视图与原始结果的段与告警 |
@@ -272,6 +274,44 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   起课输入拒绝、飞宫女命各写法、神数 ×14 gender=2 顶层与 options 都拒）。负向对照：去掉提升 / 折叠 / 太乙补缺省 / 词表 / 起课拒绝 / 飞宫解析，各自红。
 - **规则**：同一个事实只在入口读一次；技法设置不许 `x === 'a' ? 'a' : 缺省` 或 `payload.get(k) or 缺省` 吞掉认不出的值——进 `cn_vocab`（中式）/
   `western_vocab`（西占）；派生请求的 ad 跟它自己的时刻；给了起课输入就要用上，用不了就拒，结果说清起课方式。
+### v0.50.0-dev / 2026-11-12 — 守卫红不了：十把守卫各自漏掉它声称要抓的那类缺陷
+
+- **现象**（深审 C-18，逐把用影子副本变异体实跑）：
+  1. `verify_runtime_live.py` 用五个原因子串的**黑名单**判「live 用例没跑」；`test_live_shenshu_gender._pair` 函数体里
+     `pytest.skip("backend unavailable")`、`test_sync3131_mingli` 导入闸模块失败时兜成 `mark.skip("gate unavailable")`，都不在名单上 → lane 绿着没测 runtime。
+  2. `_extract_archive` / `_assert_extracted_within`：没有任何测试喂过恶意归档，删掉 tar 的 `filter="data"`、断言恒真、不调断言，全量照绿。
+  3. `verify_schema_knob_wiring` 在原文里找子串：`vargaVariant` 被 JS 的 `j.vargaVariants` 冒充，`pdYears` 被 agent_guidance 里描述它的句子冒充。
+  4. `test_layering::test_the_allowlists_name_only_real_offenders` 在空集合上循环，一条断言也不执行；扫描也看不见相对导入。
+  5. `test_mcp_robustness` 三条并发测试把 `service.run_tool` 换成 `time.sleep` 桩，真调用路径上的串扰看不见。
+  6. `verify_value_goldens` 只要值级块里「出现技法名」：calendarExtras / qimenzeri 的金标测的是 vendored 函数，从没走 tools/ 那层接线
+     （而当年的 bug 就在接线）；placeResolve 靠一行注释过关；15 个技法没有值金标。
+  7. `test_table_selftests_all_pass` 跑闸门数据文件自带的 self_tests：期望与被测物同住、只覆盖少数工具，改 `tool_table.py` 全绿。
+  8. 约 50 条测试要 `HOROSA_SOURCE_ROOT`（没有工作流设它），跳过原因十几种拼法；三处没设时**猜**维护者路径，猜到别的版本就直接红
+     （`test_mundane_and_election_presets_mirror_upstream_order`）。
+  9. `verify_error_recovery` 规则 4 在测试原文里搜码名：注释、docstring 里提一句也算「测过」（八个码这样混过去）。
+  10. 写新金标时撞上的第十一把：`selfcheck.mjs` 中途 `await Promise.all(pending)` 之后登记的 async check，失败打印 FAIL、退出码却是 0。
+- **根因**：守卫只证明过「现状下它是绿的」，没证明过「它要防的缺陷出现时它会红」。名字出现 ≠ 被调用，说明文字 ≠ 断言，黑名单 ≠ 覆盖。
+- **修**：跳过原因带七种标签（`tests/skips.py`），未标签即失败、跑完按标签计数，live lane 改白名单；恶意归档逐形状测试；旋钮按代码记号认、基线带上游
+  读者指针；豁免名单断言为空、相对 / 动态导入入扫描；真 MCP 客户端并发打六个本地 JS 技法；值金标要求块里调用 `src/tools/<名>.js` 的导出（新补 7 个，债
+  15 → 10）；闸门 114 技法 × 四形状的行为录像搬到 `tests/fixtures/gate_matrix.json`；上游路径只认 `HOROSA_SOURCE_ROOT`；错误码只认测试代码里的字面量
+  （还 24 个、四个如实回债，80 → 60）；selfcheck 收尾前再等一次。
+- **守卫**：每一条都配了变异体（把那个缺陷注回去）实跑红：`test_live_lane_skips_are_an_allowlist_not_a_denylist`、`test_runtime_archive_containment.py`（五个变异体）、
+  `test_a_substring_or_a_sentence_is_not_a_consumer`、`test_the_scan_sees_relative_and_dynamic_imports`、`test_real_local_techniques_run_concurrently_without_cross_talk`、
+  `test_a_tool_named_in_a_title_or_comment_is_not_covered`、`test_every_technique_gate_behaves_as_recorded`、`test_skip_tags.py`、
+  `test_a_code_named_only_in_a_comment_or_docstring_is_untested`。
+- **规则**：新守卫先写出它要抓的变异体并看它红，再看它在真树上绿；证据只认调用 / 字面量 / 代码记号；期望不和被测物住一个文件；跳过要说出标签（AGENTS §9.5）。
+
+### v0.50.0-dev / 2026-11-12 — JS 每次 spawn 加载全部技法模块；create_mcp_server 1.9 s
+
+- **现象**：`cli.mjs run <tool>` 每次 spawn 约 0.13 s，几乎全是 `tools/index.js` 静态 import 51 个技法模块（连同 vendored 引擎）；天星择日一次调用 spawn 7 次 ≈ 1.1 s。
+  `create_mcp_server` 全量面 1.9 s：`mcp_schema._appears_as_term` 每个别名重编一条带整段汉字区间的 IGNORECASE 正则（393 次 0.78 s），
+  pydantic 为约 9500 个字段默认值各建一个 TypeAdapter 编码。
+- **修**：`tools/index.js` 每项 `lazy(specifier, export)`，只载用到的模块（`lunarYearCache` 补丁仍静态装在最前）；loadcheck 逐项 `resolveRunner`。
+  `_appears_as_term` 字符类只编一次、逐候选位置查两侧；输入模型 schema 用 `_PlainDefaultsJsonSchema`（JSON 原生默认值短路）；签名按进程缓存。
+- **结果**（本机，负载 5–7）：spawn 0.13 → 0.04 s；天星 1.11 → 0.44 s、chart 0.62 → 0.31 s；114 个样例技法 live 的 129 次 node 调用 stdout 修前修后逐字节相同；
+  `create_mcp_server` 1.88 → 0.9 s（同进程再建 0.56 s），全量 / 精简面 tools/list 逐字节相同。奇门「jieqi/year 取两次」不成立：两次是上一年与当年两个种子年。
+- **守卫**：`test_appears_as_term_answers_like_the_lookaround_regex`（对旧正则逐例，自重叠病例）、`test_plain_defaults_generator_is_byte_identical_to_pydantics`、
+  `test_cached_signatures_build_the_same_tools_list_as_a_cold_build`、loadcheck 的 runner 表解析（写错导出名即红）。
 
 ### v0.50.0-dev / 2026-11-12 — 并行九批合并的衔接坑
 

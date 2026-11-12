@@ -99,13 +99,13 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `5905 / 5905 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 188 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `5970 / 5970 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 188 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
 | Technique provenance | every technique response carries `data.technique_card`; a declared-vs-measured compute mismatch is flagged explicitly |
 | Knowledge base | 31 domains; 243 manual entries, each returned with a file-and-version citation |
-| HorosaBench | 106 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
+| HorosaBench | 120 registry-locked benchmark cases + chart-fact faithfulness evaluation (wrong-chart and sycophancy adversarial cases go red) |
 | Local memory / report | every technique call writes 1 local run record + 1 JSON artifact |
 | Qi Men / Tai Yi / Jin Kou / Three Styles | unified on `ken`, same as the desktop app |
 | Tong She Fa / Decennials | headless, value-for-value with Xingque (`decennials.test.js` golden) |
@@ -327,7 +327,7 @@ The biggest risk in metaphysics output is not a miscalculation — it is the AI 
 
 - **Technique provenance card** — every technique response carries `data.technique_card`: technique + school settings (incl. the late-Zi midnight switches), **declared vs. measured compute source** (`compute.matches_declaration=false` must be surfaced as "treat with caution"), section completeness, version chain. `horosa_technique_report` renders a methods report (markdown / json / docx / pdf) for one run (`run_id`) or a whole conversation (`group_id`) and detects **cross-technique setting conflicts** (two techniques on different late-Zi switches cannot corroborate each other). Disable with `HOROSA_TECHNIQUE_CARD=0`.
 - **Cited knowledge base** — 31 domains = 3 in-app hover domains + 27 technique operation manuals + the 21-category bazi pithy corpus (416 entries: per-setting values and differences, school splits, algorithms and conventions), harvested from the desktop app's help panels. `knowledge_read` returns each entry with a "manual · domain · entry (file @ upstream version)" citation. Policy (in [SKILL.md](./skills/horosa-agent/SKILL.md)): doctrine quotes must carry a source; uncited readings must be labeled as general inference — the first anti-Barnum mechanism.
-- **Chart-fact faithfulness evaluation** — `horosa-skill benchmark faithfulness` runs a **deterministic verifier** (no LLM judge) over an AI reading: factual claims (pillar ganzhi, planet-in-sign, Zi Wei major-star palaces and body palace, Liu Ren three transmissions, Liu Yao hexagram names and moving lines, tarot card names and orientations, …) are checked one by one against machine-read chart truth and classified **supported / invented / contradicted**. Wrong-chart answers and sycophantic echoes ("my Moon is in Scorpio, right?" when it isn't) go red. HorosaBench: 106 benchmark cases generated from the tool registry and locked to it — a new tool without a case fails.
+- **Chart-fact faithfulness evaluation** — `horosa-skill benchmark faithfulness` runs a **deterministic verifier** (no LLM judge) over an AI reading: factual claims (pillar ganzhi, planet-in-sign, Zi Wei major-star palaces and body palace, Liu Ren three transmissions, Liu Yao hexagram names and moving lines, tarot card names and orientations, …) are checked one by one against machine-read chart truth and classified **supported / invented / contradicted**. Wrong-chart answers and sycophantic echoes ("my Moon is in Scorpio, right?" when it isn't) go red. HorosaBench: 120 benchmark cases (curated ones plus one per exported technique, generated from the tool registry) locked to it — a new tool without a case fails.
 - **Multi-technique synthesis (合参)** — `horosa_hecan` (CLI: `horosa-skill hecan`) casts several techniques in parallel on one question (same `group_id`; default 5, up to 8; `tools` may be explicit) and returns a synthesis **template**, not a verdict: per-technique conclusion slots must bind to that technique's real exported sections (responses carry evidence pointers; full text via `memory_show(run_id)`); `convergence` only when independently agreed; **`divergence` disclosed item by item — never averaged away, never one-sided**; setting conflicts (`consistency.setting_conflicts`) must be declared first.
 
 ### Optional cloud decision layer (TypeSafe Jev · off by default)
@@ -588,7 +588,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 5905 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 5970 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

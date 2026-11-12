@@ -30,7 +30,7 @@ from horosa_skill.schemas.tools.cn_divination import (
 _ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 _TMS = Path(_ROOT) / "Horosa-Web" / "astrostudyui" / "src" / "utils" / "techniqueMountSettings.js" if _ROOT else None
 requires_upstream = pytest.mark.skipif(
-    _TMS is None or not _TMS.is_file(), reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
+    _TMS is None or not _TMS.is_file(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
 )
 
 _BASE = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", "lat": "39n54", "lon": "116e23"}

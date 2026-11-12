@@ -35,7 +35,7 @@ def test_acquire_then_release_cleans_up(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(
     os.name == "nt",
-    reason="PID-liveness reclaim is POSIX-only (os.kill(pid,0) is a probe on POSIX but TerminateProcess "
+    reason="[platform] PID-liveness reclaim is POSIX-only (os.kill(pid,0) is a probe on POSIX but TerminateProcess "
     "on Windows); Windows reclaims stale locks by the age threshold, covered by the age test below.",
 )
 def test_reclaims_stale_lock_from_dead_pid(tmp_path: Path) -> None:

@@ -87,14 +87,13 @@ CLIENTS = (
 # 配置文件名按格式：Codex TOML、Goose YAML、dsh 独立补丁（client check 按文件名认格式），其余 JSON。
 CLIENT_CONFIG_NAMES = {"codex": "config.toml", "goose": "goose-config.yaml", "dsh": "horosa.cordis.yml"}
 FACTORY_START_POLL_SECONDS = 600  # a `starting` answer under the factory budget must turn ready within this
-# A live pytest run that skips for one of these reasons did not test the runtime at all.
-FORBIDDEN_SKIP_REASONS = (
-    "Horosa runtime unusable",
-    "live gates only run against an explicitly named instance",
-    "chart service not listening",
-    "java_routes_dead",
-    "not_listening",
-)
+# Every skip reason in the test suite starts with a tag (tests/skips.py; an untagged skip fails the run). A live lane
+# accepts only these tags — an allowlist: the old denylist of five reason substrings let any new way of not testing the
+# runtime (an in-body `pytest.skip("backend unavailable")`, a fallback `mark.skip("gate unavailable")`) pass silently
+# (C-18 #2). `no-runtime` and untagged lines fail the lane. Copy of tests/skips.LIVE_LANE_ALLOWED (lockstep test).
+LIVE_LANE_ALLOWED_SKIP_TAGS = frozenset({"upstream-checkout", "platform", "host", "opt-in", "version-skew", "not-applicable"})
+_SKIP_LINE = re.compile(r"^SKIPPED \[\d+\] (?P<where>[^:]+(?::\d+)?): (?P<reason>.*)$")
+_SKIP_TAG = re.compile(r"^\[(?P<tag>[a-z-]+)\] ")
 
 
 # ---------------------------------------------------------------- pure helpers (unit-tested)
@@ -150,10 +149,14 @@ def doctor_ready(report: dict[str, Any]) -> list[str]:
 
 
 def forbidden_skips(pytest_output: str) -> list[str]:
-    """`pytest -rs` lines whose reason means the live gates never ran."""
+    """`pytest -rs` lines whose reason is not on the live-lane allowlist (untagged, unknown tag, or `no-runtime`)."""
     hits: list[str] = []
     for line in pytest_output.splitlines():
-        if line.startswith("SKIPPED") and any(reason in line for reason in FORBIDDEN_SKIP_REASONS):
+        if not line.startswith("SKIPPED"):
+            continue
+        match = _SKIP_LINE.match(line.strip())
+        tag = _SKIP_TAG.match(match.group("reason")) if match else None
+        if tag is None or tag.group("tag") not in LIVE_LANE_ALLOWED_SKIP_TAGS:
             hits.append(line.strip())
     return hits
 

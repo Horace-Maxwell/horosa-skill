@@ -1,9 +1,11 @@
 {
-  "_comment": "Fields with no consumer inside this repo. The seeded set is verified-live-via-backend: each is forwarded verbatim to the upstream astropy/ken endpoints and read there by name (checked by hand against the upstream tree — e.g. pdProjection -> perchart.py:821). A NEW entry is not automatically that; point at the consumer before baselining it, or the guard degrades into a dumping ground. Refresh with `uv run python scripts/verify_schema_knob_wiring.py --update-baseline`.",
-  "unwired": [
-    "GermanyInput.personalOrb",
-    "GermanyInput.strictFactors",
-    "IndiaChartInput.dashaYearLength",
-    "IndiaChartInput.yuddhaCriterion"
-  ]
+  "_comment": "Fields with no consumer inside this repo, each with the upstream file:line that reads it (they are forwarded verbatim to the astropy / ken endpoints). An empty pointer fails the guard: point at the consumer before baselining, or the guard degrades into a dumping ground. Refresh with `uv run python scripts/verify_schema_knob_wiring.py --update-baseline` (keeps existing pointers).",
+  "unwired": {
+    "BirthInput.pdYears": "Horosa-Web/astropy/astrostudy/perchart.py:462 (data['pdYears'] → self.pdYears, clamped 1..3000)",
+    "GermanyInput.personalOrb": "Horosa-Web/astropy/websrv/webgermanysrv.py:78 (data.get('personalOrb') → MidPoint)",
+    "GermanyInput.strictFactors": "Horosa-Web/astropy/websrv/webgermanysrv.py:81 (data.get('strictFactors') → MidPoint)",
+    "IndiaChartInput.dashaYearLength": "Horosa-Web/astropy/websrv/webindiasrv.py:495 (data.get('dashaYearLength'))",
+    "IndiaChartInput.vargaVariant": "Horosa-Web/astropy/websrv/webindiasrv.py:497 (normalize_varga_variants(data.get('vargaVariant')))",
+    "IndiaChartInput.yuddhaCriterion": "Horosa-Web/astropy/websrv/webindiasrv.py:499 (data.get('yuddhaCriterion'))"
+  }
 }

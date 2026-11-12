@@ -399,7 +399,7 @@ def test_default_png_sets_never_share_a_numbered_name(tmp_path: Path, monkeypatc
     try:
         first = service.report_render({"run_id": run_id, "format": "png"})
     except ToolValidationError as exc:  # 本机没有 CJK TrueType 字体
-        pytest.skip(f"PNG needs a CJK font here: {exc.code}")
+        pytest.skip(f"[host] PNG needs a CJK font here: {exc.code}")
     second = service.report_render({"run_id": run_id, "format": "png"})
     names = [card["path"] for result in (first, second) for card in result["files"]]
     assert len(names) == len(set(names)) == 4

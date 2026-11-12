@@ -31,9 +31,9 @@ CORE_JS_SRC = CORE_JS / "src"
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _UPSTREAM_ROOT else None
 requires_upstream = pytest.mark.skipif(
-    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="HOROSA_SOURCE_ROOT (upstream checkout) not set"
+    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 
 def _node(module: str, body: str, *args: str) -> Any:

@@ -21,6 +21,8 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS
 
 
 def test_table_selftests_all_pass() -> None:
+    """数据文件自带的十几条行为例（benchmark 也跑）。它们与被测物住在同一个文件里、只覆盖少数工具，
+    挡不住 tool_table.py 的改动——整表的独立录像在 tests/test_gate_matrix.py（C-18 第 9 项）。"""
     report = run_sensitive_settings_selftests()
     assert report["ok"] is True, report["failures"]
     assert report["cases"] >= 9

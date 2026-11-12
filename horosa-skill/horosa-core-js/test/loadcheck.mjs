@@ -43,6 +43,19 @@ for (const file of files) {
 	}
 }
 
+// tools/index.js 按需加载每个技法模块（cli.mjs 一次只载用到的那个）：表里写错一个路径或导出名，静态加载查不出，
+// 只有调用到那个工具时才炸。这里把表里每一项都解析一遍（只加载、不运行）。
+const { listTools, resolveRunner } = await import(pathToFileURL(join(SRC, 'tools', 'index.js')).href);
+const toolNames = listTools();
+for (const name of toolNames) {
+	try {
+		const runner = await resolveRunner(name);
+		if (typeof runner !== 'function') failures.push(`tools/index.js ${name}: runner is ${typeof runner}`);
+	} catch (err) {
+		failures.push(`tools/index.js ${name}: ${err && err.message ? err.message : err}`);
+	}
+}
+
 if (failures.length) {
 	console.error(`loadcheck: FAIL — ${failures.length}/${files.length} modules (vendor + tools + shared) do not load:`);
 	for (const line of failures) console.error(`  - ${line}`);
@@ -51,4 +64,4 @@ if (failures.length) {
 	process.exit(1);
 }
 
-console.log(`loadcheck: ok (${files.length} modules — vendor + tools + shared — load cleanly)`);
+console.log(`loadcheck: ok (${files.length} modules — vendor + tools + shared — load cleanly; ${toolNames.length} tools/index.js entries resolve)`);

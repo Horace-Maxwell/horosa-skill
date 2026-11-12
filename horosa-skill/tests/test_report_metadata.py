@@ -47,7 +47,7 @@ def test_pdf_references_only_embedded_fonts_and_claims_ua_only_then(tmp_path: Pa
     rendered = service.report_render({"run_id": run_id, "format": "pdf", "style": "chart"})
     data = Path(rendered["artifact_path"]).read_bytes()
     if not re.search(rb"/FontFile2", data):
-        pytest.skip("本机没有中文 TrueType：CID 字体分支见 test_no_embeddable_cjk_font_is_said_out_loud")
+        pytest.skip("[host] 本机没有中文 TrueType：CID 字体分支见 test_no_embeddable_cjk_font_is_said_out_loud")
     assert not re.search(_STANDARD_14, data), re.findall(_STANDARD_14, data)
     assert b"pdfuaid:part" in data
 
@@ -64,7 +64,7 @@ def test_the_ua_claim_follows_the_fonts_actually_referenced(tmp_path: Path) -> N
     assert canvas.fonts_all_embedded() is False
     regular, _bold = renderers._register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont)  # 用报告自己的字体，不另注册
     if not isinstance(pdfmetrics.getFont(regular), TTFont):
-        pytest.skip("本机没有中文 TrueType")
+        pytest.skip("[host] 本机没有中文 TrueType")
 
     class Canvas(pdf_tagging.TaggingCanvas):
         initial_font = regular

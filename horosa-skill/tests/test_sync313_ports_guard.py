@@ -18,7 +18,7 @@ from horosa_skill.service.text import chart_family
 _ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 _ASTRO_CONST = Path(_ROOT) / "Horosa-Web" / "astrostudyui" / "src" / "constants" / "AstroConst.js" if _ROOT else None
 requires_upstream = pytest.mark.skipif(
-    _ASTRO_CONST is None or not _ASTRO_CONST.is_file(), reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
+    _ASTRO_CONST is None or not _ASTRO_CONST.is_file(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
 )
 
 

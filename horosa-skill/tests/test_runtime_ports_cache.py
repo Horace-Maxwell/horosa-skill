@@ -156,7 +156,7 @@ def _ipv6_loopback_available() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _ipv6_loopback_available(), reason="no IPv6 loopback on this host")
+@pytest.mark.skipif(not _ipv6_loopback_available(), reason="[host] no IPv6 loopback on this host")
 def test_port_bindable_sees_an_ipv6_only_listener() -> None:
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as sock:
         try:

@@ -40,7 +40,7 @@ TZ_LOOKUP = CORE_JS / "node_modules" / "tz-lookup" / "tz.js"
 requires_upstream = pytest.mark.skipif(
     shutil.which("node") is None or UPSTREAM_SRC is None
     or not (UPSTREAM_SRC / "components" / "astro" / "AstroHelper.js").is_file() or not TZ_LOOKUP.is_file(),
-    reason="node + HOROSA_SOURCE_ROOT (Horosa-Public checkout) + core-js node_modules required",
+    reason="[upstream-checkout] node + HOROSA_SOURCE_ROOT (Horosa-Public checkout) + core-js node_modules required",
 )
 
 

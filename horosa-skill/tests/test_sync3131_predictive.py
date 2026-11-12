@@ -33,7 +33,7 @@ _JAVA = (
 )
 requires_upstream = pytest.mark.skipif(
     _BACKEND is None or not _BACKEND.is_file() or not _JAVA.is_file(),
-    reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set",
+    reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set",
 )
 
 # 全非缺省设置（各取值域里一个非缺省档）：确保每个可选键都实际出现在请求体里。

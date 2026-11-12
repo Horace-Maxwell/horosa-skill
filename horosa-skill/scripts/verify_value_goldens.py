@@ -13,6 +13,12 @@ numeric comparison / serialized-structure equality) — see `_is_value_level`. I
 it can accept a weak golden that happens to mention a number. What it cannot do is accept a block
 with no value assertion at all, which is the state every regressed technique was in.
 
+A tool counts as covered only when a value-level block **calls** something the test file imported from
+`src/tools/<tool>.js` (statically, or `await import(...)` destructured), with comments and the check's
+display name stripped. The first version accepted any value-level block that *mentioned* the tool's name — in
+the check title, in a comment — so `placeResolve` was "covered" by a comment in the place-search block
+(C-18 #8; `tests/test_verify_js_boundary_contracts.py` keeps that counter-example).
+
 Two rules:
 
 1. Any tool named in `contracts/value_golden_debt.json`'s `covered` list must still have one.
@@ -52,7 +58,7 @@ BASELINE = PKG_ROOT / "contracts" / "value_golden_debt.json"
 # scanner strips bracketed section tokens before looking for CJK.
 _SECTION_TOKEN_RE = re.compile(r"\[[^\]]*\]")
 _ASSERT_RE = re.compile(r"assert\((.*?)\);", re.DOTALL)
-_CJK_LITERAL_RE = re.compile(r"['\"][^'\"]*[\u4e00-\u9fff][^'\"]*['\"]")
+_CJK_LITERAL_RE = re.compile(r"(['\"`])(?:(?!\1).)*[\u4e00-\u9fff](?:(?!\1).)*\1")  # '…' / "…" / `…${x}…`
 _NUM_COMPARE_RE = re.compile(r"(?:===|!==|>=|<=)\s*-?\d")
 _STRUCT_COMPARE_RE = re.compile(r"JSON\.stringify\(.*?\)\s*(?:===|!==)")
 
@@ -65,8 +71,33 @@ def _is_value_level(block: str) -> bool:
     return False
 
 
+_LINE_COMMENT_RE = re.compile(r"(?<![:'\"\\])//[^\n]*")
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_STATIC_IMPORT_RE = re.compile(r"import\s*\{([^}]*)\}\s*from\s*['\"]\.\./src/tools/([\w]+)\.js['\"]")
+_DYNAMIC_IMPORT_RE = re.compile(r"const\s*\{([^}]*)\}\s*=\s*await\s+import\(\s*['\"]\.\./src/tools/([\w]+)\.js['\"]\s*\)")
+
+
+def strip_comments(text: str) -> str:
+    """JS comments out (block comments, then `//` that is not inside a URL / string-ish context)."""
+    return _LINE_COMMENT_RE.sub("", _BLOCK_COMMENT_RE.sub("", text))
+
+
+def tool_bindings(text: str) -> dict[str, str]:
+    """Local name → tool module, for every name the test file imports from `../src/tools/<tool>.js`."""
+    bindings: dict[str, str] = {}
+    for pattern in (_STATIC_IMPORT_RE, _DYNAMIC_IMPORT_RE):
+        for names, module in pattern.findall(text):
+            for item in names.split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                local = re.split(r"\s+as\s+|\s*:\s*", item)[-1].strip()
+                bindings[local] = module
+    return bindings
+
+
 def _check_blocks(text: str) -> list[str]:
-    """Each top-level `check('name', …)` body, as raw text."""
+    """Each top-level `check('name', …)` body, as raw text (the display name is not part of the body)."""
     blocks: list[str] = []
     for m in re.finditer(r"check\(\s*['\"](.+?)['\"]\s*,", text):
         start = m.end()
@@ -80,27 +111,27 @@ def _check_blocks(text: str) -> list[str]:
                 if opened and depth == 0:
                     break
             i += 1
-        blocks.append(m.group(1) + "\n" + text[start : i + 1])
+        blocks.append(text[start : i + 1])
     return blocks
 
 
-def scan() -> tuple[set[str], set[str]]:
-    """(tools with a value-level golden, all local tool names)."""
-    text = SELFCHECK.read_text(encoding="utf-8")
-    value_blocks = [b for b in _check_blocks(text) if _is_value_level(b)]
-    # Also count the file's top-level `try { … }` golden blocks (zhengchuan/liureng use them).
-    for m in re.finditer(r"\ntry \{(.*?)\n\} catch", text, re.DOTALL):
-        if _is_value_level(m.group(1)):
-            value_blocks.append(m.group(1))
-    haystack = "\n".join(value_blocks)
+def value_blocks(text: str) -> list[str]:
+    """Value-level golden bodies, comments stripped: the `check(...)` blocks and the top-level `try { … }` goldens."""
+    bodies = [strip_comments(b) for b in _check_blocks(text)]
+    bodies += [strip_comments(m.group(1)) for m in re.finditer(r"\ntry \{(.*?)\n\} catch", text, re.DOTALL)]
+    return [b for b in bodies if _is_value_level(b)]
 
+
+def scan(text: str | None = None) -> tuple[set[str], set[str]]:
+    """(tools with a value-level golden that calls them, all local tool names)."""
+    text = SELFCHECK.read_text(encoding="utf-8") if text is None else text
+    bindings = tool_bindings(text)
     all_tools = {p.stem for p in TOOLS_DIR.glob("*.js") if p.stem not in {"index", "dispatch"}}
-    covered = set()
-    for tool in all_tools:
-        # `runXiaoLiuRen` / `runBaziGeju` — the exported runner name, or the module name itself.
-        camel = "run" + tool[0].upper() + tool[1:]
-        if re.search(rf"(?<![\w$])({re.escape(camel)}|{re.escape(tool)})(?![\w$])", haystack, re.IGNORECASE):
-            covered.add(tool)
+    covered: set[str] = set()
+    for body in value_blocks(text):
+        for local, module in bindings.items():
+            if module in all_tools and re.search(rf"(?<![\w$.]){re.escape(local)}\s*\(", body):
+                covered.add(module)
     return covered, all_tools
 
 
@@ -110,6 +141,13 @@ def main() -> int:
     args = ap.parse_args()
 
     covered, all_tools = scan()
+    base = json.loads(BASELINE.read_text(encoding="utf-8")) if BASELINE.is_file() else {}
+    # A helper module with no runner of its own is covered through the tool that calls it — only while that tool's
+    # golden exists and the entry says what of the helper's output the golden pins.
+    via = {name: entry for name, entry in (base.get("covered_via") or {}).items() if isinstance(entry, dict)}
+    via_problems = [f"{name}: covered_via needs 'via' (a covered tool) and 'what' (which of its output the golden pins)"
+                    for name, entry in via.items() if not entry.get("via") or not str(entry.get("what") or "").strip()]
+    covered |= {name for name, entry in via.items() if entry.get("via") in covered and name in all_tools}
     debt = sorted(all_tools - covered)
 
     if args.update_baseline:
@@ -120,12 +158,16 @@ def main() -> int:
                     "_comment": (
                         "Value-golden ratchet. `covered` tools have an assertion in selfcheck.mjs that "
                         "pins a computed value (a 格局 name, a percentage, a 起运岁) — not a section "
-                        "header. `debt` is the uncovered remainder and may only shrink; a NEW tool must "
+                        "header — in a block that CALLS something imported from src/tools/<tool>.js (a name in "
+                        "a check title or a comment does not count). `covered_via` lists helper modules with no "
+                        "runner of their own, covered through the tool that calls them. "
+                        "`debt` is the uncovered remainder and may only shrink; a NEW tool must "
                         "arrive with a golden. Expected values need an authority comment (upstream jest "
                         "golden / desktop same-chart / astronomical fact), per docs/LESSONS.md. "
                         "Refresh with `uv run python scripts/verify_value_goldens.py --update-baseline`."
                     ),
-                    "covered": sorted(covered),
+                    "covered": sorted(covered - set(via)),
+                    "covered_via": via,
                     "debt": debt,
                 },
                 ensure_ascii=False,
@@ -141,10 +183,9 @@ def main() -> int:
         print(f"missing {BASELINE.relative_to(PKG_ROOT)} — seed it with --update-baseline", file=sys.stderr)
         return 1
 
-    base = json.loads(BASELINE.read_text(encoding="utf-8"))
-    base_covered = set(base.get("covered", []))
+    base_covered = set(base.get("covered", [])) | set(via)
     base_debt = set(base.get("debt", []))
-    errors: list[str] = []
+    errors: list[str] = list(via_problems)
 
     regressed = sorted(base_covered - covered)
     if regressed:

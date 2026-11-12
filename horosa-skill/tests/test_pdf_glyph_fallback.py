@@ -42,7 +42,7 @@ def test_no_fallback_font_means_byte_identical_markup(monkeypatch: pytest.Monkey
 _HAVE_WINDOWS_FONTS = os.name == "nt" and Path("C:/Windows/Fonts/msyh.ttc").exists() and Path("C:/Windows/Fonts/simsunb.ttf").exists()
 
 
-@pytest.mark.skipif(not _HAVE_WINDOWS_FONTS, reason="needs the Windows system fonts (Microsoft YaHei + SimSun-ExtB)")
+@pytest.mark.skipif(not _HAVE_WINDOWS_FONTS, reason="[platform] needs the Windows system fonts (Microsoft YaHei + SimSun-ExtB)")
 def test_windows_pdf_embeds_the_extb_font_for_rare_chars(tmp_path: Path) -> None:
     document = {"title": f"灵棋经 {RARE}", "intro_text": f"象曰：{RARE}，吉。"}
     plain = {"title": "灵棋经", "intro_text": "象曰：吉。"}

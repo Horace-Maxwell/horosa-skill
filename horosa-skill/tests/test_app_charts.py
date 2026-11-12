@@ -27,7 +27,7 @@ BUNDLE = PKG_ROOT / "horosa-core-js" / "dist" / "app-charts.cjs"
 MANIFEST = PKG_ROOT / "contracts" / "app_charts_bundle.json"
 FIXTURE = json.loads(gzip.decompress((PKG_ROOT / "tests" / "fixtures" / "app_charts_live.json.gz").read_bytes()))
 
-needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not on PATH")
 
 
 class _Client:
@@ -54,7 +54,7 @@ def _cjk_font() -> tuple[str, str, dict[str, tuple[str, int]]]:
 
     fonts = _drawing_font_files(SIMPLIFIED)
     if not fonts:
-        pytest.skip("no CJK TrueType font on this machine")
+        pytest.skip("[host] no CJK TrueType font on this machine")
     regular, bold = fonts["names"]
     return regular, bold, {**fonts["files"], **app_charts.glyph_font_files()}
 
@@ -218,7 +218,7 @@ def test_theme_tokens_are_the_light_values_not_the_dark_fallbacks() -> None:
     )
     node = shutil.which("node")
     if not node:
-        pytest.skip("node not on PATH")
+        pytest.skip("[host] node not on PATH")
     out = subprocess.run([node, "-e", script, str(BUNDLE)], capture_output=True, text=True, check=True).stdout
     assert "#090b0e" not in out and "rgba(154, 106, 37, 0.16)" in out, out
 
@@ -266,7 +266,7 @@ def test_symbols_missing_from_the_text_font_use_the_fallback_chain() -> None:
     regular, bold, _files = _cjk_font()
     chain = app_charts._symbol_chain()
     if not chain or 0x211E in (app_charts._charset(regular) or set()):
-        pytest.skip("no symbol fallback font on this machine, or the text font already has ℞")
+        pytest.skip("[host] no symbol fallback font on this machine, or the text font already has ℞")
     group = Group(String(0, 0, "℞", fontName="Courier"), String(0, 0, "本命", fontName="Courier"))
     app_charts._swap_text_fonts(group, regular, bold)
     assert group.contents[0].fontName in {name for name, *_ in chain}
@@ -406,7 +406,7 @@ def test_core_js_tools_return_the_cast_objects_the_board_needs() -> None:
     from node_esm import run_node_esm
 
     if not shutil.which("node"):
-        pytest.skip("node not on PATH")
+        pytest.skip("[host] node not on PATH")
     tools = PKG_ROOT / "horosa-core-js" / "src" / "tools"
     script = (
         "const [x, g] = await Promise.all([import(process.argv[1]), import(process.argv[2])]);"

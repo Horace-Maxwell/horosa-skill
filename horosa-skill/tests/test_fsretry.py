@@ -209,7 +209,7 @@ def test_held_target_keeps_the_rendered_report_under_a_free_name(windows, monkey
     assert target.read_bytes() == b"old version" and (tmp_path / "report (1).pdf").read_bytes() == b"older copy"
 
 
-@pytest.mark.skipif(os.name != "nt", reason="a real open handle only blocks replace on Windows")
+@pytest.mark.skipif(os.name != "nt", reason="[platform] a real open handle only blocks replace on Windows")
 def test_really_open_target_on_windows(tmp_path: Path) -> None:
     target = tmp_path / "report.pdf"
     renderers.render_report({"title": "t", "intro_text": "first"}, output_path=target, format_name="pdf")

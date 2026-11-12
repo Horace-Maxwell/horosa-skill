@@ -25,7 +25,7 @@ _RANGE = range(18805, 18813)
 def _free_pair() -> tuple[int, int]:
     free = [port for port in _RANGE if ports.port_bindable(port) and not ports._accepting(port)]
     if len(free) < 2:
-        pytest.skip("no free test ports in 18805-18812")
+        pytest.skip("[host] no free test ports in 18805-18812")
     return free[0], free[1]
 
 
@@ -92,7 +92,7 @@ def test_our_own_half_started_service_is_not_called_foreign(tmp_path: Path, monk
     manager = _manager(tmp_path, monkeypatch, backend, chart)
     with _silent_listener(backend):
         if not ports.port_holders(backend):
-            pytest.skip("listener pids are not visible on this machine")
+            pytest.skip("[host] listener pids are not visible on this machine")
         manager._write_runtime_state({"managed": True, "status": "starting", "service_pids": [os.getpid()]})
         assert manager._ports_taken_by_others(_unreachable(backend, chart)) == []
 

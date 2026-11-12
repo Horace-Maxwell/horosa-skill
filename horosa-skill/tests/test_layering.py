@@ -33,9 +33,26 @@ def imported_modules(path: Path) -> list[tuple[int, str, str | None]]:
             continue
         if isinstance(node, ast.Import):
             found.extend((node.lineno, alias.name, None) for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            found.extend((node.lineno, node.module, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and (node.module or node.level):
+            module = _absolute(path, node.module, node.level)
+            found.extend((node.lineno, module, alias.name) for alias in node.names)
+        elif (isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", None)) in {"import_module", "__import__"}
+              and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
+            found.append((node.lineno, node.args[0].value, None))
     return found
+
+
+def _absolute(path: Path, module: str | None, level: int) -> str:
+    """`from ..service import x` in `horosa_skill/engine/a.py` → `horosa_skill.service`（相对导入也是导入）。"""
+    if level == 0:
+        return module or ""
+    try:
+        parts = ["horosa_skill", *path.relative_to(PACKAGE).with_suffix("").parts]
+    except ValueError:  # 包外的临时文件（负向对照）：按包顶层算
+        parts = ["horosa_skill", path.stem]
+    package = parts[:-1]  # 模块所在的包；`__init__.py` 的包就是它自己
+    base = package[: len(package) - (level - 1)]
+    return ".".join([*base, *([module] if module else [])])
 
 
 def _modules_outside(*packages: str) -> list[Path]:
@@ -75,9 +92,30 @@ def test_the_scan_sees_imports_inside_functions(tmp_path: Path, monkeypatch) -> 
 
 
 def test_the_allowlists_name_only_real_offenders() -> None:
-    """名单只许缩短：修好了就从名单里删掉，别留一个不再需要的豁免。"""
-    for rel in SERVICE_IMPORT_ALLOWED:
-        assert upward_imports([PACKAGE / rel], "horosa_skill.service", frozenset()), f"{rel} 已不再 import service，从豁免名单删掉"
+    """名单只许缩短：修好了就从名单里删掉，别留一个不再需要的豁免。service 的豁免已清零，所以它只能是空的
+    （旧写法在空名单上循环，一条断言也不执行——C-18 第 6 项）；surfaces 的豁免只剩入口 `__main__.py`，它必须真的 import surfaces。"""
+    assert SERVICE_IMPORT_ALLOWED == frozenset(), "service 的向上依赖已清零：修好它，别加豁免"
+    assert SURFACE_IMPORT_ALLOWED == frozenset({"__main__.py"})
+    for rel in SURFACE_IMPORT_ALLOWED:
+        assert upward_imports([PACKAGE / rel], "horosa_skill.surfaces", frozenset()), f"{rel} 已不再 import surfaces，从豁免名单删掉"
+
+
+def test_the_scan_sees_relative_and_dynamic_imports(tmp_path: Path, monkeypatch) -> None:
+    """负向对照：`from ..service import x`、`importlib.import_module("horosa_skill.service")` 同样是向上依赖。
+    旧扫描只看 level == 0 的 from-import，这两种写法都能溜过去。"""
+    deep = PACKAGE / "engine" / "probe_not_a_real_module.py"  # 只用来算相对路径，不落盘
+    assert _absolute(deep, "service", 2) == "horosa_skill.service"
+    assert _absolute(deep, None, 1) == "horosa_skill.engine"
+    assert _absolute(PACKAGE / "engine" / "__init__.py", "x", 1) == "horosa_skill.engine.x"
+    monkeypatch.setattr(sys.modules[__name__], "PACKAGE", tmp_path)
+    source = tmp_path / "low.py"
+    source.write_text("import importlib\ndef f():\n    return importlib.import_module('horosa_skill.service.api')\n", encoding="utf-8")
+    assert upward_imports([source], "horosa_skill.service", frozenset()) == [f"{source.name}:3 -> horosa_skill.service.api"]
+    (tmp_path / "engine").mkdir()
+    relative = tmp_path / "engine" / "low2.py"
+    relative.write_text("def f():\n    from ..service import api\n    from .. import service\n    return api, service\n", encoding="utf-8")
+    assert upward_imports([relative], "horosa_skill.service", frozenset()) == [
+        "engine/low2.py:2 -> horosa_skill.service", "engine/low2.py:3 -> horosa_skill"]
 
 
 def test_surfaces_reach_the_runtime_through_public_names() -> None:

@@ -274,7 +274,7 @@ def test_guolao_default_mansion_system_tracks_upstream_default(tmp_path: Path) -
     assert "\n报时星太阳时：真太阳时(经度+均时差)（行星时制式：" in f"\n{info}", info
 
 
-@pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
+@pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="[upstream-checkout] drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
 def test_guolao_default_mansion_system_sentinel() -> None:
     """上游再改 GUOLAO_DEFAULT_SU28_MODE → 红 → 同步 runners/guolao.py _GUOLAO_DEFAULT_SU28_MODE 与上一条测试。"""
     style = (_UPSTREAM_SRC / "components/guolao/GuoLaoChartStyle.js").read_text(encoding="utf-8")

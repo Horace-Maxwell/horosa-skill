@@ -139,13 +139,13 @@ def test_a_symlinked_skill_managed_by_another_tool_is_left_alone(tmp_path: Path)
     try:
         (skills / skill_install.SKILL_NAME).symlink_to(real, target_is_directory=True)
     except OSError:
-        pytest.skip("symlinks not permitted on this host")
+        pytest.skip("[host] symlinks not permitted on this host")
     result = skill_install.install_skill(skills)
     assert result["action"] == "skipped" and result["state"] == "symlink"
     assert (real / "SKILL.md").read_text(encoding="utf-8") == "managed by npx skills\n"
 
 
-@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+@pytest.mark.skipif(os.name != "nt", reason="[platform] directory junctions are Windows-only")
 def test_a_junctioned_skill_on_windows_is_left_alone(tmp_path: Path) -> None:
     """Windows 普通用户建不了符号链接，别的工具常用目录联接；`is_symlink()` 对 junction 是 False（v0.43.1-dev）。
     取 bundle 原样内容当对方目录：不认 junction 时它会被判成 current_unmarked，marker 就写进了对方的真目录。"""

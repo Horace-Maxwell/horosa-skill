@@ -623,7 +623,7 @@ def test_router_reaches_the_new_tools_without_collisions(query: str, expect: lis
 # 上游改了任何一处 → 红 → 重核本移植并更新 fixture 金标（preflight_release 带 HOROSA_SOURCE_ROOT 跑全套 pytest）。
 
 _UPSTREAM_SRC = Path(os.environ.get("HOROSA_SOURCE_ROOT") or "/nonexistent") / "Horosa-Web" / "astrostudyui" / "src"
-needs_upstream = pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
+needs_upstream = pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="[upstream-checkout] drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
 
 _UPSTREAM_BUILDERS = {
     "components/astro/AstroEphemeris.js": ("buildEphemerisSnapshotText", "ephemerisLimitsText", "defaultEphemerisWindow", "fmtDateOf"),
@@ -718,7 +718,7 @@ _EPH_EDGE_ROWS = [
 
 
 @needs_upstream
-@pytest.mark.skipif(not (_UPSTREAM_SRC.parent / "node_modules" / "@babel" / "parser").is_dir(), reason="needs upstream node_modules (@babel)")
+@pytest.mark.skipif(not (_UPSTREAM_SRC.parent / "node_modules" / "@babel" / "parser").is_dir(), reason="[upstream-checkout] needs upstream node_modules (@babel)")
 def test_ephemeris_event_positions_equal_upstream_ephpos(tmp_path: Path) -> None:
     import subprocess
 

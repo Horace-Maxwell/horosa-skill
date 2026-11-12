@@ -3,8 +3,8 @@
 🔴 为什么（v0.50.0-dev，E-11 / C-19 / E-02）：
   · `HOROSA_NODE_BIN` 指向不存在的文件时旧实现**悄悄**回落到 runtime 自带 node / PATH 上的 node —— 用户以为在用
     自己指定的那个，排查时谁也想不到；现在是 `js_engine.node_bin_missing`，点名变量。
-  · Node 低于 horosa-core-js 的下限（package.json `engines.node`，import attributes 要 ≥ 20.10）时，`tools/index.js`
-    一加载就 SyntaxError，**所有** JS 技法报 `js_engine.execution_failed`、`details.error = {}`，原因只在
+  · Node 低于 horosa-core-js 的下限（package.json `engines.node`，import attributes 要 ≥ 20.10）时，带 JSON import 的模块
+    一加载就 SyntaxError（当时 `tools/index.js` 静态 import 全部模块，于是**所有** JS 技法）报 `js_engine.execution_failed`、`details.error = {}`，原因只在
     `details.debug.stderr` 里；现在先读版本，低了直接 `js_engine.node_too_old`（找到的 / 要求的 / 怎么修）。
   · doctor 只探 runtime 自带的 node，可真正被用的可能是 PATH 上的另一个；现在 doctor 报的就是这里解析出的那一个。
 

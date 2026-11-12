@@ -125,6 +125,19 @@ def test_verifier_flags_an_untested_code_and_a_paid_debt(tmp_path: Path) -> None
     assert "tested now" in paid and "place.ambiguous" in paid
 
 
+def test_a_code_named_only_in_a_comment_or_docstring_is_untested(tmp_path: Path) -> None:
+    """规则 4 只认测试代码里的字符串字面量：此前按原文搜，注释 / docstring 里提一句（「旧实现会报 runtime.starting」）
+    就记作「测过」——八个码这样混了过去。负向对照：test_string_literals 换回读原文，本例即红（实跑过）。"""
+    verifier = _verifier()
+    src, tests = _tree(tmp_path, (
+        "from horosa_skill.errors import ToolValidationError\n"
+        "def a():\n    raise ToolValidationError('x', code=\"place.not_found\")\n"
+    ), test_text='"""Module doc: place.not_found used to be raised here."""\n# place.not_found\ndef test_x():\n    """place.not_found again"""\n    assert 1\n')
+    assert "place.not_found" in "\n".join(verifier.check_registry(src, tests, debt=[]))
+    (tests / "test_b.py").write_text("def test_y(code):\n    assert code == 'place.not_found'\n", encoding="utf-8")
+    assert verifier.check_registry(src, tests, debt=[]) == []
+
+
 def test_the_real_tree_passes_the_registry_rules() -> None:
     verifier = _verifier()
     assert verifier.check_registry(debt=verifier.load_test_debt()) == []

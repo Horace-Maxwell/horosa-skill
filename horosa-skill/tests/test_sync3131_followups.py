@@ -30,12 +30,12 @@ UPSTREAM_WEB = Path(_UPSTREAM_ROOT) / "Horosa-Web" if _UPSTREAM_ROOT else None
 UPSTREAM_UI = UPSTREAM_WEB / "astrostudyui" / "src" if UPSTREAM_WEB else None
 XUANSHI_DB = UPSTREAM_WEB / "astropy" / "astrostudy" / "xuanshi" / "data" / "public_data.sqlite" if UPSTREAM_WEB else None
 requires_upstream = pytest.mark.skipif(
-    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="HOROSA_SOURCE_ROOT (upstream checkout) not set"
+    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
 requires_xuanshi_db = pytest.mark.skipif(
-    XUANSHI_DB is None or not XUANSHI_DB.is_file(), reason="HOROSA_SOURCE_ROOT xuanshi public_data.sqlite not available"
+    XUANSHI_DB is None or not XUANSHI_DB.is_file(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT xuanshi public_data.sqlite not available"
 )
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 # 上游库里的真实天象记录（/xuanshi/celestial_event?id=TWCHRON-00132，vendored v3.13.1 实例 :8877 实抓，原样）。
 CELESTIAL_132: dict[str, Any] = {

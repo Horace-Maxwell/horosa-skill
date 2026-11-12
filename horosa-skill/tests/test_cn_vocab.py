@@ -31,7 +31,7 @@ from horosa_skill.testing_payloads import build_sample_payloads
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "horosa-core-js" / "src"
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not on PATH")
 
 # 词表的规范值必须在它的消费方源码里出现（同一个字面量）——换句话说，表里不许有引擎不认的值。
 _CONSUMER = {

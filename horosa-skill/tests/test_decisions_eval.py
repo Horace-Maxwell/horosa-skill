@@ -150,3 +150,20 @@ def test_dataset_sha256_is_line_ending_agnostic(tmp_path: Path) -> None:
     (crlf / "routing.jsonl").write_bytes(rows.replace("\n", "\r\n").encode("utf-8"))
     assert ev.dataset_sha256("routing", lf) == ev.dataset_sha256("routing", crlf)
     assert ev.dataset_sha256("routing", lf) == hashlib.sha256(rows.encode("utf-8")).hexdigest(), "LF 内容 sha 不变 → 已提交的锁仍有效"
+
+
+def test_gold_sets_are_current_with_their_generator() -> None:
+    """金标集是生成件（scripts/gen_jev_eval_sets.py：router_corpus.json + 本文件内的人工标注）。v0.49.0 时
+    routing.jsonl 落后路由语料 13 条、没有任何守卫发现（C-18）；现在按生成器重算一遍逐字节比。
+    负向对照：往 router_corpus.json 加一条用例不重跑生成器，本例即红（实跑过）。"""
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "gen_jev_eval_sets.py"
+    spec = importlib.util.spec_from_file_location("gen_jev_eval_sets_under_test", script)
+    gen = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(gen)
+    for name, rows in (("routing", gen._routing_cases()), ("extract", gen._extract_cases()), ("zhancat", gen._zhan_cases())):
+        expected = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
+        committed = (EVAL_DIR / f"{name}.jsonl").read_text(encoding="utf-8")
+        assert committed == expected, f"contracts/jev_eval/{name}.jsonl is stale: run `uv run python scripts/gen_jev_eval_sets.py`"

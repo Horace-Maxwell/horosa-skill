@@ -52,6 +52,13 @@ import { bjShiftMinutes } from '../src/vendor/utils/beijingTimeShift.js';
 import { Solar as LunarSolar } from 'lunar-javascript';
 import { runZiweiBirth } from '../src/tools/ziweiBirth.js';
 import { runSuzhan } from '../src/tools/suzhan.js';
+import { runCalendarExtras } from '../src/tools/calendarExtras.js';
+import { runQimenZeri } from '../src/tools/qimenzeri.js';
+import { runTongshu } from '../src/tools/tongshu.js';
+import { runEgyptSection } from '../src/tools/egyptSection.js';
+import { runClassicalDerived } from '../src/tools/classicalDerived.js';
+import { runJinkou } from '../src/tools/jinkou.js';
+import { runUranianExtra } from '../src/tools/uranianExtra.js';
 import { runSanshiUnited } from '../src/tools/sanshiUnited.js';
 import { calcDunJia } from '../src/vendor/dunjia/DunJiaCalc.js';
 import { buildLocalJieqiYearSeed } from '../src/vendor/utils/localNongliAdapter.js';
@@ -1470,6 +1477,99 @@ check('progextra(neroman / bezzafigure / jayprofection / michon) — directed fi
   assert(JSON.stringify(bez.request_fields) === JSON.stringify({ orb: 1 }), 'bezza default orb');
 });
 
+// ---- v0.50.0-dev（C-18 第 8 项）：值金标守卫改认「调用 tools/<名>.js 的导出」之后补的金标 ----
+// 守卫此前只看 check 标题 / 注释里有没有技法名：calendarExtras 与 qimenzeri 的旧金标测的是它们用到的 vendored 函数
+// （personBazi / computeQimenScanPan），从没走过 tools/ 里的那层接线——而那两条 bug 正是接线 bug。下面各条都经 run* 入口。
+// 期望值的来源写在每条里：独立的库 / 输入夹具里的引擎数据交叉核对，或录自本仓引擎（2026-11-12，标明「录」）。
+
+check('calendarExtras 经工具入口：当事人八字段 = 同一引擎 personBazi 的喜用（03:00 与 21:00 必不同）', () => {
+  const line = (time) => (runCalendarExtras({ year: 2028, month: 4, day: 6, rizi: { event: 'marriage', year: 2028, topN: 3,
+    persons: [{ name: '甲', date: '1990-05-15', time, gender: 1 }] } }).text.split('\n').find((l) => l.includes('（甲）：')) || '');
+  // 权威：vendored riziEngine.personBazi（与上游 RiziMain.baziOf 同一引擎）；工具层只负责把纯时刻交下去。
+  for (const time of ['03:00:00', '21:00:00']) {
+    const xi = personBazi({ date: '1990-05-15', time, gender: 1 }).xi.join('');
+    assert(line(time).includes(`喜用${xi}｜`), `${time}: ${line(time)} 应含 喜用${xi}`);
+  }
+  assert(line('03:00:00') !== line('21:00:00'), '两个时辰的当事人八字段不该相同（时刻没进盘）');
+  // 日干支 = lunar-javascript 独立算的同日干支（[通书择日] 段）。
+  const day = LunarSolar.fromYmd(2028, 4, 6).getLunar().getDayInGanZhi();
+  assert(runCalendarExtras({ year: 2028, month: 4, day: 6 }).text.includes(`日干支：${day}`), `通书段日干支应为 ${day}`);
+});
+
+check('qimenzeri 经工具入口：青龙回首扫描区间录值 + timeAlg 真的改结果', async () => {
+  const qz = { action: 'scan', cfg: { startDate: '2028-04-01', startTime: '00:00', endDate: '2028-04-08', endTime: '23:59' },
+    geo: { zone: '+08:00', gpsLon: 121.4667, gpsLat: 31.2167, lon: '121e28', lat: '31n13' }, options: { timeAlg: 0, qijuMethod: 'zhirun' },
+    tree: { kind: 'group', joiner: 'all', children: [{ type: 'pattern_ji', params: { names: ['青龙回首'], palaces: [], matchMode: 'any' } }] } };
+  const spans = async (timeAlg) => (await runQimenZeri({ ...qz, options: { ...qz.options, timeAlg } })).data.intervals.map((i) => `${i.start}~${i.end}`);
+  const flat = await spans(0);
+  // 录（本仓引擎 2026-11-12，与 live 样例载荷同一请求）：8 天 11 段，首段 4 月 1 日戌时；起局时柱口径由上一条 computeQimenScanPan 金标独立钉住。
+  assert(flat.length === 11 && flat[0] === '2028-04-01 18:58~2028-04-01 20:58' && flat[10] === '2028-04-08 14:56~2028-04-08 16:56', JSON.stringify(flat));
+  const solar = await spans(1);
+  assert(solar[0] === '2028-04-01 19:00~2028-04-01 21:00' && JSON.stringify(solar) !== JSON.stringify(flat), `timeAlg=1: ${solar[0]}`);
+});
+
+check('tongshu 董公：日干支 / 建除 = lunar-javascript 独立值，「直星」日宜嫁娶', () => {
+  const text = (date) => runTongshu({ date, event: '嫁娶', school: 'donggong' }).text;
+  for (const [y, m, d] of [[2028, 4, 6], [2028, 4, 11]]) {
+    const lunar = LunarSolar.fromYmd(y, m, d).getLunar();
+    const gz = lunar.getDayInGanZhi();
+    const jianchu = lunar.getZhiXing();   // 建除十二神（lunar-javascript 自带，与 vendored 通书引擎无关）
+    const date = `${y}-${`${m}`.padStart(2, '0')}-${`${d}`.padStart(2, '0')}`;
+    assert(text(date).includes(`日干支：${gz}`) && text(date).includes(`${jianchu}${gz.slice(1)}日`), `${date}: ${gz} ${jianchu}`);
+  }
+  // 录（董公择日表，vendored）：4 月 11 日丙寅开日值「直星」，用事嫁娶为宜；4 月 6 日辛酉为正四废。
+  assert(text('2028-04-11').includes('用事「嫁娶」：通书宜') && text('2028-04-11').includes('三吉星：直星值日'), 'tongshu 04-11');
+  assert(text('2028-04-06').includes('辛酉正四废'), 'tongshu 04-06');
+});
+
+check('egyptSection 各行星落旬 = 夹具盘黄经所在 10° 段（36 旬定义）', () => {
+  const text = runEgyptSection({ chart, fields: {} }).text;
+  const cn = { Sun: '日', Moon: '月', Mercury: '水', Venus: '金', Mars: '火', Jupiter: '木', Saturn: '土' };
+  for (const [id, label] of Object.entries(cn)) {
+    const obj = chart.chart.objects.find((o) => o.id === id);
+    const n = Math.floor(obj.lon / 10) + 1;   // 旬 = 黄道 36 等分，第 n 旬覆盖 [10(n-1), 10n)°
+    const row = text.split('\n').find((l) => l.startsWith(`${label}：`)) || '';
+    assert(row.startsWith(`${label}：第${n}旬 `) && row.includes(`(${(n - 1) * 10}–${n * 10}°)`), `${id} lon ${obj.lon} → 第${n}旬；实得 ${row}`);
+  }
+  // 录（vendored 旬名表）：日在双子第 2 旬 Remen-kher-Saḥ，面主火。
+  assert(text.includes('日：第8旬 双子2(70–80°)·埃及名 Remen-kher-Saḥ·面主火'), 'sun decan name');
+});
+
+check('classicalDerived 转宫首行 = 夹具盘上升星座；气候带按出生纬度落第 3 带（亚历山大）', () => {
+  const text = runClassicalDerived({ chart, eminence: {} }).snapshot_text;
+  const asc = chart.chart.objects.find((o) => o.id === 'Asc');
+  const signCn = { Libra: '天秤', Scorpio: '天蝎', Aries: '白羊', Cancer: '巨蟹' }[asc.sign];
+  assert(signCn && text.includes(`| 1·命宫·自我 | ${signCn} |`), `Asc ${asc.sign}`);
+  // 托勒密七气候带：第 3 带中线约北纬 30°43′（下埃及·亚历山大，最长昼 14 时），夹具纬度 31n13 落此带。
+  assert(text.includes('出生纬度 31.22°N,归入第 3 气候带（亚历山大(下埃及)·最长昼 14h'), 'clime');
+  // 斜升时度十二座之和恒 360（闭式），首末两座对称。
+  const rows = text.split('\n').filter((l) => /^\| (白羊|金牛|双子|巨蟹|狮子|处女|天秤|天蝎|射手|摩羯|水瓶|双鱼) \| [\d.]+° \|/.test(l));
+  const sum = rows.reduce((acc, l) => acc + Number(/\| ([\d.]+)° \|/.exec(l)[1]), 0);
+  assert(rows.length === 12 && Math.abs(sum - 360) < 0.1, `ascensions ${rows.length} rows sum ${sum}`);
+});
+
+check('jinkou 格式器把 ken 引擎的四位 / 三盘原样落进快照（夹具 = 共享引擎 2028-04-06 09:33 上海的真响应）', () => {
+  const fx = JSON.parse(readFileSync(join(HERE, 'fixtures', 'jinkou_live_2028-04-06.json'), 'utf8'));
+  const ken = fx.ken_response;
+  const text = runJinkou(fx).snapshot_text;
+  const g = ken.ganzhi;
+  assert(text.includes(`四柱：${g.year}年 ${g.month}月 ${g.day}日 ${g.time}时`), 'pillars from ken');
+  assert(text.includes(`地分：${ken.difen}`) && text.includes(`月将：${ken.yuejiang}`) && text.includes(`占时：${ken.zhanshi}`), 'difen/yuejiang/zhanshi');
+  assert(text.includes(`用爻：${ken.yongYao.label}(${ken.yongYao.sign})`), 'yongYao');
+  for (const row of ken.rows.filter((r) => r.label !== '人元')) {
+    assert(text.includes(`| ${row.label} | ${row.gan} | ${row.content} | ${row.shenjiang} | ${row.element}${row.season} |`), `row ${row.label}`);
+  }
+});
+
+check('uranianExtra 虚星参考 = 上游八颗汉堡学派虚星表（周期 / 距离，vendored）', () => {
+  const text = runUranianExtra({ showTnp: true, labels: {} }).text;
+  // 录（vendored 上游表）：丘比特 262/262.5 年 41AU，波塞冬 720/765.3/745 年 83.5AU；八星分前后两组。
+  assert(text.includes('丘比特(第一组(前四星))：周期 甲262/乙262.5 年 · 41AU'), 'cupido');
+  assert(text.includes('波塞冬(第二组(后四星))：周期 甲720/乙765.3/丙745 年 · 83.5AU'), 'poseidon');
+  assert(text.split('\n').filter((l) => /^ {2}\S+\(第[一二]组/.test(l)).length === 8, 'eight TNPs');
+  assert(runUranianExtra({ showTnp: false, labels: {} }).text === '' || !runUranianExtra({ showTnp: false, labels: {} }).text.includes('丘比特'), 'showTnp=false hides the table');
+});
+
 // 地名检索（v0.48.0，tools/placeSearch.js 懒加载：tz-lookup + 城市库）。期望值 = 上游 resolvePlaceOffline / dstAwareZoneAt 在上游源上
 // 跑出的值（tests/fixtures/place_search_upstream.json，test_fixture_matches_upstream 对着 HOROSA_SOURCE_ROOT 复核）：
 // 上海 1988-07-01 在 1986–1991 夏令时内 +09:00；「朝阳」三处同名不唯一；乌鲁木齐 2000 年按北京时间统一 +08:00、关掉统一回到 +06:00。
@@ -1502,6 +1602,10 @@ try {
   failures += 1;
   console.error(`  FAIL placeSearch: ${err.message}`);
 }
+
+// 🔴 收尾前再等一次：中途那句 `await Promise.all(pending)` 之后登记的 async check，其失败会在「all passed」打印之后才到，
+// 退出码照样 0（v0.50.0-dev 加 qimenzeri 金标时撞上：变异体打印了 FAIL，进程却以 0 退出）。
+await Promise.all(pending);
 
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);

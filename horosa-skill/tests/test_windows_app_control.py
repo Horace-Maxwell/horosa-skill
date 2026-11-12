@@ -118,7 +118,7 @@ def test_smart_app_control_registry_values() -> None:
     ]
 
 
-@pytest.mark.skipif(os.name != "nt", reason="registry + doctor.windows only exist on Windows")
+@pytest.mark.skipif(os.name != "nt", reason="[platform] registry + doctor.windows only exist on Windows")
 def test_doctor_windows_block_reports_smart_app_control(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert manager.read_smart_app_control_state() in {"on", "off", "evaluation", None}  # 真读本机注册表不抛
     for state in ("on", "off", None):

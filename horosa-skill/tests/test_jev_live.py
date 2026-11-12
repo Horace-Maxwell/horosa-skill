@@ -13,7 +13,7 @@ import pytest
 from horosa_skill.decisions.policy import read_api_key
 
 _LIVE = os.environ.get("HOROSA_JEV_LIVE", "").strip() == "1" and read_api_key() is not None
-requires_jev_live = pytest.mark.skipif(not _LIVE, reason="set HOROSA_JEV_LIVE=1 and HOROSA_JEV_API_KEY to run the TypeSafe Jev smoke")
+requires_jev_live = pytest.mark.skipif(not _LIVE, reason="[opt-in] set HOROSA_JEV_LIVE=1 and HOROSA_JEV_API_KEY to run the TypeSafe Jev smoke")
 
 
 @requires_jev_live

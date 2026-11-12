@@ -38,7 +38,7 @@ from horosa_skill.service import (
 
 CORE_JS = Path(__file__).resolve().parents[1] / "horosa-core-js"
 FIXTURE = json.loads((Path(__file__).resolve().parent / "fixtures" / "sync311_chartexport_live.json").read_text(encoding="utf-8"))
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 
 def _settings(tmp_path) -> Settings:

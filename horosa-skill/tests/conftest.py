@@ -101,3 +101,10 @@ def _never_touch_the_users_real_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path_f
     base = tmp_path_factory.mktemp("user-dirs")
     monkeypatch.setattr(config, "_default_home_dir", lambda: base / "data")
     monkeypatch.setattr(config, "_default_runtime_root", lambda: base / "runtime")
+
+
+
+# ---- skip reasons carry a tag (tests/skips.py; v0.50.0-dev, C-18 #2 / #10) ----------------------------------------
+# An untagged skip is turned into a failure, and the run ends with the skips counted per tag. The hooks live in
+# tests/skips.py so tests/test_skip_tags.py can load them as a plugin into a throwaway pytest run.
+from skips import pytest_runtest_makereport, pytest_terminal_summary  # noqa: E402,F401

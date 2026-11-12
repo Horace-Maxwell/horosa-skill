@@ -427,3 +427,18 @@ def test_full_surface_rows_and_workflow_probe_literals_are_checked(tmp_path: Pat
     docs.check_full_surface_counts()
     assert errors == []
 
+
+
+def test_benchmark_case_count_is_locked_to_the_runner() -> None:
+    """README 曾同时写「HorosaBench 105 条」与「106 条」，runner 实际合并跑 120 条（C-18 尾巴）。
+    负向对照：任一处写回 106、或新加一处没登记的「N 条基准用例」，都要报出来。"""
+    expected = docs.benchmark_case_count()
+    assert expected >= 120
+    texts = {rel: (docs.ROOT / rel).read_text(encoding="utf-8") for rel in {rel for rel, _ in docs.BENCHMARK_CLAIMS}}
+    assert docs.benchmark_count_problems(texts, expected) == []
+    stale = {**texts, "README.md": texts["README.md"].replace(f"| HorosaBench | {expected} 条", "| HorosaBench | 106 条")}
+    assert any("写 106 条用例" in p for p in docs.benchmark_count_problems(stale, expected))
+    extra = {**texts, "README_EN.md": texts["README_EN.md"] + "\nWe now ship 99 curated benchmark cases.\n"}
+    assert any("只认领" in p for p in docs.benchmark_count_problems(extra, expected))
+    reworded = {**texts, "README_EN.md": texts["README_EN.md"].replace("HorosaBench: ", "HorosaBench — ")}
+    assert any("措辞没找到" in p for p in docs.benchmark_count_problems(reworded, expected))

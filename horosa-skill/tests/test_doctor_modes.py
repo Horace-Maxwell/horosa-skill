@@ -142,7 +142,7 @@ def test_openclaw_is_named_only_when_the_client_is_known(monkeypatch: pytest.Mon
 # ── E-08：runtime 根写不了 ─────────────────────────────────────────────────────
 
 
-@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), reason="POSIX permissions, non-root")
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), reason="[platform] POSIX permissions, non-root")
 def test_an_unwritable_runtime_root_is_an_issue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _ready_js(monkeypatch)
     parent = tmp_path / "locked"

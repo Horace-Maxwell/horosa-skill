@@ -86,7 +86,7 @@ def test_pd_vocabulary_sizes_and_relabels_follow_v313() -> None:
     assert Z._PD_TYPE_LABELS == {0: "黄道（In Zodiaco）", 1: "世俗（In Mundo）", 4: "场平面（Field Plane）"}
 
 
-@pytest.mark.skipif(not _UPSTREAM_SYNC.is_file(), reason="drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
+@pytest.mark.skipif(not _UPSTREAM_SYNC.is_file(), reason="[upstream-checkout] drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
 def test_pd_vocabulary_sentinel_against_upstream_source() -> None:
     """上游再改 primaryDirectionSync.js 的词表 / 标签 / 登记表 → 红 → 同步 pd_zr 的镜像表。
     负向对照：删掉 _PD_SUPPORTED_TIME_KEYS 里的 SubDuodenary → 红。"""

@@ -61,14 +61,37 @@ def test_doctor_ready_requires_both_endpoints_and_no_degrade() -> None:
 
 def test_forbidden_skips_catch_live_gates_that_never_ran() -> None:
     output = (
-        "SKIPPED [12] tests/test_local_js_tools.py:94: live gates only run against an explicitly named instance — export …\n"
-        "SKIPPED [1] tests/test_ports.py:10: powershell.exe not on PATH\n"
-        "SKIPPED [3] tests/test_local_js_tools.py:94: Horosa runtime unusable — chart http://127.0.0.1:8899 (java_routes_dead)\n"
-        "900 passed, 16 skipped in 80.0s\n"
+        "SKIPPED [12] tests/test_local_js_tools.py:94: [no-runtime] live gates only run against an explicitly named instance — export …\n"
+        "SKIPPED [1] tests/test_ports.py:10: [platform] powershell.exe not on PATH\n"
+        "SKIPPED [3] tests/test_local_js_tools.py:94: [no-runtime] Horosa runtime unusable — chart http://127.0.0.1:8899 (java_routes_dead)\n"
+        "SKIPPED [9] tests/test_sync3131_bu.py:25: [upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set\n"
+        "900 passed, 25 skipped in 80.0s\n"
     )
     hits = live.forbidden_skips(output)
     assert len(hits) == 2 and all("test_local_js_tools" in h for h in hits)
-    assert live.forbidden_skips("SKIPPED [1] tests/test_ports.py:10: powershell.exe not on PATH\n") == []
+    assert live.forbidden_skips("SKIPPED [1] tests/test_ports.py:10: [platform] powershell.exe not on PATH\n") == []
+
+
+def test_live_lane_skips_are_an_allowlist_not_a_denylist() -> None:
+    """C-18 #2：旧守卫是五个原因子串的黑名单，函数体里的 `pytest.skip("tieban backend unavailable")`、导入失败时的
+    `mark.skip("test_local_js_tools gate unavailable")` 都不在名单上 → lane 绿着没测 runtime。现在只放行白名单里的标签；
+    没标签、未知标签一律算没测。负向对照：换回黑名单写法，下面两行都放行（实跑过）。"""
+    for line in (
+        "SKIPPED [5] tests/test_live_shenshu_gender.py:25: tieban backend unavailable: transport.http_error",
+        "SKIPPED [2] tests/test_sync3131_mingli.py:299: test_local_js_tools gate unavailable",
+        "SKIPPED [1] tests/test_x.py:3: [made-up] whatever",
+        "SKIPPED [1] tests/test_x.py:3: version-skew without brackets",
+    ):
+        assert live.forbidden_skips(line + "\n") == [line], line
+    # 文件位置带不带行号都认（pytest 对 skipif 标记报函数行，对模块级报文件）
+    assert live.forbidden_skips("SKIPPED [1] tests/test_x.py: [opt-in] set HOROSA_JEV_LIVE=1\n") == []
+
+
+def test_live_lane_allowlist_is_in_lockstep_with_the_test_suite_tags() -> None:
+    import skips
+
+    assert live.LIVE_LANE_ALLOWED_SKIP_TAGS == skips.LIVE_LANE_ALLOWED
+    assert "no-runtime" in skips.TAGS and "no-runtime" not in live.LIVE_LANE_ALLOWED_SKIP_TAGS
 
 
 @pytest.mark.parametrize(

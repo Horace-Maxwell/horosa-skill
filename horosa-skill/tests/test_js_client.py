@@ -100,6 +100,21 @@ def test_js_client_non_object_json_stdout_is_transport_error(tmp_path: Path, mon
         assert exc_info.value.code == "js_engine.invalid_shape", stdout
 
 
+def test_js_client_unparseable_stdout_is_invalid_json_with_the_tail_in_debug(tmp_path: Path, monkeypatch) -> None:
+    """stdout 半截 / 混进日志行：js_engine.invalid_json，原始输出只进 details.debug（截短），不冲进 agent 上下文。"""
+    client = _client_with_engine(tmp_path, monkeypatch)
+    noisy = "warning: something\n" + "x" * 2000 + '{"ok": tr'
+
+    def fake_run(*args, **kwargs) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["node"], returncode=0, stdout=noisy, stderr="boom")
+
+    monkeypatch.setattr("horosa_skill.engine.js_client.subprocess.run", fake_run)
+    with pytest.raises(ToolTransportError) as exc_info:
+        client.run("qimen", {"question": "x"})
+    assert exc_info.value.code == "js_engine.invalid_json"
+    assert exc_info.value.details["debug"]["stdout"] == noisy[-500:] and exc_info.value.details["tool"] == "qimen"
+
+
 def test_timeout_recovery_does_not_blame_the_install() -> None:
     """长窗口择时超时曾被 js_engine 前缀规则说成「确认已安装离线 runtime」。"""
     from horosa_skill.errors import classify_code, recovery_for

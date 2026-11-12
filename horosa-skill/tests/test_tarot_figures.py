@@ -28,7 +28,7 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 CORE_JS = PKG_ROOT / "horosa-core-js"
 FIXTURE = json.loads(gzip.decompress((PKG_ROOT / "tests" / "fixtures" / "app_charts_live.json.gz").read_bytes()))
 
-needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not on PATH")
 
 
 class _Client:
@@ -146,7 +146,7 @@ def test_decorative_symbols_no_font_can_print_are_dropped_not_boxed() -> None:
 
     fonts = _drawing_font_files(SIMPLIFIED)
     if not fonts:
-        pytest.skip("no CJK TrueType font on this machine")
+        pytest.skip("[host] no CJK TrueType font on this machine")
     regular, bold = fonts["names"]
     fam = app_charts.OPTIONAL_GLYPH_SVG_FAMILY
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"><text x="5" y="20" font-family="{fam}">\U0010fffd</text>'

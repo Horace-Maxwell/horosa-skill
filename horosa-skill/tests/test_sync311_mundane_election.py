@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import copy
 import math
-import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 from fakes import FakeClient
+from skips import needs_upstream, upstream_path
 
 from horosa_skill.config import Settings
 from horosa_skill.exports.registry import AI_EXPORT_OPTIONAL_SECTIONS, AI_EXPORT_PRESET_SECTIONS
@@ -28,8 +28,8 @@ from horosa_skill.service import HorosaSkillService
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 VENDOR = PKG_ROOT / "horosa-core-js" / "src" / "vendor"
-UPSTREAM_ROOT = Path(os.environ.get("HOROSA_SOURCE_ROOT") or "/Users/horacedong/Desktop/Horosa-Public")
-UPSTREAM_AIEXPORT = UPSTREAM_ROOT / "Horosa-Web/astrostudyui/src/utils/aiExport.js"
+# 没设 HOROSA_SOURCE_ROOT 就跳过，绝不猜维护者的路径（曾回落到 ~/Desktop/Horosa-Public，那份是别的版本时本例直接红）。
+UPSTREAM_AIEXPORT = upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport.js")
 
 # ── 脚本化星历：日/月黄经 = 平均速率 + 周期摄动（lonspeed 为其导数），让牛顿迭代真的要走几步。 ──
 _EPOCH = datetime(2000, 1, 1, 12, 0, 0)
@@ -194,7 +194,7 @@ def test_mundane_type_cards_are_registered_in_preset_and_optional() -> None:
     assert "回归与主限" in AI_EXPORT_PRESET_SECTIONS["election"] and "回归与主限" in AI_EXPORT_OPTIONAL_SECTIONS["election"]
 
 
-@pytest.mark.skipif(not UPSTREAM_AIEXPORT.is_file(), reason="needs the upstream Horosa-Public checkout")
+@needs_upstream("Horosa-Web/astrostudyui/src/utils/aiExport.js")
 def test_mundane_and_election_presets_mirror_upstream_order() -> None:
     import sys
 

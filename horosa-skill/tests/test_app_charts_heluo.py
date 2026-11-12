@@ -22,7 +22,7 @@ from horosa_skill.reports import app_charts
 from horosa_skill.reports.figures import extract_figures, is_drawn
 
 BOARDS = json.loads(gzip.decompress((PKG_ROOT / "tests" / "fixtures" / "app_charts_boards_live.json.gz").read_bytes()))
-needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not on PATH")
 PARTS = ["河洛起卦详情", "先天卦", "后天卦", "河洛大限"]
 
 
@@ -77,7 +77,7 @@ def test_core_js_heluo_returns_the_board_context_the_app_board_reads() -> None:
     from node_esm import run_node_esm
 
     if not shutil.which("node"):
-        pytest.skip("node not on PATH")
+        pytest.skip("[host] node not on PATH")
     tools = PKG_ROOT / "horosa-core-js" / "src" / "tools"
     script = (
         "const h = await import(process.argv[1]);"

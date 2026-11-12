@@ -42,7 +42,7 @@ def test_export_sections_carry_body_only_and_engine_data_once(tmp_path, tool: st
         assert set(section) == {"index", "raw_title", "title", "included", "body"}, section.keys()
     engine_obj = result.data.get(engine_key)
     if engine_obj is None:
-        pytest.skip(f"{tool} 的样例响应没有 {engine_key} 键（桩形状不同）")
+        pytest.skip(f"[not-applicable] {tool} 的样例响应没有 {engine_key} 键（桩形状不同）")
     probe = json.dumps(engine_obj, ensure_ascii=False, sort_keys=True)
     serialized = json.dumps(result.data, ensure_ascii=False, sort_keys=True)
     assert serialized.count(probe) == 1, f"{engine_key} 引擎对象在响应体里出现了 {serialized.count(probe)} 次，应恰 1 次"

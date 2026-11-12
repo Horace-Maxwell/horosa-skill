@@ -34,7 +34,7 @@ from horosa_skill.schemas.tools import (
 from horosa_skill.service import HorosaSkillService
 
 CORE_JS = Path(__file__).resolve().parents[1] / "horosa-core-js"
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 _CHART_FIXTURE = CORE_JS / "test" / "fixtures" / "chart_traditional.json"
 
 

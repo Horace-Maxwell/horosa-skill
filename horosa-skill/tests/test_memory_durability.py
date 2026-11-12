@@ -47,7 +47,7 @@ def _sha256(path: Path) -> str:
 @contextmanager
 def _file_size_capped_at(limit: int) -> Iterator[None]:
     """真实的写失败：超过上限的 write(2) 报 EFBIG（Python 启动时已忽略 SIGXFSZ），对写半截文件的效果与磁盘写满相同。"""
-    resource = pytest.importorskip("resource")
+    resource = pytest.importorskip("resource", reason="[platform] the resource module is POSIX-only")
     soft, hard = resource.getrlimit(resource.RLIMIT_FSIZE)
     resource.setrlimit(resource.RLIMIT_FSIZE, (limit, hard))
     try:
@@ -87,7 +87,7 @@ def test_a_failed_replace_cleans_up_and_keeps_the_original(tmp_path: Path, monke
     assert not [p.name for p in artifact.parent.iterdir() if p.name.endswith(".tmp")]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="Windows 上打开着的文件不能被替换；那条路径由 fsretry 的重试承担")
+@pytest.mark.skipif(os.name == "nt", reason="[platform] Windows 上打开着的文件不能被替换；那条路径由 fsretry 的重试承担")
 def test_a_reader_in_flight_keeps_a_complete_copy(tmp_path: Path) -> None:
     """改写走「新文件 + 替换」：正在读的会话拿到完整的旧内容。原地写时并发读者约 1.4% 读到 payload_error（2026-11-06 实测 26/1851）。"""
     store, run_id, artifact = _stored_run(tmp_path)
@@ -144,7 +144,7 @@ def test_new_artifacts_keep_the_umask_mode(tmp_path: Path) -> None:
 def test_a_rewrite_keeps_the_mode_of_the_existing_file(tmp_path: Path) -> None:
     store, run_id, artifact = _stored_run(tmp_path)
     if os.name == "nt":
-        pytest.skip("Windows 没有 POSIX 权限位")
+        pytest.skip("[platform] Windows 没有 POSIX 权限位")
     artifact.chmod(0o600)
     store.attach_ai_response(run_id=run_id, ai_answer="解读正文")
     assert artifact.stat().st_mode & 0o777 == 0o600
@@ -234,7 +234,7 @@ def test_a_healthy_database_is_never_quarantined_on_write(tmp_path: Path, error:
 
 def _make_readonly(path: Path) -> None:
     if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
-        pytest.skip("需要 POSIX 权限位，且不能以 root 跑")
+        pytest.skip("[platform] 需要 POSIX 权限位，且不能以 root 跑")
     for suffix in ("-wal", "-shm"):
         Path(f"{path}{suffix}").unlink(missing_ok=True)
     path.chmod(0o444)

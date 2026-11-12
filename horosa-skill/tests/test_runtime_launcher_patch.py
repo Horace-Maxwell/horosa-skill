@@ -37,7 +37,7 @@ BASH = shutil.which("bash")
 
 pytestmark = pytest.mark.skipif(
     not UPSTREAM.is_file() or not BASH,
-    reason="vendor/runtime-source 是 gitignored 的本地构建输入；CI 上没有它（preflight 会跑这条）。另需 bash（mac/维护机有，纯 Windows runner 无）",
+    reason="[upstream-checkout] vendor/runtime-source 是 gitignored 的本地构建输入；CI 上没有它（preflight 会跑这条）。另需 bash（mac/维护机有，纯 Windows runner 无）",
 )
 
 

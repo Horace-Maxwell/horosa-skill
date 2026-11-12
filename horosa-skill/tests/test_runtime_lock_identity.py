@@ -25,7 +25,7 @@ from horosa_skill.runtime import pidlock, procs
 
 LOCK = ".runtime-start.lock"
 posix_only = pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
-                                reason="chmod 只读目录对 Windows / root 不生效")
+                                reason="[platform] chmod 只读目录对 Windows / root 不生效")
 
 
 def _write_lock(path: Path, *, owner: str, pid: int, token: str | None) -> None:
@@ -40,7 +40,7 @@ def _write_lock(path: Path, *, owner: str, pid: int, token: str | None) -> None:
 def test_start_token_is_stable_for_one_process_and_differs_between_processes() -> None:
     mine = procs.process_start_token(os.getpid())
     if mine is None:
-        pytest.skip("本平台取不到进程启动时刻")
+        pytest.skip("[platform] 本平台取不到进程启动时刻")
     assert mine == procs.process_start_token(os.getpid())
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     try:
@@ -86,7 +86,7 @@ def test_the_real_live_holder_is_never_reclaimed(tmp_path: Path, owner: str) -> 
     lock = tmp_path / "x.lock"
     token = procs.process_start_token(os.getpid())
     if token is None:
-        pytest.skip("本平台取不到进程启动时刻")
+        pytest.skip("[platform] 本平台取不到进程启动时刻")
     _write_lock(lock, owner=owner, pid=os.getpid(), token=token)
 
     assert pidlock.reclaim_if_stale(lock, stale_after_seconds=0.0) is False
@@ -137,7 +137,7 @@ def test_start_gets_past_a_start_lock_left_on_a_recycled_pid(tmp_path: Path, mon
     spawned: list[str] = []
     _install_fake_spawn(manager, on_spawn=lambda: spawned.append("spawn"))
     if procs.process_start_token(os.getpid()) is None:
-        pytest.skip("本平台取不到进程启动时刻")
+        pytest.skip("[platform] 本平台取不到进程启动时刻")
     _write_lock(manager.runtime_root / LOCK, owner="runtime-start", pid=os.getpid(), token="stale:someone-else")
     # 记录的取法前缀要与本平台一致才可比：用本进程的前缀拼一个不同的值
     mine = procs.process_start_token(os.getpid())
