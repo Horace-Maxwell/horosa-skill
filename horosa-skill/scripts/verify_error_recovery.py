@@ -20,7 +20,8 @@ had no agent_recovery. Per-technique codes go through `errors.tool_code(tool, "<
 `errors.engine_tool_code(...)`, whose families live in `errors.TOOL_CODE_FAMILIES` (and are checked like codes).
 At runtime, `HorosaSkillError` refuses an unclassifiable code raised from package code under pytest.
 
-Rule 4 (ratchet): every code and family is exercised by at least one test (its spelling appears under `tests/`),
+Rule 4 (ratchet): every code and family is exercised by at least one test (its spelling appears in a string literal
+under `tests/` — comments and docstrings do not count),
 or is listed in `contracts/error_code_test_debt.json`, which may only shrink. A guard nothing exercises is the
 C-18 failure mode: it cannot go red.
 Stdlib + the package. Wired into CI.
@@ -75,9 +76,35 @@ def collect_families(src: Path = SRC) -> dict[str, list[str]]:
     return found
 
 
+def test_string_literals(tests: Path = TESTS) -> str:
+    """Every string literal in the test code, docstrings excluded (one per line).
+
+    Rule 4 used to search the raw text of the test files, so a code named only in a comment or a docstring
+    ("…degrades to tool.x_failed") counted as tested — the same name-mention hole as C-18 #8. A code a test really
+    exercises appears as a literal the test compares against or feeds in (`exc.code == "…"`, a parametrize id list).
+    """
+    out: list[str] = []
+    for path in sorted(tests.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue  # not test code (a fixture written as .py): it exercises nothing
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)
+        }
+        out.extend(
+            node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings
+        )
+    return "\n".join(out)
+
+
 def untested(codes: dict[str, list[str]], families: dict[str, list[str]], tests: Path = TESTS) -> list[str]:
-    """Codes / families whose spelling appears in no test file (`family:<name>` for families)."""
-    corpus = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in sorted(tests.rglob("*.py")))
+    """Codes / families that no test names in a string literal (`family:<name>` for families)."""
+    corpus = test_string_literals(tests)
     missing = [code for code in codes if code not in corpus]
     missing += [f"family:{family}" for family in families
                 if not re.search(rf"tool\.[a-z0-9_]+_{re.escape(family)}\b|\"{re.escape(family)}\"", corpus)]
