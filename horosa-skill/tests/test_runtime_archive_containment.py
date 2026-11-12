@@ -84,15 +84,26 @@ def test_tar_entries_that_leave_the_directory_are_refused(tmp_path: Path, member
     assert error.details["archive"] == str(archive)
 
 
-def test_tar_absolute_names_are_stripped_into_the_directory(tmp_path: Path) -> None:
-    """`filter="data"` 先去掉前导 `/`：绝对路径的条目落在解压目录里，不碰真实的绝对路径。"""
-    name = f"{tmp_path}/abs-escape.txt"  # 绝对路径指回沙箱：万一真写出去了，看得见、也清得掉
-    archive = _tar(tmp_path / "abs.tar.gz", [_file(name)])
+@pytest.mark.parametrize("root", ["/", "\\", "//"])
+def test_tar_absolute_names_are_stripped_into_the_directory(tmp_path: Path, root: str) -> None:
+    """前导的 `/`（与 `\\`）先去掉：绝对路径的条目落在解压目录里，不碰真实的绝对路径。
+
+    名字不带盘符（v0.50.0 windows-smoke：旧写法 `f"{tmp_path}/…"` 在 Windows 上是 `C:\\Users\\…`，那是另一种东西，见下一条）。"""
+    rel = "/".join([*tmp_path.parts[1:], "abs-escape.txt"])  # 绝对路径指回沙箱：万一真写出去了，看得见、也清得掉
+    archive = _tar(tmp_path / "abs.tar.gz", [_file(root + rel)])
     extract_dir = tmp_path / "extract"
     extract_dir.mkdir()
     _manager(tmp_path)._extract_archive(archive, extract_dir)
     assert not (tmp_path / "abs-escape.txt").exists()
-    assert (extract_dir / name.lstrip("/")).read_bytes() == b"payload"
+    assert (extract_dir / rel).read_bytes() == b"payload"
+
+
+@pytest.mark.parametrize("name", ["C:/escaped.txt", "C:\\escaped.txt", "c:escaped.txt", "/C:/escaped.txt",
+                                  "runtime-payload\\..\\..\\escaped.txt"])
+def test_tar_names_that_escape_on_windows_are_refused_on_every_platform(tmp_path: Path, name: str) -> None:
+    """盘符名、反斜杠写的 `..`：在 Windows 上是写到目录外（tarfile 在那里拒），在 POSIX 上只是怪文件名（tarfile 照解）。
+    同一个归档两边结果必须一样：一律拒（runtime 归档里不会有这种名字）。本机就能看见 Windows 那一半。"""
+    _refused(tmp_path, _tar(tmp_path / "drive.tar.gz", [_file("runtime-payload/ok.txt"), _file(name)]))
 
 
 def test_tar_device_files_are_refused(tmp_path: Path) -> None:
