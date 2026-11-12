@@ -52,6 +52,6 @@ function dropRunYearPlaceholder(svg) {
   const hits = [...svg.querySelectorAll('text')].filter((node) => (node.textContent || '').trim() === RUNYEAR_PLACEHOLDER);
   for (const node of hits) node.remove();
   return hits.length
-    ? '右下格（行年 / 旬日 / 旺衰 / 神煞）留空：这次结果没有行年（起课没带出生年），app 在那里只显示「起盘后显示」的占位提示；旬日、旺衰、神煞见正文。'
+    ? '右下格（行年 / 旬日 / 旺衰 / 神煞）留空：这次结果没有行年（起课没带出生年），app 在那里只显示一句页面上的占位提示；旬日、旺衰、神煞见正文。'
     : '';
 }
