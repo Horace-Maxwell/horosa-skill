@@ -54,6 +54,16 @@ class GuaNamesInput(FlexibleModel):
     name: list[str]
 
 
+class GuaDescInput(GuaNamesInput):
+    # 卦义查询（/gua/desc）只认六位码；卦名（全名 / 简名 / 繁体）按六十四卦表换成码，认不出的拒（cn_vocab.parse_gua_desc_names）。
+    @field_validator("name", mode="before")
+    @classmethod
+    def _hexagram_codes(cls, value: Any) -> Any:
+        from horosa_skill.cn_vocab import parse_gua_desc_names
+
+        return parse_gua_desc_names(value)
+
+
 class GuaMeiyiInput(GuaNamesInput):
     # 梅花易数卦义（/gua/meiyi）只认三爻经卦码（初→上，1 阳）；卦名（乾 / 兌 / ☰ / qian）按引擎自己的码表换成码。
     # 此前别的写法（六爻码、重卦名、乱写）后端回 null、快照印「无」而 ok=true（v0.50.0 六爻同族清扫）。

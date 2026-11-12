@@ -9,6 +9,10 @@
 """
 from __future__ import annotations
 
+import json
+import re
+from functools import cache
+from pathlib import Path
 from typing import Any
 
 from horosa_skill.input_fields import (
@@ -230,4 +234,57 @@ def parse_meiyi_names(value: Any) -> Any:
                        f"`name[{index}]` '{item}' was read as trigram code {parsed.value} ({MEIYI_TRIGRAM_CODES[parsed.value]}).")
     if issues:
         raise field_issues_error(issues)
+    return out
+
+
+# 六十四卦（初→上，1 = 阳）：data/gua64_names.json 由 vendored 上游 GuaConst.Gua64 生成（六爻 guaByName 同表同简名规则），
+# tests/test_gua_desc_names.py 在 node 在场时与 JS 表逐行对拍。
+_GUA64_PATH = Path(__file__).parent / "data" / "gua64_names.json"
+
+
+@cache
+def gua64_rows() -> tuple[tuple[str, str, str], ...]:
+    return tuple(tuple(row) for row in json.loads(_GUA64_PATH.read_text(encoding="utf-8"))["rows"])
+
+
+def parse_gua_desc_names(value: Any) -> Any:
+    """gua_desc.name：每一项读成六位卦码（六位 0/1 码原样；全名「水火既济」、简名「既济」「乾」、繁体、带「卦」字都认）。
+    认不出 → tool.invalid_option（options = 最接近的卦名，details.accepted = 六十四卦全表）。以前认不出的名字原样发给后端，
+    [卦象] 印一行「X：无」或干脆没有，ok=true（v0.50.0 深审余项）。"""
+    import difflib
+
+    from horosa_skill.input_fields import add_input_note
+    from horosa_skill.input_normalization import field_issues_error
+    from horosa_skill.textscript import fold_to_simplified
+
+    rows = gua64_rows()
+    by_name = {**{full: (code, full) for code, full, _short in rows}, **{short: (code, full) for code, full, short in rows}}
+    labels = [*by_name]
+    items = value if isinstance(value, list) else [value]
+    out: list[str] = []
+    issues: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        text = clean_text(item) if item is not None else ""
+        if re.fullmatch(r"[01]{6}", text):
+            out.append(text)
+            continue
+        hit = None
+        for candidate in dict.fromkeys((text, fold_to_simplified(text))):
+            key = candidate[:-1] if candidate.endswith("卦") and len(candidate) > 1 else candidate
+            hit = by_name.get(candidate) or by_name.get(key)
+            if hit:
+                break
+        if hit is None:
+            close = difflib.get_close_matches(fold_to_simplified(text), labels, n=5, cutoff=0.3)
+            issues.append({"field": f"name[{index}]", "code": "tool.invalid_option", "got": item,
+                           "expected": "六位 0/1 码（初→上，1 阳）或卦名（全名 水火既济 / 简名 既济、乾）/ six 0/1 digits or a hexagram name",
+                           "example": "111111", "ask_user": False,
+                           "options": [{"value": by_name[name][0], "label": by_name[name][1]} for name in close],
+                           "message": f"认不出卦：{item!r}（六十四卦里没有这个名字）。 / Unrecognized hexagram: {item!r} (no such name among the 64)."})
+            continue
+        out.append(hit[0])
+        add_input_note(f"`name[{index}]`「{item}」按卦码 {hit[0]}（{hit[1]}）读。", f"`name[{index}]` '{item}' was read as hexagram code {hit[0]} ({hit[1]}).")
+    if issues:
+        raise field_issues_error(issues, extra_details={"accepted": [{"value": code, "label": full} for code, full, _ in rows]},
+                                 tool_name="gua_desc")
     return out
