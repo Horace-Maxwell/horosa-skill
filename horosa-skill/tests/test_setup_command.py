@@ -493,7 +493,7 @@ def _replay(fake: FakeClaude, text: str, *, windows: bool = os.name == "nt") -> 
 _WIN_UV = r"C:\Users\张 三\.local\bin\uv.exe"
 _WIN_OLD = {"type": "stdio", "command": r"C:\Program Files\uv\uv.exe",
             "args": ["run", "--directory", r"C:\Users\张 三\horosa skill\horosa-skill", "horosa-skill", "serve"],
-            "env": {"MY_API_KEY": "sk-do-not-print", "HOROSA_DATA_DIR": r"D:\星阙 数据", "HOROSA_MCP_COMPACT": "1"}}
+            "env": {"MY_API_KEY": "sk-do-not-print", "HOROSA_SKILL_DATA_DIR": r"D:\星阙 数据", "HOROSA_MCP_COMPACT": "1"}}
 
 
 @pytest.mark.parametrize("fail_add", [False, True])
