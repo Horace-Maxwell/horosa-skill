@@ -12,14 +12,22 @@ def test_router_prefers_ziwei_when_query_mentions_it() -> None:
     assert select_tools(request) == ["ziwei_birth"]
 
 
-def test_router_defaults_to_chart_when_birth_exists() -> None:
+def test_router_never_turns_birth_data_into_a_natal_chart() -> None:
+    """v0.49 前：没命中关键词 + 有出生数据 → 西洋本命盘（ok、无警告）。出生数据说明不了用户想问什么。"""
+    import pytest
+
+    from horosa_skill.errors import DispatchResolutionError
+
     request = DispatchInput.model_validate(
         {
             "query": "请分析一下",
             "birth": {"date": "1990-01-01", "time": "12:00", "zone": "8", "lat": "31n14", "lon": "121e28"},
         }
     )
-    assert select_tools(request) == ["chart"]
+    with pytest.raises(DispatchResolutionError) as caught:
+        select_tools(request)
+    assert caught.value.code == "dispatch.no_matching_tool"
+    assert caught.value.details["agent_recovery"]["prompt_to_user"]
 
 
 def test_router_handles_relative_keywords() -> None:
@@ -56,8 +64,17 @@ def test_router_xiaochengtu_excludes_horary() -> None:
     # 小成图起卦：通用词「起卦」不得误路由 horary。
     got = select_tools(DispatchInput.model_validate({"query": "小成图起卦看股市"}))
     assert "xiaochengtu" in got and "horary" not in got
-    # 卜卦回归：无小成图字样时「卜卦」仍走 horary。
-    assert "horary" in select_tools(DispatchInput.model_validate({"query": "卜卦问婚姻"}))
+    # 「卜卦」在星阙是西洋卜卦占星模块名、口语里又是「起一卦」：v0.50 起让用户在六爻 / 卜卦占星间挑，
+    # 明说「卜卦占星 / horary」才直接走 horary。
+    import pytest
+
+    from horosa_skill.errors import DispatchResolutionError
+
+    with pytest.raises(DispatchResolutionError) as caught:
+        select_tools(DispatchInput.model_validate({"query": "卜卦问婚姻"}))
+    assert caught.value.code == "dispatch.technique_choice_required"
+    assert caught.value.details["candidates"] == ["sixyao", "horary"]
+    assert select_tools(DispatchInput.model_validate({"query": "卜卦占星问婚姻"})) == ["horary"]
 
 
 def test_router_guice_excludes_wangji_and_horary() -> None:
@@ -88,7 +105,7 @@ def test_election_family_is_mutually_exclusive() -> None:
         "奇门 找局": ["qimenzeri"],
         "天星择日选婚期": ["tianxing"],
         "征象搜索找吉时": ["tianxing"],
-        "择日结婚": ["election"],          # 单点评估仍归 election
+        "择日盘评估结婚的候选时刻": ["election"],  # 单点评估仍归 election（泛泛的「择日结婚」见 dispatch_intent_corpus：让用户挑方法）
         "奇门遁甲问出行": ["qimen"],        # 不带「择日」的奇门仍归 qimen
         "飞宫小奇门问出行": ["feigong"],    # 既有排除不能被新分支破坏
     }

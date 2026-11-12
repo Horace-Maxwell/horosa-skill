@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from horosa_skill.engine.query_text import normalize_query
+
 TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     # ---- 三式 / 中式起课 ----
     "qimen": ("奇门遁甲", "奇门", "qi men dun jia", "qimen", "遁甲"),
@@ -138,6 +140,13 @@ def synonyms_for(tool_name: str) -> tuple[str, ...]:
     return TOOL_SYNONYMS.get(tool_name, ())
 
 
+def display_name(tool_name: str) -> str:
+    """给人看的技法名（同义词表的第一项，中文正名）。闸门追问、路由候选、合参说明都用它，
+    不把注册表键（`liureng_gods`）直接念给用户。没有登记同义词的名字原样返回。"""
+    words = TOOL_SYNONYMS.get(tool_name)
+    return words[0] if words else tool_name
+
+
 def aka_line(tool_name: str, *, limit: int = 5) -> str:
     """MCP 描述里的一行别名（预算内：≤ ~60 B）。"""
     items = [s for s in synonyms_for(tool_name) if s.lower() != tool_name.lower()][:limit]
@@ -146,7 +155,7 @@ def aka_line(tool_name: str, *, limit: int = 5) -> str:
 
 def synonym_scores(text: str) -> list[tuple[int, str]]:
     """按同义词命中数给每个工具打分（大到小；0 分不返回）。子串匹配，大小写不敏感。"""
-    lowered = text.lower()
+    lowered = normalize_query(text)
     scored: list[tuple[int, str]] = []
     for name, words in TOOL_SYNONYMS.items():
         hits = sum(1 for word in (name, *words) if word.lower() in lowered)

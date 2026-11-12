@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from horosa_skill.engine.synonyms import synonym_scores
-from horosa_skill.errors import DispatchResolutionError
+import re
+from dataclasses import dataclass, field
+
+from horosa_skill.engine import intents
+from horosa_skill.engine.query_text import normalize_query
+from horosa_skill.engine.synonyms import display_name, synonym_scores
+from horosa_skill.errors import DispatchResolutionError, bilingual
 from horosa_skill.schemas.tools import DispatchInput
 
 
@@ -38,19 +43,66 @@ _PROG_EXCLUDE = ["恒星", "印度", "vedic", "sidereal", "赤纬", "jayne", "de
 _JAY_WORDS = ["周日小限", "jay profection", "jayprofection", "diurnal profection"]
 _NEROMAN_WORDS = ["演进推运", "neroman", "néroman", "evolved direction", "演进弧"]
 _MICHON_WORDS = ["双黄道", "michon", "double zodiac", "回归恒星叠合"]
-_BEZZA_WORDS = ["bezza", "bezzafigure", "directed figure", "推运图(bezza)", "推运图（bezza）"]
+_BEZZA_WORDS = ["bezza", "bezzafigure", "directed figure", "推运图(bezza)"]
+
+
+@dataclass
+class RouteResult:
+    """路由结果：选中的技法 + 「这是缺省选择，不是用户点名的」之类必须披露的说明。"""
+
+    tools: list[str]
+    warnings: list[str] = field(default_factory=list)
+    intent_class: str | None = None
 
 
 def select_tools(request: DispatchInput) -> list[str]:
-    text = request.query.lower()
+    """兼容入口：只要技法名（未命中 / 需选择 / 超出范围都抛 DispatchResolutionError）。"""
+    return route(request).tools
+
+
+def route(request: DispatchInput) -> RouteResult:
+    """确定性、离线、表驱动：先按技法关键词，再按意图类（engine/intents.py），都不中就结构化拒绝。
+
+    v0.49 之前没命中关键词且带出生数据时一律起西洋本命盘（「我和他合不合」也是）；现在出生数据不再参与选技法。
+    """
+    raw_query = request.query or ""
+    text = normalize_query(raw_query)
     selected: list[str] = []
+    warnings: list[str] = []
     is_zeri = _contains_any(text, _ALL_ZERI_WORDS)
 
     def add(tool_name: str) -> None:
         if tool_name not in selected:
             selected.append(tool_name)
 
-    if _contains_any(text, ["紫微", "ziwei", "purple star", "斗数"]) and not is_zeri and not _contains_any(
+    def disclose(tool_name: str, why_zh: str, why_en: str) -> None:
+        warnings.append(bilingual(
+            f"这句话没有点名技法，按「{why_zh}」缺省选了{display_name(tool_name)}（{tool_name}）；用户要别的技法请直接点名。",
+            f"The query names no technique; {display_name(tool_name)} ({tool_name}) was chosen as the default for "
+            f"{why_en}. Name another technique to use it instead.",
+        ))
+
+    # 八字合婚：目录里没有「两份八字对合」的技法——明说，不要退到单人八字或西洋合盘假装做了。
+    if _contains_any(text, intents.BAZI_WORDS) and _contains_any(text, intents.MATCHING_WORDS):
+        _refuse_not_in_catalogue(
+            text,
+            what_zh="八字合婚（两份八字对合）", what_en="BaZi marriage matching (two BaZi charts compared)",
+            nearest=["bazi_birth", "relative"],
+            note_zh="可以分别给两个人各排一张八字（八字排盘 ×2）再对照，或改用西洋合盘（合盘）。",
+            note_en="Run a BaZi chart for each person and compare them, or use Western synastry (relative) instead.",
+        )
+    # 农历 → 公历：目录只有公历 → 农历（农历换算）和整月对照（万年历）。
+    if re.search(intents.LUNAR_TO_SOLAR_PATTERN, text):
+        _refuse_not_in_catalogue(
+            text,
+            what_zh="农历 → 公历换算（某个农历日是公历哪天）", what_en="lunar → Gregorian lookup (which Gregorian day a lunar date falls on)",
+            nearest=["calendar_month", "nongli_time"],
+            note_zh="可以用万年历（calendar_month）查那个月逐日的公历 / 农历对照，自己找到对应的那一天；农历换算只做公历 → 农历。",
+            note_en="Use the month calendar (calendar_month) for the month in question and find the day in its per-day "
+                    "Gregorian / lunar table; nongli_time only converts Gregorian → lunar.",
+        )
+
+    if _contains_any(text, ["紫微", "ziwei", "zi wei", "purple star", "斗数"]) and not is_zeri and not _contains_any(
         text, ["紫微规则", "斗数规则", "格局规则", "ziwei rules", "ziwei_rules", "策天", "飞星紫微", "cetian"]
     ):
         add("ziwei_birth")
@@ -58,7 +110,7 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("ziwei_rules")
     if _contains_any(text, ["八字反查", "反推八字", "四柱反推", "干支反查", "反推出生", "inverse bazi", "reverse bazi", "bazi_inverse"]):
         add("bazi_inverse")
-    elif _contains_any(text, ["八字", "bazi", "四柱", "four pillars"]) and not is_zeri:
+    elif _contains_any(text, ["八字", "bazi", "ba zi", "四柱", "four pillars"]) and not is_zeri:
         if _contains_any(text, ["直断", "direct", "大运", "流年"]):
             add("bazi_direct")
         else:
@@ -113,15 +165,17 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("jinkou")
     if _contains_any(text, ["宿占", "宿盘", "suzhan"]):
         add("suzhan")
-    if _contains_any(text, ["六爻", "易卦", "sixyao", "guazhan", "liuyao", "i ching", "yi jing", "周易"]):
+    if _contains_any(text, ["六爻", "易卦", "sixyao", "guazhan", "liuyao", "liu yao", "i ching", "yi jing", "周易", "摇卦", "铜钱卦", "金钱卦"]):
         add("sixyao")
     if _contains_any(text, ["统摄法", "tongshefa"]):
         add("tongshefa")
     # 灵棋经：用「灵棋」全词。禁裸「棋」——它会把「奇门棋盘」这类说法误点亮；也别写裸「经」
     # （皇极经世/一掌经/太玄经全在射程内）。互斥检查：本词不与任何既有分派词重叠。
-    if _contains_any(text, ["灵棋", "靈棋", "lingqi"]):
+    if _contains_any(text, ["灵棋", "lingqi"]):
         add("lingqi")
-    if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]) and not _contains_any(text, ["正传", "zhengchuan"]):
+    if _contains_any(text, ["参评数", "邵子", "金锁银匙", "canping"]) and not _contains_any(
+        text, ["正传", "zhengchuan", "邵子神数", "邵子数", "shaozi"]
+    ):
         add("canping")
     if _contains_any(text, ["河洛理数", "河洛", "heluo", "he luo"]):
         add("heluo")
@@ -129,19 +183,21 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("harmonic")
     if _contains_any(text, ["三式合一", "sanshi", "sanshiunited"]) and not is_zeri:
         add("sanshiunited")
-    if _contains_any(text, ["节气", "jieqi", "solar terms"]) and not _contains_any(
+    if _contains_any(text, ["节气", "jieqi", "solar terms", "solar term"]) and not _contains_any(
         text, ["出生节气", "节气窗", "哪个节气出生", "哪个节气", "jieqi_birth", "jieqi birth"]
     ):
         add("jieqi_year")
-    if _contains_any(text, ["农历", "nongli"]):
+    if _contains_any(text, ["农历", "nongli", "阴历", "lunar date", "chinese calendar date", "chinese date"]):
         add("nongli_time")
-    # 卜卦 (Western horary) also contains the generic "卦" — keep it out of the 梅花易数/卦象 branch.
-    if _contains_any(text, ["梅易", "卦", "gua"]) and not _contains_any(text, ["卜卦", "horary", "起卦", "占问"]):
-        if _contains_any(text, ["梅易", "meiyi"]):
-            add("gua_meiyi")
-        else:
-            add("gua_desc")
-    if _contains_any(text, ["合盘", "关系盘", "relative", "synastry", "composite", "配对盘"]):
+    # 梅花易数：目录里的「梅花易数」是按卦名查梅易断语（gua_meiyi），不是起卦；载荷规划缺卦名时会明说并指向六爻。
+    if _contains_any(text, ["梅花易数", "梅花易", "梅易", "梅花", "meiyi", "meihua", "mei hua"]):
+        add("gua_meiyi")
+    # 卦义查询：只在「问卦的意思」时；「起一卦 / 卜一卦」是起卦，不是查卦辞（v0.49 前会落到 gua_desc 或西洋卜卦）。
+    elif (_contains_any(text, ["卦"]) or re.search(r"\b(gua|hexagram)\b", text)) and _contains_any(
+        text, ["卦义", "卦辞", "爻辞", "卦象", "什么意思", "含义", "意思", "解释", "meaning", "what does"]
+    ) and not re.search(intents.CAST_GUA_PATTERN, text):
+        add("gua_desc")
+    if _contains_any(text, ["合盘", "合个盘", "合一个盘", "关系盘", "relative", "synastry", "composite", "配对盘"]):
         add("relative")
     is_return_timeline = _contains_any(text, _RETURNTIMELINE_WORDS)
     if _contains_any(text, ["solar return", "solarreturn", "太阳返照"]) and not is_return_timeline:
@@ -162,8 +218,8 @@ def select_tools(request: DispatchInput) -> list[str]:
     # 「周日小限」（Jay）含「小限」二字、「diurnal profection」含 profection → 排除，否则一句话点亮两个工具。
     if _contains_any(text, ["profection", "小限"]) and not _contains_any(text, _JAY_WORDS):
         add("profection")
-    # 「流年」是中式通用词（八字直断/紫微/六壬都用）：只在没有更具体技法命中时才指西占指定年推运。
-    if _contains_any(text, ["given year", "givenyear"]) or ("流年" in text and not selected):
+    # 「流年」是中式通用词（八字直断/紫微/六壬都用）：不再兜底成西占指定年推运，没有别的技法命中时归意图类「运势」让用户挑。
+    if _contains_any(text, ["given year", "givenyear"]):
         add("givenyear")
     if _contains_any(text, ["zodiacal release", "zr"]):
         add("zr")
@@ -219,19 +275,14 @@ def select_tools(request: DispatchInput) -> list[str]:
     # （与「流年」→ givenyear 同一条兜底纪律）。
     if _contains_any(text, _BEZZA_WORDS) or ("推运图" in text and not selected):
         add("bezzafigure")
-    # 卜卦盘 的「起卦」通用词会被小成图/小六壬/飞宫/皇极轨策的「…起卦」误触 → 显式排除新式起卦技法。
-    if _contains_any(text, ["卜卦", "horary", "占问", "起卦"]) and not _contains_any(
-        text,
-        [
-            "小成图", "小六壬", "飞宫", "轨策", "皇极轨策", "xiaochengtu", "xiaoliuren", "feigong", "guice",
-            # v0.36.0：「六爻起卦/统摄法起卦/地占起卦」的通用「起卦」不是卜卦占星
-            "六爻", "统摄", "地占", "灵棋", "梅易", "sixyao", "tongshefa", "geomancy", "lingqi",
-        ],
-    ):
+    # 西洋卜卦占星：只认明说「占星 / horary / 卜卦盘」的说法。通用的「卜卦 / 起卦 / 占问」是起一卦，
+    # 由下面的意图类给六爻（缺省、披露）或让用户挑——v0.49 前它们全部落到西洋卜卦盘。
+    if _contains_any(text, ["卜卦占星", "占星卜卦", "卜卦盘", "西洋卜卦", "horary"]):
         add("horary")
-    # 「奇门择日」/「天星择日」都含「择日」二字 → 必须排除，否则一句话点亮三个工具。
+    # 评一个候选时刻（election 盘）只认明说「候选时刻 / electional」；泛泛的「择日 / 选个日子」是在一段时间里找日子，
+    # 归意图类「择日」让用户挑方法（v0.49 前一律给 election 单点盘，而用户没给候选时刻）。
     if (
-        _contains_any(text, ["择日", "择吉", "election", "electional", "选时", "用事时刻"])
+        _contains_any(text, ["electional", "election chart", "择日盘", "候选时刻", "用事时刻", "选时盘"])
         and not _contains_any(
             text, ["奇门择日", "天星择日", "qimenzeri", "tianxing", "奇门找局", "征象搜索", "七政择日", "择日动盘", "择日双轮"]
         )
@@ -248,7 +299,7 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("wuzhao")
     if _contains_any(text, ["太玄", "揲蓍", "taixuan"]):
         add("taixuan")
-    if _contains_any(text, ["荆诀", "jingjue", "京氏易", "靖瞶"]):
+    if _contains_any(text, ["荆诀", "jingjue", "京氏易", "靖聩"]):
         add("jingjue")
     if _contains_any(text, ["神易数", "shenyishu", "神乙数", "神乙"]):
         add("shenyishu")
@@ -318,29 +369,130 @@ def select_tools(request: DispatchInput) -> list[str]:
         add("zr")
     if _contains_any(text, ["lunar calendar", "阴历换算"]):
         add("nongli_time")
-    # 英文/口语本命盘触发：只在没有更具体的技法命中时兜底（避免「紫微星盘」双点）。
-    if not selected and _contains_any(text, ["natal chart", "birth chart", "horoscope", "本命盘", "西洋星盘", "占星盘", "western astrology"]):
+    # 明说本命盘的说法：只在没有更具体的技法命中时兜底（避免「紫微星盘」双点）。
+    if not selected and _contains_any(text, ["natal chart", "birth chart", "本命盘", "西洋星盘", "本命星盘", "western astrology", "占星盘"]):
         add("chart")
+    if selected:
+        if "bezzafigure" in selected and not _contains_any(text, _BEZZA_WORDS):
+            disclose("bezzafigure", "推运图", "a directed-figure question")
+        return RouteResult(selected, warnings)
+    return _route_by_intent(request, text, raw_query, warnings)
 
-    if not selected:
-        birth = request.birth or (request.subject.birth if request.subject else None)
-        relative = request.subject and request.subject.inner and request.subject.outer
-        if relative:
-            add("relative")
-        elif birth:
-            add("chart")
 
-    if not selected:
+def _route_by_intent(request: DispatchInput, text: str, raw_query: str, warnings: list[str]) -> RouteResult:
+    """没有点名技法：按意图类分流（engine/intents.py）。出生数据不参与——它说明不了用户想问什么。"""
+
+    def picked(tool: str, why_zh: str, why_en: str, intent_key: str) -> RouteResult:
+        warnings.append(bilingual(
+            f"这句话没有点名技法，按「{why_zh}」缺省选了{display_name(tool)}（{tool}）；用户要别的技法请直接点名。",
+            f"The query names no technique; {display_name(tool)} ({tool}) was chosen as the default for {why_en}. "
+            "Name another technique to use it instead.",
+        ))
+        return RouteResult([tool], warnings, intent_key)
+
+    category = intents.out_of_scope_category(text, raw_query)
+    if category is not None:
+        key, zh, en = category
+        coverage_zh = "；".join(zh_line for zh_line, _en in intents.COVERAGE)
+        coverage_en = "; ".join(en_line for _zh, en_line in intents.COVERAGE)
         raise DispatchResolutionError(
-            "未能从请求文本中解析出匹配的技法（no matching tool）。",
-            code="dispatch.no_matching_tool",
+            f"「{zh}」不在星阙的技法目录里（out of scope）。",
+            code=intents.CODE_OUT_OF_SCOPE,
             details={
-                "candidates": _suggest_candidates(text),
-                "hint": "可从 candidates 里选技法名直调对应工具，完整技法目录见 horosa_agent_guidance(include_all=true)。",
+                "category": key,
+                "candidates": [],
+                "covers": [bilingual(zh_line, en_line) for zh_line, en_line in intents.COVERAGE],
+                "agent_recovery": intents.choice_recovery(
+                    intent=None, names=[], reason="out_of_scope",
+                    prompt_zh=f"星阙不做{zh}。它能做的是：{coverage_zh}。如果想换成其中一种来问这件事，请说明用哪一种。",
+                    prompt_en=f"Horosa does not do {en}. It covers: {coverage_en}. To ask about this with one of "
+                              "those, say which.",
+                ),
             },
         )
+    if intents.RELATIONSHIP.matches(text) or (request.subject and request.subject.inner and request.subject.outer):
+        return picked("relative", "两个人的关系", "a two-person relationship question", "relationship")
+    # 「卜卦」在星阙里是西洋卜卦占星模块的名字，口语里又是「起一卦」：两种都说得通 → 让用户挑，不替他定。
+    if re.search(r"卜[一个]{0,2}卦", text):
+        _refuse_choice(intents.BUGUA, text)
+    if re.search(intents.CAST_GUA_PATTERN, text):
+        return picked("sixyao", "起一卦", "casting a hexagram", "divination")
+    if _contains_any(text, intents.SOLAR_TERM_NAMES):
+        return RouteResult(["jieqi_year"], warnings, "calendar")
+    if intents.DATE_SELECTION.matches(text):
+        _refuse_choice(intents.DATE_SELECTION, text)
+    if _contains_any(text, intents.LIFE_TIMING_STRONG):
+        _refuse_choice(intents.LIFE_TIMING, text)
+    if _contains_any(text, intents.NATAL_WESTERN_WORDS):
+        return picked("chart", "星盘", "an astrology chart request", "natal")
+    if _contains_any(text, intents.NATAL_WESTERN_INFERRED):
+        return picked("chart", "上升 / 星座", "a rising-sign or zodiac-sign question", "natal")
+    if intents.DIVINATION.matches(text):
+        _refuse_choice(intents.DIVINATION, text)
+    if intents.LIFE_TIMING.matches(text):
+        _refuse_choice(intents.LIFE_TIMING, text)
+    if intents.NATAL_CHOICE.matches(text):
+        _refuse_choice(intents.NATAL_CHOICE, text)
+    candidates = _suggest_candidates(text)
+    raise DispatchResolutionError(
+        "未能从请求文本中解析出匹配的技法（no matching tool）。",
+        code=intents.CODE_NO_MATCH,
+        details={
+            "candidates": candidates,
+            "candidate_tools": intents.candidate_details(candidates),
+            "hint": _GUIDANCE_HINT,
+            "agent_recovery": intents.choice_recovery(
+                intent=None, names=candidates, reason="no_matching_tool",
+                prompt_zh="这句话没有对上任何技法。想用哪一种来看？也可以换个说法，直接说技法名（如「八字」「奇门」「星盘」「六爻」）。",
+                prompt_en="The request does not match any technique. Which one should be used? You can also rephrase "
+                          "with a technique's name (BaZi, Qi Men, natal chart, Liu Yao …).",
+            ),
+        },
+    )
 
-    return selected
+
+_GUIDANCE_HINT = bilingual(
+    "从 candidates 里选技法名直调对应工具；也可把用户原话交给 horosa_agent_guidance(intent=…)，它只回最相关的几种技法和各自要的字段（几 KB）。",
+    "Call a tool from candidates directly, or pass the user's request to horosa_agent_guidance(intent=…), which returns "
+    "only the few most relevant techniques and the fields each needs (a few KB).",
+)
+
+
+def _refuse_choice(intent: intents.IntentClass, text: str) -> None:
+    names = list(intent.candidates)
+    raise DispatchResolutionError(
+        "识别出了意图，但有几种合适的技法，需要用户挑一种（technique choice required）。",
+        code=intents.CODE_CHOICE,
+        details={
+            "intent_class": intent.key,
+            "candidates": names,
+            "candidate_tools": intents.candidate_details(names),
+            "hint": _GUIDANCE_HINT,
+            "agent_recovery": intents.choice_recovery(
+                intent=intent, names=names, reason="technique_choice_required",
+                prompt_zh=intent.ask_zh, prompt_en=intent.ask_en,
+            ),
+        },
+    )
+
+
+def _refuse_not_in_catalogue(text: str, *, what_zh: str, what_en: str, nearest: list[str], note_zh: str, note_en: str) -> None:
+    raise DispatchResolutionError(
+        f"目录里没有{what_zh}这项技法（not in catalogue）。",
+        code=intents.CODE_NO_MATCH,
+        details={
+            "reason": "not_in_catalogue",
+            "requested": bilingual(what_zh, what_en),
+            "candidates": list(nearest),
+            "candidate_tools": intents.candidate_details(nearest),
+            "hint": _GUIDANCE_HINT,
+            "agent_recovery": intents.choice_recovery(
+                intent=None, names=list(nearest), reason="not_in_catalogue",
+                prompt_zh=f"星阙的目录里没有{what_zh}。{note_zh}要用哪一种？",
+                prompt_en=f"Horosa's catalogue has no {what_en}. {note_en} Which one should be used?",
+            ),
+        },
+    )
 
 
 # 关键词路由未命中时的候选建议：常用技法池按名称/关键词与查询的重合度粗排 top-N。
@@ -374,7 +526,7 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
 def _suggest_candidates(text: str, limit: int = 5) -> list[str]:
     """未命中时的候选：先按全表同义词打分（v0.36.0 B2，覆盖全部技法），再用常用池补满。"""
     hits = [name for _score, name in synonym_scores(text)]
-    lowered = text.lower()
+    lowered = normalize_query(text)
     scored: list[tuple[int, int, str]] = []
     for order, (name, keywords) in enumerate(_CANDIDATE_POOL):
         score = sum(1 for keyword in keywords if keyword.lower() in lowered)

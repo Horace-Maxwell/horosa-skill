@@ -120,21 +120,21 @@ def test_enforce_routing_only_fills_a_no_match_and_deterministic_match_stays_aut
 def test_enforce_routing_respects_abstention_and_tau(tmp_path: Path) -> None:
     low = FakeJev(_routing_script("yijing_divination", "sixyao", conf=0.4))
     service = _service(tmp_path / "low", DecisionLayer(_policy("enforce"), low, thresholds=LOCK))
-    result = service.dispatch({"query": "帮我看看这段感情最后能不能成", "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "帮我看看这段感情的走向", "save_result": False, "agent_confirmed_settings": True})
     assert not result.ok and result.code == "dispatch.no_matching_tool"
     record = result.decision_layer["records"][0]
     assert record["adopted"] is False and "tau" in record["decision"]["reason"]
 
     abstain = FakeJev({"family": choice_answer("unknown", confidence=0.99)})
     service = _service(tmp_path / "abstain", DecisionLayer(_policy("enforce"), abstain, thresholds=LOCK))
-    result = service.dispatch({"query": "帮我看看这段感情最后能不能成", "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "帮我看看这段感情的走向", "save_result": False, "agent_confirmed_settings": True})
     assert not result.ok and result.decision_layer["records"][0]["decision"]["abstained"] is True
 
 
 def test_shadow_routing_on_a_no_match_keeps_the_error_and_records(tmp_path: Path) -> None:
     fake = FakeJev(_routing_script("yijing_divination", "sixyao"))
     service = _service(tmp_path, DecisionLayer(_policy("shadow"), fake))
-    result = service.dispatch({"query": "帮我看看这段感情最后能不能成", "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "帮我看看这段感情的走向", "save_result": False, "agent_confirmed_settings": True})
     assert not result.ok and result.code == "dispatch.no_matching_tool"
     assert result.decision_layer["records"][0]["adopted"] is False and result.decision_layer["records"][0]["decision"]["tool"] == "sixyao"
 
@@ -239,3 +239,13 @@ def test_zhan_category_respects_user_value_and_general(tmp_path: Path) -> None:
     assert len(fake.calls) == calls, "user-provided zhanCategory → no call"
     payload = next(p for name, p in reversed(js.payloads) if name == "liureng")
     assert payload["zhanCategory"] == "hunyin"
+
+
+def test_enforce_routing_never_picks_a_technique_the_user_must_choose(tmp_path: Path) -> None:
+    """「能不能成」是起课问事，几派都合适、结论可能不同：确定性路由要用户挑，决策层不许替他选（v0.50.0-dev）。"""
+    fake = FakeJev(_routing_script("yijing_divination", "sixyao"))
+    service = _service(tmp_path, DecisionLayer(_policy("enforce"), fake, thresholds=LOCK))
+    for query, code in (("帮我看看这段感情最后能不能成", "dispatch.technique_choice_required"), ("帮我看手相", "dispatch.out_of_scope")):
+        result = service.dispatch({"query": query, "save_result": False, "agent_confirmed_settings": True})
+        assert not result.ok and result.code == code and result.selected_tools == []
+        assert not (result.decision_layer or {}).get("records")

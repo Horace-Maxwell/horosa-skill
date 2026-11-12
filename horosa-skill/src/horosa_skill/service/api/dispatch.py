@@ -27,7 +27,7 @@ from horosa_skill.decisions.surfaces.routing import (
 )
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
-from horosa_skill.engine.router import select_tools
+from horosa_skill.engine.router import route
 from horosa_skill.errors import DispatchResolutionError, ToolValidationError, validation_errors
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.reports.technique_card import build_technique_report
@@ -399,15 +399,24 @@ class DispatchAPI:
             ) from exc
 
         routing_error: DispatchResolutionError | None = None
+        routing_warnings: list[str] = []
         decision_records_out: list[dict[str, Any]] = []
         try:
             # 合参等上层可显式点名技法（跳过关键词路由）；未知名照常走 run_tool 的 tool.unknown。
-            selected_tools = list(preselected_tools) if preselected_tools else select_tools(request)
+            if preselected_tools:
+                selected_tools = list(preselected_tools)
+            else:
+                routed = route(request)
+                selected_tools, routing_warnings = list(routed.tools), list(routed.warnings)
         except DispatchResolutionError as exc:
             routing_error = exc
             selected_tools = []
-        # 决策层 S1（可选，缺省关）：确定性路由是权威；只有它无解时才可能采纳 Jev 的兜底，命中时只记一致性。
-        if self.decision_layer is not None and not preselected_tools:
+        # 决策层 S1（可选，缺省关）：确定性路由是权威；只有它真·无解（没认出意图）时才可能采纳 Jev 的兜底，命中时只记一致性。
+        # 「需要用户挑技法」「超出范围」「目录里没有」是确定性的回答，不许模型替用户选。
+        routable_miss = routing_error is None or (
+            routing_error.code == "dispatch.no_matching_tool" and (routing_error.details or {}).get("reason") != "not_in_catalogue"
+        )
+        if self.decision_layer is not None and not preselected_tools and routable_miss:
             with decision_records() as routing_records:
                 selected_tools = self._decide_routing(request, selected_tools, routing_error)
             decision_records_out.extend(routing_records)
@@ -421,7 +430,7 @@ class DispatchAPI:
                 selected_tools=[],
                 normalized_inputs={},
                 results={},
-                summary=["未能从当前输入解析出匹配的 Horosa 工具。"],
+                summary=[str(exc)],
                 warnings=[],
                 memory_ref=None,
                 error=ErrorInfo(code=exc.code, message=str(exc), details=exc.details),
@@ -434,7 +443,7 @@ class DispatchAPI:
         normalized_inputs: dict[str, dict[str, Any]] = {}
         results: dict[str, ToolEnvelope] = {}
         result_export_contracts: dict[str, dict[str, Any]] = {}
-        dispatch_warnings: list[str] = []
+        dispatch_warnings: list[str] = list(routing_warnings)
         extraction_shared: dict[str, Any] = {}
 
         workflow_group_id = self.tracer.new_group_id()
