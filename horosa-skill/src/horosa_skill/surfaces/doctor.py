@@ -208,7 +208,20 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
 }
 
 
-def _advice_for(code: str) -> dict[str, str]:
+# 没有离线载荷的平台（Linux / Intel Mac）：同一个码，出路不同——那里没有 730 MB 的 runtime 可装（v0.50.0-dev，CI Linux 红：
+# advice 照抄「运行 install（约 730 MB）」，而 install 在那里实际只装 7 MB 的 JS 引擎）。
+_PAYLOADLESS_ADVICE: dict[str, dict[str, str]] = {
+    "runtime:not_installed": {
+        "user_summary": "本机平台没有离线 runtime 载荷（只发 darwin-arm64 与 win32-x64）：本地 JS 技法靠独立的 JS 引擎，其余技法走网关模式。",
+        "next_action": "本地 JS 引擎没装就 `horosa-skill install --engine-only`（约 7 MB，需 Node.js ≥ 20.10）；其余技法在一台受支持的机器上跑 "
+                       "runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
+    },
+}
+
+
+def _advice_for(code: str, *, platform_supported: bool = True) -> dict[str, str]:
+    if not platform_supported and code in _PAYLOADLESS_ADVICE:
+        return dict(_PAYLOADLESS_ADVICE[code])
     if code in _DOCTOR_ADVICE:
         return dict(_DOCTOR_ADVICE[code])
     prefix = code.split(":", 1)[0] + ":"
@@ -452,15 +465,20 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
             engine_en = ("The local JS engine is in place (BaZi, Liuyao, Liuren and the other local JS techniques work)." if engine_ok else
                          f"The local JS engine is missing too: `{cli_command('install --engine-only')}` installs it (about 7 MB; "
                          "needs Node.js >= 20.10).")
+            # 引擎缺着时，本机能做的第一步就是装它：下一步先给这条命令，再说网关（此前只说网关，命令埋在结论里）。
+            first_zh = "" if engine_ok else f"先 `{cli_command('install --engine-only')}` 装本地 JS 引擎；"
+            gateway_en = ("use gateway mode for the other techniques: run the runtime on a supported machine and point "
+                          "HOROSA_SERVER_ROOT and HOROSA_CHART_SERVER_ROOT at it.")
+            next_en = (gateway_en[0].upper() + gateway_en[1:] if engine_ok else
+                       f"First run `{cli_command('install --engine-only')}` for the local JS engine, then {gateway_en}")
             return result(
                 "needs_attention",
                 "本机平台没有离线 runtime 载荷 —— 只发 darwin-arm64 与 win32-x64（Windows on ARM 自动装 x64 载荷走仿真；"
                 f"Intel Mac 与 Linux 没有载荷）。{engine_zh}",
                 "There is no offline runtime payload for this platform — only darwin-arm64 and win32-x64 are published "
                 f"(Windows on ARM installs the x64 payload under emulation; Intel Macs and Linux have none). {engine_en}",
-                "其余技法走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
-                "For the other techniques use gateway mode: run the runtime on a supported machine and point HOROSA_SERVER_ROOT "
-                "and HOROSA_CHART_SERVER_ROOT at it.",
+                f"{first_zh}其余技法走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
+                next_en,
             )
         hint = install_command()
         if "runtime:root_not_writable" in issues:
@@ -793,7 +811,7 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
     report["advice"] = [
-        {"code": code, **_advice_for(code)}
+        {"code": code, **_advice_for(code, platform_supported=report["platform_supported"] is not False)}
         for code in [*(str(i) for i in report.get("issues") or []), *(w.get("code") for w in report["warnings"] if isinstance(w, dict))]
     ]
     report["unexpanded_env_templates"] = _unexpanded()

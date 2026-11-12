@@ -44,9 +44,21 @@ def _gateway(monkeypatch: pytest.MonkeyPatch, manager: HorosaRuntimeManager, *, 
     monkeypatch.setattr(manager, "_service_status", lambda: _endpoints(GATEWAY, reachable))
 
 
-def _ready_js(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("horosa_skill.engine.js_client.HorosaJsEngineClient.diagnose",
-                        lambda self: {"state": "ready", "ok": True, "fix": None, "affects": "x / y"})
+def _ready_js(monkeypatch: pytest.MonkeyPatch, *, ok: bool = True) -> None:
+    state = {"state": "ready", "ok": True, "fix": None, "affects": "x / y"} if ok else \
+        {"state": "absent", "ok": False, "fix": "f / g", "affects": "x / y"}
+    monkeypatch.setattr("horosa_skill.engine.js_client.HorosaJsEngineClient.diagnose", lambda self: dict(state))
+
+
+# 🔴 本机平台也要钉住（v0.50.0-dev，LESSONS「macOS 绿 ≠ CI 绿」）：下面的「新机器」用例此前只在有载荷的平台（维护机 macOS arm64）
+# 上写过断言；CI 的 ubuntu 是没有载荷的平台，doctor 按设计走另一支，两条用例在 CI 红、本机绿。现在每台机器两支都跑。
+SUPPORTED_HOST, PAYLOADLESS_HOST = "darwin-arm64", "linux-x64"
+
+
+@pytest.fixture(params=[SUPPORTED_HOST, PAYLOADLESS_HOST])
+def host(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    monkeypatch.setattr("horosa_skill.runtime.manager._platform_key", lambda: request.param)
+    return request.param
 
 
 def _report(settings: Settings, manager: HorosaRuntimeManager) -> dict:
@@ -56,7 +68,7 @@ def _report(settings: Settings, manager: HorosaRuntimeManager) -> dict:
 # ── 三种模式 ──────────────────────────────────────────────────────────────────
 
 
-def test_a_fresh_machine_gets_one_issue_and_the_install_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_fresh_machine_gets_one_issue_and_the_install_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host: str) -> None:
     _ready_js(monkeypatch)
     settings = _settings(tmp_path)
     manager = HorosaRuntimeManager(settings)
@@ -67,10 +79,36 @@ def test_a_fresh_machine_gets_one_issue_and_the_install_command(tmp_path: Path, 
     assert report["deployment"] == "not_installed"
     assert report["issues"] == ["runtime:not_installed"], "不是 12 条 missing:*"
     assert report["status"] == "needs_attention"
-    install = hints.install_command()["install"]
-    assert f"`{install}`" in report["next_action"] and "openclaw" not in report["next_action"].lower()
+    assert "openclaw" not in report["next_action"].lower()
     assert " / " in report["user_summary"] and " / " in report["next_action"], "中英成对，不混"
     assert [a["code"] for a in report["advice"]][:1] == ["runtime:not_installed"]
+    advice = report["advice"][0]
+    install = hints.install_command()["install"]
+    if host == SUPPORTED_HOST:
+        assert report["platform_supported"] is True
+        assert f"`{install}`" in report["next_action"]
+        assert "730 MB" in advice["next_action"]
+    else:
+        # 没有载荷的平台：没有 730 MB 可装；引擎已就位 → 下一步只剩网关，advice 也不再叫人去装 runtime
+        assert report["platform_supported"] is False
+        assert "HOROSA_SERVER_ROOT" in report["next_action"] and "install" not in report["next_action"]
+        assert "730 MB" not in json.dumps(report, ensure_ascii=False)
+        assert "HOROSA_SERVER_ROOT" in advice["next_action"] and "--engine-only" in advice["next_action"]
+
+
+def test_a_payloadless_machine_without_the_engine_is_told_to_install_it_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("horosa_skill.runtime.manager._platform_key", lambda: PAYLOADLESS_HOST)
+    _ready_js(monkeypatch, ok=False)
+    settings = _settings(tmp_path)
+    manager = HorosaRuntimeManager(settings)
+    monkeypatch.setattr(manager, "_service_status", lambda: _endpoints(("http://127.0.0.1:18806", "http://127.0.0.1:18807"), False))
+
+    report = _report(settings, manager)
+
+    engine = hints.cli_command("install --engine-only")
+    zh, en = report["next_action"].split(" / ", 1)
+    assert zh.startswith(f"先 `{engine}`") and en.startswith(f"First run `{engine}`"), report["next_action"]
+    assert "HOROSA_SERVER_ROOT" in zh and "HOROSA_SERVER_ROOT" in en
 
 
 def test_a_reachable_gateway_is_ready(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,8 +151,8 @@ def test_an_installed_runtime_that_is_not_running_says_start_it(tmp_path: Path, 
 # ── 命令按安装方式写；OpenClaw 只给确知是 OpenClaw 的人 ─────────────────────────
 
 
-def test_commands_follow_the_install_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _ready_js(monkeypatch)
+def test_commands_follow_the_install_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host: str) -> None:
+    _ready_js(monkeypatch, ok=host == SUPPORTED_HOST)  # 无载荷平台上让引擎缺着：那一支才会给出命令
     bundle = tmp_path / "Claude Extensions" / "local.dxt.horosa"
     monkeypatch.setenv("HOROSA_INSTALL_CONTEXT", "mcpb")
     monkeypatch.setenv("HOROSA_PLUGIN_ROOT", str(bundle))
@@ -125,9 +163,10 @@ def test_commands_follow_the_install_context(tmp_path: Path, monkeypatch: pytest
     report = _report(settings, manager)
 
     prefix = f'uv run --directory "{bundle}" horosa-skill'
-    assert f"`{prefix} install`" in report["next_action"]
+    command = f"`{prefix} install`" if host == SUPPORTED_HOST else f"`{prefix} install --engine-only`"
+    assert command in report["next_action"]
     advice = {a["code"]: a for a in report["advice"]}
-    assert f"`{prefix} install`" in advice["runtime:not_installed"]["next_action"]
+    assert command in advice["runtime:not_installed"]["next_action"]
     assert "`uv run horosa-skill" not in json.dumps(report, ensure_ascii=False)
 
 
