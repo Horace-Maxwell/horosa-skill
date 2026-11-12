@@ -1159,6 +1159,33 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **Runtime manager:** close file handles before `shutil.rmtree` on the Windows start path; a missing
   local `--archive` raises `RuntimeError`（which `install` catches）, not a raw tarfile error.
 
+### 9.1.1 安装 · 下载 · 卸载 · 环境变量 · JS 引擎（v0.50.0-dev 运行时与环境批）
+
+- **锁的「有人持锁」只有一个证据：锁文件已存在（v0.50.0-dev，E-08）。** 建不了锁文件的其它原因是 `LockDirNotWritableError`，
+  start / install 报 `runtime.root_not_writable`，doctor 报 `runtime:root_not_writable`（只读探测）。锁里记 `start_token`
+  （`procs.process_start_token`，只做相等比较）：pid 活着但口令不同 = pid 被回收，按死持有者回收；取不到口令按「不知道」走旧规则。
+- **归档格式看内容不看后缀（E-04）。** `runtime/archives.py::sniff_format` 认魔数；读不了的归档一律 `runtime.install_archive_invalid`
+  （`details.detected_format`），磁盘错误不算归档坏；`install --sha256` 是手工归档唯一的核对手段。文档里的 `--archive` 配方由测试按原文真跑。
+- **清单没有 sha256 不装（C-15）。** 走网络的下载必须有摘要（清单或 `--sha256`），否则 `runtime.install_sha256_missing`；清单与归档都在
+  本机时放行并带 `runtime.install_unverified` 告警。「谁控制镜像谁就控制摘要」是另一个问题（镜像信任，待维护者决定），不靠这条解决。
+- **断点按内容定名（E-09）。** `manager._partial_paths`：`<文件名>.<sha 前 16 位>.part` + `.part.json` 旁注；来历对不上不续；续传带
+  `If-Range`；续出来不对先从头干净重下一次；有进展的断线不吃重试次数；同一内容一把下载锁（`runtime.install_download_in_progress`）。
+- **`--purge-data` 只删白名单（E-01）。** `runtime/purge.py::OWNED_NAMES` 登记本工具写进数据目录的每一种文件，新增一种落盘文件就要登记
+  （锁步测试把各存储真写一遍再全清）；别的东西列进 `left_in_place`；数据目录只 rmdir；指到家目录 / 家目录上级 / 根 / 包着 runtime 根时
+  `runtime.purge_refused`，一个字节都不删。dry-run 与真删用同一个计划。
+- **env 值认不出要点名（E-10）。** 解析器返回 (值, 拒绝原因)，`config.env_rejections()` 记下来，provenance 写
+  `default:rejected env:<NAME>=<值>`（前缀仍是 default），doctor 报 `env:rejected_value`；服务根 URL 形状不对照用并报 `env:invalid_url`
+  （换默认值可能打到用户的桌面端）。值经 `redact_env_value`：名字像 KEY / TOKEN / SECRET 的整段遮，URL 遮 userinfo（doctor 的代理变量同理）。
+  新的数值型 `HOROSA_*` 一律走 `config._env_int / _env_float / _env_bool`，不要自己 `float(os.environ[...])`。
+- **每个 `HOROSA_*` 都有文档（E-15）。** 说明写在 `env_docs.ENV_FLAG_DOCS`，`docs/ENV_VARS.md` 由 `scripts/gen_env_reference.py` 生成；
+  `tests/test_env_reference.py` 锁：登记即要说明、文档逐字节等于渲染、用户文档只许出现登记过的名字。
+- **Node 解析一次、读版本（E-11 / C-19）。** `engine/node_runtime.py`：HOROSA_NODE_BIN → runtime 自带 → PATH；HOROSA_NODE_BIN 指空是
+  `js_engine.node_bin_missing`（不回落）；低于 `NODE_FLOOR`（与 horosa-core-js `engines.node` 锁步）是 `js_engine.node_too_old`；进程在输出 JSON
+  前就死了，`error.message` 是 stderr 里那行 `XxxError`，不是 `{}`。版本按文件身份缓存、已装清单按 mtime 缓存。
+- **端口占用看 socket，不只看 HTTP（E-07）。** `ports.port_taken`：有人 accept，或绑不上且点得出监听进程 = 占着；start 起启动器前、
+  `runtime.start_timeout` 的 `port_takers`、doctor 都用它；非自家的占用者 → `runtime.port_taken`（不起、不杀）。测试里与 `classify_endpoint`
+  一样钉住（`_managed_mode`），因为维护机的 9999 / 8899 上跑着桌面端。
+
 ### 9.2 MCP 面 · schema · 错误信封（MCP surface / schema / errors）
 
 - **工具结果有线上体积预算（v0.46.1）**：官方 MCP SDK 客户端 streamable HTTP 单条 SSE 事件上限 1 MiB，超出整条调用失败。
@@ -1535,6 +1562,11 @@ A global stability pass hardened these; keep them true when you touch the releva
   或 `quote`；裸插值在 Windows 上会把 `C:\Users\…` 的反斜杠原样写进 TOML → 整文件不可解析、
   `--write` 拒绝合并（v0.33.0 codex `command` 就这么在 mac/Linux 恒绿、windows-smoke 连红两次）。
   守卫：`tests/test_client_config.py`（windows-smoke 上跑 = 唯一能判红的形状）。
+- **doctor 先定模式再说话（v0.50.0-dev，E-05 / E-06 / MCP-10）。** `manager.doctor` 先给 `deployment`（managed / external / not_installed）：
+  没装是一条 `runtime:not_installed`（不是 12 条 `missing:*`），网关只看两个地址（`external:unreachable`），可达即 ready；summary 中英成对；
+  命令一律经 `runtime/hints.py::cli_command` / `contextualize` 按安装方式写（checkout / installed / wheel / plugin / mcpb），不写死 `uv run`；
+  就绪后的下一步客户端中立，只有设了 OPENCLAW_WORKSPACE 才给 OpenClaw 命令。`js_engine` 一节报引擎在不在、实际用的 node 与下限；
+  缺了是 `js_engine:unavailable` 告警（网关仍 ready，写明哪些技法会失败）；`selfcheck` 真跑一次纯 JS 的地名检索，没引擎不许说「全部通过」。
 - **doctor 的每个码都要有人话，默认零外网请求（v0.38.0 B6）。** issue 码的真值 = `manager.DOCTOR_ISSUE_CODES`（`missing:*` 前缀族），
   warning 码 = `surfaces/doctor.py::_DOCTOR_WARNING_CODES`；`_DOCTOR_ADVICE`（同模块）逐码给 `user_summary` + `next_action`，报告 `advice[]` 与 `--explain`
   都从它出。`tests/test_doctor_machine_conditions.py` 扫 `doctor()` 源码里新增的 `issues.append("…")` 字面量——不登记必红。

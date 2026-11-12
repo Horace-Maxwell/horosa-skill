@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -44,6 +45,9 @@ def _managed_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         "horosa_skill.runtime.manager.classify_endpoint",
         lambda url, **kwargs: EndpointIdentity("ours", "identity.nonce_match", url),
     )
+    # 同理：起启动器前的 socket 层占用检查（v0.50.0-dev，E-07）。不钉的话维护机上 9999/8899 正跑着桌面端 →
+    # 每个 start 用例都撞 runtime.port_taken（还会去连用户的桌面端）；CI 上又没人听 → 绿。测占用的用例自己覆盖。
+    monkeypatch.setattr("horosa_skill.runtime.manager.port_taken", lambda port: None)
 
 
 def create_runtime_archive(tmp_path: Path) -> Path:
@@ -1396,9 +1400,12 @@ def test_download_with_resume_sends_range_and_appends(tmp_path: Path, monkeypatc
     manager = HorosaRuntimeManager(settings)
     payload = b"0123456789" * 100
     half = len(payload) // 2
-    downloads = settings.runtime_root / "downloads"
-    downloads.mkdir(parents=True, exist_ok=True)
-    (downloads / "blob.bin.part").write_bytes(payload[:half])
+    # v0.50.0-dev（E-09）：断点按内容定名、带旁注；没有旁注的断点来历不明，不会被续。
+    part, sidecar, _lock = manager._partial_paths("https://example.com/blob.bin", None)
+    part.parent.mkdir(parents=True, exist_ok=True)
+    part.write_bytes(payload[:half])
+    sidecar.write_text(json.dumps({"source": "https://example.com/blob.bin", "url": "https://example.com/blob.bin",
+                                   "etag": '"v1"', "last_modified": None, "length": len(payload), "sha256": None}), encoding="utf-8")
 
     captured_headers: dict[str, str] = {}
 
@@ -1428,6 +1435,7 @@ def test_download_with_resume_sends_range_and_appends(tmp_path: Path, monkeypatc
     )
     assert target.read_bytes() == payload
     assert captured_headers.get("range") == f"bytes={half}-"
+    assert captured_headers.get("if-range") == '"v1"', "续传要带校验值：资源变了服务器回整份，不续到旧前半截上"
     assert progress_points and progress_points[-1][0] == len(payload)
 
 
@@ -2222,7 +2230,8 @@ def test_install_over_http_records_the_real_download(tmp_path: Path) -> None:
     try:
         url = f"http://127.0.0.1:{server.server_address[1]}/{archive.name}"
         manifest = tmp_path / "manifest.json"
-        manifest.write_text(json.dumps({"version": "1.2.3", "platforms": {"darwin-arm64": {"url": url, "sha256": "", "archive_type": "tar.gz"}}}), encoding="utf-8")
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()  # 走网络的下载没有摘要会被拒（v0.50.0-dev，C-15）
+        manifest.write_text(json.dumps({"version": "1.2.3", "platforms": {"darwin-arm64": {"url": url, "sha256": digest, "archive_type": "tar.gz"}}}), encoding="utf-8")
         settings = Settings(runtime_root=tmp_path / "rt", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs", runtime_platform="darwin-arm64")
         result = HorosaRuntimeManager(settings).install(manifest_url=manifest.resolve().as_uri())
     finally:

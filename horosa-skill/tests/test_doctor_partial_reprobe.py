@@ -13,7 +13,9 @@ from pathlib import Path
 from types import MethodType
 
 import pytest
-from test_runtime_manager import create_runtime_archive
+# v0.50.0-dev：doctor 先定模式，外部（网关）模式不报 services:*。conftest 把两个根钉到 :9 = 外部模式；这里测的是本机 runtime，
+# 所以和 test_runtime_manager 一样用 _managed_mode 清掉那两个变量（否则「因为错误的原因」走进网关分支）。
+from test_runtime_manager import _managed_mode, create_runtime_archive  # noqa: F401 - _managed_mode 是 autouse fixture
 
 from horosa_skill.config import Settings
 from horosa_skill.runtime import manager as manager_module

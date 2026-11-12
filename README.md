@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-3513_passed-3e7c6f?style=flat-square" alt="3513 passed" />
+  <img src="https://img.shields.io/badge/测试-3655_passed-3e7c6f?style=flat-square" alt="3655 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -148,7 +148,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 | --- | --- |
 | `uv: command not found` | 先安装 uv：`curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | 下载缓慢或中断 | 重跑 `install` 会断点续传；或设 `HOROSA_RUNTIME_MIRROR=<镜像前缀>` 走镜像 |
-| `github.com:443` 直连不通（但 `api.github.com` 可达）——完整方案见 [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md) | 走 API 资产直链下载后本地安装：先 `curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` 找到平台 zip/tar.gz 的 `assets[].id`，再 `curl -L -H "Accept: application/octet-stream" -o runtime.zip https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`，最后 `uv run horosa-skill install --archive runtime.zip` |
+| `github.com:443` 直连不通（但 `api.github.com` 可达）——完整方案见 [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md) | 走 API 资产直链下载后本地安装：先 `curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` 找到平台 zip/tar.gz 的 `assets[].id`，再 `curl -L -H "Accept: application/octet-stream" -o runtime-archive https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`，最后 `uv run horosa-skill install --archive runtime-archive --sha256 <清单里的 sha256>`（文件名随意，安装器按内容认 zip / tar.gz；`--sha256` 可省但建议带上） |
 | Java 后端(:9999)未就绪 / `doctor` 报 `services:java_backend_not_running` | 会自动**降级 chart-only** 而不是全盘卡死：三式(奇门/太乙/金口)、神数、地占、塔罗、西占 chart 族照常可用；nongli/bazi/ziwei/liureng 与「占时」起课暂不可用。`doctor` 的 `java_diagnostics` 附捕获的 Java 启动错误，`selfcheck` 会自动改用 chart 侧探针 |
 | Windows 上 Java 进程秒退、无任何日志 | 已知诱因：代理/VPN/安全软件的 WFP 过滤会拦 `java.exe` 的 loopback（JDK-17 内部管道优先 AF_UNIX，connect 被拦即崩且无 TCP 回退，见 issue #14）。停掉相关服务通常不够（WFP 过滤驻留内核），需禁用后**重启**再试；期间 chart-only 降级模式可继续用 |
 | 磁盘不足 / 端口被占 / 看不懂 doctor 的码 | `uv run horosa-skill doctor --explain`：stdout 仍是 JSON，stderr 多 6–10 行人话；报告里 `advice[]` 给每个 issue / warning 码一句 `user_summary` + `next_action`；`--probe-network` 逐个镜像探清单 URL（默认零外网请求） |
@@ -161,7 +161,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 | 终端里 `uvx` 能跑、GUI 客户端里起不来 | GUI 客户端不继承 shell PATH；重跑 `client config`（现在写绝对路径），`client check` 报 `command_not_on_path` 即此症 |
 | Windows 用户名带空格 / 中文时服务起不来 | v0.38.0 起启动器给每个路径参数加了引号；升级后 `runtime restart` |
 | 升级 | `uv run horosa-skill upgrade`（同版本不重复下载） |
-| 卸载 | `uv run horosa-skill uninstall`（默认仅打印将删清单，`--yes` 执行，`--purge-data` 才动用户数据） |
+| 卸载 | `uv run horosa-skill uninstall`（默认仅打印将删清单，`--yes` 执行，`--purge-data` 才动用户数据：只删本工具自己写的文件，数据目录里别的东西原地保留并列在 `left_in_place`） |
 
 </details>
 
@@ -568,7 +568,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **3513 / 3513 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **3655 / 3655 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -584,7 +584,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 3513 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 3655 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

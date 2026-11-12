@@ -135,9 +135,11 @@ REMOVED_ENV_FLAGS: dict[str, str] = {}
 _ENV_AUDIT_DONE = False
 
 
-def audit_env_flags(*, force: bool = False) -> list[str]:
+def audit_env_flags(*, force: bool = False, log: bool = True) -> list[str]:
     """扫描 HOROSA_* 环境变量：未知 → warn-and-ignore（返回并记日志，进程内只告警一次）；
-    HOROSA_STRICT_CONFIG=1 时未知升级为 ValueError（显式选择加入的严格档）。"""
+    HOROSA_STRICT_CONFIG=1 时未知升级为 ValueError（显式选择加入的严格档）。
+
+    `log=False`：只要结果、不再打日志 —— doctor 把告警放进 JSON，此前它用 force=True 再打一遍，同一句话在 stderr 出现两次（E-15）。"""
     global _ENV_AUDIT_DONE
     warnings: list[str] = []
     for key in sorted(os.environ):
@@ -151,7 +153,7 @@ def audit_env_flags(*, force: bool = False) -> list[str]:
         warnings.append(f"未知环境变量 {key}（拼写有误？或来自更新版本的 skill）——已忽略，不影响运行。")
     if warnings and (os.environ.get("HOROSA_STRICT_CONFIG", "").strip().lower() in {"1", "true", "yes"}):
         raise ValueError("HOROSA_STRICT_CONFIG=1：" + "；".join(warnings))
-    if warnings and (force or not _ENV_AUDIT_DONE):
+    if warnings and log and (force or not _ENV_AUDIT_DONE):
         for line in warnings:
             # 启动期环境审计，没有工具调用可告知——不是降级点（verify_silent_degrades 只盯 logger.warning）。
             logger.log(logging.WARNING, "%s", line)
@@ -250,44 +252,129 @@ def _env_path(name: str, default: Path) -> Path:
     return Path(raw_value).expanduser()
 
 
-def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: int | None = None) -> int:
-    raw_value = _env_text(name)
-    if raw_value is None:
-        return default
+# ── 取值被拒的 env（E-10）────────────────────────────────────────────────────
+# 🔴 旧实现：`HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS=abc`、`HOROSA_JS_ENGINE_TIMEOUT_SECONDS=-5` 一律悄悄回落默认值，而 doctor 的
+# provenance 还写着 `env:<NAME>` —— 用户看到「来源 = 我设的变量」，值却是默认的，怎么都对不上。
+# 现在每个解析器返回 (值, 拒绝原因)；被拒的记在这里（按变量名，最近一次解析为准），provenance 写
+# `default:rejected env:<NAME>=<值>`，doctor 列出每一条。值一律经 `redact_env_value`：名字像密钥的整段遮掉，URL 遮 userinfo。
+_env_rejections: dict[str, dict[str, Any]] = {}
+_SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)", re.IGNORECASE)
+_URL_USERINFO = re.compile(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]*@")
+
+
+def mask_url_userinfo(text: str) -> str:
+    """`http://user:pass@proxy:8080` → `http://***@proxy:8080`。"""
+    return _URL_USERINFO.sub(lambda m: f"{m.group('scheme')}***@", text)
+
+
+def redact_env_value(name: str, value: str | None) -> str | None:
+    """给人看的 env 值：名字像密钥 / 令牌的整段遮掉，其余遮 URL 里的 userinfo、截到 120 字。"""
+    if value is None:
+        return None
+    if _SECRET_NAME.search(name):
+        return "<redacted>"
+    return mask_url_userinfo(value)[:120]
+
+
+def env_rejections() -> dict[str, dict[str, Any]]:
+    """本进程里取值被拒的 env：{名字: {value(已遮), reason, action, used}}。action = used_default / kept_as_is。"""
+    return {name: dict(entry) for name, entry in _env_rejections.items()}
+
+
+def _record_rejection(name: str, raw: str, reason: str, *, used: Any, action: str = "used_default") -> None:
+    _env_rejections[name] = {"value": redact_env_value(name, raw), "reason": reason, "action": action, "used": used}
+
+
+def _clear_rejection(name: str) -> None:
+    _env_rejections.pop(name, None)
+
+
+def parse_int(raw: str, *, minimum: int | None = None, maximum: int | None = None) -> tuple[int | None, str | None]:
     try:
-        value = int(raw_value)
+        value = int(raw.strip())
     except ValueError:
-        return default
+        return None, "not an integer"
     if minimum is not None and value < minimum:
-        return default
+        return None, f"below the minimum {minimum}"
     if maximum is not None and value > maximum:
+        return None, f"above the maximum {maximum}"
+    return value, None
+
+
+def parse_float(raw: str, *, minimum: float | None = None) -> tuple[float | None, str | None]:
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        return None, "not a number"
+    if value != value or value in (float("inf"), float("-inf")):
+        return None, "not a finite number"
+    if minimum is not None and value < minimum:
+        return None, f"below the minimum {minimum:g}"
+    return value, None
+
+
+def parse_bool(raw: str) -> tuple[bool | None, str | None]:
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True, None
+    if normalized in {"0", "false", "no", "off"}:
+        return False, None
+    return None, "not one of 1/0, true/false, yes/no, on/off"
+
+
+def url_root_problem(value: str) -> str | None:
+    """服务根 URL 的形状问题（没有 http(s) scheme / 没有主机）；没问题返回 None。"""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"}:
+        return "no http:// or https:// scheme" if "://" not in value else f"scheme `{parsed.scheme}` is not http or https"
+    if not parsed.hostname:
+        return "no host"
+    try:
+        parsed.port
+    except ValueError:
+        return "the port is not a number in 1-65535"
+    return None
+
+
+def _env_url(name: str) -> str | None:
+    """URL 型 env：形状不对时**照用**（换成默认值可能悄悄打到另一台服务上），但记一条 kept_as_is，doctor 点名。"""
+    raw = _env_text(name)
+    if raw is None:
+        _clear_rejection(name)
+        return None
+    problem = url_root_problem(raw)
+    if problem:
+        _record_rejection(name, raw, problem, used=redact_env_value(name, raw), action="kept_as_is")
+    else:
+        _clear_rejection(name)
+    return raw
+
+
+def _env_parsed(name: str, default: Any, parser: Any) -> Any:
+    raw = _env_text(name)
+    if raw is None:
+        _clear_rejection(name)
         return default
+    value, reason = parser(raw)
+    if reason is not None:
+        _record_rejection(name, raw, reason, used=default)
+        return default
+    _clear_rejection(name)
     return value
+
+
+def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: int | None = None) -> int:
+    return _env_parsed(name, default, lambda raw: parse_int(raw, minimum=minimum, maximum=maximum))
 
 
 def _env_float(name: str, default: float, *, minimum: float | None = None) -> float:
-    raw_value = _env_text(name)
-    if raw_value is None:
-        return default
-    try:
-        value = float(raw_value)
-    except ValueError:
-        return default
-    if minimum is not None and value < minimum:
-        return default
-    return value
+    return _env_parsed(name, default, lambda raw: parse_float(raw, minimum=minimum))
 
 
 def _env_bool(name: str, default: bool) -> bool:
-    raw_value = _env_text(name)
-    if raw_value is None:
-        return default
-    normalized = raw_value.strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    return default
+    return _env_parsed(name, default, parse_bool)
 
 
 def _env_result_view(name: str) -> str:
@@ -313,6 +400,10 @@ def _env_script(name: str) -> str:
 
     raw_value = _env_text(name)
     script = parse_script(raw_value)
+    if script is None and raw_value is not None:
+        _record_rejection(name, raw_value, "not one of zh-Hans / zh-Hant / zh-Hant-HK / true / false", used=SIMPLIFIED)
+    elif script is not None:
+        _clear_rejection(name)
     if script is None:
         if name not in _warned_unexpanded:
             _warned_unexpanded.add(name)
@@ -407,6 +498,14 @@ FIELD_ENV_MAP = {
 }
 
 
+def _rejected_source(env_name: str) -> str | None:
+    """取值被拒、用了默认值的字段：`default:rejected env:<NAME>=<值>`（前缀仍是 default —— doctor 契约按冒号前一段分组）。"""
+    entry = _env_rejections.get(env_name)
+    if not entry or entry.get("action") != "used_default":
+        return None
+    return f"default:rejected env:{env_name}={entry.get('value')!r} ({entry.get('reason')})"
+
+
 class Settings(BaseModel):
     server_root: str = Field(default="http://127.0.0.1:9999")
     chart_server_root: str = Field(default="http://127.0.0.1:8899")
@@ -469,8 +568,8 @@ class Settings(BaseModel):
         # 🔴 URL 必须跟着端口走。旧实现里 server_root 与 local_backend_port 是两个互不相干的字段：
         # 只设 HOROSA_LOCAL_BACKEND_PORT=19999 时，启动器听 19999，而探针、客户端、doctor 全都还
         # 打 9999 —— 用户「换个端口避开占用」的正常操作，结果是「服务起来了却一个技法都用不了」。
-        server_root_env = _env_text("HOROSA_SERVER_ROOT")
-        chart_root_env = _env_text("HOROSA_CHART_SERVER_ROOT")
+        server_root_env = _env_url("HOROSA_SERVER_ROOT")
+        chart_root_env = _env_url("HOROSA_CHART_SERVER_ROOT")
         db_path_env = _env_text("HOROSA_SKILL_DB_PATH")
         output_dir_env = _env_text("HOROSA_SKILL_OUTPUT_DIR")
         trace_dir_env = _env_text("HOROSA_TRACE_DIR")
@@ -506,12 +605,12 @@ class Settings(BaseModel):
             trace_dir=Path(trace_dir_env).expanduser() if trace_dir_env else data_dir / "traces",
             trace_capture_payloads=_env_bool("HOROSA_TRACE_CAPTURE_PAYLOADS", False),
             trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
-            trace_otlp_endpoint=_env_text("HOROSA_TRACE_OTLP_ENDPOINT"),
+            trace_otlp_endpoint=_env_url("HOROSA_TRACE_OTLP_ENDPOINT"),
             output_script=_env_script("HOROSA_OUTPUT_SCRIPT"),
             user_knowledge_dir=_env_path("HOROSA_USER_KNOWLEDGE_DIR", data_dir / "knowledge"),
             user_knowledge_max_chars=_env_int("HOROSA_USER_KNOWLEDGE_MAX_CHARS", 12_000, minimum=500, maximum=200_000),
             settings_provenance={
-                field: (f"env:{env_name}" if _env_text(env_name) is not None else (
+                field: (_rejected_source(env_name) or f"env:{env_name}" if _env_text(env_name) is not None else (
                     # 三个路径字段无独立 env 时由 data_dir 派生（而非模型默认）
                     "derived:data_dir" if field in {"db_path", "output_dir", "trace_dir", "user_knowledge_dir"}
                     # 两个 URL 无独立 env 时由端口派生（auto 模式下端口本身也是探出来的）

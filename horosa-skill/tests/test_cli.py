@@ -376,7 +376,9 @@ def test_doctor_adds_user_facing_summary(monkeypatch, tmp_path: Path) -> None:
     assert report["manifest_version"] == "0.5.11"
     assert report["runtime_payload_version"] == "0.5.11"
     assert "not running yet" in report["user_summary"]
-    assert "openclaw-setup" in report["next_action"]
+    # MCP-10：旧断言是 `"openclaw-setup" in next_action` —— 把「对所有客户端都说去配 OpenClaw」的缺陷钉成了契约。
+    # 服务没起的下一步是把它起来；只有设了 OPENCLAW_WORKSPACE（确知是 OpenClaw）时才给 OpenClaw 的命令。
+    assert "runtime start" in report["next_action"] and "openclaw" not in report["next_action"].lower()
     assert report["environment"]["runtime_root"] == str(settings.runtime_root)
     assert "current process environment" in report["environment"]["note"]
 

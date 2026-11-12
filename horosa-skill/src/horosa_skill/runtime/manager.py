@@ -16,7 +16,6 @@ import tarfile
 import tempfile
 import threading
 import time
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -25,21 +24,24 @@ from urllib.request import url2pathname
 
 import httpx
 
+from horosa_skill import fsretry
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
+from horosa_skill.runtime import archives
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, holders_outside_runtime_root, trust_unknown_ports
 from horosa_skill.runtime.pidlock import (
     INSTALL_OWNER,
     LAUNCHER_OWNER,
+    LockDirNotWritableError,
     describe_lock,
     release as release_lock,
     release_launcher,
     try_pid_lock,
 )
-from horosa_skill.runtime.procs import pid_alive
-from horosa_skill.runtime.ports import port_holders
+from horosa_skill.runtime.procs import pid_alive, process_start_token
+from horosa_skill.runtime.ports import port_holders, port_taken
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.runtime.windows_jar_patch import WindowsBootJarPatchMixin
 from horosa_skill.runtime.mac_launcher_patch import MacLauncherPatchMixin
@@ -224,6 +226,43 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _parse_manifest_text(text: str) -> tuple[dict[str, Any] | None, str | None]:
+    """清单文本 → (清单, None)；不是 JSON / 不是清单时 (None, 原因)，原因说成「它其实是什么」（HTML 登录页 / 接口报错 / 别的 JSON）。"""
+    stripped = text.lstrip("\ufeff \t\r\n")
+    try:
+        payload = json.loads(stripped)
+    except ValueError:
+        lowered = stripped[:512].lower()
+        if lowered.startswith(("<!doctype", "<html", "<?xml")) or "<html" in lowered:
+            return None, "the content is an HTML page (a login / error page?)"
+        return None, "the file is empty" if not stripped else "the content is not JSON"
+    if not isinstance(payload, dict) or not isinstance(payload.get("platforms"), dict):
+        return None, "the JSON has no `platforms` object (an API error body, or some other file?)"
+    return payload, None
+
+
+def _contextualize(text: str) -> str:
+    """提示里的 `horosa-skill …` 按本机安装方式改写（hints.contextualize；E-06）。"""
+    from horosa_skill.runtime.hints import contextualize
+
+    return contextualize(text)
+
+
+def _describe_takers(takers: list[dict[str, Any]]) -> str:
+    """`java_backend :9999 ← pid 123 (nc -l 9999)`；点不出进程时如实说不知道是谁。"""
+    parts = []
+    for taker in takers:
+        holders = ", ".join(f"pid {h.get('pid')} ({str(h.get('command') or '?')[:60]})" for h in taker.get("holders") or [])
+        parts.append(f"{taker.get('label')} :{taker.get('port')} ← {holders or 'unknown process / 查不出进程'}")
+    return "; ".join(parts)
+
+
+def _is_local_location(value: str) -> bool:
+    """file:// 或本地路径（含 Windows 盘符）。http(s) 与任何别的 scheme 都不算本地。"""
+    parsed = urlparse(value)
+    return parsed.scheme == "file" or parsed.scheme == "" or (len(parsed.scheme) == 1 and value[1:3] in {":\\", ":/"})
+
+
 def _is_url(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https", "file"}
@@ -298,6 +337,9 @@ WINDOWS_PATH_LIMIT = 259
 DOCTOR_ISSUE_CODES = (
     "runtime.manifest_invalid",
     "runtime.state_invalid",
+    "runtime:not_installed",
+    "runtime:root_not_writable",
+    "external:unreachable",
     "missing:*",
     "services:java_backend_not_running",
     "services:chart_not_running",
@@ -484,6 +526,12 @@ def _hand_lock_to(lock_path: Path, pid: Any) -> None:
         return
     payload["pid"] = pid
     payload["owner"] = LAUNCHER_OWNER
+    # 口令跟着 pid 一起换成启动器的；取不到就删掉旧的（留着本进程的口令会让启动器的锁被立刻判成「换人了」）。
+    token = process_start_token(pid)
+    if token:
+        payload["start_token"] = token
+    else:
+        payload.pop("start_token", None)
     try:
         lock_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     except OSError:
@@ -573,6 +621,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         platform_key: str | None = None,
         force: bool = False,
         progress: Any | None = None,
+        sha256: str | None = None,
     ) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="runtime.install",
@@ -582,9 +631,12 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             self._last_download = None
             # 下载 730 MB 之前就拒：装进去 Java 也起不来（只剩 chart），而修法只是换个路径。
             self._require_ascii_runtime_root()
+            self._require_writable_runtime_root()
+            pinned_sha256 = self._normalize_sha256_pin(sha256)
             self._sweep_install_temps()
             source = archive
-            expected_sha256: str | None = None
+            # `--sha256` 给的摘要：手工下载的归档（`--archive`）没有清单可对，这是唯一的核对手段。
+            expected_sha256: str | None = pinned_sha256 if source is not None else None
             asset_meta: dict[str, Any] | None = None
             manifest_data: dict[str, Any] | None = None
             fallback_note: dict[str, Any] | None = None
@@ -633,6 +685,18 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 _assert_min_os(asset_meta.get("min_os"), platform_name)
                 source = str(asset_meta.get("url") or "").strip()
                 expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
+                if pinned_sha256 and expected_sha256 and expected_sha256.lower() != pinned_sha256:
+                    # 下载 730 MB 之前就拒：用户钉的摘要与清单说的不是同一个文件。
+                    raise RuntimeValidationError(
+                        bilingual(
+                            "`--sha256` 给的摘要与发布清单里本平台归档的 sha256 不一致。",
+                            "The `--sha256` digest differs from the one the release manifest lists for this platform.",
+                        ),
+                        code="runtime.install_sha256_mismatch",
+                        details={"expected_sha256": pinned_sha256, "manifest_sha256": expected_sha256.lower(),
+                                 "manifest_url": manifest_location, "platform": platform_name},
+                    )
+                expected_sha256 = expected_sha256 or pinned_sha256
                 if not source:
                     raise RuntimeInstallError(
                         f"Runtime asset URL missing for platform `{platform_name}`.",
@@ -662,6 +726,9 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             "trace_id": trace["trace_id"],
                             "group_id": trace["group_id"],
                         }
+                # 版本短路之后才判摘要：什么都不下载时没有东西要校验（重跑 setup 不该因此被拒）。
+                if not expected_sha256:
+                    self._refuse_or_note_unverified(manifest_location, source, platform_name, install_warnings)
 
             self._require_install_disk_space(asset_meta)
             self.runtime_root.mkdir(parents=True, exist_ok=True)
@@ -674,12 +741,17 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 (temp_dir / INSTALL_TEMP_OWNER).write_text(str(os.getpid()), encoding="utf-8")
                 archive_path = self._materialize_archive(source, temp_dir, progress=progress, expected_sha256=expected_sha256)
                 already_verified = bool((self._last_download or {}).get("sha256_verified"))
-                if expected_sha256 and not already_verified and _sha256_file(archive_path).lower() != expected_sha256.lower():
+                actual_sha256: str | None = expected_sha256.lower() if expected_sha256 and already_verified else None
+                if actual_sha256 is None and (expected_sha256 or archive is not None):
+                    # 手工给的归档即使没钉摘要也算一遍放进结果：用户可以拿它和发布页对。
+                    actual_sha256 = _sha256_file(archive_path).lower()
+                if expected_sha256 and actual_sha256 != expected_sha256.lower():
                     raise RuntimeValidationError(
                         "Runtime archive checksum mismatch.",
                         code="runtime.install_sha256_mismatch",
-                        details={"archive": str(archive_path), "expected_sha256": expected_sha256},
+                        details={"archive": str(archive_path), "expected_sha256": expected_sha256.lower(), "actual_sha256": actual_sha256},
                     )
+                integrity = {"archive_sha256": actual_sha256, "sha256_verified": bool(expected_sha256)}
                 # manifest 声明的归档类型必须与资产扩展名一致（防声明 zip 实传 tar.gz 之类的静默错配）。
                 declared_type = str((asset_meta or {}).get("archive_type") or "").strip().lower()
                 if declared_type:
@@ -727,6 +799,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             "runtime_root": str(self.runtime_root),
                             "current_dir": str(self.current_dir),
                             "manifest": manifest,
+                            **integrity,
                             "trace_id": trace["trace_id"],
                             "group_id": trace["group_id"],
                         }
@@ -773,9 +846,13 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 "stopped_before_swap": was_running,
                 "restarted": restarted,
                 "download": getattr(self, "_last_download", None),
+                **integrity,
                 "asset": asset_meta or {},
                 "release_manifest": manifest_data or {},
-                "next_action": "接下来：`uv run horosa-skill doctor` 确认体检，`uv run horosa-skill serve` 启动 MCP，或把本服务注册到你的 AI 客户端（见 README「接入 AI 客户端」）。",
+                "next_action": _contextualize(bilingual(
+                    "接下来：`horosa-skill doctor` 确认体检，`horosa-skill setup --client <你的客户端>` 把本服务接进 AI 客户端。",
+                    "Next: `horosa-skill doctor` to check, then `horosa-skill setup --client <your-client>` to connect your AI client.",
+                )),
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
             }
@@ -831,7 +908,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     def _acquire_swap_lock(self, lock_path: Path) -> None:
         """等正在进行的启动结束，等不到就拒绝：启动器正从 current/ 起服务时换目录，等于把文件从它脚下搬走。"""
         deadline = time.monotonic() + float(self.settings.runtime_start_timeout_seconds)
-        while not try_pid_lock(lock_path, stale_after_seconds=960.0, owner=INSTALL_OWNER):
+        while not self._try_start_lock(lock_path, owner=INSTALL_OWNER):
             if time.monotonic() >= deadline:
                 raise RuntimeInstallError(
                     bilingual("runtime 正在启动，安装未动 current/。", "The runtime is starting; current/ was left untouched."),
@@ -870,7 +947,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         if self.current_dir.exists() or not (self.runtime_root / "previous").is_dir():
             return
         lock_path = self.runtime_root / ".runtime-start.lock"
-        if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner=INSTALL_OWNER):
+        if not self._try_start_lock(lock_path, owner=INSTALL_OWNER):
             return
         try:
             self._restore_previous_locked()
@@ -1098,50 +1175,51 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         `<data_dir>/knowledge/`，而提示语只说删 memory/runs/traces（v0.43 知识库审查 H1）。要连它一起删须再给
         purge_knowledge=True。**命主档案（`<data_dir>/profiles/`，用户给的出生信息）同一口径**：缺省保留，purge_profiles=True 才删。
         """
-        from horosa_skill.knowledge.user import STATE_DIRNAME, knowledge_dir
-        from horosa_skill.profiles import profiles_dir
+        from horosa_skill.runtime import purge
 
-        removal_plan: list[str] = []
-        kept: list[str] = []
+        runtime_paths: list[Path] = []
         for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads"):
             if path.exists():
-                removal_plan.append(str(path))
-        removal_plan.extend(str(path) for path in sorted(self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*")) if path.is_dir())
+                runtime_paths.append(path)
+        runtime_paths.extend(path for path in sorted(self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*")) if path.is_dir())
         state_path = self.settings.runtime_state_path
         if state_path.exists():
-            removal_plan.append(str(state_path))
+            runtime_paths.append(state_path)
         data_dir = self.settings.data_dir
-        if purge_data and data_dir.exists():
-            notes_dir = knowledge_dir(self.settings)
-            protected: set[Path] = set()
-            if not purge_knowledge:
-                protected |= {notes_dir.resolve(), (data_dir / STATE_DIRNAME).resolve()}
-            if not purge_profiles:
-                protected.add(profiles_dir(self.settings).resolve())
-            if not any(path.exists() for path in protected):
-                # 要保留的（知识库 / 回收站 / 命主档案）都没有，或都显式要删：整个数据目录删掉（与此前一致）。
-                removal_plan.append(str(data_dir))
-            else:
-                for child in sorted(data_dir.iterdir()):
-                    resolved = child.resolve()
-                    # 知识库 / 状态目录 / 命主档案本身，或包含它们的子目录（知识库配在数据目录更深处时）：整体保留，不深入挑删。
-                    if any(p.is_relative_to(resolved) for p in protected):
-                        kept.append(str(child))
-                        continue
-                    if str(child) not in removal_plan:
-                        removal_plan.append(str(child))
-            if purge_knowledge and notes_dir.exists() and not notes_dir.resolve().is_relative_to(data_dir.resolve()):
-                removal_plan.append(str(notes_dir))  # 知识库配在数据目录之外：显式连它一起删时单独列出
+        data_plan = purge.DataPurgePlan()
+        if purge_data:
+            # 🔴 先判「这个目录可能整个不是我们的」，再谈删什么：拒绝发生在任何删除之前，dry-run 与真删同一口径。
+            self._refuse_purge_if_not_ours(data_dir, what="data_dir")
+            data_plan = purge.plan_data_purge(self.settings, purge_knowledge=purge_knowledge, purge_profiles=purge_profiles)
+            for path in data_plan.remove:
+                if not path.resolve().is_relative_to(data_dir.resolve()):
+                    self._refuse_purge_if_not_ours(path, what="knowledge_dir")  # 配在数据目录外的知识库同一把尺
+        removal_plan = [str(path) for path in (*runtime_paths, *data_plan.remove)]
+        if data_plan.rmdir_data_dir and data_dir.exists():
+            removal_plan.append(str(data_dir))
+        kept = [str(path) for path in data_plan.kept]
+        left_in_place = [str(path) for path in data_plan.left_in_place]
+        report: dict[str, Any] = {
+            "kept": kept,
+            "left_in_place": left_in_place,
+            "purge_data": purge_data,
+            "purge_knowledge": purge_knowledge,
+            "purge_profiles": purge_profiles,
+        }
+        if data_plan.outside_data_dir:
+            report["outside_data_dir"] = [str(path) for path in data_plan.outside_data_dir]
+        if left_in_place:
+            report["left_in_place_note"] = bilingual(
+                "数据目录里这些不是本工具写的，原地保留；数据目录因此也留着。",
+                "These entries in the data directory were not written by this tool and are left in place, so the data directory itself stays.",
+            )
 
         if not yes:
             return {
                 "ok": True,
                 "dry_run": True,
                 "would_remove": removal_plan,
-                "kept": kept,
-                "purge_data": purge_data,
-                "purge_knowledge": purge_knowledge,
-                "purge_profiles": purge_profiles,
+                **report,
                 "next_action": (
                     "确认无误后追加 --yes 执行删除；用户数据默认保留（--purge-data 删 memory/runs/traces/reports，"
                     "自备知识库与其回收站、命主档案仍保留，除非再加 --purge-knowledge / --purge-profiles）。"
@@ -1158,10 +1236,15 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         for text in removal_plan:
             path = Path(text)
             try:
-                if path.is_dir():
-                    _rmtree_force(path)  # 嵌入式 JDK 的部分文件在 Windows 上带只读位，裸 rmtree 会 PermissionError
-                elif path.exists():
-                    path.unlink()
+                if path == data_dir:
+                    # 数据目录本身只 rmdir：计划之后才冒出来的文件（别的进程刚写的）不是清单上的东西，留着并如实报。
+                    try:
+                        path.rmdir()
+                    except OSError:
+                        left_in_place.extend(str(child) for child in sorted(path.iterdir()) if str(child) not in left_in_place)
+                        continue
+                else:
+                    purge.remove_owned(path)
                 removed.append(text)
             except OSError as exc:
                 raise RuntimeInstallError(
@@ -1169,9 +1252,47 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     code="runtime.uninstall_failed",
                     details={"path": text, "removed_so_far": removed, **({"stop_error": stop_error} if stop_error else {})},
                 ) from exc
-        return {"ok": True, "dry_run": False, "removed": removed, "kept": kept, "purge_data": purge_data,
-                "purge_knowledge": purge_knowledge, "purge_profiles": purge_profiles,
+        return {"ok": True, "dry_run": False, "removed": removed, **report,
                 **({"stop_error": stop_error} if stop_error else {})}
+
+    def _refuse_purge_if_not_ours(self, path: Path, *, what: str) -> None:
+        from horosa_skill.runtime import purge
+
+        reason = purge.refusal_reason(path, runtime_root=self.runtime_root)
+        if reason is None:
+            return
+        why_zh, why_en = {
+            "filesystem_root": ("是文件系统的根", "is a filesystem root"),
+            "home": ("就是你的家目录", "is your home directory"),
+            "above_home": ("是家目录的上级", "is a parent of your home directory"),
+            "contains_runtime_root": ("把 runtime 根包在里面", "contains the runtime root"),
+        }[reason]
+        label_zh, label_en, env_name = {
+            "data_dir": ("数据目录", "The data directory", "HOROSA_SKILL_DATA_DIR"),
+            "knowledge_dir": ("自备知识库目录", "The knowledge folder", "HOROSA_USER_KNOWLEDGE_DIR"),
+        }[what]
+        candidates = [str(child) for child in purge.owned_children_present(path)] if what == "data_dir" else []
+        raise RuntimeValidationError(
+            bilingual(
+                f"{label_zh} {path} {why_zh}：里面的东西不可能都是本工具写的，--purge-data 在这里一样都不删"
+                f"（runtime 也没有动）。把 {env_name} 指回一个专用目录，或手工删除 details.skill_named_children 里你确认要删的。",
+                f"{label_en} {path} {why_en}: not everything in it can belong to this tool, so --purge-data removes "
+                f"nothing here (the runtime was not touched either). Point {env_name} at a dedicated directory, or "
+                f"delete by hand the entries in details.skill_named_children that you are sure about.",
+            ),
+            code="runtime.purge_refused",
+            details={
+                "reason": reason,
+                "data_dir": str(self.settings.data_dir),
+                "path": str(path),
+                "runtime_root": str(self.runtime_root),
+                "skill_named_children": candidates,
+                "next_action": bilingual(
+                    "不带 --purge-data 的 `uninstall --yes` 照常可用（只删 runtime）。",
+                    "`uninstall --yes` without --purge-data still works (it removes the runtime only).",
+                ),
+            },
+        )
 
     def doctor(self) -> dict[str, Any]:
         with self.tracer.span(workflow_name="runtime.doctor", metadata={"entrypoint": "runtime.doctor"}) as trace:
@@ -1209,14 +1330,27 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             stop_script = self._relative_manifest_path(manifest, "services", "stop_script")
             endpoints = self._service_status_settled()
 
+            # 🔴 E-05 / E-06：先定模式，再让每条 issue 从模式里推出来。旧实现不分模式地逐个比对 12 个载荷文件：
+            # 网关（external）用户永远 12 条 missing:* + 「重新解包」，一台什么都没装的新机器也是 12 条 missing:*。
+            mode = self.runtime_mode()
+            deployment = "external" if mode == "external" else ("managed" if installed else "not_installed")
             issues = []
-            if manifest_issue:
+            if manifest_issue and deployment == "managed":
                 issues.append(manifest_issue["code"])
             if runtime_state_issue:
                 issues.append(runtime_state_issue["code"])
-            for entry in files:
-                if not entry["exists"]:
-                    issues.append(f"missing:{entry['label']}")
+            if deployment == "managed":
+                for entry in files:
+                    if not entry["exists"]:
+                        issues.append(f"missing:{entry['label']}")
+            elif deployment == "not_installed":
+                issues.append("runtime:not_installed")
+            elif not self._all_services_reachable(endpoints):
+                issues.append("external:unreachable")
+            # E-08：runtime 根写不了时 install / start 会被拒（runtime.root_not_writable）。doctor 只读：不建目录、不落文件。
+            write_problem = self.runtime_root_write_problem(probe=False) if deployment != "external" else None
+            if write_problem:
+                issues.append("runtime:root_not_writable")
             # macOS Gatekeeper（v0.38.0 B6）：浏览器下载的归档解出来的二进制带 com.apple.quarantine，
             # 首次执行被系统拦下时症状是「起不来 + 无日志」。只报不动：修复命令交给用户。
             quarantine = self._quarantine_report(manifest) if installed else {"checked": [], "flagged": [], "fix": None}
@@ -1227,7 +1361,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 issues.append("windows:runtime_root_not_ascii")
             degraded: str | None = None
             java_diagnostics: dict[str, Any] | None = None
-            if installed and not self._all_services_reachable(endpoints):
+            if deployment == "managed" and not self._all_services_reachable(endpoints):
                 if self._chart_only_degraded(endpoints):
                     # Issue #14: name the half that is down and surface WHY — a silently dead
                     # Java backend was previously indistinguishable from "nothing running".
@@ -1249,6 +1383,9 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             return {
                 "ok": not issues,
                 "installed": installed,
+                # managed（本机 runtime 由本工具启停）/ external（网关：HOROSA_SERVER_ROOT 指到别处，只探不起）/ not_installed
+                "deployment": deployment,
+                "runtime_root_writable": {"ok": write_problem is None, "problem": write_problem},
                 "platform": host_platform,
                 # v0.38.0 A4: host vs payload — Windows on ARM runs the win32-x64 payload under emulation.
                 "host_platform": host_platform,
@@ -1331,6 +1468,8 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
                 self._restore_previous_after_crash()
                 self._require_runtime()
+                # 启动要在 runtime 根下写锁、状态文件与 launcher.log。写不了就现在说，别让锁那一步把它答成「别人在启动」。
+                self._require_writable_runtime_root()
                 manifest = self.load_installed_manifest(strict=True)
                 # 🔴 macOS：带 com.apple.quarantine 的 python/java 一被启动器 exec 就被 Gatekeeper SIGKILL，
                 # 没有任何输出。此前只有 doctor 会查它；start 路径上用户要等满整个就绪预算，
@@ -1410,7 +1549,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     if wait_seconds is None
                     else max(0.0, float(wait_seconds))
                 )
-                if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner="runtime-start"):
+                if not self._try_start_lock(lock_path, owner="runtime-start"):
                     holder = describe_lock(lock_path)
                     waited = self._wait_for_service_state(
                         expected_reachable=True, timeout_seconds=budget
@@ -1462,6 +1601,10 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                         return state
 
                     self._update_runtime_state(_remember_nonce)
+
+                    # 🔴 E-07：HTTP 探针看不见的监听者（不说 HTTP / 只 accept 不应答）也占着端口：现在就点名，
+                    # 别起了启动器再让用户等满预算拿一个 conflicts 为空的 runtime.start_timeout。
+                    self._require_ports_free_of_others(initial_status)
 
                     env = self._launcher_env()
                     env["HOROSA_LAUNCH_NONCE"] = launch_nonce
@@ -1528,7 +1671,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                                 "Java backend (:9999) did not become ready; running degraded on the chart service only. "
                                 "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) stay available; "
                                 "Java-side ones (nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers. "
-                                "Run `uv run horosa-skill doctor` for the captured Java boot error."
+                                + _contextualize("Run `horosa-skill doctor` for the captured Java boot error.")
                             ),
                             "details": {
                                 "command": command,
@@ -1564,13 +1707,20 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             },
                         )
                     if not readiness["ready"]:
+                        taken = self._ports_taken_by_others(readiness["endpoints"])
                         raise RuntimeInstallError(
-                            "Local Horosa runtime did not become ready in time.",
+                            bilingual(
+                                "本机 Horosa runtime 没有在时限内就绪。"
+                                + (f"端口被别的进程占着：{_describe_takers(taken)}。" if taken else ""),
+                                "The local Horosa runtime did not become ready in time."
+                                + (f" A port is held by another process: {_describe_takers(taken)}." if taken else ""),
+                            ),
                             code="runtime.start_timeout",
                             details={
                                 "command": command,
                                 "timeout_seconds": self.settings.runtime_start_timeout_seconds,
                                 "endpoints": readiness["endpoints"],
+                                "port_takers": taken,
                                 **self._start_failure_context(manifest),
                             },
                         )
@@ -1855,6 +2005,23 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
 
         return mirror_candidates(url)
 
+    # 一次下载里「有进展」的尝试不计入重试次数，但总轮数封顶：一个每次只给几字节就断的源不能把 install 拖成无限循环。
+    _MAX_PROGRESSING_ROUNDS = 50
+    DOWNLOAD_OWNER = "runtime-download"
+
+    def _partial_paths(self, source: str, expected_sha256: str | None) -> tuple[Path, Path, Path]:
+        """断点文件、旁注（url / etag / 长度 / sha）、下载锁 —— 按**内容**定名，不按文件名。
+
+        🔴 v0.50.0-dev（E-09）：旧实现用 `downloads/<文件名>.part`。同名的另一个资产（发布 repack、换了版本却同名、
+        另一个镜像给的坏字节）留下的半截会被当成前半截续上，最后 sha 对不上；两个 install 同时跑还会争同一个文件。
+        有期望 sha 时按 sha 定名（同一份内容从哪个镜像续都对），没有时按 URL 定名。
+        """
+        filename = Path(urlparse(source).path).name or "runtime-archive"
+        key = (expected_sha256 or "").strip().lower() or hashlib.sha256(source.encode("utf-8")).hexdigest()
+        downloads_dir = self.runtime_root / "downloads"
+        stem = f"{filename}.{key[:16]}"
+        return downloads_dir / f"{stem}.part", downloads_dir / f"{stem}.part.json", downloads_dir / f"{stem}.lock"
+
     def _download_with_resume(
         self,
         source: str,
@@ -1866,14 +2033,44 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     ) -> Path:
         """流式下载 + HTTP Range 断点续传 + 有限退避重试 + 多镜像回退。
 
-        .part 分块存 runtime_root/downloads（跨 install 调用可续传）；206 续写、200 重下兜底；416 看 Content-Range：
-        分块已到头就直接用，否则丢掉从头下。给了 `expected_sha256` 就逐候选校验：镜像回 200 + 错误页时丢掉分块换下一个，
-        回退才覆盖「内容不对」，不只是 HTTP 报错。progress(done, total|None) 供 CLI 回调。
+        断点存 runtime_root/downloads（跨 install 调用可续传），按内容定名并带旁注（`_partial_paths`）；续传带 `If-Range`
+        （资源变了服务器回 200 整份，不会把新尾巴接到旧前半截上）。206 续写、200 重下；416 看 Content-Range：分块已到头就直接用，
+        否则丢掉从头下。给了 `expected_sha256` 就逐候选校验：续出来的文件对不上时先丢掉断点**从头再下一次**，仍不对才算这个候选坏了。
+        有进展的尝试不消耗重试次数（慢网上断三次不该等于失败）。同一份内容同时只有一个进程在下（下载锁）。
+        progress(done, total|None) 供 CLI 回调。
         """
         filename = Path(urlparse(source).path).name or "runtime-archive"
-        downloads_dir = self.runtime_root / "downloads"
-        downloads_dir.mkdir(parents=True, exist_ok=True)
-        part_path = downloads_dir / f"{filename}.part"
+        part_path, sidecar_path, lock_path = self._partial_paths(source, expected_sha256)
+        part_path.parent.mkdir(parents=True, exist_ok=True)
+        if not try_pid_lock(lock_path, stale_after_seconds=6 * 3600.0, owner=self.DOWNLOAD_OWNER):
+            holder = describe_lock(lock_path) or {}
+            raise RuntimeInstallError(
+                bilingual(
+                    f"另一个 install（pid {holder.get('pid')}）正在下载同一个 runtime 归档。等它结束再看结果，不用重复下载。",
+                    f"Another install (pid {holder.get('pid')}) is downloading the same runtime archive. Wait for it to finish; "
+                    "there is no need to download it twice.",
+                ),
+                code="runtime.install_download_in_progress",
+                details={"lock": str(lock_path), "holder": holder},
+            )
+        try:
+            return self._download_locked(source, temp_dir, filename=filename, part_path=part_path, sidecar_path=sidecar_path,
+                                         attempts=attempts, progress=progress, expected_sha256=expected_sha256)
+        finally:
+            release_lock(lock_path)
+
+    def _download_locked(
+        self,
+        source: str,
+        temp_dir: Path,
+        *,
+        filename: str,
+        part_path: Path,
+        sidecar_path: Path,
+        attempts: int | None,
+        progress: Any | None,
+        expected_sha256: str | None,
+    ) -> Path:
         candidates = self._mirror_candidates(source)
         # v0.38.0 B6：慢网 / 企业代理下可调（HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS / _ATTEMPTS）。
         if attempts is None:
@@ -1883,13 +2080,24 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         failures: list[str] = []
         download_started = time.monotonic()
         checksum_failed = False
+        rounds = 0
+        self._drop_partial_if_foreign(part_path, sidecar_path, source=source, expected_sha256=expected_sha256)
+        self._sweep_legacy_partials(part_path.parent)
         for candidate in candidates:
             checksum_failed = False
-            for attempt in range(attempts):
+            fruitless = 0           # 没有任何进展的失败次数：这个才和 attempts 比
+            clean_retry_used = False
+            while fruitless < attempts and rounds < self._MAX_PROGRESSING_ROUNDS:
+                rounds += 1
+                offset = part_path.stat().st_size if part_path.exists() else 0
+                done = offset
                 try:
-                    offset = part_path.stat().st_size if part_path.exists() else 0
-                    headers = {"Range": f"bytes={offset}-"} if offset else {}
-                    done = offset
+                    headers: dict[str, str] = {}
+                    if offset:
+                        headers["Range"] = f"bytes={offset}-"
+                        validator = self._sidecar_validator(sidecar_path)
+                        if validator:
+                            headers["If-Range"] = validator  # 资源变了 → 服务器回 200 整份，不续到旧前半截上
                     stale_part = False
                     with httpx.Client(timeout=httpx.Timeout(connect_timeout, read=read_timeout), follow_redirects=True) as client:
                         with client.stream("GET", candidate, headers=headers) as response:
@@ -1901,12 +2109,13 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                                 if response.status_code == 206:
                                     mode = "ab"
                                     total = offset + int(response.headers.get("Content-Length") or 0) or None
-                                    done = offset
                                 else:
-                                    # 服务器不支持 Range（或无 .part）→ 从头重下。
+                                    # 服务器不支持 Range / If-Range 判定资源变了 / 没有断点 → 从头重下。
                                     mode = "wb"
                                     total = int(response.headers.get("Content-Length") or 0) or None
                                     done = 0
+                                self._write_sidecar(sidecar_path, source=source, url=candidate, response=response,
+                                                    total=total, expected_sha256=expected_sha256)
                                 with open(part_path, mode) as handle:
                                     for chunk in response.iter_bytes(chunk_size=1024 * 1024):
                                         handle.write(chunk)
@@ -1914,16 +2123,22 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                                         if progress is not None:
                                             progress(done, total)
                     if stale_part:
-                        part_path.unlink(missing_ok=True)
+                        self._drop_partial(part_path, sidecar_path)
                         failures.append(f"{candidate}: HTTP 416, dropped a stale partial of {offset} bytes")
                         continue
                     if expected_sha256 and _sha256_file(part_path).lower() != expected_sha256.lower():
-                        part_path.unlink(missing_ok=True)  # 坏字节不能留给下一个候选当断点续传的前半截
+                        self._drop_partial(part_path, sidecar_path)  # 坏字节不能留给下一个候选当断点续传的前半截
+                        if offset and not clean_retry_used:
+                            # 续出来的不对：可能是前半截有问题，不一定是这个源坏了。从头干净地再下一次。
+                            clean_retry_used = True
+                            failures.append(f"{candidate}: sha256 mismatch after resuming at {offset} bytes, retrying from scratch")
+                            continue
                         failures.append(f"{candidate}: sha256 mismatch")
                         checksum_failed = True
                         break
                     target = temp_dir / filename
                     shutil.move(str(part_path), str(target))
+                    sidecar_path.unlink(missing_ok=True)
                     # v0.38.1 R1：真机矩阵要证明「真的下载过」——把这次传输的事实带回 install 结果。
                     self._last_download = {
                         "url": candidate, "mirror_used": candidate != source, "bytes": done, "resumed_from": offset,
@@ -1943,8 +2158,11 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                         code="runtime.install_write_failed",
                         details={"target": str(part_path)},
                     ) from exc
-                if attempt < attempts - 1:
-                    time.sleep((3 ** attempt))  # 1s/3s 退避（最后一次不等）
+                if done > offset:
+                    continue  # 有进展（断在半路）：马上续，不计数也不等
+                fruitless += 1
+                if fruitless < attempts:
+                    time.sleep(3 ** (fruitless - 1))  # 1s/3s 退避（最后一次不等）
         if checksum_failed:
             raise RuntimeValidationError(
                 bilingual("所有下载地址给的归档都与清单的 sha256 不符。", "Every source served an archive that fails the manifest sha256."),
@@ -1962,30 +2180,114 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             },
         )
 
+    @staticmethod
+    def _sweep_legacy_partials(downloads_dir: Path) -> None:
+        """v0.50.0 前按文件名存的断点（`<文件名>.part`，没有旁注）：新代码不会再续它们，留着只是占几百 MB。
+        新格式的断点在写第一个字节前就有旁注，所以「没有旁注的 .part」只可能是旧的。"""
+        try:
+            leftovers = [p for p in downloads_dir.glob("*.part") if not p.with_name(p.name + ".json").exists()]
+        except OSError:
+            return
+        for path in leftovers:
+            try:
+                path.unlink()
+            except OSError:
+                pass  # 删不掉（Windows 上被占用）不影响这次下载
+
+    @staticmethod
+    def _drop_partial(part_path: Path, sidecar_path: Path) -> None:
+        part_path.unlink(missing_ok=True)
+        sidecar_path.unlink(missing_ok=True)
+
+    def _drop_partial_if_foreign(self, part_path: Path, sidecar_path: Path, *, source: str, expected_sha256: str | None) -> None:
+        """断点的来历对不上就不续：没有旁注（来历不明）、旁注记的是别的资产 / 别的 sha、或比旁注记的总长还长。"""
+        if not part_path.exists():
+            sidecar_path.unlink(missing_ok=True)
+            return
+        meta = self._read_sidecar(sidecar_path)
+        if meta is None:
+            self._drop_partial(part_path, sidecar_path)
+            return
+        same_content = (expected_sha256 or "").lower() == str(meta.get("sha256") or "").lower()
+        if not same_content or (not expected_sha256 and meta.get("source") != source):
+            self._drop_partial(part_path, sidecar_path)
+            return
+        length = meta.get("length")
+        if isinstance(length, int) and part_path.stat().st_size > length:
+            self._drop_partial(part_path, sidecar_path)
+
+    @staticmethod
+    def _read_sidecar(sidecar_path: Path) -> dict[str, Any] | None:
+        try:
+            meta = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return meta if isinstance(meta, dict) else None
+
+    def _sidecar_validator(self, sidecar_path: Path) -> str | None:
+        meta = self._read_sidecar(sidecar_path) or {}
+        etag = meta.get("etag")
+        if isinstance(etag, str) and etag and not etag.startswith("W/"):  # If-Range 只认强校验值
+            return etag
+        modified = meta.get("last_modified")
+        return modified if isinstance(modified, str) and modified else None
+
+    @staticmethod
+    def _write_sidecar(sidecar_path: Path, *, source: str, url: str, response: Any, total: int | None,
+                       expected_sha256: str | None) -> None:
+        payload = {
+            "source": source, "url": url, "etag": response.headers.get("ETag"),
+            "last_modified": response.headers.get("Last-Modified"), "length": total,
+            "sha256": (expected_sha256 or "").lower() or None,
+        }
+        tmp = sidecar_path.with_name(sidecar_path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        fsretry.replace(tmp, sidecar_path)
+
     def _read_json_location(self, location: str) -> dict[str, Any]:
-        if _is_url(location):
-            parsed = urlparse(location)
-            if parsed.scheme == "file":
-                return json.loads(self._file_url_to_path(location).read_text(encoding="utf-8"))
+        """读发布清单。读不到 / 不是 JSON / 不是清单 → 结构化错误，带上「它实际是什么」（E-15：旧实现本地清单是 JSONDecodeError traceback）。"""
+        if _is_url(location) and urlparse(location).scheme != "file":
             last_error: Exception | None = None
+            failures: list[str] = []
             for candidate in self._mirror_candidates(location):
                 try:
                     with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                         response = client.get(candidate)
                         response.raise_for_status()
-                        payload = response.json()
-                    # 镜像常回 200 + 错误页（HTML，或 {"message": …}）：内容不对同样换下一个候选，原始 URL 永远是最后一个。
-                    if not isinstance(payload, dict) or "platforms" not in payload:
-                        raise ValueError(bilingual(f"{candidate} 返回的不是 runtime 清单", f"{candidate} did not return a runtime manifest"))
-                    return payload
-                except (httpx.HTTPError, ValueError) as exc:
+                        payload, problem = _parse_manifest_text(response.text)
+                except httpx.HTTPError as exc:
                     last_error = exc
+                    failures.append(f"{candidate}: {type(exc).__name__}: {exc}"[:240])
+                    continue
+                if payload is not None:
+                    return payload
+                # 镜像常回 200 + 错误页（HTML，或 {"message": …}）：内容不对同样换下一个候选，原始 URL 永远是最后一个。
+                failures.append(f"{candidate}: {problem}"[:240])
             raise RuntimeInstallError(
-                f"Failed to fetch runtime manifest: {last_error}",
+                bilingual(
+                    f"取不到 runtime 发布清单（{location}）：{failures[-1] if failures else last_error}",
+                    f"Could not fetch the runtime release manifest ({location}): {failures[-1] if failures else last_error}",
+                ),
                 code="runtime.install_manifest_fetch_failed",
-                details={"location": location},
+                details={"location": location, "failures": failures[-6:]},
             ) from last_error
-        return json.loads(Path(location).expanduser().read_text(encoding="utf-8"))
+        path = self._file_url_to_path(location) if _is_url(location) else Path(location).expanduser()
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise RuntimeInstallError(
+                bilingual(f"读不了 runtime 清单文件 {path}：{exc.strerror or exc}", f"Cannot read the runtime manifest file {path}: {exc.strerror or exc}"),
+                code="runtime.install_manifest_fetch_failed",
+                details={"location": location, "path": str(path)},
+            ) from exc
+        payload, problem = _parse_manifest_text(text)
+        if payload is None:
+            raise RuntimeInstallError(
+                bilingual(f"{path} 不是 runtime 发布清单：{problem}", f"{path} is not a runtime release manifest: {problem}"),
+                code="runtime.install_manifest_invalid",
+                details={"location": location, "path": str(path), "reason": problem},
+            )
+        return payload
 
     def _file_url_to_path(self, location: str) -> Path:
         parsed = urlparse(location)
@@ -2037,6 +2339,111 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             report["fix"] = f'xattr -dr com.apple.quarantine "{self.current_dir}"'
         return report
 
+    def runtime_root_write_problem(self, *, probe: bool = True) -> str | None:
+        """runtime 根写不了的原因；可写返回 None。
+
+        `probe=True`（install / start）：根不存在就建，再真建一个临时文件删掉 —— `os.access` 在 Windows ACL 与网络盘上
+        不可信。`probe=False`（doctor，只读）：不建目录、不落文件，只对最近的已存在祖先问 `os.access`，答不出问题不等于没问题。
+        """
+        root = self.runtime_root
+        if not probe:
+            target = root
+            while not target.exists() and target.parent != target:
+                target = target.parent
+            if not target.is_dir():
+                return f"{target} is not a directory"
+            if not os.access(target, os.W_OK | os.X_OK):
+                return f"no write permission on {target}"
+            return None
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            fd, name = tempfile.mkstemp(prefix=".write-probe-", dir=str(root))
+        except OSError as exc:
+            return str(exc)
+        os.close(fd)
+        try:
+            fsretry.unlink(Path(name))
+        except OSError:
+            pass
+        return None
+
+    def _root_not_writable_error(self, cause: object) -> RuntimeInstallError:
+        return RuntimeInstallError(
+            bilingual(
+                f"runtime 目录写不进去：{self.runtime_root}。安装和启动都要在这里写文件。",
+                f"The runtime directory is not writable: {self.runtime_root}. Installing and starting both write files there.",
+            ),
+            code="runtime.root_not_writable",
+            details={
+                "runtime_root": str(self.runtime_root),
+                "error": str(cause),
+                "next_action": bilingual(
+                    "修好这个目录的写权限（或腾出磁盘空间），或者把 HOROSA_RUNTIME_ROOT 指到一个可写的目录后重试。",
+                    "Fix write permission on that directory (or free disk space), or point HOROSA_RUNTIME_ROOT at a writable "
+                    "directory, then retry.",
+                ),
+            },
+        )
+
+    def _require_writable_runtime_root(self) -> None:
+        problem = self.runtime_root_write_problem()
+        if problem is not None:
+            raise self._root_not_writable_error(problem)
+
+    def _try_start_lock(self, lock_path: Path, *, owner: str) -> bool:
+        """`.runtime-start.lock` 的唯一入口：False 只表示「有人持锁」，目录写不了是 `runtime.root_not_writable`。"""
+        try:
+            return try_pid_lock(lock_path, stale_after_seconds=960.0, owner=owner)
+        except LockDirNotWritableError as exc:
+            raise self._root_not_writable_error(exc.cause) from exc
+
+    @staticmethod
+    def _refuse_or_note_unverified(manifest_location: str, asset_url: str, platform_name: str,
+                                   install_warnings: list[dict[str, Any]]) -> None:
+        """清单里本平台条目没有 sha256（C-15 / E-15）。
+
+        🔴 旧实现：没有摘要 = 不校验，一声不吭。下载走网络（还可能经镜像）时这等于关掉了唯一的完整性检查 —— 拒绝，
+        除非用户自己用 `--sha256` 给出摘要。清单和归档**都在本机**（file:// 或本地路径，自建 / 离线拷贝的场景）时没有
+        网络这一跳，用户对两样东西都负责：放行，但在结果的 warnings 里明说没校验。
+        """
+        if _is_local_location(manifest_location) and _is_local_location(asset_url):
+            install_warnings.append({
+                "code": "runtime.install_unverified",
+                "message": bilingual(
+                    "本机清单里这个平台的条目没有 sha256，归档没有经过校验就装了（清单与归档都在本机，按你自己提供的处理）。",
+                    "The local manifest has no sha256 for this platform, so the archive was installed unverified "
+                    "(both the manifest and the archive are on this machine and treated as yours).",
+                ),
+                "platform": platform_name,
+            })
+            return
+        raise RuntimeValidationError(
+            bilingual(
+                f"发布清单里 {platform_name} 的条目没有 sha256，下载来的归档无法校验，所以不装。要装就从可信来源拿到这个归档的 "
+                "sha256，用 `install --sha256 <摘要>` 再跑一次。",
+                f"The release manifest has no sha256 for {platform_name}, so a downloaded archive cannot be verified and was "
+                "not installed. Get the archive's sha256 from a source you trust and rerun with `install --sha256 <digest>`.",
+            ),
+            code="runtime.install_sha256_missing",
+            details={"manifest_url": manifest_location, "asset_url": asset_url, "platform": platform_name},
+        )
+
+    @staticmethod
+    def _normalize_sha256_pin(value: str | None) -> str | None:
+        """`--sha256` 的值：64 位十六进制，容许 `sha256:` 前缀（GitHub 资产 API 的 `digest` 就这么印）。空 = 没给。"""
+        text = str(value or "").strip().lower()
+        if not text:
+            return None
+        if text.startswith("sha256:"):
+            text = text[len("sha256:"):]
+        if not re.fullmatch(r"[0-9a-f]{64}", text):
+            raise RuntimeInstallError(
+                bilingual("`--sha256` 要的是 64 位十六进制的 SHA-256 摘要。", "`--sha256` takes a 64-hex-digit SHA-256 digest."),
+                code="runtime.install_sha256_invalid",
+                details={"given_length": len(text)},
+            )
+        return text
+
     def _require_ascii_runtime_root(self) -> None:
         """Windows：runtime 根必须纯 ASCII，否则随包的 java.exe 找不到 java.dll、Swiss Ephemeris 打不开星历（v0.38.1）。"""
         if not _host_is_windows() or windows_runtime_path_ok(self.runtime_root):
@@ -2081,17 +2488,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         """
         if os.name != "nt":
             return
-        try:
-            names: list[str] = []
-            lower = archive_path.name.lower()
-            if lower.endswith((".tar.gz", ".tgz")):
-                with tarfile.open(archive_path, "r:gz") as archive:
-                    names = archive.getnames()
-            elif lower.endswith(".zip"):
-                with zipfile.ZipFile(archive_path) as archive:
-                    names = archive.namelist()
-        except Exception:  # noqa: BLE001 - 预检失败不该挡住真正的解包
-            return
+        names = archives.list_names(archive_path)  # 读不了 = 空列表：预检失败不该挡住真正的解包（它会报得更准）
         if not names:
             return
         longest = max(names, key=len)
@@ -2113,24 +2510,65 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             },
         )
 
-    def _extract_archive(self, archive_path: Path, extract_dir: Path) -> None:
+    def _extract_archive(self, archive_path: Path, extract_dir: Path) -> str:
+        """解包，返回识别出的格式。格式看内容（`archives.sniff_format`），不看文件名：文档教用户 `curl -o runtime.zip`
+        存下来的 macOS 资产是 tar.gz；预签名 URL 下回来的文件干脆没有后缀。"""
         self._guard_windows_long_paths(archive_path, extract_dir)
-        name = archive_path.name.lower()
-        if name.endswith(".tar.gz") or name.endswith(".tgz"):
-            with tarfile.open(archive_path, "r:gz") as archive:
-                # filter="data" 已拒绝绝对路径 / .. 穿越 / 设备/symlink 逃逸 → 无需再对整棵 2GB 树逐文件
-                # resolve 断言（冗余且慢）；纵深断言只留给下方无 filter 保护的 zip/unpack 分支。
-                archive.extractall(extract_dir, filter="data")
-            return
-        if name.endswith(".zip"):
+        try:
+            # tar 分支带 filter="data"（拒绝绝对路径 / .. 穿越 / 设备 / symlink 逃逸）→ 无需再对整棵 2GB 树逐文件
+            # resolve 断言（冗余且慢）；纵深断言只留给下方没有 filter 保护的 zip 分支。
+            detected = archives.extract(archive_path, extract_dir)
+        except archives.ArchiveUnreadable as exc:
+            raise self._archive_invalid_error(archive_path, exc.detected, exc.reason) from exc
+        except tarfile.FilterError as exc:
+            raise RuntimeValidationError(
+                bilingual(
+                    "runtime 归档里有会写到解压目录之外的条目（或设备文件 / 逃逸的链接），已拒绝解压。",
+                    "The runtime archive contains an entry that would land outside the extraction directory (or a device / escaping link); refused.",
+                ),
+                code="runtime.install_path_traversal",
+                details={"archive": str(archive_path), "error": str(exc)},
+            ) from exc
+        if detected == "zip":
             # CPython zipfile 已消毒 ../ 与盘符前缀，但显式纵深断言：与 tar 分支对称、且对未来
             # 换用会保留 symlink 的库（zip-slip 复发）多一道防线。
-            with zipfile.ZipFile(archive_path) as archive:
-                archive.extractall(extract_dir)
             self._assert_extracted_within(extract_dir)
-            return
-        shutil.unpack_archive(str(archive_path), str(extract_dir))
-        self._assert_extracted_within(extract_dir)
+        return detected
+
+    def _archive_invalid_error(self, archive_path: Path, detected: str, reason: str) -> RuntimeInstallError:
+        try:
+            size = archive_path.stat().st_size
+        except OSError:
+            size = None
+        last = getattr(self, "_last_download", None)
+        source = last.get("url") if isinstance(last, dict) else None
+        if detected in {"html", "json"}:
+            zh = "下到的是一个网页 / 接口报错，不是 runtime 归档——多半是代理的登录页、过期的直链或 404。"
+            en = "The download is a web page / API error body, not the runtime archive (a proxy login page, an expired link or a 404)."
+        elif detected == "empty":
+            zh, en = "文件是空的（0 字节）——下载没有开始就结束了。", "The file is empty (0 bytes): the download ended before it began."
+        elif detected == "unknown":
+            zh, en = "文件开头不是 zip 也不是 tar：下错了文件，或者内容被改过。", "The file does not start like a zip or tar archive: wrong file, or altered content."
+        else:
+            zh = f"文件开头像 {detected}，但读到一半断了——多半是下载没下完。"
+            en = f"The file starts like {detected} but ends early: most likely an incomplete download."
+        return RuntimeInstallError(
+            bilingual(f"runtime 归档读不了：{zh}", f"The runtime archive cannot be read. {en}"),
+            code="runtime.install_archive_invalid",
+            details={
+                "archive": str(archive_path),
+                "detected_format": detected,
+                "size_bytes": size,
+                "reason": reason,
+                **({"url": source} if source else {}),
+                "next_action": bilingual(
+                    "重新下载本平台的归档（macOS arm64 是 .tar.gz，Windows x64 是 .zip，约 0.7–0.95 GB），"
+                    "用 `--sha256 <发布清单里的 sha256>` 核对后再装；已装的 runtime 没有被动过。",
+                    "Download the archive for this platform again (macOS arm64: .tar.gz, Windows x64: .zip, ~0.7-0.95 GB) "
+                    "and pass `--sha256 <digest from the release manifest>` to check it; the installed runtime was not touched.",
+                ),
+            },
+        )
 
     @staticmethod
     def _assert_extracted_within(extract_dir: Path) -> None:
@@ -2555,6 +2993,57 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     "will_not_kill": "本工具不会终止不属于自己的进程。",
                 },
             )
+
+    def _ports_taken_by_others(self, endpoints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """HTTP 上没应答、socket 上却有监听者、且证明不了是我们自己的那些端点（E-07）。
+
+        「我们自己的」= 监听进程是注册表里记的 service_pids，或映像 / 命令行住在本 runtime 根下（启动到一半的自家服务，
+        交给启动器自己的「pid files already exist → 先停再起」处理）。点不出监听进程时不算我们的。
+        """
+        from horosa_skill.runtime.identity import _holder_evidence, _port_of
+
+        state = self.load_runtime_state() or {}
+        own_pids = {int(p) for p in state.get("service_pids") or [] if isinstance(p, int) or str(p).isdigit()}
+        takers: list[dict[str, Any]] = []
+        for entry in endpoints:
+            if entry.get("reachable"):
+                continue  # 答得上来的已经由身份握手判过了
+            port = _port_of(str(entry.get("url") or ""))
+            if port is None:
+                continue
+            taken = port_taken(port)
+            if not taken:
+                continue
+            holders = taken.get("holders") or []
+            if any(h.get("pid") in own_pids for h in holders):
+                continue
+            if any(_holder_evidence(int(h["pid"]), self.runtime_root, need_name=False)[0] for h in holders if h.get("pid")):
+                continue
+            takers.append({"label": entry.get("label"), "url": entry.get("url"), **taken})
+        return takers
+
+    def _require_ports_free_of_others(self, endpoints: list[dict[str, Any]]) -> None:
+        takers = self._ports_taken_by_others(endpoints)
+        if not takers:
+            return
+        raise RuntimeInstallError(
+            bilingual(
+                f"本机服务要用的端口被别的进程占着：{_describe_takers(takers)}。没有启动（也不会去终止它）。",
+                f"A port the local services need is held by another process: {_describe_takers(takers)}. Nothing was "
+                "started (and that process will not be stopped by this tool).",
+            ),
+            code="runtime.port_taken",
+            details={
+                "port_takers": takers,
+                "next_action": bilingual(
+                    "关掉占端口的进程，或换端口：HOROSA_PORTS=auto 自动挑空闲端口，或设 HOROSA_LOCAL_BACKEND_PORT / "
+                    "HOROSA_LOCAL_CHART_PORT。",
+                    "Stop the process holding the port, or move ports: HOROSA_PORTS=auto picks free ones, or set "
+                    "HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT.",
+                ),
+                "will_not_kill": "本工具不会终止不属于自己的进程。",
+            },
+        )
 
     def _service_status_settled(self) -> list[dict[str, Any]]:
         """doctor 用：一边通、一边不通时短暂复探，别把一次抖动报成「某服务没起」（tests/test_doctor_partial_reprobe.py）。

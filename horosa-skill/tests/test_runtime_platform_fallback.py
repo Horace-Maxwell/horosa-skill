@@ -59,6 +59,14 @@ def test_installer_constants_match_the_release_platform_contract() -> None:
         assert unsupported not in PLATFORM_FALLBACKS and unsupported not in SUPPORTED_PAYLOAD_PLATFORMS
 
 
+
+def _sha(path: Path) -> str:
+    """真实摘要：清单条目没有 sha256 时本机安装会多一条 runtime.install_unverified 告警（v0.50.0-dev，C-15），这组测试只看回退。"""
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def test_darwin_x64_never_falls_back_to_arm64() -> None:
     """Rosetta runs x86_64 on arm64, not the reverse — the constant itself must say so."""
     assert "darwin-x64" not in PLATFORM_FALLBACKS
@@ -72,7 +80,7 @@ def test_windows_on_arm_installs_the_x64_payload_and_says_so(tmp_path: Path) -> 
     archive = create_windows_runtime_archive(tmp_path)
     manifest_url = _manifest(
         tmp_path,
-        {"win32-x64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "zip"}},
+        {"win32-x64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "zip"}},
     )
     manager = HorosaRuntimeManager(_settings(tmp_path, "win32-arm64"))
 
@@ -91,7 +99,7 @@ def test_windows_on_arm_fallback_is_idempotent_and_still_announced(tmp_path: Pat
     archive = create_windows_runtime_archive(tmp_path)
     manifest_url = _manifest(
         tmp_path,
-        {"win32-x64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "zip"}},
+        {"win32-x64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "zip"}},
     )
     manager = HorosaRuntimeManager(_settings(tmp_path, "win32-arm64"))
     manager.install(manifest_url=manifest_url)
@@ -108,7 +116,7 @@ def test_native_install_carries_no_fallback_note(tmp_path: Path) -> None:
     archive = create_runtime_archive(tmp_path)
     manifest_url = _manifest(
         tmp_path,
-        {"darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "tar.gz"}},
+        {"darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "tar.gz"}},
     )
     result = HorosaRuntimeManager(_settings(tmp_path, "darwin-arm64")).install(manifest_url=manifest_url)
 
@@ -120,7 +128,7 @@ def test_windows_on_arm_without_any_x64_payload_is_still_a_dead_end_with_advice(
     archive = create_runtime_archive(tmp_path)
     manifest_url = _manifest(
         tmp_path,
-        {"darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "tar.gz"}},
+        {"darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "tar.gz"}},
     )
     with pytest.raises(RuntimeInstallError) as excinfo:
         HorosaRuntimeManager(_settings(tmp_path, "win32-arm64")).install(manifest_url=manifest_url)
@@ -136,8 +144,8 @@ def test_intel_mac_is_refused_even_when_an_arm64_payload_exists(tmp_path: Path) 
     manifest_url = _manifest(
         tmp_path,
         {
-            "darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "tar.gz"},
-            "win32-x64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "zip"},
+            "darwin-arm64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "tar.gz"},
+            "win32-x64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "zip"},
         },
     )
     settings = _settings(tmp_path, "darwin-x64")
@@ -251,7 +259,7 @@ def test_doctor_reports_host_vs_payload_platform_and_emulation(tmp_path: Path) -
     _inject_platform_requirements(archive, {"min_os": "10.0.17763", "arch": "x64"})
     manifest_url = _manifest(
         tmp_path,
-        {"win32-x64": {"url": archive.resolve().as_uri(), "sha256": "", "archive_type": "zip"}},
+        {"win32-x64": {"url": archive.resolve().as_uri(), "sha256": _sha(archive), "archive_type": "zip"}},
     )
     manager = HorosaRuntimeManager(_settings(tmp_path, "win32-arm64"))
     manager.install(manifest_url=manifest_url)

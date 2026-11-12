@@ -57,12 +57,10 @@ def _elicit_timeout_seconds() -> float:
     工具超时（Codex 默认 60 秒、Cursor/VS Code 各有默认），所以超时后我们还来得及把**结构化闸门**
     交回去，让 agent 走「问用户」的常规路径，而不是把整个会话拖死。
     """
-    raw = os.environ.get("HOROSA_MCP_ELICIT_TIMEOUT_SECONDS", "120").strip()
-    try:
-        value = float(raw)
-    except ValueError:
-        return 120.0
-    return value
+    from horosa_skill.config import _env_float
+
+    # 认不出的值回落 120 并登记成「被拒」，doctor 会点名（E-10）。
+    return _env_float("HOROSA_MCP_ELICIT_TIMEOUT_SECONDS", 120.0)
 
 
 _ELICIT_MAX_QUESTIONS = 6

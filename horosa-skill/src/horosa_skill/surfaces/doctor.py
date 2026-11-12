@@ -16,8 +16,11 @@ from horosa_skill.surfaces.openclaw_smoke import _openclaw_setup_command
 
 def _network_hints() -> dict[str, Any]:
     """代理/镜像相关的现场事实 —— 这些是「装不上 / 连不上本地后端」最常见的两类成因。"""
+    from horosa_skill.config import mask_url_userinfo
+
+    # 🔴 C-21：代理 URL 常带账号口令（`http://user:pass@proxy:8080`），doctor 的 JSON 会被贴进 issue / 聊天 —— 只给 scheme / 主机 / 端口。
     proxy_vars = {
-        name: os.environ[name]
+        name: mask_url_userinfo(os.environ[name])
         for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
         if os.environ.get(name)
     }
@@ -54,6 +57,18 @@ def _doctor_port_holders(report: dict[str, Any]) -> list[dict[str, Any]]:
             "evidence": identity.get("evidence"),
             "app": identity.get("app"),
             "holders": identity.get("holders") or [],
+            "will_not_kill": "本工具不会终止不属于自己的进程。",
+        })
+    # E-07：HTTP 上没应答、socket 上却有人占着的端口（不说 HTTP 的服务 / 只 accept 不应答）—— start 会因此超时。
+    for taker in report.get("port_takers") or []:
+        conflicts.append({
+            "label": taker.get("label"),
+            "url": taker.get("url"),
+            "port": taker.get("port"),
+            "verdict": "silent_listener",
+            "evidence": "socket.accepting" if taker.get("accepting") else "socket.bind_refused",
+            "app": None,
+            "holders": taker.get("holders") or [],
             "will_not_kill": "本工具不会终止不属于自己的进程。",
         })
     return conflicts
@@ -101,6 +116,7 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 # tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
 _DOCTOR_WARNING_CODES = (
     "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
+    "env:rejected_value", "env:invalid_url", "js_engine:unavailable",
 )
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
     "runtime.manifest_invalid": {
@@ -110,6 +126,22 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
     "runtime.state_invalid": {
         "user_summary": "runtime-state.json 损坏（上次启动被打断或磁盘写坏），启停状态不可信。",
         "next_action": "`horosa-skill runtime stop` 后再 `runtime start`；仍不行就删掉 runtime-state.json 重启。",
+    },
+    "runtime:not_installed": {
+        "user_summary": "离线 runtime 还没装（本机模式下所有技法都要它）。",
+        "next_action": "运行 `horosa-skill install`（约 730 MB 下载），装好后 `horosa-skill selfcheck`。",
+    },
+    "runtime:root_not_writable": {
+        "user_summary": "runtime 目录写不了（只读盘、权限不对或路径指到了别人的目录）：install / start 都会被拒（runtime.root_not_writable）。",
+        "next_action": "把 HOROSA_RUNTIME_ROOT 指到一个可写目录，或修好该目录的权限。",
+    },
+    "external:unreachable": {
+        "user_summary": "网关模式（HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向别处）下，那边的服务不可达。",
+        "next_action": "确认那台机器上的服务在跑、地址写成完整的 http:// URL；想改用本机 runtime 就取消这两个变量。",
+    },
+    "js_engine:unavailable": {
+        "user_summary": "本地 JS 引擎不可用（js_engine.state 说明原因）：八字 / 紫微 / 奇门 / 太乙 / 六壬等本地 JS 技法会失败，其余照常。",
+        "next_action": "按 js_engine.fix 处理：装离线 runtime，或设 HOROSA_CORE_JS_ROOT（并有 node ≥ 20.10）。",
     },
     "missing:": {
         "user_summary": "已装 runtime 缺文件（解包不完整、被安全软件隔离或手动删过）。",
@@ -149,6 +181,14 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
         "user_summary": "已装的离线 runtime 比最后一次看到的发布清单旧，或其导出契约（export_registry_version）低于本包期望——"
                         "能用，但新技法/新导出段可能缺失或对不上。",
         "next_action": "跑 `horosa-skill upgrade`（wheel / 插件 / MCPB 形态的完整命令见 warnings[].fix）；只想核对最新版本号可 `doctor --probe-network`。",
+    },
+    "env:rejected_value": {
+        "user_summary": "有环境变量的值认不出或超出范围，已按默认值处理（detail 里点名变量、原因与实际用的值；密钥类的值不显示）。",
+        "next_action": "改成合法的值（或删掉它用默认值），然后重启 AI 客户端。",
+    },
+    "env:invalid_url": {
+        "user_summary": "服务根 URL 的形状不对（缺 http:// 前缀、没有主机或端口不是数字）：这个值照原样在用，连接会失败。",
+        "next_action": "写成完整的 URL，例如 HOROSA_SERVER_ROOT=http://127.0.0.1:9999，然后重启 AI 客户端。",
     },
     "platform:emulated_process": {
         "user_summary": "当前 Python 进程在仿真下跑（x64 Python 在 ARM 芯片 / Rosetta）——能用，只是慢一点；离线 runtime 按芯片选载荷，不受影响。",
@@ -244,6 +284,32 @@ def _internal_port_env_warnings(settings: Settings) -> list[dict[str, str]]:
              "fix": advice["next_action"]}]
 
 
+def _env_flag_audit() -> dict[str, Any]:
+    """未知 / 已移除的 HOROSA_*、已设旗标的档位、取值被拒的变量。只收集不打日志：Settings.from_env 已经打过一遍（E-15）。"""
+    from horosa_skill.config import ENV_FLAG_REGISTRY, audit_env_flags, env_rejections
+
+    try:
+        audit: dict[str, Any] = {"ok": True, "warnings": audit_env_flags(log=False)}
+    except ValueError as exc:
+        audit = {"ok": False, "warnings": [str(exc)]}
+    audit["set"] = {key: ENV_FLAG_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")}
+    audit["rejected"] = env_rejections()
+    return audit
+
+
+def _env_rejection_warnings(rejected: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+    """E-10：认不出的 env 值一条一条点名（值已按名字遮过：密钥类整段遮掉，URL 遮 userinfo）。"""
+    warnings: list[dict[str, str]] = []
+    for name, entry in sorted(rejected.items()):
+        kept = entry.get("action") == "kept_as_is"
+        coded = {"code": "env:invalid_url"} if kept else {"code": "env:rejected_value"}
+        advice = _advice_for(coded["code"])
+        detail = (f"{name}={entry.get('value')!r}: {entry.get('reason')}; "
+                  + ("the value is used as-is" if kept else f"using the default {entry.get('used')!r}"))
+        warnings.append({**coded, "variable": name, "detail": detail, "fix": advice["next_action"]})
+    return warnings
+
+
 def _explain_lines(report: dict[str, Any]) -> list[str]:
     """`doctor --explain`：6–10 行人话写 stderr（stdout 仍是纯 JSON）。"""
     issues = [str(item) for item in report.get("issues") or []]
@@ -273,43 +339,131 @@ def _explain_lines(report: dict[str, Any]) -> list[str]:
     return lines[:10]
 
 
+def _deployment_of(report: dict[str, Any]) -> str:
+    """managed / external / not_installed —— manager.doctor 已经给出；外面拼的报告（测试、旧调用方）按 mode + installed 推。"""
+    if report.get("deployment") in {"managed", "external", "not_installed"}:
+        return str(report["deployment"])
+    if report.get("mode") == "external":
+        return "external"
+    return "managed" if report.get("installed") is True else "not_installed"
+
+
+def _next_steps_when_ready() -> tuple[str, str]:
+    """就绪后的下一步：客户端中立；只有确知是 OpenClaw（设了 OPENCLAW_WORKSPACE）时才给 OpenClaw 的命令（MCP-10）。"""
+    from horosa_skill.runtime.hints import cli_command
+
+    if os.environ.get("OPENCLAW_WORKSPACE"):
+        command = _openclaw_setup_command(Path(os.environ["OPENCLAW_WORKSPACE"]))
+        return (f"运行 `{command}` 写好 OpenClaw 配置并冒烟。", f"Run `{command}` to write the OpenClaw config and smoke-test it.")
+    setup = cli_command("setup --client <your-client>")
+    config = cli_command("client config --format <client>")
+    selfcheck = cli_command("selfcheck")
+    clients = "claude-code / claude-desktop / cursor / vscode / codex / gemini / windsurf / cline / zed …"
+    return (
+        f"把 AI 客户端接上：`{setup}`（{clients}；只想看配置用 `{config}`），然后 `{selfcheck}` 做一次端到端活体检查。",
+        f"Connect your AI client: `{setup}` ({clients}; `{config}` only prints the config), then `{selfcheck}` for an "
+        "end-to-end live check.",
+    )
+
+
 def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
+    """一句结论 + 一条下一步。🔴 E-05 / E-06 / MCP-10：**先定模式**（managed / external / not_installed），每句话都从模式推出；
+    中英成对（`中文 / English`）；命令按安装上下文写（hints.cli_command）；不再对所有人说「去配 OpenClaw」。"""
+    from horosa_skill.errors import bilingual
+    from horosa_skill.runtime.hints import cli_command, install_command
+
     issues = [str(issue) for issue in report.get("issues", [])]
     reachable_endpoints = [
         endpoint.get("label")
         for endpoint in report.get("endpoints", [])
         if endpoint.get("reachable") is True
     ]
-    installed = report.get("installed") is True
+    deployment = _deployment_of(report)
     conflicts = report.get("port_conflicts") or []
     unexpanded = report.get("unexpanded_env_templates") or {}
-    unsupported = report.get("platform_supported") is False
-    ready_for_openclaw = installed and not issues and not conflicts and not unexpanded
-    if unsupported:
-        user_summary = (
-            "本机平台没有离线 runtime 载荷 —— 这不是发布疏漏，而是只发 darwin-arm64 与 win32-x64"
-            "（Windows on ARM 会自动装 x64 载荷走仿真；Intel Mac 本轮不做、Linux 无载荷）。"
-        )
-        next_action = (
-            "走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 "
-            "HOROSA_CHART_SERVER_ROOT 指过去（外部模式，本机不启动任何服务）。"
-        )
+    js = report.get("js_engine") if isinstance(report.get("js_engine"), dict) else None
+    js_down = bool(js) and js.get("ok") is False
+
+    def result(status: str, zh: str, en: str, next_zh: str, next_en: str) -> dict[str, Any]:
+        ready = status == "ready"
+        if ready and js_down:
+            zh += f" 但本地 JS 引擎不可用（{js.get('state')}）：{str(js.get('affects') or '').split(' / ')[0]}会失败。"
+            en += f" The local JS engine is unavailable ({js.get('state')}), so {str(js.get('affects') or '').split(' / ')[-1]} will fail."
+            fix = str(js.get("fix") or "")
+            next_zh = f"{fix.split(' / ')[0].rstrip('。')}；{next_zh}" if fix else next_zh
+            next_en = f"{fix.split(' / ')[-1].rstrip('.')}; {next_en}" if fix else next_en
         return {
-            "status": "needs_attention", "ready_for_openclaw": False,
-            "user_summary": user_summary, "next_action": next_action,
+            "status": status, "ready_for_openclaw": ready, "deployment": deployment,
+            "user_summary": bilingual(zh, en), "next_action": bilingual(next_zh, next_en),
             "reachable_endpoints": reachable_endpoints,
         }
+
     if unexpanded:
         names = "、".join(sorted(unexpanded))
-        return {
-            "status": "needs_attention", "ready_for_openclaw": False,
-            "user_summary": (
-                f"环境变量 {names} 的值还是**未展开的占位符**（宿主没有替换它），已按未设置处理。"
-                "这通常意味着 MCPB / 插件配置里的 user_config 没填。"
-            ),
-            "next_action": "在客户端的扩展设置里补上这些值，或直接删掉这些环境变量用默认路径。",
-            "reachable_endpoints": reachable_endpoints,
-        }
+        return result(
+            "needs_attention",
+            f"环境变量 {names} 的值还是未展开的占位符（宿主没有替换它），已按未设置处理——通常是 MCPB / 插件配置里的 user_config 没填。",
+            f"The environment variables {', '.join(sorted(unexpanded))} still hold unexpanded placeholders (the host did not "
+            "substitute them) and were treated as unset — usually an empty user_config in the MCPB / plugin settings.",
+            "在客户端的扩展设置里补上这些值，或直接删掉这些环境变量用默认路径。",
+            "Fill these values in the client's extension settings, or remove the variables to use the default paths.",
+        )
+
+    # ── 网关：本机什么都不起，只看那两个地址通不通 ──
+    if deployment == "external":
+        if "external:unreachable" in issues:
+            down = [str(e.get("url")) for e in report.get("endpoints", []) if e.get("reachable") is not True]
+            return result(
+                "needs_attention",
+                f"网关模式（HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向别处，本机不起服务）：{', '.join(down)} 不可达。",
+                f"Gateway mode (HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT point elsewhere; nothing runs locally): "
+                f"{', '.join(down)} cannot be reached.",
+                "确认那台机器上的 Horosa 服务在跑、地址与端口写对了（要完整的 http:// URL）；想改用本机 runtime，就取消这两个变量。",
+                "Check that the Horosa services on that machine are running and the address and port are right (a full "
+                "http:// URL); to use a local runtime instead, unset both variables.",
+            )
+        steps_zh, steps_en = _next_steps_when_ready()
+        return result(
+            "ready",
+            "就绪（网关模式）：本机不起服务，HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向的服务都可达。",
+            "Ready (gateway mode): nothing runs locally, and the services HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT "
+            "point at are reachable.",
+            steps_zh, steps_en,
+        )
+
+    # ── 还没装：一句话，不是 12 条 missing:* ──
+    if deployment == "not_installed":
+        if report.get("platform_supported") is False:
+            return result(
+                "needs_attention",
+                "本机平台没有离线 runtime 载荷 —— 只发 darwin-arm64 与 win32-x64（Windows on ARM 自动装 x64 载荷走仿真；"
+                "Intel Mac 与 Linux 没有载荷）。",
+                "There is no offline runtime payload for this platform — only darwin-arm64 and win32-x64 are published "
+                "(Windows on ARM installs the x64 payload under emulation; Intel Macs and Linux have none).",
+                "走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
+                "Use gateway mode: run the runtime on a supported machine and point HOROSA_SERVER_ROOT and "
+                "HOROSA_CHART_SERVER_ROOT at it.",
+            )
+        hint = install_command()
+        if "runtime:root_not_writable" in issues:
+            problem = (report.get("runtime_root_writable") or {}).get("problem")
+            return result(
+                "needs_attention",
+                f"离线 runtime 还没装，而且 runtime 目录 {report.get('runtime_root')} 写不了（{problem}）。",
+                f"The offline runtime is not installed, and the runtime directory {report.get('runtime_root')} is not "
+                f"writable ({problem}).",
+                f"把 HOROSA_RUNTIME_ROOT 指到一个可写目录（或修好权限），再运行 `{hint['install']}`。",
+                f"Point HOROSA_RUNTIME_ROOT at a writable directory (or fix the permissions), then run `{hint['install']}`.",
+            )
+        return result(
+            "needs_attention",
+            "离线 runtime 还没装。",
+            "The offline runtime is not installed yet.",
+            f"运行 `{hint['install']}`（约 730 MB 下载），装好后 `{cli_command('selfcheck')}`。",
+            f"Run `{hint['install']}` (~730 MB download), then `{cli_command('selfcheck')}`.",
+        )
+
+    # ── 本机 runtime ──
     if conflicts:
         from horosa_skill.runtime.identity import is_horosa_app
 
@@ -323,75 +477,82 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
                         + "——很可能是你开着的星阙桌面端，或另一个 runtime 根下的服务）")
             if app:
                 return f"一个自报为 {app} 的服务" + (f"（{listed}）" if listed else "")
+            if c.get("verdict") == "silent_listener":
+                return (listed or "一个查不出身份的进程") + "（不应答 HTTP）"
             return listed or "一个查不出身份的进程"
 
         named = "；".join(f"{c.get('label')} 端口 {c.get('port')} 被 {holder_of(c)} 占着" for c in conflicts)
+        named_en = "; ".join(f"{c.get('label')} port {c.get('port')} is held by "
+                             + (", ".join(f"pid {h.get('pid')}" for h in c.get("holders") or []) or "an unidentified process")
+                             for c in conflicts)
         horosa_held = any(is_horosa_app(c.get("app")) for c in conflicts)
-        return {
-            "status": "needs_attention", "ready_for_openclaw": False,
-            "user_summary": f"端口被非本工具的进程占用：{named}。本工具不会去终止它们。",
-            "next_action": (
-                ("占着端口的是星阙自己（多半是桌面端）：不想关它，就设 HOROSA_PORTS=auto 让本工具换到空闲端口；"
-                 "想直接用它的引擎，就设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它（外部模式）。"
-                 "也可以关掉它再重试。") if horosa_held else
-                ("关掉上面点名的进程，或换端口：设 HOROSA_PORTS=auto 自动挑空闲端口，"
-                 "或显式设 HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT；"
-                 "若那正是你想用的服务，设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它。")
-            ),
-            "reachable_endpoints": reachable_endpoints,
-        }
+        return result(
+            "needs_attention",
+            f"端口被非本工具的进程占用：{named}。本工具不会去终止它们。",
+            f"Ports are held by processes this tool did not start: {named_en}. This tool will not stop them.",
+            ("占着端口的是星阙自己（多半是桌面端）：不想关它，就设 HOROSA_PORTS=auto 让本工具换到空闲端口；"
+             "想直接用它的引擎，就设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它（外部模式）。也可以关掉它再重试。")
+            if horosa_held else
+            ("关掉上面点名的进程，或换端口：设 HOROSA_PORTS=auto 自动挑空闲端口，或显式设 HOROSA_LOCAL_BACKEND_PORT / "
+             "HOROSA_LOCAL_CHART_PORT；若那正是你想用的服务，设 HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT 指向它。"),
+            ("It is Horosa itself (most likely the desktop app): set HOROSA_PORTS=auto to move to free ports, or point "
+             "HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at it to use its engine, or close it and retry.")
+            if horosa_held else
+            ("Stop the processes named above, or move ports: HOROSA_PORTS=auto picks free ones, or set "
+             "HOROSA_LOCAL_BACKEND_PORT / HOROSA_LOCAL_CHART_PORT; if that is the service you want, point "
+             "HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at it."),
+        )
     if report.get("registry_status") == "starting":
-        return {
-            "status": "starting", "ready_for_openclaw": False,
-            "user_summary": "runtime 正在启动（首次运行含解压与 CDS 训练，可能几分钟）。",
-            "next_action": "等一会儿再跑 `horosa-skill runtime status`；启动器日志路径见 launcher_log。",
-            "reachable_endpoints": reachable_endpoints,
-        }
-    if ready_for_openclaw:
-        # 🔴 措辞改为客户端无关：doctor 是给**任何** MCP 客户端的用户看的（Claude Code/Desktop、
-        # Cursor、VS Code、Codex、Gemini CLI…），把「去开 OpenClaw」当成唯一下一步，对其余客户端
-        # 的用户既没用又误导。`ready_for_openclaw` 键名是 doctor / status JSON 的公开字段（测试与
-        # docs/WINDOWS_REPORT_STABILITY_PROMPT.md 都引用它），保留不改名；语义已是「任何客户端都可用」。
-        user_summary = "Ready. The offline runtime is installed and the local Horosa endpoints are responding."
+        status = cli_command("runtime status")
+        return {**result(
+            "needs_attention",
+            "runtime 正在启动（首次运行含解压与 CDS 训练，可能几分钟）。",
+            "The runtime is starting (the first start unpacks and trains CDS; it can take minutes).",
+            f"等一会儿再跑 `{status}`；启动器日志路径见 launcher_log。",
+            f"Wait, then run `{status}`; the launcher log path is in launcher_log.",
+        ), "status": "starting"}
+    if not issues:
+        steps_zh, steps_en = _next_steps_when_ready()
+        zh = "就绪：离线 runtime 已装好，本机 Horosa 服务在应答。"
+        en = "Ready. The offline runtime is installed and the local Horosa endpoints are responding."
         if report.get("emulated") is True:
             # v0.38.0 A4: Windows on ARM runs the win32-x64 payload under emulation — worth saying once.
-            user_summary += (
-                f" This host is {report.get('host_platform')} and runs the {report.get('payload_platform')} payload"
-                " under emulation (works; cold start is slower)."
-            )
-        next_action = (
-            "Point your MCP client at Horosa: `uv run horosa-skill client config --format <client>` "
-            "writes the right config (claude-code / claude-desktop / cursor / vscode / codex / gemini / "
-            "windsurf / cline / zed). Then `uv run horosa-skill selfcheck` for an end-to-end live check."
+            zh += f"本机是 {report.get('host_platform')}，跑的是 {report.get('payload_platform')} 载荷（仿真，能用，冷启动更慢）。"
+            en += (f" This host is {report.get('host_platform')} and runs the {report.get('payload_platform')} payload"
+                   " under emulation (works; cold start is slower).")
+        return result("ready", zh, en, steps_zh, steps_en)
+    if issues == ["services:not_running"]:
+        start = cli_command("runtime start")
+        return result(
+            "needs_attention",
+            "runtime 文件都在，本机服务还没启动（客户端第一次调用也会自动拉起）。",
+            "The runtime files are installed, but the local Horosa services are not running yet (the first client call "
+            "also starts them).",
+            f"运行 `{start}`（冷启动 10–45 秒）。",
+            f"Run `{start}` (a cold start takes 10–45 s).",
         )
-    elif not installed:
-        user_summary = "The offline runtime is not installed yet."
-        next_action = f"Run `{_openclaw_setup_command()}` to install the runtime, write a config, and verify the OpenClaw path."
-    elif issues == ["services:not_running"]:
-        user_summary = "The runtime files are installed, but the local Horosa services are not running yet."
-        next_action = f"Run `{_openclaw_setup_command()}` to start the runtime and verify the OpenClaw path."
-    elif issues == ["services:java_backend_not_running"]:
-        user_summary = (
-            "Degraded (chart-only): the Python chart service is up, but the Java backend (:9999) is not. "
-            "Chart-side techniques (三式 ken/神数/地占/塔罗/西占 chart 族) still work; Java-side ones "
-            "(nongli/bazi/ziwei/liureng and 占时 casts) will error until it recovers."
+    if issues == ["services:java_backend_not_running"]:
+        return result(
+            "needs_attention",
+            "降级（只有 chart）：Python 图表服务在跑，Java 后端没起来。chart 侧技法（三式 ken / 神数 / 地占 / 塔罗 / 西占 chart 族）"
+            "照常可用；Java 侧（农历 / 八字 / 紫微 / 六壬与占时起课）会报错，直到它恢复。",
+            "Degraded (chart-only): the Python chart service is up, but the Java backend is not. Chart-side techniques "
+            "(三式 ken / 神数 / 地占 / tarot / western chart family) still work; Java-side ones (nongli / bazi / ziwei / "
+            "liureng and time-cast techniques) will error until it recovers.",
+            "看下面 java_diagnostics 里捕获的 Java 启动错误。Windows 已知诱因：代理 / VPN / 安全软件（WFP 过滤）拦 JDK 17 的回环"
+            "（issue #14）；关掉干扰软件并重启后再试，或先只用 chart 侧技法。",
+            "See java_diagnostics below for the captured Java boot error. Known cause on Windows: proxy / VPN / security "
+            "software (WFP filters) blocking JDK 17 loopback (issue #14). Retry after disabling it and rebooting, or keep "
+            "using chart-side techniques.",
         )
-        next_action = (
-            "See `java_diagnostics` below for the captured Java boot error. Known cause on Windows: "
-            "proxy/VPN or security software (WFP filters) blocking JDK-17 AF_UNIX/TCP loopback — "
-            "issue #14. Retry after disabling the interfering software and rebooting, or keep using "
-            "chart-only techniques."
-        )
-    else:
-        user_summary = "Horosa still has runtime issues that need attention before OpenClaw will be fully ready."
-        next_action = "Review the `issues` list below, fix the blocking item, then rerun `uv run horosa-skill doctor`."
-    return {
-        "status": "ready" if ready_for_openclaw else "needs_attention",
-        "ready_for_openclaw": ready_for_openclaw,
-        "user_summary": user_summary,
-        "next_action": next_action,
-        "reachable_endpoints": reachable_endpoints,
-    }
+    doctor_cmd = cli_command("doctor --explain")
+    return result(
+        "needs_attention",
+        f"本机 runtime 还有问题要处理：{', '.join(issues[:6])}。",
+        f"The local runtime has issues to fix: {', '.join(issues[:6])}.",
+        f"按下面 advice 里每个码的说明处理，然后重跑 `{doctor_cmd}`。",
+        f"Follow the advice entry for each code below, then rerun `{doctor_cmd}`.",
+    )
 
 
 def _platform_supported(report: dict[str, Any]) -> bool:
@@ -446,13 +607,12 @@ def _probe_uv() -> dict[str, Any]:
 
 
 def _probe_port(port: int) -> dict[str, Any]:
-    """端口占用探测：区分空闲 / 被占（被占时是否是本产品由 doctor 的可达性检查判断）。"""
-    import socket
+    """端口占用探测：区分空闲 / 被占，被占时点名监听进程（与 start 起启动器前用的是同一个 `ports.port_taken`，E-07）。
+    被占的是不是本产品由 doctor 的身份判定（endpoints / port_conflicts）回答。"""
+    from horosa_skill.runtime.ports import port_taken
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(0.5)
-        occupied = sock.connect_ex(("127.0.0.1", port)) == 0
-    return {"port": port, "occupied": occupied}
+    taken = port_taken(port)
+    return {"port": port, "occupied": taken is not None, **({"accepting": taken["accepting"], "holders": taken["holders"]} if taken else {})}
 
 
 def _doctor_environment_context(settings: Settings) -> dict[str, Any]:
@@ -549,17 +709,8 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     from horosa_skill.knowledge import vectors as _vectors
 
     report["knowledge_vectors"] = {**_vectors.status(settings), "scope": "this process; the client's server may run in another environment"}
-    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果 + 已设旗标的生命周期档。
-    from horosa_skill.config import ENV_FLAG_REGISTRY as _ENV_REGISTRY
-    from horosa_skill.config import audit_env_flags as _audit_env_flags
-
-    try:
-        report["env_flags"] = {"ok": True, "warnings": _audit_env_flags(force=True)}
-    except ValueError as exc:
-        report["env_flags"] = {"ok": False, "warnings": [str(exc)]}
-    report["env_flags"]["set"] = {
-        key: _ENV_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")
-    }
+    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果 + 已设旗标的生命周期档 + 取值被拒的（E-10）。
+    report["env_flags"] = _env_flag_audit()
     # 可选云端决策层（v0.39.0）：模式 / 范围 / 面 / 模型 / 阈值锁 / 配置问题——**永不**含 key 的值；
     # 缺省 off 时也如实报 data_leaves_machine=False。零外网请求。
     from horosa_skill.decisions.policy import load_policy as _load_jev_policy
@@ -581,6 +732,9 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
                 report["endpoints"] = manager.endpoint_identities()
         except Exception as exc:  # noqa: BLE001 - 体检不能因为归属判定失败就整份报废，但失败本身要如实入报告（v0.41.1）
             report["endpoints_error"] = f"{type(exc).__name__}: {exc}"
+        if report.get("mode") == "managed" and report.get("endpoints"):
+            with _budget.timed("port_takers"):
+                report["port_takers"] = manager._ports_taken_by_others(report["endpoints"])
     report["port_conflicts"] = _doctor_port_holders(report)
     # 监听范围（v0.38.0 B1）：绑 0.0.0.0 的服务不是"坏"，但 Windows 上会弹防火墙、暴露到局域网 —— 进 warnings 而非 issues。
     report["listener_scope"] = _doctor_listener_scope(settings)
@@ -592,12 +746,22 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     if report["network_probe"] and _refresh_latest_manifest_cache(manager, report["network_probe"]):
         report["freshness"] = manager.payload_freshness(report.get("manifest"))
         report["latest_version"] = report["freshness"]["latest_version"]
+    # E-02 / E-11：JS 引擎在不在、用的是哪个 node、为什么不能用、怎么修。只读（一次 `node --version`，有缓存）。
+    with _budget.timed("js_engine"):
+        try:
+            from horosa_skill.engine.js_client import HorosaJsEngineClient
+
+            report["js_engine"] = HorosaJsEngineClient(settings).diagnose()
+        except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
+            report["js_engine"] = {"state": "unknown", "ok": None, "error": f"{type(exc).__name__}: {exc}"}
     report["warnings"] = [
         *(report.get("warnings") or []),
+        *_js_engine_warnings(report["js_engine"]),
         *_listener_scope_warnings(report["listener_scope"]),
         *_arch_warnings(report),
         *_internal_port_env_warnings(settings),
         *_payload_outdated_warnings(report),
+        *_env_rejection_warnings(report["env_flags"]["rejected"]),
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
     report["advice"] = [
@@ -609,7 +773,28 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     report["registry_status"] = (manager.load_runtime_state() or {}).get("status")
     report["launcher_log"] = str(settings.runtime_root / manager.LAUNCHER_LOG_NAME)
     report.update(_doctor_summary(report))
+    _contextualize_commands(report)
     return report
+
+
+def _js_engine_warnings(js: dict[str, Any]) -> list[dict[str, str]]:
+    if not isinstance(js, dict) or js.get("ok") is not False:
+        return []
+    return [{"code": "js_engine:unavailable", "detail": f"{js.get('state')}: {js.get('affects')}", "fix": str(js.get("fix") or "")}]
+
+
+def _contextualize_commands(report: dict[str, Any]) -> None:
+    """报告里所有给人照抄的命令，按本机的安装方式改写（E-06：此前一律 `uv run horosa-skill …`）。"""
+    from horosa_skill.runtime.hints import contextualize
+
+    for key in ("next_action", "user_summary"):
+        if isinstance(report.get(key), str):
+            report[key] = contextualize(report[key])
+    for item in [*(report.get("warnings") or []), *(report.get("advice") or [])]:
+        if isinstance(item, dict):
+            for key in ("fix", "next_action", "user_summary"):
+                if isinstance(item.get(key), str):
+                    item[key] = contextualize(item[key])
 _SETUP_NETWORK_TIMEOUT_SECONDS = 5.0
 
 

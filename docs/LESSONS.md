@@ -18,6 +18,15 @@
 | --- | --- | --- |
 | v0.50.0-dev (2026-11-12) | MCP 结果把原始引擎树当正文交给模型：114 技法中位 17 万字符、72 个超过 Claude Code 5 万字符落盘线；调度两技法 290 万字符；`include_all` 指引 126 万字符；3 MB 澄清备注原样回显两遍 | MCP 缺省改阅读视图（正文一遍 + 段索引 + 依据卡），模型预算按段裁并给照抄可用的续读调用，JSON 不缩进，调度 / 合参 / 存档读回同一视图；整表体积守卫 |
 | v0.50.0-dev (2026-11-12) | `response_view` 跟着载荷进了 runner 的子调用：择日先算的展示盘快照被清空，黄历择日 14 段丢 7 段、多一条假的「结果不完整」（7 个择日技法同病） | `run_tool` 记调用深度，嵌套调用摘掉展示键、不套视图；整表对照每种视图与原始结果的段与告警 |
+| v0.50.0-dev (2026-11-12) | 新机器、网关可达、网关不可达三种现场 doctor 给同一份报告：12 条 `missing:*` + 「not installed yet」+ 去配 OpenClaw，`uv run` 写死，中英混杂；网关永远到不了 ready | 先定 deployment 再出 issues；summary 中英成对；命令只从 `hints.cli_command` 来；OpenClaw 只给确知的人；js_engine 一节 + selfcheck 跑 JS |
+| v0.50.0-dev (2026-11-12) | Java 端口上有个不应答 HTTP 的监听者：端点「不可达」、身份判定不跑，照样起启动器，用户等满预算拿到 conflicts 为空的 start_timeout | `ports.port_taken`（socket 层）在起启动器前 / 超时报错 / doctor 三处共用；非自家占用 → `runtime.port_taken` |
+| v0.50.0-dev (2026-11-12) | 注册表 87 个 HOROSA_*，用户文档只列十几个，32 个 stable / experimental 的变量只能读源码；未知变量的告警在 doctor 里打两遍 | `docs/ENV_VARS.md` 由注册表 + `env_docs` 生成并锁步；doctor 收集告警不再重打日志 |
+| v0.50.0-dev (2026-11-12) | `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS=abc` 悄悄回落 3，provenance 却写 env:…；`HOROSA_SERVER_ROOT=127.0.0.1:9977` 没人提；代理口令原样进 doctor JSON | 解析器返回 (值, 原因)；provenance `default:rejected env:…`；doctor `env:rejected_value` / `env:invalid_url`；按名字遮值 |
+| v0.50.0-dev (2026-11-12) | 清单条目没有 sha256 时网络下载一声不吭地不校验；断点按文件名存，同名的另一份内容被续上；没有 If-Range；有进展的断线也吃重试；并发 install 互踩；本地清单不是 JSON 时 traceback | 无摘要走网络即拒（`--sha256` 可补）；断点按 sha 定名 + 旁注 + If-Range + 干净重下 + 进展豁免 + 下载锁；清单读不懂结构化报错 |
+| v0.50.0-dev (2026-11-12) | PATH 上的 Node < 20.10：tools/index.js 加载即 SyntaxError，每个 JS 技法 `execution_failed` + `error: {}`；HOROSA_NODE_BIN 指空悄悄回落；doctor 只探 runtime 自带的 node | `engine/node_runtime.py` 解析一次读版本；`node_too_old` / `node_bin_missing`；启动崩溃报 stderr 那行；清单按 mtime 缓存 |
+| v0.50.0-dev (2026-11-12) | `uninstall --purge-data --yes` 在知识库 / 档案都不在时 rmtree 整个 HOROSA_SKILL_DATA_DIR，连同里面不是本工具写的文件；dry-run 只印一行目录名 | `purge.OWNED_NAMES` 白名单 + `left_in_place` + 只 rmdir；家目录 / 根 / 包着 runtime 根时整条拒绝 |
+| v0.50.0-dev (2026-11-12) | 文档教 `curl -o runtime.zip` 存 macOS 的 tar.gz 资产再 `install --archive`：BadZipFile traceback；代理登录页、半截下载同样 traceback | 魔数认格式；坏归档 `runtime.install_archive_invalid`；`install --sha256`；文档配方按原文真跑 |
+| v0.50.0-dev (2026-11-12) | runtime 根只读时 `runtime start` 回「别的进程正在启动」，永远等不到；启动锁里的 pid 被回收给无关进程后锁永不回收 | 只有 FileExistsError 算持锁；`LockDirNotWritableError` → `runtime.root_not_writable`；锁记 `start_token` 认出回收的 pid |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -236,6 +245,108 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **守卫**：`tests/test_result_view_catalogue.py::test_service_views_never_change_what_was_computed`（整张技法表，每种视图的段序号 / 标题 /
   正文与告警与原始结果一致）+ 嵌套调用看不到展示键的断言 + 十个择日的 live 变体。负向对照：深度判断恒为 False → 两条红。
 - **规则**：只影响返回体形状的参数在入口摘一次，子调用永远拿原料；「去掉哪些键」不要散在各 runner 的排除表里。
+### v0.50.0-dev / 2026-11-12 — doctor 不分模式：新机器、网关可达、网关不可达给同一份报告（`runtime:not_installed`）
+
+- **现象**：审计在三种现场跑 doctor（全新机器 / `HOROSA_SERVER_ROOT` 指向可达的引擎 / 指向不可达地址）：三份报告的 issues 都是同样 12 条
+  `missing:*`，summary 都是「The offline runtime is not installed yet.」，下一步都是 `client openclaw-setup --workspace …`；命令一律 `uv run`
+  前缀（wheel / uvx / MCPB 用户照抄就错），话一半中文一半英文。网关用户因此永远看不到 ready。
+- **根因**：`manager.doctor` 不看模式，逐个比对载荷文件；summary 先判 `installed` 再判别的，网关模式根本没有自己的分支；「就绪后去配
+  OpenClaw」是早期只有 OpenClaw 一个客户端时写的，后来改成客户端中立时只改了 ready 分支，没装 / 没起两个分支还指向 OpenClaw；
+  命令字符串散落在十几处，各自写死前缀。旧测试 `test_doctor_adds_user_facing_summary` 断言 `"openclaw-setup" in next_action`——把缺陷钉成了契约。
+- **修**：先定 `deployment`（managed / external / not_installed），issues 从模式推（`runtime:not_installed` / `external:unreachable` /
+  `runtime:root_not_writable`）；summary 中英成对；`runtime/hints.py` 的 `cli_prefix` / `cli_command` / `contextualize` 是唯一的命令来源；
+  OpenClaw 命令只给设了 OPENCLAW_WORKSPACE 的人；doctor 多一节 `js_engine`，`selfcheck` 真跑一次纯 JS 技法。
+- **守卫**：`tests/test_doctor_modes.py`（三模式各一条、命令随上下文、OpenClaw 只给确知的人、根不可写、JS 引擎缺失时网关仍 ready 但写明、
+  selfcheck 没引擎不说全部通过）。负向对照：missing:* 不分模式 → 4 红；去掉网关分支 → 2 红；去掉 contextualize → 1 红；OpenClaw 给所有人 → 3 红；
+  selfcheck 不看 JS 一步 → 1 红。
+- **规则**：诊断先回答「你是哪种部署」，再说缺什么；给人照抄的命令只有一个来源。
+
+### v0.50.0-dev / 2026-11-12 — 不说 HTTP 的监听者让 start 等满预算（`runtime.port_taken`）
+
+- **现象**：审计在 java 端口上放一个只 listen 不应答的进程：`runtime start` 照样起启动器，Java 绑不上端口，45 秒后 `runtime.start_timeout`，
+  `conflicts` 为空；doctor 也只说服务没起。
+- **根因**：归属判定只在「HTTP 可达」的端点上跑；HTTP 探针对不说 HTTP 的监听者是隐形的。doctor 的 `_probe_port` 有 connect 结果，却没人用它下结论。
+- **修**：`ports.port_taken`（回环上有人 accept，或绑不上且点得出监听进程 = 占着；绑不上却点不出进程——TIME_WAIT——不下结论）；start 起启动器前
+  对不可达端点查一遍，非自家（不在 service_pids、不住本根）→ `runtime.port_taken`（不起、放锁、不杀）；`runtime.start_timeout` 带 `port_takers`；
+  doctor 的 port_conflicts 多一类 `silent_listener`。测试与 `classify_endpoint` 一样在 `_managed_mode` 里钉住（维护机 9999 / 8899 上跑着桌面端）。
+- **守卫**：`tests/test_runtime_port_taken.py`（只在 18805–18812 开自己的 socket）。负向对照：去掉起前检查 / port_taken 永远 None / 超时不带 takers /
+  doctor 不看 takers，各自变红。
+
+### v0.50.0-dev / 2026-11-12 — 环境变量文档只列了一小半（`docs/ENV_VARS.md`）
+
+- **现象**：`ENV_FLAG_REGISTRY` 登记 87 个变量，README 的「常见项」列了 17 个；另有 32 个 stable / experimental 的变量没有任何文档。
+  doctor 在 stderr 把同一句「未知环境变量」打两遍（Settings.from_env 一遍，doctor 用 `force=True` 再一遍）。
+  审计怀疑文档写的 `HOROSA_MCP_MAX_CONCURRENT` 与注册表的 `…_TOOLS` 不一致：当前文档里已没有这个错名（v0.47.2-dev 修过），未复现。
+- **修**：说明写在注册表旁的 `env_docs.ENV_FLAG_DOCS`，`docs/ENV_VARS.md` 由 `scripts/gen_env_reference.py` 生成；doctor 收集告警用 `log=False`。
+- **守卫**：`tests/test_env_reference.py`（每个登记变量有说明、文档逐字节等于渲染、用户文档只许出现登记过的名字——错名回来会红）；
+  `test_the_unknown_variable_warning_is_logged_once`。负向对照：加一个没说明的变量 → 3 红；手改文档 → 1 红；doctor 改回 force=True → 1 红。
+
+### v0.50.0-dev / 2026-11-12 — env 值被拒却说来源是 env（`env:rejected_value`）
+
+- **现象**：认不出 / 越界的值（`abc`、`-5`、`nan`、`maybe`）一律回落默认值，doctor 的 settings_provenance 仍写 `env:<NAME>`；少了 `http://` 的服务根
+  照用、连接失败时报的是别的错；`HTTPS_PROXY=http://user:pass@proxy:8080` 原样出现在 doctor 的 `network_hints.proxy_env`。
+- **根因**：`_env_int / _env_float / _env_bool` 只返回值；provenance 只看「变量设了没有」。另有两处模块自己 `float(os.environ[...])`。
+- **修**：解析器返回 (值, 原因)，`config.env_rejections()` 记下来；provenance `default:rejected env:<NAME>=<值> (<原因>)`（前缀仍是 default，
+  doctor 契约按冒号前一段分组）；doctor 告警 `env:rejected_value` / `env:invalid_url`（URL 形状不对照用——换默认值可能打到桌面端）；
+  `redact_env_value`：名字像 KEY / TOKEN / SECRET / PASSWORD / AUTH 的整段遮，URL 遮 userinfo；mcp_elicitation / service.remote 两处改走同一套。
+- **守卫**：`tests/test_env_rejections.py`。负向对照：provenance 回到 env → 5 红；不记拒绝 → 8 红；不遮 userinfo → 2 红；不查 URL → 5 红。
+
+### v0.50.0-dev / 2026-11-12 — 断点按文件名续、清单没摘要就不校验（`runtime.install_sha256_missing`）
+
+- **现象**：① 清单条目 `sha256` 为空（自建 / 镜像清单）时，install 下载 700 MB 后直接装，结果里看不出没校验。② `downloads/<文件名>.part`：
+  上一个版本（同名资产）或另一个镜像留下的半截被当成前半截续上，最后 sha 对不上，且错误说「换镜像」。③ 续传只带 `Range`，资源变了服务器照样回
+  206。④ 慢网上每次下一段就断，第 3 次断线就判失败。⑤ 两个 install 同时跑，后到的在挪文件时 FileNotFoundError（`runtime.install_write_failed`）。
+  ⑥ `--manifest-url` 指一个 HTML 文件：`JSONDecodeError` traceback。
+- **修**：没有摘要且走网络 → `runtime.install_sha256_missing`（下载前；`--sha256` 可补；清单与归档都在本机时放行 + `runtime.install_unverified`；
+  版本短路不受影响）。`manager._partial_paths` 按 sha 定名 + `.part.json` 旁注，来历不对不续，旧格式无旁注的 `.part` 清掉；`If-Range`；续错先从头重下
+  一次；有进展的轮次不计数（总轮数封顶 50）；下载锁（`runtime.install_download_in_progress`）；清单读不懂 → `runtime.install_manifest_invalid`（说它是
+  HTML / 空 / 别的 JSON）。注意 httpx 的 `iter_bytes(chunk_size=1 MiB)` 会攒满 1 MiB 才交出：断在一块之内的字节本来就丢，测试的分段要大于 1 MiB。
+- **守卫**：`tests/test_runtime_download_integrity.py`（18 条）。负向对照：去掉摘要拒绝 → 3 红；按文件名定名 → 2 红；去掉 If-Range / 干净重下 /
+  进展豁免 / 下载锁 → 各 1 红；本地清单裸 `json.loads` → 5 红。旧的两条断点测试按文件名预置 `.part`，从没用过「同名不同内容」，所以抓不到②。
+- **待定（维护者）**：清单与归档出自同一镜像时，镜像能同时换掉两者——摘要钉进包里（每个 wheel 带自己那一版的 sha）才挡得住，见报告。
+
+### v0.50.0-dev / 2026-11-12 — Node 太旧时每个 JS 技法都报 error: {}（`js_engine.node_too_old`）
+
+- **现象**：审计用一个只会在 stderr 打 `SyntaxError: Unexpected token 'with'` 的替身 node（= Node 18 加载 import attributes）跑 huangli：
+  `js_engine.execution_failed`、`details.error = {}`，原因只在 `details.debug.stderr`；恢复文案让人「装 runtime 或设 HOROSA_NODE_BIN」，可两样都已经有了。
+  `HOROSA_NODE_BIN` 指向不存在的文件时悄悄换成别的 node。doctor 的 node 探针只看 runtime 自带的那个，不是实际被用的那个。
+- **根因**：进程在输出任何 JSON 前就死了，空 stdout 被 `json.loads(stdout or "{}")` 当成 `{}`；没有人读 node 版本；解析顺序里「指定的不存在」与「没指定」同路。
+  另：每次 JS 调用把已装清单读 3 遍、解析 3 遍（C-20）。
+- **修**：`engine/node_runtime.py` 解析一次（来源 + 版本），版本按文件身份缓存、清单按 mtime 缓存；`js_engine.node_too_old`（found / required）、
+  `js_engine.node_bin_missing`（点名变量）；空 stdout + 非零退出 → `error.message` = stderr 里那行 `XxxError`；`js_engine.cli_missing` 双语并带
+  `details.searched`，恢复文案点名 HOROSA_CORE_JS_ROOT。doctor 的 `js_engine` 节报实际用的 node。
+- **守卫**：`tests/test_node_runtime.py`（替身 node；`NODE_FLOOR` 与 package.json 锁步）。负向对照：去版本闸 / 去启动崩溃分支 / 恢复悄悄回落 /
+  去清单缓存，各 1 红。
+
+### v0.50.0-dev / 2026-11-12 — purge 整个删掉数据目录（`runtime.purge_refused`）
+
+- **现象**：数据目录指到一个已有别的文件的文件夹（或家目录），`uninstall --purge-data --yes` 把整个目录 rmtree；dry-run 只列一行目录名，看不出代价。
+- **根因**：「数据目录 = 本工具专用」是假设，不是事实：MCPB / 插件设置里就能填路径。删除按「除了要保留的都删」做，而不是「只删认得的」。
+- **修**：`runtime/purge.py`：`OWNED_NAMES` 白名单（memory.db 及 SQLite 伴生 / `.corrupt-*` 备份、runs、traces、jev_events.jsonl、OpenClaw 自检结果，
+  点了头才删的知识库 / 回收站 / 档案，配置指到数据目录里的产物 / trace 目录）；其余 `left_in_place`；数据目录只 rmdir；链接只摘链接；
+  家目录 / 家目录上级 / 文件系统根 / 包着 runtime 根 → `runtime.purge_refused`（任何删除之前，dry-run 同样拒）。
+- **守卫**：`tests/test_uninstall_purge.py`，含锁步一条（各存储真写一遍再全清，数据目录必须消失——新增落盘文件忘登记会红）。负向对照：全当自己的 → 1 红；
+  不拒 → 9 红；账本不登记 → 3 红；跟进链接 → 1 红。拒绝用例把两个删除入口都换成只记账，负向对照时也不会真删。
+
+### v0.50.0-dev / 2026-11-12 — 归档格式按后缀判（`runtime.install_archive_invalid`）
+
+- **现象**：README / INSTALL_RESTRICTED_NETWORK 的受限网络配方把资产存成 `runtime.zip`；macOS 资产是 tar.gz → `zipfile.BadZipFile` traceback。
+  代理登录页存成 .zip、下到一半的 tar.gz 都是 traceback（`tarfile.ReadError` / CLI 只印 Aborted）。tar 的路径穿越被 `filter="data"` 拒时也是 traceback。
+- **根因**：按后缀分流；读归档的异常没人接；手工下载的归档没有任何核对手段。
+- **修**：`runtime/archives.py`（魔数认 zip / tar.gz / tar.bz2 / tar.xz / tar，认出 html / json / empty）；读不了 → `runtime.install_archive_invalid`
+  （`detected_format`、`size_bytes`），穿越 → `runtime.install_path_traversal`，磁盘错误仍是 IO 错误；`install --sha256`（与清单不一致下载前就拒）；
+  结果带 `archive_sha256` / `sha256_verified`。文档配方改为任意文件名 + 从清单取 sha256。
+- **守卫**：`tests/test_install_archive_formats.py`（35 条；文档里每个 `--archive <名>` × 两个平台的资产真装一遍）。负向对照：按后缀认 → 6 红；不包异常 → 7 红；
+  不比对摘要 → 2 红。测试是在修复之后写的，复现靠审计证据（d_badzip / d_html / d_trunc）与上面三个负向对照。
+
+### v0.50.0-dev / 2026-11-12 — 锁目录不可写被当成有人在启动（`LockDirNotWritableError`）
+
+- **现象**：runtime 根只读（或父目录建不出来）→ `try_pid_lock` 把任何 OSError 答成 False（= 有人持锁）→ `starting, started_by_other_process`，
+  用户去等一个不存在的启动者。另：持锁进程死后 pid 被别的长命进程复用，「活持有者不回收」让锁永远在。
+- **修**：只有 `FileExistsError` 算有人持锁；目录写不了是 `LockDirNotWritableError`（OSError 子类），start / install 报 `runtime.root_not_writable`；
+  锁里记 `start_token`（Linux /proc stat 第 22 列、macOS libproc `proc_bsdinfo` 的启动时刻、Windows `GetProcessTimes`），pid 活着但口令不同 = 已被回收；
+  口令取不到 / 取法不同 / 旧格式按「不知道」走原规则（宁可多等，不抢真在启动的锁）。doctor 只读报 `runtime:root_not_writable`。
+- **守卫**：`tests/test_runtime_lock_identity.py`（19 条）。负向对照见该文件各条注释。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 

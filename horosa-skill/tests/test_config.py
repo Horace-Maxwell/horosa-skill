@@ -151,6 +151,8 @@ _NOT_ENV_FLAGS = {
     "HOROSA_EPHE_FASTPATH": "负向对照里故意拼错的 HOROSA_EPHE_PATH_FASTPATH",
     "HOROSA_TYPO": "测试故意用的未知旗标",
     "HOROSA_TYPO_FLAG": "测试故意用的未知旗标",
+    "HOROSA_TYPO_API_TOKEN": "测试故意用的未知旗标：名字像令牌，验被拒的值整段遮掉（test_env_rejections）",
+    "HOROSA_TYPO_RUNTIME_MIROR": "测试故意拼错的 HOROSA_RUNTIME_MIRROR：验未知变量只告警一次（test_env_rejections）",
 }
 
 

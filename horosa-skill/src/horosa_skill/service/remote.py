@@ -63,12 +63,10 @@ class RemoteMixin:
         60 秒，其它客户端各有默认 —— 用户看到的是「工具超时/无响应」，而 runtime 其实正常启动中。
         默认 5 秒：够覆盖「已经起好了、只是探针慢一拍」，不够的场合改回 runtime.starting 让调用方重试。
         """
-        raw = os.environ.get("HOROSA_RUNTIME_CALL_WAIT_SECONDS", "5").strip()
-        try:
-            value = float(raw)
-        except ValueError:
-            return 5.0
-        return max(0.0, value)
+        from horosa_skill.config import _env_float
+
+        # 认不出 / 负数回落 5 s 并登记成「被拒」，doctor 会点名（E-10）。
+        return _env_float("HOROSA_RUNTIME_CALL_WAIT_SECONDS", 5.0, minimum=0.0)
 
     @staticmethod
     def _runtime_starting_error(endpoint: str, started: dict[str, Any]) -> ToolTransportError:

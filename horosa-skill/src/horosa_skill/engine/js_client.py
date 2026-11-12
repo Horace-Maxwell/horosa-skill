@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from horosa_skill.config import Settings
-from horosa_skill.errors import ToolTransportError
+from horosa_skill.engine import node_runtime
+from horosa_skill.errors import ToolTransportError, bilingual
 from horosa_skill.runtime import HorosaRuntimeManager
 
 # 一次已知要算很久的调用（择时区间扫描，成本随窗口线性涨）把墙钟抬到「至少 N 秒」。走 ContextVar 而不是给 run() 加参数：
@@ -36,6 +37,7 @@ class HorosaJsEngineClient:
 
     def run(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         node_bin = self._resolve_node_binary()
+        self._require_node_new_enough(node_bin)
         errors: list[dict[str, Any]] = []
         for engine_root in self._candidate_engine_roots():
             try:
@@ -63,9 +65,15 @@ class HorosaJsEngineClient:
         cli_path = engine_root / "bin" / "cli.mjs"
         if not cli_path.is_file():
             raise ToolTransportError(
-                "horosa-core-js CLI entry is missing.",
+                bilingual(
+                    "找不到本地 JS 引擎（horosa-core-js）。八字 / 紫微 / 奇门 / 太乙 / 金口诀 / 六壬 / 河洛 / 参评 等技法要用它："
+                    "装离线 runtime（自带引擎与 node），或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录。",
+                    "The local JS engine (horosa-core-js) is missing. BaZi / Ziwei / Qimen / Taiyi / Jinkou / Liuren / Heluo / Canping "
+                    "and others need it: install the offline runtime (it ships the engine and node), or set HOROSA_CORE_JS_ROOT "
+                    "to a horosa-core-js directory.",
+                ),
                 code="js_engine.cli_missing",
-                details={"path": str(cli_path)},
+                details={"path": str(cli_path), "searched": self.engine_root_report()},
             )
 
         timeout_seconds = max(self.settings.js_engine_timeout_seconds, _MIN_TIMEOUT_SECONDS.get() or 0.0)
@@ -98,6 +106,24 @@ class HorosaJsEngineClient:
                 code="js_engine.node_unavailable",
                 details={"tool": tool_name, "node_bin": str(node_bin), "error": str(exc)},
             ) from exc
+        stderr_line = node_runtime.stderr_summary(completed.stderr)
+        if completed.returncode != 0 and not (completed.stdout or "").strip():
+            # 🔴 进程死在输出任何 JSON 之前（加载期 SyntaxError、模块缺失、被杀）：旧实现把空 stdout 当 `{}` 解析，
+            # 报出来的是 `error: {}`，原因只躺在 debug.stderr 里（C-19）。这里把 stderr 最能说明问题的那行提到 error 上。
+            raise ToolTransportError(
+                bilingual(
+                    f"本地 JS 引擎没能运行（退出码 {completed.returncode}）：{stderr_line or '没有任何输出'}",
+                    f"The local JS engine did not run (exit code {completed.returncode}): {stderr_line or 'no output at all'}",
+                ),
+                code="js_engine.execution_failed",
+                details={
+                    "tool": tool_name,
+                    "returncode": completed.returncode,
+                    "error": {"message": stderr_line or "", "stage": "startup"},
+                    "node_bin": str(node_bin),
+                    "debug": {"stdout": "", "stderr": (completed.stderr or "")[-500:]},
+                },
+            )
         try:
             parsed = json.loads(completed.stdout or "{}")
         except ValueError as exc:
@@ -129,7 +155,7 @@ class HorosaJsEngineClient:
                 details={
                     "tool": tool_name,
                     "returncode": completed.returncode,
-                    "error": error_obj or {},
+                    "error": error_obj or ({"message": stderr_line} if stderr_line else {}),
                     # 原始输出属调试信息：降级进 debug 并短截断。
                     "debug": {
                         "stdout": (completed.stdout or "")[-500:],
@@ -153,7 +179,11 @@ class HorosaJsEngineClient:
         roots = [root for root in self._candidate_engine_roots() if (root / "dist" / "app-charts.cjs").is_file()]
         if not roots:
             return None
-        node_bin = self._resolve_node_binary()
+        try:
+            node_bin = self._resolve_node_binary()
+            self._require_node_new_enough(node_bin)
+        except ToolTransportError:
+            return None  # 探针：None 就是答案（没有能用的 node → 调用方保留自己画的图；原因由 doctor 的 js_engine 节报）
         try:
             completed = subprocess.run(
                 [str(node_bin), str(roots[0] / "bin" / "cli.mjs"), "render-charts"],
@@ -173,22 +203,111 @@ class HorosaJsEngineClient:
             return None
         return [result if isinstance(result, dict) else {"ok": False, "error": "malformed"} for result in results]
 
+    def node_choice(self) -> node_runtime.NodeChoice:
+        """这次调用会用哪个 Node（含来源、版本、问题）。doctor 读的也是它。"""
+        return node_runtime.resolve_node(self.settings, self._installed_manifest())
+
     def _resolve_node_binary(self) -> Path:
-        env_override = os.environ.get("HOROSA_NODE_BIN")
-        if env_override:
-            candidate = Path(env_override).expanduser().resolve()
-            if candidate.is_file():
-                return candidate
+        choice = self.node_choice()
+        if choice.problem == "node_bin_missing":
+            raise ToolTransportError(
+                bilingual(
+                    f"HOROSA_NODE_BIN 指向的 {choice.path} 不存在。改成一个真实存在的 node 可执行文件，或删掉这个变量"
+                    "（删掉后用离线 runtime 自带的 node，再没有就用 PATH 上的 node）。",
+                    f"HOROSA_NODE_BIN points at {choice.path}, which does not exist. Point it at a real node executable or "
+                    "unset it (then the offline runtime's bundled node is used, else node on PATH).",
+                ),
+                code="js_engine.node_bin_missing",
+                details={"variable": "HOROSA_NODE_BIN", "path": str(choice.path)},
+            )
+        return choice.path
 
-        manifest = self.runtime_manager.load_installed_manifest()
-        if manifest and isinstance(manifest.get("runtimes"), dict):
-            node_relative = manifest["runtimes"].get("node")
-            if isinstance(node_relative, str) and node_relative.strip():
-                candidate = self.settings.runtime_current_dir / node_relative
-                if candidate.is_file():
-                    return candidate
+    def _require_node_new_enough(self, node_bin: Path) -> None:
+        version = node_runtime.probe_version(node_bin)
+        if not node_runtime.version_is_too_old(version):
+            return
+        raise ToolTransportError(
+            bilingual(
+                f"本地 JS 引擎要 Node {node_runtime.NODE_FLOOR_TEXT}，找到的是 {version}（{node_bin}）。装离线 runtime"
+                "（自带合适版本的 node），或把 HOROSA_NODE_BIN 指向一个够新的 node。",
+                f"The local JS engine needs Node {node_runtime.NODE_FLOOR_TEXT}, found {version} ({node_bin}). Install the "
+                "offline runtime (it ships a suitable node), or point HOROSA_NODE_BIN at a newer node.",
+            ),
+            code="js_engine.node_too_old",
+            details={"node_bin": str(node_bin), "found": version, "required": node_runtime.NODE_FLOOR_TEXT},
+        )
 
-        return Path("node")
+    def _installed_manifest(self) -> dict[str, Any] | None:
+        return node_runtime.installed_manifest(self.runtime_manager)
+
+    def engine_root_report(self) -> list[dict[str, Any]]:
+        """引擎目录的三个来源各自在不在（cli_missing 的 details 与 doctor 用）。"""
+        manifest = self._installed_manifest()
+        relative = (manifest or {}).get("artifacts", {}).get("horosa_core_js_root") if isinstance((manifest or {}).get("artifacts"), dict) else None
+        rows: list[dict[str, Any]] = []
+        env_override = os.environ.get("HOROSA_CORE_JS_ROOT")
+        rows.append({"source": "env:HOROSA_CORE_JS_ROOT", "path": env_override or None,
+                     "present": bool(env_override) and (Path(env_override).expanduser() / "bin" / "cli.mjs").is_file()})
+        runtime_root = self.settings.runtime_current_dir / relative if isinstance(relative, str) and relative.strip() else None
+        rows.append({"source": "runtime", "path": str(runtime_root) if runtime_root else None,
+                     "present": bool(runtime_root) and (runtime_root / "bin" / "cli.mjs").is_file()})
+        source_root = Path(__file__).resolve().parents[3] / "horosa-core-js"
+        rows.append({"source": "source_checkout", "path": str(source_root), "present": (source_root / "bin" / "cli.mjs").is_file()})
+        return rows
+
+    def diagnose(self) -> dict[str, Any]:
+        """doctor 的 JS 引擎一节：在不在、为什么、怎么修（E-02 / E-11）。只读：会 spawn 一次 `node --version`（有缓存），不跑技法。"""
+        searched = self.engine_root_report()
+        engine_root = next((root for root in self._candidate_engine_roots() if (root / "bin" / "cli.mjs").is_file()), None)
+        source = None
+        if engine_root is not None:
+            resolved = str(engine_root.resolve())
+            source = next((row["source"] for row in searched if row.get("path") and str(Path(row["path"]).expanduser().resolve()) == resolved), "other")
+        node = self.node_choice().as_dict()
+        if engine_root is None:
+            state = "absent"
+        elif node["problem"] == "node_bin_missing":
+            state = "node_bin_missing"
+        elif node["problem"] == "not_found":
+            state = "node_missing"
+        elif node["problem"] == "too_old":
+            state = "node_too_old"
+        else:
+            state = "ready"
+        fixes = {
+            "ready": None,
+            "absent": bilingual(
+                "装离线 runtime（自带引擎与 node），或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录（还要 node ≥ 20.10）。",
+                "Install the offline runtime (it ships the engine and node), or set HOROSA_CORE_JS_ROOT to a horosa-core-js "
+                "directory (node >= 20.10 is needed too).",
+            ),
+            "node_bin_missing": bilingual(
+                f"HOROSA_NODE_BIN 指向的 {node['path']} 不存在：改成真实的 node，或删掉这个变量。",
+                f"HOROSA_NODE_BIN points at {node['path']}, which does not exist: point it at a real node or unset it.",
+            ),
+            "node_missing": bilingual(
+                "找不到 node：装离线 runtime（自带 node），或装 Node.js ≥ 20.10，或设 HOROSA_NODE_BIN。",
+                "No node found: install the offline runtime (it ships node), install Node.js >= 20.10, or set HOROSA_NODE_BIN.",
+            ),
+            "node_too_old": bilingual(
+                f"node {node['version']} 太旧（要 {node['required']}）：装离线 runtime，或把 HOROSA_NODE_BIN 指向更新的 node。",
+                f"node {node['version']} is too old (needs {node['required']}): install the offline runtime, or point "
+                "HOROSA_NODE_BIN at a newer node.",
+            ),
+        }
+        return {
+            "state": state,
+            "ok": state == "ready",
+            "engine_root": str(engine_root) if engine_root else None,
+            "engine_source": source,
+            "searched": searched,
+            "node": node,
+            "affects": bilingual(
+                "八字、紫微、奇门、太乙、金口诀、六壬、河洛、参评、六爻等本地 JS 技法，以及地名检索",
+                "BaZi, Ziwei, Qimen, Taiyi, Jinkou, Liuren, Heluo, Canping, Liuyao and the other local-JS techniques, plus place search",
+            ),
+            "fix": fixes[state],
+        }
 
     def _resolve_engine_root(self) -> Path:
         return self._candidate_engine_roots()[0]
@@ -202,7 +321,7 @@ class HorosaJsEngineClient:
             if candidate.is_dir():
                 candidates.append(candidate)
 
-        manifest = self.runtime_manager.load_installed_manifest()
+        manifest = self._installed_manifest()
         if manifest and isinstance(manifest.get("artifacts"), dict):
             relative = manifest["artifacts"].get("horosa_core_js_root")
             if isinstance(relative, str) and relative.strip():

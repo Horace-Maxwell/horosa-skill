@@ -287,12 +287,12 @@ _ENTRY_HELP = (
 )
 
 
-def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str) -> None:
+def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str, sha256: str | None = None) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     typer.echo("正在解析 runtime 版本与资产…（约 730MB 下载、解压后约 2GB，请留足磁盘）", err=True)
     try:
-        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer())
+        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer(), sha256=sha256)
     except RuntimeError as exc:
         _refuse(exc)
     except OSError as exc:
@@ -308,8 +308,9 @@ def install(
     archive: str | None = typer.Option(None, help="Local archive path or URL to a runtime asset."),
     manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
     force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
+    sha256: str | None = typer.Option(None, "--sha256", help="Expected SHA-256 of the archive (64 hex digits). Use it with --archive for a hand-downloaded file: the digest is in the release's runtime-manifest.json. 手工下载的归档用它核对。"),
 ) -> None:
-    _run_install(archive, manifest_url, force, mode="install")
+    _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256))
 
 
 @app.command(help="Version-aware install alias: skips the 730MB download when already up to date. 升级（已最新则秒退）。")
@@ -322,7 +323,7 @@ def upgrade(
 
 @app.command(help="Uninstall the offline runtime (dry-run by default; --yes to execute). 卸载 runtime（默认只打印将删清单）。")
 def uninstall(
-    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given; saved birth profiles are KEPT unless --purge-profiles. 同时删除用户数据（不可恢复；自备知识库与命主档案默认保留）。"),
+    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given; saved birth profiles are KEPT unless --purge-profiles. Only files this tool wrote are deleted: anything else in the data directory is left in place and listed as `left_in_place`. 同时删除用户数据（不可恢复；自备知识库与命主档案默认保留；数据目录里不是本工具写的文件原地保留）。"),
     purge_knowledge: bool = typer.Option(False, "--purge-knowledge", help="With --purge-data: also delete your own knowledge notes and their trash. 连自备知识库一起删（不可恢复）。"),
     purge_profiles: bool = typer.Option(False, "--purge-profiles", help="With --purge-data: also delete your saved birth profiles (horosa_profile). 连命主档案一起删（不可恢复）。"),
     yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
@@ -426,6 +427,18 @@ def setup(
         raise typer.Exit(code=2)
 
 
+def _selfcheck_js_engine(service: Any) -> dict[str, Any]:
+    """selfcheck 的 JS 引擎一步：地名检索是纯 JS（不碰 Java / chart 服务），失败就是引擎本身的问题。"""
+    from horosa_skill.errors import HorosaSkillError
+
+    try:
+        found = service.place_search({"query": "上海", "date": "2028-04-06"})
+    except HorosaSkillError as exc:
+        return {"ok": False, "tool": "place_search", "error": {"code": exc.code, "message": str(exc)[:300]}}
+    ok = bool(isinstance(found, dict) and (found.get("match") or found.get("candidates")))
+    return {"ok": ok, "tool": "place_search", "error": None if ok else {"code": "selfcheck.js_engine_empty", "message": "no candidates"}}
+
+
 @app.command(help="Client-agnostic live check: cast one chart, store it, read it back. 活体体检（起一张盘→存→读回）。")
 def selfcheck() -> None:
     settings = Settings.from_env()
@@ -488,26 +501,41 @@ def selfcheck() -> None:
         run_id = probe_result.memory_ref.run_id if probe_result.memory_ref else None
         shown = service.show_memory({"run_id": run_id}) if run_id else {"ok": False}
         report["steps"]["memory_roundtrip"] = {"ok": bool(shown.get("ok")), "run_id": run_id}
-        report["ok"] = bool(probe_result.ok and shown.get("ok"))
+        # 🔴 E-02：上面两步都不碰本地 JS 引擎（nongli_time 走 Java、wangji 走 chart）。网关 / wheel 形态没有引擎时，
+        # 八字 / 紫微 / 奇门 … 全部失败，selfcheck 却说「全部通过」。这里真跑一次纯 JS 的技法（地名检索）。
+        report["steps"]["js_engine"] = _selfcheck_js_engine(service)
+        report["ok"] = bool(probe_result.ok and shown.get("ok") and report["steps"]["js_engine"]["ok"])
         if report.get("degraded") == "chart_only":
             report["next_action"] = (
                 "降级可用（chart-only）：Java 后端(:9999)未就绪，nongli/bazi/ziwei/liureng 与占时起课暂不可用；"
                 "chart 侧技法（三式 ken/神数/地占/塔罗/西占 chart 族）可正常 `serve` 使用。"
-                "跑 `uv run horosa-skill doctor` 看 java_diagnostics 里捕获的 Java 启动错误；"
+                "跑 `horosa-skill doctor` 看 java_diagnostics 里捕获的 Java 启动错误；"
                 "Windows 已知诱因 = 代理/VPN/安全软件的 WFP 过滤拦截 JDK-17 loopback（issue #14）。"
+            )
+        elif not report["steps"]["js_engine"]["ok"]:
+            js_error = report["steps"]["js_engine"].get("error") or {}
+            report["next_action"] = bilingual(
+                f"本地 JS 引擎跑不起来（{js_error.get('code')}）：八字 / 紫微 / 奇门 / 太乙 / 六壬等会失败。"
+                "`horosa-skill doctor` 的 js_engine 一节给出原因与修法。",
+                f"The local JS engine does not run ({js_error.get('code')}): BaZi / Ziwei / Qimen / Taiyi / Liuren and "
+                "others will fail. The js_engine section of `horosa-skill doctor` says why and how to fix it.",
             )
         else:
             report["next_action"] = (
                 "全部通过：可以 `serve` 并接入 AI 客户端。" if report["ok"]
-                else "有步骤失败：按 steps 中的 error/issues 排查，或运行 `uv run horosa-skill doctor` 看完整体检。"
+                else "有步骤失败：按 steps 中的 error/issues 排查，或运行 `horosa-skill doctor` 看完整体检。"
             )
     except RuntimeError as exc:
         report["steps"]["error"] = {"code": exc.code, "message": str(exc), "details": exc.details}
         if exc.code in {"runtime.not_installed", "runtime.platform_unsupported"}:
             # 修复命令按安装上下文生成（checkout / wheel / 插件 / MCPB），平台死胡同直接给网关出路。
-            report["next_action"] = str(exc.details.get("next_action") or "运行 `uv run horosa-skill install` 安装离线 runtime 后重试。")
+            report["next_action"] = str(exc.details.get("next_action") or "运行 `horosa-skill install` 安装离线 runtime 后重试。")
         else:
-            report["next_action"] = "运行 `uv run horosa-skill doctor` 定位。"
+            report["next_action"] = "运行 `horosa-skill doctor` 定位。"
+    if isinstance(report.get("next_action"), str):
+        from horosa_skill.runtime.hints import contextualize
+
+        report["next_action"] = contextualize(report["next_action"])
     _print_json(report)
     if not report["ok"]:
         raise typer.Exit(code=1)

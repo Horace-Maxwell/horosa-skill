@@ -128,6 +128,37 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "shorten_window_or_raise_timeout",
     },
+    # JS 引擎的三种「装得不对」各有专门的修法，不落到前缀规则的泛泛一句（v0.50.0-dev，E-11 / C-19 / E-02）。
+    "js_engine.node_too_old": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "本机找到的 Node 太旧，本地 JS 引擎跑不起来（details.found / details.required）。装离线 runtime（自带合适版本的 node），"
+            "或把 HOROSA_NODE_BIN 指向一个够新的 node，然后重启客户端。",
+            "The Node found on this machine is too old for the local JS engine (details.found / details.required). Install the "
+            "offline runtime (it ships a suitable node) or point HOROSA_NODE_BIN at a newer node, then restart the client.",
+        ),
+        "next_action": "install_runtime_or_point_node_bin_at_a_newer_node",
+    },
+    "js_engine.node_bin_missing": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "HOROSA_NODE_BIN 指向的文件不存在（details.path）。改成真实存在的 node，或删掉这个变量用离线 runtime 自带的 node。",
+            "HOROSA_NODE_BIN points at a file that does not exist (details.path). Point it at a real node, or unset it to use the "
+            "offline runtime's bundled node.",
+        ),
+        "next_action": "fix_or_unset_horosa_node_bin",
+    },
+    "js_engine.cli_missing": {
+        "kind": "js_engine",
+        "prompt_to_user": bilingual(
+            "本地 JS 引擎（horosa-core-js）不在本机（details.searched 列出找过的位置）。装离线 runtime（自带引擎），或设 "
+            "HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录；只设 HOROSA_SERVER_ROOT 的网关模式不带这个引擎。",
+            "The local JS engine (horosa-core-js) is not on this machine (details.searched lists where it looked). Install the "
+            "offline runtime (it ships the engine), or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory; gateway mode "
+            "(HOROSA_SERVER_ROOT only) does not include this engine.",
+        ),
+        "next_action": "install_runtime_or_set_core_js_root",
+    },
     # 自备知识库（knowledge/user.py）：都是使用者自己能改的输入问题，不是「重试 / 体检」。
     "knowledge.user_not_found": {
         "kind": "input",
@@ -484,6 +515,99 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
             "narrow-character APIs. Set HOROSA_RUNTIME_ROOT to an ASCII-only path (e.g. C:\\horosa) and reinstall.",
         ),
         "next_action": "set_ascii_runtime_root_then_reinstall",
+    },
+    # 目录写不了不是「没装 / 去体检」：重装同样写不进去。旧行为是把它答成「别的进程正在启动」（v0.50.0-dev，E-08）。
+    "runtime.root_not_writable": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "Horosa 的 runtime 目录写不进去（details.runtime_root；常见原因：目录归别的用户、只读挂载、磁盘满）。"
+            "请修好该目录的写权限，或把 HOROSA_RUNTIME_ROOT 指到一个可写的目录，然后重试。",
+            "The Horosa runtime directory is not writable (details.runtime_root; typically owned by another user, a "
+            "read-only mount, or a full disk). Fix its write permission, or point HOROSA_RUNTIME_ROOT at a writable "
+            "directory, then retry.",
+        ),
+        "next_action": "fix_runtime_root_permissions_or_move_root",
+    },
+    # 归档坏了不是「没装 / 去体检」：重跑同一条命令还是同一个坏文件。旧行为是 BadZipFile / ReadError 的 traceback（v0.50.0-dev，E-04）。
+    "runtime.install_archive_invalid": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "给安装器的 runtime 归档读不了（details.detected_format 说它实际是什么：html / json = 下到了网页或接口报错，"
+            "empty / unknown = 不是归档，zip / tar.gz = 下载没下完）。请重新下载本平台的归档，用 `--sha256` 核对后再装；"
+            "已装的 runtime 没有被动过。",
+            "The runtime archive given to the installer cannot be read (details.detected_format says what it really is: "
+            "html / json = a web page or API error was saved, empty / unknown = not an archive, zip / tar.gz = an "
+            "incomplete download). Download the archive for this platform again and check it with `--sha256`; the "
+            "installed runtime was not touched.",
+        ),
+        "next_action": "redownload_archive_and_verify_sha256",
+    },
+    "runtime.install_sha256_invalid": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "`--sha256` 要的是 64 位十六进制的 SHA-256 摘要（可带 `sha256:` 前缀）；发布页的 runtime-manifest.json 里有本平台归档的值。",
+            "`--sha256` takes a 64-hex-digit SHA-256 digest (an optional `sha256:` prefix is fine); the release's "
+            "runtime-manifest.json lists the value for this platform's archive.",
+        ),
+        "next_action": "pass_a_64_hex_sha256",
+    },
+    # 端口被 HTTP 探针看不见的监听者占着（E-07）：不是「没装 / 去体检」，是换端口或关进程。
+    "runtime.port_taken": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "本机服务要用的端口被别的进程占着（details.port_takers 点名了端口与进程），所以没有启动。关掉那个进程，"
+            "或设 HOROSA_PORTS=auto 让本工具换到空闲端口。本工具不会去终止它。",
+            "A port the local services need is held by another process (details.port_takers names the port and the "
+            "process), so nothing was started. Stop that process, or set HOROSA_PORTS=auto to move to free ports. This "
+            "tool will not stop it for you.",
+        ),
+        "next_action": "free_the_port_or_set_horosa_ports_auto",
+    },
+    # 清单条目没有摘要 = 下载来的归档无从校验（C-15 / E-15：旧行为是一声不吭地不校验）。
+    "runtime.install_sha256_missing": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "发布清单里本平台的条目没有 sha256，下载来的归档无法校验，所以没有安装（已装的 runtime 没动）。从可信来源"
+            "（发布页）拿到归档的 sha256，用 `install --sha256 <摘要>` 重试；或者换用官方清单（不设 HOROSA_RUNTIME_MANIFEST_URL）。",
+            "The release manifest has no sha256 for this platform, so a downloaded archive cannot be verified and nothing was "
+            "installed (the installed runtime was not touched). Get the archive's sha256 from a source you trust (the release "
+            "page) and retry with `install --sha256 <digest>`, or use the official manifest (unset HOROSA_RUNTIME_MANIFEST_URL).",
+        ),
+        "next_action": "pass_sha256_from_a_trusted_source_or_use_the_official_manifest",
+    },
+    "runtime.install_manifest_invalid": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "给安装器的清单文件不是 runtime 发布清单（details.reason 说它实际是什么）。重新下载发布页的 runtime-manifest.json，"
+            "或去掉 --manifest-url / HOROSA_RUNTIME_MANIFEST_URL 用官方清单。",
+            "The manifest file given to the installer is not a runtime release manifest (details.reason says what it is). "
+            "Download runtime-manifest.json from the release page again, or drop --manifest-url / HOROSA_RUNTIME_MANIFEST_URL "
+            "to use the official manifest.",
+        ),
+        "next_action": "redownload_manifest_or_use_the_official_one",
+    },
+    "runtime.install_download_in_progress": {
+        "kind": "retry_or_doctor",
+        "prompt_to_user": bilingual(
+            "另一个 install 正在下载同一个归档（details.holder）。等它结束后看它的结果；它失败了再重跑，会从断点续传。",
+            "Another install is downloading the same archive (details.holder). Wait for it and check its result; if it fails, "
+            "rerun and the download resumes.",
+        ),
+        "next_action": "wait_for_the_other_install",
+    },
+    # 清数据被拒不是「没装 / 去体检」：数据目录指到了家目录 / 根 / 包着 runtime 根的地方（v0.50.0-dev，E-01）。
+    "runtime.purge_refused": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "`--purge-data` 没有执行：数据目录指在一个不可能整个归本工具的位置（details.reason：home / above_home / "
+            "filesystem_root / contains_runtime_root）。什么都没有删。把 HOROSA_SKILL_DATA_DIR 指回专用目录后重试，"
+            "或者手工删除 details.skill_named_children 里确认要删的；不带 --purge-data 的卸载照常可用。",
+            "`--purge-data` did nothing: the data directory points somewhere that cannot belong to this tool alone "
+            "(details.reason: home / above_home / filesystem_root / contains_runtime_root). Nothing was deleted. Point "
+            "HOROSA_SKILL_DATA_DIR at a dedicated directory and retry, or delete by hand the entries in "
+            "details.skill_named_children you are sure about; uninstalling without --purge-data still works.",
+        ),
+        "next_action": "point_data_dir_at_a_dedicated_directory_or_delete_by_hand",
     },
     "runtime.platform_unsupported": {
         "kind": "runtime",

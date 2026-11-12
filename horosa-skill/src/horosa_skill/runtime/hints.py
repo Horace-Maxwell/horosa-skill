@@ -11,15 +11,20 @@
   2. `HOROSA_INSTALL_CONTEXT=mcpb` + `HOROSA_PLUGIN_ROOT`（manifest.json 注入 `${__dirname}`）→
      `uv run --directory "<root>" horosa-skill install`
   3. 包旁边有 `pyproject.toml`（源码 checkout / editable）→ `uv run horosa-skill install`
-  4. 其余（wheel / uvx / pip）→ `uvx --from "<钉版本的 wheel URL>" horosa-skill install`
+  4. 本环境的 `horosa-skill` 入口就在 PATH 上（pip / pipx / uv tool）→ `horosa-skill install`
+  5. 其余（uvx 临时环境等）→ `uvx --from "<钉版本的 wheel URL>" horosa-skill install`
+
+v0.50.0-dev（E-06）：前缀判定抽成 `cli_prefix` / `cli_command` / `contextualize`，doctor、install 结果、selfcheck
+的每一条「请运行 …」都走它，不再到处写死 `uv run horosa-skill`。
 """
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
-Context = str  # "plugin" | "mcpb" | "checkout" | "wheel"
+Context = str  # "plugin" | "mcpb" | "checkout" | "installed" | "wheel"
 
 
 def _quote(value: str) -> str:
@@ -48,24 +53,61 @@ def detect_context(env: dict[str, str] | None = None) -> tuple[Context, str | No
     return "wheel", None
 
 
-def install_command(env: dict[str, str] | None = None) -> dict[str, Any]:
-    """`{"context", "install", "upgrade", "doctor", "cwd"}`：三条都是完整可复制的命令行字符串。"""
+def _entry_point_on_path() -> bool:
+    """`horosa-skill` 在 PATH 上、且就是**这个**环境的入口（pip / pipx / `uv tool install` 装的）—— 那就直接敲 `horosa-skill`。
+    uvx 跑的是缓存里的临时环境，PATH 上通常没有它（或者是另一个版本），这时不能这么写。"""
+    import shutil
+    import sys
+
+    found = shutil.which("horosa-skill")
+    if not found:
+        return False
+    try:
+        return Path(found).resolve().is_relative_to(Path(sys.prefix).resolve())
+    except (OSError, ValueError):
+        return False
+
+
+def cli_prefix(env: dict[str, str] | None = None) -> tuple[Context, str | None, str]:
+    """(上下文, 该在哪个目录跑, 命令前缀)。所有「请运行 …」的提示都从这里拿前缀（E-06：此前到处写死 `uv run horosa-skill`，
+    wheel / uvx / 插件 / MCPB 用户照抄就是 `uv: no pyproject.toml` 或跑错环境）。"""
     context, root = detect_context(env)
     if context == "plugin" and root:
         directory = str(Path(root) / "horosa-skill")
-        prefix = f"uv run --directory {_quote(directory)} horosa-skill"
-        return {"context": context, "cwd": directory, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
+        return context, directory, f"uv run --directory {_quote(directory)} horosa-skill"
     if context == "mcpb" and root:
-        prefix = f"uv run --directory {_quote(root)} horosa-skill"
-        return {"context": context, "cwd": root, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
+        return context, root, f"uv run --directory {_quote(root)} horosa-skill"
     if context == "checkout" and root:
-        return {"context": context, "cwd": root, "install": "uv run horosa-skill install", "upgrade": "uv run horosa-skill upgrade", "doctor": "uv run horosa-skill doctor"}
+        return context, root, "uv run horosa-skill"
+    if _entry_point_on_path():
+        return "installed", None, "horosa-skill"
     from horosa_skill.client_tools import zero_install_wheel_url
     from horosa_skill.runtime.mirrors import preferred_mirror_url
 
     wheel = preferred_mirror_url(zero_install_wheel_url())
-    prefix = f"uvx --from {_quote(wheel)} horosa-skill"
-    return {"context": "wheel", "cwd": None, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
+    return "wheel", None, f"uvx --from {_quote(wheel)} horosa-skill"
+
+
+def cli_command(args: str, env: dict[str, str] | None = None) -> str:
+    """`cli_command("runtime start")` → 这台机器上能直接复制运行的完整命令。"""
+    return f"{cli_prefix(env)[2]} {args}".rstrip()
+
+
+_BACKTICKED_COMMAND = re.compile(r"`(?:uv run |uvx )?horosa-skill(?=[ `])")
+
+
+def contextualize(text: str, env: dict[str, str] | None = None) -> str:
+    """把一段提示里反引号包着的 `` `horosa-skill …` `` / `` `uv run horosa-skill …` `` 换成本机的写法。已经换过的不再动。"""
+    if "horosa-skill" not in text:
+        return text
+    prefix = cli_prefix(env)[2]
+    return _BACKTICKED_COMMAND.sub(lambda _m: f"`{prefix}", text)
+
+
+def install_command(env: dict[str, str] | None = None) -> dict[str, Any]:
+    """`{"context", "install", "upgrade", "doctor", "cwd"}`：三条都是完整可复制的命令行字符串。"""
+    context, cwd, prefix = cli_prefix(env)
+    return {"context": context, "cwd": cwd, "install": f"{prefix} install", "upgrade": f"{prefix} upgrade", "doctor": f"{prefix} doctor"}
 
 
 def install_commands_for_error() -> dict[str, Any]:
@@ -92,4 +134,4 @@ def install_commands_for_error() -> dict[str, Any]:
     }
 
 
-__all__ = ["detect_context", "install_command", "install_commands_for_error"]
+__all__ = ["cli_command", "cli_prefix", "contextualize", "detect_context", "install_command", "install_commands_for_error"]

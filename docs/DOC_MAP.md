@@ -19,6 +19,7 @@
 | `docs/OPERATIONS.md` | 维护者 runbook：验证、live、发布、事故、会话交接 | 脚本 / 流水线 / 流程变化 | `check_links`、`check_stale_claims`；命令真值靠 `run_ci_gates.py` |
 | `docs/OFFLINE_RUNTIME_RELEASES.md` | 离线 runtime 发布形态与契约 | 载荷平台 / 清单字段 / 发布流变化 | `check_platform_table`（间接）、`check_links` |
 | `docs/INSTALL_RESTRICTED_NETWORK.md` | 受限网络安装 | 版本 / 资产名变化 | `check_pinned_install_commands`、`bump_version.py` |
+| `docs/ENV_VARS.md` | 全部 `HOROSA_*` 环境变量（档位 + 一句话说明）；**生成件** | 注册表（`config.ENV_FLAG_REGISTRY`）或说明（`env_docs.ENV_FLAG_DOCS`）变化：改源后跑 `scripts/gen_env_reference.py` | `tests/test_env_reference.py`（按渲染逐字节比对；注册表每个变量必须有说明；用户文档里只许出现登记过的变量名） |
 | `docs/RUNTIME_MANIFEST_SPEC.md` | runtime-manifest.json 字段规范 | 清单字段变化 | `verify_runtime_release.py`（契约侧）、人工 |
 | `docs/runtime-manifest.example.json` | 清单示例 | 版本 / 字段变化 | `bump_version.py` |
 | `docs/REPO_LAYOUT.md` | 仓库结构与一次调用链路 | 目录 / 模块增删 | `check_stale_claims`、`check_links` |

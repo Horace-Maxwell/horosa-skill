@@ -260,6 +260,41 @@ def find_free_port(preferred: int, *, span: int = 100, host: str = "127.0.0.1") 
         return int(sock.getsockname()[1])
 
 
+def _accepting(port: int, timeout: float = 0.3) -> bool:
+    """回环上有没有人在 accept（v4 或 v6）。TIME_WAIT 的残留连接不会 accept，所以这比「绑不上」更能证明有监听者。"""
+    for family, host in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+        try:
+            sock = socket.socket(family, socket.SOCK_STREAM)
+        except OSError:
+            continue
+        with sock:
+            sock.settimeout(timeout)
+            try:
+                if sock.connect_ex((host, port)) == 0:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+def port_taken(port: int) -> dict[str, Any] | None:
+    """这个端口上有没有**监听者**，有就尽量点名是谁。None = 空着（或只剩 TIME_WAIT 之类不算占用的残留）。
+
+    🔴 v0.50.0-dev（E-07）：HTTP 探针只认「答得上来的服务」。一个不说 HTTP、或者只 accept 不应答的监听者对它是隐形的：
+    start 照样起启动器，Java 绑不上端口，用户等满启动预算拿到一个 `runtime.start_timeout`、`conflicts` 为空。
+    这里用 socket 层的事实：有人 accept → 占着；没人 accept 但绑不上且点得出监听进程 → 占着（只听非回环地址的服务）。
+    绑不上却点不出任何监听者时不下结论（Linux 上自己刚停的服务留下的 TIME_WAIT 就是这样）。
+    start 起启动器之前、start 超时的报错、doctor 用的都是这一个函数。
+    """
+    accepting = _accepting(port)
+    if not accepting and port_bindable(port):
+        return None
+    holders = port_holders(port)
+    if not accepting and not holders:
+        return None
+    return {"port": port, "accepting": accepting, "holders": holders}
+
+
 def port_holders(port: int) -> list[dict[str, Any]]:
     """端口持有者的 {pid, command} 列表（尽力而为，用于错误信息里点名）。"""
     from horosa_skill.runtime.procs import process_command

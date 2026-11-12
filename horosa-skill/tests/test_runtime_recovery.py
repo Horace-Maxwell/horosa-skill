@@ -362,11 +362,13 @@ def _ranged(request: httpx.Request, body: bytes = ARCHIVE) -> httpx.Response:
 def _downloader(tmp_path: Path, *, part: bytes | None = None) -> tuple[HorosaRuntimeManager, Path]:
     settings = Settings(runtime_root=tmp_path / "rt", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
     manager = HorosaRuntimeManager(settings)
-    downloads = settings.runtime_root / "downloads"
-    downloads.mkdir(parents=True)
-    part_path = downloads / "payload.tar.gz.part"
+    # v0.50.0-dev（E-09）：断点按内容（期望 sha）定名、带旁注；没有旁注的断点来历不明，不会被续。
+    part_path, sidecar, _lock = manager._partial_paths(ORIGINAL, ARCHIVE_SHA)
+    part_path.parent.mkdir(parents=True)
     if part is not None:
         part_path.write_bytes(part)
+        sidecar.write_text(json.dumps({"source": ORIGINAL, "url": ORIGINAL, "etag": None, "last_modified": None,
+                                       "length": None, "sha256": ARCHIVE_SHA}), encoding="utf-8")
     manager._last_download = None
     return manager, part_path
 

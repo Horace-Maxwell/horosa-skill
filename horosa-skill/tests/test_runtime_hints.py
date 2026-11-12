@@ -45,6 +45,7 @@ def test_wheel_context_uses_the_pinned_wheel_url(monkeypatch: pytest.MonkeyPatch
     from horosa_skill import __version__
 
     monkeypatch.setattr(hints, "_package_is_checkout", lambda: False)
+    monkeypatch.setattr(hints, "_entry_point_on_path", lambda: False)  # uvx 的临时环境：PATH 上没有这个入口
     monkeypatch.delenv("HOROSA_RUNTIME_MIRROR", raising=False)
     hint = hints.install_command({})
     assert hint["context"] == "wheel" and hint["cwd"] is None
@@ -128,4 +129,26 @@ def test_every_context_offers_a_matching_upgrade_command(monkeypatch: pytest.Mon
         assert hint["upgrade"].endswith(" horosa-skill upgrade") or hint["upgrade"] == "uv run horosa-skill upgrade"
         assert hint["upgrade"].rsplit(" ", 1)[0] == hint["install"].rsplit(" ", 1)[0], "同一前缀，只换子命令"
     monkeypatch.setattr(hints, "_package_is_checkout", lambda: False)
+    monkeypatch.setattr(hints, "_entry_point_on_path", lambda: False)
     assert hints.install_command({})["upgrade"].startswith('uvx --from "https://github.com/')
+
+
+def test_an_installed_entry_point_is_used_as_is(monkeypatch: pytest.MonkeyPatch) -> None:
+    """pip / pipx / `uv tool install` 装的：PATH 上的 `horosa-skill` 就是这个环境的入口，直接敲它（E-06）。"""
+    monkeypatch.setattr(hints, "_package_is_checkout", lambda: False)
+    monkeypatch.setattr(hints, "_entry_point_on_path", lambda: True)
+    hint = hints.install_command({})
+    assert hint["context"] == "installed" and hint["install"] == "horosa-skill install"
+    assert hints.cli_command("runtime start", {}) == "horosa-skill runtime start"
+
+
+@pytest.mark.parametrize("env", [{}, {"HOROSA_INSTALL_CONTEXT": "mcpb", "HOROSA_PLUGIN_ROOT": "/m n"}])
+def test_contextualize_rewrites_every_backticked_command_once(monkeypatch: pytest.MonkeyPatch, env: dict) -> None:
+    monkeypatch.setattr(hints, "_package_is_checkout", lambda: False)
+    monkeypatch.setattr(hints, "_entry_point_on_path", lambda: False)
+    prefix = hints.cli_prefix(env)[2]
+    text = "跑 `horosa-skill install --force`，再 `uv run horosa-skill doctor`；`uvx horosa-skill selfcheck`。"
+    once = hints.contextualize(text, env)
+    assert once.count(f"`{prefix} ") == 3 and "`horosa-skill" not in once and "`uv run horosa-skill" not in once
+    assert hints.contextualize(once, env) == once, "已经换过的不再动"
+    assert hints.contextualize("没有命令的句子", env) == "没有命令的句子"
