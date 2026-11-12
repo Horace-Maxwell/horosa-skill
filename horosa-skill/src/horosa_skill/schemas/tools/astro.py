@@ -87,7 +87,8 @@ class PlanetCyclesInput(FlexibleModel):
     @field_validator("p1", "p2", "center", mode="before")
     @classmethod
     def _cycle_vocabulary(cls, value: Any, info: Any) -> Any:
-        from horosa_skill.western_vocab import PLANET_CYCLE_VOCABULARIES, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import PLANET_CYCLE_VOCABULARIES
 
         return parse_with(PLANET_CYCLE_VOCABULARIES[info.field_name], info.field_name, value)
 
@@ -223,7 +224,8 @@ class ACGInput(BirthInput):
     @classmethod
     def _point_hsys_vocabulary(cls, value: Any) -> Any:
         # v0.50.0：后端 ACGraph.hsys_code 认不出的名静默按整宫（western_vocab.ACG_POINT_HSYS，上游 AstroAcg.js HSYS_OPTIONS）。
-        from horosa_skill.western_vocab import ACG_POINT_HSYS, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import ACG_POINT_HSYS
 
         return parse_with(ACG_POINT_HSYS, "pointHsys", value)
 
@@ -425,7 +427,8 @@ class MundaneInput(FlexibleModel):
     @classmethod
     def _mundane_horary_kind(cls, value: Any) -> Any:
         # v0.50.0：vendored mundaneHorary.js 认不出的问类静默按 war（western_vocab.MUNDANE_HORARY_KIND）。
-        from horosa_skill.western_vocab import MUNDANE_HORARY_KIND, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import MUNDANE_HORARY_KIND
 
         return parse_with(MUNDANE_HORARY_KIND, "mhKind", value)
 

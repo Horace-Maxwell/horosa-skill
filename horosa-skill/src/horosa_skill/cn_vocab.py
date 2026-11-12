@@ -11,7 +11,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from horosa_skill.input_fields import FieldIssue, Parsed, Vocabulary, clean_text, field_validator_for, is_blank
+from horosa_skill.input_fields import (
+    FieldIssue,
+    Parsed,
+    Vocabulary,
+    clean_text,
+    field_validator_for,
+    is_blank,
+    parse_with,
+)
 
 V = Vocabulary
 
@@ -134,13 +142,6 @@ CN_VOCABULARIES: dict[str, dict[str, Vocabulary]] = {
         "zodiacSystem": V("zodiacSystem", {"classical": ("古典",), "planetary": ("行星",)}, labels={"classical": "古典（缺省）", "planetary": "行星"}),
     },
 }
-
-
-def parse_with(vocabulary: Vocabulary, field_name: str, value: Any) -> Any:
-    """BeforeValidator 体：None / 空串 = 没给（交给模型 / runner 的缺省），其余必须读成规范值。"""
-    if value is None or is_blank(value):
-        return None
-    return field_validator_for(vocabulary.parse, field_name)(value)
 
 
 def validate_cn_field(tool: str, field_name: str, value: Any) -> Any:

@@ -351,7 +351,8 @@ class SuZhanInput(BirthInput):
     @classmethod
     def _house_start_vocabulary(cls, value: Any) -> Any:
         # v0.50.0：只有 0 / 1 两档（runner 曾 `in (1, True, "1") else 0`，2 静默按 0）；western_vocab.SUZHAN_HOUSE_START。
-        from horosa_skill.western_vocab import SUZHAN_HOUSE_START, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import SUZHAN_HOUSE_START
 
         return parse_with(SUZHAN_HOUSE_START, "houseStartMode", value)
     # 农历四柱时间算法（Java ChartController [Q-419/T-383]：0 真太阳时缺省 / 1 直接时间 / 3 平太阳时）——只作用于

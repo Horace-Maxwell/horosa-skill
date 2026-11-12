@@ -319,14 +319,5 @@ def parse_harmonic(value: Any) -> Parsed:
     )
 
 
-def parse_with(vocabulary: Vocabulary, field_name: str, value: Any) -> Any:
-    """BeforeValidator 体（十年大运 / 七政择日旋钮）：空串 = 没给（交给模型 / runner 的缺省），其余必须读成规范值。"""
-    if value is None or is_blank(value):
-        return None
-    from horosa_skill.input_fields import field_validator_for
-
-    return field_validator_for(vocabulary.parse, field_name)(value)
-
-
 def vocabulary_table(vocabularies: Mapping[str, Vocabulary]) -> dict[str, list[dict[str, Any]]]:
     return {name: vocab.accepted for name, vocab in vocabularies.items()}

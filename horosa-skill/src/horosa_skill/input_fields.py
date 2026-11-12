@@ -620,26 +620,30 @@ def parse_gender(value: Any) -> Parsed:
 # ───────────────────────── 纪元（ad）与日界开关 ─────────────────────────
 
 _ERA_WORDS = {
-    1: ("1", "+1", "ad", "ce", "公元", "公元后", "西元"),
-    -1: ("-1", "bc", "bce", "公元前", "西元前", "前"),
+    1: ("ad", "ce", "a.d.", "c.e.", "公元", "公元后", "西元"),
+    -1: ("bc", "bce", "b.c.", "b.c.e.", "公元前", "西元前", "前"),
 }
 ERA_OPTIONS = [{"value": 1, "label": "1 = 公元（AD）"}, {"value": -1, "label": "-1 = 公元前（BC）"}]
+_ERA_VOCAB: Vocabulary | None = None
 
 
 def parse_era(value: Any) -> Parsed:
-    """`ad` / `guaAd`：1 公元 / -1 公元前。0 拒：上游 DateTime 的公元前是 ad=0，而 Python 后端 `int(ad or 1)` 把 0 读成公元——两种读法相反。
-    （不走 Vocabulary：它的键会去掉「-」，'-1' 会被读成 1。）"""
+    """`ad` / `guaAd`：1 公元 / -1 公元前（同一个 Vocabulary 机制；'-1' 与 '1' 是两个键，见 `_vocab_key`）。
+    0 拒：上游 DateTime 的公元前是 ad=0，而 Python 后端 `int(ad or 1)` 把 0 读成公元——两种读法相反。"""
+    global _ERA_VOCAB
+    if _ERA_VOCAB is None:
+        _ERA_VOCAB = Vocabulary("ad", _ERA_WORDS, labels={item["value"]: item["label"] for item in ERA_OPTIONS})
     if isinstance(value, bool):
         raise _era_issue(value)
-    if isinstance(value, (int, float)) and value in (1, -1):
+    if isinstance(value, float) and value in (1.0, -1.0):
         return Parsed(int(value))
-    if isinstance(value, str):
-        key = clean_text(value).lower().replace(" ", "").replace(".", "")
-        for era, words in _ERA_WORDS.items():
-            if key in words:
-                plain = key in ("1", "-1")
-                return Parsed(era) if plain else Parsed(era, f"纪元「{value}」按 ad={era} 读。", f"Era '{value}' was read as ad={era}.")
-    raise _era_issue(value)
+    try:
+        parsed = _ERA_VOCAB.parse(value)
+    except FieldIssue:
+        raise _era_issue(value) from None
+    if parsed.note_zh:
+        return Parsed(parsed.value, f"纪元「{value}」按 ad={parsed.value} 读。", f"Era '{value}' was read as ad={parsed.value}.")
+    return parsed
 
 
 def _era_issue(value: Any) -> FieldIssue:
@@ -888,10 +892,19 @@ class Vocabulary:
         raise self.issue(value)
 
 
+_VOCAB_NUMERAL_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
+
+
 def _vocab_key(value: Any) -> str:
+    """别名表的键：大小写 / 繁简 / 全角 / 分隔符（空格 _ - · .）不敏感。**数字字面量例外**：按数值写成规范串
+    （'-1' → '-1'、'+1' / '1.0' → '1'），绝不去符号、去小数点——否则 '-1' 与 '1'、'1.0' 与 '10' 撞成同一个键（v0.50.0 深审余项）。"""
     from horosa_skill.textscript import fold_to_simplified
 
-    return re.sub(r"[\s_\-·.]", "", fold_to_simplified(clean_text(value)).lower())
+    text = clean_text(value)
+    if _VOCAB_NUMERAL_RE.match(text):
+        number = float(text)
+        return str(int(number)) if number.is_integer() else repr(number)
+    return re.sub(r"[\s_\-·.]", "", fold_to_simplified(text).lower())
 
 
 _VOCAB_NUMBER_RE = re.compile(r"^(?P<num>[+-]?\d+(?:\.\d+)?)\s*(?P<unit>°|度|′|'|分)?$")
@@ -908,6 +921,14 @@ def _vocab_number(value: Any) -> float | None:
         return None
     number = float(match.group("num"))
     return number / 60 if match.group("unit") in ("′", "'", "分") else number
+
+
+def parse_with(vocabulary: Vocabulary, field_name: str, value: Any) -> Any:
+    """词表字段的 BeforeValidator 体（中式 / 西占 / 七政择日旋钮共用这一个）：None / 空串 = 没给（交给模型 / runner 的缺省），
+    其余必须读成规范值（做了解读的进 warnings），认不出 → tool.invalid_option（details.options 是全表）。"""
+    if value is None or is_blank(value):
+        return None
+    return field_validator_for(vocabulary.parse, field_name)(value)
 
 
 def field_validator_for(parse: Callable[[Any], Parsed], field_name: str) -> Callable[[Any], Any]:
