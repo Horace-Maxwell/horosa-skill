@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import os
 import subprocess
+import sys
 from typing import Literal
 
 from horosa_skill.runtime import budget
@@ -95,6 +96,85 @@ def _pid_alive_windows(pid: int) -> Liveness:
             kernel32.CloseHandle(handle)
     except Exception:  # noqa: BLE001
         return "unknown"
+
+
+def process_start_token(pid: object) -> str | None:
+    """这个 pid **此刻**对应的进程是哪一个：`<取法>:<启动时刻>`；取不到（进程不存在 / 无权限 / 平台不支持）返回 None。
+
+    用途只有一个：锁文件里除了 pid 再记一份它，回收时判断「pid 还活着，但还是不是当初那个进程」（系统回收 pid 很快，
+    Windows 尤其）。🔴 **只做相等比较，绝不拿它与墙钟比大小**：调时钟 / 时区 / 夏令时都会让「比锁的创建时间晚」这类
+    推断出错，而错一次的代价是抢走一个正在启动的进程的锁。前缀是取法：不同取法的值不可比，调用方须按「不知道」处理。
+    不起子进程（Linux 读 /proc，macOS 走 libproc，Windows 走 GetProcessTimes）：建锁、回收都在热路径上。
+    """
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return None
+    try:
+        if os.name == "nt":
+            return _start_token_windows(pid)
+        if sys.platform == "darwin":
+            return _start_token_darwin(pid)
+        return _start_token_procfs(pid)
+    except Exception:  # noqa: BLE001 - 取不到就是不知道，绝不抛进锁的判定里
+        return None
+
+
+def _start_token_procfs(pid: int) -> str | None:
+    """Linux：`/proc/<pid>/stat` 第 22 项（开机以来的时钟滴答数）+ boot_id（重启后滴答数会重来）。"""
+    try:
+        stat = open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace").read()  # noqa: SIM115
+    except OSError:
+        return None
+    fields = stat.rsplit(")", 1)[-1].split()  # 进程名里可以有空格和括号，从最后一个 `)` 之后数
+    if len(fields) < 20 or not fields[19].isdigit():
+        return None
+    try:
+        boot = open("/proc/sys/kernel/random/boot_id", encoding="ascii", errors="replace").read().strip()  # noqa: SIM115
+    except OSError:
+        boot = ""
+    return f"procfs:{boot}:{fields[19]}"
+
+
+_DARWIN_PROC_PIDTBSDINFO = 3
+_DARWIN_BSDINFO_SIZE = 136  # struct proc_bsdinfo；pbi_start_tvsec / pbi_start_tvusec 在偏移 120 / 128
+
+
+def _start_token_darwin(pid: int) -> str | None:
+    import ctypes
+    import struct
+
+    libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+    buffer = ctypes.create_string_buffer(_DARWIN_BSDINFO_SIZE)
+    size = libproc.proc_pidinfo(
+        ctypes.c_int(pid), ctypes.c_int(_DARWIN_PROC_PIDTBSDINFO), ctypes.c_uint64(0), buffer, ctypes.c_int(_DARWIN_BSDINFO_SIZE)
+    )
+    if size != _DARWIN_BSDINFO_SIZE:
+        return None
+    seconds, micros = struct.unpack_from("QQ", buffer.raw, 120)
+    if not seconds:
+        return None
+    return f"libproc:{seconds}.{micros:06d}"
+
+
+def _start_token_windows(pid: int) -> str | None:
+    ctypes, wintypes, kernel32 = _kernel32()
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+    kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
+    handle = kernel32.OpenProcess(_WIN_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return None
+    try:
+        created, exited, kernel, user = (wintypes.FILETIME() for _ in range(4))
+        if not kernel32.GetProcessTimes(
+            handle, ctypes.byref(created), ctypes.byref(exited), ctypes.byref(kernel), ctypes.byref(user)
+        ):
+            return None
+        # 已退出但句柄还被别人拿着的进程：OpenProcess 仍成功。它不是「此刻活着的那个」，不给口令。
+        code = wintypes.DWORD()
+        if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value != _WIN_STILL_ACTIVE:
+            return None
+        return f"filetime:{(created.dwHighDateTime << 32) | created.dwLowDateTime}"
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def process_image_path(pid: object) -> str | None:

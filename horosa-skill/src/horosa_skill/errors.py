@@ -485,6 +485,18 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "set_ascii_runtime_root_then_reinstall",
     },
+    # 目录写不了不是「没装 / 去体检」：重装同样写不进去。旧行为是把它答成「别的进程正在启动」（v0.50.0-dev，E-08）。
+    "runtime.root_not_writable": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "Horosa 的 runtime 目录写不进去（details.runtime_root；常见原因：目录归别的用户、只读挂载、磁盘满）。"
+            "请修好该目录的写权限，或把 HOROSA_RUNTIME_ROOT 指到一个可写的目录，然后重试。",
+            "The Horosa runtime directory is not writable (details.runtime_root; typically owned by another user, a "
+            "read-only mount, or a full disk). Fix its write permission, or point HOROSA_RUNTIME_ROOT at a writable "
+            "directory, then retry.",
+        ),
+        "next_action": "fix_runtime_root_permissions_or_move_root",
+    },
     "runtime.platform_unsupported": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

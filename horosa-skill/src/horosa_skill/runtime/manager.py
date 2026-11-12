@@ -25,6 +25,7 @@ from urllib.request import url2pathname
 
 import httpx
 
+from horosa_skill import fsretry
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
@@ -33,12 +34,13 @@ from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, h
 from horosa_skill.runtime.pidlock import (
     INSTALL_OWNER,
     LAUNCHER_OWNER,
+    LockDirNotWritableError,
     describe_lock,
     release as release_lock,
     release_launcher,
     try_pid_lock,
 )
-from horosa_skill.runtime.procs import pid_alive
+from horosa_skill.runtime.procs import pid_alive, process_start_token
 from horosa_skill.runtime.ports import port_holders
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.runtime.windows_jar_patch import WindowsBootJarPatchMixin
@@ -484,6 +486,12 @@ def _hand_lock_to(lock_path: Path, pid: Any) -> None:
         return
     payload["pid"] = pid
     payload["owner"] = LAUNCHER_OWNER
+    # 口令跟着 pid 一起换成启动器的；取不到就删掉旧的（留着本进程的口令会让启动器的锁被立刻判成「换人了」）。
+    token = process_start_token(pid)
+    if token:
+        payload["start_token"] = token
+    else:
+        payload.pop("start_token", None)
     try:
         lock_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     except OSError:
@@ -582,6 +590,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             self._last_download = None
             # 下载 730 MB 之前就拒：装进去 Java 也起不来（只剩 chart），而修法只是换个路径。
             self._require_ascii_runtime_root()
+            self._require_writable_runtime_root()
             self._sweep_install_temps()
             source = archive
             expected_sha256: str | None = None
@@ -831,7 +840,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     def _acquire_swap_lock(self, lock_path: Path) -> None:
         """等正在进行的启动结束，等不到就拒绝：启动器正从 current/ 起服务时换目录，等于把文件从它脚下搬走。"""
         deadline = time.monotonic() + float(self.settings.runtime_start_timeout_seconds)
-        while not try_pid_lock(lock_path, stale_after_seconds=960.0, owner=INSTALL_OWNER):
+        while not self._try_start_lock(lock_path, owner=INSTALL_OWNER):
             if time.monotonic() >= deadline:
                 raise RuntimeInstallError(
                     bilingual("runtime 正在启动，安装未动 current/。", "The runtime is starting; current/ was left untouched."),
@@ -870,7 +879,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         if self.current_dir.exists() or not (self.runtime_root / "previous").is_dir():
             return
         lock_path = self.runtime_root / ".runtime-start.lock"
-        if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner=INSTALL_OWNER):
+        if not self._try_start_lock(lock_path, owner=INSTALL_OWNER):
             return
         try:
             self._restore_previous_locked()
@@ -1331,6 +1340,8 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             with self.tracer.span(workflow_name="runtime.start", metadata={"entrypoint": "runtime.start"}) as trace:
                 self._restore_previous_after_crash()
                 self._require_runtime()
+                # 启动要在 runtime 根下写锁、状态文件与 launcher.log。写不了就现在说，别让锁那一步把它答成「别人在启动」。
+                self._require_writable_runtime_root()
                 manifest = self.load_installed_manifest(strict=True)
                 # 🔴 macOS：带 com.apple.quarantine 的 python/java 一被启动器 exec 就被 Gatekeeper SIGKILL，
                 # 没有任何输出。此前只有 doctor 会查它；start 路径上用户要等满整个就绪预算，
@@ -1410,7 +1421,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     if wait_seconds is None
                     else max(0.0, float(wait_seconds))
                 )
-                if not try_pid_lock(lock_path, stale_after_seconds=960.0, owner="runtime-start"):
+                if not self._try_start_lock(lock_path, owner="runtime-start"):
                     holder = describe_lock(lock_path)
                     waited = self._wait_for_service_state(
                         expected_reachable=True, timeout_seconds=budget
@@ -2036,6 +2047,64 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         if report["flagged"]:
             report["fix"] = f'xattr -dr com.apple.quarantine "{self.current_dir}"'
         return report
+
+    def runtime_root_write_problem(self, *, probe: bool = True) -> str | None:
+        """runtime 根写不了的原因；可写返回 None。
+
+        `probe=True`（install / start）：根不存在就建，再真建一个临时文件删掉 —— `os.access` 在 Windows ACL 与网络盘上
+        不可信。`probe=False`（doctor，只读）：不建目录、不落文件，只对最近的已存在祖先问 `os.access`，答不出问题不等于没问题。
+        """
+        root = self.runtime_root
+        if not probe:
+            target = root
+            while not target.exists() and target.parent != target:
+                target = target.parent
+            if not target.is_dir():
+                return f"{target} is not a directory"
+            if not os.access(target, os.W_OK | os.X_OK):
+                return f"no write permission on {target}"
+            return None
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            fd, name = tempfile.mkstemp(prefix=".write-probe-", dir=str(root))
+        except OSError as exc:
+            return str(exc)
+        os.close(fd)
+        try:
+            fsretry.unlink(Path(name))
+        except OSError:
+            pass
+        return None
+
+    def _root_not_writable_error(self, cause: object) -> RuntimeInstallError:
+        return RuntimeInstallError(
+            bilingual(
+                f"runtime 目录写不进去：{self.runtime_root}。安装和启动都要在这里写文件。",
+                f"The runtime directory is not writable: {self.runtime_root}. Installing and starting both write files there.",
+            ),
+            code="runtime.root_not_writable",
+            details={
+                "runtime_root": str(self.runtime_root),
+                "error": str(cause),
+                "next_action": bilingual(
+                    "修好这个目录的写权限（或腾出磁盘空间），或者把 HOROSA_RUNTIME_ROOT 指到一个可写的目录后重试。",
+                    "Fix write permission on that directory (or free disk space), or point HOROSA_RUNTIME_ROOT at a writable "
+                    "directory, then retry.",
+                ),
+            },
+        )
+
+    def _require_writable_runtime_root(self) -> None:
+        problem = self.runtime_root_write_problem()
+        if problem is not None:
+            raise self._root_not_writable_error(problem)
+
+    def _try_start_lock(self, lock_path: Path, *, owner: str) -> bool:
+        """`.runtime-start.lock` 的唯一入口：False 只表示「有人持锁」，目录写不了是 `runtime.root_not_writable`。"""
+        try:
+            return try_pid_lock(lock_path, stale_after_seconds=960.0, owner=owner)
+        except LockDirNotWritableError as exc:
+            raise self._root_not_writable_error(exc.cause) from exc
 
     def _require_ascii_runtime_root(self) -> None:
         """Windows：runtime 根必须纯 ASCII，否则随包的 java.exe 找不到 java.dll、Swiss Ephemeris 打不开星历（v0.38.1）。"""
