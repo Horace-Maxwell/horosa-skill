@@ -108,7 +108,7 @@ def build_agent_guidance(
     else:
         tools = {}
 
-    return {
+    result = {
         "ok": True,
         "schema": GUIDANCE_SCHEMA,
         "intent": intent,
@@ -126,6 +126,41 @@ def build_agent_guidance(
         # 不要凭通用知识虚构不存在的命令或功能。
         "usage_help": SOFTWARE_USAGE_HELP,
     }
+    if intent and not include_all and not tool_name:
+        result["suggested_tools"] = suggest_tools_for_intent(intent)
+    return result
+
+
+def suggest_tools_for_intent(intent: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    """[dispatch 批 v0.50 F2] `intent`（用户原话）→ 最相关的几种技法：一句话说明 + 各自要的字段（几 KB）。
+
+    与 dispatch 同一个确定性路由：点名了技法就是那几个；没点名就是意图类的候选；都没有就按同义词打分。
+    v0.49 之前 `intent` 只被原样回显，未命中的 hint 却让客户端去拉 1.4 MB 的 include_all。"""
+    from horosa_skill.engine import intents as intent_table
+    from horosa_skill.engine.router import route
+    from horosa_skill.engine.time_roles import time_role
+    from horosa_skill.errors import DispatchResolutionError
+    from horosa_skill.schemas.tools import DispatchInput
+
+    try:
+        names = route(DispatchInput(query=str(intent))).tools
+        reason = "named_or_default"
+    except DispatchResolutionError as exc:
+        names = list((exc.details or {}).get("candidates") or [])
+        reason = str((exc.details or {}).get("reason") or exc.code)
+    rows: list[dict[str, Any]] = []
+    for row in intent_table.candidate_details(names[:limit]):
+        definition = TOOL_DEFINITIONS[row["tool"]]
+        required = sorted(name for name, info in definition.input_model.model_fields.items() if info.is_required())
+        policy = TOOL_GUIDANCE.get(row["tool"], {})
+        rows.append({
+            **row,
+            "time_role": time_role(row["tool"]),
+            "required_fields": required,
+            "must_have_context": list(policy.get("must_have_context", []))[:6],
+            "match": reason,
+        })
+    return rows
 
 
 def assert_guidance_covers_registered_tools() -> None:

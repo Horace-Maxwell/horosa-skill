@@ -76,7 +76,9 @@ def test_agent_preflight_blocks_unconfirmed_calculation_tools() -> None:
     assert "agent_confirmed_settings" in gate["confirmation_fields"]
     assert any(item["field"] == "guirengType" for item in gate["ask_if_missing"])
     assert gate["agent_recovery"]["must_ask_user"] is True
-    assert "调用 `liureng_gods` 前需要先确认" in gate["agent_recovery"]["prompt_to_user"]
+    # v0.50：技法用中文正名、每个问题「中文 / English」。
+    assert "调用「大六壬」前需要先确认" in gate["agent_recovery"]["prompt_to_user"]
+    assert "Before running 「大六壬」" in gate["agent_recovery"]["prompt_to_user"]
 
 
 def test_predictive_input_contracts_are_explicit_for_agents() -> None:
@@ -113,11 +115,15 @@ def test_agent_preflight_exempts_registry_tools() -> None:
 
 
 def test_agent_preflight_blocks_unconfirmed_dispatch() -> None:
-    gate = validate_agent_preflight("dispatch", {"query": "帮我起一个盘"})
-
-    assert gate["ok"] is False
-    assert gate["code"] == "agent_guidance.required"
-    assert any(item["field"] == "target technique" for item in gate["ask_if_missing"])
+    # v0.50：先路由。「帮我起一个盘」没说哪一派 → 闸门放行给 dispatch 自己的「请挑技法」拒绝，不先问四个起盘问题。
+    vague = validate_agent_preflight("dispatch", {"query": "帮我起一个盘"})
+    assert vague["ok"] is True and vague["mode"] == "routing_refusal"
+    # 路由选中了八字 → 问的是八字在这份载荷上真正开着的问题，不是写死的「用哪种技法」。
+    birth = {"date": "1990-05-03", "time": "08:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+    gate = validate_agent_preflight("dispatch", {"query": "帮我看看八字", "birth": birth})
+    assert gate["ok"] is False and gate["code"] == "agent_guidance.required"
+    fields = [item["field"] for item in gate["ask_if_missing"]]
+    assert "target technique" not in fields and "gender" in fields and "birth data" not in fields
 
 
 def test_validation_recovery_returns_prompt_for_incomplete_payload() -> None:
@@ -128,8 +134,9 @@ def test_validation_recovery_returns_prompt_for_incomplete_payload() -> None:
     )
 
     assert recovery["must_ask_user"] is True
-    assert "调用 `chart` 前需要先确认" in recovery["prompt_to_user"]
-    assert any(item["field"] == "date/time/place" for item in recovery["ask_if_missing"])
+    assert "「本命盘」" in recovery["prompt_to_user"]
+    # v0.50：只问校验卡住的字段，不拿空载荷重放整份问卷。
+    assert [item["field"] for item in recovery["ask_if_missing"]] == ["date"]
 
 
 def test_options_keys_never_leak_onto_tools_that_share_a_policy_dict() -> None:

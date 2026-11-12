@@ -986,14 +986,14 @@ def use_for(uses: list[ProfileUse], slot: str) -> ProfileUse | None:
 def gate_view(settings: Any, tool_name: str, payload: Any) -> Any:
     """澄清闸看的载荷：档案字段并进来，闸门就不再追问档案里已有的出生信息（问不问、拦不拦仍由闸门定）。
 
-    认不出的档案名在这里就报错（早于闸门追问）；没有档案名 = 原样返回、不碰档案库。dispatch / hecan 的闸门问题是固定的，
-    只做名字校验、载荷原样返回。
+    认不出的档案名在这里就报错（早于闸门追问）；没有档案名 = 原样返回、不碰档案库。
     """
     if settings is None or not isinstance(payload, dict):
         return payload
     if tool_name in {"dispatch", "hecan", "horosa_dispatch", "horosa_hecan"}:
-        expand_dispatch_payload(ProfileStore(settings), payload)
-        return payload
+        # [dispatch 批 v0.50] dispatch / hecan 的闸门也按选中技法实际收到的载荷问问题（agent_guidance/dispatch_gate.py）：
+        # 返回并进档案之后的载荷，档案里已有的出生信息（含性别）不再追问。
+        return expand_dispatch_payload(ProfileStore(settings), payload)[0]
     from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
 
     definition = TOOL_DEFINITIONS.get(resolve_tool_name(tool_name) or "")

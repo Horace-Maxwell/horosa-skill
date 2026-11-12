@@ -160,6 +160,9 @@ def test_invalid_tool_payload_returns_agent_recovery_prompt(tmp_path) -> None:
     assert {"date", "time", "zone", "lat", "lon"} <= set(fixes)
     assert "place" in fixes["lat"]["expected"] and fixes["date"]["example"] == "1990-05-03"
     assert {item["field"] for item in recovery["ask_if_missing"]} >= {"date", "time", "zone"}
+    # v0.50：只问校验卡住的字段（不拿空载荷重放整份问卷），双语。
+    assert "`date`" in recovery["prompt_to_user"] and " / " in recovery["prompt_to_user"]
+    assert "date" in [item["field"] for item in recovery["ask_if_missing"]]
 
 
 def test_service_starts_runtime_before_first_remote_call_when_probe_fails(tmp_path) -> None:
@@ -1675,6 +1678,7 @@ def test_dispatch_exposes_child_export_contracts_explicitly(tmp_path) -> None:
         {
             "query": "请用奇门和六壬综合分析",
             "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "context": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
             "save_result": True,
         }
     )
@@ -1716,6 +1720,7 @@ def test_service_can_attach_ai_answer_to_existing_run(tmp_path) -> None:
         {
             "query": "请用奇门分析事业",
             "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "context": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
             "save_result": True,
         }
     )
@@ -2627,6 +2632,7 @@ def test_dispatch_emits_group_trace_for_children(tmp_path) -> None:
         {
             "query": "请用奇门和六壬综合分析",
             "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "context": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
             "save_result": True,
         },
         evaluation_case_id="dispatch_case",
@@ -3424,6 +3430,7 @@ def test_hecan_routes_and_returns_a_synthesis_template(tmp_path) -> None:
     result = service.hecan({
         "query": "综合奇门和六壬分析当前事业局势",
         "birth": build_sample_payloads()["qimen"],
+        "context": build_sample_payloads()["qimen"],  # 奇门 / 六壬按起课此刻（context），不按出生时刻
         "save_result": True,
     })
     assert result["ok"] is True
@@ -3449,6 +3456,7 @@ def test_hecan_accepts_explicit_tools_and_caps_them(tmp_path) -> None:
         "tools": ["bazi_birth", "ziwei_birth", "liureng_gods", "qimen", "taiyi", "jinkou", "sixyao"],
         "max_tools": 3,
         "birth": build_sample_payloads()["bazi_birth"],
+        "context": build_sample_payloads()["qimen"],
         "save_result": False,
     })
     assert result["ok"] is True

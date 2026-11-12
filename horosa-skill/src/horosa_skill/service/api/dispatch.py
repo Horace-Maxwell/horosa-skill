@@ -1,6 +1,7 @@
 """跨技法 API（DispatchAPI）：hecan 合参、决策层各面（路由 / 性别 / 占类 / 忠实度）、dispatch。"""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -8,7 +9,7 @@ from pydantic import ValidationError
 from horosa_skill import __version__
 from horosa_skill import profiles as birth_profiles
 from horosa_skill.agent_guidance import build_validation_recovery
-from horosa_skill.civil_calendar import _leading_year_of
+from horosa_skill.agent_guidance.base import GATE_FAILURE_CODE
 from horosa_skill.decisions.layer import decision_records
 from horosa_skill.decisions.redact import build_meta_state
 from horosa_skill.decisions.surfaces.extract import (
@@ -26,9 +27,15 @@ from horosa_skill.decisions.surfaces.routing import (
     resolve_routing,
 )
 from horosa_skill.decisions.surfaces.zhancat import build_zhan_question, resolve_zhan
+from horosa_skill.engine import dispatch_plan
 from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
-from horosa_skill.engine.router import select_tools
-from horosa_skill.errors import DispatchResolutionError, ToolValidationError, validation_errors
+from horosa_skill.engine.router import route
+from horosa_skill.errors import (
+    DispatchResolutionError,
+    ToolValidationError,
+    bilingual,
+    validation_errors,
+)
 from horosa_skill.input_normalization import normalize_request_payload
 from horosa_skill.reports.technique_card import build_technique_report
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
@@ -46,6 +53,63 @@ from horosa_skill.service.envelope import (
 )
 
 HECAN_SCHEMA = "horosa.skill.hecan.v1"
+
+
+_DEGRADED_MARKERS = ("降级", "缺段", "不完整", "失败", "不可用", "超时", "degrad", "missing", "unavailable", "failed", "timeout")
+_PLACE_MARKERS = ("地名", "地点", "坐标", "place", "城市库")
+
+
+def _tool_notes_line(results: dict[str, ToolEnvelope]) -> str | None:
+    """各技法 warnings 按类汇总（v0.49 前任何一条说明——连「地名已解析为某城」——都被说成「降级/缺段」）。"""
+    parts: list[str] = []
+    for name, result in results.items():
+        if not result.ok or not result.warnings:
+            continue
+        kinds = {"degraded": 0, "place": 0, "note": 0}
+        for warning in result.warnings:
+            text = str(warning).lower()
+            if any(marker in text for marker in _DEGRADED_MARKERS):
+                kinds["degraded"] += 1
+            elif any(marker in text for marker in _PLACE_MARKERS):
+                kinds["place"] += 1
+            else:
+                kinds["note"] += 1
+        labels = [label for key, label in (("degraded", "降级 / 缺段"), ("place", "地点解析"), ("note", "其他说明")) if kinds[key]]
+        counts = [kinds[key] for key in ("degraded", "place", "note") if kinds[key]]
+        parts.append(f"{name}：" + "、".join(f"{label} {count} 条" for label, count in zip(labels, counts)))
+    if not parts:
+        return None
+    return "技法结果附带说明 — " + "；".join(parts) + "（原文见 results.<tool>.warnings；降级 / 缺段须如实转述）。"
+
+
+def _child_failure(tool_name: str, payload: dict[str, Any], exc: ToolValidationError) -> ToolEnvelope:
+    details = dict(exc.details or {})
+    return ToolEnvelope(
+        ok=False,
+        tool=tool_name,
+        version=__version__,
+        input_normalized=payload,
+        summary=[f"{tool_name} 的载荷不合法，没有起盘（{exc.code}）。"],
+        error=ErrorInfo(code=exc.code, message=str(exc), details=details),
+        code=exc.code,
+        message=str(exc),
+        details=details,
+    )
+
+
+def _one_error_per_field(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`birth` 是几种出生模型的联合：pydantic 对每个分支各报一遍，`loc` 里夹着内部类名（BirthInput / ZiWeiBirthInput …）。
+    摘掉类名、按（位置, 类型）去重 → 每个字段一条。"""
+    seen: set[tuple[str, str]] = set()
+    out: list[dict[str, Any]] = []
+    for error in errors:
+        loc = [part for part in (error.get("loc") or []) if not (isinstance(part, str) and re.fullmatch(r"[A-Z][A-Za-z0-9]*(Input|Model)", part))]
+        key = (".".join(str(part) for part in loc), str(error.get("type")))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({**error, "loc": loc})
+    return out
 
 
 def _validated(model: Any, payload: dict[str, Any]) -> Any:
@@ -392,7 +456,7 @@ class DispatchAPI:
             # 地名在校验之前换成坐标（birth / context / subject 里的 place；BirthInput 要 lat / lon / zone）。幂等：合参已解析过的原样过。
             request = _validated(DispatchInput, self.resolve_place_fields(payload, tool_name="dispatch"))
         except ValidationError as exc:
-            errors = validation_errors(exc)
+            errors = _one_error_per_field(validation_errors(exc))
             raise ToolValidationError(
                 "Invalid payload for horosa_dispatch.",
                 code="dispatch.invalid_payload",
@@ -407,15 +471,24 @@ class DispatchAPI:
             ) from exc
 
         routing_error: DispatchResolutionError | None = None
+        routing_warnings: list[str] = []
         decision_records_out: list[dict[str, Any]] = []
         try:
             # 合参等上层可显式点名技法（跳过关键词路由）；未知名照常走 run_tool 的 tool.unknown。
-            selected_tools = list(preselected_tools) if preselected_tools else select_tools(request)
+            if preselected_tools:
+                selected_tools = list(preselected_tools)
+            else:
+                routed = route(request)
+                selected_tools, routing_warnings = list(routed.tools), list(routed.warnings)
         except DispatchResolutionError as exc:
             routing_error = exc
             selected_tools = []
-        # 决策层 S1（可选，缺省关）：确定性路由是权威；只有它无解时才可能采纳 Jev 的兜底，命中时只记一致性。
-        if self.decision_layer is not None and not preselected_tools:
+        # 决策层 S1（可选，缺省关）：确定性路由是权威；只有它真·无解（没认出意图）时才可能采纳 Jev 的兜底，命中时只记一致性。
+        # 「需要用户挑技法」「超出范围」「目录里没有」是确定性的回答，不许模型替用户选。
+        routable_miss = routing_error is None or (
+            routing_error.code == "dispatch.no_matching_tool" and (routing_error.details or {}).get("reason") != "not_in_catalogue"
+        )
+        if self.decision_layer is not None and not preselected_tools and routable_miss:
             with decision_records() as routing_records:
                 selected_tools = self._decide_routing(request, selected_tools, routing_error)
             decision_records_out.extend(routing_records)
@@ -429,7 +502,7 @@ class DispatchAPI:
                 selected_tools=[],
                 normalized_inputs={},
                 results={},
-                summary=["未能从当前输入解析出匹配的 Horosa 工具。"],
+                summary=[str(exc)],
                 warnings=[],
                 memory_ref=None,
                 error=ErrorInfo(code=exc.code, message=str(exc), details=exc.details),
@@ -439,10 +512,65 @@ class DispatchAPI:
                 decision_layer=self._decision_layer_view(decision_records_out),
             )
 
+        def birth_payload() -> tuple[dict[str, Any], birth_profiles.ProfileUse | None]:
+            if request.birth is not None:
+                return request.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "birth")
+            if request.subject and request.subject.birth is not None:
+                return request.subject.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "subject.birth")
+            return {}, None
+
+        expanded_birth, birth_use = birth_payload()
+        # 交给技法的是「显式字段 + 档案名」：档案字段由 run_tool 按选中的技法重新并。
+
+        def party(name: str) -> dict[str, Any] | None:
+            model = getattr(request.subject, name, None) if request.subject else None
+            if model is None:
+                return None
+            dumped = model.model_dump(exclude_none=True)
+            return birth_profiles.restore_refs(dumped, birth_profiles.use_for(profile_uses, f"subject.{name}"))
+
+        # 逐技法规划载荷（engine/dispatch_plan.py）：按时间角色取时刻，出生数据不顶替起课时刻；偏好与原话按技法声明转发。
+        plan_inputs = dispatch_plan.inputs_from_request(
+            request,
+            birth_for_run=birth_profiles.restore_refs(expanded_birth, birth_use),
+            inner=party("inner"),
+            outer=party("outer"),
+        )
+        plans, plan_warnings = dispatch_plan.plan_all(selected_tools, plan_inputs)
+        missing = dispatch_plan.missing_facts_recovery(plans)
+        if missing is not None:
+            # 缺的是只有用户知道的事实（起课时刻、第二个人、要推的年份……）：一个技法都不跑，一次问全。确认标记代替不了事实。
+            details = {
+                "missing_facts": missing["missing_facts"],
+                "ask_if_missing": missing["ask_if_missing"],
+                "selected_tools": selected_tools,
+                "agent_recovery": missing,
+            }
+            message = bilingual(
+                "缺少只有用户知道的信息：" + "；".join(f"{item['fact']}（{', '.join(item['fields'])}）" for item in missing["missing_facts"]),
+                "Missing facts only the user knows: " + "; ".join(f"{item['fact']} ({', '.join(item['fields'])})" for item in missing["missing_facts"]),
+            )
+            return DispatchEnvelope(
+                ok=False,
+                version=__version__,
+                selected_tools=selected_tools,
+                normalized_inputs={plan.tool: plan.payload for plan in plans},
+                results={},
+                summary=[message],
+                warnings=[*routing_warnings, *plan_warnings],
+                time_basis={plan.tool: plan.time_basis for plan in plans if plan.time_basis},
+                memory_ref=None,
+                error=ErrorInfo(code=GATE_FAILURE_CODE, message=message, details=details),
+                code=GATE_FAILURE_CODE,
+                message=message,
+                details=details,
+                decision_layer=self._decision_layer_view(decision_records_out),
+            )
+
         normalized_inputs: dict[str, dict[str, Any]] = {}
         results: dict[str, ToolEnvelope] = {}
         result_export_contracts: dict[str, dict[str, Any]] = {}
-        dispatch_warnings: list[str] = []
+        dispatch_warnings: list[str] = [*routing_warnings, *plan_warnings]
         extraction_shared: dict[str, Any] = {}
 
         workflow_group_id = self.tracer.new_group_id()
@@ -469,77 +597,17 @@ class DispatchAPI:
                 except Exception as exc:  # noqa: BLE001 - 存档是旁路：开不了 run 也要把技法算完
                     dispatch_warnings.append(_memory_save_failed(exc))
 
-            def birth_payload() -> tuple[dict[str, Any], birth_profiles.ProfileUse | None]:
-                if request.birth is not None:
-                    return request.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "birth")
-                if request.subject and request.subject.birth is not None:
-                    return request.subject.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "subject.birth")
-                return {}, None
-
-            expanded_birth, birth_use = birth_payload()
-            # 交给技法的是「显式字段 + 档案名」：档案字段由 run_tool 按选中的技法重新并。按出生信息自己拼载荷的分支（节气盘）读展开后的。
-            base_birth = birth_profiles.restore_refs(expanded_birth, birth_use)
-
-            def party(name: str) -> dict[str, Any]:
-                model = getattr(request.subject, name, None) if request.subject else None
-                dumped = model.model_dump(exclude_none=True) if model is not None else {}
-                return birth_profiles.restore_refs(dumped, birth_profiles.use_for(profile_uses, f"subject.{name}"))
-            confirmation = {
-                key: value
-                for key, value in {
-                    "agent_confirmed_settings": request.agent_confirmed_settings,
-                    "defaults_accepted": request.defaults_accepted,
-                    "clarification_notes": request.clarification_notes,
-                    # 自备知识库点名随确认三键一起传给每个技法（各自按本技法解析 `auto`）。
-                    "knowledge": request.knowledge,
-                }.items()
-                if value is not None
-            }
             total_tools = len(selected_tools)
-            for tool_index, tool_name in enumerate(selected_tools, start=1):
+            for tool_index, plan in enumerate(plans, start=1):
+                tool_name = plan.tool
                 _progress_tick(tool_index - 1, total_tools, f"调度：{tool_name}（{tool_index}/{total_tools}）")
-                if tool_name == "relative":
-                    payload_for_tool = {
-                        "inner": party("inner"),
-                        "outer": party("outer"),
-                        "hsys": request.preferences.get("hsys", 1),  # 缺省随 RelativeInput（星阙 DefaultHouseSystem 1）
-                        "zodiacal": request.preferences.get("zodiacal", 0),
-                        "relative": request.preferences.get("relative", 0),
-                    }
-                elif tool_name in {"gua_desc", "gua_meiyi"}:
-                    gua_names = []
-                    if request.subject and request.subject.gua_names:
-                        gua_names = request.subject.gua_names
-                    elif "gua_names" in request.context:
-                        gua_names = list(request.context["gua_names"])
-                    payload_for_tool = {"name": gua_names}
-                elif tool_name == "jieqi_year":
-                    year = request.subject.year if request.subject and request.subject.year is not None else None
-                    if year is None and expanded_birth.get("date"):
-                        # 串首带符号年（dateStrSafe.leadingYearOf）：旧 [:4] 把公元前 '-0500-03-21' 切成 '-050'、五位年切成前四位。
-                        lead = _leading_year_of(expanded_birth["date"])
-                        year = str(lead) if lead is not None else str(expanded_birth["date"])[:4]
-                    jieqi_lat = expanded_birth.get("lat", request.context.get("lat"))
-                    jieqi_lon = expanded_birth.get("lon", request.context.get("lon"))
-                    if not jieqi_lat or not jieqi_lon:
-                        # 兜底赤道/本初子午线坐标会改变节气盘宫位——显式告知而非静默。
-                        dispatch_warnings.append(
-                            "jieqi_year 未提供经纬度，已按 0n00/0e00 兜底起盘；宫位随地点变化，建议补充坐标后重算。"
-                        )
-                    payload_for_tool = {
-                        "year": year,
-                        "zone": expanded_birth.get("zone", request.context.get("zone", "8")),
-                        "lat": jieqi_lat or "0n00",
-                        "lon": jieqi_lon or "0e00",
-                        "time": request.context.get("time"),
-                    }
-                elif birth_use is not None and birth_profiles.owns_profile_key(getattr(TOOL_DEFINITIONS.get(tool_name), "input_model", None)):
+                payload_for_tool = plan.payload
+                if birth_use is not None and birth_profiles.PROFILE_KEY in payload_for_tool and birth_profiles.owns_profile_key(
+                    getattr(TOOL_DEFINITIONS.get(tool_name), "input_model", None)
+                ):
                     # 自己声明了 `profile` 的技法（天文地占的传本流派）：档案名在那里不是档案名，直接给展开后的出生信息。
-                    payload_for_tool = {k: v for k, v in expanded_birth.items() if k != birth_profiles.PROFILE_KEY}
-                else:
-                    payload_for_tool = dict(base_birth)
-
-                payload_for_tool.update(confirmation)
+                    payload_for_tool = {**{k: v for k, v in expanded_birth.items() if k != birth_profiles.PROFILE_KEY},
+                                        **{k: v for k, v in payload_for_tool.items() if k != birth_profiles.PROFILE_KEY}}
                 # 决策层 S2（可选，缺省关）：只把原话里**明说**的性别变成「已提供」（词表 + Jev 双钥）。档案里存了性别就不问：
                 # 那是用户存档时给的（显式），也省一次出本机的调用。
                 if self.decision_layer is not None and not (birth_use is not None and "gender" in birth_use.stored):
@@ -562,17 +630,22 @@ class DispatchAPI:
                     # 无匹配请求会以「huanglizeri 缺 startDate」的面目出现，而路由这一步的自陈全丢。
                     if decision_records_out and "decision_layer" not in exc.details:
                         exc.details["decision_layer"] = self._decision_layer_view(decision_records_out)
-                    raise
+                    if total_tools == 1:
+                        raise
+                    # 多技法时一个技法的载荷不合法只记在它自己名下，其余照算（v0.50：载荷逐技法规划后，一个技法缺参不该拖垮整次调度）。
+                    results[tool_name] = _child_failure(tool_name, payload_for_tool, exc)
+                    continue
                 result_export_contracts[tool_name] = _build_dispatch_export_contract(results[tool_name])
             _progress_tick(total_tools, total_tools, "调度：汇总结果")
 
-            degraded_tools = [name for name, result in results.items() if result.ok and result.warnings]
-            if degraded_tools:
-                dispatch_warnings.append(
-                    f"{len(degraded_tools)} 个工具结果带降级/缺段说明：{', '.join(degraded_tools)}"
-                    "（详见 results.<tool>.warnings，报告须如实转述）。"
-                )
+            notes_line = _tool_notes_line(results)
+            if notes_line:
+                dispatch_warnings.append(notes_line)
+            failed_children = [name for name, result in results.items() if not result.ok]
             summary = [f"horosa_dispatch 选择了 {len(selected_tools)} 个工具：{', '.join(selected_tools)}。"]
+            if failed_children:
+                summary.append(f"{len(failed_children)} 个技法没有算成：{', '.join(failed_children)}（见 results.<tool>.error）。")
+            summary.extend(line for line in (dispatch_plan.basis_line(plan) for plan in plans) if line)
             summary.extend([line for result in results.values() for line in result.summary[:1]])
 
             envelope = DispatchEnvelope(
@@ -582,8 +655,9 @@ class DispatchAPI:
                 normalized_inputs=normalized_inputs,
                 results=results,
                 result_export_contracts=result_export_contracts,
-                summary=summary[:6],
+                summary=summary[:8],
                 warnings=dispatch_warnings,
+                time_basis={plan.tool: plan.time_basis for plan in plans if plan.time_basis},
                 memory_ref=None,
                 error=None,
                 trace_id=trace["trace_id"],

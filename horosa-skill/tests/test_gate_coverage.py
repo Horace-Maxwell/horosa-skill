@@ -16,6 +16,7 @@ import pytest
 from typer.testing import CliRunner
 
 from horosa_skill.agent_guidance import PREFLIGHT_EXEMPT_TOOLS, validate_agent_preflight
+from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.memory.store import MemoryStore
@@ -39,9 +40,13 @@ def _arguments(mcp_name: str, *, confirmed: bool) -> dict:
     extra = CONFIRM if confirmed else {}
     if mcp_name in _BY_MCP_NAME:
         sample = {k: v for k, v in SAMPLES[_BY_MCP_NAME[mcp_name]].items() if k not in CONFIRM and k != "defaults_accepted"}
+        if confirmed and _BY_MCP_NAME[mcp_name] in GENDER_FACT_TOOLS:
+            sample.setdefault("gender", 1)  # 性别是事实：确认标记代替不了它（v0.50）
         return {**sample, **extra}
     return {
         **BIRTH, **extra, "gender": 1, "query": "看看八字", "tools": ["bazi_birth"], "tool_name": "bazi_birth",
+        # dispatch / hecan 逐技法规划载荷（v0.50）：缺出生数据就结构化拒绝、根本不到 run_tool——出生数据放进 birth。
+        "birth": {**BIRTH, "gender": 1},
         "payload": {**BIRTH, "gender": 1, **extra}, "format": "json", "run_id": "r",
     }
 
@@ -82,9 +87,23 @@ def _gate_on(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize("compact", [False, True], ids=["full", "compact"])
 def test_no_mcp_tool_reaches_run_tool_unconfirmed(tmp_path: Path, compact: bool) -> None:
+    """未确认就到了 run_tool 的，只能是闸门判定「什么都不缺」的（v0.50：问题全被载荷回答 → 放行）。
+    门面（dispatch / hecan / report_from_tool / tool_run）的探针载荷缺设置，必须被拦。"""
     mcp, _service, reached = _spied_server(tmp_path, compact=compact)
-    leaked = {name: tools for name, tools in _reached_by_tool(mcp, reached, confirmed=False).items() if name not in EXEMPT_MCP}
+    got = _reached_by_tool(mcp, reached, confirmed=False)
+    leaked = {
+        name: tools for name, tools in got.items()
+        if name not in EXEMPT_MCP
+        and (name not in _BY_MCP_NAME or not validate_agent_preflight(_BY_MCP_NAME[name], _arguments(name, confirmed=False))["ok"])
+    }
     assert not leaked, f"这些 MCP 工具没过澄清闸就跑了技法：{leaked}"
+    # 守卫不空转：把每个技法探针载荷里回答设置问题的键拿掉（只留时刻 / 地点），绝大多数技法都必须被拦。
+    data_only = {"date", "time", "zone", "lat", "lon", "gender", "question", "askEvent", "year", "inner", "outer", "name"}
+    blocked = [
+        name for name in _BY_MCP_NAME
+        if not validate_agent_preflight(_BY_MCP_NAME[name], {k: v for k, v in SAMPLES[_BY_MCP_NAME[name]].items() if k in data_only})["ok"]
+    ]
+    assert len(blocked) >= 90, len(blocked)
 
 
 @pytest.mark.parametrize("compact", [False, True], ids=["full", "compact"])
@@ -174,7 +193,7 @@ def test_cli_hecan_runs_once_the_caller_confirms(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(cli_module, "_service", lambda: service)
     result = CliRunner().invoke(
         cli_module.app, ["hecan", "--query", "看看八字", "--tool", "bazi_birth", "--stdin"],
-        input=json.dumps({"birth": BIRTH, **CONFIRM}),
+        input=json.dumps({"birth": {**BIRTH, "gender": 1}, **CONFIRM}),
     )
     assert result.exit_code == 0, result.output
     assert reached == ["bazi_birth"]
@@ -184,7 +203,8 @@ def test_hecan_gate_is_the_dispatch_gate_with_a_named_operation() -> None:
     for name in ("hecan", "horosa_hecan"):
         verdict = validate_agent_preflight(name, {"query": "看看八字"})
         assert verdict["ok"] is False and verdict["code"] == "agent_guidance.required"
-        assert "target technique" in [item["field"] for item in verdict["ask_if_missing"]]
+        # v0.50：先路由再问——缺的是出生数据（事实），不是写死的「用哪种技法」。
+        assert [item["fact"] for item in verdict["missing_facts"]] == ["birth_data"]
     assert validate_agent_preflight("hecan", {"defaults_accepted": True})["ok"] is True
     # 显式 `tools` 已经答了「用哪种技法」：闸门不再问一遍。
     named = validate_agent_preflight("hecan", {"query": "看看八字", "tools": ["bazi_birth"]})

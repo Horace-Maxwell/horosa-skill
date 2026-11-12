@@ -114,6 +114,26 @@ def precheck_arguments(gate: str | None, payload: Any) -> ToolValidationError | 
     return None
 
 
+def gate_view_arguments(gate: str | None, payload: Any) -> Any:
+    """闸门要看的载荷 = 执行时真正会用的载荷（别名改名、嵌套 `birth` / `subject` 提到顶层之后）。
+
+    🔴 合并深审两批时踩到：闸门（agent_guidance.questions）只认规范字段名，入参批的别名 / 嵌套提升却在 run_tool 里才做，
+    于是 `sex: "女"`、`{"birth": {...}}` 在闸门眼里是「没给性别」，一次本该通过的调用被要求再问用户。这里用同一个归一化
+    （不抛、不留解读说明——说明由 run_tool 那一次产出）给闸门一份视图；读不懂的值已由 precheck_arguments 拦下，这里有问题就原样返回。
+    带命主档案名的载荷交给档案视图（_profile_gate_view）。"""
+    if not isinstance(payload, dict):
+        return payload
+    definition = TOOL_DEFINITIONS.get(gate or "")
+    if definition is None or carries_profile(payload, definition.input_model):
+        return payload
+    from horosa_skill.input_fields import input_notes_scope
+    from horosa_skill.input_normalization import normalize_collecting_issues
+
+    with input_notes_scope(fresh=True):
+        normalized, issues = normalize_collecting_issues(payload, model=definition.input_model)
+    return payload if issues or not isinstance(normalized, dict) else normalized
+
+
 def _request_object(raw_request: Any) -> dict[str, Any]:
     """整包载荷（`request` 或合并后的参数）→ dict：BaseModel / None / JSON 对象字符串都收，其余 → tool.invalid_payload。"""
     # 与 service.run_tool / 各门面的归一化 + 校验是**有意重复**：两步都幂等，但这一层产出 MCP 形状的

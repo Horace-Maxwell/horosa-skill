@@ -415,10 +415,11 @@ def test_jieqi_birth_bracket_brackets_bc_and_three_digit_years() -> None:
 
 # ── horosa_dispatch → jieqi_year：年取串首带符号年 ─────────────────────────────────────────────────────
 
-@pytest.mark.parametrize(("date", "want"), [("-0500-03-21", "-500"), ("10000-01-01", "10000"), ("1500-02-20", "1500")])
-def test_dispatch_jieqi_year_takes_leading_signed_year(tmp_path: Path, date: str, want: str) -> None:
+@pytest.mark.parametrize(("date", "want"), [("-0500-03-21", -500), ("10000-01-01", 10000), ("1500-02-20", 1500)])
+def test_dispatch_jieqi_year_takes_leading_signed_year(tmp_path: Path, date: str, want: int) -> None:
     """dispatch 给 jieqi_year 补年份：旧 str(date)[:4] 把公元前 '-0500-03-21' 切成 '-050'、五位年切成 '1000'。
-    期望 = dateStrSafe.leadingYearOf 口径（'-0500' → -500）。负向对照：dispatch.py 换回 [:4] → 前两条红。"""
+    期望 = dateStrSafe.leadingYearOf 口径（'-0500' → -500）。v0.50 起年份取自 context（当前 / 所问日期），不再取出生年
+    （节气年表问的是那一年，不是命主出生那年）；年份解析口径不变。负向对照：dispatch_plan._date_parts 换回四位年 → 前两条红。"""
     from horosa_skill.config import Settings
     from horosa_skill.memory.store import MemoryStore
     from horosa_skill.service import HorosaSkillService
@@ -435,7 +436,7 @@ def test_dispatch_jieqi_year_takes_leading_signed_year(tmp_path: Path, date: str
     service.run_tool = run_tool  # type: ignore[method-assign]
     with pytest.raises(_StopAtJs):
         service.dispatch(
-            {"query": "节气", "birth": {"date": date, "time": "12:00:00", "zone": "+02:00", "lat": "37n58", "lon": "23e43"},
+            {"query": "节气", "context": {"date": date, "time": "12:00:00", "zone": "+02:00", "lat": "37n58", "lon": "23e43"},
              "save_result": False, "agent_confirmed_settings": True},
             preselected_tools=["jieqi_year"],
         )

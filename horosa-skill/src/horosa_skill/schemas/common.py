@@ -70,6 +70,8 @@ class DispatchEnvelope(BaseModel):
     # v0.39.0 可选云端决策层自陈：只在 HOROSA_JEV 开启时出现（provider / mode / scope / model / records[]），
     # 缺省 off 时恒为 None —— 调度信封逐字节不变。
     decision_layer: dict[str, Any] | None = None
+    # v0.50：每个技法用了哪个时刻、来自哪里（role / moment|birth|target / source=context|birth|query|query+context）。
+    time_basis: dict[str, Any] = Field(default_factory=dict)
     # 顶层错误镜像，与 ToolEnvelope 同义（见那里的说明）。
     code: str | None = None
     message: str | None = None

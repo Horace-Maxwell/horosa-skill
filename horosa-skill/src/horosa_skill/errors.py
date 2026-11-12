@@ -351,6 +351,22 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "pick_candidate_tool",
     },
+    "dispatch.technique_choice_required": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "认出了要问什么，但有几种技法都合适、结论可能不同：把 details.agent_recovery.prompt_to_user 转给用户，按用户选的技法直调对应工具（或用 horosa_hecan 同时跑几种）。",
+            "The intent is clear but several techniques fit and may disagree: relay details.agent_recovery.prompt_to_user, then call the tool the user picks (or horosa_hecan to run several).",
+        ),
+        "next_action": "ask_user_then_call_chosen_tool",
+    },
+    "dispatch.out_of_scope": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这类请求不在星阙的技法目录里：如实告诉用户，details.covers 列出了能做什么；不要拿别的技法冒充。",
+            "This request is outside Horosa's catalogue: tell the user so; details.covers lists what it does. Do not substitute another technique silently.",
+        ),
+        "next_action": "tell_user_not_supported",
+    },
     "runtime.not_installed": {"kind": "runtime", "next_action": "install"},
     "runtime.java_backend_unavailable": {
         "kind": "runtime",

@@ -266,6 +266,11 @@ def verified_example_payload(tool_name: str) -> dict[str, Any] | None:
     ):
         example["agent_confirmed_settings"] = True
         example["clarification_notes"] = _EXAMPLE_NOTES_TEXT
+    # v0.50：性别在这些技法里是事实（确认标记代替不了）——示例也得带上，复制即可过闸。
+    from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS
+
+    if tool_name in GENDER_FACT_TOOLS:
+        example.setdefault("gender", 1)
     return example
 
 

@@ -133,7 +133,10 @@ def test_mcp_agent_preflight_allows_confirmed_calculation_tool() -> None:
 
 
 def test_mcp_agent_preflight_blocks_unconfirmed_dispatch() -> None:
-    error = _agent_preflight_error("dispatch", {"query": "帮我起一个盘"})
+    # v0.50：先路由——「帮我起一个盘」没说哪一派，由 dispatch 自己的「请挑技法」拒绝回答；点名了技法才问它开着的设置。
+    assert _agent_preflight_error("dispatch", {"query": "帮我起一个盘"}) is None
+    birth = {"date": "1990-05-03", "time": "08:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+    error = _agent_preflight_error("dispatch", {"query": "帮我起一个奇门盘", "birth": birth})
 
     assert error is not None
     assert error["code"] == "agent_guidance.required"

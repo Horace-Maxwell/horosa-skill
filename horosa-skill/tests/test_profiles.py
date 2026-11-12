@@ -431,8 +431,10 @@ def test_hecan_hands_profiles_down_so_every_technique_records_its_source(tmp_pat
     envelopes = []
     original = service.dispatch
     monkeypatch.setattr(service, "dispatch", lambda payload, **kw: envelopes.append(original(payload, **kw)) or envelopes[-1])
+    # 天文地占是起课类：时刻取自 context（起卦此刻），不是命主的出生时刻（v0.50：出生数据不顶替起课时刻）。
+    moment = {"date": "2026-11-12", "time": "10:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
     template = service.hecan({"query": "合参看看", "subject": {"profile": "妈妈"}, "tools": ["bazi_birth", "ziwei_birth", "geomancy"],
-                              "save_result": False, **CONFIRM})
+                              "context": moment, "save_result": False, **CONFIRM})
     assert template["ok"] and template["selected_tools"] == ["bazi_birth", "ziwei_birth", "geomancy"]
     results = envelopes[0].results
     for tool in ("bazi_birth", "ziwei_birth"):
@@ -440,7 +442,8 @@ def test_hecan_hands_profiles_down_so_every_technique_records_its_source(tmp_pat
         assert uses[0]["name"] == "妈妈" and "date" in uses[0]["filled"] and uses[0]["overridden"] == [], tool
     assert results["ziwei_birth"].input_normalized["gender"] is False
     geomancy = results["geomancy"].input_normalized
-    assert geomancy["profile"] == "european_classical" and geomancy["date"] == "1962-03-05", "地占的 profile 是传本流派，不是档案名"
+    assert geomancy["profile"] == "european_classical", "地占的 profile 是传本流派，不是档案名"
+    assert geomancy["date"] == "2026-11-12", "地占按起卦此刻（context），不按命主出生时刻"
 
 
 def test_a_tool_that_owns_the_profile_key_keeps_its_meaning(tmp_path: Path) -> None:
