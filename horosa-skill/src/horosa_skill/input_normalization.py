@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from horosa_skill import input_fields as F
 from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.western_vocab import CLASSICAL_UNDECLARED_FIELDS
 
 _COMPACT_COORD_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([NSEWnsew])\s*(\d+(?:\.\d+)?)\s*$")
 _DECIMAL_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
@@ -420,7 +421,11 @@ def _safe_date(value: Any) -> bool:
 
 
 def _report_unknown_keys(out: dict[str, Any], fields: frozenset[str]) -> None:
-    unknown = [key for key in out if key not in fields and key not in NON_TECHNIQUE_KEYS and not key.startswith("_")]
+    # 恒星轨前端名 fixedStarOrb / fixedStarOrbMode：西占盘族（声明了后端名 starOrb 的模型）照读（chart_family.fixedStarOrbParamsFor、
+    # judgeLayerHeadless 双名回退），不是「没人读的键」。
+    read_aliases = CLASSICAL_UNDECLARED_FIELDS if "starOrb" in fields else ()
+    unknown = [key for key in out if key not in fields and key not in NON_TECHNIQUE_KEYS and key not in read_aliases
+               and not key.startswith("_")]
     if not unknown:
         return
     vocabulary = sorted(fields | set(FIELD_ALIASES))
@@ -471,6 +476,8 @@ def tool_error_from_validation(exc: Any, *, tool_name: str, payload: dict[str, A
         leaf = loc[-1] if loc else ""
         ctx = error.get("ctx") or {}
         if error.get("type") == "horosa_field":
+            # 模型级前置校验（未声明的 extra 键，如恒星轨前端名 fixedStarOrb）没有 loc，字段名放在 ctx 里。
+            field = ctx.get("field") or field
             entry = {"field": field, "code": ctx.get("code", "tool.invalid_option"), "got": _jsonable(error.get("input")),
                      "expected": ctx.get("expected"), "example": ctx.get("example"), "ask_user": bool(ctx.get("ask_user")),
                      "message": ctx.get("message") or error.get("msg")}

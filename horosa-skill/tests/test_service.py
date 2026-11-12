@@ -3211,13 +3211,14 @@ def test_tianxing_forwards_top_level_classical_options(tmp_path) -> None:
         return original(endpoint, payload)
 
     service.client.call = spy  # type: ignore[method-assign]
-    payload = {**build_sample_payloads()["tianxing"], "combustOrb": 15, "termsVariant": "ptolemy",
+    # termsVariant 用规范值（v0.50.0 起古典口径键过词表：旧的 "ptolemy" 不是任何一档，现在会被拒，见 test_western_vocab）。
+    payload = {**build_sample_payloads()["tianxing"], "combustOrb": 15, "termsVariant": 1,
                "siderealAyanamsa": "fagan_bradley", "precision": "minute"}
     assert service.run_tool("tianxing", payload, save_result=False).ok is True
     assert sent, "没有发出扫描请求"
     first = sent[0]
     assert first["combustOrb"] == 15, "顶层 combustOrb 被丢了"
-    assert first["termsVariant"] == "ptolemy", "顶层 termsVariant 被丢了"
+    assert first["termsVariant"] == 1, "顶层 termsVariant 被丢了"
     # 快照会把 siderealAyanamsa 印出来，所以它必须真的进请求，否则输出在声称一个没用上的设置
     assert first["siderealAyanamsa"] == "fagan_bradley", "siderealAyanamsa 没进请求，但快照会印它"
     assert first["precision"] == "minute", "precision 是个文档化了却没接线的死旋钮"
@@ -3248,7 +3249,7 @@ def test_tianxing_forwards_every_key_the_backend_actually_reads(tmp_path) -> Non
     service.client.call = lambda e, p: (sent.append(p) if e == "/electionscan/scan" else None) or original(e, p)  # type: ignore[method-assign,assignment]
     backend_read_keys = {
         "nodeExaltation": 1, "dignityDebilities": 0, "lotsDocReverse": 1,
-        "orbSystem": "lilly", "luminaryOrbBonus": 2, "customTermsDay": "egyptian",
+        "orbSystem": "byAspect", "luminaryOrbBonus": 10, "customTermsDay": "egyptian",
         "customTermsNight": "ptolemy",
     }
     payload = {**build_sample_payloads()["tianxing"], **backend_read_keys}

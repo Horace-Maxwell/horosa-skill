@@ -51,17 +51,18 @@ def _refusal(result) -> dict:
 
 
 @pytest.mark.parametrize(
-    ("argv", "knob"),
+    ("argv", "knob", "code"),
     [
-        (["tool", "run", "chart", "--stdin"], "sunriseMode"),
-        (["report", "from-tool", "chart", "--format", "json", "--stdin"], "sunriseMode"),
-        (["tool", "run", "draconic", "--stdin"], "draconicHouses"),
+        # sunriseMode 走古典口径词表（v0.50.0 western_vocab）→ tool.invalid_option；draconicHouses 仍是类型层 ValueError。
+        (["tool", "run", "chart", "--stdin"], "sunriseMode", "tool.invalid_option"),
+        (["report", "from-tool", "chart", "--format", "json", "--stdin"], "sunriseMode", "tool.invalid_option"),
+        (["tool", "run", "draconic", "--stdin"], "draconicHouses", "tool.invalid_payload"),
     ],
     ids=["tool-run", "report-from-tool", "draconic"],
 )
-def test_a_validator_rejection_is_exit_2_json_not_a_traceback(service, argv: list[str], knob: str) -> None:
+def test_a_validator_rejection_is_exit_2_json_not_a_traceback(service, argv: list[str], knob: str, code: str) -> None:
     body = _refusal(RUNNER.invoke(C.app, argv, input=json.dumps({**BIRTH, **CONFIRM, knob: "bogus"})))
-    assert body["code"] == "tool.invalid_payload"
+    assert body["code"] == code
     assert any(knob in str(error.get("msg")) or knob in str(error.get("loc")) for error in body["details"]["errors"])
 
 

@@ -158,11 +158,16 @@ def test_horary_top_level_classical_keys_feed_the_global_judge_layer(tmp_path: P
 
 
 def test_horary_invalid_global_enum_is_an_error(tmp_path: Path) -> None:
-    service = _service(tmp_path, RecordingClient(chart_for=lambda p: CHART_TRADITIONAL))
-    result = service.run_tool("horary", {**BIRTH, "vocMode": "no_such_mode"}, save_result=False)
-    assert result.ok is False
-    assert result.error.code == "tool.horary_invalid_setting"
-    assert "vocMode" in result.error.message
+    """顶层古典口径键 v0.50.0 起在 schema 层过词表（western_vocab）：认不出的值在发任何请求之前就拒（tool.invalid_option，
+    options = 全表）。此前由 JS 判读全局层回执 tool.horary_invalid_setting（ok=false 信封）。"""
+    client = RecordingClient(chart_for=lambda p: CHART_TRADITIONAL)
+    service = _service(tmp_path, client)
+    with pytest.raises(ToolValidationError) as info:
+        service.run_tool("horary", {**BIRTH, "vocMode": "no_such_mode"}, save_result=False)
+    assert info.value.code == "tool.invalid_option"
+    assert info.value.details["field"] == "vocMode"
+    assert "by_orb" in [o["value"] for o in info.value.details["options"]]
+    assert client.calls == []
 
 
 def test_horary_self_assessment_and_question_reach_the_snapshot(tmp_path: Path) -> None:

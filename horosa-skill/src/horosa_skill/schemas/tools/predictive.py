@@ -1,9 +1,9 @@
 """推运族输入：返照 / 太阳弧 / 主限 / 小限 / 黄道释放 / 年龄点 / 各类推运 / 星历 / progextra 族 / 多重回归 / 129 年 / 波斯向运 / 法达 / 十年期。"""
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from horosa_skill.schemas.tools.base import BirthInput
 
@@ -259,6 +259,15 @@ class DecennialsInput(BirthInput):
     dayMethod: str | None = "valens"
     calendarType: str | None = "calendar_360"
     aiMode: str | None = "l1_all"
+
+    # v0.50.0：五个口径旋钮各一张词表（western_vocab.DECENNIAL_VOCABULARIES；上游 utils/decennials.js 常量 + AstroDecennials
+    # AI_MODE_ITEMS）。此前认不出的值静默回缺省（引擎 `x or 缺省` / `== 'chaldean' else 黄道序`），[十年大运设置] 却照抄原值。
+    @field_validator("startMode", "orderType", "dayMethod", "calendarType", "aiMode", mode="before")
+    @classmethod
+    def _decennial_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.western_vocab import DECENNIAL_VOCABULARIES, parse_with
+
+        return parse_with(DECENNIAL_VOCABULARIES[info.field_name], info.field_name, value)
     aiL1Idx: int | None = 0
     aiL2Idx: int | None = 0
     aiL3Idx: int | None = 0

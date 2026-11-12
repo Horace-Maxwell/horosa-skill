@@ -82,6 +82,15 @@ class PlanetCyclesInput(FlexibleModel):
     center: str | None = Field(default=None, description="坐标系：geo=地心（缺省）| helio=日心 | topo=站心")
     response_view: str | None = None
 
+    # v0.50.0：星名 / 坐标系过词表（western_vocab.PLANET_CYCLE_VOCABULARIES）——后端对认不出的星名静默换木 / 土、坐标系换地心，
+    # [周期配置] 行却照抄原值。
+    @field_validator("p1", "p2", "center", mode="before")
+    @classmethod
+    def _cycle_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.western_vocab import PLANET_CYCLE_VOCABULARIES, parse_with
+
+        return parse_with(PLANET_CYCLE_VOCABULARIES[info.field_name], info.field_name, value)
+
 
 class IndiaRectifyInput(BirthInput):
     """印度（KP 法）出生时间校正：以给定时刻为锚，在 ±半窗内扫描候选并按判据打分排序。
@@ -308,6 +317,15 @@ class HarmonicInput(BirthInput, _ChartDayBoundaryKnobs):
     harmonic: int | None = 9
     orb: float | None = 2.0
 
+    # v0.50.0：1–360 整数，越界 / 非整数拒（tool.invalid_option）——此前 runner 静默夹成 H1 / H360（0、-3 → H1，1000 → H360）。
+    @field_validator("harmonic", mode="before")
+    @classmethod
+    def _harmonic_range(cls, value: Any) -> Any:
+        from horosa_skill.input_fields import field_validator_for
+        from horosa_skill.western_vocab import parse_harmonic
+
+        return field_validator_for(parse_harmonic, "harmonic")(value)
+
 
 class BabylonInput(BirthInput):
     # 巴比伦占星（美索不达米亚天象体系）：恒星黄道 · 毕宿锚（Aldebaran = 金牛 15°）。
@@ -393,6 +411,15 @@ class MundaneInput(FlexibleModel):
         description="盘型：ingress（默认）/ newmoon / fullmoon / solecl / lunecl / cycles / solunar / vedicmundane / mundanehorary / region（地区盘，配 regionKey）。",
     )
     mhKind: str | None = Field(default=None, description="世运卜卦问类：war 战争（默认）/ weather 天候 / price 物价。")
+
+    @field_validator("mhKind", mode="before")
+    @classmethod
+    def _mundane_horary_kind(cls, value: Any) -> Any:
+        # v0.50.0：vendored mundaneHorary.js 认不出的问类静默按 war（western_vocab.MUNDANE_HORARY_KIND）。
+        from horosa_skill.western_vocab import MUNDANE_HORARY_KIND, parse_with
+
+        return parse_with(MUNDANE_HORARY_KIND, "mhKind", value)
+
     solunarType: str | None = Field(default=None, description="恒星派入境盘型：capsolar（默认）/arisolar/cansolar/libsolar/caplunar/arilunar/canlunar/liblunar。")
     solunarWeights: str | None = Field(default=None, description="恒星派权重方案（scheme_a 默认）。")
     solunarOrb: float | None = Field(default=None, description="角化容许度（默认 3°）。")

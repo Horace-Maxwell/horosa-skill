@@ -803,6 +803,9 @@ def _build_india_rectify_snapshot_text(payload: dict[str, Any], res: dict[str, A
     ])
 
 
+_ZODIAC_SIGN_IDS = ("Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces")
+
+
 def _build_persianchart_section_text(directed: dict[str, Any]) -> str:
     """[指定日期向运盘]（/predict/persianchart，getPersianDirectedByDate 的文本化）。
 
@@ -821,10 +824,13 @@ def _build_persianchart_section_text(directed: dict[str, Any]) -> str:
     for obj in chart.get("objects") or []:
         if not isinstance(obj, dict) or obj.get("id") is None:
             continue
-        sign = _astro_msg(obj.get("sign"))
+        sign_id = obj.get("sign")
+        sign = _astro_msg(sign_id)
         try:
-            signlon = float(obj.get("signlon"))
-            deg, minute = int(signlon), int(round((signlon - int(signlon)) * 60)) % 60
+            # 四舍五入到角分后进位：旧写法 `round(分) % 60` 把 12°59.7′ 写成 12°00′（同 C-10 行星周期的分钟回绕）；满 30° 进下一座。
+            deg, minute = divmod(math.floor(float(obj.get("signlon")) * 60 + 0.5), 60)
+            if deg >= 30 and sign_id in _ZODIAC_SIGN_IDS:
+                deg, sign = deg - 30, _astro_msg(_ZODIAC_SIGN_IDS[(_ZODIAC_SIGN_IDS.index(sign_id) + 1) % 12])
             pos = f"{sign} {deg}°{minute:02d}′"
         except (TypeError, ValueError):
             pos = sign or "—"

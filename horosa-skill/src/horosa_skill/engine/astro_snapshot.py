@@ -372,7 +372,9 @@ def classical_backend_overrides(get_val: Callable[[str], Any]) -> dict[str, Any]
             val = _js_str(raw)
             if val == default or val in aliases:
                 continue
-        if options is not None and not any(
+        # skill 偏离（v0.50.0）：float 键（容许度）不卡档——headless 请求体可给表外的有限数，后端 /chart 与判读层都照算
+        # （上游页面只写得进表内档，所以上游这道卡档不会丢真用了的值）；卡了就成「盘按 9° 算、口径行与 [古典格局] 按缺省」。
+        if value_type != "float" and options is not None and not any(
             (isinstance(o, str) and isinstance(val, str) and o == val)
             or (not isinstance(o, str) and not isinstance(val, str) and float(o) == float(val))
             for o in options
@@ -454,7 +456,10 @@ _CLS_CALIBRE_HEAD_DEFAULTS: dict[str, Any] = {
 
 
 def _calibre_phrase(key: str, value: Any) -> str:
-    """astroAiSnapshot.js:379-385 classicalCalibrePhrase。"""
+    """astroAiSnapshot.js:379-385 classicalCalibrePhrase。
+
+    skill 偏离（v0.50.0）：有取值表（map）而值不在表里时返回 ''（不写），上游会把原值照抄进行里。入参词表
+    （western_vocab）已保证到这里的都是规范值；这道是第二层：「古典口径」行永远只写算法真用了的、有名字的档。"""
     spec = _CLS_CALIBRE_LABELS.get(key)
     if spec is None:
         return f"{key}={_js_str(value)}"
@@ -463,7 +468,18 @@ def _calibre_phrase(key: str, value: Any) -> str:
         return f"{label}={mapping[_js_str(value)]}"
     if fmt is not None:
         return f"{label}={fmt(value)}"
-    return f"{label}={_js_str(value)}"
+    return ""
+
+
+_SPEC_OPTIONS: dict[str, tuple[Any, ...] | None] = {key: options for key, _b, _t, _d, _a, options in CLASSICAL_PARAM_SPEC_NON_DEFAULT}
+
+
+def _in_spec_options(key: str, value: Any) -> bool:
+    options = _SPEC_OPTIONS.get(key)
+    if options is None:
+        return True
+    return any((isinstance(o, str) and o == value) or (not isinstance(o, str) and not isinstance(value, str) and float(o) == float(value))
+               for o in options)
 
 
 def build_classical_calibre_line(fields: Any) -> str:
@@ -480,7 +496,7 @@ def build_classical_calibre_line(fields: Any) -> str:
             norm = int(norm)
         else:
             norm = _js_str(value)
-        if norm != default:
+        if norm != default and _in_spec_options(key, norm):
             parts.append(_calibre_phrase(key, norm))
     overrides = classical_backend_overrides_from_fields(fields)
     custom_terms_noted = False
@@ -496,6 +512,7 @@ def build_classical_calibre_line(fields: Any) -> str:
             continue
         front = "fixedStarOrb" if key == "starOrb" else ("fixedStarOrbMode" if key == "starOrbMode" else key)
         parts.append(_calibre_phrase(front, value))
+    parts = [part for part in parts if part]
     if not parts:
         return ""
     return f"古典口径（非默认项）：{'；'.join(parts)}。"
