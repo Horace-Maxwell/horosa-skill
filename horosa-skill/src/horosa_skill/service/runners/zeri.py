@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from horosa_skill.civil_calendar import _to_slash_date
+from horosa_skill.civil_calendar import _ad_of_date, _to_slash_date
 from horosa_skill.engine.js_client import engine_timeout_at_least
 from horosa_skill.errors import (
     HorosaSkillError,
@@ -508,6 +508,8 @@ class ZeriRunners:
             **qimen_payload,
             "date": pan_date or start_date,
             "time": pan_time or start_time or "00:00:00",
+            # 派生盘的纪元随它自己的时刻（chartAtMoment / 后端 reset_ad_for_date）：沿用调用方的 ad=-1 会把公元后的命中时刻当公元前起盘。
+            "ad": _ad_of_date(pan_date or start_date),
         })
         extra = self.js_client.run(
             "qimenzeri",
@@ -794,6 +796,9 @@ class ZeriRunners:
                                      "nongli", "jieqi_year_prev", "jieqi_year_current")}
         base_payload["date"] = pan_date or start_date
         base_payload["time"] = pan_time or start_time or "00:00:00"
+        # 派生盘的纪元随它自己的时刻（chartAtMoment / 后端 reset_ad_for_date）：调用方的 ad 不跟到命中时刻上——入口会把
+        # ad=-1 + 不带负号的日期改写成公元前，公元后的命中时刻就被当成公元前（老黄历择日因此铸盘失败）。
+        base_payload["ad"] = _ad_of_date(base_payload["date"])
         # 展示盘跟随**扫描口径**（上游 v3.11「所见行=所判口径」：各宿主 buildFields/applyWorkbenchCalibre
         # 把冻结的扫描 options 回写进 pick 后的显示盘）。此前 base_payload 丢掉 options、只剩顶层 →
         # options 里给的时间算法/贵人/日界对展示盘全无效，且缺省时展示盘走基底工具自己的缺省
@@ -914,6 +919,7 @@ class ZeriRunners:
                                      "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
                                      "su28Mode", "nodeType", "lilithType", "fuOrb")}
         base_payload.update({"date": pan_date or start_date,
+                             "ad": _ad_of_date(pan_date or start_date),  # 派生盘纪元随自己的时刻
                              "time": pan_time or start_time or "00:00:00",
                              "agent_confirmed_settings": True,
                              "clarification_notes": f"{tool_name} selected-moment sub-chart"})

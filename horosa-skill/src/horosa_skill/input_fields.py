@@ -617,6 +617,70 @@ def parse_gender(value: Any) -> Parsed:
     )
 
 
+# ───────────────────────── 纪元（ad）与日界开关 ─────────────────────────
+
+_ERA_WORDS = {
+    1: ("1", "+1", "ad", "ce", "公元", "公元后", "西元"),
+    -1: ("-1", "bc", "bce", "公元前", "西元前", "前"),
+}
+ERA_OPTIONS = [{"value": 1, "label": "1 = 公元（AD）"}, {"value": -1, "label": "-1 = 公元前（BC）"}]
+
+
+def parse_era(value: Any) -> Parsed:
+    """`ad` / `guaAd`：1 公元 / -1 公元前。0 拒：上游 DateTime 的公元前是 ad=0，而 Python 后端 `int(ad or 1)` 把 0 读成公元——两种读法相反。
+    （不走 Vocabulary：它的键会去掉「-」，'-1' 会被读成 1。）"""
+    if isinstance(value, bool):
+        raise _era_issue(value)
+    if isinstance(value, (int, float)) and value in (1, -1):
+        return Parsed(int(value))
+    if isinstance(value, str):
+        key = clean_text(value).lower().replace(" ", "").replace(".", "")
+        for era, words in _ERA_WORDS.items():
+            if key in words:
+                plain = key in ("1", "-1")
+                return Parsed(era) if plain else Parsed(era, f"纪元「{value}」按 ad={era} 读。", f"Era '{value}' was read as ad={era}.")
+    raise _era_issue(value)
+
+
+def _era_issue(value: Any) -> FieldIssue:
+    return FieldIssue(
+        "tool.invalid_option", f"ad 认不出 {value!r}：只收 1（公元）或 -1（公元前）。", f"Unrecognized ad {value!r}: only 1 (AD) or -1 (BC).",
+        expected_zh="1 = 公元，-1 = 公元前（或把日期写成带负号的 -0500-03-21）", expected_en="1 = AD, -1 = BC (or write the date with a leading minus, -0500-03-21)",
+        example=1, options=ERA_OPTIONS,
+    )
+
+
+# 日界两开关（上游全局出厂缺省 1 / 1：dayBoundary.js defaultAfter23NewDay / defaultLateZiHourUseNextDay）。
+DAY_SWITCH_KEYS = ("after23NewDay", "lateZiHourUseNextDay")
+DAY_SWITCH_DEFAULTS = {"after23NewDay": 1, "lateZiHourUseNextDay": 1}
+_DAY_SWITCH_LABELS = {
+    "after23NewDay": {1: "23 点换日（日柱进次日，缺省）", 0: "24 点换日"},
+    "lateZiHourUseNextDay": {1: "晚子时时干按次日日干起（缺省）", 0: "晚子时时干按当日日干起"},
+}
+_DAY_SWITCH_WORDS = {1: ("1", "true", "yes", "on", "是"), 0: ("0", "false", "no", "off", "否")}
+
+
+def parse_day_switch(value: Any, *, field_name: str = "after23NewDay") -> Parsed:
+    """日界 / 晚子时开关 → 0 / 1。旧做法「不是 1 / true 就当 0」把 'bogus'、2 都悄悄读成 24 点换日。"""
+    labels = _DAY_SWITCH_LABELS.get(field_name, _DAY_SWITCH_LABELS["after23NewDay"])
+    if isinstance(value, bool):
+        return Parsed(1 if value else 0)
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return Parsed(int(value))
+    if isinstance(value, str):
+        key = clean_text(value).lower()
+        for switch, words in _DAY_SWITCH_WORDS.items():
+            if key in words:
+                return Parsed(switch)
+    pairs = " ".join(f"{v}={label}" for v, label in labels.items())
+    raise FieldIssue(
+        "tool.invalid_option", f"{field_name} 认不出 {value!r}：只收 1 / 0（或 true / false）。",
+        f"Unrecognized {field_name} {value!r}: only 1 / 0 (or true / false).",
+        expected_zh="可选值：" + pairs, expected_en="accepted values: " + pairs, example=1,
+        options=[{"value": v, "label": label} for v, label in labels.items()],
+    )
+
+
 # ───────────────────────── 宫制 / 黄道 ─────────────────────────
 
 def _name_key(text: str) -> str:

@@ -271,6 +271,10 @@ def _civil_instant_ms_of_str(text: Any) -> float | None:
     return ms + (civil - greg) * _MS_PER_DAY
 
 
+# 本地历法引擎 lunar-javascript 的可靠域（上游 vendor/bazi/lunarDomainGuard.js LUNAR_JS_MIN_YEAR / LUNAR_JS_MAX_YEAR）。
+LUNAR_JS_MIN_YEAR, LUNAR_JS_MAX_YEAR = 1, 9999
+
+
 def _parse_date_parts(text: Any) -> tuple[int, int, int] | None:
     """dateStrSafe.parseDateParts：'YYYY-MM-DD' / '-YYYY/MM/DD' / 带时间尾巴 → (带符号年, 月, 日)；认不出 → None。"""
     if text is None:

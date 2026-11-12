@@ -207,7 +207,7 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 - **命盘日期一律经 `horosa_skill/civil_calendar.py`（v0.46.0）**：上游 v3.12.0 把日期收口到 civilCalendar / civilMoment /
   dateStrSafe（1582-10-15 前儒略历、无 0 年、公元前前导负号、1–6 位年）；Python `datetime` 只认外推格里历 1–9999 年。禁止对命盘
   日期新写 `strptime` / `fromisoformat` / `datetime + timedelta` / `[:4]` / `replace("-", "/")` / `len()==10`——公元前会被 try 吞成
-  「无数据」，1500 年静默差一天；派生请求的 `ad` 随时刻本身（chartAtMoment）。值对拍用上游源在 node 里跑（`tests/test_sync313_historical.py`）。
+  「无数据」，1500 年静默差一天；派生请求的 `ad` 随时刻本身（chartAtMoment；技法内部再调技法的展示盘也一样，见 `zeri._ad_of_date` 三处）。值对拍用上游源在 node 里跑（`tests/test_sync313_historical.py`）。
   **调用方给的目标日 / 区间日也算（v0.47.0）**：`PredictiveRunners._astroextra_date` 曾是四位年正则 + `datetime()`，公元前本命盘一给
   targetDate / 星历区间就报「不是合法日期」，区间先后又是字符串比较（`'-0400…' < '-0500…'`）——校验用 `_civil_ymd_exists`、输出
   `_format_signed_date`、比较用 `_civil_jdn`（`tests/test_sync3131_civil_dates.py`）。
@@ -457,6 +457,11 @@ birth / subject / context、natal、davison）、`horosa_tool_run`、dispatch / 
 `_merge_mcp_arguments` 接回 SDK 丢掉的未声明顶层键（schema 写的是 `additionalProperties: true`，行为与之一致）；`_gated_run` 第一步
 `precheck_arguments`（确认位必须是 JSON 布尔、坏字段先于闸门问卷）。**枚举类旋钮一律用 `input_fields.Vocabulary` + `field_validator_for`
 挂 pydantic BeforeValidator**（宫制 / 黄道 / 合参 tools 已用；错误码 `tool.invalid_option` 等，`options` 是全表）——不要再写 `payload.get(k) or 缺省`。
+**中式技法的入口形态（v0.50.0，台账 2026-11-12「中式技法：同一个输入…」）**：日界两开关写在顶层或 options / 三式合一三层口径里都行，入口
+`_lift_day_switches` 合成**一个**顶层值（不同 → `tool.field_conflict`，只收 1 / 0）；远端只发显式值（缺省 = 引擎缺省 1 / 1），快照 / JS 标签吃
+`options_cn._resolved_day_switches` 补了缺省的同一值——盘头与正文由 live 全目录守卫对拍。公元前只有一种写法：`_fold_era` 把 `ad=-1` + 不带负号的日期改成
+带负号日期（`ad` 只收 1 / -1）。中式枚举设置进 `cn_vocab.py`（规范值锚到 adapter / 上游选项源码），别在 adapter 写 `x === 'a' ? 'a' : 缺省`；
+起课输入（nums / counts / 卦名）给了用不了就 `tool.<技法>_invalid_cast`，结果带 `cast_method`；本地历法域外 `tool.date_range_unsupported`。
 
 ### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
 

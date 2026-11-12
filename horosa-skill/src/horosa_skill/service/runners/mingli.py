@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
+from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual, tool_code
 from horosa_skill.service._common import (
     _civil_wall_ms_of_moment,
     _GANZHI_BRANCHES,
@@ -350,19 +350,36 @@ class MingliRunners:
             "export_snapshot": self._augment_export_payload(technique="ziwei", snapshot_text=text),
         }
 
+    _TONGSHEFA_DEFAULT_SELECTION = {"taiyin": "巽", "taiyang": "坤", "shaoyang": "震", "shaoyin": "震"}  # 上游 TongSheFaCore DEFAULT_SELECTION
+
     def _run_tongshefa_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        js_result = self.js_client.run("tongshefa", payload)
+        # 四轴取值已在 schema 按卦名词表判过（认不出的拒）。没给的轴按上游缺省选择起，并说出来：以前整盘悄悄用 巽 / 坤 / 震 / 震，
+        # 结果里看不出那是缺省而不是用户的选择。
+        defaulted = [axis for axis in self._TONGSHEFA_DEFAULT_SELECTION if payload.get(axis) is None]
+        selection = {axis: payload.get(axis) or default for axis, default in self._TONGSHEFA_DEFAULT_SELECTION.items()}
+        js_result = self.js_client.run("tongshefa", {**payload, **selection})
         snapshot_text = js_result.get("snapshot_text")
-        return {
+        result: dict[str, Any] = {
             "tongshefa": js_result.get("data", {}),
+            # given = 四轴都是调用方给的；default = 全部按上游缺省选择；partial = 部分轴按缺省（selection_defaulted 列出）
+            "selection_source": "given" if not defaulted else ("default" if len(defaulted) == 4 else "partial"),
+            "selection_defaulted": defaulted,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tongshefa", snapshot_text=snapshot_text),
         }
+        if defaulted:
+            names = "、".join(f"{axis}={selection[axis]}" for axis in defaulted)
+            result["_warnings"] = [bilingual(
+                f"统摄法：{'、'.join(defaulted)} 没有给，按上游缺省选择起卦（{names}）——这几轴不是用户选的卦。",
+                f"tongshefa: {', '.join(defaulted)} not given; the upstream default selection was used ({names}); those axes were not chosen by the user.",
+            )]
+        return result
 
     def _run_canping_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # canping is computed entirely in-process by horosa-core-js (bazi chain → 金锁银匙 起数),
         # not the ken backend. The JS returns the canping model + the 星阙-identical snapshot text.
         js_result = self.js_client.run("canping", payload)
+        _raise_if_insufficient("canping", js_result)
         snapshot_text = js_result.get("snapshot_text")
         return {
             "canping": js_result.get("data", {}),
@@ -375,6 +392,7 @@ class MingliRunners:
         # heluo (河洛理数) is also a 原生·非 ken tool: the JS computes the chart (起命/先天/后天), 大限/
         # 岁运, and 命运篇 judge in-process and returns the 星阙-identical snapshot text.
         js_result = self.js_client.run("heluo", payload)
+        _raise_if_insufficient("heluo", js_result)
         snapshot_text = js_result.get("snapshot_text")
         return {
             "heluo": js_result.get("data", {}),
@@ -400,11 +418,8 @@ class MingliRunners:
                 code="tool.bazi_inverse_invalid_pillars",
                 details={"pillars": cleaned, "invalid": bad, "hint": "pillars=['甲子','丙寅','戊辰','庚申'] 或 year/month/day/hour 四键"},
             )
-        count = payload.get("count")
-        try:
-            count = max(1, min(10, int(count if count is not None else 3)))
-        except (TypeError, ValueError):
-            count = 3
+        # count 已在 schema 判过（1–10 的整数，越界 / 读不出 → tool.invalid_option；以前悄悄夹到 1–10、读不出当 3）。
+        count = int(payload.get("count") or 3)
         desc = payload.get("desc")
         desc = True if desc is None else bool(desc)
         remote_payload: dict[str, Any] = {
@@ -443,6 +458,7 @@ class MingliRunners:
         # 一掌经：原生·非 ken 工具，JS 进程内完成 农历解析→四柱四宫→命宫/人事十二宫→格局/重犯/
         # 大限/小限流年十二神（+可选神煞合参层），返回引擎自产快照（段头已转 [段名]）。
         js_result = self.js_client.run("yizhangjing", payload)
+        _raise_if_insufficient("yizhangjing", js_result)
         snapshot_text = js_result.get("snapshot_text")
         return {
             "yizhangjing": js_result.get("data", {}),
@@ -520,3 +536,28 @@ class MingliRunners:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="tongshu", snapshot_text=snapshot_text),
         }
+
+
+def _raise_if_insufficient(tool: str, js_result: Any) -> None:
+    """河洛 / 参评 / 一掌经的本地引擎读不了输入时回 data.ok=false + 空快照；以前 runner 照样回 ok=true，导出里每段都是
+    「本次本地计算结果未返回…」的占位（公元前生日就这样出过一份空盘）。现在照实拒绝。"""
+    data = js_result.get("data") if isinstance(js_result, dict) else None
+    if not isinstance(data, dict) or data.get("ok") is not False:
+        return
+    message = f"{data.get('message') or ''}".strip()
+    if "本地速算不适用" in message:  # vendor/bazi/lunarDomainGuard.lunarDomainNotice：域外（公元前 / 万年后）
+        raise ToolValidationError(
+            bilingual(
+                f"`{tool}` 的本地历法引擎只算公元 1–9999 年（lunar-javascript 可靠域）：{message}",
+                f"`{tool}` runs on a local calendar engine that only covers AD 1–9999 (lunar-javascript's reliable range): {message}",
+            ),
+            code="tool.date_range_unsupported",
+            details={"tool": tool, "reason": data.get("reason"), "engine_message": message,
+                     "accepted": {"min_year": 1, "max_year": 9999}, "engine": "lunar-javascript"},
+        )
+    raise ToolValidationError(
+        bilingual(f"`{tool}` 起盘所需的输入不足或读不了：{message or data.get('reason')}",
+                  f"`{tool}` could not cast from the given input: {message or data.get('reason')}"),
+        code=tool_code(tool, "missing_inputs"),
+        details={"tool": tool, "reason": data.get("reason"), "engine_message": message},
+    )

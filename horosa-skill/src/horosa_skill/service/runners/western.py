@@ -9,6 +9,7 @@ from horosa_skill.astro_rulers import (
     DRACONIC_HOUSE_MODES,
 )
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
+from horosa_skill.civil_calendar import _parse_date_parts
 from horosa_skill.engine.astroextra_snapshots import fmt_num
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
 from horosa_skill.schemas.tools.astro import INDIA_RECTIFY_DEAD_KEYS
@@ -447,13 +448,13 @@ class WesternRunners:
                       "datetime", "dirZone", "dirLat", "dirLon"):
             chart_payload.pop(stale, None)
         chart = self._call_remote("/chart", chart_payload)
-        date_text = f"{payload.get('date') or ''}".replace("/", "-")
-        parts = date_text.split("-")
-        try:
-            year, month, day = int(parts[0]), int(parts[1]), int(parts[2][:2])
-        except (IndexError, ValueError):
-            raise ToolValidationError(f"Invalid date for tool `babylon`: {payload.get('date')!r}") from None
-        if f"{payload.get('ad', 1)}" in {"-1", "0"}:
+        # 带符号年（上游 dateStrSafe.parseDateParts）：公元前在入口统一成 '-0500-03-21'（input_normalization._fold_era）。
+        # 旧 split('-') 把前导负号切成空段 → 公元前日期一律「Invalid date」。
+        parsed_date = _parse_date_parts(payload.get("date"))
+        if parsed_date is None:
+            raise ToolValidationError(f"Invalid date for tool `babylon`: {payload.get('date')!r}")
+        year, month, day = parsed_date
+        if f"{payload.get('ad', 1)}" == "-1":
             year = -abs(year)  # 公元前：同上游 babylonBirthJdn 的 signedYear 分支
         ephemeris = None
         try:

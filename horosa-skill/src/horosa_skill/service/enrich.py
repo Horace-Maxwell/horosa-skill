@@ -9,6 +9,7 @@ from horosa_skill import __version__
 from horosa_skill import predictive_text as _ptext
 from horosa_skill.decisions.layer import current_decision_records
 from horosa_skill.engine.registry import CLASSICAL_ANALYSIS_TOOLS, EGYPT_AXIS_KEYS, TOOL_DEFINITIONS
+from horosa_skill.civil_calendar import LUNAR_JS_MAX_YEAR, LUNAR_JS_MIN_YEAR, _parse_date_parts
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.reports.technique_card import build_technique_card
 from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
@@ -712,11 +713,23 @@ class EnrichMixin:
 
     @staticmethod
     def _split_ymd(value: Any, *, tool: str) -> tuple[int, int, int]:
-        parts = f"{value or ''}".replace("/", "-").split("-")
-        try:
-            return int(parts[0]), int(parts[1]), int(parts[2][:2])
-        except (IndexError, ValueError):
-            raise ToolValidationError(f"Invalid date for tool `{tool}`: {value!r}") from None
+        """老黄历 / 通书：纯前端 lunar-javascript 推演，可靠域只有公元 1–9999 年（上游 lunarDomainGuard：域外不报错但节气错位、
+        干支静默算错）。带符号年按 parseDateParts 读；域外明确拒绝——以前公元前写法报「Invalid date」，ad=-1 写法被悄悄当公元算。"""
+        parts = _parse_date_parts(value)
+        if parts is None:
+            raise ToolValidationError(f"Invalid date for tool `{tool}`: {value!r}")
+        if not LUNAR_JS_MIN_YEAR <= parts[0] <= LUNAR_JS_MAX_YEAR:
+            raise ToolValidationError(
+                bilingual(
+                    f"`{tool}` 只能算公元 {LUNAR_JS_MIN_YEAR}–{LUNAR_JS_MAX_YEAR} 年（本地历法引擎 lunar-javascript 的可靠域；域外节气错位、干支会静默算错）：收到 {value!r}。",
+                    f"`{tool}` only covers AD {LUNAR_JS_MIN_YEAR}–{LUNAR_JS_MAX_YEAR} (the reliable range of its lunar-javascript calendar engine; "
+                    f"outside it solar terms shift and the stems and branches come out silently wrong): got {value!r}.",
+                ),
+                code="tool.date_range_unsupported",
+                details={"tool": tool, "date": value, "accepted": {"min_year": LUNAR_JS_MIN_YEAR, "max_year": LUNAR_JS_MAX_YEAR},
+                         "engine": "lunar-javascript"},
+            )
+        return parts
 
     def _attach_calendar_extras(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         """黄历页的三个子模块段块（老黄历 8 段 + 通书择日 + 日子馆 2 段）。

@@ -32,6 +32,7 @@ from horosa_skill.schemas.tools.base import (
 from horosa_skill.schemas.tools.cn_divination import (
     FeiGongInput,
     GeomancyInput,
+    GuaMeiyiInput,
     GuaNamesInput,
     GuiceInput,
     JinKouInput,
@@ -174,6 +175,7 @@ __all__ = [
     "FlexibleModel",
     "GeomancyInput",
     "GermanyInput",
+    "GuaMeiyiInput",
     "GuaNamesInput",
     "GuiceInput",
     "GuoLaoInput",

@@ -61,7 +61,14 @@ class CnDivinationRunners:
         # （农历月 monthInt / 农历日 dayInt / 时支序 三数，前置 /nongli/time 派生，JS 层不发 HTTP，AGENTS §4）。
         nums = payload.get("nums")
         time_lines: list[str] = []
-        if not (isinstance(nums, list) and len(nums) == 3):
+        # 给了 nums 却用不了（不是三个正整数）→ 拒；以前悄悄改成以时起课，盘头却照写所问（v0.50.0 六爻同族清扫）。
+        if nums not in (None, []) and not _xiaoliuren_nums_ok(nums):
+            raise _cast_issue("xiaoliuren", "nums", nums,
+                              "nums 要正好三个正整数 [月, 日, 时]（如 [5, 20, 7]）；都不给就按占时起课。",
+                              "nums must be exactly three positive integers [month, day, hour] (e.g. [5, 20, 7]); give none to cast by time.",
+                              example=[5, 20, 7])
+        cast_method = "nums" if nums not in (None, []) else "time"
+        if cast_method == "time":
             _require_cast_geo(payload, tool="xiaoliuren")
             nongli = self._call_remote(
                 "/nongli/time",
@@ -104,9 +111,17 @@ class CnDivinationRunners:
                 "timeLines": time_lines,
             },
         )
+        data = js_result.get("data", {})
+        if isinstance(data, dict) and data.get("ok") is False:
+            raise ToolValidationError(
+                bilingual(f"小六壬起课失败：{data.get('message') or data.get('reason')}", f"xiaoliuren could not cast: {data.get('message') or data.get('reason')}"),
+                code="tool.xiaoliuren_cast_unavailable", details={"reason": data.get("reason"), "nums": nums},
+            )
         snapshot_text = js_result.get("snapshot_text")
         return {
-            "xiaoliuren": js_result.get("data", {}),
+            "xiaoliuren": data,
+            # 起课方式（同六爻 data.cast_method）：nums 用调用方给的三数 / time 以占时起（农历月 · 日 · 时支序）
+            "cast_method": cast_method,
             "input_normalized": js_result.get("input_normalized", {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="xiaoliuren", snapshot_text=snapshot_text),
@@ -162,7 +177,7 @@ class CnDivinationRunners:
                 "dayGan": day_gan,
                 "dayZhi": day_zhi,
                 "mingAge": payload.get("mingAge"),
-                "mingGender": payload.get("mingGender", "male"),
+                "mingGender": _feigong_ming_gender(payload),
                 "liuYueMonth": payload.get("liuYueMonth"),
                 "koujing": payload.get("koujing", "zheng"),
                 "askEvent": payload.get("askEvent") or payload.get("question") or "",
@@ -448,9 +463,13 @@ class CnDivinationRunners:
         # （TarotMain.js:97-108）：name|date|time|lat|lon 取非空项以 | 相连（全空 → 'horosa-tarot-default'）；
         # 显式 seed 覆盖。此前 skill 用 yyyyMMddHHmm，与上游同一盘抽出不同的牌（sync311 F10）。
         seed = payload.get("seed")
+        # 抽牌方式（同六爻 data.cast_method）：seed 显式种子 / birth_fields 由 name|date|time|lat|lon 派生（同人同刻同地同牌）/
+        # default_seed 固定种子（只有内部调用缺全部字段时；BirthInput 要求日期地点，入口调用到不了这一档）。
+        cast_method = "seed"
         if seed is None or f"{seed}".strip() == "":
             parts = [f"{payload.get(k)}".strip() for k in ("name", "date", "time", "lat", "lon") if payload.get(k) not in (None, "")]
             seed = "|".join(p for p in parts if p) or "horosa-tarot-default"
+            cast_method = "birth_fields" if parts else "default_seed"
         js_payload: dict[str, Any] = {
             "seed": str(seed),
             "question": payload.get("question") or "",
@@ -495,6 +514,7 @@ class CnDivinationRunners:
             "deck": (isinstance(result, dict) and result.get("deck")) or js_payload["deck"],
             "spread": (isinstance(result, dict) and result.get("spread")) or js_payload.get("spread"),
             "seed": str(seed),
+            "cast_method": cast_method,
             "params_applied": list(data.get("params_applied") or []),
             "params_ignored": ignored,
             "snapshot_text": snapshot_text,
@@ -522,8 +542,17 @@ class CnDivinationRunners:
             "category": payload.get("category") or "general",
             "timeLines": self._lingqi_time_lines(payload, parts),
         }
-        if isinstance(payload.get("counts"), list):
-            js_payload["counts"] = payload["counts"]
+        counts = payload.get("counts")
+        if counts not in (None, []):
+            # 冻结卦：[上, 中, 下] 三层正面枚数各 0–4。给了却用不了 → 拒；以前 JS 悄悄改成按占时重掷（长度不对 / 非数字），
+            # 越界值悄悄夹到 0–4。
+            if not (isinstance(counts, list) and len(counts) == 3
+                    and all(isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= 4 for n in counts)):
+                raise _cast_issue("lingqi", "counts", counts,
+                                  "counts 要正好三个 0–4 的整数 [上, 中, 下]（各层正面枚数）；都不给就按占时起卦。",
+                                  "counts must be exactly three integers 0–4 [upper, middle, lower] (face-up pieces per row); give none to cast by time.",
+                                  example=[2, 3, 1])
+            js_payload["counts"] = counts
         if isinstance(payload.get("zhuVisible"), dict):
             js_payload["zhuVisible"] = payload["zhuVisible"]
         # 六戊日提示（卷首「六戊日不宜占卜」）需要日干支。走本仓 nongli 后端拿，**不**在 JS 侧引
@@ -536,6 +565,8 @@ class CnDivinationRunners:
         result = self.js_client.run("lingqi", js_payload)
         snapshot_text = result.get("snapshot_text")
         return {
+            # 起卦方式（同六爻 data.cast_method）：counts 照调用方给的冻结卦复排 / time 以占时种子掷
+            "cast_method": "counts" if "counts" in js_payload else "time",
             "counts": result.get("counts") or js_payload.get("counts"),
             "seed": result.get("seed") or None,
             "category": js_payload["category"],
@@ -548,7 +579,7 @@ class CnDivinationRunners:
         """[起盘信息] 的占时行。上游由 UI 拼，headless 这边按归一化输入如实拼一行。"""
         zone = f"{payload.get('zone') or ''}".strip()
         stamp = (
-            f"{parts['year']:04d}-{parts['month']:02d}-{parts['day']:02d} "
+            f"{'-' if parts['year'] < 0 else ''}{abs(parts['year']):04d}-{parts['month']:02d}-{parts['day']:02d} "
             f"{parts['hour']:02d}:{parts['minute']:02d}"
         )
         return [f"占时：{stamp}{f'（{zone}）' if zone else ''}"]
@@ -594,8 +625,12 @@ class CnDivinationRunners:
                 details={"profile": profile, "chartMode": chart_mode,
                          "cultural_notice": "Ifá 为独立圣传体系，仅结构同构对照，不套地占含义、不构成占断。"},
             )
-        if profile not in _GEOMANCY_PROFILES:
-            profile = "european_classical"
+        if profile not in _GEOMANCY_PROFILES:  # schema 词表已拒；这里只是第二道闸，不再悄悄换成 european_classical
+            raise ToolValidationError(
+                bilingual(f"天文地占传本 {profile!r} 不存在。", f"Unknown geomancy profile {profile!r}."),
+                code="tool.invalid_option",
+                details={"field": "profile", "got": profile, "accepted": list(_GEOMANCY_PROFILES)},
+            )
         question_type = f"{payload.get('questionType') or 'custom'}".strip() or "custom"
         if question_type not in _GEOMANCY_QUESTION_TYPES:
             raise ToolValidationError(
@@ -864,3 +899,36 @@ class CnDivinationRunners:
             result["_warnings"] = warnings
         result["export_snapshot"] = self._augment_export_payload(technique="sixyao", snapshot_text=snapshot_text)
         return result
+
+
+def _feigong_ming_gender(payload: dict[str, Any]) -> str:
+    """飞宫命宫的性别：`mingGender`（schema 已用同一个性别解析器读成 1 / 0），没给时读 `gender`；都没给按男（上游缺省）。
+    两个都给了且不同 → tool.field_conflict。feigong.js 只认字面 'female'，所以这里交出去的一律是 'male' / 'female'。"""
+    from horosa_skill.input_normalization import field_issues_error
+
+    ming, gender = payload.get("mingGender"), payload.get("gender")
+    if ming is not None and gender is not None and int(ming) != int(gender):
+        raise field_issues_error([{
+            "field": "mingGender", "code": "tool.field_conflict", "got": ming,
+            "expected": bilingual("mingGender 与 gender 只给一个（或给同一个性别）", "give mingGender or gender, not two different genders"),
+            "example": 0, "ask_user": True, "options": [{"value": 1, "label": "男 / male"}, {"value": 0, "label": "女 / female"}],
+            "message": bilingual(f"飞宫命主性别给了两个不同的值：mingGender={ming!r}、gender={gender!r}。",
+                                 f"The feigong native's gender was given twice with different values: mingGender={ming!r}, gender={gender!r}."),
+        }])
+    chosen = ming if ming is not None else gender
+    return "female" if chosen is not None and int(chosen) == 0 else "male"
+
+
+def _xiaoliuren_nums_ok(nums: Any) -> bool:
+    return isinstance(nums, list) and len(nums) == 3 and all(isinstance(n, int) and not isinstance(n, bool) and n >= 1 for n in nums)
+
+
+def _cast_issue(tool: str, field: str, got: Any, zh: str, en: str, *, example: Any) -> Any:
+    """「给了起课输入却用不了」（v0.50.0，与六爻 tool.sixyao_invalid_cast 同形）：逐字段错误，绝不悄悄改成以时起课。"""
+    from horosa_skill.errors import tool_code
+    from horosa_skill.input_normalization import field_issues_error
+
+    return field_issues_error([{
+        "field": field, "code": tool_code(tool, "invalid_cast"), "got": got if isinstance(got, (str, int, float, bool, type(None))) else repr(got),
+        "expected": bilingual(zh, en), "example": example, "ask_user": False, "message": bilingual(zh, en),
+    }])

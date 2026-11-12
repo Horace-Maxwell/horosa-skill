@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from horosa_skill.cn_vocab import cn_field_validator
 from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _unadvertised
 
 
@@ -33,6 +34,8 @@ class ZiWeiBirthInput(FlexibleModel):
     # 晚子时时柱开关：None=不发送（沿用后端默认 1=时干按次日日干起子时）；显式 0/1 全链穿透。
     lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = Field(default=0, description="0=真太阳时（默认）1=直接时间")
+    # v0.50.0：只有两档（3 = 平太阳时按真太阳时算并说明，同上游）；其余值拒——旧 runner 把 2 悄悄读成真太阳时。
+    _vocab = cn_field_validator("ziwei_birth", "timeAlg")
     # 旧入参：原样四化表 {干:[禄,权,科,忌]} ≡ 上游 sihuaSchool=custom + sihuaCustomTable（_run_ziwei_tool 映射）。
     sihua: dict[str, list[str]] | None = None
     ad: int | None = 1
@@ -237,10 +240,13 @@ class TongshuInput(FlexibleModel):
 
 
 class TongSheFaInput(FlexibleModel):
-    taiyin: str | None = "巽"
-    taiyang: str | None = "坤"
-    shaoyang: str | None = "震"
-    shaoyin: str | None = "震"
+    # 四轴各取一卦（乾兑离震巽坎艮坤；繁体 / 拼音 / ☰ 符号也认，cn_vocab）。认不出的拒（此前悄悄换成上游缺省选择）；
+    # 没给的轴按上游缺省选择 巽 / 坤 / 震 / 震 起，并在 warnings 与 data.selection_source 里说明（缺省值是用户没选的那一轴）。
+    taiyin: str | None = None
+    taiyang: str | None = None
+    shaoyang: str | None = None
+    shaoyin: str | None = None
+    _vocab = cn_field_validator("tongshefa", "taiyin", "taiyang", "shaoyang", "shaoyin")
 
 
 class CanPingInput(FlexibleModel):
@@ -266,6 +272,7 @@ class CanPingInput(FlexibleModel):
     # 'baziStyle'(节气起运，与八字盘同源)。镜像上游 aiAnalysisContext.js:1903 的每技法设置；
     # 上游 [Win-D69] 记的正是「页面选了档、挂载不传 → 挂载恒回落默认档+一岁起」这个 bug。
     dayunRule: str | None = None
+    _vocab = cn_field_validator("canping", "method", "timeAlg")
 
 
 class HeLuoInput(FlexibleModel):
@@ -295,6 +302,7 @@ class HeLuoInput(FlexibleModel):
     quHuaGong: str | None = Field(default=None, description="取化工 tuWangKunGen/siFangBoOnly")
     # 纪年基准（黄帝纪元差，缺省 2697，0 可达）→ [断验] 纪年行
     huangdiOffset: int | None = Field(default=None, description="黄帝纪元差(缺省2697)")
+    _vocab = cn_field_validator("heluo", "ziShuMode", "jiGongMode", "pureGanKunVariant", "liunianStep2", "quHuaGong", "zhiZunEnabled", "timeAlg")
 
 
 class YizhangjingInput(FlexibleModel):
@@ -335,6 +343,8 @@ class YizhangjingInput(FlexibleModel):
     # 折半法与品级变体（缺省字节不变；vendor/yizhangjing/yizhangjingReport.js）：
     leapRule: str | None = None  # 'half'★ 十五折半 | 'midnight' 夜半折半（十五日晚子时作下月）
     gradeSet: str | None = None  # 'standard'★ | 'variant' 品级变体表
+    _vocab = cn_field_validator("yizhangjing", "dingYue", "shunniRule", "mingGongMethod", "dayunLength", "dayunStartAge", "xiaoxianStart",
+                                "xiaoxianDir", "annualMethod", "flowShenSet", "chongfanKou", "starNaming", "daoTerm", "leapRule", "gradeSet", "timeAlg")
 
 
 class BaziInverseInput(FlexibleModel):
@@ -346,5 +356,13 @@ class BaziInverseInput(FlexibleModel):
     day: str | None = None
     hour: str | None = None
     count: int | None = Field(default=3, description="候选时刻数量（1–10，默认 3）。")
+
+    @field_validator("count", mode="before")
+    @classmethod
+    def _count_range(cls, value: Any) -> Any:
+        from horosa_skill.cn_vocab import parse_int_in_range
+        from horosa_skill.input_fields import field_validator_for
+
+        return None if value is None else field_validator_for(parse_int_in_range("count", 1, 10), "count")(value)
     desc: bool | None = Field(default=True, description="true=从 fromYear 向过去逐年回推（默认）；false=向未来。")
     fromYear: int | None = Field(default=None, description="回推起始公历年（缺省=后端当前年）。")

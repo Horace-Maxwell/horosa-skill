@@ -20,6 +20,11 @@ and predictive runs must mirror what the user sees on screen.
 | `after23NewDay` | `1` / `0` | `1` | `1` = “23点算第二天” → day pillar advances to next day. `0` = “24点算第二天” → day pillar stays today. |
 | `lateZiHourUseNextDay` | `1` / `0` | `1` | `1` = “晚子时按次日日柱计算” → hour stem 起 from next-day day stem. `0` = “晚子时按当日柱计算” → hour stem 起 from today's day stem. |
 
+**One value per call (v0.50.0).** Give the switches at the top level; they may also sit inside a technique's
+`options` (or 三式合一 `qimen_options` / `taiyi_options` / `liureng_options`) — the entry folds them into one top-level
+value and every consumer (農历 prerequisite, ken pan, the snapshot's 换日 line) uses it. The same switch with two
+different values → `tool.field_conflict`; anything other than 1 / 0 / true / false → `tool.invalid_option`.
+
 **Outside of `hour == 23`, both flags are no-ops.** They change nothing in `[00:00, 23:00)` — don't
 ask about them unless the time is actually in that window.
 
