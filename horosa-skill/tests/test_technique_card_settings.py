@@ -128,3 +128,12 @@ def test_reference_lookups_carry_no_technique_card(tmp_path: Path) -> None:
     for tool in ("knowledge_registry", "export_registry"):
         result = service.run_tool(tool, {}, save_result=False)
         assert result.ok and "technique_card" not in result.data, tool
+
+
+def test_structured_values_are_summarised_not_dumped() -> None:
+    from horosa_skill.reports.technique_card import setting_text
+
+    lines = [{"value": 1, "change": False, "god": "青龙", "name": "初爻"}] * 6
+    assert setting_text("lines", lines) == "已给 6 项（原值见 input_normalized）"
+    assert setting_text("shenshaSet", ["天乙贵人", "禄神"]) == "天乙贵人、禄神"
+    assert len(setting_text("x", {"a": "b" * 200})) <= 81

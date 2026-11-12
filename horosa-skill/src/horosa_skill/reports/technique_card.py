@@ -159,7 +159,7 @@ def result_setting_specs(tool_name: str) -> tuple[dict[str, Any], ...]:
         for key in keys:
             spec = specs.setdefault(key, {"key": key})
             if len(keys) == 1 and question.get("question"):
-                spec.setdefault("label", re.split(r"[？?（(，,；]", str(question["question"]))[0][:16])
+                spec.setdefault("label", re.split(r"[？?（(，,；]", str(question["question"]))[0][:24])
             if len(keys) == 1 and isinstance(question.get("options"), list) and isinstance(question.get("values"), list):
                 spec.setdefault("options", list(question["options"]))
                 spec.setdefault("values", list(question["values"]))
@@ -194,6 +194,17 @@ def setting_text(key: str, value: Any, spec: dict[str, Any] | None = None) -> st
     spec = spec or {}
     if value is None or (isinstance(value, str) and not value.strip()):
         return _UNSENT
+    if isinstance(value, (list, tuple)) and not value:
+        return "空（没给）"
+    if isinstance(value, (list, tuple)):
+        # 结构化输入（六爻逐爻、神煞名单…）：标量列表照写，结构列表只说给了几项（原值在 input_normalized）。
+        if all(isinstance(item, (str, int, float)) for item in value):
+            joined = "、".join(str(item) for item in value)
+            return joined if len(joined) <= 60 else joined[:60] + "…"
+        return f"已给 {len(value)} 项（原值见 input_normalized）"
+    if isinstance(value, dict):
+        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return text if len(text) <= 80 else text[:80] + "…"
     # 性别的 true / false 是 男 / 女，不是 是 / 否（紫微的 `gender: false` 曾原样印在卡上）。
     mapped = setting_reader_text(key, str(value).lower() if key in ("gender", "sex") else value, standalone=True)
     if mapped and mapped != str(value):
