@@ -6,7 +6,10 @@ POSIX 没有这条规则：连接没关就去隔离坏库、删 `-shm`，本机�
 
 `windows_sharing(monkeypatch)` 把 `os.replace / rename / unlink / remove / rmdir` 换成「先看本进程有没有开着这个路径
 （或它下面的文件），开着就按 Windows 那样拒绝」。只认本进程的文件描述符（SQLite 的 -wal / -shm 也是描述符），
-够抓「自己忘了关连接」这一类。拿不到描述符路径的平台直接 skip（`[platform]`）。
+够抓「自己忘了关连接」这一类。tests/conftest.py 让**每条用例**都在它下面跑（`posix_file_semantics` 标记的除外：
+那是 Windows 上本就跳过、专测 POSIX 语义的用例）。Windows 上不装（真规则在生效）；拿不到描述符路径的平台也不装。
+
+例外：`tempfile` 模块自己「开着就删」——那是 TemporaryFile 的 POSIX 写法，Windows 上走的是另一条（O_TEMPORARY），不会这么删。
 """
 from __future__ import annotations
 
@@ -56,14 +59,24 @@ def holders(path: Any) -> list[str]:
     return sorted(p for p in open_paths() if p == target or p.startswith(prefix))
 
 
+def active() -> bool:
+    """这台机器上模拟能不能装（Windows 上不需要，真规则在生效）。"""
+    return os.name != "nt" and supported()
+
+
 def windows_sharing(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """装上模拟；返回一个列表，每次被拒绝都记一条（测试可以断言它为空，也可以看拒绝了什么）。"""
-    if not supported():
-        pytest.skip("[platform] 本机拿不到文件描述符对应的路径，模拟不了 Windows 的共享规则")
+    """装上模拟；返回一个列表，每次被拒绝都记一条（测试可以断言它为空，也可以看拒绝了什么）。已经装过就返回同一个列表。"""
+    existing = getattr(os.replace, "_winsim_refused", None)
+    if existing is not None:
+        return existing
     refused: list[str] = []
+    if not active():
+        return refused
 
     def guard(real: Callable[..., Any], name: str, arity: int) -> Callable[..., Any]:
         def wrapped(*args: Any, **kwargs: Any) -> Any:
+            if sys._getframe(1).f_globals.get("__name__") == "tempfile":
+                return real(*args, **kwargs)
             for path in args[:arity]:
                 if isinstance(path, int):
                     continue
@@ -80,6 +93,7 @@ def windows_sharing(monkeypatch: pytest.MonkeyPatch) -> list[str]:
                     raise error
             return real(*args, **kwargs)
 
+        wrapped._winsim_refused = refused  # type: ignore[attr-defined]
         return wrapped
 
     for name, arity in (("replace", 2), ("rename", 2), ("unlink", 1), ("remove", 1), ("rmdir", 1)):
@@ -87,4 +101,4 @@ def windows_sharing(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return refused
 
 
-__all__ = ["holders", "open_paths", "supported", "windows_sharing"]
+__all__ = ["active", "holders", "open_paths", "supported", "windows_sharing"]
