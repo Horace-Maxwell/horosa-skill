@@ -146,9 +146,37 @@ def test_a_name_alone_is_not_evidence_the_old_way_would_have_passed() -> None:
     declared = module._declared_fields()
     assert "ElectionInput" in declared and "HoraryInput" in declared
     # The scan must be discriminating, not vacuous: it rejects a name nothing consumes.
-    haystack = module._haystack()
-    assert "definitelyNotAConsumedFieldName" not in haystack
+    tokens = module.consumer_tokens()
+    assert "definitelyNotAConsumedFieldName" not in tokens
     # Schema modules mention their own field names; none of that may count as a consumer (v0.41.1, schemas/tools is a
-    # package): a baselined unwired knob appears only inside the schema package, so it must not be in the haystack.
-    unwired = json.loads((PKG_ROOT / "contracts" / "schema_knob_debt.json").read_text(encoding="utf-8"))["unwired"]
-    assert unwired and all(entry.split(".", 1)[1] not in haystack for entry in unwired[:3])
+    # package): a baselined unwired knob appears only inside the schema package, so it must not be a consumer token.
+    unwired = module.load_baseline()
+    assert unwired and all(entry.split(".", 1)[1] not in tokens for entry in unwired)
+
+
+def test_a_substring_or_a_sentence_is_not_a_consumer() -> None:
+    """C-18 #5 的两个反例：旧扫描按子串查原文，`vargaVariant` 被 JS 里的 `j.vargaVariants` 冒充、`pdYears` 被
+    `agent_guidance/contracts.py` 里描述它的那句话冒充——两者在本仓都没有读者（读者在上游后端，见基线指针）。
+    负向对照：把扫描换回「子串出现在任意文件原文里」，两个都从 scan() 里消失（实跑过）。"""
+    module = _load("verify_schema_knob_wiring")
+    dead = module.scan()
+    assert "IndiaChartInput.vargaVariant" in dead and "BirthInput.pdYears" in dead
+    assert "vargaVariant" not in module.js_tokens("const v = j.vargaVariants; // vargaVariant\n/* vargaVariant */ 'see vargaVariant'")
+    assert "vargaVariant" in module.js_tokens("const v = opts.vargaVariant;") and "vargaVariant" in module.js_tokens("x['vargaVariant']")
+    assert "pdYears" not in module.python_tokens('# pdYears\nDOC = {"a": "推算年限 pdYears 上限"}\n')
+    assert {"pdYears"} <= module.python_tokens('payload.get("pdYears")') and {"pdYears"} <= module.python_tokens("f(pdYears=1)")
+    # 只描述旋钮的文件不算读者
+    assert any(path.endswith("agent_guidance/") for path in module.DESCRIBING_FILES)
+
+
+def test_every_baselined_knob_points_at_its_upstream_reader(tmp_path: Path) -> None:
+    """基线不是垃圾桶：每条都要写上游读它的文件:行；有上游 checkout 时文件必须存在且提到该字段。"""
+    module = _load("verify_schema_knob_wiring")
+    baseline = module.load_baseline()
+    assert all(pointer.strip() for pointer in baseline.values())
+    assert module.pointer_problems({"X.someKnob": ""}, None) and not module.pointer_problems({"X.someKnob": "a.py:1"}, None)
+    (tmp_path / "a.py").write_text("data.get('otherKnob')\n", encoding="utf-8")
+    assert module.pointer_problems({"X.someKnob": "a.py:1"}, tmp_path)  # 指向的文件根本没提这个字段
+    assert module.pointer_problems({"X.someKnob": "missing.py:1"}, tmp_path)
+    (tmp_path / "a.py").write_text("data.get('someKnob')\n", encoding="utf-8")
+    assert not module.pointer_problems({"X.someKnob": "a.py:1 (reads it)"}, tmp_path)
