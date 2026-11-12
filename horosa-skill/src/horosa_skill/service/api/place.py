@@ -173,6 +173,25 @@ def _verdict_caveats(verdict: dict[str, Any]) -> list[str]:
     return notes
 
 
+_QUERY_BASIS = "_from_query"
+
+
+def _query_date_reference(query: Any, context: dict[str, Any]) -> dict[str, Any] | None:
+    """dispatch / 合参：context 只给了地点、没给日期，而问句里明说了日期 / 年份 → 用那一天给地点取时区偏移。"""
+    if _present(context.get("date")) or not isinstance(query, str) or not query.strip():
+        return None
+    from horosa_skill.engine.dispatch_plan import query_target
+
+    target = query_target(query, {})
+    if not target or target.get("needs_context"):
+        return None
+    if target.get("date"):
+        return {"date": target["date"], _QUERY_BASIS: True}
+    if target.get("year"):
+        return {"date": f"{int(target['year']):04d}-01-01", _QUERY_BASIS: True}
+    return None
+
+
 def place_resolution_note(record: dict[str, Any]) -> str:
     """给人看的一行（进 envelope.summary，不进 warnings）：地名解析到了哪里、时区从哪来。结构化的同一份在技法卡
     `place_resolution` 里。只有真要用户留意的事（旧称、核对不了的限定词、没补上时区…）才进 warnings（place_caveat_notes）。"""
@@ -188,6 +207,8 @@ def place_resolution_note(record: dict[str, Any]) -> str:
     region = f"（{record.get('region')}）" if record.get("region") else ""
     zone_text = {
         "place_and_date": f"时区 {record.get('zone')} 按地点 + {record.get('date')} 推得（{record.get('iana')}，夏令时：{'是' if record.get('dst') else '否'}）",
+        "place_and_query_date": f"时区 {record.get('zone')} 按地点 + 问句里的日子 {record.get('date')} 推得（只给了年份时取当年 1 月 1 日；"
+                                f"{record.get('iana')}，夏令时：{'是' if record.get('dst') else '否'}）",
         "explicit": "时区沿用显式给出的 zone",
         "not_filled_no_date": "没有日期，时区未补",
         "not_resolvable": "该坐标推不出时区，时区未补",
@@ -527,8 +548,13 @@ class PlaceAPI:
         for key in _NESTED_SPOTS:
             child = out.get(key)
             if isinstance(child, dict):
-                # dispatch 的 context 没有自己的日期时借 birth 的（「当下」的地点按事件日期取偏移）。
-                reference = out.get("birth") if key == "context" and isinstance(out.get("birth"), dict) else None
+                # dispatch 的 context 没有自己的日期时：问句里明说了日期 / 年份（「2027年立春」）就按那一天（只有年份 = 当年 1 月 1 日）
+                # 取偏移——那是技法要算的日子；否则借 birth 的。都没有才留空（时区未补）。
+                reference = None
+                if key == "context":
+                    reference = _query_date_reference(out.get("query"), child)
+                    if reference is None and isinstance(out.get("birth"), dict):
+                        reference = out["birth"]
                 out[key] = self.resolve_place_fields(child, tool_name=tool_name, _reference=reference)
         if PLACE_KEY in out:
             out = self._resolve_one_spot(out, tool_name=tool_name, reference=_reference)
@@ -581,7 +607,7 @@ class PlaceAPI:
                 raise self._zone_refusal(query, match, date=date, time=time or "", tool_name=label)
             else:
                 out["zone"] = match["zone"]
-                zone_source = "place_and_date"
+                zone_source = "place_and_query_date" if dated is reference and (reference or {}).get(_QUERY_BASIS) else "place_and_date"
                 if match.get("advisory") == "cn-unified":
                     out.setdefault("geoZone", match.get("geoZone"))
                     out["zoneAdvisory"] = "cn-unified"
@@ -590,7 +616,7 @@ class PlaceAPI:
             **_matched_facts(verdict),
             "name": match.get("name"), "region": match.get("region"), "en": match.get("en"), "where": match.get("where"),
             "lat": match.get("lat"), "lon": match.get("lon"), "gpsLat": match.get("gpsLat"), "gpsLon": match.get("gpsLon"),
-            "iana": match.get("iana"), "zone": out.get("zone") if zone_source == "place_and_date" else match.get("zone"),
+            "iana": match.get("iana"), "zone": out.get("zone") if zone_source in ("place_and_date", "place_and_query_date") else match.get("zone"),
             "zone_source": zone_source, "dst": match.get("dst"), "advisory": match.get("advisory"),
             "date": date, "engine": ENGINE_LABEL, "caveat_notes": _verdict_caveats(verdict),
         }

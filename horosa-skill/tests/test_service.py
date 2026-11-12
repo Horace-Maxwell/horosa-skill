@@ -1307,8 +1307,9 @@ def test_all_callable_techniques_can_generate_report_json_artifacts(tmp_path) ->
         assert template["coverage_contract"]["all_source_export_sections_required"] is True, tool_name
         assert template["coverage_contract"]["source_export_section_count"] == len(template["source_export_sections"]), tool_name
         assert template["source_context"]["export_text"], tool_name
-        assert template["source_context"]["export_sections"], tool_name
-        assert all(section["body"] for section in template["source_context"]["export_sections"]), tool_name
+        # 深审 F13：正文只给一份（export_text），段索引在 source_export_sections，不再在 source_context 里逐段再抄一遍正文。
+        assert "export_sections" not in template["source_context"], tool_name
+        assert "question_analysis" not in template["ai_fillable"] and "input_normalized" not in template["conversation_brief"]["user_context"]
         assert template["targeted_analysis_contract"]["answer_priority"] == "directly_answer_user_question_first", tool_name
         assert template["question_analysis"]["has_question"] is True, tool_name
         assert template["targeted_analysis_contract"]["question_analysis"]["raw_question"] == f"生成 {tool_name} 报告", tool_name
@@ -1783,7 +1784,7 @@ def test_service_can_build_report_template_and_render_json_docx_pdf(tmp_path) ->
     assert template["tool_name"] == "chart"
     assert template["technique"] == "astrochart"
     assert template["source_export_sections"]
-    assert template["source_context"]["export_sections"][0]["body"]
+    assert template["source_context"]["export_text"] and template["source_export_sections"][0]["title"]
     assert template["coverage_contract"]["must_explain_sections"]
     assert template["targeted_analysis_contract"]["required_ai_fields"]
     assert template["question_analysis"]["focus_domains"] == ["general_reading"]
@@ -1961,7 +1962,7 @@ def test_report_from_tool_without_ai_report_returns_analysis_packet_not_final_re
     assert result["artifact_path"] is None
     assert result["tool_result"]["ok"] is True
     assert result["report_template"]["source_context"]["export_text"]
-    assert result["report_template"]["source_context"]["export_sections"]
+    assert result["report_template"]["source_export_sections"]
     assert result["report_template"]["targeted_analysis_contract"]["targeted_answer_requirements"]
     assert result["report_template"]["conversation_brief"]["role"].startswith("你是接入 Horosa Skill 的 AI 解盘助手")
     assert "完整对话式解盘正文" in result["report_template"]["conversation_brief"]["final_ai_report_contract"]["answer_text"]
@@ -3635,3 +3636,16 @@ def test_bazi_inverse_rejects_bad_pillars(tmp_path) -> None:
     assert result.ok is False and result.error.code == "tool.bazi_inverse_invalid_pillars"
     assert result.error.details["invalid"] == ["庚"]
     assert result.error.details["agent_recovery"]["kind"] == "input"
+
+
+def test_stored_inputs_carry_no_empty_internal_keys(tmp_path) -> None:
+    """奇门的 `context` 是三式合一内部给奇门盘的展示时刻：缺省 None，存档 input 不再带一个空的 "context": {}（ledger 跟进项）。
+    全表守：任何技法的 input_normalized 都不许出现空 dict 的 context。"""
+    service = _service(tmp_path)
+    samples = build_sample_payloads()
+    result = service.run_tool("qimen", {**samples["qimen"], "agent_confirmed_settings": True}, save_result=False)
+    assert result.ok and "context" not in result.input_normalized
+    for name, definition in TOOL_DEFINITIONS.items():
+        field = definition.input_model.model_fields.get("context")
+        if field is not None:
+            assert field.get_default(call_default_factory=True) in (None,), f"{name}.context 缺省不能是空 dict"

@@ -29,17 +29,23 @@
 uv run horosa-skill report technique --group-id <group_id> --format markdown
 ```
 
-## 合参（多技法交叉印证，v0.28.0）
+## 合参（多技法交叉印证，v0.28.0；v0.50.0 重做）
 
-一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据，可显式 `tools`，上限 `max_tools`）。与 `horosa_dispatch` 同闸：先问用户，带 `agent_confirmed_settings` / `defaults_accepted` 再调。
-它返回**合参模板**，不是终稿：
+一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据 / `context`，可显式 `tools`，上限 `max_tools`）。与 `horosa_dispatch` 同闸：先问用户，带 `agent_confirmed_settings` / `defaults_accepted` 再调。
 
-1. 逐技法读段落：MCP 返回的 `results.<tool>` 就是各技法的阅读视图（正文 + 段索引）；被预算裁掉的段按 `warnings` 里的
-   `horosa_memory_show(run_id=…, response_tool=…, response_sections=[…])` 续读（CLI 的合参只给证据指针，用 `memory show` 取全文）。
+- **选技法**：`tools` 写技法名，也可以写此前某次运行的 `run_id`（32 位十六进制；那次的结果原样复用、不重算，闸门不再问它）。
+  不给 `tools` 时按问题领域缺省配一对并在 `warnings` 披露（命理 八字 + 紫微 / 起课 六壬 + 奇门 / 运势 八字直断 + 紫微 / 卜卦 六爻 + 卜卦占星；
+  点名了一种就补同领域的另一种）；择日不配对，请点名两种择日法。
+- **少于两个技法算成 = 不是合参**：`cross_validation: false`、`consistency.all_clear: null`、`warnings` 明说——照单技法解读作答，并告诉用户没有交叉印证。
+- 它返回**合参模板**，不是终稿：
+
+1. 逐技法读段落：`techniques[].evidence` 是正文节选（上限 4000 字 / 技法，`evidence.note` 说放了几段、`read_rest` 是续读调用）；
+   MCP 返回的 `results.<tool>` 是各技法的阅读视图（节选正文此时不重复，`evidence.text_in` 指过去）；被预算裁掉的段按 `warnings` 续读。
+   CLI / 存档也带节选；全文 `horosa_memory_show(run_id=合参 run)` —— 合参 run 会把复用的子结果从原 run 接上（`child_runs` 列出每个技法的 run_id）。
 2. 填 `synthesis_contract.ai_fillable`：每技法一条结论（必须绑定该技法真实段落）、
    `convergence`（仅多技法独立同判）、`divergence`（**逐条披露，不许平均、不许只挑一边**）、
    `final_answer`（先直答，再依据与边界）。
-3. `consistency.setting_conflicts` 非空时先声明口径冲突（例如两技法晚子时开关不同 = 结论不可互证）。
+3. `consistency.setting_conflicts` 非空时先声明口径冲突（例如两技法晚子时开关不同 = 结论不可互证）。复用的本命盘出生时刻与这次不同会有警告——先与用户确认是不是同一个人。
 4. 要文件：`horosa_technique_report --group-id` 出方法报告；解读终稿走 `horosa_report_render`。
 
 ## Structured report flow (MCP)

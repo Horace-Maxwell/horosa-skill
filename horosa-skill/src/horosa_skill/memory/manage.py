@@ -186,7 +186,7 @@ def export_runs(store: MemoryStore, selected: list[dict[str, Any]], out_dir: Pat
             target_dir.mkdir(exist_ok=True)
             shutil.copy2(source, target_dir / source.name)
             copied.append(f"{target_dir.name}/{source.name}")
-            if kind in {"tool_result", "dispatch_result"}:
+            if kind in {"tool_result", "dispatch_result", "hecan_result"}:
                 texts += [(str(artifact.get("tool_name")), text) for text in _search.export_texts_from_file(source)]
         try:
             manifest = store._build_run_manifest_payload(record["run_id"])

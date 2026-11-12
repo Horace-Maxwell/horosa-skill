@@ -86,8 +86,9 @@ def build_template(
         "source_context": {
             "input_normalized": payload.get("input_normalized") if isinstance(payload.get("input_normalized"), dict) else {},
             "summary": payload.get("summary") if isinstance(payload.get("summary"), list) else [],
+            # 正文只给一份（export_text）；逐段的段号 / 标题 / 行数在 source_export_sections（深审 F13：此前段正文在这里再抄一遍，
+            # 模板 38 KB 里约 7 KB 是重复）。
             "export_text": read_export_text(export_snapshot=export_snapshot, export_format=export_format, payload=payload),
-            "export_sections": export_sections,
             "provenance": read_provenance(export_snapshot=export_snapshot, export_format=export_format, source=source),
         },
         "source_export_sections": [
@@ -96,7 +97,6 @@ def build_template(
         ],
         "ai_fillable": {
             "analysis_focus": user_question,
-            "question_analysis": question_analysis,
             "answer_plan": targeted_contract["answer_plan"],
             "targeted_answer_requirements": targeted_contract["targeted_answer_requirements"],
             "direct_answer": "",
@@ -137,7 +137,6 @@ def _conversation_brief(
         "role": "你是接入 Horosa Skill 的 AI 解盘助手，正在根据本地离线算法算出的真实盘面回答用户。",
         "user_context": {
             "question": user_question or "用户没有给出明确问题，请做整体综合解盘。",
-            "input_normalized": input_normalized,
             "focus_domains": question_analysis.get("focus_domains", []),
             "needs_timing": question_analysis.get("needs_timing"),
             "needs_decision_support": question_analysis.get("needs_decision_support"),
@@ -149,7 +148,7 @@ def _conversation_brief(
             "source_sections": section_titles,
             "must_read": [
                 "source_context.export_text",
-                "source_context.export_sections",
+                "source_export_sections",
                 "source_context.input_normalized",
                 "targeted_analysis_contract",
             ],

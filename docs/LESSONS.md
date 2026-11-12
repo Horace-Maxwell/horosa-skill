@@ -19,6 +19,10 @@
 | v0.50.0-dev (2026-11-12) | 中式技法同一个输入多种读法：太乙缺省日界盘头写 24 点、日柱按 23 点，options 里的日界只到快照（盘头辛酉正文壬戌）；`ad=-1` 被正传 / 小六壬 / 神数 ×14 等丢掉、太乙一半用；飞宫只认字面 female；小六壬「道家」、地占未知传本、紫微 timeAlg=2、河洛 / 一掌经十余旋钮认不出就换缺省；小六壬 nums / 灵棋 counts 用不了就悄悄以时起；河洛 / 参评公元前出空盘 ok=true | 入口只留一种形态（日界合到顶层、`ad=-1` 改写成带负号日期、派生盘 ad 随自己的时刻）；`cn_vocab` 词表挂 schema；给了用不了就拒并回 `cast_method`；本地历法域外 `tool.date_range_unsupported` |
 | v0.50.0-dev (2026-11-12) | 十把守卫红不了：live lane 跳过原因是黑名单、归档防穿越零测试、旋钮接线按子串、分层豁免空循环、并发测的是 sleep 桩、值金标认标题和注释、闸门自测住在被测数据里、约 50 条要上游检出的测试有的猜路径、错误码「有测试」认注释；selfcheck 中途 await 之后的 async 失败退出码 0 | 每把守卫配一个它声称要抓的变异体实跑红；跳过原因带标签、live lane 白名单；字面量 / 调用 / 代码记号才算证据；期望搬出被测物 |
 | v0.50.0-dev (2026-11-12) | 每次 JS spawn 静态加载全部 51 个技法模块（0.13 s，天星择日一次 7 次 = 1.1 s）；create_mcp_server 1.9 s（别名整词判断每次重编大字符类正则、每个默认值建 TypeAdapter） | tools/index.js 按需 import（0.04 s/次，129 次调用 stdout 逐字节相同）；正则只编一次、默认值短路、签名按进程缓存（tools/list 逐字节相同，0.9 s） |
+| v0.50.0-dev (2026-11-12) | 合参把一个技法包装成交叉印证（all_clear true）、没给 tools 借单技法路由、模板里没有盘面事实、不能复用已算的 run、只有中文 | `engine/hecan_select`（闸门与服务共用，按领域缺省配对）+ run_id 复用 + 正文节选 + 合参自己的 run 与 child_runs + 双语；`test_hecan.py` |
+| v0.50.0-dev (2026-11-12) | 技法卡只回显手写的少数键：六爻缺省男却 settings 空、紫微 `gender: false`、岁差空串；看不出来源 | 设置全表从闸门指引表推出，每项人读值 + 来源（用户 / 档案 / 地点 / 缺省）；`test_technique_card_settings.py` 整表守卫 |
+| v0.50.0-dev (2026-11-12) | 择日条件极性没人说：冲煞生肖自带判法再加 negate = 双重否定，拿到冲马的日子 | 生成自上游注册表的条件说明 + negate 规则 + 每个择日结果回显引擎读法；`test_zeri_conditions.py`（真引擎冲马对照） |
+| v0.50.0-dev (2026-11-12) | 摘要噪声、知识结果挂技法卡、节气盘「没要」报「缺」、模板正文两份、决策层白发请求、OTLP 不自陈、精简面指向不存在的工具、追问不点名技法 | 一句话标题、无卡域、not_requested_sections、模板去重、enforce 不问、instructions 第三说法、按面写读法、追问点名；各有守卫 |
 | v0.50.0-dev (2026-11-12) | 并行九批各自全绿，合进集成分支后撞出七处衔接：闸门看不到入参批的别名 / 嵌套提升、缺性别名单两份（12 / 17）、同一错误码登记两次、两个码表达同一件事、可选值键 accepted / allowed / valid_domains 三种、密钥判定子串误报 MAX_TOKENS、tools/list 量尺把线上不发的 null 计入撞硬顶 | 合并后在集成分支重跑全量门禁；同一事实只留一份（名单、错误码、详情键、归一化载荷）；预算守卫量线上真发的形状 |
 | v0.50.0-dev (2026-11-12) | MCP 结果把原始引擎树当正文交给模型：114 技法中位 17 万字符、72 个超过 Claude Code 5 万字符落盘线；调度两技法 290 万字符；`include_all` 指引 126 万字符；3 MB 澄清备注原样回显两遍 | MCP 缺省改阅读视图（正文一遍 + 段索引 + 依据卡），模型预算按段裁并给照抄可用的续读调用，JSON 不缩进，调度 / 合参 / 存档读回同一视图；整表体积守卫 |
 | v0.50.0-dev (2026-11-12) | `response_view` 跟着载荷进了 runner 的子调用：择日先算的展示盘快照被清空，黄历择日 14 段丢 7 段、多一条假的「结果不完整」（7 个择日技法同病） | `run_tool` 记调用深度，嵌套调用摘掉展示键、不套视图；整表对照每种视图与原始结果的段与告警 |
@@ -312,6 +316,63 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   `create_mcp_server` 1.88 → 0.9 s（同进程再建 0.56 s），全量 / 精简面 tools/list 逐字节相同。奇门「jieqi/year 取两次」不成立：两次是上一年与当年两个种子年。
 - **守卫**：`test_appears_as_term_answers_like_the_lookaround_regex`（对旧正则逐例，自重叠病例）、`test_plain_defaults_generator_is_byte_identical_to_pydantics`、
   `test_cached_signatures_build_the_same_tools_list_as_a_cold_build`、loadcheck 的 runner 表解析（写错导出名即红）。
+### v0.50.0-dev / 2026-11-12 — 合参把一个技法包装成交叉印证，模板里没有盘面事实，复用不了已算的盘
+
+- **现象**（深审 H-1 / H-2 / H-3 / F16，冷启动客户端 s07）：`tools: ["bazi_birth"]` 或问句只路由出一个技法时，合参照样回 `all_clear: true`
+  的「合参模板」；没给 `tools` 时借 dispatch 的单技法路由。模板每个技法只有段名 + 「去 memory_show 取全量」（3.4 KB 里没有一条盘面事实），
+  memory_show 那条 dispatch run 336 KB；已经算过的三个 run 不能拿来合参，只能重算；摘要与契约说明只有中文。
+- **根因**：合参是 dispatch 外面包的一层模板，没有自己的选择规则、没有自己的存档；「至少两个技法」从没写成判断。
+- **修**：`engine/hecan_select.py`（闸门与服务共用）——没点名按意图类缺省配一对（`IntentClass.hecan_pair`：命理 八字+紫微 / 起课 六壬+奇门 /
+  运势 八字直断+紫微 / 卜卦 六爻+卜卦占星；点名一种补同领域另一个；择日不配对：各法条件词表不同），披露；`tools` 可混写 run_id（复用，不重算；
+  `memory.run.not_found` / `hecan.run_not_reusable`；复用的本命盘出生时刻与这次不同 → 警告）。算成少于两个 → `cross_validation: false`、
+  `all_clear: null`、警告与摘要明说。每个技法带有上限的正文节选 `evidence`（4000 字，按段，没放进的段列名 + 续读调用；`service/hecan_template.py`）。
+  合参自己一条 run（`entrypoint=hecan`），新算的子技法记进同一 run / group，结果存 `hecan_result`（`child_runs`）；memory_show 把复用的子结果
+  从原 run 接上（`from_run`）；库重建按 `record_meta.kind` 认回。摘要 / 警告 / instructions 中英双语。
+- **大小**（留给维护者定：全文内联还是有上限的节选）：节选上限 4000 字 / 技法；实测见 CHANGELOG 与合参批报告。
+- **守卫**：`tests/test_hecan.py`（24 条；六处变异全红：恒 cross_validation、不配对、不补位、不接子 run、复用变重算、去掉节选）。
+- **规则**：合参的产出必须让「少于两个技法」可见；选择规则只有一份（闸门与服务同一个函数）；模板自带可引用的正文，不只给指针（AGENTS §3）。
+
+### v0.50.0-dev / 2026-11-12 — 技法卡只回显少数几个键：六爻缺省男却口径为空，紫微原样印性别布尔值，岁差哪里都没写（`result_setting_specs`）
+
+- **现象**（深审 F10）：技法卡的口径行来自一张手写的 15 键表 + 按 domain 过滤；闸门会问的设置大半不在卡上（六爻占类 / 流派 / 性别缺省男），
+  值原样印（`gender: false`、`hsys: 1`），回归黄道时引擎回报 `siderealAyanamsa: ""`，卡上写「岁差=」；也看不出值是用户给的还是缺省。
+- **根因**：「哪些设置改结果」写了两份（闸门指引表一份、卡片一份），卡片那份只覆盖了一小部分；来源信息在 run_tool 里有，没传给卡。
+- **修**：`reports/technique_card.result_setting_specs` 从闸门指引表推出全表（`ask_if_missing` 带选项的问题 + `safe_defaults`，伪名按闸门别名表展开，
+  时刻 / 纯确认类 / NON_BLOCKING 不算）；每项 `{label, value, text, source}`，人读写法：码表 > 缺省说明 > 闸门选项 > 原值；空值按缺省补并写适用条件
+  （「恒星黄道缺省 Lahiri（仅 zodiacal=1 生效）」）；没下发也没缺省的写「未下发，引擎按自己的缺省算」。来源由 run_tool 标（调用方写了的键路径 /
+  档案填的 / 地名补的 / 缺省）。性别是否适用按 `questions.gender_required`（与闸门、入口同一个判断）。六爻性别缺省男补进指引表 safe_defaults。
+  知识库 / 导出域不挂卡（`CARDLESS_DOMAINS`）。
+- **守卫**：`tests/test_technique_card_settings.py`——全部带卡技法：闸门解析器（`answer_groups`）独立列出的设置键都在卡上、各有人读值与来源
+  （去掉全表 94 红）；三处审计个案；档案 / 地点来源；不挂卡。
+- **规则**：「改结果的设置」只有闸门指引表一份；新问题 / 新缺省进指引表，卡片自动跟上（AGENTS §3）。
+
+### v0.50.0-dev / 2026-11-12 — 择日条件的极性没人说：冲煞生肖 + 取反拿到的正是冲马的日子（`condition_echo`）
+
+- **现象**（深审 F5，s04）：用户属马、要避冲马日，客户端写 `{type: chong_shengxiao, negate: true, params: {values: ["马"]}}`——这一类自带判法
+  `mode`（缺省 without = 不冲所选肖），再取反就是「冲马」；schema、guidance 都没写极性，结果里也看不到引擎把条件读成了什么（只有快照里的「非·」）。
+- **根因**：条件的含义只存在于上游注册表（label / summary / fields），skill 只列了键名。
+- **修**：horosa-core-js `zeri_conditions`（skill 自有）：catalog 读十张注册表；echo 把条件树按引擎读法写成人话（取反写「不满足〔…〕」、连接词左结合）。
+  生成件 `data/zeri_condition_meanings.json`（`scripts/gen_zeri_condition_meanings.py --check`）：282 类各一行中英说明（≤4 选项的自带判法逐项写），
+  negate 规则写明「判法与 negate 叠加 = 双重否定」；guidance `condition_types`；十个择日结果都带 `data.condition_echo` + 摘要一行「条件按此理解」。
+- **守卫**：`tests/test_zeri_conditions.py`（十技法 × 每类回显、生成件与引擎一致、十个结果都回显；真引擎：不加 negate 排除冲马日，加 negate 只剩冲马日，
+  两者互补成整月，命中日的「冲」由黄历本身读出）。
+- **规则**：条件 / 选项的含义从上游注册表生成，不手写；结果回显它被读成了什么（AGENTS §4.4）。
+
+### v0.50.0-dev / 2026-11-12 — 结果里的噪声与几处没说实话的地方（跟进批）
+
+- **现象**：通用摘要「工具 `x` 已返回结构化结果」「顶层字段：…」（阅读视图删了，CLI / 存档 / dispatch 摘要还在）；注册表回答带 2.9 KB 技法卡；
+  只查「立春」的节气盘报「结果不完整」并给 12 段占位；报告模板 38 KB 里正文抄两遍；决策层 enforce 时确定性路由已命中仍每次发约 18.5 KB；
+  `HOROSA_TRACE_OTLP_ENDPOINT` 设了 instructions 仍说「nothing is sent」；精简面检索说明叫客户端调不存在的 `horosa_knowledge_read`；
+  逐字段追问不点名技法；「2027年立春」+ 地点北京被追问时区；奇门存档带空 `"context": {}`。
+- **修**：`envelope.export_headline`（「已生成<技法>（N 段）：<起盘信息头两行>」）；`CARDLESS_DOMAINS`；`export._sections_not_requested` +
+  `not_requested_sections`；模板只留一份正文；`_decide_routing_inner` 在路由命中 + enforce 时不问；instructions 第三种说法（四组合 ≤ 2048 B）；
+  检索说明按面写读法；`field_issues_error(tool_name=)`；dispatch / 合参 context 无日期时按问句里的日子取时区（`place_and_query_date`）；
+  `QimenInput.context` 缺省 None。
+- **守卫**：`test_summary_noise.py`、`test_instructions_name_every_path_that_sends_data_off_the_machine`、
+  `test_enforce_routing_only_fills_a_no_match…`（FakeJev 无 dispatch 调用）、`test_knowledge_search_names_a_read_tool_that_exists_on_each_surface`、
+  `test_per_field_prompt_names_the_technique`、`test_context_place_without_a_date_takes_the_zone_from_the_date_the_query_names`、
+  `test_stored_inputs_carry_no_empty_internal_keys`；各自负向对照已跑。
+- **规则**：凡把数据送出本机的开关都要在 instructions 自陈；摘要第一行必须有信息；「没要」不是「缺」（AGENTS §4.4 / §9.3）。
 
 ### v0.50.0-dev / 2026-11-12 — 并行九批合并的衔接坑
 

@@ -17,6 +17,7 @@ function lazy(specifier, exportName) {
 
 const TOOL_RUNNERS = {
   place_search: lazy('./placeSearch.js', 'runPlaceSearch'),
+  zeri_conditions: lazy('./zeriConditions.js', 'runZeriConditions'),  // 择日条件词表 / 条件回显（skill 自有）
   uranian_extra: lazy('./uranianExtra.js', 'runUranianExtra'),
   tieban_framework: lazy('./tiebanFramework.js', 'runTiebanFramework'),
   yanqin_yanfa: lazy('./yanqinYanfa.js', 'runYanqinYanfa'),

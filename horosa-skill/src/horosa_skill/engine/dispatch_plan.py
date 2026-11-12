@@ -478,14 +478,18 @@ def extra_request_settings(payload: dict[str, Any], model_fields: set[str]) -> d
 def missing_facts_recovery(plans: list[ToolPlan], *, operation: str = "horosa_dispatch") -> dict[str, Any] | None:
     """所有规划里缺的事实 → 一份 agent_recovery（双语，逐条点名缺什么、放在哪个键）。没缺 → None。"""
     items: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: dict[tuple[str, tuple[str, ...]], dict[str, Any]] = {}
     for plan in plans:
         for fact in plan.missing:
-            key = (fact["fact"], fact["question"])
+            # 同一件事实、同一组键（几个本命技法都缺出生数据）只问一次，记上都有哪些技法要它。
+            key = (fact["fact"], tuple(fact["fields"]))
             if key in seen:
+                if plan.tool not in seen[key]["tools"]:
+                    seen[key]["tools"].append(plan.tool)
                 continue
-            seen.add(key)
-            items.append({**fact, "field": " / ".join(fact["fields"]), "tools": [plan.tool]})
+            item = {**fact, "field": " / ".join(fact["fields"]), "tools": [plan.tool]}
+            seen[key] = item
+            items.append(item)
     if not items:
         return None
     lines_zh = ["还缺这些只有用户知道的信息（确认默认设置代替不了它们）："]

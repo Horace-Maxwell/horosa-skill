@@ -27,12 +27,15 @@ from horosa_skill.knowledge import (
 )
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
 from horosa_skill.service._context import (
+    _degrade,
     _degrade_collector,
     _memory_save_failed,
     _run_query_scope,
     _run_tool_scope,
     without_presentation_keys,
 )
+from horosa_skill.reports.technique_card import annotate_setting_sources
+from horosa_skill.zeri_conditions import NEGATE_RULE, echo_summary_line, zeri_tools
 from horosa_skill.service.api.place import place_caveat_notes, place_resolution_note
 from horosa_skill.service.text.predictive import _PERIOD_PREDICTIVE_TOOLS
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
@@ -75,11 +78,25 @@ from horosa_skill.agent_guidance.questions import gender_required  # noqa: E402
 _INSIDE_TECHNIQUE: ContextVar[bool] = ContextVar("horosa_inside_technique", default=False)
 
 
+def _key_paths(payload: Any) -> frozenset[str]:
+    """载荷里写了的键路径（顶层 + 嵌套一层：`liuyaoSettings.askType`）。值为空的不算写了。"""
+    if not isinstance(payload, dict):
+        return frozenset()
+    paths: set[str] = set()
+    for key, value in payload.items():
+        if value is None or value == "" or value == []:
+            continue
+        paths.add(str(key))
+        if isinstance(value, dict):
+            paths.update(f"{key}.{inner}" for inner, item in value.items() if item is not None and item != "")
+    return frozenset(paths)
+
+
 def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
     target = payload.get("datetime")
     if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
         # 只给年份的目标时刻只对「有那一年含义」的技法成立（返照 / 流年 / 小限 / 太阳弧，见 enrich._apply_yearly_target）。
-        raise field_issues_error([{
+        raise field_issues_error(tool_name=tool_name, issues=[{
             "field": "datetime", "code": "tool.invalid_datetime", "got": target,
             "expected": bilingual("YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS", "YYYY-MM-DD or YYYY-MM-DD HH:MM:SS"), "example": f"{target}-01-01 12:00:00",
             "ask_user": False, "message": bilingual(f"`{tool_name}` 的目标时刻要具体到日期：只给年份「{target}」不知道是哪一天。",
@@ -93,12 +110,13 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
         try:
             parse_gender(options["gender"])
         except FieldIssue as issue:
-            raise field_issues_error([{"field": "options.gender", "code": issue.code, "got": options["gender"],
-                                       "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
-                                       "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
+            raise field_issues_error(tool_name=tool_name, issues=[{
+                "field": "options.gender", "code": issue.code, "got": options["gender"],
+                "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
+                "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
         return
     if gender_required(tool_name, payload) and payload.get("gender") is None and not _INSIDE_TECHNIQUE.get():
-        raise field_issues_error([{
+        raise field_issues_error(tool_name=tool_name, issues=[{
             "field": "gender", "code": "tool.missing_gender", "got": None,
             "expected": bilingual("1 / 男 / 乾造 = 男；0 / 女 / 坤造 = 女", "1 / 男 / male = male; 0 / 女 / female = female"),
             "example": 1, "ask_user": True, "options": [{"value": 1, "label": "男 / male"}, {"value": 0, "label": "女 / female"}],
@@ -147,6 +165,8 @@ class _ToolCall:
     place_records: list[dict[str, Any]] = field(default_factory=list)
     # 入参解读说明（input_fields.add_input_note：别名改名、东八区 → +08:00、未知参数…）：成功 / 失败信封的 warnings 都回显。
     input_notes: list[str] = field(default_factory=list)
+    # 调用方（或档案 / 地名）写进载荷的键路径（`a`、`a.b`）：技法卡逐项设置的来源（用户 / 档案 / 地点 / 缺省）按它判。
+    explicit_paths: frozenset[str] = frozenset()
 
     @property
     def place_notes(self) -> list[str]:
@@ -390,8 +410,8 @@ class ToolsAPI:
 
     def _validated_tool_input(
         self, definition: ToolDefinition, payload: dict[str, Any], trace: dict[str, Any]
-    ) -> tuple[dict[str, Any], Any, list[Any], list[dict[str, Any]]]:
-        """(规范化入参, 自备知识库点名, 并进来的命主档案, 地名解析记录)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。
+    ) -> tuple[dict[str, Any], Any, list[Any], list[dict[str, Any]], frozenset[str]]:
+        """(规范化入参, 自备知识库点名, 并进来的命主档案, 地名解析记录, 调用方写了的键路径)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。
         先并档案、再解析地名：档案只存 place 文字标签、不进载荷，所以两者不会互相覆盖；载荷自己的 place 照常解析。"""
         tool_name = definition.name
         # 命主档案在归一化与校验**之前**并进来：显式字段逐键优先，模型缺省值不会冒充「显式」压掉档案里的值。
@@ -415,7 +435,7 @@ class ToolsAPI:
         try:
             # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
             # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。
-            payload = normalize_request_payload(payload, model=definition.input_model)
+            payload = normalize_request_payload(payload, model=definition.input_model, tool_name=tool_name)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
             knowledge_selection = None
             if isinstance(payload, dict) and "knowledge" in payload:
@@ -436,6 +456,7 @@ class ToolsAPI:
             knowledge_selection,
             profile_uses,
             place_records,
+            _key_paths(payload),
         )
 
     def _compute_tool_result(self, call: _ToolCall) -> dict[str, Any]:
@@ -466,9 +487,29 @@ class ToolsAPI:
         response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
         response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
         response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+        response_data = self._attach_condition_echo(tool_name, input_normalized, response_data)
         # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
         # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
         return self._attach_technique_card(tool_name, input_normalized, response_data)
+
+    def _attach_condition_echo(self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """择日十技法：把这次的条件树按引擎的读法写成人话（每叶 summary + 取反 + 连接词），挂 `data.condition_echo`（深审 F5）。
+        读不出不影响结果，降级可见。"""
+        conditions = input_normalized.get("conditions")
+        if tool_name not in zeri_tools() or not conditions or not isinstance(response_data, dict):
+            return response_data
+        try:
+            echoed = self.js_client.run("zeri_conditions", {"action": "echo", "technique": tool_name, "tree": conditions})
+            data = echoed.get("data") if isinstance(echoed, dict) else None
+            if not isinstance(data, dict) or not data.get("ok"):
+                raise ValueError((data or {}).get("error") or "no data")
+        except Exception as exc:  # noqa: BLE001 - 回显是说明，不能拖垮一次算好的择日
+            _degrade("择日条件回显不可得：%s", exc)
+            return response_data
+        echo = {"lines": data.get("lines") or [], "negate_rule": bilingual(*NEGATE_RULE)}
+        if data.get("unknown"):
+            echo["unknown_types"] = data["unknown"]
+        return {**response_data, "condition_echo": echo}
 
     def _with_user_knowledge(self, call: _ToolCall, response_data: dict[str, Any]) -> tuple[dict[str, Any], Any, str | None]:
         """把自备知识库的选中条目挂上去：(结果, 知识上下文, 失败说明)。附加资料出错绝不该让一张算好的盘作废。"""
@@ -504,7 +545,20 @@ class ToolsAPI:
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
         # 地名解析一行紧跟标题行（标题仍是 summary[0]：dispatch 只取每个子结果的 summary[:1]）。
         summary = [*summary[:1], *call.place_notes, *summary[1:]]
+        echo = response_data.get("condition_echo") if isinstance(response_data, dict) else None
+        if isinstance(echo, dict) and echo.get("lines"):
+            # 择日：条件按引擎的读法回显一行（取反 / 判法一眼可见；全文与逐行在 data.condition_echo）。
+            summary = [*summary[:1], echo_summary_line(echo["lines"]), *summary[1:]]
         warnings: list[str] = [*call.input_notes, *call.place_caveats]
+        if isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
+            # 每项设置的来源（深审 F10）：用户给的 / 命主档案 / 地点推得 / 缺省。
+            annotate_setting_sources(
+                response_data["technique_card"], explicit_paths=call.explicit_paths,
+                profile_keys={key for use in call.profile_uses if not use.slot for key in use.filled},
+                place_keys={key for record in call.place_records if not record.get("spot")
+                            for key in ("lat", "lon", "gpsLat", "gpsLon", "zone", "pos", "geoZone", "zoneAdvisory")
+                            if key != "zone" or record.get("zone_source") in ("place_and_date", "place_and_query_date", "coordinates_and_date")},
+            )
         if call.place_records and isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
             # 技法卡在存档之前就挂好了（_compute_tool_result）；这里补上「地点是怎么来的」，同一份存进 memory。
             response_data["technique_card"]["place_resolution"] = [
@@ -630,10 +684,11 @@ class ToolsAPI:
             if nested:
                 # runner 拼子盘的调用：展示键不是算法输入，摘掉再算（见 _context.PRESENTATION_KEYS）。
                 payload = without_presentation_keys(payload)
-            input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
+            input_normalized, knowledge_selection, profile_uses, place_records, explicit_paths = self._validated_tool_input(
+                definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
-                profile_uses=profile_uses, place_records=place_records, input_notes=input_notes,
+                profile_uses=profile_uses, place_records=place_records, input_notes=input_notes, explicit_paths=explicit_paths,
             )
             try:
                 inside = _INSIDE_TECHNIQUE.set(True)

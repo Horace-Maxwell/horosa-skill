@@ -72,7 +72,8 @@ class QimenInput(BirthInput):
     lateZiHourUseNextDay: int | bool | None = None
     timeAlg: int | None = 0
     options: dict[str, Any] = Field(default_factory=dict)
-    context: dict[str, Any] = Field(default_factory=dict)
+    # 三式合一内部给奇门盘的展示时刻（displaySolarTime / isDiurnal）；用户不传。缺省 None：存档的 input 不再带一个空的 "context": {}。
+    context: dict[str, Any] | None = None
     nongli: dict[str, Any] | None = None
     jieqi_year_prev: dict[str, Any] | None = None
     jieqi_year_current: dict[str, Any] | None = None

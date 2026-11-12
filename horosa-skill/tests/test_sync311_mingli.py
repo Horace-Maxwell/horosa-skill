@@ -134,7 +134,7 @@ def test_technique_card_echoes_effective_day_boundary_default(tmp_path) -> None:
     service = _service(tmp_path)
     env = service.run_tool("nongli_time", {"date": "2026-05-27", "time": "23:30:00", **_SH}, save_result=False)
     settings = env.data["technique_card"]["settings"]
-    assert settings["after23NewDay"] == {"label": "晚子时·日柱开关（缺省）", "value": 1}
+    assert settings["after23NewDay"] == {"label": "晚子时·日柱开关（缺省）", "value": 1, "text": "是", "source": "default"}
 
 
 # ════════════════════════════════════ F9 · 八字本地优先 ════════════════════════════════════

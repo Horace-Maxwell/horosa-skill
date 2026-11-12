@@ -260,21 +260,34 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
         if data.get("planet") and data.get("sign"):
             summary.append(f"骰面：{data['planet']} / {data['sign']}。")
         return summary
-    lines = [f"工具 `{tool_name}` 已返回结构化结果。"]
-    keys = sorted(data.keys())
-    if keys:
-        lines.append(f"顶层字段：{', '.join(keys[:8])}{' ...' if len(keys) > 8 else ''}")
-    if "chart" in data:
-        lines.append("结果包含 chart 结构。")
-    if "predictives" in data:
-        lines.append("结果包含 predictive / 时运相关数据。")
-    if "bazi" in data:
-        lines.append("结果包含八字结构。")
-    if "liureng" in data:
-        lines.append("结果包含六壬结构。")
-    if "jieqi24" in data and isinstance(data["jieqi24"], list):
-        lines.append(f"结果包含 {len(data['jieqi24'])} 个节气节点。")
-    return lines[:4]
+    headline = export_headline(data)
+    if headline:
+        return [headline]
+    return [f"工具 `{tool_name}` 已返回结果（没有导出正文）。"]
+
+
+_PLACEHOLDER_PREFIX = "本次本地计算结果未返回"
+# 摘要头一行优先取这些段（它们是盘的「身份证」）；都没有就取第一段。
+_HEADLINE_SECTIONS = ("概览", "全局速览", "起盘信息", "节气盘参数", "问事", "起课", "起卦")
+
+
+def export_headline(data: dict[str, Any], *, limit: int = 96) -> str | None:
+    """一句话标题（深审 F13）：「已生成<技法>（N 段）：<起盘信息头两行>」。取代 v0.49 的「工具 `x` 已返回结构化结果」「顶层字段：…」——
+    那两行对读者没有信息，阅读视图早就把后一行删了，CLI / 存档 / dispatch 摘要里却一直在。"""
+    snapshot = data.get("export_snapshot") if isinstance(data.get("export_snapshot"), dict) else {}
+    sections = [row for row in snapshot.get("sections") or [] if isinstance(row, dict) and str(row.get("body") or "").strip()
+                and not str(row.get("body")).startswith(_PLACEHOLDER_PREFIX)]  # 「未产出」占位不算段
+    if not sections:
+        return None
+    technique = snapshot.get("technique") if isinstance(snapshot.get("technique"), dict) else {}
+    label = technique.get("label") or technique.get("key") or "盘"
+    chosen = next((row for title in _HEADLINE_SECTIONS for row in sections if row.get("title") == title), sections[0])
+    facts = [line.strip() for line in str(chosen.get("body") or "").splitlines()
+             if line.strip() and not line.strip().startswith(("|", _PLACEHOLDER_PREFIX))][:2]
+    text = "；".join(facts)
+    if len(text) > limit:
+        text = text[:limit] + "…"
+    return f"已生成{label}（{len(sections)} 段）" + (f"：{text}" if text else "。")
 
 
 def _extract_entities(input_normalized: dict[str, Any], query_text: str | None = None) -> list[dict[str, Any]]:

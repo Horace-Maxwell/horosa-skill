@@ -120,6 +120,12 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 - **每次给出结论后附技法尾注**：把 `data.technique_card`（技法/口径/算源/段落健康度/版本链）原样转述，
   不得改写或省略口径行；`matches_declaration: false` 必须明说。要文件调 `horosa_technique_report`
   （`run_id` 单次 / `group_id` 整场，后者另检出跨技法口径冲突）。它与咨询报告是两种文档，不混。
+  **卡上的设置全表（v0.50.0）只从闸门指引表推出**（`technique_card.result_setting_specs`：`ask_if_missing` 带选项的问题 + `safe_defaults`），
+  每项 `{label, value, text, source}`（source = user / profile / place / default，run_tool 标）；新问题 / 新缺省进指引表，卡自动跟上，
+  `tests/test_technique_card_settings.py` 整表守。性别是否适用只认 `questions.gender_required`。知识库 / 导出域不挂卡（`CARDLESS_DOMAINS`）。
+- **择日条件的含义从上游注册表生成**（v0.50.0，`data/zeri_condition_meanings.json` 是生成件：`scripts/gen_zeri_condition_meanings.py`，re-vendor 后重跑）：
+  guidance `condition_types` 每类一行中英说明 + negate 规则（自带判法 + negate = 双重否定）；十个择日结果都带 `data.condition_echo` 与摘要一行
+  「条件按此理解」（引擎读法，horosa-core-js `zeri_conditions`）。不手写条件说明。
 - **没有 MCP 的 agent 走同一契约**（v0.38.0 B5）：SKILL.md「Shell-only agents (no MCP)」——`tool run --input/--output`
   文件（Windows PowerShell 5.1 管道会重编码）、退出码 0 = 信封已写（看 `ok`）/ 2 = 起跑前被拒（stderr JSON `code`），闸门
   `agent_guidance.required` 在 stderr；两节里每条命令由 `tests/test_skill_shell_contract.py` 对到 Click 命令树。四家客户端
@@ -127,7 +133,10 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
   指针 + 闸门 + 读盘 + `setup --client`，`verify_docs_sync.check_agent_mirrors` 锁；不加 Roo（不在 Works-with 矩阵）。
 - **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（31 域，逐条 citation 落到
   上游组件文件），没有的按通则推理并明说无出处；多技法互证走 `horosa_hecan`——它产**模板**不产
-  终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。
+  终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。**合参（v0.50.0）**：选技法只有 `engine/hecan_select.py` 一份
+  （闸门与服务共用）——没点名按意图类缺省配一对（`IntentClass.hecan_pair`，披露），择日不配对；`tools` 可混写 run_id（复用存档、不重算）；
+  算成少于两个 = `cross_validation: false` + `all_clear: null`，绝不把一个技法说成合参；每个技法带有上限的正文节选；合参有自己的 run
+  （`hecan_result` + `child_runs`），memory_show 接上复用的子结果。
 
 ## 4. 计算模型铁律（compute model）
 
@@ -401,7 +410,8 @@ dict，**不许原地改**签名里的字段 schema——否则同进程第二�
 `dispatch.no_matching_tool` 时可采纳兜底）、澄清门只接受「原话明说 + 词表证据 + conf≥τ」三钥齐的抽取（S2，永不替用户选
 默认，铁律 2 不动）、S3 门类分错只多一段向导；③ 失败一律**关闭式**回确定性路径并经 `_degrade` 进 `envelope.warnings`
 （三连败熔断 60 s，一窗一报）；④ 每次真调用自陈：`technique_card.decisions[]` / `DispatchEnvelope.decision_layer` /
-开启时 instructions 改口（两态 ≤2048 字节由测试锁）；⑤ 数据边界：一档 `meta` 只送**本地脱敏**后的问题文本（日期/时刻/
+开启时 instructions 改口（`HOROSA_TRACE_OTLP_ENDPOINT` 设了也改口：凡把数据送出本机的开关都要自陈，四种组合 × 两面都 ≤2048 字节由测试锁）；
+确定性路由命中且 dispatch 面为 enforce 时不发问（答案注定不被采纳，只有影子模式要对照）；⑤ 数据边界：一档 `meta` 只送**本地脱敏**后的问题文本（日期/时刻/
 坐标/地名/号码→占位符；v0.50.0-dev 起**按构造**：任何数字串一律 `<数字>`、星阙地名库全集 + 档案名 + 引导词人名 + 干支时辰，地名库找不到就抛、不发；
 线性时间——空白先压、量词有上界、输入先截，`\s*` 开头的模式曾在 8 万空格上跑 43 s；改脱敏会让 `contracts/jev_eval/cache.jsonl` 的回放失配，晋升的 τ 要重测），二档 `snapshot` 才许导出快照且只给 S4/S5；出生数据永不以原值离机；key 只在调用时读、
 永不入日志/异常/信封/生成配置；⑥ 阈值只认自家中文标注集测出的数——`enforce` 需 `contracts/jev_thresholds.json`

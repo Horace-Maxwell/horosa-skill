@@ -1048,8 +1048,8 @@ def benchmark_run(
 
 @app.command(help="合参：一问多技法交叉印证，产出合参模板（分歧必须披露）。Cross-technique synthesis template.")
 def hecan(
-    query: str = typer.Option(..., "--query", help="用户的问题（路由据此选盘，除非显式 --tool）。"),
-    tool: list[str] = typer.Option([], "--tool", help="显式指定技法（可重复），缺省由路由选。"),
+    query: str = typer.Option(..., "--query", help="用户的问题（没给 --tool 时按问题领域缺省配两种技法）。"),
+    tool: list[str] = typer.Option([], "--tool", help="技法名或此前运行的 run_id（复用、不重算；可重复）。"),
     max_tools: int = typer.Option(5, "--max-tools", help="最多同时起几个技法。"),
     stdin: bool = typer.Option(False, "--stdin", help="Read birth/subject JSON from stdin."),
     input_file: Optional[Path] = typer.Option(None, "--input", help="Read birth/subject JSON from a file."),

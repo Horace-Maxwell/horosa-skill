@@ -41,6 +41,31 @@ def test_instructions_fit_the_budget_in_both_states_and_off_is_byte_identical() 
     assert "nothing is sent to a remote service" not in on and "HOROSA_JEV is ON" in on and "TypeSafe Jev" in on
 
 
+def test_instructions_name_every_path_that_sends_data_off_the_machine() -> None:
+    """HOROSA_TRACE_OTLP_ENDPOINT 把每条追踪事件 POST 出去：instructions 不许再说「nothing is sent」（决策层之外的第三种说法）。
+    四种组合 × 全量 / 精简两面都在 2048 字节预算内。"""
+    for compact in (False, True):
+        for jev in (False, True):
+            for otlp in (False, True):
+                text = _server_instructions(decision_layer_on=jev, compact=compact, trace_export_on=otlp)
+                assert len(text.encode("utf-8")) <= 2048, (compact, jev, otlp, len(text.encode("utf-8")))
+                assert ("nothing is sent to a remote service" in text) is (not jev and not otlp), (compact, jev, otlp)
+                assert ("HOROSA_TRACE_OTLP_ENDPOINT is set" in text) is otlp
+                assert ("TypeSafe Jev" in text) is jev
+
+
+def test_mcp_server_instructions_follow_the_trace_export_setting(tmp_path: Path) -> None:
+    from horosa_skill.config import Settings
+    from horosa_skill.service import HorosaSkillService
+    from horosa_skill.surfaces.mcp_server import create_mcp_server
+
+    settings = Settings(server_root="http://127.0.0.1:9", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs",
+                        trace_otlp_endpoint="http://127.0.0.1:4318/v1/traces")
+    server = create_mcp_server(HorosaSkillService(settings), settings)
+    assert "HOROSA_TRACE_OTLP_ENDPOINT is set" in server.instructions
+    assert "nothing is sent to a remote service" not in server.instructions
+
+
 def test_doctor_report_has_a_keyless_decision_layer_section(monkeypatch, tmp_path: Path) -> None:
     from horosa_skill.decisions.policy import load_policy, load_thresholds
 

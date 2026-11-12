@@ -1188,6 +1188,16 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[神煞合参]\n（通用命理合参层·非本术原生）\n命(未·天驛)：华盖—主孤高"
                 ),
             }
+        if tool_name == "zeri_conditions":
+            # 择日条件回显 / 词表：只读上游注册表、不起盘——直接跑真 JS（node 必备；与 selfcheck 同一入口）。
+            import json as _json
+            import subprocess as _subprocess
+            from pathlib import Path as _Path
+
+            cli = _Path(__file__).resolve().parents[1] / "horosa-core-js" / "bin" / "cli.mjs"
+            out = _subprocess.run(["node", str(cli), "run", "zeri_conditions"], input=_json.dumps(payload, ensure_ascii=False),
+                                  capture_output=True, text=True, encoding="utf-8", check=True)
+            return _json.loads(out.stdout)
         if tool_name == "xiaoliuren":
             # 小六壬：6 段无条件恒出（道门九宫含五行生克/拜解）。真内容样例，供离线契约 round-trip。
             return {

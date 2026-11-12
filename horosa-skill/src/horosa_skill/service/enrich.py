@@ -11,7 +11,7 @@ from horosa_skill.decisions.layer import current_decision_records
 from horosa_skill.engine.registry import CLASSICAL_ANALYSIS_TOOLS, EGYPT_AXIS_KEYS, TOOL_DEFINITIONS
 from horosa_skill.civil_calendar import LUNAR_JS_MAX_YEAR, LUNAR_JS_MIN_YEAR, _parse_date_parts
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
-from horosa_skill.reports.technique_card import build_technique_card
+from horosa_skill.reports.technique_card import CARDLESS_DOMAINS, build_technique_card
 from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
 from horosa_skill.service._common import (
     _civil_shift_moment,
@@ -789,6 +789,9 @@ class EnrichMixin:
         if not isinstance(response_data, dict):
             return response_data
         if os.environ.get("HOROSA_TECHNIQUE_CARD", "1").strip() in {"0", "false", "no"}:
+            return response_data
+        if tool_name in TOOL_DEFINITIONS and TOOL_DEFINITIONS[tool_name].domain in CARDLESS_DOMAINS:
+            # 知识库 / 导出注册表与解析：没有起任何盘，卡上没有一项是真的（v0.49 一份注册表回答里 2.9 KB 是它）。
             return response_data
         try:
             card = build_technique_card(

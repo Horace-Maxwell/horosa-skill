@@ -1603,6 +1603,24 @@ try {
   console.error(`  FAIL placeSearch: ${err.message}`);
 }
 
+// 择日条件回显（skill 自有 tools/zeriConditions.js，深审 F5）：期望值 = 上游 huangliZeriConditionTypes.chong_shengxiao.summary 的写法
+// （mode 缺省 without →「不冲:」）+ 本工具的取反措辞；词表条数 = 上游十张注册表的键数（黄历 26）。
+try {
+  const { runZeriConditions } = await import('../src/tools/zeriConditions.js');
+  const tree = { kind: 'group', joiner: 'all', children: [
+    { kind: 'leaf', type: 'yi_has', params: { values: ['移徙'] } },
+    { kind: 'leaf', type: 'chong_shengxiao', negate: true, params: { values: ['马'] } },
+  ] };
+  const echo = runZeriConditions({ action: 'echo', technique: 'huanglizeri', tree }).data;
+  assert(echo.lines[1].zh === '且 不满足〔冲煞生肖：不冲:马〕（negate 取反：这一项不成立才算命中）', JSON.stringify(echo.lines));
+  const catalog = runZeriConditions({ action: 'catalog' }).data.catalog;
+  assert(catalog.huanglizeri.length === 26, `huanglizeri types ${catalog.huanglizeri.length}`);
+  console.log('  ok   zeriConditions 黄历冲煞生肖取反回显 / 词表条数');
+} catch (err) {
+  failures += 1;
+  console.error(`  FAIL zeriConditions: ${err.message}`);
+}
+
 // 🔴 收尾前再等一次：中途那句 `await Promise.all(pending)` 之后登记的 async check，其失败会在「all passed」打印之后才到，
 // 退出码照样 0（v0.50.0-dev 加 qimenzeri 金标时撞上：变异体打印了 FAIL，进程却以 0 退出）。
 await Promise.all(pending);

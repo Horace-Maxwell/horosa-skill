@@ -272,7 +272,7 @@ def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
         "request": {"type": ["object", "string"], "description": "整包载荷（对象或 JSON 串）"},
     }
     if hecan:
-        props["tools"] = {"type": "array", "items": {"type": "string"}, "description": "显式指定技法（缺省由路由选盘）"}
+        props["tools"] = {"type": "array", "items": {"type": "string"}, "description": "技法名或已有 run_id（复用不重算）；缺省按问题配两种"}
         props["max_tools"] = {"type": "integer", "description": "合参技法上限（默认 5）"}
     return {"type": "object", "properties": props, "additionalProperties": True}
 

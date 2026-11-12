@@ -640,7 +640,7 @@ class ReportsAPI:
                 "conversation_brief": conversation_brief,
                 "process": [
                     "读取 conversation_brief，明确用户问题、盘面上下文、解盘方法和输出口吻。",
-                    "阅读 report_template.source_context.export_text/export_sections 中的真实起盘结果。",
+                    "阅读 report_template.source_context.export_text（逐段段号见 source_export_sections）中的真实起盘结果。",
                     "像在 AI 对话窗口里正式解盘一样，先给结论，再给盘面依据、推理过程、风险边界和建议。",
                     "把完整正文写入 ai_report.answer_text，同时填写 direct_answer、executive_summary、analysis_sections、recommendations、limitations、evidence。",
                     "最后调用 horosa_report_render 或 horosa_report_from_tool，并把 ai_report 一起传入，生成最终 JSON/DOCX/PDF 和 memory。",

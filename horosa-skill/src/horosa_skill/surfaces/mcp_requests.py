@@ -111,7 +111,7 @@ def precheck_arguments(gate: str | None, payload: Any) -> ToolValidationError | 
         return None
     try:
         # dispatch / hecan：只判当事人位置上的字段（birth / subject / context），不按门面模型报「未知参数」。
-        normalize_request_payload(payload, model=model if definition is not None else None)
+        normalize_request_payload(payload, model=model if definition is not None else None, tool_name=gate if definition is not None else None)
     except ToolValidationError as exc:
         return exc
     return None

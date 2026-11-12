@@ -747,13 +747,28 @@ class MemoryStore:
         trace_id: str | None = None,
         group_id: str | None = None,
     ) -> MemoryRef:
+        return self.record_facade_result(
+            run_id=run_id, payload=payload, tool_name="horosa_dispatch", kind="dispatch_result", trace_id=trace_id, group_id=group_id,
+        )
+
+    def record_facade_result(
+        self,
+        *,
+        run_id: str,
+        payload: dict[str, Any],
+        tool_name: str,
+        kind: str,
+        trace_id: str | None = None,
+        group_id: str | None = None,
+    ) -> MemoryRef:
+        """门面的整份结果（dispatch_result / hecan_result）作为该 run 的一份产物。"""
         now = utc_now_iso()
         artifact_path = self._write_artifact(
             run_id=run_id,
-            tool_name="horosa_dispatch",
+            tool_name=tool_name,
             payload=payload,
             tool_call_id=None,
-            kind="dispatch_result",
+            kind=kind,
             trace_id=trace_id,
             group_id=group_id,
             evaluation_case_id=None,
@@ -764,7 +779,7 @@ class MemoryStore:
                 INSERT INTO artifacts (run_id, tool_call_id, tool_name, kind, path, created_at, file_size, sha256)
                 VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, "horosa_dispatch", "dispatch_result", str(artifact_path), now, *_file_hash_info(artifact_path)),
+                (run_id, tool_name, kind, str(artifact_path), now, *_file_hash_info(artifact_path)),
             )
             conn.execute("UPDATE runs SET updated_at = ?, group_id = COALESCE(group_id, ?) WHERE id = ?", (now, group_id, run_id))
             self._write_search_doc(conn, run_id, texts=_search.export_texts(payload))
@@ -772,7 +787,7 @@ class MemoryStore:
         self._refresh_run_manifest(run_id)
         return MemoryRef(
             run_id=run_id,
-            tool_name="horosa_dispatch",
+            tool_name=tool_name,
             artifact_path=str(artifact_path),
             artifact_id=int(cursor.lastrowid),
             trace_id=trace_id,

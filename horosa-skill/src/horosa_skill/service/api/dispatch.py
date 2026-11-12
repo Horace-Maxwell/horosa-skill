@@ -127,16 +127,19 @@ def _validated(model: Any, payload: dict[str, Any]) -> Any:
 
 class DispatchAPI:
     def hecan(self, payload: dict[str, Any], *, include_results: bool = False) -> dict[str, Any]:
-        """合参（v0.28.0 B3）：一问多技法交叉印证——全行业没有的形态，也只有 92 技法才做得起。
+        """合参（v0.28.0 B3；v0.50.0 深审重做）：一问多技法交叉印证。
 
-        传统方法论（三式互参、八字紫微互证）+ orchestrator-workers 编排：路由/显式选盘（上限
-        max_tools）→ 同一 group 逐技法起盘（复用 dispatch 全部载荷管线；澄清闸与 dispatch 一样在表面入口过）→ 产出**合参模板**：
-        逐技法证据表（引用不复制全文）+ 口径一致性（复用技法卡冲突检测）+ ai_fillable 综合槽。
-        两条铁律写进模板 instructions：**只准引用已导出段落的事实**；**分歧必须披露，不许平均**。
+        传统方法论（三式互参、八字紫微互证）+ orchestrator-workers 编排：显式 `tools`（技法名与此前运行的 run_id 可混写，
+        run_id 复用存档结果、不重算）或按问题领域缺省配一对（engine/hecan_select.py）→ 新算的技法在合参自己的 run / group 里起盘
+        （复用 dispatch 全部载荷管线：时间角色、原话与偏好转发；澄清闸在表面入口过）→ 产出**合参模板**
+        （service/hecan_template.py）：逐技法正文节选 + 口径一致性 + ai_fillable 综合槽；少于两个技法算成即明说「不是交叉印证」。
+        合参结果本身存成该 run 的 `hecan_result` 产物（child_runs 列出每个技法的 run_id），memory_show 打开它时带上子结果。
 
-        `include_results=True`（MCP 面）：另附 `results.<tool>` = 各技法的完整信封，由 MCP 的阅读视图逐个整形成正文——
-        模型填模板要的段落就在同一次返回里，不必再逐个 memory_show。CLI 不传，输出不变。
+        `include_results=True`（MCP 面）：另附 `results.<tool>` = 各技法的完整信封，由 MCP 的阅读视图逐个整形成正文。CLI 不传。
         """
+        from horosa_skill.engine import hecan_select
+        from horosa_skill.service import hecan_template as tpl
+
         with self.tracer.span(
             workflow_name="hecan.run",
             metadata={"entrypoint": "hecan", "payload": payload},
@@ -161,108 +164,182 @@ class DispatchAPI:
                 ) from exc
 
             max_tools = max(1, min(int(request.max_tools or 5), 8))
-            preselected = [resolve_tool_name(t) or t for t in (request.tools or []) if t][:max_tools] or None
-            dispatch_payload = birth_profiles.restore_dispatch_refs(request.model_dump(exclude_none=True), profile_uses)
-            dispatch_payload.pop("tools", None)
-            dispatch_payload.pop("max_tools", None)
-            envelope = self.dispatch(dispatch_payload, preselected_tools=preselected)
-            if not envelope.ok and not envelope.results:
-                # 路由失败原样透出（含 agent_recovery），不包一层假成功。
-                return {
-                    "ok": False,
-                    "schema": HECAN_SCHEMA,
-                    "question": request.query,
-                    "error": envelope.error.model_dump(mode="json") if envelope.error else None,
-                    "code": envelope.code,
-                    "message": envelope.message,
-                    "details": envelope.details,
-                    "trace_id": trace["trace_id"],
-                    "group_id": envelope.group_id,
-                }
+            names, run_ids = hecan_select.split_tools(request.tools)
+            names = [resolve_tool_name(name) or name for name in names]
+            reused = self._hecan_reused_results(run_ids)
+            selection_warnings: list[str] = []
+            if not names and not run_ids:
+                try:
+                    selection = hecan_select.select(request, max_tools=max_tools)
+                except DispatchResolutionError as exc:
+                    return self._hecan_refusal(request, trace, code=exc.code, message=str(exc), details=exc.details)
+                names, selection_warnings = selection.tools, list(selection.warnings)
+            reused_names = [name for name, _run, _envelope in reused]
+            fresh = [name for name in names if name not in reused_names]
+            # 上限按「复用 + 新算」一起数；复用的排前（用户点名要沿用的结果不该被截掉）。
+            fresh = fresh[: max(0, max_tools - len(reused))]
+            reused = reused[:max_tools]
+            selection_warnings.extend(self._hecan_reuse_mismatch(request, reused))
 
-            selected = envelope.selected_tools[:max_tools]
-            techniques: list[dict[str, Any]] = []
-            cards: list[dict[str, Any]] = []
-            for tool_name in selected:
-                result = envelope.results.get(tool_name)
-                if result is None:
-                    continue
-                data = result.data if isinstance(result.data, dict) else {}
-                export = data.get("export_snapshot") if isinstance(data.get("export_snapshot"), dict) else {}
-                card = data.get("technique_card") if isinstance(data.get("technique_card"), dict) else None
-                if card:
-                    cards.append(card)
-                technique_info = export.get("technique") if isinstance(export.get("technique"), dict) else {}
-                titles = [
-                    section.get("title")
-                    for section in export.get("sections", [])
-                    if isinstance(section, dict) and section.get("title")
-                ]
-                techniques.append({
-                    "tool": tool_name,
-                    "ok": result.ok,
-                    "technique": {"key": technique_info.get("key"), "label": technique_info.get("label")},
-                    "summary": list(result.summary),
-                    "section_titles": titles,
-                    "sections_health": {
-                        "missing_selected_sections": export.get("missing_selected_sections") or [],
-                        "unknown_detected_sections": export.get("unknown_detected_sections") or [],
-                    },
-                    "error": result.error.model_dump(mode="json") if result.error else None,
-                    # 证据指针而非全文：完整段落在 dispatch 存档里，memory_show(run_id) 可取。
-                    "evidence_pointer": {
-                        "run_id": envelope.memory_ref.run_id if envelope.memory_ref else None,
-                        "read_with": "horosa_memory_show",
-                    },
-                })
+            hecan_run_id: str | None = None
+            group_id = self.tracer.new_group_id()
+            if request.save_result:
+                try:
+                    hecan_run_id = self.store.create_run(
+                        entrypoint="hecan", query_text=request.query, subject=request.model_dump(exclude_none=True), group_id=group_id,
+                    )
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路
+                    selection_warnings.append(_memory_save_failed(exc))
 
-            consistency = build_technique_report(
-                cards=cards, scope="group", scope_id=envelope.group_id
-            )["consistency"] if cards else {"setting_conflicts": [], "export_contract_unclean": [], "compute_mismatched": [], "all_clear": None}
+            fresh_results: dict[str, ToolEnvelope] = {}
+            dispatch_warnings: list[str] = []
+            if fresh:
+                dispatch_payload = birth_profiles.restore_dispatch_refs(request.model_dump(exclude_none=True), profile_uses)
+                dispatch_payload.pop("tools", None)
+                dispatch_payload.pop("max_tools", None)
+                envelope = self.dispatch(dispatch_payload, preselected_tools=fresh, run_id=hecan_run_id, group_id=group_id)
+                if not envelope.ok and not envelope.results:
+                    # 载荷规划缺事实（起课时刻、第二个人……）：原样透出（含 agent_recovery），不包一层假成功。
+                    return self._hecan_refusal(request, trace, code=envelope.code, message=envelope.message, details=envelope.details,
+                                               error=envelope.error.model_dump(mode="json") if envelope.error else None,
+                                               group_id=envelope.group_id)
+                fresh_results = {name: envelope.results[name] for name in envelope.selected_tools if name in envelope.results}
+                dispatch_warnings = list(envelope.warnings)
 
-            template = {
+            selected = [*reused_names, *[name for name in fresh if name in fresh_results]]
+            envelopes: dict[str, dict[str, Any]] = {name: env for name, _run, env in reused}
+            envelopes.update({name: result.model_dump(mode="json") for name, result in fresh_results.items()})
+            child_runs = [{"tool": name, "run_id": run, "reused": True} for name, run, _env in reused]
+            child_runs += [{"tool": name, "run_id": hecan_run_id, "reused": False} for name in fresh if name in fresh_results]
+            run_of = {row["tool"]: row["run_id"] for row in child_runs}
+            techniques = [
+                tpl.technique_row(name, envelopes[name], run_id=run_of.get(name), reused=name in reused_names) for name in selected
+            ]
+            cards = [card for name in selected
+                     if isinstance(card := (envelopes[name].get("data") or {}).get("technique_card"), dict)]
+            succeeded = [row["tool"] for row in techniques if row["ok"]]
+            failed = [row["tool"] for row in techniques if not row["ok"]]
+            cross_validation = len(succeeded) >= tpl.MIN_TECHNIQUES
+            if cards and cross_validation:
+                consistency = build_technique_report(cards=cards, scope="group", scope_id=group_id)["consistency"]
+            else:
+                consistency = {"setting_conflicts": [], "export_contract_unclean": [], "compute_mismatched": [], "all_clear": None}
+            warnings = [*selection_warnings, *dispatch_warnings]
+            if not cross_validation:
+                warnings.append(tpl.not_cross_validated_warning(succeeded))
+
+            template: dict[str, Any] = {
                 "ok": True,
-                "schema": HECAN_SCHEMA,
+                "schema": tpl.HECAN_SCHEMA,
                 "question": request.query,
                 "selected_tools": selected,
+                "cross_validation": cross_validation,
                 "techniques": techniques,
+                "child_runs": child_runs,
                 "consistency": consistency,
                 "synthesis_contract": {
-                    "instructions": [
-                        "先读每个技法的导出段落（memory_show 取全量），再填 cross_validation：每技法一条结论，"
-                        "必须绑定该技法真实段落里的事实，不许引用未导出的内容。",
-                        "convergence 只写多技法**独立**得出的共同判断；一个技法的结论不算共识。",
-                        "divergence 必须逐条披露（哪两个技法、各说什么、可能因口径差异还是体系差异）——"
-                        "**分歧不许平均、不许只挑一边**；无法调和就写无法调和。",
-                        "consistency.setting_conflicts 非空时，先声明口径冲突再谈结论可比性。",
-                        "final_answer 先直答用户问题，再给依据与边界；引用口径/教义按 SKILL.md 带出处。",
-                    ],
+                    "instructions": tpl.instructions(),
                     "ai_fillable": {
                         "cross_validation": [
-                            {"tool": t["tool"], "label": (t["technique"] or {}).get("label"), "conclusion": "", "evidence_lines": []}
-                            for t in techniques
+                            {"tool": row["tool"], "label": (row["technique"] or {}).get("label"), "conclusion": "", "evidence_lines": []}
+                            for row in techniques if row["ok"]
                         ],
                         "convergence": "",
                         "divergence": "",
                         "final_answer": "",
                     },
                 },
-                "memory_ref": envelope.memory_ref.model_dump(mode="json") if envelope.memory_ref else None,
-                "summary": [
-                    f"合参已起 {len(techniques)} 个技法（{('、'.join(selected))}），同组存档待综合。",
-                    "这是合参模板，不是终稿：请按 synthesis_contract 填写后给出结论（分歧必须披露）。",
-                ],
+                "memory_ref": None,
+                "summary": tpl.summary_lines(selected, reused=reused_names, cross_validation=cross_validation, failed=failed),
+                "warnings": warnings,
                 "trace_id": trace["trace_id"],
-                "group_id": envelope.group_id,
+                "group_id": group_id,
             }
+            if hecan_run_id is not None:
+                try:
+                    ref = self.store.record_facade_result(
+                        run_id=hecan_run_id, payload=template, tool_name="horosa_hecan", kind="hecan_result",
+                        trace_id=trace["trace_id"], group_id=group_id,
+                    )
+                    template["memory_ref"] = ref.model_dump(mode="json")
+                except Exception as exc:  # noqa: BLE001 - 存档是旁路
+                    template["warnings"].append(_memory_save_failed(exc))
             if include_results:
-                template["results"] = {
-                    tool_name: envelope.results[tool_name].model_dump(mode="json")
-                    for tool_name in selected if tool_name in envelope.results
-                }
+                template["results"] = {name: envelopes[name] for name in selected}
+                template = tpl.results_view_without_duplicates(template)
             trace["success"] = True
             trace["selected_tools"] = selected
+            trace["run_id"] = hecan_run_id
             return template
+
+    def _hecan_refusal(self, request: Any, trace: dict[str, Any], *, code: str | None, message: str | None,
+                       details: dict[str, Any] | None, error: dict[str, Any] | None = None, group_id: str | None = None) -> dict[str, Any]:
+        """路由 / 载荷规划拒绝：原样透出（含 agent_recovery），不包一层假成功。"""
+        return {
+            "ok": False,
+            "schema": HECAN_SCHEMA,
+            "question": request.query,
+            "error": error or {"code": code, "message": message, "details": details},
+            "code": code,
+            "message": message,
+            "details": details,
+            "trace_id": trace["trace_id"],
+            "group_id": group_id,
+        }
+
+    def _hecan_reused_results(self, run_ids: list[str]) -> list[tuple[str, str, dict[str, Any]]]:
+        """`tools` 里的 run_id → (技法名, run_id, 存档里的技法信封)。一个 run 里有几个技法结果（dispatch / 合参）就都取。"""
+        out: list[tuple[str, str, dict[str, Any]]] = []
+        for run_id in run_ids:
+            rows = self.store.query_runs(run_id=run_id, limit=1, include_payload=True)
+            if not rows:
+                raise ToolValidationError(
+                    bilingual(f"tools 里的 run_id 没有这条记录：{run_id}。", f"No stored run for the run_id in tools: {run_id}."),
+                    code="memory.run.not_found",
+                    details={"run_id": run_id, "field": "tools"},
+                )
+            found = [
+                (str(artifact.get("tool_name")), run_id, artifact["payload"])
+                for artifact in rows[0].get("artifacts") or []
+                if artifact.get("kind") == "tool_result" and isinstance(artifact.get("payload"), dict) and artifact["payload"].get("ok")
+            ]
+            if not found:
+                raise ToolValidationError(
+                    bilingual(
+                        f"run {run_id} 里没有算成的技法结果（只有报告 / 调度记录，或技法失败了），不能拿来合参；换一个 run_id，或写技法名重新起盘。",
+                        f"Run {run_id} holds no successful technique result (only reports / a dispatch record, or the technique failed); "
+                        "use another run_id or name the technique to compute it.",
+                    ),
+                    code="hecan.run_not_reusable",
+                    details={"run_id": run_id, "field": "tools",
+                             "artifact_kinds": sorted({str(a.get("kind")) for a in rows[0].get("artifacts") or []})},
+                )
+            for item in found:
+                if item[0] not in [name for name, _run, _env in out]:
+                    out.append(item)
+        return out
+
+    @staticmethod
+    def _hecan_reuse_mismatch(request: Any, reused: list[tuple[str, str, dict[str, Any]]]) -> list[str]:
+        """复用的本命类结果与这次给的出生数据不是同一个时刻 → 提醒（可能是另一个人的盘）。"""
+        birth = request.birth or (request.subject.birth if request.subject else None)
+        if birth is None or not reused:
+            return []
+        given = birth.model_dump(exclude_none=True)
+        notes: list[str] = []
+        for name, run_id, envelope in reused:
+            stored = envelope.get("input_normalized") if isinstance(envelope.get("input_normalized"), dict) else {}
+            if dispatch_plan.time_role(name) not in (dispatch_plan.NATAL, dispatch_plan.NATAL_TARGET, dispatch_plan.NATAL_MOMENT):
+                continue
+            diff = [key for key in ("date", "time") if key in given and key in stored and str(given[key]) != str(stored[key])]
+            if diff:
+                notes.append(bilingual(
+                    f"复用的 {name}（run {run_id}）出生{'/'.join(diff)}与这次给的不同（{', '.join(f'{k}: {stored[k]} ≠ {given[k]}' for k in diff)}）——"
+                    "可能不是同一个人或同一张盘，先与用户确认。",
+                    f"The reused {name} (run {run_id}) has a different birth {'/'.join(diff)} from this request "
+                    f"({', '.join(f'{k}: {stored[k]} != {given[k]}' for k in diff)}); it may be another person or chart, confirm with the user.",
+                ))
+        return notes
 
     # ---- 可选云端决策层（v0.39.0）：三个面的采纳逻辑都在这里，代码持有权限、模型只供证据 ----
     def _decision_layer_view(self, records: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -302,6 +379,10 @@ class DispatchAPI:
         """S1：两级 Choice。确定性路由命中 → 只记一致性；无解且 enforce 且 conf≥τ → 采纳兜底；其余原样。"""
         layer = self.decision_layer
         if layer is None or not layer.policy.surface_enabled("dispatch"):
+            return deterministic
+        if error is None and layer.effective_mode("dispatch")[0] == "enforce":
+            # 确定性路由命中时决策层的答案永远不会被采纳；只有影子模式要拿它做一致性对照。enforce 下不发这次请求
+            # （每次约 18.5 KB 的问题规格出本机，换来一条注定 adopted=false 的记录）。
             return deterministic
         state, redaction = build_meta_state(request.query, private_terms=self._private_terms())
         outcome = layer.ask(
@@ -449,7 +530,10 @@ class DispatchAPI:
         *,
         evaluation_case_id: str | None = None,
         preselected_tools: list[str] | None = None,
+        run_id: str | None = None,
+        group_id: str | None = None,
     ) -> DispatchEnvelope:
+        """`run_id` / `group_id`（合参内部用）：子技法记进合参自己的 run 与 group，不另开一条。"""
         # 命主档案先并进来（只为过 DispatchInput 校验；认不出的档案名在这里就拒）。交给各技法前摘回去：run_tool 按那个技法重新并
         # （性别只进读性别的技法）、在技法卡记出处。
         payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
@@ -574,7 +658,8 @@ class DispatchAPI:
         dispatch_warnings: list[str] = [*routing_warnings, *plan_warnings]
         extraction_shared: dict[str, Any] = {}
 
-        workflow_group_id = self.tracer.new_group_id()
+        workflow_group_id = group_id or self.tracer.new_group_id()
+        parent_run_id = run_id
         with self.tracer.span(
             workflow_name="dispatch.run",
             group_id=workflow_group_id,
@@ -586,8 +671,8 @@ class DispatchAPI:
                 "evaluation_case_id": evaluation_case_id,
             },
         ) as trace:
-            run_id: str | None = None
-            if request.save_result:
+            run_id = parent_run_id
+            if request.save_result and run_id is None:
                 try:
                     run_id = self.store.create_run(
                         entrypoint="dispatch",
