@@ -50,6 +50,19 @@ uv run horosa-skill install --archive runtime-archive --sha256 <上一步印出�
 - 读不了的归档一律报 `runtime.install_archive_invalid`，`details.detected_format` 说它实际是什么；已装的 runtime 不会被动。
 - `--archive` 也接受 `file://` URL；安装器仍会校验归档内嵌的清单版本与布局。
 
+### 2b. 只装 JS 引擎（Linux / Intel Mac / 网关机器，v0.50.0 起）
+
+没有 runtime 归档的平台只需要平台无关的 JS 引擎资产（约 7 MB）。同一个发布页下载 `horosa-core-js-v<版本>.tar.gz`，
+摘要在清单的 `core_js.sha256`：
+
+```bash
+python3 -c "import json; print(json.load(open('runtime-manifest.json'))['core_js']['sha256'])"
+uv run horosa-skill install --engine-only --archive horosa-core-js-v<版本>.tar.gz --sha256 <上一步印出的 sha256>
+```
+
+镜像前缀（路径 1）对它同样生效；联网时直接 `install --engine-only`（或在这些平台上直接 `install`）即可。引擎落在
+`<runtime 根>/core-js/`，`uninstall --engine-only` 只删它。另需 Node.js ≥ 20.10（`node` 在 PATH 上，或 `HOROSA_NODE_BIN`）。
+
 ## 3. 完全离线：U 盘搬运
 
 在一台能上网的机器上下载两件东西，拷到目标机：
@@ -90,7 +103,9 @@ uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill client config --f
 | `runtime.install_start_in_progress` | runtime 正在启动，这时换目录会把启动器脚下的文件搬走；已装的 runtime 没动 | 等启动结束（`horosa-skill runtime status`）后重跑 `install` |
 | `runtime.install_long_path` | Windows 路径超 260 且未开长路径 | 设 `HOROSA_RUNTIME_ROOT=C:\horosa` 或开注册表 `LongPathsEnabled` |
 | `runtime.path_not_ascii` | Windows 上 runtime 根含非 ASCII 字符（随包 java.exe / Swiss Ephemeris 按 ANSI 读路径，装了也起不来） | `HOROSA_RUNTIME_ROOT=C:\horosa`（纯 ASCII）后重跑 `install` |
-| `runtime.install_missing_platform` | 清单里没有本机平台 | Intel Mac / Linux 走网关模式（`HOROSA_SERVER_ROOT` 指向装了 runtime 的机器）；Windows ARM 不会走到这里——它自动装 win32-x64 载荷走仿真（结果里 `warnings[].code == runtime.platform_emulated`），走到这里说明清单连 win32-x64 都缺 |
+| `runtime.install_missing_platform` | 清单里没有本机平台，也没有 JS 引擎资产（0.50.0 之前的发布） | 换 0.50.0 及以后的清单：Intel Mac / Linux 会只装 JS 引擎（结果 `mode: engine_only`、`warnings[].code == runtime.engine_only_installed`），其余技法走网关模式（`HOROSA_SERVER_ROOT` 指向装了 runtime 的机器）；Windows ARM 不会走到这里——它自动装 win32-x64 载荷走仿真（结果里 `warnings[].code == runtime.platform_emulated`），走到这里说明清单连 win32-x64 都缺 |
+| `runtime.engine_asset_missing` | `install --engine-only` 用的清单没有 `core_js` 条目（0.50.0 之前的发布） | `--manifest-url` 指向更新的发布清单，或设 `HOROSA_CORE_JS_ROOT` |
+| `runtime.engine_asset_invalid` | 给的文件不是 JS 引擎资产（`details.problems` 说缺什么） | 重新下载 `horosa-core-js-v<版本>.tar.gz`，带 `--sha256` 再装 |
 | `runtime.install_download_failed` 反复出现在慢网 / 企业代理下 | 每块 1 MiB 之间等待超过 120 s，或 3 次重试用尽 | `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS=600` / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS=10`（每个镜像各算一轮）；`doctor --probe-network` 先看哪个镜像通 |
 | `runtime.install_os_too_old` | 本机系统版本低于载荷声明的 `min_os`（派生的 Windows 载荷要 Windows 10 1809+） | 升级系统，或走网关模式 |
 
@@ -122,6 +137,11 @@ yourself with `--sha256` (since v0.50.0; before that the check was silently skip
 (since v0.50.0), and anything unreadable — a proxy login page, a truncated download — is refused as
 `runtime.install_archive_invalid` with `details.detected_format`, leaving the installed runtime untouched.
 
+**2b. JS engine only (Linux / Intel Mac / gateway machines, since v0.50.0)** — download `horosa-core-js-v<version>.tar.gz`
+(about 7 MB) from the same release and run `horosa-skill install --engine-only --archive <file> --sha256 <core_js.sha256 from the
+manifest>`; online, `install --engine-only` (or plain `install` on those platforms) does the same through the mirror prefixes. It lands
+in `<runtime root>/core-js/`, `uninstall --engine-only` removes only it, and it needs Node.js >= 20.10 (`node` on PATH or `HOROSA_NODE_BIN`).
+
 **3. Fully offline (USB)** — copy the wheel and the runtime archive from a connected machine, then
 `uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./<archive> --sha256 <digest>`; a local
 `.whl` path works everywhere the release URL does.
@@ -138,8 +158,11 @@ local manifest file is not a manifest: `details.reason` says HTML page / empty /
 candidate — switch mirrors, never skip verification), `runtime.install_start_in_progress` (the runtime is starting and
 swapping now would pull files out from under the launcher; the installed runtime is untouched — wait for
 `horosa-skill runtime status`, then re-run), `runtime.install_long_path` (`HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled`),
-`runtime.install_missing_platform` (gateway mode via `HOROSA_SERVER_ROOT`; Windows on ARM never lands here — it installs the
-win32-x64 payload under emulation and reports `runtime.platform_emulated` in `warnings`), `runtime.install_os_too_old` (the
+`runtime.install_missing_platform` (a pre-0.50.0 manifest without this platform and without the JS engine asset — from 0.50.0 on
+Intel Mac / Linux install only the JS engine, `mode: engine_only` with a `runtime.engine_only_installed` warning; gateway mode via
+`HOROSA_SERVER_ROOT` for the rest; Windows on ARM never lands here — it installs the win32-x64 payload under emulation and reports
+`runtime.platform_emulated` in `warnings`), `runtime.engine_asset_missing` / `runtime.engine_asset_invalid` (`install --engine-only`
+with a manifest that predates the asset / a file that is not the asset), `runtime.install_os_too_old` (the
 host is older than the payload's `min_os` — upgrade the OS or use gateway mode). Slow or proxied networks: raise
 `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` (default 120, per 1 MiB chunk) / `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` (default 3, per
 mirror) and run `horosa-skill doctor --probe-network` to see which mirror answers.

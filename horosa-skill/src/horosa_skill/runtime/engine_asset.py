@@ -257,13 +257,13 @@ class EngineAssetMixin:
             result_warnings.append({
                 "code": "runtime.engine_only_installed",
                 "message": bilingual(
-                    f"本机平台（{platform_name}）没有离线 runtime 归档，只装了 JS 引擎：八字 / 紫微 / 六壬 / 河洛 / 参评等本地 JS 技法可用；"
-                    "要用 Java / chart 服务算的技法（西占、奇门 / 太乙 / 金口诀的排盘、神数等）还得走网关模式——设 HOROSA_SERVER_ROOT 与 "
-                    "HOROSA_CHART_SERVER_ROOT 指向一台装了 runtime 的机器。",
+                    f"本机平台（{platform_name}）没有离线 runtime 归档，只装了 JS 引擎：本地 JS 技法（八字、六爻、大六壬、河洛、参评、"
+                    "一掌经、塔罗、黄历等）可用；要 Java / chart 服务算的技法（紫微、西占、奇门 / 太乙 / 金口诀、神数等）还得走网关模式——"
+                    "设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指向一台装了 runtime 的机器。",
                     f"This platform ({platform_name}) has no offline runtime archive, so only the JS engine was installed: the local "
-                    "JS techniques (BaZi / Ziwei / Liuren / Heluo / Canping …) work; techniques computed by the Java / chart "
-                    "services (Western charts, Qimen / Taiyi / Jinkou boards, Shenshu …) still need gateway mode: point "
-                    "HOROSA_SERVER_ROOT and HOROSA_CHART_SERVER_ROOT at a machine that runs the runtime.",
+                    "JS techniques (BaZi, Liuyao, Liuren, Heluo, Canping, Yizhangjing, tarot, almanac …) work; techniques computed by "
+                    "the Java / chart services (Ziwei, Western charts, Qimen / Taiyi / Jinkou, Shenshu …) still need gateway mode: "
+                    "point HOROSA_SERVER_ROOT and HOROSA_CHART_SERVER_ROOT at a machine that runs the runtime.",
                 ),
                 "platform": platform_name,
             })

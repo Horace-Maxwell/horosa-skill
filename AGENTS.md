@@ -734,7 +734,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   留下的运行期文件，git 不跟踪、磁盘上有；sync 脚本 RSYNC_FILTERS、`verify_upstream_sync` TREE_EXCLUDE_SUFFIXES、
   `package_runtime_payload.sh` 与 windows/linux builder 的 `rsync_copy` 排除集**必须同时**列出它们——只在
   一处排除，剩下三处要么对着干净树恒红、要么把侧车打进包（首版 v0.35.0 darwin 包就带过一对）。
-  以后排除集加任何一项，都在这四处同加。跨树比对/preflight 的输入一律用上游 **HEAD 的干净 checkout**。
+  以后排除集加任何一项，都在这四处同加——外加 JS 引擎资产的 `build_core_js_asset.EXCLUDE_PATTERNS`（与 `RSYNC_FILTERS` 由
+  `tests/test_core_js_asset.py` 锁步）。跨树比对/preflight 的输入一律用上游 **HEAD 的干净 checkout**。
 - **flatlib 必须活过 strip**：`package_runtime_payload.sh` 保留 `flatlib-ctrad2/flatlib` 拷贝行，
   否则 bundled chart 服务 `ModuleNotFoundError: No module named 'flatlib'`。
 - **python-strip 先 `-prune` `site-packages`** 再删 `test`/`tests` 目录：删了 `site-packages/astropy/tests`
@@ -834,6 +835,10 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   否则镜像里 `uv pip install .` 直接失败（v0.38.0 B0 抓到 `scripts/runtime_templates/windows` 漏拷；守卫
   `tests/test_dockerfile_matches_wheel_includes.py`）。
 
+- **JS 引擎另有一件平台无关的发布资产 `horosa-core-js-v<ver>.tar.gz`（v0.50.0-dev，E-02）。** 只能由 `scripts/build_core_js_asset.py` 产出：
+  已跟踪树（须等于 HEAD）+ 锁里生产依赖闭包（node_modules 逐版本核对）、确定性归档；清单里只进顶层 `core_js`（`platforms` 键集是老安装器与
+  `--expect-platforms` 的契约，永不放它）；`contracts/release_platforms.json` 的 `core_js` 段是唯一事实（since / 资产名 / node 下限 / 必需条目），
+  安装器常量与 Dockerfile 的 Node 钉都按它锁步。改引擎的运行期文件布局 = 同改 `core_js.required_entries`。
 - **horosa-core-js 的 npm 依赖集 = `package.json`（v0.48.0 加 tz-lookup 6.1.25，钉上游 package-lock 的版本与 integrity）。**
   `verify_builder_parity` 逐依赖要求两个 builder 都 `require_path`、三平台 `REQUIRED_ENTRIES` 都列出；JS 工具在 `tools/index.js` 一律按需加载，
   旧 runtime 缺依赖只坏用到它的工具（地名：`place.runtime_outdated`，带升级命令），其余照常加载。
@@ -889,10 +894,10 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   一整年）、宿主 OS 决定的默认值（假归档要显式写全路径）、
   系统工具输出差异（托管 macOS 的 netstat 把别人的监听 socket 打成 CLOSED）。
 - **发布 = draft → 托管派生 → 真机矩阵 → [OK] 才转公开（v0.38.0 A5）。** 维护机只做 seed：`scripts/publish_release.sh`
-  （payload → darwin manifest（本地校验用）→ **SBOM** → MCPB → **wheel** → SHA256SUMS → verify；`--draft` 把 seed / .mcpb /
-  wheel / SBOM 放上 **draft** release，**永不上清单、永不建公开 release**；`--dispatch` 触发 `release-runtime.yml`）。
+  （payload → **JS 引擎资产** → darwin manifest（本地校验用）→ **SBOM** → MCPB → **wheel** → SHA256SUMS → verify；`--draft` 把 seed / JS 引擎资产 /
+  .mcpb / wheel / SBOM 放上 **draft** release，**永不上清单、永不建公开 release**；`--dispatch` 触发 `release-runtime.yml`）。
   流水线：`resolve`（draft 上有 seed）→ `build-windows`（windows-latest `build_runtime_release_windows.py --seed`）→
-  `assemble`（`verify_runtime_python_lock --seed`、双平台清单钉 tag + size、`verify_runtime_release --expect-platforms`、
+  `assemble`（`verify_runtime_python_lock --seed`、双平台清单钉 tag + size + 从 draft 取回的 JS 引擎资产写 `core_js`、`verify_runtime_release --expect-platforms`、
   SHA256SUMS、SBOM、上 draft、`attest-build-provenance`）→ `matrix`（`runtime-matrix.yml` 三台真机装→起→四引擎→
   ——三 lane **都阻断**，含 windows-11-arm（dry run #4 全绿后转阻断；`arm_nonblocking=true` 只是单次逃生口）→
   `setup` 全部客户端（v0.41.0 起 25 家）+ Claude Code user scope + HTTP 握手 + 挂着客户端不停 + restart/auto 端口→live pytest→停）→ `publish`（`sync_windows_release.py --check --tag vX --draft` 必 `[OK]` →
@@ -973,7 +978,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 - **修复一律走托管流水线**：修 → 重新 `publish_release.sh --draft --dispatch` → 矩阵绿 + `--check --tag --draft [OK]` → `publish=true`。
   Windows 构建机的 vendor 模式（`sync_windows_release.py --upload` 收尾、永不手翻 `--latest`）只在托管路径不可用时用；
   「目录 mtime 判源树新旧」的坑与判据见台账 v0.27.0。
-- **首诊命令**：`gh release view vX.Y.Z --json assets`（应见七件：darwin tar.gz + win32 zip + wheel + `.mcpb` + `horosa-skill-sbom.json` +
+- **首诊命令**：`gh release view vX.Y.Z --json assets`（应见八件：darwin tar.gz + win32 zip + JS 引擎资产（≥ 0.50.0）+ wheel + `.mcpb` + `horosa-skill-sbom.json` +
   runtime-manifest.json + SHA256SUMS.txt）+ 确认 `releases/latest/download/runtime-manifest.json` 同时含
   `darwin-arm64` 与 `win32-x64`。
 - **托管 runner 可以起 runtime——但只在 `release-runtime.yml` / `runtime-matrix.yml`，绝不在逐 push 的 `ci.yml`**
@@ -1251,6 +1256,11 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **Node 解析一次、读版本（E-11 / C-19）。** `engine/node_runtime.py`：HOROSA_NODE_BIN → runtime 自带 → PATH；HOROSA_NODE_BIN 指空是
   `js_engine.node_bin_missing`（不回落）；低于 `NODE_FLOOR`（与 horosa-core-js `engines.node` 锁步）是 `js_engine.node_too_old`；进程在输出 JSON
   前就死了，`error.message` 是 stderr 里那行 `XxxError`，不是 `{}`。版本按文件身份缓存、已装清单按 mtime 缓存。
+- **没有 runtime 归档的平台装 JS 引擎资产，不报「不支持」（E-02）。** `runtime/engine_asset.py`：清单缺本平台但有 `core_js` → `install` 自动
+  只装引擎（`mode: engine_only` + `runtime.engine_only_installed` 告警 + 网关出路）；`--engine-only` 任何平台显式。复用 manager 的清单读取 / 镜像 /
+  断点 / 摘要 / 安全解包，落 `<runtime 根>/core-js/`（`install.json` 记来历），**绝不碰 `current/`**；解析序 env → runtime → 本资产 → 源码树。
+  Node 不随资产走：缺 / 太旧时照装并在 warnings 点名装什么；`uninstall --engine-only` 只删 `core-js*`，完整卸载也带上它。setup 在外部引擎 /
+  无载荷两条路上尽力装它（失败不让 setup 失败）。引擎能力只说 headless JS 那部分：紫微、西占、三式、神数仍要 Java / chart（网关）。
 - **端口占用看 socket，不只看 HTTP（E-07）。** `ports.port_taken`：有人 accept，或绑不上且点得出监听进程 = 占着；start 起启动器前、
   `runtime.start_timeout` 的 `port_takers`、doctor 都用它；非自家的占用者 → `runtime.port_taken`（不起、不杀）。测试里与 `classify_endpoint`
   一样钉住（`_managed_mode`），因为维护机的 9999 / 8899 上跑着桌面端。
@@ -1840,9 +1850,9 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ### 9.6 发布 · 分发（release / distribution）
 
-- **发布件 = darwin seed + 派生的 win32-x64 + wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动
+- **发布件 = darwin seed + 派生的 win32-x64 + JS 引擎资产（≥ 0.50.0）+ wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动
   dispatch（用 `GITHUB_TOKEN` 翻公开产生的 published 事件不触发下游）；`verify_wheel_contents.py` 锁 wheel 内容（知识包 / bench / 闸表 /
-  Windows 启动模板 / 入口点 / 运行期契约 / skill 副本；core-js 不进 wheel、随 runtime）；`server.json` 只登记 mcpb（PyPI 未开，pypi 条目注册表
+  Windows 启动模板 / 入口点 / 运行期契约 / skill 副本；core-js 不进 wheel，随 runtime 与它自己的资产走）；`server.json` 只登记 mcpb（PyPI 未开，pypi 条目注册表
   publish 时必拒），mcpb 的 `fileSha256` 必须来自真正上传的那次 `--draft` 构建（`release-completeness.yml` 对齐）。
 - **官方 MCP Registry：名字按 GitHub 原样大小写、只在翻公开之后登记、只信发布页的 sha（v0.41.0）。** OIDC 授予
   `io.github.<repository_owner>/*`、前缀比较区分大小写 → `io.github.Horace-Maxwell/horosa-skill`；注册表的 `/v0/validate`
@@ -1855,7 +1865,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   `${PLUGIN_ROOT}` → 一个占位符都不写，命令是 `uvx` + 钉当前版本的 wheel、精简面。VS Code / Copilot CLI / Codex / OpenHands 优先读它，
   OpenClaw / Claude Code 仍读 `.claude-plugin/`——两套并存不会重复注册。`verify_client_configs.check_agent_plugin` 锁；`bump_version` 同改两份。
 - **零安装 = wheel 资产 + 镜像前缀 + 钉版本锁。** 每个 Release 附 `horosa_skill-<ver>-py3-none-any.whl`（发布脚本
-  [5/8] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
+  [6/9] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
   `HOROSA_RUNTIME_MIRROR` 由 `runtime/mirrors.py` 统一改写清单/归档/wheel 三种 URL；`client config --launcher uvx-wheel`
   是免 git、免 PyPI 的推荐零安装启动器（`uvx-git` 需要 git + github.com 直连）。文档/`server.json`/examples 里
   钉版本的 `@v<x>#` / `/v<x>/…whl` / `/v<x>/…mcpb` 由 `verify_docs_sync.check_pinned_install_commands` 锁死；

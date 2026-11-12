@@ -162,8 +162,9 @@ For the embedded payload manifest, see [`RUNTIME_MANIFEST_SPEC.md`](./RUNTIME_MA
 - 守卫：`scripts/verify_wheel_contents.py`（CI + 发布前）重建 wheel 并断言知识包/bench/闸表/Windows 启动模板/入口点
   都在；`verify_server_json.py` 锁 `server.json` 的 pypi 条目与 `pyproject` 的 name/version；发布工作流断言
   pyproject 版本 == release tag。
-- wheel **不含** `horosa-core-js`：它随离线 runtime payload 分发（manifest `artifacts.horosa_core_js_root`），
-  `HOROSA_CORE_JS_ROOT` 可覆盖；源码树回退只在 checkout 里有效。
+- wheel **不含** `horosa-core-js`：它随离线 runtime payload 分发（manifest `artifacts.horosa_core_js_root`），0.50.0 起另有平台无关的
+  独立资产 `horosa-core-js-v<ver>.tar.gz`（清单顶层 `core_js` 条目；没有 runtime 归档的平台 `install` 自动装它，`install --engine-only` 任何平台可装，
+  落在 `<runtime 根>/core-js/`）；`HOROSA_CORE_JS_ROOT` 可覆盖；源码树回退只在 checkout 里有效。发布侧的来龙去脉见 [OPERATIONS.md](./OPERATIONS.md)「JS 引擎资产」。
 - 发布顺序（v0.38.0 A5，v0.40.0 补齐）：`preflight_release.py` 全绿（含上游 pin 在公开远端）→ tag → `publish_release.sh --draft --dispatch`
   （draft + 触发 `release-runtime.yml`：派生 Windows 半、双平台清单、真机矩阵）→ 提交 `server.json` 的 mcpb sha 回填（来自这一次 draft 构建）→
   `sync_windows_release.py --check --tag vX --draft` [OK] → `gh workflow run release-runtime.yml -f version=X -f publish=true -f run_matrix=true`

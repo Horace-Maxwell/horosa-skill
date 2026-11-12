@@ -267,7 +267,8 @@
       "source_url": "https://github.com/nodejs/Release/blob/main/schedule.json",
       "verified_on": "2026-09-29",
       "affects": [
-        "horosa-skill/scripts/package_runtime_payload.sh"
+        "horosa-skill/scripts/package_runtime_payload.sh",
+        "horosa-skill/Dockerfile"
       ]
     },
     {

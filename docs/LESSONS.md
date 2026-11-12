@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-12) | JS 引擎只随 darwin / win32 两个 runtime 归档走：Linux、Intel Mac、Docker、pip 网关、没跑 install 的人一个都没有，八字 / 六爻 / 六壬 / 河洛 / 参评等全部 js_engine.cli_missing；install 在这些平台上只报「不支持」，Docker 镜像连 node 都没有 | 平台无关资产 `horosa-core-js-v<ver>.tar.gz`（确定性构建）随发布上 draft、进清单顶层 `core_js`、[GAP] 与 completeness 查缺件 / 摘要；install 在无载荷平台自动只装它、`--engine-only` 任何平台；Docker 自带钉版本 Node + 引擎 |
 | v0.50.0-dev (2026-11-12) | 客户端文档跟不上十三批改动：SKILL.md 说 profile 的 place 不解析（其实解析）、门面 13 写成 14 / 11、`warnings` 非空 = 不完整、确认标记万能、dispatch 什么都能接；示例从没对过 schema，`response_sections` 广告成字符串而服务自己的续读调用给整数 | SKILL.md 按弱客户端重写（45 KB → 27 KB，细节进 references）；示例一律 ```call 块，`tests/test_skill_examples.py` 离线逐条对工具面 / 字段 / 逐字段校验 / 闸门，文档批对共享引擎逐条真跑 |
 | v0.50.0-dev (2026-11-12) | 深审余项：缺 zone 时小六壬 KeyError、占时四技法 HTTP 500、神数 / 本地八字链悄悄按 +08:00；命主的 ad=-1 把择日窗口 / 流年 / 起课读成公元前；择日入参问题报「重试 / doctor」；卦义不认卦名；日子馆印 undefined；十年大运印英文星名；按设计不出的段印失败式占位 | 时地缺什么报什么（`place_fields_required`）、`ad` 只跟它配对的日期（`_ad_of_date`，源码扫描守卫）、`zeri_engine_input_error` 逐字段、`SECTIONS_NOT_PRODUCED_BY_DESIGN` 走 not_requested |
 | v0.50.0-dev (2026-11-12) | 中式技法同一个输入多种读法：太乙缺省日界盘头写 24 点、日柱按 23 点，options 里的日界只到快照（盘头辛酉正文壬戌）；`ad=-1` 被正传 / 小六壬 / 神数 ×14 等丢掉、太乙一半用；飞宫只认字面 female；小六壬「道家」、地占未知传本、紫微 timeAlg=2、河洛 / 一掌经十余旋钮认不出就换缺省；小六壬 nums / 灵棋 counts 用不了就悄悄以时起；河洛 / 参评公元前出空盘 ok=true | 入口只留一种形态（日界合到顶层、`ad=-1` 改写成带负号日期、派生盘 ad 随自己的时刻）；`cn_vocab` 词表挂 schema；给了用不了就拒并回 `cast_method`；本地历法域外 `tool.date_range_unsupported` |
@@ -245,6 +246,28 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-12 — JS 引擎只随两个平台的 runtime 归档走：其它机器一个都没有（E-02）
+
+- **症状**（深审 env 组 E-02）：wheel / pip / Docker / 网关安装在 Linux、Intel Mac 上（以及任何没跑 `install` 的人）没有本地 JS 引擎：
+  八字 / 紫微 / 奇门 / 太乙 / 金口诀 / 六壬 / 河洛 / 参评等一律 `js_engine.cli_missing`，六爻失败，盘图与塔罗悄悄降级；`install` 在这些平台上只报
+  `runtime.install_missing_platform`，Docker 镜像连 node 都没有；`setup` 在网关 / 无载荷两条路上一个字节都不装却报成功。
+- **根因**：horosa-core-js 只作为 runtime 载荷的一部分发布（`artifacts.horosa_core_js_root`）。载荷含原生二进制（JDK / CPython / Node），所以只有
+  darwin-arm64 / win32-x64 两份；而引擎本身是纯 JS + 四个生产 npm 包，与平台无关——它被不必要地绑在了平台载荷上。
+- **修复**（维护者选方案 a）：每个发布另附平台无关的 `horosa-core-js-v<ver>.tar.gz`。`scripts/build_core_js_asset.py` 从已跟踪树 + 锁里生产依赖闭包
+  确定性打包；`publish_release.sh` [2/9] 构建并与 seed 同批上 draft、进 SHA256SUMS；`generate_release_manifest.py --core-js-archive` 写清单顶层 `core_js`
+  （钉 tag 的 url、sha256、size、node 下限、version；不进 `platforms`）；`release-runtime.yml` 的 resolve 先查 draft 上有它、assemble 取回同一份字节写进
+  最终清单与 SHA256SUMS。安装侧 `runtime/engine_asset.py`：清单缺本平台但有 `core_js` 时 `install` 自动只装引擎，`--engine-only` 任何平台显式；
+  复用镜像 / 断点 / 摘要 / 安全解包，落 `<runtime 根>/core-js/`，`uninstall --engine-only` 只删它；Node 不随资产走，缺了照装并说清装什么。
+  Docker 镜像加钉版本 Node（与 runtime_toolchain 同版本）+ 按锁 `npm ci --omit=dev` 的引擎，设 `HOROSA_CORE_JS_ROOT`。
+- **守卫**：`tests/test_core_js_asset.py`（排除集与 `RSYNC_FILTERS` 锁步、只含生产依赖、两次构建逐字节相同、脏树 / 版本不符 / 锁不符 / 符号链接拒）；
+  `tests/test_core_js_release_wiring.py`（清单生成、校验器 since 起必需、`sync_windows_release --check` 对缺件 / 缺条目 / 未钉 tag / 摘要不符 / 无摘要 /
+  size 不符各报 [GAP]、completeness 五项、发布脚本与流水线把资产带进最终清单与 SHA256SUMS）；`tests/test_engine_asset_install.py`（127.0.0.1 上的
+  HTTP 源 + 镜像前缀、篡改摘要拒且旧引擎原样、缺资产 / 404 / 非引擎归档 / 穿越成员拒、卸载范围、无载荷平台自动装、Node 缺 / 旧的告警、真资产装上后
+  真跑 place_search 与 huangli）；Dockerfile 守卫五个负向对照。每把都先用变异体跑红过。
+- **规则**：平台无关的东西不绑在平台载荷上；一件发布资产 = 构建脚本 + 清单条目 + [GAP] / completeness 检查 + 安装路径 + 卸载范围，同一个 change 里齐。
+  `contracts/release_platforms.json` 的 `core_js` 段是唯一事实；说引擎能力时只说 headless JS 那部分（紫微、西占、三式、神数仍要 Java / chart）。
+
 
 ### v0.50.0-dev / 2026-11-12 — 客户端文档落后于行为：SKILL.md 的说法与示例没人核对（文档批）
 

@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-6521_passed-3e7c6f?style=flat-square" alt="6521 passed" />
+  <img src="https://img.shields.io/badge/测试-6591_passed-3e7c6f?style=flat-square" alt="6591 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -135,10 +135,13 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 > PyPI 通道（`uvx horosa-skill …`）已就绪但**暂未开通**（等维护者完成一次性 Trusted Publisher 配置），开通后命令更短、行为不变。
 
 > [!NOTE]
-> **Docker / Linux（实验）**：离线 runtime 只发布 macOS(arm64) / Windows(x64) 两个 payload，没有 Linux payload；
-> 容器里能跑的是 **MCP 网关**（Python 包 + 知识库 + 记忆），把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT`
-> 指向宿主机或另一台装了 runtime 的机器即可。仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`
-> （网关镜像：容器内没有离线 runtime，必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
+> **Linux / Intel Mac / Docker（实验）**：离线 runtime 只发布 macOS(arm64) / Windows(x64) 两个 payload。其它平台上
+> `horosa-skill install` 自 0.50.0 起改装**平台无关的 JS 引擎资产**（`horosa-core-js-v<版本>.tar.gz`，约 7 MB，装到 runtime 根下的 `core-js/`；
+> 需要系统里有 Node.js ≥ 20.10，没有时引擎照装、结果里说明装什么）：八字、六爻、大六壬、河洛、参评、一掌经、塔罗、黄历等本地 JS 技法因此可用；
+> 任何平台都可以用 `install --engine-only` 只装它，`uninstall --engine-only` 只删它。要 Java / chart 服务算的技法（紫微、西占、三式、神数等）
+> 走 **MCP 网关**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向宿主机或另一台装了 runtime 的机器即可。
+> 仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`（网关镜像：自带钉版本的 Node 与 JS 引擎，容器内没有离线 runtime，
+> 必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
 > 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.49.0/horosa_skill-0.49.0-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
 
 <details>
@@ -147,6 +150,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 | 症状 | 处理 |
 | --- | --- |
 | `uv: command not found` | 先安装 uv：`curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| 八字 / 六爻 / 六壬等报 `js_engine.cli_missing`，或 `doctor` 的 `js_engine.state` 是 `absent` | 本机没有 JS 引擎（Linux / Intel Mac / Docker 外的 pip 网关 / 没跑过 `install`）：`uv run horosa-skill install --engine-only`（任何平台，约 7 MB），再装 Node.js ≥ 20.10 让 `node` 进 PATH（或设 `HOROSA_NODE_BIN`）；`doctor` 的 `js_engine` 节应为 `ready`、`engine_source: engine_asset`。离线搬运：发布页下载 `horosa-core-js-v<版本>.tar.gz` 后 `install --engine-only --archive <文件> --sha256 <清单 core_js.sha256>` |
 | 下载缓慢或中断 | 重跑 `install` 会断点续传；或设 `HOROSA_RUNTIME_MIRROR=<镜像前缀>` 走镜像 |
 | `github.com:443` 直连不通（但 `api.github.com` 可达）——完整方案见 [docs/INSTALL_RESTRICTED_NETWORK.md](./docs/INSTALL_RESTRICTED_NETWORK.md) | 走 API 资产直链下载后本地安装：先 `curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest` 找到平台 zip/tar.gz 的 `assets[].id`，再 `curl -L -H "Accept: application/octet-stream" -o runtime-archive https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>`，最后 `uv run horosa-skill install --archive runtime-archive --sha256 <清单里的 sha256>`（文件名随意，安装器按内容认 zip / tar.gz；`--sha256` 可省但建议带上） |
 | Java 后端(:9999)未就绪 / `doctor` 报 `services:java_backend_not_running` | 会自动**降级 chart-only** 而不是全盘卡死：三式(奇门/太乙/金口)、神数、地占、塔罗、西占 chart 族照常可用；nongli/bazi/ziwei/liureng 与「占时」起课暂不可用。`doctor` 的 `java_diagnostics` 附捕获的 Java 启动错误，`selfcheck` 会自动改用 chart 侧探针 |
@@ -238,8 +242,8 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | macOS arm64 | ✅ 官方载荷 | 主力平台 |
 | Windows x64 | ✅ 官方载荷 | 见 [Windows 说明](./docs/OFFLINE_RUNTIME_RELEASES.md) |
 | Windows ARM（骁龙本 / Surface 等） | ✅ 自动装 x64 载荷走仿真（自 0.38.0） | Windows 11 的 x64 仿真下 Java / Python / Node 都能起（GitHub `windows-11-arm` 真机 lane 验证）；`install` 报 `runtime.platform_emulated`、`doctor` 报 `emulated: true`（`payload_platform: win32-x64`） |
-| Linux | ⚠️ 无载荷（实验） | 走**网关模式**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向一台受支持的机器 |
-| Intel Mac | ❌ 不支持 | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷，走网关模式 |
+| Linux | ⚠️ 无载荷（实验）；JS 引擎可装（自 0.50.0） | `install` 自动只装平台无关的 JS 引擎（需 Node.js ≥ 20.10），本地 JS 技法可用；其余技法走**网关模式**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向一台受支持的机器 |
+| Intel Mac | ❌ 不支持载荷；JS 引擎可装（自 0.50.0） | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷。`install` 自动只装 JS 引擎（需 Node.js ≥ 20.10），其余技法走网关模式 |
 
 > [!TIP]
 > 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 14 个门面工具（含按名直调的 `horosa_tool_run`，114 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；认不出的值会被忽略，问题写在 stderr、`horosa_agent_guidance` 的 `server_profile` 与 `doctor` 里；一个合法值都没有时只注册门面工具 + `horosa_tool_run`，不会悄悄变成全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
@@ -581,7 +585,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **6521 / 6521 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 204 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **6591 / 6591 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 204 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -590,14 +594,14 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | HorosaBench | 120 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
-| Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.49.0`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时明确报不支持并指向网关模式 |
+| Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.49.0`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时只装平台无关的 JS 引擎资产（自 0.50.0，本地 JS 技法可用），其余技法指向网关模式 |
 
 第一次 clone 后确认非空壳的最小验证：
 
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 6521 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 6591 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

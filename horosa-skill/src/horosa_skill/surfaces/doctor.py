@@ -447,9 +447,9 @@ def _doctor_summary(report: dict[str, Any]) -> dict[str, Any]:
         if report.get("platform_supported") is False:
             # E-02：没有载荷的平台也能有本地 JS 引擎（engine-only 资产）；结论按引擎在不在分两句。
             engine_ok = bool(js) and js.get("ok") is True
-            engine_zh = ("本地 JS 引擎已就位（八字 / 紫微 / 六壬等本地 JS 技法可用）。" if engine_ok else
+            engine_zh = ("本地 JS 引擎已就位（八字、六爻、大六壬等本地 JS 技法可用）。" if engine_ok else
                          f"本地 JS 引擎也还没有：`{cli_command('install --engine-only')}` 装上它（约 7 MB，需 Node.js ≥ 20.10）。")
-            engine_en = ("The local JS engine is in place (BaZi / Ziwei / Liuren and the other local JS techniques work)." if engine_ok else
+            engine_en = ("The local JS engine is in place (BaZi, Liuyao, Liuren and the other local JS techniques work)." if engine_ok else
                          f"The local JS engine is missing too: `{cli_command('install --engine-only')}` installs it (about 7 MB; "
                          "needs Node.js >= 20.10).")
             return result(
