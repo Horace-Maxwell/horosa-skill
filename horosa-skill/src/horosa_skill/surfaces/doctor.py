@@ -16,8 +16,11 @@ from horosa_skill.surfaces.openclaw_smoke import _openclaw_setup_command
 
 def _network_hints() -> dict[str, Any]:
     """代理/镜像相关的现场事实 —— 这些是「装不上 / 连不上本地后端」最常见的两类成因。"""
+    from horosa_skill.config import mask_url_userinfo
+
+    # 🔴 C-21：代理 URL 常带账号口令（`http://user:pass@proxy:8080`），doctor 的 JSON 会被贴进 issue / 聊天 —— 只给 scheme / 主机 / 端口。
     proxy_vars = {
-        name: os.environ[name]
+        name: mask_url_userinfo(os.environ[name])
         for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
         if os.environ.get(name)
     }
@@ -101,6 +104,7 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 # tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
 _DOCTOR_WARNING_CODES = (
     "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
+    "env:rejected_value", "env:invalid_url",
 )
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
     "runtime.manifest_invalid": {
@@ -149,6 +153,14 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
         "user_summary": "已装的离线 runtime 比最后一次看到的发布清单旧，或其导出契约（export_registry_version）低于本包期望——"
                         "能用，但新技法/新导出段可能缺失或对不上。",
         "next_action": "跑 `horosa-skill upgrade`（wheel / 插件 / MCPB 形态的完整命令见 warnings[].fix）；只想核对最新版本号可 `doctor --probe-network`。",
+    },
+    "env:rejected_value": {
+        "user_summary": "有环境变量的值认不出或超出范围，已按默认值处理（detail 里点名变量、原因与实际用的值；密钥类的值不显示）。",
+        "next_action": "改成合法的值（或删掉它用默认值），然后重启 AI 客户端。",
+    },
+    "env:invalid_url": {
+        "user_summary": "服务根 URL 的形状不对（缺 http:// 前缀、没有主机或端口不是数字）：这个值照原样在用，连接会失败。",
+        "next_action": "写成完整的 URL，例如 HOROSA_SERVER_ROOT=http://127.0.0.1:9999，然后重启 AI 客户端。",
     },
     "platform:emulated_process": {
         "user_summary": "当前 Python 进程在仿真下跑（x64 Python 在 ARM 芯片 / Rosetta）——能用，只是慢一点；离线 runtime 按芯片选载荷，不受影响。",
@@ -242,6 +254,32 @@ def _internal_port_env_warnings(settings: Settings) -> list[dict[str, str]]:
     advice = _advice_for("env:internal_port_override")
     return [{"code": "env:internal_port_override", "detail": "; ".join(mismatched) + "：" + advice["user_summary"],
              "fix": advice["next_action"]}]
+
+
+def _env_flag_audit() -> dict[str, Any]:
+    """未知 / 已移除的 HOROSA_*、已设旗标的档位、取值被拒的变量。只收集不打日志：Settings.from_env 已经打过一遍（E-15）。"""
+    from horosa_skill.config import ENV_FLAG_REGISTRY, audit_env_flags, env_rejections
+
+    try:
+        audit: dict[str, Any] = {"ok": True, "warnings": audit_env_flags(log=False)}
+    except ValueError as exc:
+        audit = {"ok": False, "warnings": [str(exc)]}
+    audit["set"] = {key: ENV_FLAG_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")}
+    audit["rejected"] = env_rejections()
+    return audit
+
+
+def _env_rejection_warnings(rejected: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+    """E-10：认不出的 env 值一条一条点名（值已按名字遮过：密钥类整段遮掉，URL 遮 userinfo）。"""
+    warnings: list[dict[str, str]] = []
+    for name, entry in sorted(rejected.items()):
+        kept = entry.get("action") == "kept_as_is"
+        coded = {"code": "env:invalid_url"} if kept else {"code": "env:rejected_value"}
+        advice = _advice_for(coded["code"])
+        detail = (f"{name}={entry.get('value')!r}: {entry.get('reason')}; "
+                  + ("the value is used as-is" if kept else f"using the default {entry.get('used')!r}"))
+        warnings.append({**coded, "variable": name, "detail": detail, "fix": advice["next_action"]})
+    return warnings
 
 
 def _explain_lines(report: dict[str, Any]) -> list[str]:
@@ -549,17 +587,8 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     from horosa_skill.knowledge import vectors as _vectors
 
     report["knowledge_vectors"] = {**_vectors.status(settings), "scope": "this process; the client's server may run in another environment"}
-    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果 + 已设旗标的生命周期档。
-    from horosa_skill.config import ENV_FLAG_REGISTRY as _ENV_REGISTRY
-    from horosa_skill.config import audit_env_flags as _audit_env_flags
-
-    try:
-        report["env_flags"] = {"ok": True, "warnings": _audit_env_flags(force=True)}
-    except ValueError as exc:
-        report["env_flags"] = {"ok": False, "warnings": [str(exc)]}
-    report["env_flags"]["set"] = {
-        key: _ENV_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")
-    }
+    # env 旗标审计（批 II-1）：未知 HOROSA_* 的 warn-and-ignore 结果 + 已设旗标的生命周期档 + 取值被拒的（E-10）。
+    report["env_flags"] = _env_flag_audit()
     # 可选云端决策层（v0.39.0）：模式 / 范围 / 面 / 模型 / 阈值锁 / 配置问题——**永不**含 key 的值；
     # 缺省 off 时也如实报 data_leaves_machine=False。零外网请求。
     from horosa_skill.decisions.policy import load_policy as _load_jev_policy
@@ -598,6 +627,7 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
         *_arch_warnings(report),
         *_internal_port_env_warnings(settings),
         *_payload_outdated_warnings(report),
+        *_env_rejection_warnings(report["env_flags"]["rejected"]),
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
     report["advice"] = [

@@ -15,12 +15,19 @@ from typing import Any
 
 import httpx
 import pytest
+from test_runtime_manager import (  # noqa: F401 - _managed_mode 是 autouse fixture
+    _managed_mode,
+    create_runtime_archive,
+)
 from typer.testing import CliRunner
 
 from horosa_skill.config import Settings
-from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError, recovery_for
+from horosa_skill.errors import (
+    RuntimeInstallError,
+    RuntimeValidationError,
+    recovery_for,
+)
 from horosa_skill.runtime import HorosaRuntimeManager, pidlock
-from test_runtime_manager import _managed_mode, create_runtime_archive  # noqa: F401 - _managed_mode 是 autouse fixture
 
 URL = "https://example.com/releases/download/v9/payload.tar.gz"
 MANIFEST_URL = "https://example.com/releases/latest/download/runtime-manifest.json"

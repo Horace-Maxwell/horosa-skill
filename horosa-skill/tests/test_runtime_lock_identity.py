@@ -9,14 +9,19 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from test_runtime_manager import (  # noqa: F401 - autouse fixture
+    _endpoints,
+    _install_fake_spawn,
+    _managed_mode,
+    _manager_with_runtime,
+)
 
 from horosa_skill.errors import RuntimeInstallError
 from horosa_skill.runtime import pidlock, procs
-from test_runtime_manager import _endpoints, _install_fake_spawn, _managed_mode, _manager_with_runtime  # noqa: F401 - autouse fixture
 
 LOCK = ".runtime-start.lock"
 posix_only = pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
@@ -24,7 +29,7 @@ posix_only = pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and o
 
 
 def _write_lock(path: Path, *, owner: str, pid: int, token: str | None) -> None:
-    payload = {"pid": pid, "owner": owner, "created_at": datetime.now(timezone.utc).isoformat()}
+    payload = {"pid": pid, "owner": owner, "created_at": datetime.now(UTC).isoformat()}
     if token is not None:
         payload["start_token"] = token
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -213,9 +218,10 @@ def test_start_on_an_unwritable_runtime_root_says_so(tmp_path: Path, monkeypatch
 
 @posix_only
 def test_install_into_an_unwritable_runtime_root_says_so(tmp_path: Path) -> None:
+    from test_runtime_manager import create_runtime_archive
+
     from horosa_skill.config import Settings
     from horosa_skill.runtime import HorosaRuntimeManager
-    from test_runtime_manager import create_runtime_archive
 
     archive = create_runtime_archive(tmp_path)
     root = tmp_path / "ro-root"

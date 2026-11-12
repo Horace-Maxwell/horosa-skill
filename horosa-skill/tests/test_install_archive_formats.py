@@ -18,14 +18,13 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from test_runtime_manager import _managed_mode, create_runtime_archive  # noqa: F401
 from typer.testing import CliRunner
 
 from horosa_skill.config import Settings
 from horosa_skill.errors import RuntimeInstallError, RuntimeValidationError
-from horosa_skill.runtime import HorosaRuntimeManager
-from horosa_skill.runtime import archives
+from horosa_skill.runtime import HorosaRuntimeManager, archives
 from horosa_skill.surfaces import cli
-from test_runtime_manager import _managed_mode, create_runtime_archive  # noqa: F401
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = CliRunner()

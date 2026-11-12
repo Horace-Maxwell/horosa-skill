@@ -158,4 +158,4 @@ def _resolved(path: Path) -> Path:
         return Path(os.path.abspath(os.path.expanduser(str(path))))
 
 
-__all__ = ["DataPurgePlan", "OWNED_NAMES", "owned_children_present", "plan_data_purge", "refusal_reason", "remove_owned"]
+__all__ = ["OWNED_NAMES", "DataPurgePlan", "owned_children_present", "plan_data_purge", "refusal_reason", "remove_owned"]
