@@ -131,7 +131,7 @@ class BaZiBirthInput(FlexibleModel):
     )
     response_view: str | None = Field(
         default=None,
-        description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
+        description="返回体视图：MCP 缺省 reading=正文+段索引+依据卡；sections=分段正文；titles=只给段索引；full=带原始引擎树（CLI 缺省即完整）。完整结果始终已存档。",
     )
     # [多运限·指定时段]：上游由界面勾选驱动，headless 开成显式入参。语义同上游 ——
     # 流年 × 流月笛卡尔各一段；流日/流时锚定到所选的第一个上层；总段数封顶 50。

@@ -94,7 +94,7 @@ def test_enums_are_locked_to_their_tables(full_tools) -> None:
     props = full_tools["horosa_astro_chart"]["inputSchema"]["properties"]
     assert props["zodiacal"]["enum"] == [0, 1]
     assert props["ad"]["enum"] == [1, -1]
-    assert props["response_view"]["enum"] == ["full", "sections", "titles"]
+    assert props["response_view"]["enum"] == ["reading", "sections", "titles", "full"]   # result_view.VIEWS
 
 
 def test_dispatch_and_hecan_advertise_a_single_loose_object(full_tools) -> None:

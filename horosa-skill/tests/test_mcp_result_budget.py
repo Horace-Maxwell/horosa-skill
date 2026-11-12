@@ -45,9 +45,12 @@ def _call(mcp, name: str, args: dict) -> tuple[int, dict]:
 
 
 def test_bazi_result_fits_one_sse_event_and_keeps_what_the_ai_reads(tmp_path: Path) -> None:
-    """负向对照：call_tool 里去掉「超预算 → _fit_result_budget」分支 → 线上 2.4 MB，第一条断言红（实跑过）。"""
+    """负向对照：call_tool 里去掉「超预算 → _fit_result_budget」分支 → 线上超预算，第一条断言红（实跑过）。
+
+    v0.50.0-dev：缺省改成阅读视图（不带原始树，见 tests/test_result_view*.py），线上预算管的是 `full` 视图；
+    JSON 正文不再缩进后八字全量约 33 万字符，只需略去 smallDirection 一张表。"""
     mcp, service = _server(tmp_path)
-    wire, body = _call(mcp, "horosa_cn_bazi_birth", BIRTH)
+    wire, body = _call(mcp, "horosa_cn_bazi_birth", {**BIRTH, "response_view": "full"})
     assert wire <= mcp_runner.MCP_RESULT_WIRE_BUDGET < SSE_EVENT_LIMIT
     full = service.run_tool("bazi_birth", BIRTH, save_result=False).model_dump(mode="json")
     # 给 AI 读的部分逐字不变；原始盘只略去最大的两张明细表，四柱等小块留着。
@@ -61,8 +64,9 @@ def test_bazi_result_fits_one_sse_event_and_keeps_what_the_ai_reads(tmp_path: Pa
     assert set(body["data"]) == set(full["data"]) and set(body) == set(full)
     bazi = body["data"]["bazi"]
     assert bazi["fourColumns"] == full["data"]["bazi"]["fourColumns"]
-    for key in ("smallDirection", "direction"):
-        assert bazi[key]["omitted"] == "too_large_for_mcp" and "memory show" in bazi[key]["note"]
+    small = bazi["smallDirection"]
+    assert small["omitted"] == "too_large_for_mcp" and "memory show" in small["note"]
+    assert bazi["direction"] == full["data"]["bazi"]["direction"], "放得下的明细原样留着"
     assert any("已略去原始明细" in w and "bazi.smallDirection" in w for w in body["warnings"])
 
 
@@ -89,3 +93,23 @@ def test_fit_is_pure_and_prefers_second_level_subtrees() -> None:
     assert fitted["data"]["chart"]["small"] == [1, 2, 3] and fitted["data"]["chart"]["big"]["omitted"] == "too_large_for_mcp"
     assert "horosa-skill memory show r1" in fitted["data"]["chart"]["big"]["note"]
     assert fitted["data"]["snapshot_text"] == "x" * 10
+
+
+def test_dispatch_results_are_fitted_across_techniques() -> None:
+    """调度 / 合参（`results.<tool>`）也受线上预算管：v0.49.0 两个技法 3.2 MB 原样上线（审计 MCP-03）。
+
+    负向对照：_fit_result_budget 去掉 results 映射这一支 → 原样返回，第一条断言红（实跑过）。"""
+    def envelope(tool: str, size: int) -> dict:
+        return {"ok": True, "tool": tool, "data": {"export_snapshot": {"export_text": "正文"},
+                                                 "chart": {"big": "y" * size, "small": [1]}}, "warnings": []}
+
+    raw = {"ok": True, "selected_tools": ["a", "b"], "memory_ref": {"run_id": "d1"}, "warnings": [],
+           "results": {"a": envelope("a", 700_000), "b": envelope("b", 600_000)}}
+    before = json.dumps(raw)
+    fitted = mcp_runner._fit_result_budget(raw, lambda value: json.dumps(value))
+    assert len(json.dumps(fitted)) <= mcp_runner.MCP_RESULT_WIRE_BUDGET
+    assert json.dumps(raw) == before
+    assert fitted["results"]["a"]["data"]["chart"]["big"]["omitted"] == "too_large_for_mcp"
+    assert fitted["results"]["b"]["data"]["export_snapshot"] == {"export_text": "正文"}
+    assert fitted["results"]["b"]["data"]["chart"]["small"] == [1]
+    assert any("已略去原始明细" in w for w in fitted["warnings"])

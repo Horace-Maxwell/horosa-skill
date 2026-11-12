@@ -60,11 +60,11 @@ class BirthInput(FlexibleModel):
     lat: str = Field(description="纬度：31n13（31°13'N）或十进制 31.2167（会自动归一）；南纬用 s。")
     lon: str = Field(description="经度：121e28（121°28'E）或十进制 121.4667（会自动归一）；西经用 w。")
     ad: int | None = Field(default=1, description="纪元：1=公元后（默认），-1=公元前。")
-    # 响应视图（所有技法工具通用，FlexibleModel 均接受）：None=完整；"sections"=段标题+正文；
-    # "titles"=只留段标题索引。仅精简返回体，完整快照照常存档（memory_show 可取回）。
+    # 响应视图（所有技法工具通用，FlexibleModel 均接受）。MCP 面在进工具之前就取走它、自己整形（horosa_skill/result_view.py）；
+    # CLI / 服务层只认 "sections" / "titles"（service/envelope._apply_response_view）。完整快照照常存档（memory_show 可取回）。
     response_view: str | None = Field(
         default=None,
-        description="响应精简视图：缺省=完整；'sections'=段标题+正文；'titles'=只留段标题索引（完整结果已存档，memory_show 可取回）。",
+        description="返回体视图：MCP 缺省 reading=正文+段索引+依据卡；sections=分段正文；titles=只给段索引；full=带原始引擎树（CLI 缺省即完整）。完整结果始终已存档。",
     )
     # 全表 0–24 由 astro_rulers.HOUSE_SYSTEM_LABELS（上游 AstroConst.HOUSE_SYSTEM_OPTIONS 镜像）生成——校验层描述，
     # 不进 tools/list（广告层 hsys 走 mcp_schema.CORE_DOC + 0–8 enum，预算所限）。

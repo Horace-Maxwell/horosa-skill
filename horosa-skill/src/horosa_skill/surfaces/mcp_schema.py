@@ -62,7 +62,7 @@ CORE_DOC: dict[str, str] = {
     "pos": "地点显示名",
     "gender": "1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
-    "response_view": "裁剪（全文已存档）",
+    "response_view": "full=原始树",
     "agent_confirmed_settings": "用户已确认设置→true",
     "defaults_accepted": "用户接受默认→true",
     "clarification_notes": "确认摘要",
@@ -90,7 +90,7 @@ def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
     if field == "ad":
         return {"enum": [1, -1]}
     if field == "response_view":
-        return {"enum": ["full", "sections", "titles"]}
+        return {"enum": ["reading", "sections", "titles", "full"]}
     if field == "siderealAyanamsa":
         # 47 制的 enum 每工具 600 B × 80 工具 = 48 KB，超预算；只给常用键，全表见 guidance。
         # 只举三制：印度标准 lahiri、西方恒星派 fagan_bradley、raman（v0.46.x 预算收紧，其余见 guidance）。

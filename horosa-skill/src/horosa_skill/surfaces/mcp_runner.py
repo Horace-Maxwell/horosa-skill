@@ -7,12 +7,14 @@ from contextvars import ContextVar
 from typing import Any
 
 import anyio
+import pydantic_core
 from mcp import types as mcp_types
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import ValidationError
 
 from horosa_skill.config import _env_int
 from horosa_skill.errors import ToolValidationError
+from horosa_skill.result_view import READING, Budget, cap_free_text, shape_result, take_view_request
 from horosa_skill.service import progress_sink
 from horosa_skill.textscript import SIMPLIFIED
 from horosa_skill.textscript.localize import PROTOCOL_OPERATIONS, localize
@@ -133,6 +135,9 @@ class HorosaMCPServer(MCPServer):
     """
 
     output_script: str = SIMPLIFIED
+    # 结果视图与模型预算（service 之外的一层，见 horosa_skill/result_view.py）：create_mcp_server 按 Settings 设。
+    result_view: str = READING
+    result_budget: Budget = Budget(max_tokens=20_000, max_chars=48_000)
 
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None) -> Any:
         if context is None:
@@ -140,6 +145,9 @@ class HorosaMCPServer(MCPServer):
         tool = self._tool_manager.get_tool(name)
         if tool is None:
             return await super().call_tool(name, arguments, context)
+        # 视图参数只管返回体的形状：进工具之前取走，服务层、闸门、存档都见不到；过长的自由文本先截断（会被回显进结果与存档）。
+        arguments, view = take_view_request(arguments, default_view=self.result_view)
+        arguments, capped = cap_free_text(arguments)
         token = _CURRENT_CONTEXT.set(context)
         try:
             with request_conflict_scope() as request_notes:
@@ -148,20 +156,41 @@ class HorosaMCPServer(MCPServer):
             _CURRENT_CONTEXT.reset(token)
         if isinstance(raw, mcp_types.InputRequiredResult):
             return raw
-        raw = _with_request_notes(raw, request_notes)
+        raw = _with_request_notes(raw, [*request_notes, *capped])
+        convert = functools.partial(_compact_convert, tool.fn_metadata)
+        # 阅读视图 + 模型预算：在转字形之前（少转几十万字），在盘图内嵌之前（内嵌按整形后的体积算余量）。
+        raw = await anyio.to_thread.run_sync(shape_result, raw, view, self.result_budget)
         # 盘图 PNG 在转文字之前定好内嵌几张：没内嵌的说明进 summary，要跟着结果一起转字形。
         images: list[mcp_types.ImageContent] = []
         if _png_cards(raw):  # 读文件、base64 放进线程；别的结果一个字节都不碰
-            raw, images = await anyio.to_thread.run_sync(_plan_inline_images, raw, tool.fn_metadata.convert_result)
+            raw, images = await anyio.to_thread.run_sync(_plan_inline_images, raw, convert)
         if self.output_script != SIMPLIFIED and name not in UNLOCALIZED_TOOLS:
             # 一份结果可达数百 KB 文本（合参 / 调度会带多个技法），转换放进线程，别卡住事件循环上的 ping / cancel。
             raw = await anyio.to_thread.run_sync(localize, raw, self.output_script)
         protocol = context.protocol_version if context._request_context is not None else None
-        converted = tool.fn_metadata.convert_result(raw)
+        converted = convert(raw)
         if _wire_bytes(converted) > MCP_RESULT_WIRE_BUDGET:
-            raw = await anyio.to_thread.run_sync(_fit_result_budget, raw, tool.fn_metadata.convert_result)
-            converted = tool.fn_metadata.convert_result(raw)
+            raw = await anyio.to_thread.run_sync(_fit_result_budget, raw, convert)
+            converted = convert(raw)
         return _with_file_link(raw, converted, str(protocol or ""), images)
+
+
+def _compact_convert(metadata: Any, raw: Any) -> Any:
+    """SDK 的 convert_result，但 JSON 正文不缩进。
+
+    SDK 把非字符串结果按 `indent=2` 序列化：一份结果三成是缩进空格，客户端按字符计上限（Claude Code 5 万字符落盘）时
+    这些空格白占额度。没有 outputSchema 时直接交给它一段紧凑 JSON 文本（SDK 原样放进 text 块）；有 outputSchema
+    （HOROSA_OUTPUT_SCHEMA=1）时照常让 SDK 校验、生成 structuredContent，只把 text 块换成紧凑版。"""
+    if raw is None or isinstance(raw, (str, list, tuple, mcp_types.CallToolResult, mcp_types.InputRequiredResult)):
+        return metadata.convert_result(raw)
+    text = pydantic_core.to_json(raw, fallback=str).decode()
+    if metadata.output_schema is None:
+        return metadata.convert_result(text)
+    converted = metadata.convert_result(raw)
+    content = getattr(converted, "content", None)
+    if isinstance(converted, mcp_types.CallToolResult) and content and isinstance(content[0], mcp_types.TextContent):
+        return converted.model_copy(update={"content": [mcp_types.TextContent(type="text", text=text), *content[1:]]})
+    return converted
 
 
 # 一次工具结果的线上体积上限（v0.46.1）。官方 MCP SDK（mcp 2.x）客户端走 streamable HTTP 时单条 SSE 事件上限
@@ -208,6 +237,8 @@ def _fit_result_budget(raw: Any, convert: Any) -> Any:
         return raw
     if isinstance(raw.get("data"), dict):
         return _fit_envelope(raw, convert)
+    if isinstance(raw.get("results"), dict):
+        return _fit_results_map(raw, convert)
     if isinstance(raw.get("result"), dict) or isinstance(raw.get("results"), list):
         return _fit_memory_records(raw, convert)
     return raw
@@ -304,6 +335,36 @@ def _fit_memory_records(raw: dict[str, Any], convert: Any) -> dict[str, Any]:
             excess -= size
             if excess <= 0:
                 excess = over_budget()
+    if omitted:
+        warnings = list(result.get("warnings") or [])
+        warnings.append(f"返回体超过 MCP 单条消息上限，已略去原始明细：{'、'.join(sorted(set(omitted)))}（本机存档为全量）。")
+        result["warnings"] = warnings
+    return result
+
+
+def _fit_results_map(raw: dict[str, Any], convert: Any) -> dict[str, Any]:
+    """调度 / 合参（`results.<tool>` 是一份份技法信封）放不下时，跨全部技法从最大的原始子树起裁，规则与单个技法相同。
+
+    v0.49.0 的预算只认 `data` 与记忆结果两种形状，调度落在中间：两个技法 3.2 MB 原样上线，HTTP 客户端整条报错。"""
+    result = dict(raw)
+    results = dict(result["results"])
+    result["results"] = results
+    run_id = ((result.get("memory_ref") or {}) if isinstance(result.get("memory_ref"), dict) else {}).get("run_id")
+    holders = [({"payload": envelope}, run_id, name) for name, envelope in results.items() if isinstance(envelope, dict)]
+    omitted: list[str] = []
+
+    def sync() -> None:
+        for holder, _run, name in holders:
+            results[name] = holder["payload"]
+
+    def over_budget() -> int:
+        sync()
+        return _wire_bytes(convert(result)) - MCP_RESULT_WIRE_BUDGET
+
+    excess = over_budget()
+    if excess > 0:
+        _omit_raw_subtrees([(holder, run) for holder, run, _name in holders], excess, omitted, over_budget)
+    sync()
     if omitted:
         warnings = list(result.get("warnings") or [])
         warnings.append(f"返回体超过 MCP 单条消息上限，已略去原始明细：{'、'.join(sorted(set(omitted)))}（本机存档为全量）。")

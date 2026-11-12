@@ -256,7 +256,7 @@ _TOOL_RUN_COMMON_FIELDS: tuple[tuple[str, Any, str], ...] = (
     ("dirLat", str | float | None, "推运目标地纬度"),
     ("dirLon", str | float | None, "推运目标地经度"),
     ("question", str | None, "所问事项"),
-    ("response_view", str | None, "full / sections / titles（全文已存档）"),
+    ("response_view", str | None, "reading（缺省）/ sections / titles / full（带原始树）"),
     ("agent_confirmed_settings", bool | None, "用户已确认设置→true"),
     ("defaults_accepted", bool | None, "用户接受默认→true"),
     ("clarification_notes", str | None, "确认摘要"),

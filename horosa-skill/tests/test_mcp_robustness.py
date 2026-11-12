@@ -440,7 +440,7 @@ def test_facades_resolve_the_service_method_at_call_time(tmp_path, tool_name, me
     mcp = M.create_mcp_server(svc, settings)
     seen: list[str] = []
 
-    def _replacement(payload):
+    def _replacement(payload, **_kwargs):   # 合参门面另传 include_results（MCP 面要各技法信封）
         seen.append(method)
         return {"ok": True, "replaced": method}
 

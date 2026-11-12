@@ -234,6 +234,11 @@ class MemoryQueryInput(FlexibleModel):
 class MemoryShowInput(FlexibleModel):
     run_id: str
     include_payload: bool = True
+    # 以下四个只在 MCP 面生效（horosa_skill/result_view.py，进工具之前取走）：读回存档时按段翻页。
+    response_view: str | None = Field(default=None, description="reading/sections/titles/full")
+    response_tool: str | None = Field(default=None, description="技法名")
+    response_sections: list[int | str] | None = Field(default=None, description="段序号或标题")
+    response_offset: int | None = Field(default=None, description="续读起点（字）")
 
 
 class ReportTemplateInput(FlexibleModel):

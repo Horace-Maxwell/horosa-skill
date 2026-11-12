@@ -61,13 +61,16 @@ def _validated(model: Any, payload: dict[str, Any]) -> Any:
 
 
 class DispatchAPI:
-    def hecan(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def hecan(self, payload: dict[str, Any], *, include_results: bool = False) -> dict[str, Any]:
         """合参（v0.28.0 B3）：一问多技法交叉印证——全行业没有的形态，也只有 92 技法才做得起。
 
         传统方法论（三式互参、八字紫微互证）+ orchestrator-workers 编排：路由/显式选盘（上限
         max_tools）→ 同一 group 逐技法起盘（复用 dispatch 全部载荷管线；澄清闸与 dispatch 一样在表面入口过）→ 产出**合参模板**：
         逐技法证据表（引用不复制全文）+ 口径一致性（复用技法卡冲突检测）+ ai_fillable 综合槽。
         两条铁律写进模板 instructions：**只准引用已导出段落的事实**；**分歧必须披露，不许平均**。
+
+        `include_results=True`（MCP 面）：另附 `results.<tool>` = 各技法的完整信封，由 MCP 的阅读视图逐个整形成正文——
+        模型填模板要的段落就在同一次返回里，不必再逐个 memory_show。CLI 不传，输出不变。
         """
         with self.tracer.span(
             workflow_name="hecan.run",
@@ -187,6 +190,11 @@ class DispatchAPI:
                 "trace_id": trace["trace_id"],
                 "group_id": envelope.group_id,
             }
+            if include_results:
+                template["results"] = {
+                    tool_name: envelope.results[tool_name].model_dump(mode="json")
+                    for tool_name in selected if tool_name in envelope.results
+                }
             trace["success"] = True
             trace["selected_tools"] = selected
             return template

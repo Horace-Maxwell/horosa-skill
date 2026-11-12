@@ -78,7 +78,8 @@ def test_asking_for_payloads_still_fits_one_message(tmp_path: Path) -> None:
     for _ in range(6):
         _stored_bazi(service, raw_chars=300_000)
 
-    wire, body = _call(mcp, "horosa_memory_query", {"limit": 6, "include_payload": True})
+    # 线上预算管的是 full 视图（原始树全带）；缺省阅读视图另见 tests/test_result_view*.py。
+    wire, body = _call(mcp, "horosa_memory_query", {"limit": 6, "include_payload": True, "response_view": "full"})
 
     assert wire <= mcp_runner.MCP_RESULT_WIRE_BUDGET < SSE_EVENT_LIMIT
     payloads = _payloads(body)
@@ -93,7 +94,7 @@ def test_memory_show_fits_one_message_and_keeps_what_the_ai_reads(tmp_path: Path
     mcp, service = _server(tmp_path)
     run_id = _stored_bazi(service, raw_chars=1_500_000)
 
-    wire, body = _call(mcp, "horosa_memory_show", {"run_id": run_id})
+    wire, body = _call(mcp, "horosa_memory_show", {"run_id": run_id, "response_view": "full"})
 
     assert wire <= mcp_runner.MCP_RESULT_WIRE_BUDGET
     payload = _payloads(body)[0]
@@ -143,9 +144,10 @@ def test_memory_fit_does_not_mutate_its_input() -> None:
 def test_a_small_memory_show_is_untouched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     mcp, service = _server(tmp_path)
     run_id = _stored_bazi(service, raw_chars=1_000)
-    _, normal = _call(mcp, "horosa_memory_show", {"run_id": run_id, "include_payload": True})
+    full = {"run_id": run_id, "include_payload": True, "response_view": "full"}
+    _, normal = _call(mcp, "horosa_memory_show", full)
     monkeypatch.setattr(mcp_runner, "MCP_RESULT_WIRE_BUDGET", 10**12)
-    _, unlimited = _call(mcp, "horosa_memory_show", {"run_id": run_id, "include_payload": True})
+    _, unlimited = _call(mcp, "horosa_memory_show", full)
     for body in (normal, unlimited):
         body.pop("trace_id")
         body.pop("group_id")

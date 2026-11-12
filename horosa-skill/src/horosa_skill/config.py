@@ -50,6 +50,11 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_RUNTIME_CALL_WAIT_SECONDS": "stable",
     "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS": "stable",
     "HOROSA_MCP_COMPACT": "stable",
+    # MCP 结果视图（v0.50.0-dev，service/result_view.py）：缺省 reading = 正文一遍 + 段索引 + 依据卡；full（别名 raw）= 原始树全带。
+    # 后两项是阅读视图的模型预算（估算 token / 字符，两条都守），超了按段裁并在 warnings 里写明续读的调用。
+    "HOROSA_MCP_RESULT_VIEW": "stable",
+    "HOROSA_MCP_RESULT_MAX_TOKENS": "stable",
+    "HOROSA_MCP_RESULT_MAX_CHARS": "stable",
     "HOROSA_MCP_ELICIT": "stable",
     "HOROSA_MCP_ELICIT_TIMEOUT_SECONDS": "stable",
     "HOROSA_MCP_TOKEN": "stable",
@@ -285,6 +290,23 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def _env_result_view(name: str) -> str:
+    """MCP 结果视图（reading / sections / titles / full，raw = full）。认不出的值回落 reading 并告警一次。"""
+    from horosa_skill.result_view import READING, normalize_view
+
+    raw_value = _env_text(name)
+    if raw_value is None:
+        return READING
+    view = normalize_view(raw_value)
+    if view is None:
+        if name not in _warned_unexpanded:
+            _warned_unexpanded.add(name)
+            # 启动期配置通知：还没有工具调用可挂告警（同 _env_text 的未展开占位符）。
+            logger.log(logging.WARNING, "%s=%r 认不出（可选 reading / sections / titles / full）——按 reading 返回。", name, raw_value)
+        return READING
+    return view
+
+
 def _env_script(name: str) -> str:
     """输出文字设置。认不出的值（拼错）回落简体并告警一次——宁可照旧输出，也不在拼写错误时报错拒绝服务。"""
     from horosa_skill.textscript import SIMPLIFIED, parse_script
@@ -367,6 +389,9 @@ FIELD_ENV_MAP = {
     "runtime_download_attempts": "HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS",
     "runtime_java_retry_cooldown_seconds": "HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS",
     "mcp_compact": "HOROSA_MCP_COMPACT",
+    "mcp_result_view": "HOROSA_MCP_RESULT_VIEW",
+    "mcp_result_max_tokens": "HOROSA_MCP_RESULT_MAX_TOKENS",
+    "mcp_result_max_chars": "HOROSA_MCP_RESULT_MAX_CHARS",
     "js_engine_timeout_seconds": "HOROSA_JS_ENGINE_TIMEOUT_SECONDS",
     "host": "HOROSA_SKILL_HOST",
     "port": "HOROSA_SKILL_PORT",
@@ -408,6 +433,11 @@ class Settings(BaseModel):
     # MCP 精简工具面：True 时只暴露 11 个门面工具（dispatch/guidance/memory/report 等 + 通用直呼
     # horosa_tool_run），技法工具不平铺（省 tools/list 上下文预算）；默认 False 保持全量平铺（门面 + 全部技法）。
     mcp_compact: bool = False
+    # MCP 工具结果的缺省视图与模型预算（service/result_view.py）。Claude Code 超过 5 万字符就把结果落盘、只给模型一句提示，
+    # 预算按这条线留余量；估算 token 对中文偏保守（每字 1.5）。
+    mcp_result_view: str = "reading"
+    mcp_result_max_tokens: int = 20_000
+    mcp_result_max_chars: int = 48_000
     js_engine_timeout_seconds: float = 60.0
     host: str = "127.0.0.1"
     port: int = 8765
@@ -465,6 +495,9 @@ class Settings(BaseModel):
             runtime_download_attempts=_env_int("HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS", 3, minimum=1, maximum=20),
             runtime_java_retry_cooldown_seconds=_env_float("HOROSA_RUNTIME_JAVA_RETRY_COOLDOWN_SECONDS", 120.0, minimum=0.0),
             mcp_compact=_env_bool("HOROSA_MCP_COMPACT", False),
+            mcp_result_view=_env_result_view("HOROSA_MCP_RESULT_VIEW"),
+            mcp_result_max_tokens=_env_int("HOROSA_MCP_RESULT_MAX_TOKENS", 20_000, minimum=2_000, maximum=1_000_000),
+            mcp_result_max_chars=_env_int("HOROSA_MCP_RESULT_MAX_CHARS", 48_000, minimum=4_000, maximum=2_000_000),
             js_engine_timeout_seconds=_env_float("HOROSA_JS_ENGINE_TIMEOUT_SECONDS", 60.0, minimum=0.1),
             host=_env_text("HOROSA_SKILL_HOST", "127.0.0.1") or "127.0.0.1",
             port=_env_int("HOROSA_SKILL_PORT", 8765, minimum=1, maximum=65535),

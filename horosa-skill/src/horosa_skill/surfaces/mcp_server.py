@@ -23,6 +23,9 @@ from horosa_skill.engine.registry import (
     resolve_tool_name,
 )
 from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.result_view import READING, Budget, ViewRequest, compact_json, guidance_index, shape_result
+from horosa_skill.textscript import SIMPLIFIED
+from horosa_skill.textscript.localize import localize
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import (
     AgentGuidanceInput,
@@ -70,6 +73,7 @@ from horosa_skill.surfaces.mcp_requests import (
 from horosa_skill.surfaces.mcp_runner import (
     HorosaMCPServer,
     _guarded_facade,
+    _run_blocking,
     _run_tool_blocking,
 )
 from horosa_skill.surfaces.mcp_schema import apply_advertised_schemas
@@ -113,10 +117,10 @@ HOW TO USE IT
 2. A tool REFUSES (agent_guidance.required) when a result-changing setting is missing — time, place,
    timezone, gender, 流派/宫制/起局方式. Ask via details.agent_recovery.prompt_to_user, then retry with
    agent_confirmed_settings=true (or defaults_accepted=true). Never self-confirm.
-3. Explain ONLY from the returned export_snapshot.export_text sections — never hand-calculate, and
-   never read a missing section as a missing dependency.
-4. Every result carries data.technique_card (technique, settings, engine) — quote it after your
-   answer; horosa_technique_report renders it per run/session.
+3. Explain ONLY from data.export_snapshot.export_text — never hand-calculate. Text cut? warnings
+   name the horosa_memory_show call for the rest; read it before concluding.
+4. Every result carries data.technique_card — quote it after your answer;
+   horosa_technique_report renders it per run/session.
 5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF.
 
 HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run reaches any technique
@@ -233,6 +237,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         token_verifier=StaticTokenVerifier(token) if token else None,
     )
     mcp.output_script = settings.output_script
+    mcp.result_view = settings.mcp_result_view
+    mcp.result_budget = Budget(max_tokens=settings.mcp_result_max_tokens, max_chars=settings.mcp_result_max_chars)
     mcp.profile_settings = settings  # 闸门按命主档案过滤追问（_gated_run）
 
     def _placed(payload: Any, tool_name: str) -> Any:
@@ -273,11 +279,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     )(horosa_dispatch)
 
     def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str,
-                                 meta: dict[str, Any] | None = None, gate: str | None = None, raw: bool = False) -> None:
+                                 meta: dict[str, Any] | None = None, gate: str | None = None, raw: bool = False,
+                                 call_kwargs: dict[str, Any] | None = None) -> None:
         """门面工具 = 归一化入参 → service.<method>(payload)，统一兜底、签名、注解（v0.41.1 起表驱动）。
 
         method 按名在**调用时**取（`getattr(service, method)`）：测试会在建好 server 之后替换实例上的方法。
         会起盘的门面传 `gate`：闸门在表面入口，不在 service 里（tests/test_gate_coverage.py 枚举全部工具守这一条）。
+        `call_kwargs`：MCP 面才要的额外关键字参数（合参要各技法的完整信封，交给阅读视图逐个整形；CLI 不传，输出不变）。
         `raw=True`：载荷原样交给 service（它自己校验）——命主档案的 data 要存用户给的原值（IANA 时区名留着，起盘时按出生日期折算），
         这一层的归一化会把嵌套的出生字段提前折掉、还会塞进 geoZone 这类派生键。
         """
@@ -288,7 +296,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 # 再按档案感知的 _mcp_payload 交下去（raw 门面 = horosa_profile，原样收）。
                 def _call() -> dict[str, Any]:
                     body = _placed(payload, method) if gate is not None else payload
-                    return getattr(service, method)(_request_object(body) if raw else _mcp_payload(body, model))
+                    return getattr(service, method)(_request_object(body) if raw else _mcp_payload(body, model), **(call_kwargs or {}))
 
                 return await _guarded_facade(mcp, name, _call)
 
@@ -303,12 +311,16 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     async def horosa_agent_guidance(**kwargs: Any) -> dict[str, Any]:
         def _run() -> dict[str, Any]:
             payload = _normalize_mcp_request(_merge_mcp_arguments(kwargs), AgentGuidanceInput)
+            include_all = payload.get("include_all", False)
             guidance = build_agent_guidance(
                 tool_name=payload.get("tool_name"),
                 intent=payload.get("intent"),
-                include_all=payload.get("include_all", False),
+                include_all=include_all,
             )
             if isinstance(guidance, dict):
+                if include_all and not payload.get("tool_name"):
+                    # 全量指引 1.26 M 字符（每个技法的完整输入契约），一次塞不进任何客户端；MCP 面给索引，全文按 tool_name 取。
+                    guidance = guidance_index(guidance)
                 guidance["server_profile"] = _server_profile(settings)
             return guidance
 
@@ -416,9 +428,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         title="查看单次记录 / show run",
         annotations=_ANN_QUERY,
         doc=(
-            "Fetch one stored run in full by run_id: the normalized input, the export snapshot, any AI "
+            "Fetch one stored run by run_id: the normalized input, each technique's reader text, any AI "
             "answer written back, and the paths of generated artifacts (JSON/DOCX/PDF). Use it to resume "
-            "a past reading without re-casting the chart."
+            "a past reading without re-casting the chart, or to continue a cut result exactly as its warnings say."
         ),
     )
 
@@ -456,6 +468,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         title="合参 / cross-technique synthesis",
         annotations=_ANN_CALC,
         gate="hecan",
+        call_kwargs={"include_results": True},
         doc=(
             "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
             "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "
@@ -519,6 +532,23 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
     register_resources(mcp, settings)
     register_prompts(mcp)
+
+    @mcp.resource(
+        "horosa://runs/{run_id}",
+        name="horosa-run",
+        title="单次记录 / stored run",
+        description="One stored run in the reading view (same as horosa_memory_show(run_id)); the full raw copy stays on disk.",
+        mime_type="application/json",
+    )
+    async def run_resource(run_id: str) -> str:
+        # 资源读不走 call_tool，视图与字形在这里各做一次；读存档有磁盘 I/O，放进工作线程。
+        def _read() -> str:
+            shaped = shape_result(service.show_memory({"run_id": run_id}), ViewRequest(view=READING), mcp.result_budget)
+            if settings.output_script != SIMPLIFIED:
+                shaped = localize(shaped, settings.output_script)
+            return compact_json(shaped)
+
+        return await _run_blocking(_read)
 
     toolsets = _selected_toolsets()
     if settings.mcp_compact or toolsets is not None:
