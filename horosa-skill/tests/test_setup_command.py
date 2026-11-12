@@ -228,6 +228,59 @@ def test_setup_in_external_engine_mode_skips_install_and_carries_the_addresses(t
     assert report["steps"]["doctor"]["advisory"] is True and "外部引擎" in report["summary"]
 
 
+def _manifest_with_engine(tmp_path: Path) -> str:
+    """本地清单：只有 darwin-arm64 + 平台无关的 JS 引擎资产（file:// 归档，不碰网络）。"""
+    from corejs_fixture import core_js_manifest_entry, make_core_js_archive
+
+    info = make_core_js_archive(tmp_path / "rel" / "horosa-core-js-v1.2.3.tar.gz", "1.2.3")
+    manifest = tmp_path / "rel" / "runtime-manifest.json"
+    manifest.write_text(json.dumps({"version": "1.2.3", "platforms": {"darwin-arm64": {
+        "url": (tmp_path / "missing.tar.gz").resolve().as_uri(), "sha256": "0" * 64}},
+        "core_js": core_js_manifest_entry(info, info["path"].resolve().as_uri(), "1.2.3")}), encoding="utf-8")
+    return manifest.resolve().as_uri()
+
+
+@pytest.mark.parametrize("mode", ["no_payload", "external_engine"])
+def test_setup_without_a_local_runtime_still_installs_the_js_engine(
+    mode: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """E-02：不装 runtime 的两条路（本平台没有载荷 / 外部引擎）此前一个字节都不装，八字 / 紫微 / 奇门等本地 JS 技法全部
+    js_engine.cli_missing 而 setup 报成功。现在装平台无关的 JS 引擎资产（runtime 根下 core-js/），网关配置照写。"""
+    monkeypatch.setattr("horosa_skill.surfaces.setup_flow._engine_available", lambda settings: False)
+    if mode == "no_payload":
+        monkeypatch.setenv("HOROSA_RUNTIME_PLATFORM", "linux-x64")
+    else:
+        monkeypatch.setenv("HOROSA_SERVER_ROOT", "http://127.0.0.1:18861")
+        monkeypatch.setenv("HOROSA_CHART_SERVER_ROOT", "http://127.0.0.1:18862")
+    config = tmp_path / "mcp.json"
+
+    report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--manifest-url", _manifest_with_engine(tmp_path),
+                               "--no-probe-network", "--no-stdio-probe"))
+
+    install = report["steps"]["install"]
+    assert install["skipped"] is True, "the runtime itself is still not installed here"
+    engine = install["engine"]
+    assert engine["ok"] is True and engine["version"] == "1.2.3"
+    assert (Path(engine["root"]) / "bin" / "cli.mjs").is_file()
+    assert Path(engine["root"]).is_relative_to(tmp_path / "runtime-root")
+    assert not (tmp_path / "runtime-root" / "current").exists()
+    assert "horosa" in json.loads(config.read_text(encoding="utf-8"))["mcpServers"]
+
+
+def test_setup_records_an_engine_install_failure_without_failing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("horosa_skill.surfaces.setup_flow._engine_available", lambda settings: False)
+    monkeypatch.setenv("HOROSA_RUNTIME_PLATFORM", "linux-x64")
+    config = tmp_path / "mcp.json"
+
+    report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--manifest-url", _manifest_without(tmp_path, "linux"),
+                               "--no-probe-network", "--no-stdio-probe"))
+
+    engine = report["steps"]["install"]["engine"]
+    assert (engine["ok"], engine["code"]) == (False, "runtime.engine_asset_missing")
+    assert any("install --engine-only" in item for item in report["next_steps"])
+    assert "horosa" in json.loads(config.read_text(encoding="utf-8"))["mcpServers"], "the gateway config is still written"
+
+
 def test_setup_installs_the_skill_where_the_client_reads_it(tmp_path: Path) -> None:
     """v0.41.0 第 4 步：skill 进客户端读的目录，幂等；next_steps 告诉用户新开会话才生效。"""
     config = tmp_path / ".mcp.json"

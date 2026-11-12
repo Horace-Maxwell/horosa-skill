@@ -97,6 +97,7 @@ def bilingual(zh: str, en: str) -> str:
 
 DOCTOR_CMD = "uv run horosa-skill doctor"
 INSTALL_CMD = "uv run horosa-skill install"
+ENGINE_ONLY_CMD = "uv run horosa-skill install --engine-only"
 
 RECOVERY_KINDS: dict[str, dict[str, _Any]] = {
     "input": {
@@ -191,16 +192,58 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_or_unset_horosa_node_bin",
     },
+    # v0.50.0-dev E-02：任何平台都有一条装引擎的路（engine-only 资产），网关模式 / Linux / Intel Mac 不再是死路。
     "js_engine.cli_missing": {
         "kind": "js_engine",
         "prompt_to_user": bilingual(
-            "本地 JS 引擎（horosa-core-js）不在本机（details.searched 列出找过的位置）。装离线 runtime（自带引擎），或设 "
-            "HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录；只设 HOROSA_SERVER_ROOT 的网关模式不带这个引擎。",
-            "The local JS engine (horosa-core-js) is not on this machine (details.searched lists where it looked). Install the "
-            "offline runtime (it ships the engine), or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory; gateway mode "
-            "(HOROSA_SERVER_ROOT only) does not include this engine.",
+            f"本地 JS 引擎（horosa-core-js）不在本机（details.searched 列出找过的位置）。运行 `{ENGINE_ONLY_CMD}`（任何平台，"
+            "只装 JS 引擎，约 7 MB，另需 Node.js ≥ 20.10），或装离线 runtime（自带引擎与 node），或设 HOROSA_CORE_JS_ROOT 指向一份 "
+            "horosa-core-js 目录。只设 HOROSA_SERVER_ROOT 的网关模式本身不带这个引擎。装好后重启客户端。",
+            f"The local JS engine (horosa-core-js) is not on this machine (details.searched lists where it looked). Run "
+            f"`{ENGINE_ONLY_CMD}` (any OS, the JS engine only, about 7 MB; needs Node.js >= 20.10), install the offline runtime "
+            "(it ships the engine and node), or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory. Gateway mode "
+            "(HOROSA_SERVER_ROOT only) does not include this engine by itself. Restart the client afterwards.",
         ),
-        "next_action": "install_runtime_or_set_core_js_root",
+        "next_action": "install_engine_only_or_runtime_or_set_core_js_root",
+        "commands": [ENGINE_ONLY_CMD, DOCTOR_CMD],
+    },
+    "runtime.engine_asset_missing": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "这份发布清单没有 JS 引擎独立资产（details.since 起的发布才带）。用 `--manifest-url` 指向更新的发布清单，或设 "
+            "HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录。",
+            "This release manifest has no standalone JS engine asset (releases from details.since on carry it). Point "
+            "`--manifest-url` at a newer release manifest, or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory.",
+        ),
+        "next_action": "use_a_newer_manifest_or_set_core_js_root",
+    },
+    "runtime.engine_asset_invalid": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "给安装器的文件不是可用的 JS 引擎资产（details.problems 说缺什么；它应是 horosa-core-js-v<版本>.tar.gz）。重新下载发布页的"
+            "这件资产，用 `--sha256` 核对后再装；已装的东西没有被动过。",
+            "The file given to the installer is not a usable JS engine asset (details.problems says what is missing; it should be "
+            "horosa-core-js-v<version>.tar.gz). Download that asset from the release page again and check it with `--sha256`; "
+            "nothing installed was touched.",
+        ),
+        "next_action": "redownload_engine_asset_and_verify_sha256",
+    },
+    "runtime.engine_install_in_progress": {
+        "kind": "retry_or_doctor",
+        "prompt_to_user": bilingual(
+            "另一个进程正在安装 JS 引擎资产（details.holder）。等它结束看结果；它失败了再重跑。",
+            "Another process is installing the JS engine asset (details.holder). Wait for it and check its result; rerun if it fails.",
+        ),
+        "next_action": "wait_for_the_other_install",
+    },
+    "runtime.uninstall_engine_only_conflict": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "`uninstall --engine-only` 只删 JS 引擎资产，不能和 --purge-data / --purge-knowledge / --purge-profiles 一起用；分两次执行。",
+            "`uninstall --engine-only` removes the JS engine asset only and cannot be combined with --purge-data / "
+            "--purge-knowledge / --purge-profiles; run them separately.",
+        ),
+        "next_action": "run_the_two_uninstalls_separately",
     },
     # 自备知识库（knowledge/user.py）：都是使用者自己能改的输入问题，不是「重试 / 体检」。
     "knowledge.user_not_found": {
@@ -699,11 +742,12 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     "runtime.platform_unsupported": {
         "kind": "runtime",
         "prompt_to_user": bilingual(
-            "本机平台没有离线 runtime 载荷（只发 macOS Apple Silicon 与 Windows x64）。可走网关模式：在一台"
-            "受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 HOROSA_CHART_SERVER_ROOT 指过去。",
-            "There is no offline runtime payload for this platform (only macOS Apple Silicon and Windows x64 ship). "
-            "Use gateway mode: run the runtime on a supported machine and point HOROSA_SERVER_ROOT / "
-            "HOROSA_CHART_SERVER_ROOT at it.",
+            "本机平台没有离线 runtime 载荷（只发 macOS Apple Silicon 与 Windows x64）。本地 JS 技法用 "
+            f"`{ENGINE_ONLY_CMD}` 装引擎即可；其余技法走网关模式：在一台受支持的机器上跑 runtime，本机设 HOROSA_SERVER_ROOT 与 "
+            "HOROSA_CHART_SERVER_ROOT 指过去。",
+            "There is no offline runtime payload for this platform (only macOS Apple Silicon and Windows x64 ship). For the local "
+            f"JS techniques, `{ENGINE_ONLY_CMD}` installs the engine; for the rest use gateway mode: run the runtime on a "
+            "supported machine and point HOROSA_SERVER_ROOT / HOROSA_CHART_SERVER_ROOT at it.",
         ),
         "next_action": "use_gateway_mode",
     },

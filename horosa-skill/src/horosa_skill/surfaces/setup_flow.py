@@ -50,6 +50,35 @@ from horosa_skill.surfaces.runtime_helpers import _install_progress_printer
 # 输出契约冻结在 tests/test_cli_output_contract.py；行为在 tests/test_setup_command.py。
 # ---------------------------------------------------------------------------
 
+
+def _engine_available(settings: Settings) -> bool:
+    """本机已经有 JS 引擎（HOROSA_CORE_JS_ROOT / 已装 runtime / engine-only 资产 / 源码树）。接缝：测试替换它。"""
+    from horosa_skill.engine.js_client import HorosaJsEngineClient
+
+    return HorosaJsEngineClient(settings).diagnose().get("engine_root") is not None
+
+
+def _engine_step(manager: Any, settings: Settings, manifest_url: str | None, announce: Any) -> dict[str, Any]:
+    """不装 runtime 的机器（外部引擎 / 本平台没有载荷）也装上 JS 引擎（v0.50.0-dev，E-02）。
+
+    🔴 此前这两条路一个字节都不装：网关模式的八字 / 紫微 / 奇门等本地 JS 技法全部 js_engine.cli_missing，setup 却报成功。
+    尽力而为：装不上（离线、清单太旧）只记在 install.engine 里，setup 不因此失败——网关模式本身仍然成立。
+    """
+    if _engine_available(settings):
+        return {"ok": True, "skipped": True, "reason": "already_available"}
+    announce("install", "装 JS 引擎（平台无关资产，约 7MB；本机不装离线 runtime）…")
+    try:
+        result = manager.install(engine_only=True, manifest_url=manifest_url, progress=_install_progress_printer())
+    except (RuntimeError, OSError) as exc:
+        return {"ok": False, "code": getattr(exc, "code", "runtime.install_io_error"), "message": str(exc)[:400]}
+    return _engine_summary(result)
+
+
+def _engine_summary(result: dict[str, Any]) -> dict[str, Any]:
+    return {"ok": True, "changed": result.get("changed"), "version": result.get("version"),
+            "root": (result.get("engine") or {}).get("root"), "node": result.get("node"), "ready": result.get("ready"),
+            "warnings": result.get("warnings") or []}
+
 _SETUP_STEPS = ("network_probe", "install", "vectors", "config", "skill", "doctor", "client_check", "stdio_probe", "next_steps")
 # uvx-wheel 首跑要下载 wheel 与依赖（顺带焐热 uvx 缓存，客户端首次启动就快了）；uv 形态通常 5–10 s。
 _SETUP_STDIO_TIMEOUT_SECONDS = 300.0
@@ -554,16 +583,20 @@ def _run_setup(
             "ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
             "server_root": settings.server_root, "chart_server_root": settings.chart_server_root,
             "explanation": bilingual(
-                "引擎地址指向本机 runtime 之外（外部引擎 / 网关模式）：本机不装也不起离线 runtime，工具调用直连这两个地址。",
-                "The engine addresses point outside the local runtime (external engine / gateway mode): nothing is installed "
-                "or started here; tool calls go straight to those addresses.",
+                "引擎地址指向本机 runtime 之外（外部引擎 / 网关模式）：本机不装也不起离线 runtime，工具调用直连这两个地址；"
+                "本地 JS 技法要的 JS 引擎单独装（install.engine）。",
+                "The engine addresses point outside the local runtime (external engine / gateway mode): no runtime is installed "
+                "or started here; tool calls go straight to those addresses. The JS engine the local JS techniques need is "
+                "installed on its own (install.engine).",
             ),
         }
+        steps["install"]["engine"] = _engine_step(manager, settings, manifest_url, announce)
     elif not archive and not platform_has_payload(platform_key):
         no_runtime_reason = "no_payload_for_platform"
         advice = platform_dead_end_advice(platform_key)
         steps["install"] = {"ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
                             "why": advice.get("reason"), "next_action": advice.get("next_action")}
+        steps["install"]["engine"] = _engine_step(manager, settings, manifest_url, announce)
     else:
         announce("install", "安装 / 校验离线 runtime（已是最新版则秒退；约 730MB 下载、解压后约 2GB）…")
         try:
@@ -582,6 +615,15 @@ def _run_setup(
                                 "why": details.get("reason") or str(exc), "next_action": details.get("next_action")}
         except OSError as exc:
             fail("install", "runtime.install_io_error", str(exc), {})
+        if result is not None and result.get("mode") == "engine_only":
+            # 清单里没有本平台、但带着 JS 引擎资产：install 已经只装了引擎（E-02）。runtime 仍然不在本机，按「没有载荷」那条路走。
+            no_runtime_reason = "no_payload_for_platform"
+            advice = platform_dead_end_advice(platform_key)
+            steps["install"] = {"ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
+                                "manifest_url": manifest_location, "supported_platforms": result.get("supported_platforms"),
+                                "why": advice.get("reason"), "next_action": advice.get("next_action"),
+                                "engine": _engine_summary(result)}
+            result = None
         if result is not None:
             steps["install"] = {
                 "ok": True, "seconds": seconds, "changed": result.get("changed"),
@@ -847,7 +889,8 @@ def _run_setup(
         )
     elif no_runtime_reason == "no_payload_for_platform":
         next_steps.append(
-            f"这台机器（{platform_key}）没有离线载荷，runtime 没装：走网关模式——在 darwin-arm64 / win32-x64 机器上跑 runtime，"
+            f"这台机器（{platform_key}）没有离线载荷，runtime 没装（本地 JS 技法要的 JS 引擎见 install.engine）："
+            "其余技法走网关模式——在 darwin-arm64 / win32-x64 机器上跑 runtime，"
             f"然后 `HOROSA_SERVER_ROOT=http://<那台机器>:9999 HOROSA_CHART_SERVER_ROOT=http://<那台机器>:8899 "
             f"{_setup_command_text(client_key, launcher=launcher_key, config=config)}` 重跑本命令（两个地址会写进客户端配置）。"
         )
@@ -858,9 +901,15 @@ def _run_setup(
     for warning in report.get("warnings") or []:
         if isinstance(warning, dict):
             next_steps.append(f"doctor 提示 {warning.get('code')}：{warning.get('fix') or warning.get('detail') or ''}".rstrip("："))
-    for warning in steps["install"].get("warnings") or []:
+    engine_step = steps["install"].get("engine") if isinstance(steps["install"].get("engine"), dict) else {}
+    for warning in [*(steps["install"].get("warnings") or []), *(engine_step.get("warnings") or [])]:
         if isinstance(warning, dict) and warning.get("message"):
             next_steps.append(str(warning["message"]))
+    if engine_step.get("ok") is False:
+        next_steps.append(
+            f"JS 引擎没装上（{engine_step.get('code')}）：联网后 `{prefix} install --engine-only`，或设 HOROSA_CORE_JS_ROOT；"
+            "在那之前八字 / 紫微 / 奇门等本地 JS 技法不可用。"
+        )
     next_steps.append(_SETUP_TRY_PROMPT)
     next_steps.append(
         f"活体检查：`{prefix} selfcheck`（起 runtime → 起一张盘 → 存 → 读回）；"

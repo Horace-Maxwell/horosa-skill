@@ -13,6 +13,7 @@ from horosa_skill.config import Settings
 from horosa_skill.engine import node_runtime
 from horosa_skill.errors import ToolTransportError, bilingual
 from horosa_skill.runtime import HorosaRuntimeManager
+from horosa_skill.runtime import engine_asset
 
 # 一次已知要算很久的调用（择时区间扫描，成本随窗口线性涨）把墙钟抬到「至少 N 秒」。走 ContextVar 而不是给 run() 加参数：
 # 测试里十几个替身按 run(tool_name, payload) 实现，签名一变全要跟着改。只抬不降——配置的 HOROSA_JS_ENGINE_TIMEOUT_SECONDS 更大时照用配置。
@@ -64,16 +65,18 @@ class HorosaJsEngineClient:
     ) -> dict[str, Any]:
         cli_path = engine_root / "bin" / "cli.mjs"
         if not cli_path.is_file():
+            command = engine_asset.engine_only_command()
             raise ToolTransportError(
                 bilingual(
                     "找不到本地 JS 引擎（horosa-core-js）。八字 / 紫微 / 奇门 / 太乙 / 金口诀 / 六壬 / 河洛 / 参评 等技法要用它："
-                    "装离线 runtime（自带引擎与 node），或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录。",
+                    f"运行 `{command}`（任何平台，约 7 MB，另需 Node.js ≥ 20.10），或装离线 runtime（自带引擎与 node），"
+                    "或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录。",
                     "The local JS engine (horosa-core-js) is missing. BaZi / Ziwei / Qimen / Taiyi / Jinkou / Liuren / Heluo / Canping "
-                    "and others need it: install the offline runtime (it ships the engine and node), or set HOROSA_CORE_JS_ROOT "
-                    "to a horosa-core-js directory.",
+                    f"and others need it: run `{command}` (any OS, about 7 MB; needs Node.js >= 20.10), install the offline runtime "
+                    "(it ships the engine and node), or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory.",
                 ),
                 code="js_engine.cli_missing",
-                details={"path": str(cli_path), "searched": self.engine_root_report()},
+                details={"path": str(cli_path), "searched": self.engine_root_report(), "commands": [command]},
             )
 
         timeout_seconds = max(self.settings.js_engine_timeout_seconds, _MIN_TIMEOUT_SECONDS.get() or 0.0)
@@ -251,6 +254,9 @@ class HorosaJsEngineClient:
         runtime_root = self.settings.runtime_current_dir / relative if isinstance(relative, str) and relative.strip() else None
         rows.append({"source": "runtime", "path": str(runtime_root) if runtime_root else None,
                      "present": bool(runtime_root) and (runtime_root / "bin" / "cli.mjs").is_file()})
+        asset_root = engine_asset.engine_dir(self.settings.runtime_root) / engine_asset.ENGINE_ASSET_ROOT
+        rows.append({"source": "engine_asset", "path": str(asset_root),
+                     "present": engine_asset.installed_engine_root(self.settings.runtime_root) is not None})
         source_root = Path(__file__).resolve().parents[3] / "horosa-core-js"
         rows.append({"source": "source_checkout", "path": str(source_root), "present": (source_root / "bin" / "cli.mjs").is_file()})
         return rows
@@ -274,20 +280,24 @@ class HorosaJsEngineClient:
             state = "node_too_old"
         else:
             state = "ready"
+        command = engine_asset.engine_only_command()
         fixes = {
             "ready": None,
             "absent": bilingual(
-                "装离线 runtime（自带引擎与 node），或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录（还要 node ≥ 20.10）。",
-                "Install the offline runtime (it ships the engine and node), or set HOROSA_CORE_JS_ROOT to a horosa-core-js "
-                "directory (node >= 20.10 is needed too).",
+                f"运行 `{command}`（任何平台，只装 JS 引擎，约 7 MB；还要 node ≥ 20.10），或装离线 runtime（自带引擎与 node），"
+                "或设 HOROSA_CORE_JS_ROOT 指向一份 horosa-core-js 目录。",
+                f"Run `{command}` (any OS, the JS engine only, about 7 MB; node >= 20.10 is needed too), install the offline "
+                "runtime (it ships the engine and node), or set HOROSA_CORE_JS_ROOT to a horosa-core-js directory.",
             ),
             "node_bin_missing": bilingual(
                 f"HOROSA_NODE_BIN 指向的 {node['path']} 不存在：改成真实的 node，或删掉这个变量。",
                 f"HOROSA_NODE_BIN points at {node['path']}, which does not exist: point it at a real node or unset it.",
             ),
             "node_missing": bilingual(
-                "找不到 node：装离线 runtime（自带 node），或装 Node.js ≥ 20.10，或设 HOROSA_NODE_BIN。",
-                "No node found: install the offline runtime (it ships node), install Node.js >= 20.10, or set HOROSA_NODE_BIN.",
+                "找不到 node：装 Node.js ≥ 20.10（nodejs.org 的 LTS / 系统包管理器 / nvm）让 `node` 进 PATH，或设 HOROSA_NODE_BIN，"
+                "或装离线 runtime（自带 node；只有 darwin-arm64 / win32-x64 有）。",
+                "No node found: install Node.js >= 20.10 (an LTS from nodejs.org, your package manager or nvm) so `node` is on "
+                "PATH, set HOROSA_NODE_BIN, or install the offline runtime (it ships node; darwin-arm64 / win32-x64 only).",
             ),
             "node_too_old": bilingual(
                 f"node {node['version']} 太旧（要 {node['required']}）：装离线 runtime，或把 HOROSA_NODE_BIN 指向更新的 node。",
@@ -301,6 +311,7 @@ class HorosaJsEngineClient:
             "engine_root": str(engine_root) if engine_root else None,
             "engine_source": source,
             "searched": searched,
+            "engine_asset": self.runtime_manager.engine_asset_status(),
             "node": node,
             "affects": bilingual(
                 "八字、紫微、奇门、太乙、金口诀、六壬、河洛、参评、六爻等本地 JS 技法，以及地名检索",
@@ -328,6 +339,11 @@ class HorosaJsEngineClient:
                 candidate = self.settings.runtime_current_dir / relative
                 if candidate.is_dir():
                     candidates.append(candidate)
+
+        # v0.50.0-dev E-02：engine-only 的 JS 引擎资产（`install --engine-only`，或没有 runtime 归档的平台上 `install` 自动装的）。
+        asset_root = engine_asset.installed_engine_root(self.settings.runtime_root)
+        if asset_root is not None:
+            candidates.append(asset_root)
 
         source_candidate = Path(__file__).resolve().parents[3] / "horosa-core-js"
         if source_candidate.is_dir():
