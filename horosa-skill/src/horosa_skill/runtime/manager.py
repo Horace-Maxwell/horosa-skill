@@ -16,7 +16,6 @@ import tarfile
 import tempfile
 import threading
 import time
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +28,7 @@ from horosa_skill import fsretry
 from horosa_skill.config import Settings
 from horosa_skill.engine.client import HorosaApiClient, loopback_httpx_client
 from horosa_skill.errors import HorosaSkillError, RuntimeInstallError, RuntimeValidationError, bilingual
+from horosa_skill.runtime import archives
 from horosa_skill.runtime import registry as runtime_registry
 from horosa_skill.runtime.identity import EndpointIdentity, classify_endpoint, holders_outside_runtime_root, trust_unknown_ports
 from horosa_skill.runtime.pidlock import (
@@ -581,6 +581,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         platform_key: str | None = None,
         force: bool = False,
         progress: Any | None = None,
+        sha256: str | None = None,
     ) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="runtime.install",
@@ -591,9 +592,11 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             # 下载 730 MB 之前就拒：装进去 Java 也起不来（只剩 chart），而修法只是换个路径。
             self._require_ascii_runtime_root()
             self._require_writable_runtime_root()
+            pinned_sha256 = self._normalize_sha256_pin(sha256)
             self._sweep_install_temps()
             source = archive
-            expected_sha256: str | None = None
+            # `--sha256` 给的摘要：手工下载的归档（`--archive`）没有清单可对，这是唯一的核对手段。
+            expected_sha256: str | None = pinned_sha256 if source is not None else None
             asset_meta: dict[str, Any] | None = None
             manifest_data: dict[str, Any] | None = None
             fallback_note: dict[str, Any] | None = None
@@ -642,6 +645,18 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 _assert_min_os(asset_meta.get("min_os"), platform_name)
                 source = str(asset_meta.get("url") or "").strip()
                 expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
+                if pinned_sha256 and expected_sha256 and expected_sha256.lower() != pinned_sha256:
+                    # 下载 730 MB 之前就拒：用户钉的摘要与清单说的不是同一个文件。
+                    raise RuntimeValidationError(
+                        bilingual(
+                            "`--sha256` 给的摘要与发布清单里本平台归档的 sha256 不一致。",
+                            "The `--sha256` digest differs from the one the release manifest lists for this platform.",
+                        ),
+                        code="runtime.install_sha256_mismatch",
+                        details={"expected_sha256": pinned_sha256, "manifest_sha256": expected_sha256.lower(),
+                                 "manifest_url": manifest_location, "platform": platform_name},
+                    )
+                expected_sha256 = expected_sha256 or pinned_sha256
                 if not source:
                     raise RuntimeInstallError(
                         f"Runtime asset URL missing for platform `{platform_name}`.",
@@ -683,12 +698,17 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 (temp_dir / INSTALL_TEMP_OWNER).write_text(str(os.getpid()), encoding="utf-8")
                 archive_path = self._materialize_archive(source, temp_dir, progress=progress, expected_sha256=expected_sha256)
                 already_verified = bool((self._last_download or {}).get("sha256_verified"))
-                if expected_sha256 and not already_verified and _sha256_file(archive_path).lower() != expected_sha256.lower():
+                actual_sha256: str | None = expected_sha256.lower() if expected_sha256 and already_verified else None
+                if actual_sha256 is None and (expected_sha256 or archive is not None):
+                    # 手工给的归档即使没钉摘要也算一遍放进结果：用户可以拿它和发布页对。
+                    actual_sha256 = _sha256_file(archive_path).lower()
+                if expected_sha256 and actual_sha256 != expected_sha256.lower():
                     raise RuntimeValidationError(
                         "Runtime archive checksum mismatch.",
                         code="runtime.install_sha256_mismatch",
-                        details={"archive": str(archive_path), "expected_sha256": expected_sha256},
+                        details={"archive": str(archive_path), "expected_sha256": expected_sha256.lower(), "actual_sha256": actual_sha256},
                     )
+                integrity = {"archive_sha256": actual_sha256, "sha256_verified": bool(expected_sha256)}
                 # manifest 声明的归档类型必须与资产扩展名一致（防声明 zip 实传 tar.gz 之类的静默错配）。
                 declared_type = str((asset_meta or {}).get("archive_type") or "").strip().lower()
                 if declared_type:
@@ -736,6 +756,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             "runtime_root": str(self.runtime_root),
                             "current_dir": str(self.current_dir),
                             "manifest": manifest,
+                            **integrity,
                             "trace_id": trace["trace_id"],
                             "group_id": trace["group_id"],
                         }
@@ -782,6 +803,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                 "stopped_before_swap": was_running,
                 "restarted": restarted,
                 "download": getattr(self, "_last_download", None),
+                **integrity,
                 "asset": asset_meta or {},
                 "release_manifest": manifest_data or {},
                 "next_action": "接下来：`uv run horosa-skill doctor` 确认体检，`uv run horosa-skill serve` 启动 MCP，或把本服务注册到你的 AI 客户端（见 README「接入 AI 客户端」）。",
@@ -2106,6 +2128,22 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         except LockDirNotWritableError as exc:
             raise self._root_not_writable_error(exc.cause) from exc
 
+    @staticmethod
+    def _normalize_sha256_pin(value: str | None) -> str | None:
+        """`--sha256` 的值：64 位十六进制，容许 `sha256:` 前缀（GitHub 资产 API 的 `digest` 就这么印）。空 = 没给。"""
+        text = str(value or "").strip().lower()
+        if not text:
+            return None
+        if text.startswith("sha256:"):
+            text = text[len("sha256:"):]
+        if not re.fullmatch(r"[0-9a-f]{64}", text):
+            raise RuntimeInstallError(
+                bilingual("`--sha256` 要的是 64 位十六进制的 SHA-256 摘要。", "`--sha256` takes a 64-hex-digit SHA-256 digest."),
+                code="runtime.install_sha256_invalid",
+                details={"given_length": len(text)},
+            )
+        return text
+
     def _require_ascii_runtime_root(self) -> None:
         """Windows：runtime 根必须纯 ASCII，否则随包的 java.exe 找不到 java.dll、Swiss Ephemeris 打不开星历（v0.38.1）。"""
         if not _host_is_windows() or windows_runtime_path_ok(self.runtime_root):
@@ -2150,17 +2188,7 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         """
         if os.name != "nt":
             return
-        try:
-            names: list[str] = []
-            lower = archive_path.name.lower()
-            if lower.endswith((".tar.gz", ".tgz")):
-                with tarfile.open(archive_path, "r:gz") as archive:
-                    names = archive.getnames()
-            elif lower.endswith(".zip"):
-                with zipfile.ZipFile(archive_path) as archive:
-                    names = archive.namelist()
-        except Exception:  # noqa: BLE001 - 预检失败不该挡住真正的解包
-            return
+        names = archives.list_names(archive_path)  # 读不了 = 空列表：预检失败不该挡住真正的解包（它会报得更准）
         if not names:
             return
         longest = max(names, key=len)
@@ -2182,24 +2210,65 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             },
         )
 
-    def _extract_archive(self, archive_path: Path, extract_dir: Path) -> None:
+    def _extract_archive(self, archive_path: Path, extract_dir: Path) -> str:
+        """解包，返回识别出的格式。格式看内容（`archives.sniff_format`），不看文件名：文档教用户 `curl -o runtime.zip`
+        存下来的 macOS 资产是 tar.gz；预签名 URL 下回来的文件干脆没有后缀。"""
         self._guard_windows_long_paths(archive_path, extract_dir)
-        name = archive_path.name.lower()
-        if name.endswith(".tar.gz") or name.endswith(".tgz"):
-            with tarfile.open(archive_path, "r:gz") as archive:
-                # filter="data" 已拒绝绝对路径 / .. 穿越 / 设备/symlink 逃逸 → 无需再对整棵 2GB 树逐文件
-                # resolve 断言（冗余且慢）；纵深断言只留给下方无 filter 保护的 zip/unpack 分支。
-                archive.extractall(extract_dir, filter="data")
-            return
-        if name.endswith(".zip"):
+        try:
+            # tar 分支带 filter="data"（拒绝绝对路径 / .. 穿越 / 设备 / symlink 逃逸）→ 无需再对整棵 2GB 树逐文件
+            # resolve 断言（冗余且慢）；纵深断言只留给下方没有 filter 保护的 zip 分支。
+            detected = archives.extract(archive_path, extract_dir)
+        except archives.ArchiveUnreadable as exc:
+            raise self._archive_invalid_error(archive_path, exc.detected, exc.reason) from exc
+        except tarfile.FilterError as exc:
+            raise RuntimeValidationError(
+                bilingual(
+                    "runtime 归档里有会写到解压目录之外的条目（或设备文件 / 逃逸的链接），已拒绝解压。",
+                    "The runtime archive contains an entry that would land outside the extraction directory (or a device / escaping link); refused.",
+                ),
+                code="runtime.install_path_traversal",
+                details={"archive": str(archive_path), "error": str(exc)},
+            ) from exc
+        if detected == "zip":
             # CPython zipfile 已消毒 ../ 与盘符前缀，但显式纵深断言：与 tar 分支对称、且对未来
             # 换用会保留 symlink 的库（zip-slip 复发）多一道防线。
-            with zipfile.ZipFile(archive_path) as archive:
-                archive.extractall(extract_dir)
             self._assert_extracted_within(extract_dir)
-            return
-        shutil.unpack_archive(str(archive_path), str(extract_dir))
-        self._assert_extracted_within(extract_dir)
+        return detected
+
+    def _archive_invalid_error(self, archive_path: Path, detected: str, reason: str) -> RuntimeInstallError:
+        try:
+            size = archive_path.stat().st_size
+        except OSError:
+            size = None
+        last = getattr(self, "_last_download", None)
+        source = last.get("url") if isinstance(last, dict) else None
+        if detected in {"html", "json"}:
+            zh = "下到的是一个网页 / 接口报错，不是 runtime 归档——多半是代理的登录页、过期的直链或 404。"
+            en = "The download is a web page / API error body, not the runtime archive (a proxy login page, an expired link or a 404)."
+        elif detected == "empty":
+            zh, en = "文件是空的（0 字节）——下载没有开始就结束了。", "The file is empty (0 bytes): the download ended before it began."
+        elif detected == "unknown":
+            zh, en = "文件开头不是 zip 也不是 tar：下错了文件，或者内容被改过。", "The file does not start like a zip or tar archive: wrong file, or altered content."
+        else:
+            zh = f"文件开头像 {detected}，但读到一半断了——多半是下载没下完。"
+            en = f"The file starts like {detected} but ends early: most likely an incomplete download."
+        return RuntimeInstallError(
+            bilingual(f"runtime 归档读不了：{zh}", f"The runtime archive cannot be read. {en}"),
+            code="runtime.install_archive_invalid",
+            details={
+                "archive": str(archive_path),
+                "detected_format": detected,
+                "size_bytes": size,
+                "reason": reason,
+                **({"url": source} if source else {}),
+                "next_action": bilingual(
+                    "重新下载本平台的归档（macOS arm64 是 .tar.gz，Windows x64 是 .zip，约 0.7–0.95 GB），"
+                    "用 `--sha256 <发布清单里的 sha256>` 核对后再装；已装的 runtime 没有被动过。",
+                    "Download the archive for this platform again (macOS arm64: .tar.gz, Windows x64: .zip, ~0.7-0.95 GB) "
+                    "and pass `--sha256 <digest from the release manifest>` to check it; the installed runtime was not touched.",
+                ),
+            },
+        )
 
     @staticmethod
     def _assert_extracted_within(extract_dir: Path) -> None:

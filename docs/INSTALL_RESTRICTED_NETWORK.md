@@ -33,13 +33,22 @@ uv run horosa-skill install
 ```bash
 curl -s https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/latest \
   | python3 -c "import json,sys; [print(a['id'], a['name']) for a in json.load(sys.stdin)['assets']]"
-# 记下本平台归档（darwin-arm64 .tar.gz 或 win32-x64 .zip）的 id：
-curl -L -H "Accept: application/octet-stream" -o runtime.zip \
-  https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<id>
-uv run horosa-skill install --archive runtime.zip
+# 记下两个 id：本平台归档（darwin-arm64 是 .tar.gz，win32-x64 是 .zip）与 runtime-manifest.json
+curl -L -H "Accept: application/octet-stream" -o runtime-archive \
+  https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<归档 id>
+curl -L -H "Accept: application/octet-stream" -o runtime-manifest.json \
+  https://api.github.com/repos/Horace-Maxwell/horosa-skill/releases/assets/<清单 id>
+# 清单里有本平台归档的 sha256（Windows 把 darwin-arm64 换成 win32-x64）：
+python3 -c "import json; print(json.load(open('runtime-manifest.json'))['platforms']['darwin-arm64']['sha256'])"
+uv run horosa-skill install --archive runtime-archive --sha256 <上一步印出的 sha256>
 ```
 
-`--archive` 也接受 `file://` URL；安装器仍会校验归档内嵌的清单版本与布局。
+- 存成什么名字都行（`runtime-archive`、`runtime.zip`、原始资产名）：安装器按**文件内容**认格式，不看后缀（v0.50.0 起；
+  更早的版本按后缀认，macOS 的 tar.gz 存成 `runtime.zip` 会直接报错）。
+- `--sha256` 可省，但手工下载没有别的核对手段：代理的登录页、断在一半的下载都会被存成一个「归档」。不给 `--sha256` 时
+  结果里的 `sha256_verified` 是 `false`，`archive_sha256` 是这份文件的实际摘要。
+- 读不了的归档一律报 `runtime.install_archive_invalid`，`details.detected_format` 说它实际是什么；已装的 runtime 不会被动。
+- `--archive` 也接受 `file://` URL；安装器仍会校验归档内嵌的清单版本与布局。
 
 ## 3. 完全离线：U 盘搬运
 
@@ -51,7 +60,7 @@ uv run horosa-skill install --archive runtime.zip
 目标机（只需 uv；Python ≥ 3.12 由 uv 自动准备——uv 本身也可从镜像或离线安装包装）：
 
 ```bash
-uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./horosa-runtime-win32-x64-v0.49.0.zip
+uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./horosa-runtime-win32-x64-v0.49.0.zip --sha256 <清单里的 sha256>
 uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill doctor
 uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill client config --format <client> --launcher uvx-wheel --write <配置文件>
 ```
@@ -73,6 +82,8 @@ uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill client config --f
 | `runtime.install_manifest_fetch_failed` | 清单 URL 经所有镜像都取不到 | 路径 1 换镜像 / 路径 2 直链 |
 | `runtime.install_download_failed` | 归档下载失败（`resume_note` 说明 `.part` 是否保留） | 重跑 `install` 续传；或路径 2/3 |
 | `runtime.install_sha256_mismatch` | 所有地址给的归档都与清单 sha256 不符（单个镜像给错文件时会自动换下一个） | 换镜像或走直链；别 `--force` 跳过校验 |
+| `runtime.install_archive_invalid` | `--archive` 给的文件读不了：`details.detected_format` 为 `html` / `json`（下到了网页或接口报错）、`empty` / `unknown`（不是归档）、`zip` / `tar.gz`（下载没下完） | 重新下载本平台归档，带 `--sha256` 再装 |
+| `runtime.install_sha256_invalid` | `--sha256` 的值不是 64 位十六进制 | 从 `runtime-manifest.json` 的 `platforms.<平台>.sha256` 抄 |
 | `runtime.install_start_in_progress` | runtime 正在启动，这时换目录会把启动器脚下的文件搬走；已装的 runtime 没动 | 等启动结束（`horosa-skill runtime status`）后重跑 `install` |
 | `runtime.install_long_path` | Windows 路径超 260 且未开长路径 | 设 `HOROSA_RUNTIME_ROOT=C:\horosa` 或开注册表 `LongPathsEnabled` |
 | `runtime.path_not_ascii` | Windows 上 runtime 根含非 ASCII 字符（随包 java.exe / Swiss Ephemeris 按 ANSI 读路径，装了也起不来） | `HOROSA_RUNTIME_ROOT=C:\horosa`（纯 ASCII）后重跑 `install` |
@@ -98,11 +109,14 @@ lists every candidate). The original URL is always the last fallback; downloads 
 `<runtime_root>/downloads/`) and are sha256-checked.
 
 **2. Assets API + local archive** — when `api.github.com` works but `github.com` does not: list
-`releases/latest` assets, download your platform archive with `Accept: application/octet-stream`, then
-`horosa-skill install --archive runtime.zip` (`file://` URLs work too).
+`releases/latest` assets, download your platform archive **and** `runtime-manifest.json` with
+`Accept: application/octet-stream`, then `horosa-skill install --archive runtime-archive --sha256 <platforms.<key>.sha256 from the manifest>`
+(`file://` URLs work too). The file name does not matter: the installer recognises zip / tar.gz from the content
+(since v0.50.0), and anything unreadable — a proxy login page, a truncated download — is refused as
+`runtime.install_archive_invalid` with `details.detected_format`, leaving the installed runtime untouched.
 
 **3. Fully offline (USB)** — copy the wheel and the runtime archive from a connected machine, then
-`uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./<archive>`; a local
+`uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./<archive> --sha256 <digest>`; a local
 `.whl` path works everywhere the release URL does.
 
 **Proxies & corporate CAs** — downloads honour `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`; loopback probes to the

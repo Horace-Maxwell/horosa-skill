@@ -287,12 +287,12 @@ _ENTRY_HELP = (
 )
 
 
-def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str) -> None:
+def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str, sha256: str | None = None) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     typer.echo("正在解析 runtime 版本与资产…（约 730MB 下载、解压后约 2GB，请留足磁盘）", err=True)
     try:
-        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer())
+        result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer(), sha256=sha256)
     except RuntimeError as exc:
         _refuse(exc)
     except OSError as exc:
@@ -308,8 +308,9 @@ def install(
     archive: str | None = typer.Option(None, help="Local archive path or URL to a runtime asset."),
     manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
     force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
+    sha256: str | None = typer.Option(None, "--sha256", help="Expected SHA-256 of the archive (64 hex digits). Use it with --archive for a hand-downloaded file: the digest is in the release's runtime-manifest.json. 手工下载的归档用它核对。"),
 ) -> None:
-    _run_install(archive, manifest_url, force, mode="install")
+    _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256))
 
 
 @app.command(help="Version-aware install alias: skips the 730MB download when already up to date. 升级（已最新则秒退）。")

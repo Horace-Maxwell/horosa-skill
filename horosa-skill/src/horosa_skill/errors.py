@@ -497,6 +497,29 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_runtime_root_permissions_or_move_root",
     },
+    # 归档坏了不是「没装 / 去体检」：重跑同一条命令还是同一个坏文件。旧行为是 BadZipFile / ReadError 的 traceback（v0.50.0-dev，E-04）。
+    "runtime.install_archive_invalid": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "给安装器的 runtime 归档读不了（details.detected_format 说它实际是什么：html / json = 下到了网页或接口报错，"
+            "empty / unknown = 不是归档，zip / tar.gz = 下载没下完）。请重新下载本平台的归档，用 `--sha256` 核对后再装；"
+            "已装的 runtime 没有被动过。",
+            "The runtime archive given to the installer cannot be read (details.detected_format says what it really is: "
+            "html / json = a web page or API error was saved, empty / unknown = not an archive, zip / tar.gz = an "
+            "incomplete download). Download the archive for this platform again and check it with `--sha256`; the "
+            "installed runtime was not touched.",
+        ),
+        "next_action": "redownload_archive_and_verify_sha256",
+    },
+    "runtime.install_sha256_invalid": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "`--sha256` 要的是 64 位十六进制的 SHA-256 摘要（可带 `sha256:` 前缀）；发布页的 runtime-manifest.json 里有本平台归档的值。",
+            "`--sha256` takes a 64-hex-digit SHA-256 digest (an optional `sha256:` prefix is fine); the release's "
+            "runtime-manifest.json lists the value for this platform's archive.",
+        ),
+        "next_action": "pass_a_64_hex_sha256",
+    },
     "runtime.platform_unsupported": {
         "kind": "runtime",
         "prompt_to_user": bilingual(
