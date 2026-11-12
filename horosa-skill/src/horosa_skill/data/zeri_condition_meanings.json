@@ -1,0 +1,1439 @@
+{
+ "_generated_by": "scripts/gen_zeri_condition_meanings.py (horosa-core-js zeri_conditions catalog)",
+ "negate_rule": {
+  "zh": "negate: true 把这一项（或整组）取反：不满足它的才算命中。条件自带判法时（如冲煞生肖的 mode：without = 不冲所选肖，缺省；with = 冲所选肖）先按判法读，再看 negate——「避开冲马」写 mode 缺省、不加 negate；两者都加等于双重否定。连接词 joiner 写在后一项上，从上到下依次结合（A 或 B 且 C = (A 或 B) 且 C）。",
+  "en": "negate: true inverts a leaf (or a whole group): it matches only where the condition fails. When a condition has its own mode (e.g. chong_shengxiao mode: without = the day does not clash the chosen signs, the default; with = it does), read the mode first, then negate — to avoid days clashing 马 keep the default mode and no negate; using both is a double negative. A joiner sits on the later item and items combine top to bottom (A OR B AND C = (A OR B) AND C)."
+ },
+ "techniques": {
+  "bazizeri": [
+   {
+    "type": "day_ganzhi",
+    "zh": "day_ganzhi「日柱干支」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱:甲子」。negate:true = 取反。",
+    "en": "day_ganzhi '日柱干支' (四柱): passes when the day / moment meets it as set by params; the default params read '日柱:甲子'. negate:true inverts it."
+   },
+   {
+    "type": "hour_ganzhi",
+    "zh": "hour_ganzhi「时柱干支」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时柱:甲子」。negate:true = 取反。",
+    "en": "hour_ganzhi '时柱干支' (四柱): passes when the day / moment meets it as set by params; the default params read '时柱:甲子'. negate:true inverts it."
+   },
+   {
+    "type": "month_year_gz",
+    "zh": "month_year_gz「年月柱干支」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月柱:寅」；柱 pillar：year=年柱 / month=月柱（缺省）。negate:true = 取反。",
+    "en": "month_year_gz '年月柱干支' (四柱): passes when the day / moment meets it as set by params; the default params read '月柱:寅'; pillar (柱): year=年柱 / month=月柱 (default). negate:true inverts it."
+   },
+   {
+    "type": "zhi_relation",
+    "zh": "zhi_relation「支间关系」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱时柱支六合」；柱A a：year=年柱 / month=月柱 / day=日柱（缺省） / time=时柱；柱B b：year=年柱 / month=月柱 / day=日柱 / time=时柱（缺省）。negate:true = 取反。",
+    "en": "zhi_relation '支间关系' (四柱): passes when the day / moment meets it as set by params; the default params read '日柱时柱支六合'; a (柱A): year=年柱 / month=月柱 / day=日柱 (default) / time=时柱; b (柱B): year=年柱 / month=月柱 / day=日柱 / time=时柱 (default). negate:true inverts it."
+   },
+   {
+    "type": "gan_wuhe",
+    "zh": "gan_wuhe「天干五合」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱时柱干五合」；柱A a：year=年柱 / month=月柱 / day=日柱（缺省） / time=时柱；柱B b：year=年柱 / month=月柱 / day=日柱 / time=时柱（缺省）。negate:true = 取反。",
+    "en": "gan_wuhe '天干五合' (四柱): passes when the day / moment meets it as set by params; the default params read '日柱时柱干五合'; a (柱A): year=年柱 / month=月柱 / day=日柱 (default) / time=时柱; b (柱B): year=年柱 / month=月柱 / day=日柱 / time=时柱 (default). negate:true inverts it."
+   },
+   {
+    "type": "sanhe_ju",
+    "zh": "sanhe_ju「地支三合局」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三合水局」。negate:true = 取反。",
+    "en": "sanhe_ju '地支三合局' (四柱): passes when the day / moment meets it as set by params; the default params read '三合水局'. negate:true inverts it."
+   },
+   {
+    "type": "shensha_has",
+    "zh": "shensha_has「吉神在柱」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「吉神:天乙贵人」；匹配 matchMode：any=任一命中（缺省） / all=全部命中。negate:true = 取反。",
+    "en": "shensha_has '吉神在柱' (神煞): passes when the day / moment meets it as set by params; the default params read '吉神:天乙贵人'; matchMode (匹配): any=任一命中 (default) / all=全部命中. negate:true inverts it."
+   },
+   {
+    "type": "shensha_not",
+    "zh": "shensha_not「凶煞回避」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「避煞:羊刃/劫煞」；判法 mode：without=全不出现(净)（缺省） / with=出现任一。negate:true = 取反。",
+    "en": "shensha_not '凶煞回避' (神煞): passes when the day / moment meets it as set by params; the default params read '避煞:羊刃/劫煞'; mode (判法): without=全不出现(净) (default) / with=出现任一. negate:true inverts it."
+   },
+   {
+    "type": "nayin_wuxing",
+    "zh": "nayin_wuxing「柱纳音五行」（纳音长生）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱纳音:金」；柱 pillar：year=年柱 / month=月柱 / day=日柱（缺省） / time=时柱。negate:true = 取反。",
+    "en": "nayin_wuxing '柱纳音五行' (纳音长生): passes when the day / moment meets it as set by params; the default params read '日柱纳音:金'; pillar (柱): year=年柱 / month=月柱 / day=日柱 (default) / time=时柱. negate:true inverts it."
+   },
+   {
+    "type": "changsheng",
+    "zh": "changsheng「日干长生态」（纳音长生）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日干于时支:长生/临官/帝旺」；于 at：time=时支（缺省） / day=日支(自坐) / month=月支(月令)。negate:true = 取反。",
+    "en": "changsheng '日干长生态' (纳音长生): passes when the day / moment meets it as set by params; the default params read '日干于时支:长生/临官/帝旺'; at (于): time=时支 (default) / day=日支(自坐) / month=月支(月令). negate:true inverts it."
+   },
+   {
+    "type": "xunkong",
+    "zh": "xunkong「旬空」（纳音长生）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时支不空」；判法 mode：not=不落空(实)（缺省） / is=落旬空。negate:true = 取反。",
+    "en": "xunkong '旬空' (纳音长生): passes when the day / moment meets it as set by params; the default params read '时支不空'; mode (判法): not=不落空(实) (default) / is=落旬空. negate:true inverts it."
+   },
+   {
+    "type": "wuxing_day",
+    "zh": "wuxing_day「日主五行」（五行）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日主:木」。negate:true = 取反。",
+    "en": "wuxing_day '日主五行' (五行): passes when the day / moment meets it as set by params; the default params read '日主:木'. negate:true inverts it."
+   },
+   {
+    "type": "wuxing_presence",
+    "zh": "wuxing_presence「五行齐缺」（五行）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「五行俱全」；判法 mode：all5=五行俱全（缺省） / has=含指定行 / lack=缺指定行。negate:true = 取反。",
+    "en": "wuxing_presence '五行齐缺' (五行): passes when the day / moment meets it as set by params; the default params read '五行俱全'; mode (判法): all5=五行俱全 (default) / has=含指定行 / lack=缺指定行. negate:true inverts it."
+   },
+   {
+    "type": "yinyang_day",
+    "zh": "yinyang_day「阴阳日」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「阳日」；取 value：yang=阳日(阳干)（缺省） / yin=阴日(阴干)。negate:true = 取反。",
+    "en": "yinyang_day '阴阳日' (历法): passes when the day / moment meets it as set by params; the default params read '阳日'; value (取): yang=阳日(阳干) (default) / yin=阴日(阴干). negate:true inverts it."
+   },
+   {
+    "type": "jieqi_month",
+    "zh": "jieqi_month「节气月令」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月令:寅月」。negate:true = 取反。",
+    "en": "jieqi_month '节气月令' (历法): passes when the day / moment meets it as set by params; the default params read '月令:寅月'. negate:true inverts it."
+   },
+   {
+    "type": "bm_bu_chong",
+    "zh": "bm_bu_chong「不冲本命」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「不冲本命年支/日支」。negate:true = 取反。",
+    "en": "bm_bu_chong '不冲本命' (本命): passes when the day / moment meets it as set by params; the default params read '不冲本命年支/日支'. negate:true inverts it."
+   },
+   {
+    "type": "bm_xiyong",
+    "zh": "bm_xiyong「喜用相扶」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「喜用相扶(日)」；取面 scope：day=日干五行∈本命喜用（缺省） / dayhour=日时干五行均∈喜用。negate:true = 取反。",
+    "en": "bm_xiyong '喜用相扶' (本命): passes when the day / moment meets it as set by params; the default params read '喜用相扶(日)'; scope (取面): day=日干五行∈本命喜用 (default) / dayhour=日时干五行均∈喜用. negate:true inverts it."
+   },
+   {
+    "type": "bm_he",
+    "zh": "bm_he「与本命相合」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日支六合本命」；合法 rel：zhi_liuhe=候选日支合本命日支(六合)（缺省） / zhi_sanhe=候选日支会本命年支(三合) / gan_wuhe=候选日干合本命日干(五合)。negate:true = 取反。",
+    "en": "bm_he '与本命相合' (本命): passes when the day / moment meets it as set by params; the default params read '日支六合本命'; rel (合法): zhi_liuhe=候选日支合本命日支(六合) (default) / zhi_sanhe=候选日支会本命年支(三合) / gan_wuhe=候选日干合本命日干(五合). negate:true inverts it."
+   },
+   {
+    "type": "shishen_at",
+    "zh": "shishen_at「十神在柱(干/支本气/藏干)」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「干十神:正官」；判层 layer：stem=天干十神（缺省） / branch=支本气十神 / canggan=藏干十神(任一藏)；匹配 matchMode：any=任一命中（缺省） / all=全部命中。negate:true = 取反。",
+    "en": "shishen_at '十神在柱(干/支本气/藏干)' (四柱): passes when the day / moment meets it as set by params; the default params read '干十神:正官'; layer (判层): stem=天干十神 (default) / branch=支本气十神 / canggan=藏干十神(任一藏); matchMode (匹配): any=任一命中 (default) / all=全部命中. negate:true inverts it."
+   },
+   {
+    "type": "tai_ming_shen",
+    "zh": "tai_ming_shen「胎元/命宫/身宫柱」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫·干支:甲子」；柱 who：tai=胎元 / ming=命宫（缺省） / shen=身宫；判面 dim：ganzhi=干支(单字=干或支)（缺省） / nayin=纳音五行。negate:true = 取反。",
+    "en": "tai_ming_shen '胎元/命宫/身宫柱' (四柱): passes when the day / moment meets it as set by params; the default params read '命宫·干支:甲子'; who (柱): tai=胎元 / ming=命宫 (default) / shen=身宫; dim (判面): ganzhi=干支(单字=干或支) (default) / nayin=纳音五行. negate:true inverts it."
+   },
+   {
+    "type": "nayin_full",
+    "zh": "nayin_full「柱纳音(六十甲子全名)」（纳音长生）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「纳音:海中金」；匹配 matchMode：any=任一命中（缺省） / all=全部命中。negate:true = 取反。",
+    "en": "nayin_full '柱纳音(六十甲子全名)' (纳音长生): passes when the day / moment meets it as set by params; the default params read '纳音:海中金'; matchMode (匹配): any=任一命中 (default) / all=全部命中. negate:true inverts it."
+   },
+   {
+    "type": "zhu_phase",
+    "zh": "zhu_phase「逐柱星运(十二长生)」（纳音长生）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「星运:长生/帝旺」；匹配 matchMode：any=任一命中（缺省） / all=全部命中。negate:true = 取反。",
+    "en": "zhu_phase '逐柱星运(十二长生)' (纳音长生): passes when the day / moment meets it as set by params; the default params read '星运:长生/帝旺'; matchMode (匹配): any=任一命中 (default) / all=全部命中. negate:true inverts it."
+   },
+   {
+    "type": "zhu_xunkong",
+    "zh": "zhu_xunkong「逐柱旬空(各柱自起旬)」（纳音长生）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「柱旬空:日含子」。negate:true = 取反。",
+    "en": "zhu_xunkong '逐柱旬空(各柱自起旬)' (纳音长生): passes when the day / moment meets it as set by params; the default params read '柱旬空:日含子'. negate:true inverts it."
+   },
+   {
+    "type": "canggan_has",
+    "zh": "canggan_has「藏干存在性」（五行）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「藏丁」；判法 mode：has=藏有任一（缺省） / not=全不藏(透藏皆无另用五行齐缺)。negate:true = 取反。",
+    "en": "canggan_has '藏干存在性' (五行): passes when the day / moment meets it as set by params; the default params read '藏丁'; mode (判法): has=藏有任一 (default) / not=全不藏(透藏皆无另用五行齐缺). negate:true inverts it."
+   },
+   {
+    "type": "lunar_date",
+    "zh": "lunar_date「农历日/月/闰月」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「农历日:1」；判面 dim：day=农历日(1-30)（缺省） / month=农历月(1-12) / leap=闰月。negate:true = 取反。",
+    "en": "lunar_date '农历日/月/闰月' (历法): passes when the day / moment meets it as set by params; the default params read '农历日:1'; dim (判面): day=农历日(1-30) (default) / month=农历月(1-12) / leap=闰月. negate:true inverts it."
+   },
+   {
+    "type": "jie_delta",
+    "zh": "jie_delta「节气后第 N 天(含中气,1 起)」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「节气后第 1-5 天」。negate:true = 取反。",
+    "en": "jie_delta '节气后第 N 天(含中气,1 起)' (历法): passes when the day / moment meets it as set by params; the default params read '节气后第 1-5 天'. negate:true inverts it."
+   }
+  ],
+  "huanglizeri": [
+   {
+    "type": "yi_has",
+    "zh": "yi_has「宜含事项」（用事）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「宜:嫁娶」；匹配 matchMode：any=任一命中（缺省） / all=全部命中。negate:true = 取反。",
+    "en": "yi_has '宜含事项' (用事): passes when the day / moment meets it as set by params; the default params read '宜:嫁娶'; matchMode (匹配): any=任一命中 (default) / all=全部命中. negate:true inverts it."
+   },
+   {
+    "type": "ji_not",
+    "zh": "ji_not「忌避事项」（用事）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「忌不含:嫁娶」；判法 mode：without=忌中不含(可办)（缺省） / with=忌中含(避开日)。negate:true = 取反。",
+    "en": "ji_not '忌避事项' (用事): passes when the day / moment meets it as set by params; the default params read '忌不含:嫁娶'; mode (判法): without=忌中不含(可办) (default) / with=忌中含(避开日). negate:true inverts it."
+   },
+   {
+    "type": "jianchu",
+    "zh": "jianchu「建除十二神」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「建除:成」。negate:true = 取反。",
+    "en": "jianchu '建除十二神' (神煞): passes when the day / moment meets it as set by params; the default params read '建除:成'. negate:true inverts it."
+   },
+   {
+    "type": "tianshen_dao",
+    "zh": "tianshen_dao「黄黑道」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「黄道」；道 dao：黄道=黄道(吉)（缺省） / 黑道=黑道(凶) / =不限。negate:true = 取反。",
+    "en": "tianshen_dao '黄黑道' (神煞): passes when the day / moment meets it as set by params; the default params read '黄道'; dao (道): 黄道=黄道(吉) (default) / 黑道=黑道(凶) / =不限. negate:true inverts it."
+   },
+   {
+    "type": "zhixiu",
+    "zh": "zhixiu「值宿(廿八宿)」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「宿:任意」；吉凶 luck：=不限（缺省） / 吉=吉宿 / 凶=凶宿。negate:true = 取反。",
+    "en": "zhixiu '值宿(廿八宿)' (神煞): passes when the day / moment meets it as set by params; the default params read '宿:任意'; luck (吉凶): =不限 (default) / 吉=吉宿 / 凶=凶宿. negate:true inverts it."
+   },
+   {
+    "type": "jishen_has",
+    "zh": "jishen_has「吉神宜趋」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「吉神:天德」；匹配 matchMode：any=任一命中（缺省） / all=全部命中。negate:true = 取反。",
+    "en": "jishen_has '吉神宜趋' (神煞): passes when the day / moment meets it as set by params; the default params read '吉神:天德'; matchMode (匹配): any=任一命中 (default) / all=全部命中. negate:true inverts it."
+   },
+   {
+    "type": "xiongsha_not",
+    "zh": "xiongsha_not「凶煞回避」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「避凶煞:月破/致死/四废」；判法 mode：without=全不出现(净日)（缺省） / with=出现任一(排查日)。negate:true = 取反。",
+    "en": "xiongsha_not '凶煞回避' (神煞): passes when the day / moment meets it as set by params; the default params read '避凶煞:月破/致死/四废'; mode (判法): without=全不出现(净日) (default) / with=出现任一(排查日). negate:true inverts it."
+   },
+   {
+    "type": "nine_star",
+    "zh": "nine_star「九星值日」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「九星:一」。negate:true = 取反。",
+    "en": "nine_star '九星值日' (神煞): passes when the day / moment meets it as set by params; the default params read '九星:一'. negate:true inverts it."
+   },
+   {
+    "type": "chong_shengxiao",
+    "zh": "chong_shengxiao「冲煞生肖」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「不冲:」；判法 mode：without=不冲所选肖（缺省） / with=冲所选肖。negate:true = 取反。",
+    "en": "chong_shengxiao '冲煞生肖' (神煞): passes when the day / moment meets it as set by params; the default params read '不冲:'; mode (判法): without=不冲所选肖 (default) / with=冲所选肖. negate:true inverts it."
+   },
+   {
+    "type": "day_ganzhi",
+    "zh": "day_ganzhi「日干支」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱:甲子」。negate:true = 取反。",
+    "en": "day_ganzhi '日干支' (历法): passes when the day / moment meets it as set by params; the default params read '日柱:甲子'. negate:true inverts it."
+   },
+   {
+    "type": "nayin_wuxing",
+    "zh": "nayin_wuxing「日纳音五行」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「纳音:金行」。negate:true = 取反。",
+    "en": "nayin_wuxing '日纳音五行' (历法): passes when the day / moment meets it as set by params; the default params read '纳音:金行'. negate:true inverts it."
+   },
+   {
+    "type": "liuyao",
+    "zh": "liuyao「六曜」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「六曜:大安」。negate:true = 取反。",
+    "en": "liuyao '六曜' (历法): passes when the day / moment meets it as set by params; the default params read '六曜:大安'. negate:true inverts it."
+   },
+   {
+    "type": "yuexiang",
+    "zh": "yuexiang「月相」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月相:望」。negate:true = 取反。",
+    "en": "yuexiang '月相' (历法): passes when the day / moment meets it as set by params; the default params read '月相:望'. negate:true inverts it."
+   },
+   {
+    "type": "lunar_day",
+    "zh": "lunar_day「农历日」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「农历:初一/十五」。negate:true = 取反。",
+    "en": "lunar_day '农历日' (历法): passes when the day / moment meets it as set by params; the default params read '农历:初一/十五'. negate:true inverts it."
+   },
+   {
+    "type": "jieqi_day",
+    "zh": "jieqi_day「节气日」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「节气日」；判法 mode：is=当日交节（缺省） / not=非交节日。negate:true = 取反。",
+    "en": "jieqi_day '节气日' (历法): passes when the day / moment meets it as set by params; the default params read '节气日'; mode (判法): is=当日交节 (default) / not=非交节日. negate:true inverts it."
+   },
+   {
+    "type": "week_day",
+    "zh": "week_day「星期」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「星期:六/日」。negate:true = 取反。",
+    "en": "week_day '星期' (历法): passes when the day / moment meets it as set by params; the default params read '星期:六/日'. negate:true inverts it."
+   },
+   {
+    "type": "good_hour",
+    "zh": "good_hour「当日吉时」（时辰）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「吉时≥1」。negate:true = 取反。",
+    "en": "good_hour '当日吉时' (时辰): passes when the day / moment meets it as set by params; the default params read '吉时≥1'. negate:true inverts it."
+   },
+   {
+    "type": "hour_yiji",
+    "zh": "hour_yiji「时辰宜忌(逐时)」（时辰）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时宜含:祭祀」；判面 mode：yi=时宜含(某时辰宜中含该事项即命中)（缺省） / ji=时忌含(某时辰忌中含该事项即命中;要「无忌」请取反)。negate:true = 取反。",
+    "en": "hour_yiji '时辰宜忌(逐时)' (时辰): passes when the day / moment meets it as set by params; the default params read '时宜含:祭祀'; mode (判面): yi=时宜含(某时辰宜中含该事项即命中) (default) / ji=时忌含(某时辰忌中含该事项即命中;要「无忌」请取反). negate:true inverts it."
+   },
+   {
+    "type": "hour_shen",
+    "zh": "hour_shen「时辰值神/时冲/时煞」（时辰）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时值神:青龙」；判面 dim：tianshen=时辰值神（缺省） / chong=时冲生肖 / sha=时煞方。negate:true = 取反。",
+    "en": "hour_shen '时辰值神/时冲/时煞' (时辰): passes when the day / moment meets it as set by params; the default params read '时值神:青龙'; dim (判面): tianshen=时辰值神 (default) / chong=时冲生肖 / sha=时煞方. negate:true inverts it."
+   },
+   {
+    "type": "tongshu_verdict",
+    "zh": "tongshu_verdict「通书流派日判(董公/乌兔)」（通书）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「董公:吉」；流派 school：donggong=董公择日（缺省） / wutu=天元乌兔。negate:true = 取反。",
+    "en": "tongshu_verdict '通书流派日判(董公/乌兔)' (通书): passes when the day / moment meets it as set by params; the default params read '董公:吉'; school (流派): donggong=董公择日 (default) / wutu=天元乌兔. negate:true inverts it."
+   },
+   {
+    "type": "tongshu_star",
+    "zh": "tongshu_star「通书值星(三吉星/列宿)」（通书）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「董公吉星:煞贡」；流派 school：donggong=董公三吉星（缺省） / sanyuan=三垣列宿加临。negate:true = 取反。",
+    "en": "tongshu_star '通书值星(三吉星/列宿)' (通书): passes when the day / moment meets it as set by params; the default params read '董公吉星:煞贡'; school (流派): donggong=董公三吉星 (default) / sanyuan=三垣列宿加临. negate:true inverts it."
+   },
+   {
+    "type": "tongshu_hours",
+    "zh": "tongshu_hours「通书吉时在(叠数/玄空)」（通书）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「玄空有吉时」；流派 school：dieshu=奇门叠数(每日恒有吉时·不判别) / xuankong=玄空大卦(有上吉时)（缺省）。negate:true = 取反。",
+    "en": "tongshu_hours '通书吉时在(叠数/玄空)' (通书): passes when the day / moment meets it as set by params; the default params read '玄空有吉时'; school (流派): dieshu=奇门叠数(每日恒有吉时·不判别) / xuankong=玄空大卦(有上吉时) (default). negate:true inverts it."
+   },
+   {
+    "type": "yongshi_verdict",
+    "zh": "yongshi_verdict「用事裁决(宜/忌/冲突)」（用事）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「嫁娶:宜」。negate:true = 取反。",
+    "en": "yongshi_verdict '用事裁决(宜/忌/冲突)' (用事): passes when the day / moment meets it as set by params; the default params read '嫁娶:宜'. negate:true inverts it."
+   },
+   {
+    "type": "month_year_info",
+    "zh": "month_year_info「月/年干支·生肖」（历法）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月柱:寅」；判面 dim：monthgz=月干支(单字=干或支)（缺省） / yeargz=年干支(单字=干或支) / shengxiao=年生肖。negate:true = 取反。",
+    "en": "month_year_info '月/年干支·生肖' (历法): passes when the day / moment meets it as set by params; the default params read '月柱:寅'; dim (判面): monthgz=月干支(单字=干或支) (default) / yeargz=年干支(单字=干或支) / shengxiao=年生肖. negate:true inverts it."
+   },
+   {
+    "type": "xiu_detail",
+    "zh": "xiu_detail「值宿细面(四象/七政/禽)」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「宿四象:东青龙」；判面 dim：xiang=四象方（缺省） / zheng=七政值日 / animal=值禽。negate:true = 取反。",
+    "en": "xiu_detail '值宿细面(四象/七政/禽)' (神煞): passes when the day / moment meets it as set by params; the default params read '宿四象:东青龙'; dim (判面): xiang=四象方 (default) / zheng=七政值日 / animal=值禽. negate:true inverts it."
+   },
+   {
+    "type": "sha_fang_pengzu",
+    "zh": "sha_fang_pengzu「煞方/彭祖百忌」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「煞方:煞南」；判面 dim：sha=煞方（缺省） / pengzu_gan=彭祖干忌(含字) / pengzu_zhi=彭祖支忌(含字)。negate:true = 取反。",
+    "en": "sha_fang_pengzu '煞方/彭祖百忌' (神煞): passes when the day / moment meets it as set by params; the default params read '煞方:煞南'; dim (判面): sha=煞方 (default) / pengzu_gan=彭祖干忌(含字) / pengzu_zhi=彭祖支忌(含字). negate:true inverts it."
+   }
+  ],
+  "indiazeri": [
+   {
+    "type": "tithi",
+    "zh": "tithi「Tithi(月相日)」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Tithi:2/3/5/7/10/11/13」。negate:true = 取反。",
+    "en": "tithi 'Tithi(月相日)' (五肢): passes when the day / moment meets it as set by params; the default params read 'Tithi:2/3/5/7/10/11/13'. negate:true inverts it."
+   },
+   {
+    "type": "vara",
+    "zh": "vara「Vara(曜日·日出界)」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Vara:周四」。negate:true = 取反。",
+    "en": "vara 'Vara(曜日·日出界)' (五肢): passes when the day / moment meets it as set by params; the default params read 'Vara:周四'. negate:true inverts it."
+   },
+   {
+    "type": "nakshatra",
+    "zh": "nakshatra「Nakshatra(月宿)」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月宿:Rohini」。negate:true = 取反。",
+    "en": "nakshatra 'Nakshatra(月宿)' (五肢): passes when the day / moment meets it as set by params; the default params read '月宿:Rohini'. negate:true inverts it."
+   },
+   {
+    "type": "yoga",
+    "zh": "yoga「Yoga(日月合行)」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Yoga:23」。negate:true = 取反。",
+    "en": "yoga 'Yoga(日月合行)' (五肢): passes when the day / moment meets it as set by params; the default params read 'Yoga:23'. negate:true inverts it."
+   },
+   {
+    "type": "karana",
+    "zh": "karana「Karana(半日)」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Karana:Bava/Balava」。negate:true = 取反。",
+    "en": "karana 'Karana(半日)' (五肢): passes when the day / moment meets it as set by params; the default params read 'Karana:Bava/Balava'. negate:true inverts it."
+   },
+   {
+    "type": "lagna",
+    "zh": "lagna「Lagna(上升星座)」（上升）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Lagna:白羊」。negate:true = 取反。",
+    "en": "lagna 'Lagna(上升星座)' (上升): passes when the day / moment meets it as set by params; the default params read 'Lagna:白羊'. negate:true inverts it."
+   },
+   {
+    "type": "planet_sign",
+    "zh": "planet_sign「曜落星座」（曜位）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「木在白羊」。negate:true = 取反。",
+    "en": "planet_sign '曜落星座' (曜位): passes when the day / moment meets it as set by params; the default params read '木在白羊'. negate:true inverts it."
+   },
+   {
+    "type": "retro",
+    "zh": "retro「曜顺逆」（曜位）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「水顺」；态 state：direct=顺行（缺省） / retro=逆行。negate:true = 取反。",
+    "en": "retro '曜顺逆' (曜位): passes when the day / moment meets it as set by params; the default params read '水顺'; state (态): direct=顺行 (default) / retro=逆行. negate:true inverts it."
+   },
+   {
+    "type": "day_kalam",
+    "zh": "day_kalam「日凶段(Rahu Kalam 类)」（日段）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Rahu Kalam避开」；段 kind：rahu=Rahu Kalam（缺省） / yama=Yama Ganda / gulika=Gulika Kalam；判法 mode：avoid=避开该段（缺省） / in=落在该段。negate:true = 取反。",
+    "en": "day_kalam '日凶段(Rahu Kalam 类)' (日段): passes when the day / moment meets it as set by params; the default params read 'Rahu Kalam避开'; kind (段): rahu=Rahu Kalam (default) / yama=Yama Ganda / gulika=Gulika Kalam; mode (判法): avoid=避开该段 (default) / in=落在该段. negate:true inverts it."
+   },
+   {
+    "type": "tara_bala",
+    "zh": "tara_bala「Tara Bala(宿力)」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Tara:2/4/6/8/9」。negate:true = 取反。",
+    "en": "tara_bala 'Tara Bala(宿力)' (本命): passes when the day / moment meets it as set by params; the default params read 'Tara:2/4/6/8/9'. negate:true inverts it."
+   },
+   {
+    "type": "chandra_bala",
+    "zh": "chandra_bala「Chandra Bala(月力)」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Chandra:1/3/6/7/10/11」。negate:true = 取反。",
+    "en": "chandra_bala 'Chandra Bala(月力)' (本命): passes when the day / moment meets it as set by params; the default params read 'Chandra:1/3/6/7/10/11'. negate:true inverts it."
+   },
+   {
+    "type": "muhurta_seg",
+    "zh": "muhurta_seg「三十须臾(Muhurta/Abhijit)」（日段）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「须臾:吉」；取段 pick：grade=按吉凶档（缺省） / abhijit=Abhijit(昼第8·至吉)。negate:true = 取反。",
+    "en": "muhurta_seg '三十须臾(Muhurta/Abhijit)' (日段): passes when the day / moment meets it as set by params; the default params read '须臾:吉'; pick (取段): grade=按吉凶档 (default) / abhijit=Abhijit(昼第8·至吉). negate:true inverts it."
+   },
+   {
+    "type": "choghadia",
+    "zh": "choghadia「Choghadia 八段」（日段）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Choghadia:吉」。negate:true = 取反。",
+    "en": "choghadia 'Choghadia 八段' (日段): passes when the day / moment meets it as set by params; the default params read 'Choghadia:吉'. negate:true inverts it."
+   },
+   {
+    "type": "hora_vedic",
+    "zh": "hora_vedic「行星时(Hora)」（日段）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Hora:木时」。negate:true = 取反。",
+    "en": "hora_vedic '行星时(Hora)' (日段): passes when the day / moment meets it as set by params; the default params read 'Hora:木时'. negate:true inverts it."
+   },
+   {
+    "type": "panchaka",
+    "zh": "panchaka「Panchaka 五忌」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「避五忌」；判法 mode：avoid=避开五忌段(推荐)（缺省） / in=处于五忌段。negate:true = 取反。",
+    "en": "panchaka 'Panchaka 五忌' (五肢): passes when the day / moment meets it as set by params; the default params read '避五忌'; mode (判法): avoid=避开五忌段(推荐) (default) / in=处于五忌段. negate:true inverts it."
+   },
+   {
+    "type": "nak_pada",
+    "zh": "nak_pada「月宿分足(Pada 1-4)」（五肢）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月宿足:1」；曜 body：Moon=月（缺省） / Sun=日。negate:true = 取反。",
+    "en": "nak_pada '月宿分足(Pada 1-4)' (五肢): passes when the day / moment meets it as set by params; the default params read '月宿足:1'; body (曜): Moon=月 (default) / Sun=日. negate:true inverts it."
+   },
+   {
+    "type": "bhava_from_lagna",
+    "zh": "bhava_from_lagna「曜落宫(自 Lagna 整宫)」（曜位）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「Jupiter落Kendra」；宫组 group：kendra=Kendra(1/4/7/10)（缺省） / trikona=Trikona(1/5/9) / dusthana=Dusthana(6/8/12) / custom=自选宫位。negate:true = 取反。",
+    "en": "bhava_from_lagna '曜落宫(自 Lagna 整宫)' (曜位): passes when the day / moment meets it as set by params; the default params read 'Jupiter落Kendra'; group (宫组): kendra=Kendra(1/4/7/10) (default) / trikona=Trikona(1/5/9) / dusthana=Dusthana(6/8/12) / custom=自选宫位. negate:true inverts it."
+   },
+   {
+    "type": "day_night_in",
+    "zh": "day_night_in「昼/夜(日出界)」（日段）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「昼段」；段 value：day=昼(日出→日没)（缺省） / night=夜(日没→次日出)。negate:true = 取反。",
+    "en": "day_night_in '昼/夜(日出界)' (日段): passes when the day / moment meets it as set by params; the default params read '昼段'; value (段): day=昼(日出→日没) (default) / night=夜(日没→次日出). negate:true inverts it."
+   }
+  ],
+  "liurengzeri": [
+   {
+    "type": "ke_name",
+    "zh": "ke_name「课名(九宗门)」（课体）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「课名:元首课」。negate:true = 取反。",
+    "en": "ke_name '课名(九宗门)' (课体): passes when the day / moment meets it as set by params; the default params read '课名:元首课'. negate:true inverts it."
+   },
+   {
+    "type": "chuan_zhi",
+    "zh": "chuan_zhi「三传含支」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传含子」；位 pos：any=任一传（缺省） / 0=初传 / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "chuan_zhi '三传含支' (三传): passes when the day / moment meets it as set by params; the default params read '三传含子'; pos (位): any=任一传 (default) / 0=初传 / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "chuan_jiang",
+    "zh": "chuan_jiang「三传天将」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传乘贵人」；位 pos：any=任一传（缺省） / 0=初传 / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "chuan_jiang '三传天将' (三传): passes when the day / moment meets it as set by params; the default params read '三传乘贵人'; pos (位): any=任一传 (default) / 0=初传 / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "chuan_liuqin",
+    "zh": "chuan_liuqin「三传六亲」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「初传为妻财」；位 pos：any=任一传 / 0=初传（缺省） / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "chuan_liuqin '三传六亲' (三传): passes when the day / moment meets it as set by params; the default params read '初传为妻财'; pos (位): any=任一传 / 0=初传 (default) / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "chuan_kong",
+    "zh": "chuan_kong「三传旬空」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传净空」；判法 mode：none=三传不犯空(净)（缺省） / has=有传犯空 / first=初传空(空发用)。negate:true = 取反。",
+    "en": "chuan_kong '三传旬空' (三传): passes when the day / moment meets it as set by params; the default params read '三传净空'; mode (判法): none=三传不犯空(净) (default) / has=有传犯空 / first=初传空(空发用). negate:true inverts it."
+   },
+   {
+    "type": "chuan_ju",
+    "zh": "chuan_ju「三传合局」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传成水/木/火/金局」。negate:true = 取反。",
+    "en": "chuan_ju '三传合局' (三传): passes when the day / moment meets it as set by params; the default params read '三传成水/木/火/金局'. negate:true inverts it."
+   },
+   {
+    "type": "fa_yong",
+    "zh": "fa_yong「发用(初传)神煞」（发用）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「驿马发用」。negate:true = 取反。",
+    "en": "fa_yong '发用(初传)神煞' (发用): passes when the day / moment meets it as set by params; the default params read '驿马发用'. negate:true inverts it."
+   },
+   {
+    "type": "tianpan_at",
+    "zh": "tianpan_at「天盘乘临」（盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「子上见丑」。negate:true = 取反。",
+    "en": "tianpan_at '天盘乘临' (盘式): passes when the day / moment meets it as set by params; the default params read '子上见丑'. negate:true inverts it."
+   },
+   {
+    "type": "guiren_pos",
+    "zh": "guiren_pos「贵人临支·顺逆」（盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「贵人」；行度 dir：any=不限（缺省） / forward=顺行(贵人升殿区) / reverse=逆行。negate:true = 取反。",
+    "en": "guiren_pos '贵人临支·顺逆' (盘式): passes when the day / moment meets it as set by params; the default params read '贵人'; dir (行度): any=不限 (default) / forward=顺行(贵人升殿区) / reverse=逆行. negate:true inverts it."
+   },
+   {
+    "type": "jiang_at",
+    "zh": "jiang_at「天将临支」（盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「青龙临寅」。negate:true = 取反。",
+    "en": "jiang_at '天将临支' (盘式): passes when the day / moment meets it as set by params; the default params read '青龙临寅'. negate:true inverts it."
+   },
+   {
+    "type": "yue_jiang_is",
+    "zh": "yue_jiang_is「月将」（盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月将:子」。negate:true = 取反。",
+    "en": "yue_jiang_is '月将' (盘式): passes when the day / moment meets it as set by params; the default params read '月将:子'. negate:true inverts it."
+   },
+   {
+    "type": "zhou_ye",
+    "zh": "zhou_ye「昼占/夜占」（盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「昼占」；取 value：day=昼占(日出后)（缺省） / night=夜占。negate:true = 取反。",
+    "en": "zhou_ye '昼占/夜占' (盘式): passes when the day / moment meets it as set by params; the default params read '昼占'; value (取): day=昼占(日出后) (default) / night=夜占. negate:true inverts it."
+   },
+   {
+    "type": "ke_shang",
+    "zh": "ke_shang「四课上神」（四课）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「一课上见子」。negate:true = 取反。",
+    "en": "ke_shang '四课上神' (四课): passes when the day / moment meets it as set by params; the default params read '一课上见子'. negate:true inverts it."
+   },
+   {
+    "type": "ke_zei",
+    "zh": "ke_zei「贼克数」（四课）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「下贼上 0~0课」；类 kind：zei=下贼上（缺省） / ke=上克下。negate:true = 取反。",
+    "en": "ke_zei '贼克数' (四课): passes when the day / moment meets it as set by params; the default params read '下贼上 0~0课'; kind (类): zei=下贼上 (default) / ke=上克下. negate:true inverts it."
+   },
+   {
+    "type": "day_ganzhi",
+    "zh": "day_ganzhi「日柱干支」（日时）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱:甲子」。negate:true = 取反。",
+    "en": "day_ganzhi '日柱干支' (日时): passes when the day / moment meets it as set by params; the default params read '日柱:甲子'. negate:true inverts it."
+   },
+   {
+    "type": "hour_zhi",
+    "zh": "hour_zhi「占时地支」（日时）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「占时:午」。negate:true = 取反。",
+    "en": "hour_zhi '占时地支' (日时): passes when the day / moment meets it as set by params; the default params read '占时:午'. negate:true inverts it."
+   },
+   {
+    "type": "shensha_at",
+    "zh": "shensha_at「神煞值支」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日德值寅」。negate:true = 取反。",
+    "en": "shensha_at '神煞值支' (神煞): passes when the day / moment meets it as set by params; the default params read '日德值寅'. negate:true inverts it."
+   },
+   {
+    "type": "taisui_god_at",
+    "zh": "taisui_god_at「太岁十二神值支」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「岁驾在子」。negate:true = 取反。",
+    "en": "taisui_god_at '太岁十二神值支' (神煞): passes when the day / moment meets it as set by params; the default params read '岁驾在子'. negate:true inverts it."
+   },
+   {
+    "type": "xun_ding",
+    "zh": "xun_ding「遁丁/旬空」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「遁丁:丑」；取 who：ding=遁丁(旬内丁支)（缺省） / kong=旬空支。negate:true = 取反。",
+    "en": "xun_ding '遁丁/旬空' (神煞): passes when the day / moment meets it as set by params; the default params read '遁丁:丑'; who (取): ding=遁丁(旬内丁支) (default) / kong=旬空支. negate:true inverts it."
+   },
+   {
+    "type": "bm_in_chuan",
+    "zh": "bm_in_chuan「本命/行年入传」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「本命入传」；取 who：ming=本命支（缺省） / xingnian=行年支；判法 mode：in=入三传（缺省） / not_in=不入三传 / fayong=发用(为初传)。negate:true = 取反。",
+    "en": "bm_in_chuan '本命/行年入传' (本命): passes when the day / moment meets it as set by params; the default params read '本命入传'; who (取): ming=本命支 (default) / xingnian=行年支; mode (判法): in=入三传 (default) / not_in=不入三传 / fayong=发用(为初传). negate:true inverts it."
+   },
+   {
+    "type": "bm_shang_jiang",
+    "zh": "bm_shang_jiang「本命/行年上神天将」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「本命乘贵人/青龙/六合/太常/天后」；取 who：ming=本命支上（缺省） / xingnian=行年支上。negate:true = 取反。",
+    "en": "bm_shang_jiang '本命/行年上神天将' (本命): passes when the day / moment meets it as set by params; the default params read '本命乘贵人/青龙/六合/太常/天后'; who (取): ming=本命支上 (default) / xingnian=行年支上. negate:true inverts it."
+   },
+   {
+    "type": "chuan_chong_ri",
+    "zh": "chuan_chong_ri「发用与日辰关系」（发用）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「发用不冲日」；关系 rel：not_chong=初传不冲日支(避)（缺省） / chong=初传冲日支 / same=初传即日支(伏吟象) / he=初传三合日支。negate:true = 取反。",
+    "en": "chuan_chong_ri '发用与日辰关系' (发用): passes when the day / moment meets it as set by params; the default params read '发用不冲日'; rel (关系): not_chong=初传不冲日支(避) (default) / chong=初传冲日支 / same=初传即日支(伏吟象) / he=初传三合日支. negate:true inverts it."
+   },
+   {
+    "type": "chuan_dungan",
+    "zh": "chuan_dungan「三传遁干」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传遁丁」；传位 pos：any=任一传（缺省） / 0=初传 / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "chuan_dungan '三传遁干' (三传): passes when the day / moment meets it as set by params; the default params read '三传遁丁'; pos (传位): any=任一传 (default) / 0=初传 / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "xiaoju_hit",
+    "zh": "xiaoju_hit「小局(泆女狡童元胎…)」（课体）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「小局:泆女」；判法 mode：with=命中任一（缺省） / without=全不命中(避局)。negate:true = 取反。",
+    "en": "xiaoju_hit '小局(泆女狡童元胎…)' (课体): passes when the day / moment meets it as set by params; the default params read '小局:泆女'; mode (判法): with=命中任一 (default) / without=全不命中(避局). negate:true inverts it."
+   },
+   {
+    "type": "dage_hit",
+    "zh": "dage_hit「大格(元首重审知一…)」（课体）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「大格:元首」；判法 mode：with=命中任一（缺省） / without=全不命中(避格)。negate:true = 取反。",
+    "en": "dage_hit '大格(元首重审知一…)' (课体): passes when the day / moment meets it as set by params; the default params read '大格:元首'; mode (判法): with=命中任一 (default) / without=全不命中(避格). negate:true inverts it."
+   },
+   {
+    "type": "ke_pos_zei",
+    "zh": "ke_pos_zei「贼克位置(第N课上下)」（四课）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「1课上克下」；课位 pos：1=一课（缺省） / 2=二课 / 3=三课 / 4=四课；关系 rel：shang_ke_xia=上克下（缺省） / xia_zei_shang=下贼上 / sheng=上下相生 / bi=上下比和。negate:true = 取反。",
+    "en": "ke_pos_zei '贼克位置(第N课上下)' (四课): passes when the day / moment meets it as set by params; the default params read '1课上克下'; pos (课位): 1=一课 (default) / 2=二课 / 3=三课 / 4=四课; rel (关系): shang_ke_xia=上克下 (default) / xia_zei_shang=下贼上 / sheng=上下相生 / bi=上下比和. negate:true inverts it."
+   },
+   {
+    "type": "zhu_wangshuai",
+    "zh": "zhu_wangshuai「传/干十二长生(旺衰)」（三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「发用:长生/帝旺」；主体 who：fa_yong=发用(初传)（缺省） / zhong=中传 / mo=末传 / ri_gan=日干(于占时支)。negate:true = 取反。",
+    "en": "zhu_wangshuai '传/干十二长生(旺衰)' (三传): passes when the day / moment meets it as set by params; the default params read '发用:长生/帝旺'; who (主体): fa_yong=发用(初传) (default) / zhong=中传 / mo=末传 / ri_gan=日干(于占时支). negate:true inverts it."
+   }
+  ],
+  "qimenzeri": [
+   {
+    "type": "pattern_ji",
+    "zh": "pattern_ji「吉格」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「青龙回首」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "pattern_ji '吉格' (格局): passes when the day / moment meets it as set by params; the default params read '青龙回首'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "pattern_xiong",
+    "zh": "pattern_xiong「凶格」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「伏吟」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "pattern_xiong '凶格' (格局): passes when the day / moment meets it as set by params; the default params read '伏吟'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "tian_gan",
+    "zh": "tian_gan「天盘干」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「丙」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "tian_gan '天盘干' (盘面): passes when the day / moment meets it as set by params; the default params read '丙'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "di_gan",
+    "zh": "di_gan「地盘干」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「戊」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "di_gan '地盘干' (盘面): passes when the day / moment meets it as set by params; the default params read '戊'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "door",
+    "zh": "door「八门」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「开门」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "door '八门' (盘面): passes when the day / moment meets it as set by params; the default params read '开门'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "star",
+    "zh": "star「九星」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「天辅」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "star '九星' (盘面): passes when the day / moment meets it as set by params; the default params read '天辅'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "god",
+    "zh": "god「八神」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「符」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "god '八神' (盘面): passes when the day / moment meets it as set by params; the default params read '符'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "palace_flag",
+    "zh": "palace_flag「宫位标记」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「空亡」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "palace_flag '宫位标记' (盘面): passes when the day / moment meets it as set by params; the default params read '空亡'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "men_gong_relation",
+    "zh": "men_gong_relation「门宫生克」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「门生宫」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "men_gong_relation '门宫生克' (盘面): passes when the day / moment meets it as set by params; the default params read '门生宫'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "zhifu",
+    "zh": "zhifu「值符」（纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「任意星落乾6宫」。negate:true = 取反。",
+    "en": "zhifu '值符' (纲要): passes when the day / moment meets it as set by params; the default params read '任意星落乾6宫'. negate:true inverts it."
+   },
+   {
+    "type": "zhishi",
+    "zh": "zhishi「值使」（纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「开门落任意宫」。negate:true = 取反。",
+    "en": "zhishi '值使' (纲要): passes when the day / moment meets it as set by params; the default params read '开门落任意宫'. negate:true inverts it."
+   },
+   {
+    "type": "ju_info",
+    "zh": "ju_info「局象」（纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「阳遁」；遁 dun：=任意 / 阳遁=阳遁（缺省） / 阴遁=阴遁。negate:true = 取反。",
+    "en": "ju_info '局象' (纲要): passes when the day / moment meets it as set by params; the default params read '阳遁'; dun (遁): =任意 / 阳遁=阳遁 (default) / 阴遁=阴遁. negate:true inverts it."
+   },
+   {
+    "type": "pillar_ganzhi",
+    "zh": "pillar_ganzhi「四柱干支」（四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时柱·支子」；柱 pillar：year=年柱 / month=月柱 / day=日柱 / time=时柱（缺省）。negate:true = 取反。",
+    "en": "pillar_ganzhi '四柱干支' (四柱): passes when the day / moment meets it as set by params; the default params read '时柱·支子'; pillar (柱): year=年柱 / month=月柱 / day=日柱 / time=时柱 (default). negate:true inverts it."
+   },
+   {
+    "type": "wang_shuai",
+    "zh": "wang_shuai「旺衰(星门干宫·旺相休囚死)」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「门旺衰:旺/相」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "wang_shuai '旺衰(星门干宫·旺相休囚死)' (盘面): passes when the day / moment meets it as set by params; the default params read '门旺衰:旺/相'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_shensha",
+    "zh": "qm_shensha「神煞值支(日禄天马桃花…)」（神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日禄值午」。negate:true = 取反。",
+    "en": "qm_shensha '神煞值支(日禄天马桃花…)' (神煞): passes when the day / moment meets it as set by params; the default params read '日禄值午'. negate:true inverts it."
+   },
+   {
+    "type": "fuyin_ju",
+    "zh": "fuyin_ju「伏吟/反吟局(全盘)」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「正局(非伏反)」；局态 value：none=非伏非反(正局)（缺省） / 伏吟=天地伏吟局 / 反吟=反吟局。negate:true = 取反。",
+    "en": "fuyin_ju '伏吟/反吟局(全盘)' (格局): passes when the day / moment meets it as set by params; the default params read '正局(非伏反)'; value (局态): none=非伏非反(正局) (default) / 伏吟=天地伏吟局 / 反吟=反吟局. negate:true inverts it."
+   },
+   {
+    "type": "kong_all",
+    "zh": "kong_all「空亡细判(日空/时空/柱空)」（纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时空:子」。negate:true = 取反。",
+    "en": "kong_all '空亡细判(日空/时空/柱空)' (纲要): passes when the day / moment meets it as set by params; the default params read '时空:子'. negate:true inverts it."
+   },
+   {
+    "type": "xun_shou",
+    "zh": "xun_shou「旬首/符头」（纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「旬首:甲子」；判面 dim：xunShou=旬首（缺省） / fuTou=符头。negate:true = 取反。",
+    "en": "xun_shou '旬首/符头' (纲要): passes when the day / moment meets it as set by params; the default params read '旬首:甲子'; dim (判面): xunShou=旬首 (default) / fuTou=符头. negate:true inverts it."
+   },
+   {
+    "type": "an_ganzhi",
+    "zh": "an_ganzhi「暗干/暗支」（盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「暗干:甲」；判面 dim：anGan=暗干（缺省） / anZhi=暗支；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "an_ganzhi '暗干/暗支' (盘面): passes when the day / moment meets it as set by params; the default params read '暗干:甲'; dim (判面): anGan=暗干 (default) / anZhi=暗支; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   }
+  ],
+  "qizhengzeri": [
+   {
+    "type": "body_in_gong",
+    "zh": "body_in_gong「曜落地支宫」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月在午宫」。negate:true = 取反。",
+    "en": "body_in_gong '曜落地支宫' (落宫): passes when the day / moment meets it as set by params; the default params read '月在午宫'. negate:true inverts it."
+   },
+   {
+    "type": "body_in_xiu",
+    "zh": "body_in_xiu「曜落二十八宿」（落宿）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月宿角」。negate:true = 取反。",
+    "en": "body_in_xiu '曜落二十八宿' (落宿): passes when the day / moment meets it as set by params; the default params read '月宿角'. negate:true inverts it."
+   },
+   {
+    "type": "dignity",
+    "zh": "dignity「曜庙旺状态」（庙旺）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「木庙/旺」。negate:true = 取反。",
+    "en": "dignity '曜庙旺状态' (庙旺): passes when the day / moment meets it as set by params; the default params read '木庙/旺'. negate:true inverts it."
+   },
+   {
+    "type": "dignity_seven",
+    "zh": "dignity_seven「曜七态(殿垣庙旺乐喜怒)」（庙旺）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「木七态:垣/庙」。negate:true = 取反。",
+    "en": "dignity_seven '曜七态(殿垣庙旺乐喜怒)' (庙旺): passes when the day / moment meets it as set by params; the default params read '木七态:垣/庙'. negate:true inverts it."
+   },
+   {
+    "type": "deg_lord",
+    "zh": "deg_lord「所在宿度主」（落宿）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月居木度」。negate:true = 取反。",
+    "en": "deg_lord '所在宿度主' (落宿): passes when the day / moment meets it as set by params; the default params read '月居木度'. negate:true inverts it."
+   },
+   {
+    "type": "speed_state",
+    "zh": "speed_state「曜行度态」（行度）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「水逆」。negate:true = 取反。",
+    "en": "speed_state '曜行度态' (行度): passes when the day / moment meets it as set by params; the default params read '水逆'. negate:true inverts it."
+   },
+   {
+    "type": "combust",
+    "zh": "combust「合日伏焦」（伏焦）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「水离日」；判法 mode：free=不伏不焦(避)（缺省） / combust=焦(8°内) / fu=伏(3°内)。negate:true = 取反。",
+    "en": "combust '合日伏焦' (伏焦): passes when the day / moment meets it as set by params; the default params read '水离日'; mode (判法): free=不伏不焦(避) (default) / combust=焦(8°内) / fu=伏(3°内). negate:true inverts it."
+   },
+   {
+    "type": "day_night",
+    "zh": "day_night「昼占/夜占」（昼夜）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「昼占」；取 value：day=昼(日在地平上)（缺省） / night=夜。negate:true = 取反。",
+    "en": "day_night '昼占/夜占' (昼夜): passes when the day / moment meets it as set by params; the default params read '昼占'; value (取): day=昼(日在地平上) (default) / night=夜. negate:true inverts it."
+   },
+   {
+    "type": "asc_gong",
+    "zh": "asc_gong「命宫(上升)落支」（命宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫:子」。negate:true = 取反。",
+    "en": "asc_gong '命宫(上升)落支' (命宫): passes when the day / moment meets it as set by params; the default params read '命宫:子'. negate:true inverts it."
+   },
+   {
+    "type": "body_rel",
+    "zh": "body_rel「两曜宫位关系」（会照）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「木同宫月」；关系 rel：same=同宫（缺省） / opposite=对照 / trine=三合。negate:true = 取反。",
+    "en": "body_rel '两曜宫位关系' (会照): passes when the day / moment meets it as set by params; the default params read '木同宫月'; rel (关系): same=同宫 (default) / opposite=对照 / trine=三合. negate:true inverts it."
+   },
+   {
+    "type": "hua_lu",
+    "zh": "hua_lu「化曜(年干禄主)落处」（化曜）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「禄主宫:午」；判面 where：gong=落宫（缺省） / xiu=落宿。negate:true = 取反。",
+    "en": "hua_lu '化曜(年干禄主)落处' (化曜): passes when the day / moment meets it as set by params; the default params read '禄主宫:午'; where (判面): gong=落宫 (default) / xiu=落宿. negate:true inverts it."
+   }
+  ],
+  "sanshizeri": [
+   {
+    "type": "lr_ke_name",
+    "zh": "lr_ke_name「六壬·课名(九宗门)」（六壬·课体）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「课名:元首课」。negate:true = 取反。",
+    "en": "lr_ke_name '六壬·课名(九宗门)' (六壬·课体): passes when the day / moment meets it as set by params; the default params read '课名:元首课'. negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_zhi",
+    "zh": "lr_chuan_zhi「六壬·三传含支」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传含子」；位 pos：any=任一传（缺省） / 0=初传 / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "lr_chuan_zhi '六壬·三传含支' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '三传含子'; pos (位): any=任一传 (default) / 0=初传 / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_jiang",
+    "zh": "lr_chuan_jiang「六壬·三传天将」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传乘贵人」；位 pos：any=任一传（缺省） / 0=初传 / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "lr_chuan_jiang '六壬·三传天将' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '三传乘贵人'; pos (位): any=任一传 (default) / 0=初传 / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_liuqin",
+    "zh": "lr_chuan_liuqin「六壬·三传六亲」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「初传为妻财」；位 pos：any=任一传 / 0=初传（缺省） / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "lr_chuan_liuqin '六壬·三传六亲' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '初传为妻财'; pos (位): any=任一传 / 0=初传 (default) / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_kong",
+    "zh": "lr_chuan_kong「六壬·三传旬空」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传净空」；判法 mode：none=三传不犯空(净)（缺省） / has=有传犯空 / first=初传空(空发用)。negate:true = 取反。",
+    "en": "lr_chuan_kong '六壬·三传旬空' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '三传净空'; mode (判法): none=三传不犯空(净) (default) / has=有传犯空 / first=初传空(空发用). negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_ju",
+    "zh": "lr_chuan_ju「六壬·三传合局」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传成水/木/火/金局」。negate:true = 取反。",
+    "en": "lr_chuan_ju '六壬·三传合局' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '三传成水/木/火/金局'. negate:true inverts it."
+   },
+   {
+    "type": "lr_fa_yong",
+    "zh": "lr_fa_yong「六壬·发用(初传)神煞」（六壬·发用）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「驿马发用」。negate:true = 取反。",
+    "en": "lr_fa_yong '六壬·发用(初传)神煞' (六壬·发用): passes when the day / moment meets it as set by params; the default params read '驿马发用'. negate:true inverts it."
+   },
+   {
+    "type": "lr_tianpan_at",
+    "zh": "lr_tianpan_at「六壬·天盘乘临」（六壬·盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「子上见丑」。negate:true = 取反。",
+    "en": "lr_tianpan_at '六壬·天盘乘临' (六壬·盘式): passes when the day / moment meets it as set by params; the default params read '子上见丑'. negate:true inverts it."
+   },
+   {
+    "type": "lr_guiren_pos",
+    "zh": "lr_guiren_pos「六壬·贵人临支·顺逆」（六壬·盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「贵人」；行度 dir：any=不限（缺省） / forward=顺行(贵人升殿区) / reverse=逆行。negate:true = 取反。",
+    "en": "lr_guiren_pos '六壬·贵人临支·顺逆' (六壬·盘式): passes when the day / moment meets it as set by params; the default params read '贵人'; dir (行度): any=不限 (default) / forward=顺行(贵人升殿区) / reverse=逆行. negate:true inverts it."
+   },
+   {
+    "type": "lr_jiang_at",
+    "zh": "lr_jiang_at「六壬·天将临支」（六壬·盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「青龙临寅」。negate:true = 取反。",
+    "en": "lr_jiang_at '六壬·天将临支' (六壬·盘式): passes when the day / moment meets it as set by params; the default params read '青龙临寅'. negate:true inverts it."
+   },
+   {
+    "type": "lr_yue_jiang_is",
+    "zh": "lr_yue_jiang_is「六壬·月将」（六壬·盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「月将:子」。negate:true = 取反。",
+    "en": "lr_yue_jiang_is '六壬·月将' (六壬·盘式): passes when the day / moment meets it as set by params; the default params read '月将:子'. negate:true inverts it."
+   },
+   {
+    "type": "lr_zhou_ye",
+    "zh": "lr_zhou_ye「六壬·昼占/夜占」（六壬·盘式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「昼占」；取 value：day=昼占(日出后)（缺省） / night=夜占。negate:true = 取反。",
+    "en": "lr_zhou_ye '六壬·昼占/夜占' (六壬·盘式): passes when the day / moment meets it as set by params; the default params read '昼占'; value (取): day=昼占(日出后) (default) / night=夜占. negate:true inverts it."
+   },
+   {
+    "type": "lr_ke_shang",
+    "zh": "lr_ke_shang「六壬·四课上神」（六壬·四课）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「一课上见子」。negate:true = 取反。",
+    "en": "lr_ke_shang '六壬·四课上神' (六壬·四课): passes when the day / moment meets it as set by params; the default params read '一课上见子'. negate:true inverts it."
+   },
+   {
+    "type": "lr_ke_zei",
+    "zh": "lr_ke_zei「六壬·贼克数」（六壬·四课）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「下贼上 0~0课」；类 kind：zei=下贼上（缺省） / ke=上克下。negate:true = 取反。",
+    "en": "lr_ke_zei '六壬·贼克数' (六壬·四课): passes when the day / moment meets it as set by params; the default params read '下贼上 0~0课'; kind (类): zei=下贼上 (default) / ke=上克下. negate:true inverts it."
+   },
+   {
+    "type": "lr_day_ganzhi",
+    "zh": "lr_day_ganzhi「六壬·日柱干支」（六壬·日时）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日柱:甲子」。negate:true = 取反。",
+    "en": "lr_day_ganzhi '六壬·日柱干支' (六壬·日时): passes when the day / moment meets it as set by params; the default params read '日柱:甲子'. negate:true inverts it."
+   },
+   {
+    "type": "lr_hour_zhi",
+    "zh": "lr_hour_zhi「六壬·占时地支」（六壬·日时）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「占时:午」。negate:true = 取反。",
+    "en": "lr_hour_zhi '六壬·占时地支' (六壬·日时): passes when the day / moment meets it as set by params; the default params read '占时:午'. negate:true inverts it."
+   },
+   {
+    "type": "lr_shensha_at",
+    "zh": "lr_shensha_at「六壬·神煞值支」（六壬·神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日德值寅」。negate:true = 取反。",
+    "en": "lr_shensha_at '六壬·神煞值支' (六壬·神煞): passes when the day / moment meets it as set by params; the default params read '日德值寅'. negate:true inverts it."
+   },
+   {
+    "type": "lr_taisui_god_at",
+    "zh": "lr_taisui_god_at「六壬·太岁十二神值支」（六壬·神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「岁驾在子」。negate:true = 取反。",
+    "en": "lr_taisui_god_at '六壬·太岁十二神值支' (六壬·神煞): passes when the day / moment meets it as set by params; the default params read '岁驾在子'. negate:true inverts it."
+   },
+   {
+    "type": "lr_xun_ding",
+    "zh": "lr_xun_ding「六壬·遁丁/旬空」（六壬·神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「遁丁:丑」；取 who：ding=遁丁(旬内丁支)（缺省） / kong=旬空支。negate:true = 取反。",
+    "en": "lr_xun_ding '六壬·遁丁/旬空' (六壬·神煞): passes when the day / moment meets it as set by params; the default params read '遁丁:丑'; who (取): ding=遁丁(旬内丁支) (default) / kong=旬空支. negate:true inverts it."
+   },
+   {
+    "type": "lr_bm_in_chuan",
+    "zh": "lr_bm_in_chuan「六壬·本命/行年入传」（六壬·本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「本命入传」；取 who：ming=本命支（缺省） / xingnian=行年支；判法 mode：in=入三传（缺省） / not_in=不入三传 / fayong=发用(为初传)。negate:true = 取反。",
+    "en": "lr_bm_in_chuan '六壬·本命/行年入传' (六壬·本命): passes when the day / moment meets it as set by params; the default params read '本命入传'; who (取): ming=本命支 (default) / xingnian=行年支; mode (判法): in=入三传 (default) / not_in=不入三传 / fayong=发用(为初传). negate:true inverts it."
+   },
+   {
+    "type": "lr_bm_shang_jiang",
+    "zh": "lr_bm_shang_jiang「六壬·本命/行年上神天将」（六壬·本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「本命乘贵人/青龙/六合/太常/天后」；取 who：ming=本命支上（缺省） / xingnian=行年支上。negate:true = 取反。",
+    "en": "lr_bm_shang_jiang '六壬·本命/行年上神天将' (六壬·本命): passes when the day / moment meets it as set by params; the default params read '本命乘贵人/青龙/六合/太常/天后'; who (取): ming=本命支上 (default) / xingnian=行年支上. negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_chong_ri",
+    "zh": "lr_chuan_chong_ri「六壬·发用与日辰关系」（六壬·发用）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「发用不冲日」；关系 rel：not_chong=初传不冲日支(避)（缺省） / chong=初传冲日支 / same=初传即日支(伏吟象) / he=初传三合日支。negate:true = 取反。",
+    "en": "lr_chuan_chong_ri '六壬·发用与日辰关系' (六壬·发用): passes when the day / moment meets it as set by params; the default params read '发用不冲日'; rel (关系): not_chong=初传不冲日支(避) (default) / chong=初传冲日支 / same=初传即日支(伏吟象) / he=初传三合日支. negate:true inverts it."
+   },
+   {
+    "type": "lr_chuan_dungan",
+    "zh": "lr_chuan_dungan「六壬·三传遁干」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三传遁丁」；传位 pos：any=任一传（缺省） / 0=初传 / 1=中传 / 2=末传。negate:true = 取反。",
+    "en": "lr_chuan_dungan '六壬·三传遁干' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '三传遁丁'; pos (传位): any=任一传 (default) / 0=初传 / 1=中传 / 2=末传. negate:true inverts it."
+   },
+   {
+    "type": "lr_xiaoju_hit",
+    "zh": "lr_xiaoju_hit「六壬·小局(泆女狡童元胎…)」（六壬·课体）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「小局:泆女」；判法 mode：with=命中任一（缺省） / without=全不命中(避局)。negate:true = 取反。",
+    "en": "lr_xiaoju_hit '六壬·小局(泆女狡童元胎…)' (六壬·课体): passes when the day / moment meets it as set by params; the default params read '小局:泆女'; mode (判法): with=命中任一 (default) / without=全不命中(避局). negate:true inverts it."
+   },
+   {
+    "type": "lr_dage_hit",
+    "zh": "lr_dage_hit「六壬·大格(元首重审知一…)」（六壬·课体）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「大格:元首」；判法 mode：with=命中任一（缺省） / without=全不命中(避格)。negate:true = 取反。",
+    "en": "lr_dage_hit '六壬·大格(元首重审知一…)' (六壬·课体): passes when the day / moment meets it as set by params; the default params read '大格:元首'; mode (判法): with=命中任一 (default) / without=全不命中(避格). negate:true inverts it."
+   },
+   {
+    "type": "lr_ke_pos_zei",
+    "zh": "lr_ke_pos_zei「六壬·贼克位置(第N课上下)」（六壬·四课）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「1课上克下」；课位 pos：1=一课（缺省） / 2=二课 / 3=三课 / 4=四课；关系 rel：shang_ke_xia=上克下（缺省） / xia_zei_shang=下贼上 / sheng=上下相生 / bi=上下比和。negate:true = 取反。",
+    "en": "lr_ke_pos_zei '六壬·贼克位置(第N课上下)' (六壬·四课): passes when the day / moment meets it as set by params; the default params read '1课上克下'; pos (课位): 1=一课 (default) / 2=二课 / 3=三课 / 4=四课; rel (关系): shang_ke_xia=上克下 (default) / xia_zei_shang=下贼上 / sheng=上下相生 / bi=上下比和. negate:true inverts it."
+   },
+   {
+    "type": "lr_zhu_wangshuai",
+    "zh": "lr_zhu_wangshuai「六壬·传/干十二长生(旺衰)」（六壬·三传）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「发用:长生/帝旺」；主体 who：fa_yong=发用(初传)（缺省） / zhong=中传 / mo=末传 / ri_gan=日干(于占时支)。negate:true = 取反。",
+    "en": "lr_zhu_wangshuai '六壬·传/干十二长生(旺衰)' (六壬·三传): passes when the day / moment meets it as set by params; the default params read '发用:长生/帝旺'; who (主体): fa_yong=发用(初传) (default) / zhong=中传 / mo=末传 / ri_gan=日干(于占时支). negate:true inverts it."
+   },
+   {
+    "type": "qm_pattern_ji",
+    "zh": "qm_pattern_ji「奇门·吉格」（奇门·格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「青龙回首」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_pattern_ji '奇门·吉格' (奇门·格局): passes when the day / moment meets it as set by params; the default params read '青龙回首'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_pattern_xiong",
+    "zh": "qm_pattern_xiong「奇门·凶格」（奇门·格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「伏吟」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_pattern_xiong '奇门·凶格' (奇门·格局): passes when the day / moment meets it as set by params; the default params read '伏吟'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_tian_gan",
+    "zh": "qm_tian_gan「奇门·天盘干」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「丙」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_tian_gan '奇门·天盘干' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '丙'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_di_gan",
+    "zh": "qm_di_gan「奇门·地盘干」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「戊」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_di_gan '奇门·地盘干' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '戊'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_door",
+    "zh": "qm_door「奇门·八门」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「开门」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_door '奇门·八门' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '开门'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_star",
+    "zh": "qm_star「奇门·九星」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「天辅」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_star '奇门·九星' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '天辅'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_god",
+    "zh": "qm_god「奇门·八神」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「符」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_god '奇门·八神' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '符'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_palace_flag",
+    "zh": "qm_palace_flag「奇门·宫位标记」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「空亡」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_palace_flag '奇门·宫位标记' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '空亡'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_men_gong_relation",
+    "zh": "qm_men_gong_relation「奇门·门宫生克」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「门生宫」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_men_gong_relation '奇门·门宫生克' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '门生宫'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_zhifu",
+    "zh": "qm_zhifu「奇门·值符」（奇门·纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「任意星落乾6宫」。negate:true = 取反。",
+    "en": "qm_zhifu '奇门·值符' (奇门·纲要): passes when the day / moment meets it as set by params; the default params read '任意星落乾6宫'. negate:true inverts it."
+   },
+   {
+    "type": "qm_zhishi",
+    "zh": "qm_zhishi「奇门·值使」（奇门·纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「开门落任意宫」。negate:true = 取反。",
+    "en": "qm_zhishi '奇门·值使' (奇门·纲要): passes when the day / moment meets it as set by params; the default params read '开门落任意宫'. negate:true inverts it."
+   },
+   {
+    "type": "qm_ju_info",
+    "zh": "qm_ju_info「奇门·局象」（奇门·纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「阳遁」；遁 dun：=任意 / 阳遁=阳遁（缺省） / 阴遁=阴遁。negate:true = 取反。",
+    "en": "qm_ju_info '奇门·局象' (奇门·纲要): passes when the day / moment meets it as set by params; the default params read '阳遁'; dun (遁): =任意 / 阳遁=阳遁 (default) / 阴遁=阴遁. negate:true inverts it."
+   },
+   {
+    "type": "qm_pillar_ganzhi",
+    "zh": "qm_pillar_ganzhi「奇门·四柱干支」（奇门·四柱）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时柱·支子」；柱 pillar：year=年柱 / month=月柱 / day=日柱 / time=时柱（缺省）。negate:true = 取反。",
+    "en": "qm_pillar_ganzhi '奇门·四柱干支' (奇门·四柱): passes when the day / moment meets it as set by params; the default params read '时柱·支子'; pillar (柱): year=年柱 / month=月柱 / day=日柱 / time=时柱 (default). negate:true inverts it."
+   },
+   {
+    "type": "qm_wang_shuai",
+    "zh": "qm_wang_shuai「奇门·旺衰(星门干宫·旺相休囚死)」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「门旺衰:旺/相」；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_wang_shuai '奇门·旺衰(星门干宫·旺相休囚死)' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '门旺衰:旺/相'; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "qm_qm_shensha",
+    "zh": "qm_qm_shensha「奇门·神煞值支(日禄天马桃花…)」（奇门·神煞）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「日禄值午」。negate:true = 取反。",
+    "en": "qm_qm_shensha '奇门·神煞值支(日禄天马桃花…)' (奇门·神煞): passes when the day / moment meets it as set by params; the default params read '日禄值午'. negate:true inverts it."
+   },
+   {
+    "type": "qm_fuyin_ju",
+    "zh": "qm_fuyin_ju「奇门·伏吟/反吟局(全盘)」（奇门·格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「正局(非伏反)」；局态 value：none=非伏非反(正局)（缺省） / 伏吟=天地伏吟局 / 反吟=反吟局。negate:true = 取反。",
+    "en": "qm_fuyin_ju '奇门·伏吟/反吟局(全盘)' (奇门·格局): passes when the day / moment meets it as set by params; the default params read '正局(非伏反)'; value (局态): none=非伏非反(正局) (default) / 伏吟=天地伏吟局 / 反吟=反吟局. negate:true inverts it."
+   },
+   {
+    "type": "qm_kong_all",
+    "zh": "qm_kong_all「奇门·空亡细判(日空/时空/柱空)」（奇门·纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「时空:子」。negate:true = 取反。",
+    "en": "qm_kong_all '奇门·空亡细判(日空/时空/柱空)' (奇门·纲要): passes when the day / moment meets it as set by params; the default params read '时空:子'. negate:true inverts it."
+   },
+   {
+    "type": "qm_xun_shou",
+    "zh": "qm_xun_shou「奇门·旬首/符头」（奇门·纲要）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「旬首:甲子」；判面 dim：xunShou=旬首（缺省） / fuTou=符头。negate:true = 取反。",
+    "en": "qm_xun_shou '奇门·旬首/符头' (奇门·纲要): passes when the day / moment meets it as set by params; the default params read '旬首:甲子'; dim (判面): xunShou=旬首 (default) / fuTou=符头. negate:true inverts it."
+   },
+   {
+    "type": "qm_an_ganzhi",
+    "zh": "qm_an_ganzhi「奇门·暗干/暗支」（奇门·盘面）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「暗干:甲」；判面 dim：anGan=暗干（缺省） / anZhi=暗支；要求 matchMode：any=任一在场（缺省） / all=全部在场。negate:true = 取反。",
+    "en": "qm_an_ganzhi '奇门·暗干/暗支' (奇门·盘面): passes when the day / moment meets it as set by params; the default params read '暗干:甲'; dim (判面): anGan=暗干 (default) / anZhi=暗支; matchMode (要求): any=任一在场 (default) / all=全部在场. negate:true inverts it."
+   },
+   {
+    "type": "ty_yinyang_ju",
+    "zh": "ty_yinyang_ju「太乙·阴阳遁」（太乙·局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「阳遁」；遁 value：阳=阳遁（缺省） / 阴=阴遁。negate:true = 取反。",
+    "en": "ty_yinyang_ju '太乙·阴阳遁' (太乙·局式): passes when the day / moment meets it as set by params; the default params read '阳遁'; value (遁): 阳=阳遁 (default) / 阴=阴遁. negate:true inverts it."
+   },
+   {
+    "type": "ty_ju_num",
+    "zh": "ty_ju_num「太乙·局数」（太乙·局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「局数:1」。negate:true = 取反。",
+    "en": "ty_ju_num '太乙·局数' (太乙·局式): passes when the day / moment meets it as set by params; the default params read '局数:1'. negate:true inverts it."
+   },
+   {
+    "type": "ty_taiyi_gong",
+    "zh": "ty_taiyi_gong「太乙·太乙落宫」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「太乙:子宫」。negate:true = 取反。",
+    "en": "ty_taiyi_gong '太乙·太乙落宫' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '太乙:子宫'. negate:true inverts it."
+   },
+   {
+    "type": "ty_wenchang_gong",
+    "zh": "ty_wenchang_gong「太乙·文昌(天目)落宫」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「文昌:巽宫」。negate:true = 取反。",
+    "en": "ty_wenchang_gong '太乙·文昌(天目)落宫' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '文昌:巽宫'. negate:true inverts it."
+   },
+   {
+    "type": "ty_shiji_gong",
+    "zh": "ty_shiji_gong「太乙·始击落宫」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「始击:子宫」。negate:true = 取反。",
+    "en": "ty_shiji_gong '太乙·始击落宫' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '始击:子宫'. negate:true inverts it."
+   },
+   {
+    "type": "ty_jishen_gong",
+    "zh": "ty_jishen_gong「太乙·计神/合神落宫」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「计神:寅」；神 who：jigod=计神（缺省） / hegod=合神。negate:true = 取反。",
+    "en": "ty_jishen_gong '太乙·计神/合神落宫' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '计神:寅'; who (神): jigod=计神 (default) / hegod=合神. negate:true inverts it."
+   },
+   {
+    "type": "ty_youshen_gong",
+    "zh": "ty_youshen_gong「太乙·游神落宫(五福/大游/小游)」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「五福:1宫」。negate:true = 取反。",
+    "en": "ty_youshen_gong '太乙·游神落宫(五福/大游/小游)' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '五福:1宫'. negate:true inverts it."
+   },
+   {
+    "type": "ty_geju_kind",
+    "zh": "ty_geju_kind「太乙·格局(掩迫关囚格对提挟击)」（太乙·格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「格局:掩」；判法 mode：with=出现任一（缺省） / without=全不出现(净局)。negate:true = 取反。",
+    "en": "ty_geju_kind '太乙·格局(掩迫关囚格对提挟击)' (太乙·格局): passes when the day / moment meets it as set by params; the default params read '格局:掩'; mode (判法): with=出现任一 (default) / without=全不出现(净局). negate:true inverts it."
+   },
+   {
+    "type": "ty_victory_side",
+    "zh": "ty_victory_side「太乙·主客胜负」（太乙·格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「利主」；利 value：home=利主(主胜)（缺省） / away=利客(客胜)。negate:true = 取反。",
+    "en": "ty_victory_side '太乙·主客胜负' (太乙·格局): passes when the day / moment meets it as set by params; the default params read '利主'; value (利): home=利主(主胜) (default) / away=利客(客胜). negate:true inverts it."
+   },
+   {
+    "type": "ty_suan_range",
+    "zh": "ty_suan_range「太乙·主客算区间」（太乙·算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主算 1~40」；算 who：homeCal=主算（缺省） / awayCal=客算 / setCal=定算。negate:true = 取反。",
+    "en": "ty_suan_range '太乙·主客算区间' (太乙·算数): passes when the day / moment meets it as set by params; the default params read '主算 1~40'; who (算): homeCal=主算 (default) / awayCal=客算 / setCal=定算. negate:true inverts it."
+   },
+   {
+    "type": "ty_suan_parity",
+    "zh": "ty_suan_parity「太乙·算数阴阳(奇偶)」（太乙·算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主算奇」；算 who：homeCal=主算（缺省） / awayCal=客算 / setCal=定算；取 value：odd=奇(阳数)（缺省） / even=偶(阴数)。negate:true = 取反。",
+    "en": "ty_suan_parity '太乙·算数阴阳(奇偶)' (太乙·算数): passes when the day / moment meets it as set by params; the default params read '主算奇'; who (算): homeCal=主算 (default) / awayCal=客算 / setCal=定算; value (取): odd=奇(阳数) (default) / even=偶(阴数). negate:true inverts it."
+   },
+   {
+    "type": "ty_dajiang_gong",
+    "zh": "ty_dajiang_gong「太乙·主客大将宫」（太乙·大将）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主将:1宫」。negate:true = 取反。",
+    "en": "ty_dajiang_gong '太乙·主客大将宫' (太乙·大将): passes when the day / moment meets it as set by params; the default params read '主将:1宫'. negate:true inverts it."
+   },
+   {
+    "type": "ty_dajiang_same",
+    "zh": "ty_dajiang_same「太乙·将算同宫关系」（太乙·大将）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主客将同宫」；关系 rel：zhu_ke_same=主客大将同宫（缺省） / zhu_taiyi_same=主将同太乙(囚象) / ke_taiyi_same=客将同太乙。negate:true = 取反。",
+    "en": "ty_dajiang_same '太乙·将算同宫关系' (太乙·大将): passes when the day / moment meets it as set by params; the default params read '主客将同宫'; rel (关系): zhu_ke_same=主客大将同宫 (default) / zhu_taiyi_same=主将同太乙(囚象) / ke_taiyi_same=客将同太乙. negate:true inverts it."
+   },
+   {
+    "type": "ty_gong16_has",
+    "zh": "ty_gong16_has「太乙·宫内布神」（太乙·十六宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「子宫有神」；盘面 board：gong16=十六宫（缺省） / branch12=十二支位。negate:true = 取反。",
+    "en": "ty_gong16_has '太乙·宫内布神' (太乙·十六宫): passes when the day / moment meets it as set by params; the default params read '子宫有神'; board (盘面): gong16=十六宫 (default) / branch12=十二支位. negate:true inverts it."
+   },
+   {
+    "type": "ty_sanji_men",
+    "zh": "ty_sanji_men「太乙·太乙所临(门户/正宫)」（太乙·门户）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「太乙临门户」；判面 mode：men=临门户宫(艮巽坤乾)（缺省） / zheng=临正宫(子卯午酉)。negate:true = 取反。",
+    "en": "ty_sanji_men '太乙·太乙所临(门户/正宫)' (太乙·门户): passes when the day / moment meets it as set by params; the default params read '太乙临门户'; mode (判面): men=临门户宫(艮巽坤乾) (default) / zheng=临正宫(子卯午酉). negate:true inverts it."
+   },
+   {
+    "type": "ty_wenchang_taiyi_rel",
+    "zh": "ty_wenchang_taiyi_rel「太乙·文昌/始击与太乙位置关系」（太乙·格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「文昌同太乙」；谁 who：skyeyes=文昌（缺省） / sf=始击；关系 rel：same=同宫（缺省） / opposite=对宫(环对冲) / adjacent=邻宫(迫象)。negate:true = 取反。",
+    "en": "ty_wenchang_taiyi_rel '太乙·文昌/始击与太乙位置关系' (太乙·格局): passes when the day / moment meets it as set by params; the default params read '文昌同太乙'; who (谁): skyeyes=文昌 (default) / sf=始击; rel (关系): same=同宫 (default) / opposite=对宫(环对冲) / adjacent=邻宫(迫象). negate:true inverts it."
+   },
+   {
+    "type": "ty_shuli_kind",
+    "zh": "ty_shuli_kind「太乙·数理类(重阳重阴和数无门…)」（太乙·算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主算:重阳数」；算 suan：home=主算（缺省） / away=客算 / set=定算。negate:true = 取反。",
+    "en": "ty_shuli_kind '太乙·数理类(重阳重阴和数无门…)' (太乙·算数): passes when the day / moment meets it as set by params; the default params read '主算:重阳数'; suan (算): home=主算 (default) / away=客算 / set=定算. negate:true inverts it."
+   },
+   {
+    "type": "ty_ehui_has",
+    "zh": "ty_ehui_has「太乙·厄会(重阳/重阴/无门厄)」（太乙·算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「厄会:重阳厄/重阴厄/无门厄」；限定算 suan：any=任一算（缺省） / 主算=主算 / 客算=客算 / 定算=定算。negate:true = 取反。",
+    "en": "ty_ehui_has '太乙·厄会(重阳/重阴/无门厄)' (太乙·算数): passes when the day / moment meets it as set by params; the default params read '厄会:重阳厄/重阴厄/无门厄'; suan (限定算): any=任一算 (default) / 主算=主算 / 客算=客算 / 定算=定算. negate:true inverts it."
+   },
+   {
+    "type": "ty_shijing_gong",
+    "zh": "ty_shijing_gong「太乙·十精落位(二目八将三基)」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「文昌:巳」。negate:true = 取反。",
+    "en": "ty_shijing_gong '太乙·十精落位(二目八将三基)' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '文昌:巳'. negate:true inverts it."
+   },
+   {
+    "type": "ty_shensuan_kind",
+    "zh": "ty_shensuan_kind「太乙·诸神之算(君臣民基/五福/始击)」（太乙·算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「君基算:上和数」。negate:true = 取反。",
+    "en": "ty_shensuan_kind '太乙·诸神之算(君臣民基/五福/始击)' (太乙·算数): passes when the day / moment meets it as set by params; the default params read '君基算:上和数'. negate:true inverts it."
+   },
+   {
+    "type": "ty_fenye_info",
+    "zh": "ty_fenye_info「太乙·九州分野(卦/门/州/气)」（太乙·门户）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「太乙分野·卦:乾」；主体 who：taiyi=太乙（缺省） / shiji=始击(正宫时)；判面 dim：gua=卦（缺省） / men=门 / zhou=州 / qi=气。negate:true = 取反。",
+    "en": "ty_fenye_info '太乙·九州分野(卦/门/州/气)' (太乙·门户): passes when the day / moment meets it as set by params; the default params read '太乙分野·卦:乾'; who (主体): taiyi=太乙 (default) / shiji=始击(正宫时); dim (判面): gua=卦 (default) / men=门 / zhou=州 / qi=气. negate:true inverts it."
+   },
+   {
+    "type": "ty_sanyuan_wuziyuan",
+    "zh": "ty_sanyuan_wuziyuan「太乙·三元/五子元」（太乙·局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三元:上元」；判面 dim：sanyuan=三元(纪元推)（缺省） / wuziyuan=五子元(积年推)。negate:true = 取反。",
+    "en": "ty_sanyuan_wuziyuan '太乙·三元/五子元' (太乙·局式): passes when the day / moment meets it as set by params; the default params read '三元:上元'; dim (判面): sanyuan=三元(纪元推) (default) / wuziyuan=五子元(积年推). negate:true inverts it."
+   },
+   {
+    "type": "ty_nayin_taiyi",
+    "zh": "ty_nayin_taiyi「太乙·主柱纳音五行」（太乙·局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「纳音:金」。negate:true = 取反。",
+    "en": "ty_nayin_taiyi '太乙·主柱纳音五行' (太乙·局式): passes when the day / moment meets it as set by params; the default params read '纳音:金'. negate:true inverts it."
+   },
+   {
+    "type": "ty_god_gong",
+    "zh": "ty_god_gong「太乙·诸神落位(定目太岁基符…)」（太乙·落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「定目:子」。negate:true = 取反。",
+    "en": "ty_god_gong '太乙·诸神落位(定目太岁基符…)' (太乙·落宫): passes when the day / moment meets it as set by params; the default params read '定目:子'. negate:true inverts it."
+   }
+  ],
+  "taiyizeri": [
+   {
+    "type": "yinyang_ju",
+    "zh": "yinyang_ju「阴阳遁」（局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「阳遁」；遁 value：阳=阳遁（缺省） / 阴=阴遁。negate:true = 取反。",
+    "en": "yinyang_ju '阴阳遁' (局式): passes when the day / moment meets it as set by params; the default params read '阳遁'; value (遁): 阳=阳遁 (default) / 阴=阴遁. negate:true inverts it."
+   },
+   {
+    "type": "ju_num",
+    "zh": "ju_num「局数」（局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「局数:1」。negate:true = 取反。",
+    "en": "ju_num '局数' (局式): passes when the day / moment meets it as set by params; the default params read '局数:1'. negate:true inverts it."
+   },
+   {
+    "type": "taiyi_gong",
+    "zh": "taiyi_gong「太乙落宫」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「太乙:子宫」。negate:true = 取反。",
+    "en": "taiyi_gong '太乙落宫' (落宫): passes when the day / moment meets it as set by params; the default params read '太乙:子宫'. negate:true inverts it."
+   },
+   {
+    "type": "wenchang_gong",
+    "zh": "wenchang_gong「文昌(天目)落宫」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「文昌:巽宫」。negate:true = 取反。",
+    "en": "wenchang_gong '文昌(天目)落宫' (落宫): passes when the day / moment meets it as set by params; the default params read '文昌:巽宫'. negate:true inverts it."
+   },
+   {
+    "type": "shiji_gong",
+    "zh": "shiji_gong「始击落宫」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「始击:子宫」。negate:true = 取反。",
+    "en": "shiji_gong '始击落宫' (落宫): passes when the day / moment meets it as set by params; the default params read '始击:子宫'. negate:true inverts it."
+   },
+   {
+    "type": "jishen_gong",
+    "zh": "jishen_gong「计神/合神落宫」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「计神:寅」；神 who：jigod=计神（缺省） / hegod=合神。negate:true = 取反。",
+    "en": "jishen_gong '计神/合神落宫' (落宫): passes when the day / moment meets it as set by params; the default params read '计神:寅'; who (神): jigod=计神 (default) / hegod=合神. negate:true inverts it."
+   },
+   {
+    "type": "youshen_gong",
+    "zh": "youshen_gong「游神落宫(五福/大游/小游)」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「五福:1宫」。negate:true = 取反。",
+    "en": "youshen_gong '游神落宫(五福/大游/小游)' (落宫): passes when the day / moment meets it as set by params; the default params read '五福:1宫'. negate:true inverts it."
+   },
+   {
+    "type": "geju_kind",
+    "zh": "geju_kind「格局(掩迫关囚格对提挟击)」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「格局:掩」；判法 mode：with=出现任一（缺省） / without=全不出现(净局)。negate:true = 取反。",
+    "en": "geju_kind '格局(掩迫关囚格对提挟击)' (格局): passes when the day / moment meets it as set by params; the default params read '格局:掩'; mode (判法): with=出现任一 (default) / without=全不出现(净局). negate:true inverts it."
+   },
+   {
+    "type": "victory_side",
+    "zh": "victory_side「主客胜负」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「利主」；利 value：home=利主(主胜)（缺省） / away=利客(客胜)。negate:true = 取反。",
+    "en": "victory_side '主客胜负' (格局): passes when the day / moment meets it as set by params; the default params read '利主'; value (利): home=利主(主胜) (default) / away=利客(客胜). negate:true inverts it."
+   },
+   {
+    "type": "suan_range",
+    "zh": "suan_range「主客算区间」（算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主算 1~40」；算 who：homeCal=主算（缺省） / awayCal=客算 / setCal=定算。negate:true = 取反。",
+    "en": "suan_range '主客算区间' (算数): passes when the day / moment meets it as set by params; the default params read '主算 1~40'; who (算): homeCal=主算 (default) / awayCal=客算 / setCal=定算. negate:true inverts it."
+   },
+   {
+    "type": "suan_parity",
+    "zh": "suan_parity「算数阴阳(奇偶)」（算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主算奇」；算 who：homeCal=主算（缺省） / awayCal=客算 / setCal=定算；取 value：odd=奇(阳数)（缺省） / even=偶(阴数)。negate:true = 取反。",
+    "en": "suan_parity '算数阴阳(奇偶)' (算数): passes when the day / moment meets it as set by params; the default params read '主算奇'; who (算): homeCal=主算 (default) / awayCal=客算 / setCal=定算; value (取): odd=奇(阳数) (default) / even=偶(阴数). negate:true inverts it."
+   },
+   {
+    "type": "dajiang_gong",
+    "zh": "dajiang_gong「主客大将宫」（大将）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主将:1宫」。negate:true = 取反。",
+    "en": "dajiang_gong '主客大将宫' (大将): passes when the day / moment meets it as set by params; the default params read '主将:1宫'. negate:true inverts it."
+   },
+   {
+    "type": "dajiang_same",
+    "zh": "dajiang_same「将算同宫关系」（大将）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主客将同宫」；关系 rel：zhu_ke_same=主客大将同宫（缺省） / zhu_taiyi_same=主将同太乙(囚象) / ke_taiyi_same=客将同太乙。negate:true = 取反。",
+    "en": "dajiang_same '将算同宫关系' (大将): passes when the day / moment meets it as set by params; the default params read '主客将同宫'; rel (关系): zhu_ke_same=主客大将同宫 (default) / zhu_taiyi_same=主将同太乙(囚象) / ke_taiyi_same=客将同太乙. negate:true inverts it."
+   },
+   {
+    "type": "gong16_has",
+    "zh": "gong16_has「宫内布神」（十六宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「子宫有神」；盘面 board：gong16=十六宫（缺省） / branch12=十二支位。negate:true = 取反。",
+    "en": "gong16_has '宫内布神' (十六宫): passes when the day / moment meets it as set by params; the default params read '子宫有神'; board (盘面): gong16=十六宫 (default) / branch12=十二支位. negate:true inverts it."
+   },
+   {
+    "type": "sanji_men",
+    "zh": "sanji_men「太乙所临(门户/正宫)」（门户）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「太乙临门户」；判面 mode：men=临门户宫(艮巽坤乾)（缺省） / zheng=临正宫(子卯午酉)。negate:true = 取反。",
+    "en": "sanji_men '太乙所临(门户/正宫)' (门户): passes when the day / moment meets it as set by params; the default params read '太乙临门户'; mode (判面): men=临门户宫(艮巽坤乾) (default) / zheng=临正宫(子卯午酉). negate:true inverts it."
+   },
+   {
+    "type": "wenchang_taiyi_rel",
+    "zh": "wenchang_taiyi_rel「文昌/始击与太乙位置关系」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「文昌同太乙」；谁 who：skyeyes=文昌（缺省） / sf=始击；关系 rel：same=同宫（缺省） / opposite=对宫(环对冲) / adjacent=邻宫(迫象)。negate:true = 取反。",
+    "en": "wenchang_taiyi_rel '文昌/始击与太乙位置关系' (格局): passes when the day / moment meets it as set by params; the default params read '文昌同太乙'; who (谁): skyeyes=文昌 (default) / sf=始击; rel (关系): same=同宫 (default) / opposite=对宫(环对冲) / adjacent=邻宫(迫象). negate:true inverts it."
+   },
+   {
+    "type": "shuli_kind",
+    "zh": "shuli_kind「数理类(重阳重阴和数无门…)」（算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「主算:重阳数」；算 suan：home=主算（缺省） / away=客算 / set=定算。negate:true = 取反。",
+    "en": "shuli_kind '数理类(重阳重阴和数无门…)' (算数): passes when the day / moment meets it as set by params; the default params read '主算:重阳数'; suan (算): home=主算 (default) / away=客算 / set=定算. negate:true inverts it."
+   },
+   {
+    "type": "ehui_has",
+    "zh": "ehui_has「厄会(重阳/重阴/无门厄)」（算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「厄会:重阳厄/重阴厄/无门厄」；限定算 suan：any=任一算（缺省） / 主算=主算 / 客算=客算 / 定算=定算。negate:true = 取反。",
+    "en": "ehui_has '厄会(重阳/重阴/无门厄)' (算数): passes when the day / moment meets it as set by params; the default params read '厄会:重阳厄/重阴厄/无门厄'; suan (限定算): any=任一算 (default) / 主算=主算 / 客算=客算 / 定算=定算. negate:true inverts it."
+   },
+   {
+    "type": "shijing_gong",
+    "zh": "shijing_gong「十精落位(二目八将三基)」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「文昌:巳」。negate:true = 取反。",
+    "en": "shijing_gong '十精落位(二目八将三基)' (落宫): passes when the day / moment meets it as set by params; the default params read '文昌:巳'. negate:true inverts it."
+   },
+   {
+    "type": "shensuan_kind",
+    "zh": "shensuan_kind「诸神之算(君臣民基/五福/始击)」（算数）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「君基算:上和数」。negate:true = 取反。",
+    "en": "shensuan_kind '诸神之算(君臣民基/五福/始击)' (算数): passes when the day / moment meets it as set by params; the default params read '君基算:上和数'. negate:true inverts it."
+   },
+   {
+    "type": "fenye_info",
+    "zh": "fenye_info「九州分野(卦/门/州/气)」（门户）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「太乙分野·卦:乾」；主体 who：taiyi=太乙（缺省） / shiji=始击(正宫时)；判面 dim：gua=卦（缺省） / men=门 / zhou=州 / qi=气。negate:true = 取反。",
+    "en": "fenye_info '九州分野(卦/门/州/气)' (门户): passes when the day / moment meets it as set by params; the default params read '太乙分野·卦:乾'; who (主体): taiyi=太乙 (default) / shiji=始击(正宫时); dim (判面): gua=卦 (default) / men=门 / zhou=州 / qi=气. negate:true inverts it."
+   },
+   {
+    "type": "sanyuan_wuziyuan",
+    "zh": "sanyuan_wuziyuan「三元/五子元」（局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「三元:上元」；判面 dim：sanyuan=三元(纪元推)（缺省） / wuziyuan=五子元(积年推)。negate:true = 取反。",
+    "en": "sanyuan_wuziyuan '三元/五子元' (局式): passes when the day / moment meets it as set by params; the default params read '三元:上元'; dim (判面): sanyuan=三元(纪元推) (default) / wuziyuan=五子元(积年推). negate:true inverts it."
+   },
+   {
+    "type": "nayin_taiyi",
+    "zh": "nayin_taiyi「主柱纳音五行」（局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「纳音:金」。negate:true = 取反。",
+    "en": "nayin_taiyi '主柱纳音五行' (局式): passes when the day / moment meets it as set by params; the default params read '纳音:金'. negate:true inverts it."
+   },
+   {
+    "type": "god_gong",
+    "zh": "god_gong「诸神落位(定目太岁基符…)」（落宫）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「定目:子」。negate:true = 取反。",
+    "en": "god_gong '诸神落位(定目太岁基符…)' (落宫): passes when the day / moment meets it as set by params; the default params read '定目:子'. negate:true inverts it."
+   }
+  ],
+  "tianxing": [
+   {
+    "type": "aspect",
+    "zh": "aspect「星体相位」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 在 太阳 的 90° 相位(orb 3°)」；入出 motion：any=任意（缺省） / applying=入相位 / separating=出相位；左右 side：any=不限左右（缺省） / dexter=右相位 / sinister=左相位；正相位 partile：off=不限（缺省） / same_degree=正(同度) / le3=正(≤3°) / le1=正(≤1°)。negate:true = 取反。",
+    "en": "aspect '星体相位' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 月亮 在 太阳 的 90° 相位(orb 3°)'; motion (入出): any=任意 (default) / applying=入相位 / separating=出相位; side (左右): any=不限左右 (default) / dexter=右相位 / sinister=左相位; partile (正相位): off=不限 (default) / same_degree=正(同度) / le3=正(≤3°) / le1=正(≤1°). negate:true inverts it."
+   },
+   {
+    "type": "in_sign",
+    "zh": "in_sign「星体入座」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 在 白羊」。negate:true = 取反。",
+    "en": "in_sign '星体入座' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 月亮 在 白羊'. negate:true inverts it."
+   },
+   {
+    "type": "in_house",
+    "zh": "in_house「星体入宫」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 在 1 宫」。negate:true = 取反。",
+    "en": "in_house '星体入宫' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 在 1 宫'. negate:true inverts it."
+   },
+   {
+    "type": "reception",
+    "zh": "reception「接纳」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 金星 接纳 月亮(庙·旺·须相位)」；命中 match：any=任一层级（缺省） / all=全部层级。negate:true = 取反。",
+    "en": "reception '接纳' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 金星 接纳 月亮(庙·旺·须相位)'; match (命中): any=任一层级 (default) / all=全部层级. negate:true inverts it."
+   },
+   {
+    "type": "mutual_reception",
+    "zh": "mutual_reception「互容」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 水星 与 金星 互容(任意对)」；配对 pairing：any_pair=任意层级对（缺省） / same_level=同级互容。negate:true = 取反。",
+    "en": "mutual_reception '互容' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 水星 与 金星 互容(任意对)'; pairing (配对): any_pair=任意层级对 (default) / same_level=同级互容. negate:true inverts it."
+   },
+   {
+    "type": "rulership",
+    "zh": "rulership「主宰关系」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 的主宰星是 火星」；方向 mode：dispositor_is=A 的主宰星是 B（缺省） / rules=A 主宰 B(所在座)。negate:true = 取反。",
+    "en": "rulership '主宰关系' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 的主宰星是 火星'; mode (方向): dispositor_is=A 的主宰星是 B (default) / rules=A 主宰 B(所在座). negate:true inverts it."
+   },
+   {
+    "type": "besieged",
+    "zh": "besieged「围攻」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 被 火星、土星 围攻(体围·前8°后8°·计救援)」；围式 mode：body=体围(实体夹)（缺省） / ray=光线围。negate:true = 取反。",
+    "en": "besieged '围攻' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 被 火星、土星 围攻(体围·前8°后8°·计救援)'; mode (围式): body=体围(实体夹) (default) / ray=光线围. negate:true inverts it."
+   },
+   {
+    "type": "dignity_state",
+    "zh": "dignity_state「尊贵状态」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 入庙(全部)」；命中 require：all=全部满足（缺省） / any=任一满足。negate:true = 取反。",
+    "en": "dignity_state '尊贵状态' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 入庙(全部)'; require (命中): all=全部满足 (default) / any=任一满足. negate:true inverts it."
+   },
+   {
+    "type": "considerations",
+    "zh": "considerations「择日考量」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮空亡 VOC」；快慢口径 speedMode：ramesey=13°10′（缺省） / mean=平均日速 / twelve=12°；燃烧之路口径 variant：standard=天秤15°-天蝎15°（缺省） / scorpioFull=天秤15°-天蝎尾 / bothFull=天秤头-天蝎尾 / narrow=窄口径 208-217。negate:true = 取反。",
+    "en": "considerations '择日考量' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮空亡 VOC'; speedMode (快慢口径): ramesey=13°10′ (default) / mean=平均日速 / twelve=12°; variant (燃烧之路口径): standard=天秤15°-天蝎15° (default) / scorpioFull=天秤15°-天蝎尾 / bothFull=天秤头-天蝎尾 / narrow=窄口径 208-217. negate:true inverts it."
+   },
+   {
+    "type": "aspect_pattern",
+    "zh": "aspect_pattern「相位格局」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 T 三角 orb 6°」。negate:true = 取反。",
+    "en": "aspect_pattern '相位格局' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 T 三角 orb 6°'. negate:true inverts it."
+   },
+   {
+    "type": "point_relation",
+    "zh": "point_relation「星体与点」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 与 上升 ASC 任意主相位(orb 3°)」；点类型 pointKind：angle=四轴点（缺省） / planet=星体 / lot=希腊点(福/灵/基/跃升) / fixedLon=固定黄经；四轴 pointId：ASC=上升 ASC（缺省） / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC；希腊点 lotId：fortuna=福点 Fortuna（缺省） / spirit=灵点 Spirit / basis=基点 Basis / exaltation=跃升点 Exaltation。negate:true = 取反。",
+    "en": "point_relation '星体与点' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 月亮 与 上升 ASC 任意主相位(orb 3°)'; pointKind (点类型): angle=四轴点 (default) / planet=星体 / lot=希腊点(福/灵/基/跃升) / fixedLon=固定黄经; pointId (四轴): ASC=上升 ASC (default) / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC; lotId (希腊点): fortuna=福点 Fortuna (default) / spirit=灵点 Spirit / basis=基点 Basis / exaltation=跃升点 Exaltation. negate:true inverts it."
+   },
+   {
+    "type": "numeric",
+    "zh": "numeric「天文数值」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 太阳 黄经 Long ∈ [0, 30]」；高度口径 altitudeKind：true=真高度（缺省） / apparent=视高度。negate:true = 取反。",
+    "en": "numeric '天文数值' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 太阳 黄经 Long ∈ [0, 30]'; altitudeKind (高度口径): true=真高度 (default) / apparent=视高度. negate:true inverts it."
+   },
+   {
+    "type": "chart_shape",
+    "zh": "chart_shape「盘面形状」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 盘形=碗型 Bowl」。negate:true = 取反。",
+    "en": "chart_shape '盘面形状' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 盘形=碗型 Bowl'. negate:true inverts it."
+   },
+   {
+    "type": "midpoint",
+    "zh": "midpoint「中点」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 太阳/月亮 中点 90°盘 合 金星(orb 1.5°)」；目标 targetKind：planet=星体（缺省） / midpoint=另一中点 / angle=四轴点 / fixedLon=固定黄经；四轴 targetId：ASC=上升 ASC / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC。negate:true = 取反。",
+    "en": "midpoint '中点' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 太阳/月亮 中点 90°盘 合 金星(orb 1.5°)'; targetKind (目标): planet=星体 (default) / midpoint=另一中点 / angle=四轴点 / fixedLon=固定黄经; targetId (四轴): ASC=上升 ASC / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC. negate:true inverts it."
+   },
+   {
+    "type": "day_window",
+    "zh": "day_window「当日时间窗」（generative）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 每日 09:00 → 17:00」。negate:true = 取反。",
+    "en": "day_window '当日时间窗' (generative): passes when the day / moment meets it as set by params; the default params read '查找 每日 09:00 → 17:00'. negate:true inverts it."
+   },
+   {
+    "type": "light_dynamics",
+    "zh": "light_dynamics「相位动态」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 传光 任 自 任 至 任」；南北弯 which：any=任意（缺省） / north=北弯(交点+90°) / south=南弯(交点−90°)。negate:true = 取反。",
+    "en": "light_dynamics '相位动态' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 传光 任 自 任 至 任'; which (南北弯): any=任意 (default) / north=北弯(交点+90°) / south=南弯(交点−90°). negate:true inverts it."
+   },
+   {
+    "type": "royal_attendance",
+    "zh": "royal_attendance「皇室伴寝」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 的第一西没 = 金星」；侧位 slot：first_occidental=第一西没（缺省） / first_oriental=第一东升 / any_occidental=西没侧(任一) / any_oriental=东升侧(任一)。negate:true = 取反。",
+    "en": "royal_attendance '皇室伴寝' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 的第一西没 = 金星'; slot (侧位): first_occidental=第一西没 (default) / first_oriental=第一东升 / any_occidental=西没侧(任一) / any_oriental=东升侧(任一). negate:true inverts it."
+   },
+   {
+    "type": "sect_joy",
+    "zh": "sect_joy「宗派喜乐」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 太阳 同宗 of-sect」。negate:true = 取反。",
+    "en": "sect_joy '宗派喜乐' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 太阳 同宗 of-sect'. negate:true inverts it."
+   },
+   {
+    "type": "degree_state",
+    "zh": "degree_state「度性查表」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 在月站第1宿」；度质 quality：B=明 Bright（缺省） / D=暗 Dark / E=空 Empty / S=烟 Smoky；特殊度 special：pitted=陷度 Pitted（缺省） / azemene=慢病度 Azemene / increasing_fortune=增福度。negate:true = 取反。",
+    "en": "degree_state '度性查表' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 在月站第1宿'; quality (度质): B=明 Bright (default) / D=暗 Dark / E=空 Empty / S=烟 Smoky; special (特殊度): pitted=陷度 Pitted (default) / azemene=慢病度 Azemene / increasing_fortune=增福度. negate:true inverts it."
+   },
+   {
+    "type": "decan_state",
+    "zh": "decan_state「三十六旬」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 落第1旬」；判定 mode：planet_in=星体落旬（缺省） / ruler_is=所落旬主是 / talisman=护符择时(ASC或月正当旬)。negate:true = 取反。",
+    "en": "decan_state '三十六旬' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 月亮 落第1旬'; mode (判定): planet_in=星体落旬 (default) / ruler_is=所落旬主是 / talisman=护符择时(ASC或月正当旬). negate:true inverts it."
+   },
+   {
+    "type": "pattern_overview",
+    "zh": "pattern_overview「大势格局」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 龙截」；联结型 which：any=任意（缺省） / 8_12=8·12 联结 / 8_1=8·1 联结。negate:true = 取反。",
+    "en": "pattern_overview '大势格局' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 龙截'; which (联结型): any=任意 (default) / 8_12=8·12 联结 / 8_1=8·1 联结. negate:true inverts it."
+   },
+   {
+    "type": "dispositor_cycle",
+    "zh": "dispositor_cycle「主宰循环」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 终极主宰 = 太阳」；判定 mode：final_is=终极主宰是某星（缺省） / final_exists=存在终极主宰 / in_loop=某星在互容环中 / loop_exists=存在互容环。negate:true = 取反。",
+    "en": "dispositor_cycle '主宰循环' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 终极主宰 = 太阳'; mode (判定): final_is=终极主宰是某星 (default) / final_exists=存在终极主宰 / in_loop=某星在互容环中 / loop_exists=存在互容环. negate:true inverts it."
+   },
+   {
+    "type": "almuten_is",
+    "zh": "almuten_is「胜利星」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 盘主胜利星 = 太阳」；范围 scope：chart=盘主(五要点+宫位分)（缺省） / topic=逐题(单宫头)。negate:true = 取反。",
+    "en": "almuten_is '胜利星' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 盘主胜利星 = 太阳'; scope (范围): chart=盘主(五要点+宫位分) (default) / topic=逐题(单宫头). negate:true inverts it."
+   },
+   {
+    "type": "distribution_state",
+    "zh": "distribution_state「分布权重」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 分布·火象 严格最多(十星)」；维度 axis：element=元素(火土风水)（缺省） / mode=模式(基本固定变动) / hemisphere=半球(轴制)；比较 op：max=严格最多（缺省） / gte=≥N / lte=≤N / eq==N。negate:true = 取反。",
+    "en": "distribution_state '分布权重' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 分布·火象 严格最多(十星)'; axis (维度): element=元素(火土风水) (default) / mode=模式(基本固定变动) / hemisphere=半球(轴制); op (比较): max=严格最多 (default) / gte=≥N / lte=≤N / eq==N. negate:true inverts it."
+   },
+   {
+    "type": "temperament",
+    "zh": "temperament「气质评估」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 气质·胆汁质 主导」；维度 kind：temperament=气质（缺省） / quality=性质；比较 op：dominant=严格主导（缺省） / gte=≥N / lte=≤N。negate:true = 取反。",
+    "en": "temperament '气质评估' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 气质·胆汁质 主导'; kind (维度): temperament=气质 (default) / quality=性质; op (比较): dominant=严格主导 (default) / gte=≥N / lte=≤N. negate:true inverts it."
+   },
+   {
+    "type": "accidental_score",
+    "zh": "accidental_score「偶然尊贵分」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 木星 偶然尊贵≥5分」；比较 op：gte=≥分（缺省） / lte=≤分 / top1=全盘最高(严格)。negate:true = 取反。",
+    "en": "accidental_score '偶然尊贵分' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 木星 偶然尊贵≥5分'; op (比较): gte=≥分 (default) / lte=≤分 / top1=全盘最高(严格). negate:true inverts it."
+   },
+   {
+    "type": "classical_pattern",
+    "zh": "classical_pattern「古典格局」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 持矛护卫」；格局 pattern：doryphory=持矛护卫 Doryphory（缺省） / overcoming=优势压制 Overcoming / besieging_degree=度数围攻(±7°夹)；压制相 aspectKind：any=任意（缺省） / trine=三分压制 / square=四分压制 / sextile=六分压制。negate:true = 取反。",
+    "en": "classical_pattern '古典格局' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 持矛护卫'; pattern (格局): doryphory=持矛护卫 Doryphory (default) / overcoming=优势压制 Overcoming / besieging_degree=度数围攻(±7°夹); aspectKind (压制相): any=任意 (default) / trine=三分压制 / square=四分压制 / sextile=六分压制. negate:true inverts it."
+   },
+   {
+    "type": "eminence_level",
+    "zh": "eminence_level「显赫程度」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 显赫度 显赫」；比较 op：band=按档（缺省） / gte=≥分 / lte=≤分；档位 band：eminent=显赫(≥8)（缺省） / notable=显著(6-8) / ordinary=平凡(3-6) / obscure=暗晦(<3)。negate:true = 取反。",
+    "en": "eminence_level '显赫程度' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 显赫度 显赫'; op (比较): band=按档 (default) / gte=≥分 / lte=≤分; band (档位): eminent=显赫(≥8) (default) / notable=显著(6-8) / ordinary=平凡(3-6) / obscure=暗晦(<3). negate:true inverts it."
+   },
+   {
+    "type": "antiscia",
+    "zh": "antiscia「映点」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 月亮 映点 合 金星(orb 1°)」；镜像 kind：antiscia=映点(至点轴)（缺省） / contra=反映点(分点轴)；目标 targetKind：planet=星体（缺省） / angle=四轴点；轴点 targetAngle：ASC=上升 ASC（缺省） / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC。negate:true = 取反。",
+    "en": "antiscia '映点' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 月亮 映点 合 金星(orb 1°)'; kind (镜像): antiscia=映点(至点轴) (default) / contra=反映点(分点轴); targetKind (目标): planet=星体 (default) / angle=四轴点; targetAngle (轴点): ASC=上升 ASC (default) / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC. negate:true inverts it."
+   },
+   {
+    "type": "fixed_star",
+    "zh": "fixed_star「恒星触发」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 恒星 Regulus 合 月亮(orb 1°)」；触发点 targetKind：planet=星体（缺省） / angle=四轴点；轴点 targetAngle：ASC=上升 ASC（缺省） / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC。negate:true = 取反。",
+    "en": "fixed_star '恒星触发' (continuous): passes when the day / moment meets it as set by params; the default params read '查找 恒星 Regulus 合 月亮(orb 1°)'; targetKind (触发点): planet=星体 (default) / angle=四轴点; targetAngle (轴点): ASC=上升 ASC (default) / MC=天顶 MC / DESC=下降 DESC / IC=天底 IC. negate:true inverts it."
+   },
+   {
+    "type": "planetary_hour",
+    "zh": "planetary_hour「行星时」（generative）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 值时星 = 木星」；判定 kind：hour_ruler=值时星(不等时)（缺省） / day_ruler=值日星(日出至次日出)。negate:true = 取反。",
+    "en": "planetary_hour '行星时' (generative): passes when the day / moment meets it as set by params; the default params read '查找 值时星 = 木星'; kind (判定): hour_ruler=值时星(不等时) (default) / day_ruler=值日星(日出至次日出). negate:true inverts it."
+   },
+   {
+    "type": "lifespan_state",
+    "zh": "lifespan_state「寿命格局」（boolean）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「查找 生命主(托法) = 太阳」；取主法 method：ptolemy=托勒密（缺省） / alcabitius=阿尔卡比修斯 / dorotheus=多罗修斯。negate:true = 取反。",
+    "en": "lifespan_state '寿命格局' (boolean): passes when the day / moment meets it as set by params; the default params read '查找 生命主(托法) = 太阳'; method (取主法): ptolemy=托勒密 (default) / alcabitius=阿尔卡比修斯 / dorotheus=多罗修斯. negate:true inverts it."
+   },
+   {
+    "type": "cusp_state",
+    "zh": "cusp_state「宫头状态(落座/近座界)」（continuous）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「第10宫头落1座」；判面 mode：in_sign=宫头落座（缺省） / near_boundary=宫头近座界(整宫制下无意义)。negate:true = 取反。",
+    "en": "cusp_state '宫头状态(落座/近座界)' (continuous): passes when the day / moment meets it as set by params; the default params read '第10宫头落1座'; mode (判面): in_sign=宫头落座 (default) / near_boundary=宫头近座界(整宫制下无意义). negate:true inverts it."
+   }
+  ],
+  "ziweizeri": [
+   {
+    "type": "wuxing_ju",
+    "zh": "wuxing_ju「五行局」（局式）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「五行局:3」。negate:true = 取反。",
+    "en": "wuxing_ju '五行局' (局式): passes when the day / moment meets it as set by params; the default params read '五行局:3'. negate:true inverts it."
+   },
+   {
+    "type": "ming_gong_zhi",
+    "zh": "ming_gong_zhi「命宫地支」（命身）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫:子」。negate:true = 取反。",
+    "en": "ming_gong_zhi '命宫地支' (命身): passes when the day / moment meets it as set by params; the default params read '命宫:子'. negate:true inverts it."
+   },
+   {
+    "type": "ming_zhu_xing",
+    "zh": "ming_zhu_xing「命宫正曜」（命身）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫有:紫微」；判法 mode：has=含任一（缺省） / empty=空宫(无正曜)。negate:true = 取反。",
+    "en": "ming_zhu_xing '命宫正曜' (命身): passes when the day / moment meets it as set by params; the default params read '命宫有:紫微'; mode (判法): has=含任一 (default) / empty=空宫(无正曜). negate:true inverts it."
+   },
+   {
+    "type": "shen_zhu_xing",
+    "zh": "shen_zhu_xing「身宫正曜」（命身）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「身宫有:天府」；判法 mode：has=含任一（缺省） / empty=空宫(无正曜)。negate:true = 取反。",
+    "en": "shen_zhu_xing '身宫正曜' (命身): passes when the day / moment meets it as set by params; the default params read '身宫有:天府'; mode (判法): has=含任一 (default) / empty=空宫(无正曜). negate:true inverts it."
+   },
+   {
+    "type": "ming_changsheng",
+    "zh": "ming_changsheng「命宫长生态」（命身）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫长生:长生/帝旺/临官」。negate:true = 取反。",
+    "en": "ming_changsheng '命宫长生态' (命身): passes when the day / moment meets it as set by params; the default params read '命宫长生:长生/帝旺/临官'. negate:true inverts it."
+   },
+   {
+    "type": "star_in_gong",
+    "zh": "star_in_gong「星落宫名」（安星）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「紫微在官禄宫」。negate:true = 取反。",
+    "en": "star_in_gong '星落宫名' (安星): passes when the day / moment meets it as set by params; the default params read '紫微在官禄宫'. negate:true inverts it."
+   },
+   {
+    "type": "star_in_zhi",
+    "zh": "star_in_zhi「星落地支」（安星）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「紫微在午」。negate:true = 取反。",
+    "en": "star_in_zhi '星落地支' (安星): passes when the day / moment meets it as set by params; the default params read '紫微在午'. negate:true inverts it."
+   },
+   {
+    "type": "star_tong_gong",
+    "zh": "star_tong_gong「两星同宫」（安星）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「禄存同宫天马」。negate:true = 取反。",
+    "en": "star_tong_gong '两星同宫' (安星): passes when the day / moment meets it as set by params; the default params read '禄存同宫天马'. negate:true inverts it."
+   },
+   {
+    "type": "sihua_star",
+    "zh": "sihua_star「生年四化为星」（四化）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「化禄=武曲」；化 hua：禄=禄（缺省） / 权=权 / 科=科 / 忌=忌。negate:true = 取反。",
+    "en": "sihua_star '生年四化为星' (四化): passes when the day / moment meets it as set by params; the default params read '化禄=武曲'; hua (化): 禄=禄 (default) / 权=权 / 科=科 / 忌=忌. negate:true inverts it."
+   },
+   {
+    "type": "sihua_in_gong",
+    "zh": "sihua_in_gong「生年四化入宫」（四化）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「化禄入财帛宫」；化 hua：禄=禄（缺省） / 权=权 / 科=科 / 忌=忌。negate:true = 取反。",
+    "en": "sihua_in_gong '生年四化入宫' (四化): passes when the day / moment meets it as set by params; the default params read '化禄入财帛宫'; hua (化): 禄=禄 (default) / 权=权 / 科=科 / 忌=忌. negate:true inverts it."
+   },
+   {
+    "type": "sihua_dui_ming",
+    "zh": "sihua_dui_ming「四化会命宫(同宫/对照)」（四化）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「化忌不犯命」；化 hua：禄=禄 / 权=权 / 科=科 / 忌=忌（缺省）；关系 rel：in=坐命宫 / opposite=对照(迁移位) / not_in=不坐命不对照(避)（缺省）。negate:true = 取反。",
+    "en": "sihua_dui_ming '四化会命宫(同宫/对照)' (四化): passes when the day / moment meets it as set by params; the default params read '化忌不犯命'; hua (化): 禄=禄 / 权=权 / 科=科 / 忌=忌 (default); rel (关系): in=坐命宫 / opposite=对照(迁移位) / not_in=不坐命不对照(避) (default). negate:true inverts it."
+   },
+   {
+    "type": "star_brightness",
+    "zh": "star_brightness「星曜亮度」（亮度）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「紫微庙/旺」。negate:true = 取反。",
+    "en": "star_brightness '星曜亮度' (亮度): passes when the day / moment meets it as set by params; the default params read '紫微庙/旺'. negate:true inverts it."
+   },
+   {
+    "type": "life_master",
+    "zh": "life_master「命主」（主宰）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命主:贪狼」。negate:true = 取反。",
+    "en": "life_master '命主' (主宰): passes when the day / moment meets it as set by params; the default params read '命主:贪狼'. negate:true inverts it."
+   },
+   {
+    "type": "body_master",
+    "zh": "body_master「身主」（主宰）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「身主:文昌」。negate:true = 取反。",
+    "en": "body_master '身主' (主宰): passes when the day / moment meets it as set by params; the default params read '身主:文昌'. negate:true inverts it."
+   },
+   {
+    "type": "doujun_zhi",
+    "zh": "doujun_zhi「斗君落支」（主宰）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「斗君:寅」。negate:true = 取反。",
+    "en": "doujun_zhi '斗君落支' (主宰): passes when the day / moment meets it as set by params; the default params read '斗君:寅'. negate:true inverts it."
+   },
+   {
+    "type": "sanfang_has",
+    "zh": "sanfang_has「宫三方四正会星」（会照）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫三方会齐左辅/右弼」；判法 mode：all=会齐全部（缺省） / any=会任一 / none=全不会(避)。negate:true = 取反。",
+    "en": "sanfang_has '宫三方四正会星' (会照): passes when the day / moment meets it as set by params; the default params read '命宫三方会齐左辅/右弼'; mode (判法): all=会齐全部 (default) / any=会任一 / none=全不会(避). negate:true inverts it."
+   },
+   {
+    "type": "liuji_count",
+    "zh": "liuji_count「三方四正六吉数」（会照）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫三方六吉≥2」。negate:true = 取反。",
+    "en": "liuji_count '三方四正六吉数' (会照): passes when the day / moment meets it as set by params; the default params read '命宫三方六吉≥2'. negate:true inverts it."
+   },
+   {
+    "type": "liusha_count",
+    "zh": "liusha_count「三方四正六煞数」（会照）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫三方六煞≤1」。negate:true = 取反。",
+    "en": "liusha_count '三方四正六煞数' (会照): passes when the day / moment meets it as set by params; the default params read '命宫三方六煞≤1'. negate:true inverts it."
+   },
+   {
+    "type": "kong_jie_ming",
+    "zh": "kong_jie_ming「空劫犯命」（会照）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「空劫不犯命」；判法 rel：avoid=空劫不坐命不照命(避)（缺省） / tong=空劫坐命宫 / hui=空劫会命(三方四正)。negate:true = 取反。",
+    "en": "kong_jie_ming '空劫犯命' (会照): passes when the day / moment meets it as set by params; the default params read '空劫不犯命'; rel (判法): avoid=空劫不坐命不照命(避) (default) / tong=空劫坐命宫 / hui=空劫会命(三方四正). negate:true inverts it."
+   },
+   {
+    "type": "bm_ji_bu_chong",
+    "zh": "bm_ji_bu_chong「年忌不犯本命命宫」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「候选年忌不坐/不冲本命命宫」。negate:true = 取反。",
+    "en": "bm_ji_bu_chong '年忌不犯本命命宫' (本命): passes when the day / moment meets it as set by params; the default params read '候选年忌不坐/不冲本命命宫'. negate:true inverts it."
+   },
+   {
+    "type": "bm_ming_he",
+    "zh": "bm_ming_he「候选命宫合本命命宫」（本命）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「候选命宫合本命命宫」；关系 rel：any_he=六合或三合（缺省） / liuhe=六合 / sanhe=三合 / same=同支。negate:true = 取反。",
+    "en": "bm_ming_he '候选命宫合本命命宫' (本命): passes when the day / moment meets it as set by params; the default params read '候选命宫合本命命宫'; rel (关系): any_he=六合或三合 (default) / liuhe=六合 / sanhe=三合 / same=同支. negate:true inverts it."
+   },
+   {
+    "type": "geju_hit",
+    "zh": "geju_hit「格局命中(53 格)」（格局）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「格局:紫府同宫」；判法 mode：with=命中任一（缺省） / without=全不命中(避格)；破格档 broken：any=不论破格（缺省） / intact=仅算不破之格 / broken=仅算已破之格。negate:true = 取反。",
+    "en": "geju_hit '格局命中(53 格)' (格局): passes when the day / moment meets it as set by params; the default params read '格局:紫府同宫'; mode (判法): with=命中任一 (default) / without=全不命中(避格); broken (破格档): any=不论破格 (default) / intact=仅算不破之格 / broken=仅算已破之格. negate:true inverts it."
+   },
+   {
+    "type": "gong_gan_sihua",
+    "zh": "gong_gan_sihua「宫干四化(飞化/自化)」（四化）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫干化禄自化」；四化 hua：禄=禄（缺省） / 权=权 / 科=科 / 忌=忌；判面 mode：self=自化(化星在本宫)（缺省） / to_ming=飞入命宫。negate:true = 取反。",
+    "en": "gong_gan_sihua '宫干四化(飞化/自化)' (四化): passes when the day / moment meets it as set by params; the default params read '命宫干化禄自化'; hua (四化): 禄=禄 (default) / 权=权 / 科=科 / 忌=忌; mode (判面): self=自化(化星在本宫) (default) / to_ming=飞入命宫. negate:true inverts it."
+   },
+   {
+    "type": "shen_gong_pos",
+    "zh": "shen_gong_pos「身宫落位(宫名/地支)」（命身）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「身宫:迁移」。negate:true = 取反。",
+    "en": "shen_gong_pos '身宫落位(宫名/地支)' (命身): passes when the day / moment meets it as set by params; the default params read '身宫:迁移'. negate:true inverts it."
+   },
+   {
+    "type": "gong_changsheng",
+    "zh": "gong_changsheng「任意宫长生态」（命身）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫:长生/帝旺」。negate:true = 取反。",
+    "en": "gong_changsheng '任意宫长生态' (命身): passes when the day / moment meets it as set by params; the default params read '命宫:长生/帝旺'. negate:true inverts it."
+   },
+   {
+    "type": "laiyin_gong",
+    "zh": "laiyin_gong「来因宫(生年干落宫)」（四化）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「来因:命宫」。negate:true = 取反。",
+    "en": "laiyin_gong '来因宫(生年干落宫)' (四化): passes when the day / moment meets it as set by params; the default params read '来因:命宫'. negate:true inverts it."
+   },
+   {
+    "type": "gong_empty",
+    "zh": "gong_empty「任意宫空宫(无主星)」（安星）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「命宫空宫」；判态 want：empty=空宫(无十四正曜)（缺省） / filled=有正曜。negate:true = 取反。",
+    "en": "gong_empty '任意宫空宫(无主星)' (安星): passes when the day / moment meets it as set by params; the default params read '命宫空宫'; want (判态): empty=空宫(无十四正曜) (default) / filled=有正曜. negate:true inverts it."
+   },
+   {
+    "type": "gong_zhi_name",
+    "zh": "gong_zhi_name「宫名落地支」（安星）：按参数判定这一天 / 这一刻是否满足；缺省设定读作「财帛在寅」。negate:true = 取反。",
+    "en": "gong_zhi_name '宫名落地支' (安星): passes when the day / moment meets it as set by params; the default params read '财帛在寅'. negate:true inverts it."
+   }
+  ]
+ }
+}

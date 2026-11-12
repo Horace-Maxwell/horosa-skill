@@ -27,6 +27,7 @@ from horosa_skill.knowledge import (
 )
 from horosa_skill.schemas.common import ErrorInfo, ToolEnvelope
 from horosa_skill.service._context import (
+    _degrade,
     _degrade_collector,
     _memory_save_failed,
     _run_query_scope,
@@ -34,6 +35,7 @@ from horosa_skill.service._context import (
     without_presentation_keys,
 )
 from horosa_skill.reports.technique_card import annotate_setting_sources
+from horosa_skill.zeri_conditions import NEGATE_RULE, echo_summary_line, zeri_tools
 from horosa_skill.service.api.place import place_caveat_notes, place_resolution_note
 from horosa_skill.service.text.predictive import _PERIOD_PREDICTIVE_TOOLS
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
@@ -485,9 +487,29 @@ class ToolsAPI:
         response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
         response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
         response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+        response_data = self._attach_condition_echo(tool_name, input_normalized, response_data)
         # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
         # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
         return self._attach_technique_card(tool_name, input_normalized, response_data)
+
+    def _attach_condition_echo(self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """择日十技法：把这次的条件树按引擎的读法写成人话（每叶 summary + 取反 + 连接词），挂 `data.condition_echo`（深审 F5）。
+        读不出不影响结果，降级可见。"""
+        conditions = input_normalized.get("conditions")
+        if tool_name not in zeri_tools() or not conditions or not isinstance(response_data, dict):
+            return response_data
+        try:
+            echoed = self.js_client.run("zeri_conditions", {"action": "echo", "technique": tool_name, "tree": conditions})
+            data = echoed.get("data") if isinstance(echoed, dict) else None
+            if not isinstance(data, dict) or not data.get("ok"):
+                raise ValueError((data or {}).get("error") or "no data")
+        except Exception as exc:  # noqa: BLE001 - 回显是说明，不能拖垮一次算好的择日
+            _degrade("择日条件回显不可得：%s", exc)
+            return response_data
+        echo = {"lines": data.get("lines") or [], "negate_rule": bilingual(*NEGATE_RULE)}
+        if data.get("unknown"):
+            echo["unknown_types"] = data["unknown"]
+        return {**response_data, "condition_echo": echo}
 
     def _with_user_knowledge(self, call: _ToolCall, response_data: dict[str, Any]) -> tuple[dict[str, Any], Any, str | None]:
         """把自备知识库的选中条目挂上去：(结果, 知识上下文, 失败说明)。附加资料出错绝不该让一张算好的盘作废。"""
@@ -523,6 +545,10 @@ class ToolsAPI:
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
         # 地名解析一行紧跟标题行（标题仍是 summary[0]：dispatch 只取每个子结果的 summary[:1]）。
         summary = [*summary[:1], *call.place_notes, *summary[1:]]
+        echo = response_data.get("condition_echo") if isinstance(response_data, dict) else None
+        if isinstance(echo, dict) and echo.get("lines"):
+            # 择日：条件按引擎的读法回显一行（取反 / 判法一眼可见；全文与逐行在 data.condition_echo）。
+            summary = [*summary[:1], echo_summary_line(echo["lines"]), *summary[1:]]
         warnings: list[str] = [*call.input_notes, *call.place_caveats]
         if isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
             # 每项设置的来源（深审 F10）：用户给的 / 命主档案 / 地点推得 / 缺省。

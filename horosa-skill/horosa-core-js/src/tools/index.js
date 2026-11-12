@@ -53,9 +53,12 @@ import { runAcgSection } from './acgSection.js';
 // （开发树没重跑 npm ci、旧 runtime 只换了代码）会让本文件加载失败 = 全部 JS 技法一起挂；懒加载把影响收在
 // place_search 自己身上（Python 侧把「缺依赖 / 不认识这个工具」报成 place.runtime_outdated）。
 const runPlaceSearch = (payload) => import('./placeSearch.js').then((m) => m.runPlaceSearch(payload));
+// 择日条件词表 / 条件回显（skill 自有）：只在择日结果与指引生成时用，懒加载。
+const runZeriConditions = (payload) => import('./zeriConditions.js').then((m) => m.runZeriConditions(payload));
 
 const TOOL_RUNNERS = {
   place_search: runPlaceSearch,
+  zeri_conditions: runZeriConditions,
   uranian_extra: runUranianExtra,
   tieban_framework: runTiebanFramework,
   yanqin_yanfa: runYanqinYanfa,

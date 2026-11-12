@@ -47,7 +47,7 @@ HECAN_SCHEMA = "horosa.skill.hecan.v1"
 RAW_FIELDS_SUMMARY_PREFIX = "顶层字段："
 
 # 阅读视图里 `data` 下原样保留的键：给模型读的、或指向文件 / 来源的。
-_KEPT_DATA_KEYS = frozenset({"technique_card", "compute_sources", "route", "knowledge_context", "file", "files"})
+_KEPT_DATA_KEYS = frozenset({"technique_card", "compute_sources", "route", "knowledge_context", "file", "files", "condition_echo"})
 # 其余键：序列化后不超过这个长度的小值留着（命中数、是否截断、性别……），更大的算原始明细。
 _SMALL_VALUE_CHARS = 300
 # 预算留的余量：繁体转换、告警文字的长度浮动。

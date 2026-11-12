@@ -201,6 +201,12 @@ def _with_common_fields(tool_name: str, policy: dict[str, Any]) -> dict[str, Any
     for doc in doc_sources:
         if doc:
             result["options_keys"] = {**(result.get("options_keys") or {}), **doc}
+    # 择日十技法：每类条件一行中英说明 + negate 的规则（深审 F5；生成件 data/zeri_condition_meanings.json，读上游注册表）。
+    from horosa_skill.zeri_conditions import guidance_block
+
+    conditions_doc = guidance_block(tool_name)
+    if conditions_doc:
+        result["condition_types"] = conditions_doc
     result["hard_gate"] = {
         "enabled": tool_name not in PREFLIGHT_EXEMPT_TOOLS,
         "pass_condition": "Provide `agent_confirmed_settings: true` after asking the user, or `defaults_accepted: true` when the user explicitly accepts Xingque/default settings.",
