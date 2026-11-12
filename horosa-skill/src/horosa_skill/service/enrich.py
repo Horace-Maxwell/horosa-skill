@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from horosa_skill import __version__
@@ -52,6 +53,32 @@ from horosa_skill.service.text.predictive import (
 from horosa_skill.service.text.western import _RELATIVE_TAB_BY_CODE
 
 
+_YEAR_TARGET_RE = re.compile(r"^\d{4}$")
+_DATE_ONLY_RE = re.compile(r"^-?\d{4,5}-\d{2}-\d{2}$")
+
+
+def _apply_yearly_target(tool_name: str, effective: dict[str, Any]) -> None:
+    """IN-13（v0.50.0）：推运目标只给年份（datetime='2026'，或 year=2026 已由入口改写成 datetime）。
+
+    返照 / 流年 / 小限 / 太阳弧都有「那一年」的意思：= 那一年的生日时刻（上游 returnPickerSeed 同式：那年 + 出生月日 + 出生时分），
+    进 warnings。givenyear 后端不收只有日期的目标 → 补出生时分。"""
+    from datetime import datetime as _datetime
+
+    from horosa_skill.input_fields import add_input_note
+
+    target = f"{effective.get('datetime') or ''}".strip()
+    birth = f"{effective.get('date') or ''}".strip()
+    if _YEAR_TARGET_RE.match(target) and birth:
+        seeded = _return_picker_seed(f"{birth} {effective.get('time') or '12:00:00'}", _datetime(int(target), 1, 1))  # noqa: DTZ001 - 只取年份
+        effective["datetime"] = seeded
+        add_input_note(f"推运目标「{target}」按那一年的生日时刻 {seeded} 起算。", f"Target '{target}' was read as that year's birthday moment {seeded}.")
+    elif tool_name == "givenyear" and _DATE_ONLY_RE.match(target):
+        clock = f"{effective.get('time') or '12:00:00'}"[:5]
+        effective["datetime"] = f"{target} {clock}"
+        add_input_note(f"流年目标「{target}」只有日期，按出生时分补成 {effective['datetime']}。",
+                       f"Target '{target}' has no time; the birth time was used: {effective['datetime']}.")
+
+
 class EnrichMixin:
     def _apply_upstream_predictive_defaults(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         """F19：远端星运工具缺目标时刻/返照地时按上游缺省补齐（写回 input_normalized，回显即实算口径）。
@@ -84,6 +111,7 @@ class EnrichMixin:
             if payload.get("profStart") is not None:
                 _require_option(payload["profStart"], tuple(_ptext.PROFECTION_START_CN), field="profStart", tool="profection")
         effective = dict(payload)
+        _apply_yearly_target(tool_name, effective)
         if tool_name in _PERIOD_PREDICTIVE_TOOLS:
             if not effective.get("datetime"):
                 # 上游 v3.12.0 regenPredictive.js:27-33：「此刻」按本盘时区（DateTime.nowForChart(np.zone)），

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.config import Settings
@@ -14,6 +16,7 @@ from horosa_skill.decisions.errors import JevError
 from horosa_skill.decisions.fake import FailingJev, FakeJev, choice_answer
 from horosa_skill.decisions.layer import DecisionLayer
 from horosa_skill.decisions.policy import Policy
+from horosa_skill.errors import ToolValidationError
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 
@@ -164,25 +167,28 @@ def test_gender_is_filled_only_with_lexicon_and_jev_agreeing_in_enforce(tmp_path
     record = next(r for r in result.decision_layer["records"] if r["surface"] == "extract")
     assert record["adopted"] is True and record["decision"]["evidence"] == ["老婆"] and record["decision"]["value"] == "女"
 
-    shadow = _service(tmp_path / "s", DecisionLayer(_policy("shadow"), FakeJev({"subject_gender": choice_answer("female", confidence=0.97)})))
-    result = shadow.dispatch({"query": query, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
-    assert "gender" not in result.normalized_inputs["ziwei_birth"]
-    record = next(r for r in result.decision_layer["records"] if r["surface"] == "extract")
-    assert record["adopted"] is False and record["reason"] == "shadow"
+    shadow_jev = FakeJev({"subject_gender": choice_answer("female", confidence=0.97)})
+    shadow = _service(tmp_path / "s", DecisionLayer(_policy("shadow"), shadow_jev))
+    # v0.50.0：影子模式不采纳 → 紫微没有性别 → 拒绝并请问用户（tool.missing_gender），不再按男命排。决策层确实问过（shadow 只记不填）。
+    with pytest.raises(ToolValidationError) as caught:
+        shadow.dispatch({"query": query, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    assert caught.value.code == "tool.missing_gender" and caught.value.details["agent_recovery"]["must_ask_user"] is True
+    assert shadow_jev.calls, "影子模式照样问决策层（只是不采纳）"
 
 
 def test_gender_double_key_blocks_jev_without_lexicon_evidence_and_never_asks_without_candidates(tmp_path: Path) -> None:
     fake = FakeJev({"subject_gender": choice_answer("male", confidence=0.99)})
     service = _service(tmp_path, DecisionLayer(_policy("enforce", ("extract",)), fake, thresholds=LOCK))
-    # 原话说的是「老婆」（女性词表），Jev 却选 male → 双钥不齐，不填。
-    result = service.dispatch({"query": "帮我老婆排紫微斗数", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
-    assert "gender" not in result.normalized_inputs["ziwei_birth"]
-    record = next(r for r in result.decision_layer["records"] if r["surface"] == "extract")
-    assert record["adopted"] is False and "double-key" in record["reason"]
-    # 原话没有任何性别词 → 连问都不问（零调用、零 PII）。
+    # 原话说的是「老婆」（女性词表），Jev 却选 male → 双钥不齐，不填 → v0.50.0 起紫微没有性别就拒（不再按男命排）。
+    with pytest.raises(ToolValidationError) as caught:
+        service.dispatch({"query": "帮我老婆排紫微斗数", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    assert caught.value.code == "tool.missing_gender"
+    assert fake.calls, "双钥不齐：问过决策层但没采纳"
+    # 原话没有任何性别词 → 连问都不问（零调用、零 PII）；同样因缺性别被拒。
     calls_before = len(fake.calls)
-    result = service.dispatch({"query": "帮我排紫微斗数", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
-    assert len(fake.calls) == calls_before and not [r for r in result.decision_layer["records"] if r["surface"] == "extract"]
+    with pytest.raises(ToolValidationError):
+        service.dispatch({"query": "帮我排紫微斗数", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    assert len(fake.calls) == calls_before
     # 用户已经给了 gender → 不问不改。
     result = service.dispatch({"query": "帮我老婆排紫微斗数", "birth": {**BIRTH, "gender": 1}, "save_result": False, "agent_confirmed_settings": True})
     assert len(fake.calls) == calls_before and result.normalized_inputs["ziwei_birth"]["gender"] == 1

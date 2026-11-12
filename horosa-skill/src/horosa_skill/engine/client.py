@@ -147,8 +147,8 @@ _JAVA_MONGO_UNREACHABLE_MARKERS = ("mongodb.host", "MongoSocketException", "Mong
 # 读到（在 MongoDB 里）」，会把一个参数 bug 指去查 Mongo——正是本仓花了两轮才清掉的那类误诊。
 # 所以：9999 必须再看 `Result` 原文，认不出就给中性提示，不替用户断案。
 _JAVA_GENERIC_9999_HINT = (
-    "ResultCode 9999 是 Java 聚合层的通用失败码，**不等于** app 注册问题——请以 `Result` 原文为准。"
-    "本仓实测过的一例：`begin/end/length` 形态的字符串越界，真因是请求缺 lat（先核 lon 与 lat 是否齐全）。"
+    "ResultCode 9999 是 Java 聚合层的通用失败码，**不等于** app 注册问题——请以 `Result` 原文与 details 里发出去的字段为准，"
+    "不要按某一种原因去猜（v0.50.0：入参在入口已逐字段校验过）。"
 )
 
 

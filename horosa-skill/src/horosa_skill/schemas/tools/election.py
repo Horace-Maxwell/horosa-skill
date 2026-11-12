@@ -126,6 +126,7 @@ class QizhengZeriInput(ZeriBackendScanInput):
 
 class IndiaZeriInput(ZeriBackendScanInput):
     """印度择时（Muhurta）：后端扫描。段自足 —— 印度盘全文见 india_chart 本身，本工具只出择时三段。"""
+    # hsys 是继承来的西占键（缺省 1），Muhurta 扫描不读分宫制——按西占表校验，不设 HSYS_FAMILY="india"（印占表没有 1）。
 
     # 扫描上下文读 ayanamsa（IndiaScanContext）；indiaAyanamsa 是与 india_chart 同词表的别名（显式 ayanamsa 优先）。
     # indiaHsys 已删：Muhurta 扫描不读分宫制、本工具也不铸印度盘，声明着等于广告一个死开关。

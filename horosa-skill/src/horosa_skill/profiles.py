@@ -41,7 +41,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from horosa_skill.civil_calendar import _civil_ymd_exists, _parse_date_parts
 from horosa_skill.errors import ToolValidationError, bilingual
-from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.input_normalization import normalize_collecting_issues
 
 PROFILE_KEY = "profile"
 DIRNAME = "profiles"
@@ -66,7 +66,6 @@ _NAME_MAX = 64
 _PLACE_MAX = 200
 _NOTES_MAX = 2000
 _ALIASES_MAX = 12
-_OFFSET_RE = re.compile(r"^([+-])(\d{2}):(\d{2})$")
 _DATE_RE = re.compile(r"^-?\d{4,5}-\d{2}-\d{2}$")
 _TIME_RE = re.compile(r"^(\d{2}):(\d{2}):(\d{2})$")
 _COORD_RE = re.compile(r"^(\d{1,3})([nsew])(\d{2})$")
@@ -253,30 +252,42 @@ def _error(field_name: str, message: str, *, kind: str = "value_error") -> dict[
     return {"loc": ["data", field_name], "msg": message, "type": kind}
 
 
-def _check_zone(raw: Any, normalized: Any) -> Any:
-    """返回要存的时区：IANA 名原样存（起盘时按出生日期换算偏移、新疆时区归并照常生效），其余存归一后的偏移。"""
-    if isinstance(normalized, str):
-        match = _OFFSET_RE.match(normalized)
-        if match and int(match.group(2)) * 60 + int(match.group(3)) <= 15 * 60 and int(match.group(3)) < 60:
-            return raw.strip() if isinstance(raw, str) and "/" in raw else normalized
-    if isinstance(raw, str) and "/" in raw:
-        try:
-            ZoneInfo(raw.strip())
-            return raw.strip()
-        except (ZoneInfoNotFoundError, ValueError):
-            pass
-    raise ToolValidationError(
-        bilingual(f"认不出时区：{raw!r}。", f"Unrecognized time zone: {raw!r}."),
-        code="tool.invalid_zone",
-        details={"zone": raw, "accepted_forms": ["+08:00", "-05:00", "8", "Asia/Shanghai"]},
-    )
+def _check_zone(raw: Any) -> Any:
+    """返回要存的时区：IANA 名原样存（起盘时按出生日期换算偏移、新疆时区归并照常生效）；地名式时区（北京时间）存成它的 IANA 名
+    （1986–1991 夏令时照常生效）；其余按技法同一个解析器（input_fields.parse_zone）存偏移。认不出 → tool.invalid_zone。"""
+    from horosa_skill import input_fields
+
+    text = raw.strip() if isinstance(raw, str) else raw
+    if isinstance(text, str):
+        named = input_fields.ZONE_NAME_TO_IANA.get(text.lower())
+        if named:
+            return named
+        if "/" in text:
+            try:
+                ZoneInfo(text)
+                return text
+            except (ZoneInfoNotFoundError, ValueError):
+                pass
+    try:
+        return input_fields.parse_zone(raw).value
+    except input_fields.FieldIssue as issue:
+        raise ToolValidationError(
+            bilingual(f"认不出时区：{raw!r}。{issue.zh}", f"Unrecognized time zone: {raw!r}. {issue.en}"),
+            code="tool.invalid_zone",
+            details={"zone": raw, "accepted_forms": ["+08:00", "-05:00", "8", "Asia/Shanghai"], **({"options": issue.options} if issue.options else {})},
+        ) from None
 
 
 def validate_birth_fields(data: dict[str, Any]) -> dict[str, Any]:
     """出生字段 → 要存的规范形（技法载荷原样可收）。用的是技法同一套归一化；认不出的值报错，绝不换默认值蒙混。"""
     raw = {key: data[key] for key in BIRTH_FIELDS if data.get(key) is not None}
-    normalized = normalize_request_payload(dict(raw))
-    errors: list[dict[str, Any]] = []
+    # 与技法同一个逐字段校验器（v0.50.0）：读不懂的值在这里就报，措辞与技法一致。时区不交给它（_check_zone 单独判）——档案原样存
+    # IANA 名（起盘时按出生日期折算），档案可以先存时区、后补钟点。
+    probe = {key: value for key, value in raw.items() if key != "zone"}
+    normalized, issues = normalize_collecting_issues(probe)
+    errors: list[dict[str, Any]] = [_error(item["field"], item["message"]) for item in issues]
+    flagged = {item["field"] for item in issues}
+    normalized = {key: value for key, value in normalized.items() if key not in flagged}
     out: dict[str, Any] = {}
 
     ad = normalized.get("ad")
@@ -351,7 +362,7 @@ def validate_birth_fields(data: dict[str, Any]) -> dict[str, Any]:
     if errors:
         raise _invalid(errors, "档案的出生信息有误，请与用户核对后重存。", "Some birth fields are invalid; check them with the user and save again.")
     if raw.get("zone") is not None:
-        out["zone"] = _check_zone(raw["zone"], normalized.get("zone"))
+        out["zone"] = _check_zone(raw["zone"])
     return {key: out[key] for key in BIRTH_FIELDS if key in out}
 
 

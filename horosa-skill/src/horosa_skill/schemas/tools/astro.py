@@ -22,6 +22,7 @@ class AstroChartInput(BirthInput, _ChartDayBoundaryKnobs):
 
 
 class IndiaChartInput(BirthInput):
+    HSYS_FAMILY: ClassVar[str] = "india"  # 印占宫制索引表（astro_sidereal.INDIA_HOUSE_SYSTEM_LABELS）
     hsys: int | None = 0  # 印占宫制走 indiaHsys；本键只作 indiaHsys 缺席时的回退 = INDIA_HOUSE_SYSTEM_DEFAULT 0（整宫/Rashi）
     # 印度占星 (星阙 v2.6.4)：分宫制 4→全 24 制(indiaHsys 0–24)、黄道岁差 6→全 47(indiaAyanamsa)。
     # 印占恒星黄道引擎 pyswisseph，与西洋 siderealAyanamsa 共用 47 套岁差键。缺省 hsys=0(整宫)/lahiri。
@@ -89,6 +90,7 @@ class IndiaRectifyInput(BirthInput):
     边界（gandanta 甘丹塔预警）+ 可选事件评分（rectifyEvents 录入后才参评）。
     输出证据与排序，是否采用由用户决定（上游免责声明原样带回）。
     """
+    HSYS_FAMILY: ClassVar[str] = "india"  # 印占宫制索引表（astro_sidereal.INDIA_HOUSE_SYSTEM_LABELS）
     hsys: int | None = 0  # 同 IndiaChartInput：印占家族整宫缺省
 
     rectifyWindowMinutes: float | None = Field(default=None, description="扫描半窗（分钟），缺省 30，上限 240（锚点前后各半窗）")

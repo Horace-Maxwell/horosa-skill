@@ -150,7 +150,7 @@ class HorosaMCPServer(MCPServer):
         arguments, capped = cap_free_text(arguments)
         token = _CURRENT_CONTEXT.set(context)
         try:
-            with request_conflict_scope() as request_notes:
+            with request_conflict_scope(arguments) as request_notes:
                 raw = await self._tool_manager.call_tool(name, arguments, context, convert_result=False)
         finally:
             _CURRENT_CONTEXT.reset(token)

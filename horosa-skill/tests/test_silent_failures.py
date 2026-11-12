@@ -60,8 +60,10 @@ def test_valid_zones_keep_their_exact_wire_form(zone, expected: str) -> None:
 def test_tianxing_refuses_a_city_name_for_zone_before_scanning(tmp_path: Path) -> None:
     client = CaptureClient()
     service = _service(tmp_path, client)
-    envelope = service.run_tool("tianxing", {**CONFIRMED, **WINDOW, "zone": "New York"}, save_result=False)
-    assert envelope.ok is False and envelope.error.code == "tool.invalid_zone"
+    # v0.50.0：入口的逐字段校验先拒（抛结构化错误，带字段级恢复），比 runner 里的 _electionscan_zone 更早。
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool("tianxing", {**CONFIRMED, **WINDOW, "zone": "New York"}, save_result=False)
+    assert caught.value.code == "tool.invalid_zone" and caught.value.details["fields"][0]["field"] == "zone"
     assert not [endpoint for endpoint, _ in client.calls if endpoint == "/electionscan/scan"]
 
 

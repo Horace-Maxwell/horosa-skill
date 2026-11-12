@@ -9,6 +9,7 @@ from typing import Any
 from horosa_skill.engine import astro_snapshot as _astro_snap
 from horosa_skill.service import _clock
 from horosa_skill.civil_calendar import _month_day_label, _year_month_key
+from horosa_skill.errors import bilingual
 from horosa_skill.service._common import (
     _chart_at_moment_date_fields,
     _gender_label,
@@ -305,6 +306,110 @@ def _gua_code_lines(gua_code: Any, changed_code: Any) -> list[dict[str, Any]]:
     changed = str(changed_code or "")
     moving = [len(changed) == 6 and changed[i] != code[i] for i in range(6)]
     return [{"value": int(code[i]), "change": moving[i], "god": None, "name": None} for i in range(6)]
+
+
+# 六爻手动起卦（v0.50.0）：给了却用不了的输入一律报错，绝不悄悄改成以时起卦。
+# 铜钱值：6 老阴（动）、7 少阳、8 少阴、9 老阳（动）——《卜筮正宗》以来的通行记法；0 / 1 是本仓旧接口（1 阳 0 阴，动爻看 change）。
+_COIN_VALUES = {6: (0, True, "老阴（动）"), 7: (1, False, "少阳"), 8: (0, False, "少阴"), 9: (1, True, "老阳（动）")}
+_SIXYAO_EXPECTED = (
+    ("lines：六爻（自下而上）每爻 value 0 阴 / 1 阳（动爻 change=true），或铜钱值 6 老阴动 / 7 少阳 / 8 少阴 / 9 老阳动；"
+     "或 gua_code：六位 0/1（初→上，1 阳）或卦名（火天大有 / 大有 / 乾）；都不给 = 以时起卦"),
+    ("lines: six lines bottom to top, value 0 yin / 1 yang (moving: change=true) or coin values 6 old yin (moving) / 7 young yang / "
+     "8 young yin / 9 old yang (moving); or gua_code: six 0/1 digits (bottom to top, 1 = yang) or a hexagram name; give neither to cast by time"),
+)
+
+
+def _sixyao_issue(field: str, got: Any, zh: str, en: str) -> Any:
+    from horosa_skill.input_normalization import field_issues_error
+
+    # lines 的问题沿用旧码 tool.sixyao_invalid_lines；gua_code / changed_code / numbers 用 tool.sixyao_invalid_cast。
+    code = "tool.sixyao_invalid_lines" if field.startswith("lines") else "tool.sixyao_invalid_cast"
+    return field_issues_error([{
+        "field": field, "code": code, "got": got if isinstance(got, (str, int, float, bool, type(None))) else repr(got),
+        "expected": bilingual(*_SIXYAO_EXPECTED), "example": "111101", "ask_user": False, "message": bilingual(zh, en),
+    }])
+
+
+def resolve_sixyao_cast(payload: dict[str, Any]) -> dict[str, Any]:
+    """→ {"method": "manual" | "gua_code" | "gua_name" | "time", "lines": [...], "gua_name"?, "changed_name"?, "changed_bits"?, "notes": [...]}。
+
+    lines 与 gua_code 同时给 → 以 lines 为准（旧口径），两者不一致时报错；`numbers`（报数起卦）引擎没有这条路 → 报错。"""
+    if payload.get("numbers") not in (None, "", []):
+        raise _sixyao_issue("numbers", payload.get("numbers"),
+                            "六爻引擎没有报数起卦：请改用 lines（六爻）或 gua_code（六位码 / 卦名），都不给就按时间起卦。",
+                            "The six-line engine has no number casting: use lines or gua_code instead, or give neither to cast by time.")
+    raw_lines = payload.get("lines")
+    notes: list[str] = []
+    if raw_lines not in (None, [], ""):
+        if not isinstance(raw_lines, list) or len(raw_lines) != 6:
+            count = len(raw_lines) if isinstance(raw_lines, list) else 0
+            raise _sixyao_issue("lines", f"{count} 爻" if isinstance(raw_lines, list) else raw_lines,
+                                f"lines 要正好六爻（初→上），收到 {count}。", f"lines must hold exactly six lines (bottom to top); got {count}.")
+        lines: list[dict[str, Any]] = []
+        coin_used = False
+        for index, item in enumerate(raw_lines):
+            raw_value = item.get("value") if isinstance(item, dict) else item
+            change = item.get("change") if isinstance(item, dict) else None
+            value = raw_value
+            if isinstance(value, str) and value.strip().isdigit():
+                value = int(value.strip())
+            if isinstance(value, bool):
+                value = int(value)
+            if value in _COIN_VALUES and not isinstance(value, bool):
+                yin_yang, moving, _label = _COIN_VALUES[value]
+                if change not in (None, moving):
+                    raise _sixyao_issue(f"lines[{index}]", raw_value,
+                                        f"第 {index + 1} 爻铜钱值 {value} 本身已定动静（{_label}），与 change={change!r} 矛盾。",
+                                        f"Line {index + 1}: coin value {value} already fixes moving / still, contradicting change={change!r}.")
+                coin_used = True
+                lines.append({"value": yin_yang, "change": moving, "god": item.get("god") if isinstance(item, dict) else None,
+                              "name": item.get("name") if isinstance(item, dict) else None})
+            elif value in (0, 1):
+                if change not in (None, True, False, 0, 1):
+                    raise _sixyao_issue(f"lines[{index}].change", change, f"第 {index + 1} 爻 change 要是 true / false。", f"Line {index + 1}: change must be true / false.")
+                lines.append({"value": value, "change": bool(change), "god": item.get("god") if isinstance(item, dict) else None,
+                              "name": item.get("name") if isinstance(item, dict) else None})
+            else:
+                raise _sixyao_issue(f"lines[{index}].value", raw_value, f"第 {index + 1} 爻 value={raw_value!r} 认不出。",
+                                    f"Line {index + 1}: value={raw_value!r} is not understood.")
+        if coin_used:
+            notes.append(bilingual("lines 按铜钱值读：6 老阴（动）、7 少阳、8 少阴、9 老阳（动）。",
+                                   "lines were read as coin values: 6 old yin (moving), 7 young yang, 8 young yin, 9 old yang (moving)."))
+        code = payload.get("gua_code")
+        if isinstance(code, str) and len(code.strip()) == 6 and set(code.strip()) <= {"0", "1"} and code.strip() != _derive_gua_code(lines):
+            raise _sixyao_issue("gua_code", code, f"gua_code={code} 与 lines 排出的卦 {_derive_gua_code(lines)} 不一致。",
+                                f"gua_code={code} disagrees with the hexagram the lines give ({_derive_gua_code(lines)}).")
+        return {"method": "manual", "lines": lines, "notes": notes}
+    code = payload.get("gua_code")
+    changed = payload.get("changed_code")
+    if code in (None, ""):
+        if changed not in (None, ""):
+            raise _sixyao_issue("changed_code", changed, "只给了变卦 changed_code、没给本卦 gua_code。", "changed_code was given without gua_code.")
+        return {"method": "time", "lines": [], "notes": notes}
+    text = f"{code}".strip().replace(" ", "")
+    changed_text = f"{changed}".strip().replace(" ", "") if changed not in (None, "") else ""
+    is_bits = len(text) == 6 and set(text) <= {"0", "1"}
+    changed_bits = len(changed_text) == 6 and set(changed_text) <= {"0", "1"}
+    if is_bits:
+        if changed_text and not changed_bits:
+            return {"method": "gua_name", "lines": [], "gua_name": text, "changed_name": _name_candidates(changed_text), "notes": notes}
+        return {"method": "gua_code", "lines": _gua_code_lines(text, changed_text), "notes": notes}
+    if text.isdigit() or set(text) <= {"0", "1", "-", "_"}:
+        raise _sixyao_issue("gua_code", code, f"gua_code={code!r} 要么是六位 0/1（初→上），要么是卦名。", f"gua_code={code!r} must be six 0/1 digits (bottom to top) or a hexagram name.")
+    result: dict[str, Any] = {"method": "gua_name", "lines": [], "gua_name": _name_candidates(text), "notes": notes}
+    if changed_bits:
+        result["changed_bits"] = [int(ch) for ch in changed_text]
+    elif changed_text:
+        result["changed_name"] = _name_candidates(changed_text)
+    return result
+
+
+def _name_candidates(text: str) -> list[str]:
+    """卦名 → [原文, 繁→简]：JS 依次查 vendored Gua64。原文要先试——通用繁简折叠把「乾」折成「干」。"""
+    from horosa_skill.textscript import fold_to_simplified
+
+    folded = "".join(ch if ch == "乾" else fold_to_simplified(ch) for ch in text)  # 逐字折叠、乾不动（乾為天 → 乾为天）
+    return [text] if folded == text else [text, folded]
 
 
 def _ziwei_star_names(value: Any) -> list[str]:

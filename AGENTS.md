@@ -423,6 +423,15 @@ runtime 带 Node 22；`package.json` 声明 `engines.node >=20.10.0`；新加 ra
 进技法卡 `place_resolution`，`warnings` 只放真要提醒的事（dispatch 把带 warnings 的结果算降级）。显式 lat/lon/zone 永远优先；档案字段逐键让位于显式字段；
 档案只补它存了的，澄清闸照问没存的（铁律 2 不变）。档案名 / 别名 / 地名标签进决策层前脱敏成 `<档案>`。
 
+**入参：一个逐字段校验器（v0.50.0，`input_fields.py` + `input_normalization.py`）**：全部技法、嵌套当事人（inner / outer、dispatch 的
+birth / subject / context、natal、davison）、`horosa_tool_run`、dispatch / hecan、命主档案都经 `normalize_request_payload(payload, model=…)`。
+每个字段只有两种结局：读懂（规范值；做了解读的 → `add_input_note` → 信封 warnings）或结构化拒绝（`details.fields` / `agent_recovery.fix_fields`
+每个字段一条 `{field, got, expected, example, options}`；只有用户知道的事实才 `must_ask_user`）。**认不出的值不许原样流向引擎、不许换缺省值**。
+更深的引擎结构（nongli、jieqi_year_*、options…）走 `_legacy_normalize`，不替引擎判。MCP 层：`call_tool` 把原始参数放进 `request_conflict_scope`，
+`_merge_mcp_arguments` 接回 SDK 丢掉的未声明顶层键（schema 写的是 `additionalProperties: true`，行为与之一致）；`_gated_run` 第一步
+`precheck_arguments`（确认位必须是 JSON 布尔、坏字段先于闸门问卷）。**枚举类旋钮一律用 `input_fields.Vocabulary` + `field_validator_for`
+挂 pydantic BeforeValidator**（宫制 / 黄道 / 合参 tools 已用；错误码 `tool.invalid_option` 等，`options` 是全表）——不要再写 `payload.get(k) or 缺省`。
+
 ### 4.5 输出文字：简体（缺省）/ 繁体（v0.42.0，`src/horosa_skill/textscript/`）——**以后加东西必须同步**
 
 **古籍档（v0.47.0 / v0.47.1）**：玄史「原文」区段走上游 toHantClassic（范 / 里缺省保留原字，只在整词表里作 範 / 裡）；span 必须覆盖**多行**原文
@@ -566,6 +575,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 
 1. `schemas/tools/<族>.py` 输入模型（v0.41.1 起按技法族分模块，`__init__` 显式 re-export；神数用 split 年月日时分 + `options` passthrough 的 `ShenShuInput` 模式；
    `BirthInput` `extra="allow"`，声明字段主要为 discoverability + guidance）。
+   枚举旋钮挂 `Vocabulary`（§4.4「入参」段）；date / time / zone / 经纬度 / 性别 用标准键名就自动进逐字段校验（`tests/test_input_fields.py`
+   的全目录用例按 schema 推字段种类，新技法自动覆盖）；结果随性别而变的技法登记进 `api/tools.GENDER_DEPENDENT_TOOLS`。
 2. `service/runners/<族>.py` 里加 `_run_<技法名>_tool(payload)`（mixin 方法；跨族只经 `self.` 调）。按这个名字写就会被 `_run_local_tool` 分派，不用改 `api/tools.py`；只有方法名或参数不同才进 `_LOCAL_RUNNER_OVERRIDES`（`tests/test_local_tool_dispatch.py` 把全部本地工具解析一遍）。远端端点进 `_PYTHON_CHART_ENDPOINTS`；ken-backed 加 `_require_ken_pan`。
 3. `engine/registry.py` TOOL_DEFINITIONS 注册；`router.py` 分派词做互斥检查（**卜卦含「卦」字**：梅易/卦
    分支必须排除 卜卦/horary/起卦/占问 短语，否则「卜卦问婚姻」误路由 `gua_desc`——同类新词照此办理；「周日小限」含「小限」

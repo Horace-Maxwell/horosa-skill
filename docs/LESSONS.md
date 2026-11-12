@@ -28,6 +28,7 @@
 | v0.50.0-dev (2026-11-12) | 文档教 `curl -o runtime.zip` 存 macOS 的 tar.gz 资产再 `install --archive`：BadZipFile traceback；代理登录页、半截下载同样 traceback | 魔数认格式；坏归档 `runtime.install_archive_invalid`；`install --sha256`；文档配方按原文真跑 |
 | v0.50.0-dev (2026-11-12) | runtime 根只读时 `runtime start` 回「别的进程正在启动」，永远等不到；启动锁里的 pid 被回收给无关进程后锁永不回收 | 只有 FileExistsError 算持锁；`LockDirNotWritableError` → `runtime.root_not_writable`；锁记 `start_token` 认出回收的 pid |
 | v0.50.0-dev (2026-11-12) | 地名「唯一命中」照收上游 high：NYC → 银川、HK → 海口（拼音首字母算精确）、St. Petersburg → 佛州（地区半截提示）、照样起盘；限定写法（北京市朝阳区、London, UK、Taipei, Taiwan）全找不到；提示语推荐的写法自己也不能用 | skill 自己的接受规则（placeResolve.js verdict）：本名 / 英文名 / 全拼 / 行政区词干 / 别名相等才收，同名多地一律问；551 条语料 + 全库 50 077 条「本名, 本地区」性质测试；档案名繁简同键、rename、CLI 导出导入 |
+| v0.50.0-dev (2026-11-12) | 入参认不出就原样往下传：东八区 / 辰时 / 480 / 40n75 / 性别「其他」在不同技法上报错、按缺省或算错，MCP 顶层 place / 别名键被 SDK 丢掉 | 一个逐字段校验器（input_fields + input_normalization）管全部技法与嵌套当事人：读懂进 warnings、读不懂按字段结构化拒；MCP 接回未声明键；结果随性别而变的技法没性别就拒；全目录垃圾值用例守 |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -374,6 +375,26 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   接受改回只看上游 high → NYC 落银川，红。
 - **教训**：上游给的「置信度」是它自己场景的评分，借来当「可以不问用户」的判据之前，要先拿真用户的写法量一遍；提示语里的例子
   就是接口，必须有测试跑过。
+### v0.50.0-dev / 2026-11-12 — 入参「认不出就原样往下传」：东八区、辰时、480、40n75、性别「其他」都算出了一张别的盘
+
+- **现象**（深审 IN-01…IN-15，审计探针 `audit-1111/inputs`）：同一个值在不同技法上三种结局。`zone="东八区"` 星盘回 `tool.backend_param_error`、
+  八字悄悄按 +08:00 算；`zone=480` 变成 `+480:00`；`time="辰时"` / `"不详"` / `"上午8点"` 在八字上变成 00:00；`03/05/1990` 成乱码日期，
+  `1990-02-30` 照算；`lat="40n75"` 进位成 41n15，经纬对调（lat=121e28）盘偏约 6 小时而盘头仍写真太阳时；性别「其他」→「未知」按男排，紫微
+  不给性别 schema 缺省就是男；`hsys="Placidus"` 是 int_parsing 错误、`hsys=99` 照算；六爻 `gua_code="大有"`、七爻、`numbers` 都悄悄改成以时起卦；
+  MCP 顶层的 `place` / `timezone` / `sex` / `latitude` 被 SDK 丢掉而 schema 写着 `additionalProperties: true`；确认位传 `"true"` 被闸门当成没确认、反复追问。
+- **根因**：归一化只认识「它会改写的写法」，认不出的值**原样**留给下游——下游有的报错（星盘后端）、有的用缺省（八字 JS `Number(...)`、
+  神数 `_split_birth_ymdhm` 读不出就 00:00）。校验是各 runner 各写一份（八字 / 档案 / 择日各有一张时区表），所以同一个值的命运取决于技法。
+  MCP 层另有一道：FastMCP 按签名生成的 arg model 在函数体之前丢掉未声明键。
+- **修**：`input_fields.parse_*`（时区 / 时刻 / 日期 / 经纬度 / 性别 / 宫制 / 黄道 / 词表）只有「读懂」与「结构化拒绝」两种结局；
+  `input_normalization.normalize_request_payload(payload, model=…)` 在当事人位置严判、深层引擎结构保留旧的宽松归一；run_tool、MCP、档案共用。
+  每个出问题的字段一条恢复条目（`details.fields` / `agent_recovery.fix_fields`），只有用户才知道的事实（时辰、CST、日月顺序、性别）`must_ask_user`。
+  IANA 名落在夏令时缺口 / 重叠里与地名路径同样拒（`tool.zone_ambiguous`，两个偏移作候选）。MCP：`call_tool` 留原始参数、
+  `_merge_mcp_arguments` 接回未声明键（别名改名、未知键进 warnings 并给近似名），`_gated_run` 先 `precheck_arguments`。
+  八字 / 紫微 / 六壬行年 / 河洛 / 参评 / 一掌经 / 铁板 / 邵子 / 演禽 / 策天 / 七政四余钦 没给性别就拒（`tool.missing_gender`）。
+- **守卫**：`tests/test_input_fields.py`——每个字段一张接受 / 拒绝表（简繁、全角、英文），加一条全目录用例：按 schema 推字段种类、
+  对 114 个技法的每个 date / time / zone / 经纬度 / 性别 字段喂垃圾，必须拒、码对、不得 ok=True（715 例，约 3 s）。负向对照见报告。
+- **规则**：**归一化不是校验**——认不出的值必须当场拒，不能「原样交给下游」：下游总有一处会把它换成缺省值。改写输入一律进 warnings。
+  广告 `additionalProperties: true` 就得真的收下未声明键。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 

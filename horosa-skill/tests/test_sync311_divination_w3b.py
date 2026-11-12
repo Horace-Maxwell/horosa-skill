@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 
 import pytest
+
+from horosa_skill.errors import ToolValidationError
 from test_sync311_divination_w3 import (
     CORE_JS_SRC,
     DOCTRINE_CACHE,
@@ -149,8 +151,10 @@ def test_sixyao_querent_gender_line_follows_the_record(tmp_path) -> None:
     assert "求测人性别：男" in info(_ok(service, "sixyao", SIX))
     assert "求测人性别：女" in info(_ok(service, "sixyao", {**SIX, "gender": 0}))
     assert "求测人性别：女" in info(_ok(service, "sixyao", {**SIX, "gender": "女"}))
-    bad = _run(service, "sixyao", {**SIX, "gender": 2})
-    assert bad.ok is False and bad.error.code == "tool.sixyao_invalid_gender"
+    # v0.50.0：认不出的性别在入口就拒（tool.invalid_gender，带字段级恢复）；runner 的 tool.sixyao_invalid_gender 是第二道闸。
+    with pytest.raises(ToolValidationError) as caught:
+        _run(service, "sixyao", {**SIX, "gender": 2})
+    assert caught.value.code == "tool.invalid_gender"
 
 
 def test_sixyao_drops_skill_only_lines_but_keeps_descriptions(tmp_path) -> None:
@@ -171,6 +175,7 @@ def test_sixyao_incomplete_lines_fail_loudly(tmp_path) -> None:
     five = [{"value": 1, "change": False}] * 5
     env = _run(_service(tmp_path), "sixyao", {**SIX, "lines": five})
     assert env.ok is False and env.error.code == "tool.sixyao_invalid_lines"
+    assert env.error.details["fields"][0]["field"] == "lines"  # v0.50.0：逐字段恢复条目
 
 
 @requires_upstream

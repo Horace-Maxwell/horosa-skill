@@ -38,7 +38,7 @@ class LiuRengGodsInput(FlexibleModel):
 
 
 class LiuRengRunYearInput(LiuRengGodsInput):
-    gender: bool | None = True
+    gender: bool | None = None  # v0.50.0：行年男女起点不同，缺省不再是男，没给就拒绝（tool.missing_gender）
     guaYearGanZi: str | None = None
     guaDate: str | None = None
     guaTime: str | None = None
@@ -390,8 +390,9 @@ class LingqiInput(BirthInput):
 
 
 class SixYaoLineInput(FlexibleModel):
+    # value：0 阴 / 1 阳，或铜钱值 6 老阴（动）/ 7 少阳 / 8 少阴 / 9 老阳（动）（v0.50.0，service/text/chinese.resolve_sixyao_cast）。
     value: int | bool
-    change: bool | None = False
+    change: bool | None = None  # None = 没给（铜钱值自带动静）；0/1 爻缺省静
     god: str | None = None
     name: str | None = None
 

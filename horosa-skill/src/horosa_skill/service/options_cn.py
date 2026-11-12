@@ -595,16 +595,27 @@ def _split_birth_ymdhm(payload: dict[str, Any]) -> dict[str, int]:
     # rather than silently substituting a default (which would compute a chart for the wrong moment).
     # 上游 kinAstroFieldsSync / fieldsDateTime.parseFieldsDateTime：年走 parseDateParts（带符号显示年，公元前 -500、
     # 五位年原样）。旧 strptime 只认 1–9999 年外推格里历：公元前 / 五位年整盘拒收，1582 年前的儒略历闰日（如 1500-02-29）
-    # 也被拒。日期须是民用历上存在的日子（2 月 30 日、改历缺口 1582-10-05…14 仍报错）；时刻缺省或认不出 = 00:00
-    # （与旧 strptime 三格式逐级回落同口径）。
+    # 也被拒。日期须是民用历上存在的日子（2 月 30 日、改历缺口 1582-10-05…14 仍报错）。时刻缺省 = 00:00（模型缺省
+    # '00:00:00'，留给维护者定）；**给了却认不出 / 越界的时刻报错**（v0.50.0）：旧代码把「20点48」「abc」读成 00:00 而盘头照印
+    # 用户原文，与 AGENTS §5.3「解析失败不许换成默认值」相反——入口的逐字段校验现在先把 20点48 读成 20:48:00，这里是第二道闸。
     date_raw = f"{payload.get('date', '')}".strip()
-    time_raw = f"{payload.get('time', '')}".strip()
+    time_raw = f"{payload.get('time') or ''}".strip()
     parts = _parse_date_parts(date_raw) if date_raw and not any(ch.isspace() for ch in date_raw) else None
     if parts is not None and _civil_ymd_exists(*parts):
         time_match = _SPLIT_TIME_RE.match(time_raw)
+        if time_raw and not time_match:
+            raise ToolValidationError(
+                bilingual(f"认不出神数起盘时刻：time={payload.get('time')!r}（HH:MM[:SS]）。", f"Unrecognized shenshu time: time={payload.get('time')!r} (HH:MM[:SS])."),
+                code="tool.invalid_time",
+                details={"field": "time", "got": payload.get("time"), "expected": "HH:MM[:SS]", "example": "08:30:00"},
+            )
         hour, minute, second = (int(g or 0) for g in time_match.groups()) if time_match else (0, 0, 0)
         if hour > 23 or minute > 59 or second > 59:
-            hour = minute = 0
+            raise ToolValidationError(
+                bilingual(f"神数起盘时刻越界：time={payload.get('time')!r}。", f"Shenshu time out of range: time={payload.get('time')!r}."),
+                code="tool.invalid_time",
+                details={"field": "time", "got": payload.get("time"), "expected": "00:00:00–23:59:59", "example": "08:30:00"},
+            )
         return {"year": parts[0], "month": parts[1], "day": parts[2], "hour": hour, "minute": minute}
     raise ToolValidationError(
         f"无法解析神数起盘日期/时间：date={payload.get('date')!r} time={payload.get('time')!r}。"

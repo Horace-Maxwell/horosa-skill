@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
@@ -9,19 +10,17 @@ from typing import Any
 from pydantic import ValidationError
 
 from horosa_skill import __version__
-from horosa_skill.agent_guidance import (
-    build_tool_input_contract,
-    build_validation_recovery,
-)
+from horosa_skill.agent_guidance import build_tool_input_contract
 from horosa_skill.decisions.layer import decision_records
 from horosa_skill.engine.registry import (
     TOOL_DEFINITIONS,
     ToolDefinition,
     resolve_tool_name,
 )
-from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual, validation_errors
+from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.exports import build_export_registry, parse_export_content
-from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.input_fields import input_notes_scope
+from horosa_skill.input_normalization import field_issues_error, normalize_request_payload, tool_error_from_validation
 from horosa_skill.knowledge import (
     build_knowledge_registry,
     read_knowledge_entry,
@@ -35,6 +34,7 @@ from horosa_skill.service._context import (
     without_presentation_keys,
 )
 from horosa_skill.service.api.place import place_caveat_notes, place_resolution_note
+from horosa_skill.service.text.predictive import _PERIOD_PREDICTIVE_TOOLS
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.envelope import (
     _apply_response_view,
@@ -64,6 +64,53 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
     return envelope
 
 
+# 结果随性别而变（大运 / 大限 / 行年顺逆、条文分男女）的技法：没有性别不起盘（v0.50.0，tool.missing_gender）。旧行为是悄悄按男命
+# 排（紫微 / 八字直断 / 六壬行年的 schema 缺省 True；八字、河洛、参评、一掌经走上游「未知(按男排)」；神数五支后端缺省男）。
+# 太乙不在内：它多用于事件局，性别只进命法段，闸门照常追问（tool_table 的 sex 选项含「事件局/不指定」）。
+GENDER_DEPENDENT_TOOLS = frozenset({
+    "bazi_birth", "bazi_direct", "ziwei_birth", "liureng_runyear", "heluo", "canping", "yizhangjing",
+    "tieban", "shaozi", "xianqin", "cetian", "qizhengkin",
+})
+
+
+# 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。
+_INSIDE_TECHNIQUE: ContextVar[bool] = ContextVar("horosa_inside_technique", default=False)
+
+
+def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
+    target = payload.get("datetime")
+    if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
+        # 只给年份的目标时刻只对「有那一年含义」的技法成立（返照 / 流年 / 小限 / 太阳弧，见 enrich._apply_yearly_target）。
+        raise field_issues_error([{
+            "field": "datetime", "code": "tool.invalid_datetime", "got": target,
+            "expected": bilingual("YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS", "YYYY-MM-DD or YYYY-MM-DD HH:MM:SS"), "example": f"{target}-01-01 12:00:00",
+            "ask_user": False, "message": bilingual(f"`{tool_name}` 的目标时刻要具体到日期：只给年份「{target}」不知道是哪一天。",
+                                                   f"`{tool_name}` needs a target date, not just the year '{target}'."),
+        }])
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    if payload.get("gender") is None and options.get("gender") is not None:
+        # 神数旧写法：性别写在 options 里（runner 会提升到顶层）——同一个解析器判它，认得就算给了。
+        from horosa_skill.input_fields import FieldIssue, parse_gender
+
+        try:
+            parse_gender(options["gender"])
+        except FieldIssue as issue:
+            raise field_issues_error([{"field": "options.gender", "code": issue.code, "got": options["gender"],
+                                       "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
+                                       "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
+        return
+    if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None and not _INSIDE_TECHNIQUE.get():
+        raise field_issues_error([{
+            "field": "gender", "code": "tool.missing_gender", "got": None,
+            "expected": bilingual("1 / 男 / 乾造 = 男；0 / 女 / 坤造 = 女", "1 / 男 / male = male; 0 / 女 / female = female"),
+            "example": 1, "ask_user": True, "options": [{"value": 1, "label": "男 / male"}, {"value": 0, "label": "女 / female"}],
+            "message": bilingual(
+                f"`{tool_name}` 的结果随性别而变（大运 / 大限顺逆、条文分男女），没有性别不起盘：请向用户问性别，不要默认成男。",
+                f"`{tool_name}` depends on gender (direction of the luck cycles, gendered verses); ask the user instead of assuming male.",
+            ),
+        }])
+
+
 @dataclass
 class _ToolCall:
     """一次 run_tool 的现场。`input_normalized` 放这里而不是局部变量：计算途中它会被重新绑定（上游推运缺省、印度流派预设），
@@ -79,9 +126,12 @@ class _ToolCall:
     # 载荷里 `place` 的解析记录（service/api/place.py）：技法卡 place_resolution（结构化）+ summary 一行（中性说明），
     # 只有要提醒的事（旧称 / 核对不了的限定词 / 没补上的时区）进 warnings——warnings 在 dispatch 里算「降级」。不进引擎请求。
     place_records: list[dict[str, Any]] = field(default_factory=list)
+    # 入参解读说明（input_fields.add_input_note：别名改名、东八区 → +08:00、未知参数…）：成功 / 失败信封的 warnings 都回显。
+    input_notes: list[str] = field(default_factory=list)
 
     @property
     def place_notes(self) -> list[str]:
+        """地名解析的中性说明：进 summary（紧跟标题行），不算降级。入参解读说明（input_notes）另进 warnings。"""
         return [place_resolution_note(record) for record in self.place_records]
 
     @property
@@ -102,7 +152,7 @@ def _failure_envelope(call: _ToolCall, *, summary: str, code: str, message: str,
         input_normalized=call.input_normalized,
         data={},
         summary=[summary, *([profile_line] if profile_line else []), *call.place_notes],
-        warnings=[*call.place_caveats, *call.degrade_notes],
+        warnings=[*call.input_notes, *call.place_caveats, *call.degrade_notes],
         memory_ref=None,
         error=ErrorInfo(code=code, message=message, details=details),
         code=code,
@@ -323,32 +373,29 @@ class ToolsAPI:
         except ToolValidationError as exc:
             trace["error_code"] = exc.code
             raise
+        raw_payload = payload if isinstance(payload, dict) else {}  # 含 placeResolution：缺 zone 的提示要知道 place 给过
         payload, place_records = self.pop_place_records(payload)
         try:
-            payload = normalize_request_payload(payload)
+            # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
+            # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。
+            payload = normalize_request_payload(payload, model=definition.input_model)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
             knowledge_selection = None
             if isinstance(payload, dict) and "knowledge" in payload:
                 payload = dict(payload)
                 knowledge_selection = payload.pop("knowledge")
             validated = definition.input_model.model_validate(payload)
+        except ToolValidationError as exc:
+            trace["error_code"] = exc.code
+            raise
         except ValidationError as exc:
-            trace["error_code"] = "tool.invalid_payload"
-            errors = validation_errors(exc)
-            raise ToolValidationError(
-                f"Invalid payload for tool `{tool_name}`.",
-                code="tool.invalid_payload",
-                details={
-                    "errors": errors,
-                    "agent_recovery": build_validation_recovery(
-                        operation_name=f"tool.{tool_name}",
-                        tool_name=tool_name,
-                        errors=errors,
-                    ),
-                },
-            ) from exc
+            error = tool_error_from_validation(exc, tool_name=tool_name, payload=raw_payload)
+            trace["error_code"] = error.code
+            raise error from exc
+        input_normalized = validated.model_dump(exclude_none=True)
+        _require_result_facts(tool_name, input_normalized)
         return (
-            _apply_chart_request_defaults(tool_name, validated.model_dump(exclude_none=True)),
+            _apply_chart_request_defaults(tool_name, input_normalized),
             knowledge_selection,
             profile_uses,
             place_records,
@@ -420,7 +467,7 @@ class ToolsAPI:
         # 不静默：调用方能看到「结果不完整」而 ok 仍为 True（优雅降级 ≠ 无声降级）。
         # 地名解析一行紧跟标题行（标题仍是 summary[0]：dispatch 只取每个子结果的 summary[:1]）。
         summary = [*summary[:1], *call.place_notes, *summary[1:]]
-        warnings: list[str] = list(call.place_caveats)
+        warnings: list[str] = [*call.input_notes, *call.place_caveats]
         if call.place_records and isinstance(response_data, dict) and isinstance(response_data.get("technique_card"), dict):
             # 技法卡在存档之前就挂好了（_compute_tool_result）；这里补上「地点是怎么来的」，同一份存进 memory。
             response_data["technique_card"]["place_resolution"] = [
@@ -541,7 +588,7 @@ class ToolsAPI:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), _run_tool_scope() as depth:
+        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), _run_tool_scope() as depth, input_notes_scope(fresh=_INSIDE_TECHNIQUE.get()) as input_notes:
             nested = depth > 1
             if nested:
                 # runner 拼子盘的调用：展示键不是算法输入，摘掉再算（见 _context.PRESENTATION_KEYS）。
@@ -549,10 +596,15 @@ class ToolsAPI:
             input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
-                profile_uses=profile_uses, place_records=place_records,
+                profile_uses=profile_uses, place_records=place_records, input_notes=input_notes,
             )
             try:
-                envelope = self._success_envelope(call, self._compute_tool_result(call))
+                inside = _INSIDE_TECHNIQUE.set(True)
+                try:
+                    computed = self._compute_tool_result(call)
+                finally:
+                    _INSIDE_TECHNIQUE.reset(inside)
+                envelope = self._success_envelope(call, computed)
             except HorosaSkillError as exc:
                 trace["error_code"] = exc.code
                 envelope = _failure_envelope(
