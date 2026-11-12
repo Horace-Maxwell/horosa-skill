@@ -6,15 +6,17 @@ def build_sample_payloads() -> dict[str, dict]:
         "agent_confirmed_settings": True,
         "clarification_notes": "self-check fixture with explicit test settings",
     }
+    # 南半球样例 = 惠灵顿（新西兰）。坐标与时区取自地名库（place=「惠灵顿」，2028-04-06：新西兰夏令时 04-02 已结束 → +12:00），
+    # 不手写：此前纬度写成北纬 41n26、gpsLat 却是 -41.43，经度 174w30（西经）而惠灵顿在东经，时区 +00:00——三处互相矛盾。
     base_birth = {
         **confirmed,
         "date": "2028/04/06",
         "time": "09:33:00",
-        "zone": "+00:00",
-        "lat": "41n26",
-        "lon": "174w30",
-        "gpsLat": -41.433333,
-        "gpsLon": -174.5,
+        "zone": "+12:00",
+        "lat": "41s17",
+        "lon": "174e46",
+        "gpsLat": -41.28664,
+        "gpsLon": 174.77557,
         "hsys": 1,
         "tradition": False,
         "predictive": True,
