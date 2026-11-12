@@ -202,8 +202,10 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     "profile.invalid_payload": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "horosa_profile 的参数由调用方给：action = save / get / list / delete，save / get / delete 要带 name，data 是对象。",
-            "horosa_profile arguments come from the caller: action = save / get / list / delete; save / get / delete need a name; data is an object.",
+            "horosa_profile 的参数由调用方给：action = save / get / list / delete / rename，除 list 外都要带 name，data 是对象"
+            "（rename 的新名放 data.new_name）。",
+            "horosa_profile arguments come from the caller: action = save / get / list / delete / rename; all but list need a name; "
+            "data is an object (rename takes data.new_name).",
         ),
         "next_action": "fix_payload_fields_and_retry",
     },

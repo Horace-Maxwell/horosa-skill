@@ -255,7 +255,7 @@ class ToolsAPI:
         return store
 
     def profile(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """门面 horosa_profile：命主档案 save / get / list / delete（CLI `profile` 走同一个函数）。"""
+        """门面 horosa_profile：命主档案 save / get / list / delete / rename（CLI `profile` 走同一个函数；export / import 只在 CLI）。"""
         payload, resolution = self._profile_place_coordinates(payload)
         result = birth_profiles.run_action(self.profiles, payload)
         if resolution is not None:
@@ -277,10 +277,11 @@ class ToolsAPI:
             return payload, None
         if any(data.get(key) not in (None, "") for key in ("lat", "lon", "gpsLat", "gpsLon")):
             return payload, None
-        previous = next(
-            (p for p in self.profiles.all() if birth_profiles.name_key(p.name) == birth_profiles.name_key(payload.get("name") or "")),
-            None,
-        )
+        rows = self.profiles.all()
+        wanted = payload.get("name") or ""
+        # 与 save 同一套「同一个人」：精确名优先，再繁简折叠（媽媽 = 妈妈）。
+        previous = next((p for p in rows if birth_profiles.name_key(p.name) == birth_profiles.name_key(wanted)), None) or next(
+            (p for p in rows if birth_profiles.store_key(p.name) == birth_profiles.store_key(wanted)), None)
         if previous is not None and previous.place == label and any(k in previous.fields for k in ("lat", "gpsLat")):
             return payload, None
         dated = {**(previous.fields if previous is not None else {}), **{k: v for k, v in data.items() if v is not None}}

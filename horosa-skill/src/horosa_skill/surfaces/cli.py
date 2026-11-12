@@ -921,23 +921,58 @@ def knowledge_restore(
     _print_json({"ok": True, **restored})
 
 
-@app.command(help="Saved birth profiles on this machine: `profile list [--detail]` / `profile get <name>` / `profile save <name> --input data.json` / `profile delete <name>`. 命主档案（存了以后技法载荷带 profile=名字 即可）。")
+@app.command(help="Saved birth profiles on this machine: `profile list [--detail]` / `profile get <name>` / `profile save <name> --input data.json` / `profile delete <name>` / `profile rename <name> --to <new>` / `profile export [--output file.json]` / `profile import --input file.json [--overwrite]`. 命主档案（存了以后技法载荷带 profile=名字 即可）。")
 def profile(
-    action: str = typer.Argument(..., help="save | get | list | delete"),
-    name: Optional[str] = typer.Argument(None, help="Profile name or alias (save / get / delete)."),
-    stdin: bool = typer.Option(False, "--stdin", help="save: read the data object (date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes) from stdin."),
-    input_file: Optional[Path] = typer.Option(None, "--input", help="save: read the data object from a JSON file."),
+    action: str = typer.Argument(..., help="save | get | list | delete | rename | export | import"),
+    name: Optional[str] = typer.Argument(None, help="Profile name or alias (save / get / delete / rename)."),
+    stdin: bool = typer.Option(False, "--stdin", help="save / import: read the JSON object from stdin."),
+    input_file: Optional[Path] = typer.Option(None, "--input", help="save: the data object (date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes); import: a `profile export` file."),
     detail: bool = typer.Option(False, "--detail", help="list: include each profile's birth fields."),
+    to: Optional[str] = typer.Option(None, "--to", help="rename: the new name. 新名字。"),
+    output: Optional[Path] = typer.Option(None, "--output", help="export: write the JSON to this file (UTF-8) instead of stdout. The file holds private birth data and notes."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="import: update profiles that already exist (default: skip them)."),
 ) -> None:
+    if action in ("export", "import"):
+        _profile_portability(action, stdin=bool(_opt(stdin, False)), input_file=_opt(input_file, None), output=_opt(output, None),
+                             overwrite=bool(_opt(overwrite, False)))
+        return
     body: dict[str, Any] = {"action": action, "name": name, "detail": bool(_opt(detail, False)) or None}
     if stdin or input_file is not None:
         body["data"] = _load_payload(stdin=stdin, input_file=input_file)
+    if action == "rename":
+        body["data"] = {**(body.get("data") or {}), "new_name": _opt(to, None)}
     try:
         # 与门面 horosa_profile 同一个入口：save 只给地名时要先解析出坐标与时区（直接调 run_action 会把地名当纯标签存下）。
         result = _service().profile(body)
     except ToolValidationError as exc:
         _refuse(exc)
     _print_json(result)
+
+
+def _profile_portability(action: str, *, stdin: bool, input_file: Optional[Path], output: Optional[Path], overwrite: bool) -> None:
+    """`profile export` / `profile import`：命主档案整库导出 / 导入 JSON（MCP 面暂不开）。"""
+    from horosa_skill.profiles import export_profiles, import_profiles
+
+    store = _service().profiles
+    try:
+        if action == "export":
+            document = export_profiles(store)
+            if output is not None:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                _print_json({"ok": True, "action": "export", "count": document["count"], "path": str(output)})
+                return
+            _print_json(document)
+            return
+        if not stdin and input_file is None:
+            raise ToolValidationError(
+                bilingual("import 要给 --input <file.json> 或 --stdin（profile export 的输出）。",
+                          "import needs --input <file.json> or --stdin (the output of profile export)."),
+                code="profile.invalid_payload", details={"field": "input"},
+            )
+        _print_json(import_profiles(store, _load_payload(stdin=stdin, input_file=input_file), overwrite=overwrite))
+    except ToolValidationError as exc:
+        _refuse(exc)
 
 
 @app.command(help='Natural-language routing: JSON {query, birth|subject|flat birth fields, …} → picks and runs the right techniques. 自然语言路由起盘。')

@@ -110,3 +110,15 @@ def test_cli_profile_save_resolves_the_place_like_the_facade(
     assert saved["place_resolution"]["status"] == "resolved"
     fields = saved["profile"]["payload"]
     assert (fields["lat"], fields["lon"], fields["zone"]) == ("31n13", "121e28", "+09:00")
+
+
+@requires_engine
+def test_saving_by_place_name_goes_through_the_acceptance_rule(tmp_path: Path) -> None:
+    """v0.50.0：档案按地名存坐标也走 skill 接受规则——NYC 是纽约（以前上游 high 给银川），St. Petersburg 要问用户。"""
+    service = _service(tmp_path)
+    saved = _save(service, "老同学", {"date": "1988-07-01", "time": "08:00", "place": "NYC"})
+    assert saved["place_resolution"]["name"] == "纽约" and saved["place_resolution"]["matched_by"] == "alias"
+    assert _stored(service, "老同学")["payload"]["zone"] == "-04:00"
+    with pytest.raises(ToolValidationError) as exc:
+        _save(service, "表哥", {"date": "1988-07-01", "time": "08:00", "place": "St. Petersburg"})
+    assert exc.value.code == "place.ambiguous" and len(exc.value.details["candidates"]) == 2

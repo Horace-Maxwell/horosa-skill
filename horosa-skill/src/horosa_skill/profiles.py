@@ -5,8 +5,13 @@ AI 客户端每开一个新对话就忘了上一次的出生信息；档案放�
 
 规则（每条都有测试）：
 - 只存出生事实：date / time / zone / lat / lon（+ gpsLat / gpsLon）/ ad / gender / timeAlg / cnUnifiedZone，外加
-  aliases（别名）、place（地点文字标签，**不解析**成坐标）、notes（备注，永不回显进技法结果）。宫制、流派、日界这类
-  口径不是档案字段：它们每次调用由澄清闸问（铁律 2 不动）；save 收到这类键只报 `ignored_fields`，不存。
+  aliases（别名）、place（地点文字）、notes（备注，永不回显进技法结果）。宫制、流派、日界这类口径不是档案字段：它们每次
+  调用由澄清闸问（铁律 2 不动）；save 收到这类键只报 `ignored_fields`，不存。
+- place：save 只给地名、没给经纬度时，门面（service/api/tools.py `_profile_place_coordinates`）用技法同一条地名解析
+  （含 v0.50.0 接受规则）把坐标与按出生日期的 zone **解析并存进档案**，地名本身照留作标签；歧义 / 找不到照常拒绝。
+  给了经纬度就只存标签。本模块自己不解析地名（下层，不碰引擎）。
+- 档案名：查找键折叠全角 / 大小写 / 空白，并**折叠繁简**（「媽媽」与「妈妈」是同一份档案；显示名保留第一次存的写法）。
+  v0.50.0 之前存下的「妈妈」「媽媽」两条照旧各自可取（精确名优先），不自动合并；用 rename / delete 自己整理。
 - save 用技法同一套归一化（input_normalization）校验：日期不存在、时刻越界、经纬度越界 → `tool.invalid_payload`；
   时区认不出 → `tool.invalid_zone`。按名字合并更新（给 null 删一个字段），返回 previous 作为撤销依据。
 - 并进载荷时**显式字段逐键优先**（lat 与 gpsLat、lon 与 gpsLon 各算一组）；档案只给它存了的字段，没存的照旧缺、
@@ -81,6 +86,8 @@ class Profile:
     notes: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    # 库里这一行的主键（v0.50.0 前 = name_key(name)，之后 = store_key(name)）：更新 / 删除 / 改名按它定位。
+    key: str = field(default="", compare=False)
 
     def summary(self) -> dict[str, Any]:
         return {"name": self.name, "aliases": list(self.aliases)}
@@ -116,16 +123,29 @@ class ProfileUse:
 
 
 def _invalid(errors: list[dict[str, Any]], zh: str, en: str) -> ToolValidationError:
-    from horosa_skill.agent_guidance import build_validation_recovery
+    """出生字段写坏了 / 缺了：要问用户（must_ask_user=true），不是 AI 自己能补的字段。说清是「写法不对」还是「缺」，
+    并点名真实的工具 horosa_profile（v0.50.0 前这里写的是不存在的 horosa_profile_data，且一律说「请补充」）。"""
+    from horosa_skill.agent_guidance import build_clarification_recovery
 
+    ask: list[dict[str, Any]] = []
+    for error in errors:
+        field_name = str((error.get("loc") or ["data", "?"])[-1])
+        if error.get("type") == "missing":
+            question = bilingual(f"缺 `{field_name}`：{error.get('msg')}。请向用户要，再用 horosa_profile 重存。",
+                                 f"`{field_name}` is missing: {error.get('msg')}. Ask the user, then save again with horosa_profile.")
+        else:
+            question = bilingual(f"`{field_name}` 写法不对：{error.get('msg')}。请与用户核对后用 horosa_profile 重存。",
+                                 f"`{field_name}` is malformed: {error.get('msg')}. Check it with the user, then save again with horosa_profile.")
+        ask.append({"field": f"data.{field_name}", "question": question})
+    recovery = build_clarification_recovery(
+        tool_name="horosa_profile", ask_if_missing=ask[:8],
+        do_not_assume=["Do not guess or reformat a birth date, time, zone or coordinate yourself; ask the user."],
+        reason="invalid_birth_fields",
+    )
     return ToolValidationError(
         bilingual(zh, en),
         code="tool.invalid_payload",
-        details={
-            "errors": errors,
-            # 出生数据是用户的数据：坏了要问用户（must_ask_user=true），不是 AI 自己能补的字段。
-            "agent_recovery": build_validation_recovery(operation_name="horosa_profile_data", errors=errors),
-        },
+        details={"errors": errors, "agent_recovery": recovery},
     )
 
 
@@ -158,6 +178,33 @@ def name_key(text: str) -> str:
     """查找键：NFKC（全角字母数字归半角）+ casefold + 空白折叠。"""
     folded = unicodedata.normalize("NFKC", f"{text}").casefold()
     return " ".join(folded.split())
+
+
+def store_key(text: str) -> str:
+    """档案的身份键（v0.50.0）：name_key 再折繁简（与 resolve_in 第三步、本仓其余繁简折叠同一个 fold_to_simplified）。
+    「媽媽」与「妈妈」是同一个人：save 合并进已有那条，显示名不改写。"""
+    from horosa_skill.textscript import fold_to_simplified
+
+    return name_key(fold_to_simplified(name_key(text)))
+
+
+def _same_person(rows: list[Profile], display: str) -> Profile | None:
+    """save / rename 用：同名档案。精确名（name_key）优先——v0.50.0 前存下的「妈妈」「媽媽」两条各自照旧；只有一条
+    繁简折叠后同名时才并到它；折叠后有两条以上且没有精确的，不替用户挑。"""
+    exact = [p for p in rows if name_key(p.name) == name_key(display)]
+    if exact:
+        return exact[0]
+    folded = [p for p in rows if store_key(p.name) == store_key(display)]
+    if len(folded) > 1:
+        names = [p.name for p in folded]
+        raise ToolValidationError(
+            bilingual(f"「{display}」与已存的 {'、'.join(names)} 繁简折叠后同名：请先用 rename / delete 整理，或用其中一个的原名。",
+                      f"'{display}' folds to the same name as {', '.join(names)}; rename or delete one first, or use one of their exact names."),
+            code="profile.ambiguous",
+            details={"profile": display, "candidates": names, "known_profiles": [p.name for p in rows],
+                     "agent_recovery": {"kind": "input", "next_action": "pick_one_candidate_by_name", "candidates": names}},
+        )
+    return folded[0] if folded else None
 
 
 def _clean_name(value: Any, what: str) -> str:
@@ -202,8 +249,8 @@ def _clean_aliases(value: Any, own_name: str) -> tuple[str, ...]:
 # ───────────────────────────── 出生字段校验 ─────────────────────────────
 
 
-def _error(field_name: str, message: str) -> dict[str, Any]:
-    return {"loc": ["data", field_name], "msg": message, "type": "value_error"}
+def _error(field_name: str, message: str, *, kind: str = "value_error") -> dict[str, Any]:
+    return {"loc": ["data", field_name], "msg": message, "type": kind}
 
 
 def _check_zone(raw: Any, normalized: Any) -> Any:
@@ -422,7 +469,7 @@ class ProfileStore:
             Profile(
                 name=row["name"], fields=json.loads(row["fields_json"] or "{}"),
                 aliases=tuple(json.loads(row["aliases_json"] or "[]")), place=row["place"], notes=row["notes"],
-                created_at=row["created_at"], updated_at=row["updated_at"],
+                created_at=row["created_at"], updated_at=row["updated_at"], key=row["key"],
             )
             for row in rows
         ]
@@ -452,11 +499,11 @@ class ProfileStore:
             raise _request_error("data 须是对象（出生字段 + aliases / place / notes）。",
                                  "data must be an object (birth fields + aliases / place / notes).", field="data")
         unknown = sorted(key for key in data if key not in BIRTH_FIELDS and key not in LABEL_FIELDS)
-        key = name_key(display)
         with self._connect(write=True) as connection:
             assert connection is not None
-            existing = {name_key(p.name): p for p in self._rows(connection)}
-            previous = existing.get(key)
+            rows = self._rows(connection)
+            previous = _same_person(rows, display)
+            key = previous.key if previous is not None else store_key(display)
             fields = dict(previous.fields) if previous else {}
             for field_name in BIRTH_FIELDS:
                 if field_name in data:
@@ -467,7 +514,7 @@ class ProfileStore:
             fields.update({k: v for k, v in data.items() if k in BIRTH_FIELDS and v is not None})
             fields = validate_birth_fields(fields)
             if "date" not in fields:
-                raise _invalid([_error("date", "档案至少要有出生日期 / a profile needs at least a birth date")],
+                raise _invalid([_error("date", "档案至少要有出生日期 / a profile needs at least a birth date", kind="missing")],
                                "档案至少要有出生日期。", "A profile needs at least a birth date.")
             aliases = _clean_aliases(data["aliases"], display) if "aliases" in data else (previous.aliases if previous else ())
             place = _clean_text(data["place"], "place", _PLACE_MAX) if "place" in data else (previous.place if previous else None)
@@ -481,11 +528,16 @@ class ProfileStore:
                 (key, stored_name, json.dumps(fields, ensure_ascii=False), json.dumps(list(aliases), ensure_ascii=False),
                  place, notes, previous.created_at if previous else now, now),
             )
-        saved = Profile(stored_name, fields, aliases, place, notes, previous.created_at if previous else now, now)
+        saved = Profile(stored_name, fields, aliases, place, notes, previous.created_at if previous else now, now, key=key)
         result: dict[str, Any] = {"ok": True, "action": "save", "created": previous is None, "profile": saved.as_dict()}
         if previous is not None:
             result["previous"] = previous.as_dict()
-        warnings = _alias_warnings(saved, [p for k, p in existing.items() if k != key])
+        warnings = _alias_warnings(saved, [p for p in rows if p.key != key])
+        if previous is not None and previous.name != display:
+            warnings.append(bilingual(
+                f"「{display}」与已存的「{previous.name}」是同一份档案（大小写 / 全半角 / 繁简不同），已更新「{previous.name}」，显示名不变。",
+                f"'{display}' is the saved profile '{previous.name}' (case / width / script differ); it was updated and keeps its name.",
+            ))
         if unknown:
             result["ignored_fields"] = unknown
             warnings.append(bilingual(
@@ -500,9 +552,101 @@ class ProfileStore:
         with self._connect(write=True) as connection:
             assert connection is not None
             profile = resolve_in(self._rows(connection), ref)
-            connection.execute("DELETE FROM profiles WHERE key = ?", (name_key(profile.name),))
+            connection.execute("DELETE FROM profiles WHERE key = ?", (profile.key,))
         # 整条交回：要撤销就把它原样 save 回去。
         return {"ok": True, "action": "delete", "deleted": profile.as_dict()}
+
+    def rename(self, ref: Any, new_name: Any) -> dict[str, Any]:
+        """改档案名（出生信息、别名、备注不动）。新名与别的档案（折叠后）同名就拒绝——不合并两个人。只改写法
+        （妈妈 → 媽媽、mom → Mom）也行。撤销：用新名再 rename 回旧名。"""
+        display = _clean_name(new_name, "new_name")
+        with self._connect(write=True) as connection:
+            assert connection is not None
+            rows = self._rows(connection)
+            profile = resolve_in(rows, ref)
+            clash = [p.name for p in rows if p.key != profile.key and store_key(p.name) == store_key(display)]
+            if clash:
+                raise _request_error(
+                    f"已有档案叫「{clash[0]}」（与「{display}」繁简 / 大小写折叠后同名）：换一个名字，或先删掉那一条。",
+                    f"A profile named '{clash[0]}' already exists (same name once script/case are folded): pick another name or delete it first.",
+                    field="new_name", known_profiles=[p.name for p in rows],
+                )
+            new_key = store_key(display)
+            now = _now()
+            connection.execute("UPDATE profiles SET key = ?, name = ?, updated_at = ? WHERE key = ?",
+                               (new_key, display, now, profile.key))
+        renamed = Profile(display, profile.fields, profile.aliases, profile.place, profile.notes, profile.created_at, now, key=new_key)
+        result: dict[str, Any] = {"ok": True, "action": "rename", "previous_name": profile.name, "profile": renamed.as_dict()}
+        warnings = _alias_warnings(renamed, [p for p in rows if p.key != profile.key])
+        if warnings:
+            result["warnings"] = warnings
+        return result
+
+
+EXPORT_FORMAT = "horosa-birth-profiles"
+EXPORT_VERSION = 1
+
+
+def export_profiles(store: ProfileStore) -> dict[str, Any]:
+    """全部档案 → 一个 JSON 文档（CLI `profile export`）。含 notes 与出生信息：是用户的私人数据，文件由用户自己保管。"""
+    items = store.all()
+    return {"format": EXPORT_FORMAT, "version": EXPORT_VERSION, "exported_at": _now(), "count": len(items),
+            "profiles": [item.as_dict() for item in items]}
+
+
+def import_profiles(store: ProfileStore, document: Any, *, overwrite: bool = False) -> dict[str, Any]:
+    """CLI `profile import`：先整份校验（任何一条坏了就一条都不写，报出全部问题），再逐条 save。已有同名档案默认跳过，
+    overwrite=True 才按名合并覆盖（与 save 同一套合并：文件里没有的字段保留）。坐标 / 时区照文件里存的，不重新解析地名。"""
+    if not isinstance(document, dict) or document.get("format") != EXPORT_FORMAT or not isinstance(document.get("profiles"), list):
+        raise _request_error(f"不是档案导出文件：要 {{\"format\": \"{EXPORT_FORMAT}\", \"profiles\": [...]}}（profile export 的输出）。",
+                             f"Not a profile export: expected {{\"format\": \"{EXPORT_FORMAT}\", \"profiles\": [...]}} (the output of profile export).",
+                             field="document")
+    if document.get("version") != EXPORT_VERSION:
+        raise _request_error(f"导出文件版本 {document.get('version')!r} 不认识（本版只读 {EXPORT_VERSION}）。",
+                             f"Unknown export version {document.get('version')!r} (this build reads {EXPORT_VERSION}).", field="version")
+    problems: list[dict[str, Any]] = []
+    planned: list[tuple[str, dict[str, Any]]] = []
+    seen: set[str] = set()
+    for index, item in enumerate(document["profiles"]):
+        try:
+            if not isinstance(item, dict):
+                raise _request_error("每条档案须是对象。", "Each profile must be an object.", field=f"profiles[{index}]")
+            name = _clean_name(item.get("name"), "name")
+            if store_key(name) in seen:
+                raise _request_error(f"文件里「{name}」出现了两次。", f"'{name}' appears twice in the file.", field=f"profiles[{index}].name")
+            seen.add(store_key(name))
+            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            data = {**{k: v for k, v in payload.items() if k in BIRTH_FIELDS},
+                    **{k: item[k] for k in LABEL_FIELDS if item.get(k) is not None}}
+            fields = validate_birth_fields(data)
+            if "date" not in fields:
+                raise _invalid([_error("date", "档案至少要有出生日期 / a profile needs at least a birth date", kind="missing")],
+                               "档案至少要有出生日期。", "A profile needs at least a birth date.")
+            _clean_aliases(data.get("aliases"), name)
+            _clean_text(data.get("place"), "place", _PLACE_MAX)
+            _clean_text(data.get("notes"), "notes", _NOTES_MAX)
+            planned.append((name, data))
+        except ToolValidationError as exc:
+            problems.append({"index": index, "name": item.get("name") if isinstance(item, dict) else None,
+                             "code": exc.code, "message": str(exc), "errors": exc.details.get("errors")})
+    if problems:
+        raise ToolValidationError(
+            bilingual(f"导入文件里有 {len(problems)} 条档案有问题，一条都没写入（details.problems）。",
+                      f"{len(problems)} profile(s) in the file are invalid; nothing was imported (details.problems)."),
+            code="profile.invalid_payload",
+            details={"problems": problems},
+        )
+    existing = {store_key(p.name): p.name for p in store.all()}
+    imported: list[str] = []
+    skipped: list[dict[str, str]] = []
+    for name, data in planned:
+        if store_key(name) in existing and not overwrite:
+            skipped.append({"name": name, "existing": existing[store_key(name)], "reason": "exists"})
+            continue
+        imported.append(store.save(name, data)["profile"]["name"])
+    return {"ok": True, "action": "import", "imported": imported, "skipped": skipped,
+            **({"hint": bilingual("已有同名档案的条目被跳过；要覆盖请加 --overwrite。",
+                                  "Profiles that already exist were skipped; pass --overwrite to update them.")} if skipped else {})}
 
 
 USE_HINT = (
@@ -512,7 +656,8 @@ USE_HINT = (
 
 
 def run_action(store: ProfileStore, payload: Any) -> dict[str, Any]:
-    """horosa_profile / CLI `profile`：save / get / list / delete。"""
+    """horosa_profile / CLI `profile`：save / get / list / delete / rename（rename 的新名放 data.new_name）。
+    export / import 只在 CLI（profile export / profile import），MCP 面暂不开（留给维护者定）。"""
     from pydantic import ValidationError
 
     from horosa_skill.errors import validation_errors
@@ -521,8 +666,8 @@ def run_action(store: ProfileStore, payload: Any) -> dict[str, Any]:
     try:
         request = ProfileInput.model_validate(payload if isinstance(payload, dict) else {})
     except ValidationError as exc:
-        raise _request_error("命主档案的参数不对：action 取 save / get / list / delete，save/get/delete 要给 name。",
-                             "Invalid horosa_profile payload: action is save / get / list / delete; save/get/delete need a name.",
+        raise _request_error("命主档案的参数不对：action 取 save / get / list / delete / rename，除 list 外都要给 name。",
+                             "Invalid horosa_profile payload: action is save / get / list / delete / rename; all but list need a name.",
                              errors=validation_errors(exc)) from exc
     if request.action == "list":
         items = store.all()
@@ -535,6 +680,12 @@ def run_action(store: ProfileStore, payload: Any) -> dict[str, Any]:
                              known_profiles=store.names())
     if request.action == "delete":
         return store.delete(request.name)
+    if request.action == "rename":
+        new_name = (request.data or {}).get("new_name")
+        if _blank(new_name):
+            raise _request_error("rename 要在 data.new_name 给新名字。", "rename needs the new name in data.new_name.",
+                                 field="data.new_name", known_profiles=store.names())
+        return {**store.rename(request.name, new_name), "use": USE_HINT}
     return {"ok": True, "action": "get", "profile": store.resolve(request.name).as_dict(), "use": USE_HINT}
 
 
