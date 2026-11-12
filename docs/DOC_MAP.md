@@ -32,8 +32,9 @@
 | `docs/WINDOWS_RELEASE_BUILD_PROMPT.md` | Windows 半边派生的操作提示 | 派生流水线变化 | 人工 |
 | `docs/WINDOWS_REPORT_STABILITY_PROMPT.md` | Windows 报告稳定性排查提示 | 报告渲染路径变化 | 人工 |
 | `docs/templates/HANDOFF_TEMPLATE.md` | 会话交接文件模板（复制成 `HANDOFF-*.local.md`，不提交） | 交接协议变化 | 人工 |
-| `skills/horosa-agent/SKILL.md` | AI 客户端行为唯一策略源 | 闸门 / 入参 / 段契约 / 工具面变化 | `check_frontmatter`、`check_tool_coverage`、`check_pinned_install_commands` |
-| `skills/horosa-agent/references/payloads.md` | 各技法载荷参考 | 入参变化 | 人工（随 SKILL） |
+| `skills/horosa-agent/SKILL.md` | AI 客户端行为唯一策略源 | 闸门 / 入参 / 段契约 / 工具面变化 | `check_frontmatter`、`check_tool_coverage`、`check_pinned_install_commands`、`tests/test_skill_examples.py`（```call 示例）、`tests/test_skill_shell_contract.py` |
+| `skills/horosa-agent/references/techniques.md` | 技法选择与各技法特有入参 | 新增技法 / 技法入参或缺省变化 | 人工；```call 示例由 `tests/test_skill_examples.py` 守 |
+| `skills/horosa-agent/references/payloads.md` | 各技法载荷参考 | 入参变化 | 人工（随 SKILL）；```call 示例由 `tests/test_skill_examples.py` 守 |
 | `skills/horosa-agent/references/reports.md` | 报告输出参考 | 报告工具变化 | 人工 |
 | `skills/horosa-agent/references/troubleshooting.md` | 客户端排障 | 错误码 / doctor 变化 | 人工 |
 | `skills/horosa-agent/references/chinese-methods.md` | 中式技法口径 | 缺省 / 流派变化 | 人工 |

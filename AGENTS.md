@@ -88,7 +88,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 ## 3. AI 客户端行为（属主 = SKILL.md，本节只留一行版）
 
 客户端行为规则的**唯一策略源**是 [`skills/horosa-agent/SKILL.md`](./skills/horosa-agent/SKILL.md)
-（分册：`references/{payloads,late-zi,predictive,chinese-methods,reports,troubleshooting}.md`）。速查：
+（分册：`references/{techniques,payloads,late-zi,predictive,chinese-methods,reports,troubleshooting}.md`）。速查：
 
 - 禁手算 / 禁 `Exec` / 禁网搜公式；只从返回的 `export_snapshot.export_text` + `export_format.sections` +
   `summary` 解释，缺什么就说本地未返回该段，不发明依赖。
@@ -113,6 +113,9 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
 - 每个技法的 `input_contract.example_payload` 都有（`tool list` / guidance 里）：手写的预测族 9 个之外取 `testing_payloads`
   的 live 样例；样例要保持 live 可跑（section_harness 每次发布前跑全 110）。精简面的 server instructions 有独立变体
   （`_server_instructions(compact=True)`），两态都锁 ≤ 2048 字节。
+- **示例即契约（v0.50.0）**：SKILL.md 与 references 里的调用示例只写在 ```call 块（一行 `<工具名> <JSON>`，`<run_id>` 占位），
+  `tests/test_skill_examples.py` 离线逐条对工具面 / 广告 schema / 字段名 / 逐字段校验 / 闸门；新示例先对共享引擎真跑。SKILL.md 给最弱的客户端读：
+  维护者与安装材料不进正文（进 references 或 README），长度只减不增。
 - 大六壬默认 `guirengType: 2`（星占法贵人）；0/1 需用户明说或既有案例指定。
 - 预测类光有本命数据不够：必须有目标 `datetime` / `dirZone` / `dirLat` / `dirLon` / PD 方法设置
   （逐工具契约表：`references/predictive.md`）。
@@ -1252,7 +1255,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **工具结果有线上体积预算（v0.46.1）**：官方 MCP SDK 客户端 streamable HTTP 单条 SSE 事件上限 1 MiB，超出整条调用失败。
   `mcp_runner.MCP_RESULT_WIRE_BUDGET`（900 000 B）：转换后超预算时只略去 `data` 里最大的原始子树（说明占位 + `memory show` 指引），
   快照 / 导出段 / 依据卡不动（`tests/test_mcp_result_budget.py`）。加大结果的工具或字段时，用进程内 MCP 客户端量线上字节。
-- **工具面（v0.45.0）**：全量面 = 114 技法 + 11 门面，精简面 = 11 门面 + `horosa_tool_run`。新加的非技法工具做成门面，
+- **工具面（v0.45.0；v0.50.0 计数）**：全量面 = 114 技法 + 13 门面 = 127，精简面 = 13 门面 + `horosa_tool_run` = 14（`FACADE_TOOL_COUNT` / `COMPACT_SURFACE_TOOL_COUNT`）。新加的非技法工具做成门面，
   **别塞进 `TOOL_DEFINITIONS`**（那里每一项都计入技法总数）。检索与精读分两个工具（`horosa_knowledge_search` / `horosa_knowledge_read`）。常驻（`anthropic/alwaysLoad`）：
   guidance / dispatch / tool_run / knowledge_search。报告结果带 `file` 文件卡；MCP 层只给协商到 2025-06-18 及以后的客户端追加
   `resource_link`（老客户端按旧联合类型校验，多一个块可能整条作废）。守卫 `tests/test_mcp_tool_design.py`。
