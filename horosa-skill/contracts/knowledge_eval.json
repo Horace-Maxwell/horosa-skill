@@ -1,5 +1,5 @@
 {
- "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调。heldout 在改检索之前写好、写的时候没看过任何检索结果，只许用来报数，不许按它调；看过就挪走，换一批新的。seen_2026_11_06 是第一批 heldout（0.474 / 0.526 → 0.821 / 0.923），未命中清单看过之后改作 dev 用。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。",
+ "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调。heldout 在改检索之前写好、写的时候没看过任何检索结果，只许用来报数，不许按它调；看过就挪走，换一批新的。seen_2026_11_06 是第一批 heldout（0.474 / 0.526 → 0.821 / 0.923），未命中清单看过之后改作 dev 用。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。 relevance_2026_11_11（深审 K-2）：每条带 top（1 = 必须排第一，3 = 前三），在改排序之前写好、按语料里哪一条专讲这个词选的；改排序时看过它的结果，所以它是调参用的 dev 型集合，heldout 仍不许看。",
  "sets": {
   "dev": [
    {
@@ -2203,6 +2203,885 @@
       "@兄弟"
      ]
     ]
+   }
+  ],
+  "relevance_2026_11_11": [
+   {
+    "q": "用神",
+    "class": "term",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ],
+     [
+      "guazhan",
+      "用神动变"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "四化",
+    "class": "term",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ],
+     [
+      "sanshi",
+      "Ziwei"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "三传",
+    "class": "term",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "四课",
+    "class": "term",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "值符",
+    "class": "term",
+    "want": [
+     [
+      "qimen",
+      "值符"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "值使",
+    "class": "term",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "定局设置"
+     ],
+     [
+      "sanshi",
+      "Qimen"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "八门",
+    "class": "term",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "定局设置"
+     ],
+     [
+      "sanshi",
+      "Qimen"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "三奇",
+    "class": "term",
+    "want": [
+     [
+      "dunjia",
+      "格局断法"
+     ],
+     [
+      "dunjia",
+      "底层逻辑"
+     ],
+     [
+      "dunjia",
+      "灭象·布阵"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "六仪",
+    "class": "term",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "底层逻辑"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "牌阵",
+    "class": "term",
+    "want": [
+     [
+      "tarot",
+      "流派与牌阵"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "逆位",
+    "class": "term",
+    "want": [
+     [
+      "tarot",
+      "读法体系"
+     ],
+     [
+      "tarot",
+      "牌面与判读"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "节气",
+    "class": "term",
+    "want": [
+     [
+      "jieqi",
+      "二十四节气"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "立春",
+    "class": "term",
+    "want": [
+     [
+      "jieqi",
+      "二十四节气"
+     ],
+     [
+      "bazi",
+      "排盘设置"
+     ],
+     [
+      "shusuan",
+      "算法与口径"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "黄历",
+    "class": "term",
+    "want": [
+     [
+      "calendar",
+      "老黄历"
+     ],
+     [
+      "zeri",
+      "黄历择日"
+     ],
+     [
+      "calendar",
+      "总览"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "建除",
+    "class": "term",
+    "want": [
+     [
+      "calendar",
+      "老黄历"
+     ],
+     [
+      "zeri",
+      "黄历择日"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "岁差",
+    "class": "term",
+    "want": [
+     [
+      "india",
+      "岁差·分宫"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "主限法",
+    "class": "term",
+    "want": [
+     [
+      "direction",
+      "主限法"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "太阳弧",
+    "class": "term",
+    "want": [
+     [
+      "germany",
+      "太阳弧 · 校时"
+     ],
+     [
+      "direction",
+      "返照·流年·通用"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "返照",
+    "class": "term",
+    "want": [
+     [
+      "direction",
+      "返照·流年·通用"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "比较盘",
+    "class": "term",
+    "want": [
+     [
+      "relative",
+      "比较盘"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "组合盘",
+    "class": "term",
+    "want": [
+     [
+      "relative",
+      "组合盘"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "中点",
+    "class": "term",
+    "want": [
+     [
+      "germany",
+      "行星中点 · 图形星历"
+     ],
+     [
+      "germany",
+      "90°中点盘"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "动爻",
+    "class": "term",
+    "want": [
+     [
+      "guazhan",
+      "起卦装卦"
+     ],
+     [
+      "guazhan",
+      "用神动变"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "纳甲",
+    "class": "term",
+    "want": [
+     [
+      "guazhan",
+      "起卦装卦"
+     ],
+     [
+      "guazhan",
+      "总览"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "六亲",
+    "class": "term",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "大运",
+    "class": "term",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ],
+     [
+      "india",
+      "大运体系"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "流年",
+    "class": "term",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ],
+     [
+      "ziwei",
+      "四化与运限"
+     ],
+     [
+      "direction",
+      "返照·流年·通用"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "小限",
+    "class": "term",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ],
+     [
+      "direction",
+      "返照·流年·通用"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "调候",
+    "class": "term",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "互容",
+    "class": "term",
+    "want": [
+     [
+      "astro_manual",
+      "界与尊贵"
+     ],
+     [
+      "auxchart",
+      "Horary"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "燃烧",
+    "class": "term",
+    "want": [
+     [
+      "astro_manual",
+      "古典口径"
+     ],
+     [
+      "auxchart",
+      "Horary"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "整宫",
+    "class": "term",
+    "want": [
+     [
+      "astro_manual",
+      "黄道与分宫"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "分宫制",
+    "class": "term",
+    "want": [
+     [
+      "astro_manual",
+      "黄道与分宫"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "天蝎",
+    "class": "term",
+    "want": [
+     [
+      "astro",
+      "Scorpio"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "第七宫",
+    "class": "term",
+    "want": [
+     [
+      "astro",
+      "House7"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "幸运点",
+    "class": "term",
+    "want": [
+     [
+      "astro",
+      "Pars Fortuna"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "八字 用神",
+    "class": "multi",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "紫微 四化",
+    "class": "multi",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "奇门 值使",
+    "class": "multi",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "定局设置"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "六爻 用神",
+    "class": "multi",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "六壬 三传",
+    "class": "multi",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "塔罗 逆位",
+    "class": "multi",
+    "want": [
+     [
+      "tarot",
+      "读法体系"
+     ],
+     [
+      "tarot",
+      "牌面与判读"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "印度 大运",
+    "class": "multi",
+    "want": [
+     [
+      "india",
+      "大运体系"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "八字 大运",
+    "class": "multi",
+    "want": [
+     [
+      "bazi",
+      "行运"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "紫微 流年",
+    "class": "multi",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "合盘 组合盘",
+    "class": "multi",
+    "want": [
+     [
+      "relative",
+      "组合盘"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "八字里的用神怎么选",
+    "class": "question",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "八字裡的用神怎麼選",
+    "class": "question",
+    "want": [
+     [
+      "bazi",
+      "格局用神"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "紫微斗数的四化是什么",
+    "class": "question",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "六爻的用神怎么取",
+    "class": "question",
+    "want": [
+     [
+      "guazhan",
+      "用神动变"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "大六壬的三传怎么起",
+    "class": "question",
+    "want": [
+     [
+      "liureng_manual",
+      "三传八法"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "奇门遁甲的值使是什么意思",
+    "class": "question",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "定局设置"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "塔罗牌逆位怎么解读",
+    "class": "question",
+    "want": [
+     [
+      "tarot",
+      "读法体系"
+     ],
+     [
+      "tarot",
+      "牌面与判读"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "印度占星的岁差怎么选",
+    "class": "question",
+    "want": [
+     [
+      "india",
+      "岁差·分宫"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "二十四节气是怎么算的",
+    "class": "question",
+    "want": [
+     [
+      "jieqi",
+      "二十四节气"
+     ],
+     [
+      "jieqi",
+      "算法与口径"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "主限法是什么",
+    "class": "question",
+    "want": [
+     [
+      "direction",
+      "主限法"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "我想了解一下比较盘",
+    "class": "question",
+    "want": [
+     [
+      "relative",
+      "比较盘"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "primary direction",
+    "class": "english",
+    "want": [
+     [
+      "direction",
+      "主限法"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "solar return",
+    "class": "english",
+    "want": [
+     [
+      "direction",
+      "返照·流年·通用"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "composite chart",
+    "class": "english",
+    "want": [
+     [
+      "relative",
+      "组合盘"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "firdaria",
+    "class": "english",
+    "want": [
+     [
+      "direction",
+      "时主类·子设置"
+     ],
+     [
+      "direction",
+      "逐法一览"
+     ],
+     [
+      "direction",
+      "总览"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "whole sign houses",
+    "class": "english",
+    "want": [
+     [
+      "astro_manual",
+      "黄道与分宫"
+     ],
+     [
+      "astro_manual",
+      "排盘设置"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "lot of fortune",
+    "class": "english",
+    "want": [
+     [
+      "astro",
+      "Pars Fortuna"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "what is a solar arc",
+    "class": "english",
+    "want": [
+     [
+      "germany",
+      "太阳弧 · 校时"
+     ],
+     [
+      "direction",
+      "返照·流年·通用"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "紫微斗數 四化",
+    "class": "traditional",
+    "want": [
+     [
+      "ziwei",
+      "四化与运限"
+     ]
+    ],
+    "top": 1
+   },
+   {
+    "q": "奇門 值使",
+    "class": "traditional",
+    "want": [
+     [
+      "dunjia",
+      "盘面结构"
+     ],
+     [
+      "dunjia",
+      "定局设置"
+     ]
+    ],
+    "top": 3
+   },
+   {
+    "q": "節氣",
+    "class": "traditional",
+    "want": [
+     [
+      "jieqi",
+      "二十四节气"
+     ]
+    ],
+    "top": 1
    }
   ]
  }

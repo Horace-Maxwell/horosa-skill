@@ -101,7 +101,7 @@ def _notice(matches: list[dict[str, Any]]) -> dict[str, str]:
 
 
 # 自备知识库那一路自己说的话，按域检索时原样带出：改写成了什么、封顶前有几段、库是不是空的、哪些文件没读入。
-USER_EXTRAS = ("total_passages", "expanded_query", "library", "suggestions", "warnings")
+USER_EXTRAS = ("total_passages", "expanded_query", "library", "suggestions", "no_match", "warnings")
 
 
 def _search(settings: Any, payload: dict[str, Any], query: str, domain: str, limit: int, offset: int) -> dict[str, Any]:
@@ -127,7 +127,8 @@ def _search(settings: Any, payload: dict[str, Any], query: str, domain: str, lim
             match["more_in_note"] = more.pop(match["key"])
     next_offset = offset + len(page)
     result = {
-        **{key: value for key, value in builtin.items() if key not in ("matches", "total_matched", "limit")},
+        **{key: value for key, value in builtin.items()
+           if key not in ("matches", "total_matched", "limit", "warnings", "suggestions", "no_match")},
         "mode": "search", "query": query, "limit": limit, "offset": offset, "total_matched": total,
         "next_offset": next_offset if next_offset < total else None, **_notice(page), "matches": page,
     }
@@ -136,6 +137,10 @@ def _search(settings: Any, payload: dict[str, Any], query: str, domain: str, lim
     expanded = builtin.get("expanded_query") or mine.get("expanded_query")
     if expanded:
         result["expanded_query"] = expanded
-    if mine.get("warnings"):
-        result["warnings"] = mine["warnings"]
+    warnings = [*builtin.get("warnings", []), *mine.get("warnings", [])]
+    if warnings:
+        result["warnings"] = warnings
+    if not total:  # 两边都没有：建议词取两边的并集，说明照内置那边的（语料是中文写的）
+        suggestions = list(dict.fromkeys([*builtin.get("suggestions", []), *mine.get("suggestions", [])]))[:5]
+        result.update(store.no_match(query, suggestions))
     return result

@@ -1268,6 +1268,44 @@ def _guarded_search(settings: Any, catalog: Catalog, by_id: dict[str, Any], pars
     return result
 
 
+def note_vocabulary(catalog: Catalog) -> frozenset[str]:
+    """笔记自己的词表：标题、标签、小节名（零命中改写切词用，与内置知识用语料自己的词表同一个道理）。"""
+    from horosa_skill.knowledge import index as kindex
+    from horosa_skill.knowledge import retrieval
+
+    raw: set[str] = set()
+    for entry in catalog.entries:
+        raw |= {entry.title, *entry.tags}
+        raw.update(match.group(2) for line in entry.text.splitlines() if (match := kindex.HEADING.match(line)))
+    words: set[str] = set()
+    for item in raw:
+        for part in re.split(r"[\s/·、，,：:；;（）()#]+", retrieval.normalize(item)):
+            if 2 <= len(part) <= 8:
+                words.add(part)
+    return frozenset(words)
+
+
+def _no_match(query: str, catalog: Catalog) -> dict[str, Any]:
+    """笔记里零命中：最接近的笔记标题 / 小节名 / 标签作建议（「我笔记里关于七杀的内容」这种整句也能落到「七杀」）。"""
+    import difflib
+
+    from horosa_skill.knowledge import retrieval
+
+    vocabulary = sorted(note_vocabulary(catalog))
+    text = retrieval.normalize(query).strip()
+    near = difflib.get_close_matches(text, vocabulary, n=5, cutoff=0.5)
+    inside = [word for word in vocabulary if word in text and word not in near]
+    suggestions = list(dict.fromkeys([*sorted(inside, key=len, reverse=True), *near]))[:5]
+    tried = "、".join(suggestions)
+    return {
+        "suggestions": suggestions,
+        "no_match": bilingual(
+            "自备知识库里没有找到" + (f"；相近的词：{tried}。" if suggestions else "：换个说法，或拆成更短的词。"),
+            "Nothing found in your notes" + (f"; closest terms: {', '.join(suggestions)}." if suggestions else "; rephrase or use shorter terms."),
+        ),
+    }
+
+
 MORE_READS = 12  # more_in_note.read 一次最多给几段的精读参数（再多就按 outline 自己翻）
 
 
@@ -1334,7 +1372,7 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
                 return kindex.term_df(settings, by_id, term, use_index=False)
 
         n_docs = int(catalog.index_report.get("chunks") or len(by_id))
-        expanded = retrieval.expand_query(query, retrieval.cached(df), n_docs)
+        expanded = retrieval.expand_query(query, retrieval.cached(df), n_docs, note_vocabulary(catalog))
         if expanded:
             parsed = kindex.parse_query(expanded)
             found = _guarded_search(settings, catalog, by_id, parsed, limit=limit, offset=offset, raw_query=query)
@@ -1358,6 +1396,7 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
             told.add(entry.id)
             matches[-1]["more_in_note"] = _more_in_note(entry, found.hidden[entry.id], kindex.PER_ENTRY_HITS)
     notes = list(found.problems)
+    nothing = {} if found.total or not catalog.entries else _no_match(query, catalog)
     skipped = not_indexed(catalog)
     if skipped:
         # 搜不到的原因可能就是「那个文件根本没读入」：每次检索都说一遍，不只在注册表里。
@@ -1369,6 +1408,7 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
             "engine": _engine(settings, catalog) if found.used_index else "substring",
             **({"expanded_query": expanded} if expanded else {}),
             **({"library": library_status(catalog)} if not catalog.entries else {}),
+            **nothing,
             **({"warnings": notes} if notes else {})}
 
 
