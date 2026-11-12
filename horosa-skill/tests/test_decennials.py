@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from horosa_skill.engine.decennials import build_decennial_timeline, DECENNIAL_TRADITIONAL_PLANETS
 
 
@@ -59,3 +61,29 @@ def test_decennials_hephaistio_day_method_builds_full_order() -> None:
     )
     assert timeline["list"][0]["planet"] == "Sun"
     assert len(timeline["list"][0]["sublevel"]) == 7
+
+
+# ───────────── [十年大运设置] 行星名照上游（v0.50.0 深审余项）─────────────
+# 上游 utils/decennials.js：得时光体括注短名（日 / 月）、起运主星 / 实际起运 / [基于X起运] / 逐期行用长名（太阳 / 木星）；
+# AI 输出模式印选项标签；「名义」区间只在 360 天口径附；宫制印名称；真太阳时只在盘上有时印。此前一律印英文 id 与内部值。
+# 负向对照（实跑过）：start_label / node_line 改回印 id → 本用例红。
+
+@pytest.mark.parametrize("start_mode, calendar, start_line", [
+    ("sect_light", "calendar_360", "起运主星：得时光体（日）"),
+    ("Jupiter", "calendar_365_25", "起运主星：木星"),
+])
+def test_decennial_snapshot_names_planets_like_upstream(start_mode: str, calendar: str, start_line: str) -> None:
+    from horosa_skill.service.text.predictive import _build_decennials_snapshot_text
+
+    response = {
+        "chart": {"isDiurnal": True, "nongli": {}, "zodiacal": "Tropical"},
+        "params": {"birth": "2028-04-06 09:33:00", "lon": "121e28", "lat": "31n13", "zone": "+08:00", "hsys": 1},
+        "timeline": {"resolvedStartPlanet": "Sun", "list": [{"planet": "Jupiter", "date": "2028-04-06 - 2038-11-10", "nominal": "0个月 - 10年9个月"}]},
+    }
+    text = _build_decennials_snapshot_text(response, {"startMode": start_mode, "calendarType": calendar}, {"aiMode": "l1_all"})
+    assert start_line in text
+    assert "实际起运：太阳" in text and "[基于太阳起运]" in text
+    assert "AI输出模式：输出所有L1（年主星+时间）" in text and "宫制：Alcabitus" in text
+    assert "L1-1：木星-2028-04-06 - 2038-11-10" in text
+    assert ("（名义：" in text) == (calendar == "calendar_360")
+    assert "真太阳时" not in text and "Sun" not in text and "Jupiter" not in text

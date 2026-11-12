@@ -246,7 +246,7 @@ def test_custom_terms_without_tables_is_refused_not_silently_egyptian() -> None:
 
 # ───────────── election `topic`：别名经词表（v0.50.0 深审余项）─────────────
 # runner 曾私下 `topicId or topic` 读它：「topic=bogus」悄悄按缺省主题择日，入口却说「没有哪个设置读它」。
-# 负向对照（实跑过）：FIELD_ALIASES 去掉 topic → 两个用例红（bogus 不报错、入宅不读成 move_in）。
+# 负向对照（实跑过）：FIELD_ALIASES 去掉 topic → 别名用例红（bogus 不报错、入宅不读成 move_in）；第二例守「没有规范键不改名」。
 
 def test_election_topic_alias_goes_through_the_vocabulary() -> None:
     from horosa_skill.errors import ToolValidationError
