@@ -11,7 +11,6 @@
     "jev.connection",
     "jev.rate_limited",
     "jev.response_invalid",
-    "js_engine.invalid_json",
     "knowledge.user_bad_range",
     "knowledge.user_too_large",
     "openclaw.native_config.invalid_json",

@@ -258,7 +258,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **修**：跳过原因带七种标签（`tests/skips.py`），未标签即失败、跑完按标签计数，live lane 改白名单；恶意归档逐形状测试；旋钮按代码记号认、基线带上游
   读者指针；豁免名单断言为空、相对 / 动态导入入扫描；真 MCP 客户端并发打六个本地 JS 技法；值金标要求块里调用 `src/tools/<名>.js` 的导出（新补 7 个，债
   15 → 10）；闸门 114 技法 × 四形状的行为录像搬到 `tests/fixtures/gate_matrix.json`；上游路径只认 `HOROSA_SOURCE_ROOT`；错误码只认测试代码里的字面量
-  （还 23 个、四个如实回债，80 → 61）；selfcheck 收尾前再等一次。
+  （还 24 个、四个如实回债，80 → 60）；selfcheck 收尾前再等一次。
 - **守卫**：每一条都配了变异体（把那个缺陷注回去）实跑红：`test_live_lane_skips_are_an_allowlist_not_a_denylist`、`test_runtime_archive_containment.py`（五个变异体）、
   `test_a_substring_or_a_sentence_is_not_a_consumer`、`test_the_scan_sees_relative_and_dynamic_imports`、`test_real_local_techniques_run_concurrently_without_cross_talk`、
   `test_a_tool_named_in_a_title_or_comment_is_not_covered`、`test_every_technique_gate_behaves_as_recorded`、`test_skip_tags.py`、
