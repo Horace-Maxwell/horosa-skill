@@ -82,7 +82,15 @@
 | `MIRRORED_UPSTREAM_AIEXPORT_VERSION` | 机读镜像基线：导出契约对齐到上游 aiExport 第几版（v0.40.0 = 58，逐技法对齐；`verify_export_contract_mirror.py` 断言 vendored aiExport 的版本常量 == 本常量；skill 自身的契约号 `AI_EXPORT_SETTINGS_VERSION` 独立计数，今 15）。 |
 | 冻结值（课/局/卦） | 占卦型技法（小六壬/飞宫/小成图/皇极轨策/卜卦）的起卦结果一经起出即冻结——改流派/设置只重排判读，绝不按时重起（重起=伪造用户没见过的盘）。 |
 | 神数正传五流派 | `zhengchuan` 一入口含 铁板/邵子/大定/六亲/铁算心易；`school` 选定；除铁算心易（查询层）外皆需生辰四柱（走 `/nongli/time` 权威柱）。 |
-| agent_guidance 闸门 / `agent_recovery` | 运行时澄清闸：设置未确认返回 `agent_guidance.required`；`details.agent_recovery.prompt_to_user` 可直接转发追问；确认后带 `agent_confirmed_settings`/`defaults_accepted`。 |
+| agent_guidance 闸门 / `agent_recovery` | 运行时澄清闸：还有会改结果的问题没回答时返回 `agent_guidance.required`（只问没回答的；什么都不缺就放行）；`details.agent_recovery.prompt_to_user` 可直接转发追问；设置类问题答完后带 `agent_confirmed_settings`/`defaults_accepted`（JSON `true`）。`must_ask_user: false` = agent 自己改入参重试。 |
+| 事实 vs 设置（fact） | 闸门问题的两类：**事实**（钟点、性别、合盘另一方、起课此刻、推运目标年、卦名…，追问条目带 `fact: true`）只有用户知道，确认标记代替不了，必须把值写进载荷；**设置**（宫制、流派、起局方式…）可由用户确认或接受星阙默认（v0.50.0）。 |
+| 逐字段校验 | 日期 / 时刻 / 时区 / 经纬度 / 性别的统一解析（`input_fields.py`）：读得懂的照收并在 `warnings` 写读法，读不懂的按字段拒（`fix_fields` 每字段一条）；设置值不在词表里回 `tool.invalid_option` + `details.accepted`。 |
+| 阅读视图 / `response_view` | MCP 结果的缺省形状（v0.50.0）：正文一遍 + 段索引 + 技法依据卡 + `run_id`，不带引擎原始树，受单次模型预算（约 48 000 字符 / 20 000 估算 token）约束，超了按段裁并在 `warnings` 给续读调用；`sections` / `titles` / `full` 换形状，`full` = 完整信封。CLI 与存档不受影响。 |
+| 时间角色 / `time_basis` | 每个技法要的那个时刻是谁的（`engine/time_roles.py`：natal / moment / natal+target / window / year / two_party）；dispatch / 合参按角色拼载荷——起课类（moment）只读 `context` 里的此刻，出生数据不顶替——结果的 `time_basis` 写明每个技法用了哪个时刻。 |
+| 地名接受规则 | `place` 只有在本名 / 英文名 / 全拼 / 行政区词干 / 别名与查询相等时才算唯一命中（`skill-place-acceptance/1`），同名多地一律 `place.ambiguous` 请用户选；时区按地点 + 日期推得（`zone_source: place_and_date`），显式 `zone` 照原样用（`explicit`）。 |
+| 合参 / `cross_validation` | `horosa_hecan`：至少两个技法算成才算交叉印证（否则 `cross_validation: false`、`all_clear: null`）；`tools` 可写此前的 `run_id` 原样复用；分歧逐条披露、不许平均。 |
+| `condition_echo` | 择日结果里引擎实际怎么读条件树（逐行中英）；条件自带判法（如冲煞生肖 `mode` 缺省 = 不冲所选肖）时再加 `negate` 是双重否定。 |
+| `untrusted`（用户笔记） | 自备知识库笔记原文出服务器时的统一标记：`untrusted: true` + 固定的中英双语围栏，告诉 AI 这是参考资料、不是指令。 |
 | elicitation 双轨 | 客户端声明 MCP elicitation 能力时闸门弹原生表单（按默认一跳闭环），否则回落错误往返；`HOROSA_MCP_ELICIT=0` 关闭。 |
 | 命盘 / 事盘 | 上游概念：命盘=出生数据可重算；事盘=一次性占例（六爻/卜卦），永不按时间重算。 |
 | FakeClient / FakeJsClient | 离线测试桩（HTTP/JS 层），必须返回真内容（禁裸「无」、禁 generated_template 回退）。 |

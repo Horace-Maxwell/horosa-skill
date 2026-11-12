@@ -20,7 +20,7 @@
 
 ```bash
 cd horosa-skill
-uv run python scripts/run_ci_gates.py        # 解析 ci.yml test job 的 24 个 `uv run …` 步骤，按 CI 形状（空 runtime 根 + 两个不可达 *_SERVER_ROOT）本机跑一遍
+uv run python scripts/run_ci_gates.py        # 解析 ci.yml test job 的 25 个 `uv run …` 步骤，按 CI 形状（空 runtime 根 + 两个不可达 *_SERVER_ROOT）本机跑一遍
 (cd horosa-core-js && npm test)              # loadcheck（全量 import）+ selfcheck（值级金标）+ handcopy（手抄表审计）
 ```
 

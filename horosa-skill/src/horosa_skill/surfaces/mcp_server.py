@@ -108,24 +108,24 @@ Any request to 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦
 such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
 
 WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)
-· Western: natal + derived charts, 20+ predictive systems (returns, progressions, primary
-  directions, zodiacal releasing, firdaria), horary 卜卦, astrocartography, midpoints.
+· Western: natal + derived charts, 20+ predictive systems, horary 卜卦, astrocartography, midpoints.
 · Chinese: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
-  邵子参评数, 一掌经, 小六壬, 飞宫小奇门, 小成图, 皇极轨策, 统摄法, 宿占, 灵棋经.
+  邵子参评数, 一掌经, 小六壬, 灵棋经 …
 · 择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).
 · 神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.
 
 HOW TO USE IT
-1. Unsure? horosa_agent_guidance / horosa_dispatch. horosa_hecan runs several techniques on one
-   question → cross-validation (divergence disclosed, never averaged).
-2. A tool REFUSES (agent_guidance.required) when a result-changing setting is missing — time, place,
-   timezone, gender, 流派/宫制/起局方式. Ask via details.agent_recovery.prompt_to_user, then retry with
-   agent_confirmed_settings=true (or defaults_accepted=true). Never self-confirm.
-3. Explain ONLY from data.export_snapshot.export_text — never hand-calculate. Text cut? warnings
-   name the horosa_memory_show call for the rest; read it before concluding.
-4. Every result carries data.technique_card — quote it after your answer;
-   horosa_technique_report renders it per run/session.
-5. Runs are stored: horosa_memory_query finds them; horosa_report_render writes DOCX/PDF.
+1. Unsure? horosa_agent_guidance(intent=<user's words>) / horosa_dispatch. horosa_hecan runs 2+
+   techniques on one question → cross-validation (divergence disclosed, never averaged).
+2. Pass place:"上海" (→ coordinates + that date's zone). Cast techniques (奇门/六壬/六爻/塔罗)
+   need the question's moment: you give its date/time/place (dispatch/hecan: context).
+3. agent_guidance.required → ask via details.agent_recovery.prompt_to_user. Settings: retry with
+   agent_confirmed_settings=true (or defaults_accepted=true). Facts (gender, time, moment,
+   other person) go in the payload; no flag replaces them. Never self-confirm.
+4. Explain ONLY from data.export_snapshot.export_text — never hand-calculate. Text cut? warnings give
+   the horosa_memory_show call for the rest; read it first.
+5. Technique results carry data.technique_card — quote it after your answer. Runs are stored
+   (horosa_memory_query); horosa_report_render writes DOCX/PDF.
 
 HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run reaches any technique
 by name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."""
@@ -148,12 +148,9 @@ _JEV_OTLP_CLAIM = (
 )
 _JEV_TRIMS = (
     ("\nsuch a chart. Also 农历/节气/黄历 conversion and celebrity birth data.", "\nsuch a chart, 农历/节气/黄历 conversion, celebrity birth data."),
-    (
-        "· Western: natal + derived charts, 20+ predictive systems (returns, progressions, primary\n  directions, zodiacal releasing, firdaria), horary 卜卦, astrocartography, midpoints.",
-        "· Western: natal + derived charts, 20+ predictive systems, horary 卜卦, astrocartography, midpoints.",
-    ),
+    ("· 择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).", "· 择日 ×10: condition-tree window search."),
     ("· 神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.", "· 神数 ×14 + 神数正传, 天文地占, tarot."),
-    ("   question → cross-validation (divergence disclosed, never averaged).", "   question → cross-validation (divergence disclosed)."),
+    ("one question → cross-validation (divergence disclosed, never averaged).", "one question → cross-validation (divergence disclosed)."),
 )
 
 

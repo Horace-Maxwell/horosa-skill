@@ -31,7 +31,7 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 
 ## 合参（多技法交叉印证，v0.28.0；v0.50.0 重做）
 
-一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据 / `context`，可显式 `tools`，上限 `max_tools`）。与 `horosa_dispatch` 同闸：先问用户，带 `agent_confirmed_settings` / `defaults_accepted` 再调。
+一问需要多技法互证时用 `horosa_hecan`（`query` + 出生数据 `birth` / 起课时刻 `context`，可显式 `tools`，上限 `max_tools`）。与 `horosa_dispatch` 同闸：闸门问的是所选技法问题的并集——设置问题按用户回答带 `agent_confirmed_settings` / `defaults_accepted`；事实（性别、起课时刻、对方出生数据）只能放进载荷，确认标记代替不了。
 
 - **选技法**：`tools` 写技法名，也可以写此前某次运行的 `run_id`（32 位十六进制；那次的结果原样复用、不重算，闸门不再问它）。
   不给 `tools` 时按问题领域缺省配一对并在 `warnings` 披露（命理 八字 + 紫微 / 起课 六壬 + 奇门 / 运势 八字直断 + 紫微 / 卜卦 六爻 + 卜卦占星；
@@ -49,6 +49,10 @@ uv run horosa-skill report technique --group-id <group_id> --format markdown
 4. 要文件：`horosa_technique_report --group-id` 出方法报告；解读终稿走 `horosa_report_render`。
 
 ## Structured report flow (MCP)
+
+```call
+horosa_report_render {"run_id": "<run_id>", "tool_name": "bazi_birth", "format": "docx", "ai_report": {"executive_summary": "日主……（只写盘面支持的结论）", "answer_text": "先直答，再引段落 [E2]……", "analysis_sections": [{"title": "四柱", "content": "见 [E2] 四柱与三元……"}], "recommendations": ["……"], "limitations": ["出生时刻按用户所给；只依据本次返回的段落"]}}
+```
 
 1. Call the calculation tool.
 2. Call `horosa_report_template` with the `run_id` and `tool_name`.
@@ -90,9 +94,17 @@ raw engine data. In the full view a result stays inside one MCP message: past ab
 subtrees become `{"omitted": "too_large_for_mcp", ...}` placeholders and a line appears in `warnings`; the full copy
 stays on disk (`horosa-skill memory show <run_id>`).
 
-`text` searches questions and answers across all runs, but the chart text inside artifacts only in the newest
-runs (400 at the default `limit`). When the result says `not_scanned: N`, N older runs were not searched for chart
-text. Before saying a run does not exist, narrow with `after` / `before` / `tool` / `entity` and search again.
+`text` searches what a person would search (question, answer, technique names, person names, chart text); words
+separated by spaces must all match; Simplified and Traditional match each other. After an upgrade of an old memory
+store the chart text of older runs is indexed gradually: `not_scanned: N` means N matching runs were not yet searched
+for chart text (their questions and answers were). Other filters: `entity` (a `name` you passed or a profile name /
+alias), `tool` (key, MCP name or Chinese name), `after` / `before` (a date = that whole day in `zone`; ISO date-time;
+"昨天" is refused with `memory.query.invalid_time` — convert it yourself), `group_id`, `limit` ≤ 100. Before saying a
+run does not exist, narrow with these filters and search again. Writing a second answer with
+`horosa_memory_record_answer` keeps the earlier one in `answer_history`. Deleting, exporting and rebuilding the store
+are CLI commands the user runs (`horosa-skill memory delete` — lists only, deletes with `--yes` —
+/
+`memory export` / `memory rebuild`).
 
 **Cite the chart by section number.** Every exported section has a `cite_id` (`E1`, `E2`, …) in the
 template's `source_export_sections`; the report prints it in front of that section's heading, and in the
@@ -139,7 +151,7 @@ uv run horosa-skill report from-tool liureng_gods \
 三个报告工具的 `output_path` 只许落在报告输出目录（`HOROSA_SKILL_OUTPUT_DIR`，缺省 `<数据目录>/runs`）内：省略 = 存储层缺省产物路径；
 相对路径按输出目录解析；绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS`（`os.pathsep` 分隔的白名单根，由用户在环境里配）之内，
 否则 `report.output_path_not_allowed`（`details.allowed_roots` 列出可写根，不写任何文件）。这三个工具的 MCP annotations 标 `destructiveHint=true`
-（会覆盖同名文件），客户端可能要求确认。
+（同名的、星阙自己写过的报告会被替换），客户端可能要求确认。
 
 v0.50.0 起 `output_path` 在起盘、写回解读**之前**整体检查（`report_from_tool` 被拒时不起盘、不存档）：给目录 → 缺省文件名写在里面；
 没写扩展名 → 补上，结果 `output_path_adjustment` 写明；下面这些回 `report.output_path_unusable`，`details.reason` 说是哪一种、什么都没写：
