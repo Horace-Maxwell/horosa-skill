@@ -406,7 +406,7 @@ elicit 必须在任何副作用之前（MRTR 的重试会重放整个工具函�
 **MCP 结果视图（v0.50.0，`horosa_skill/result_view.py`，在 `HorosaMCPServer.call_tool` 里、转字形之前）**：MCP 缺省返回**阅读视图**——
 正文一遍（`export_snapshot.export_text`）+ 段索引 + 技法卡 + run_id，不带原始树、不带 `snapshot_text`；`full`（别名 `raw`）才是完整信封。
 模型预算（估算 token：非 ASCII ×1.5、ASCII ÷3；字符 48 000 < Claude Code 5 万落盘线）超了按段裁，告警里的续读调用必须**照抄可用**
-（测试照抄回放）。视图参数在进工具前就取走，服务层 / 存档 / CLI 都见不到；`HOROSA_MCP_RESULT_VIEW` 切缺省。**展示键不是算法输入**：
+（测试照抄回放）。视图参数（`response_view` / `response_sections` / `response_offset` / `response_tool`）在进工具前就取走，服务层 / 存档 / CLI 都见不到；`HOROSA_MCP_RESULT_VIEW` 切缺省。**展示键不是算法输入**：
 runner 里嵌套的 `run_tool` 由 `_context._run_tool_scope` 摘掉 `PRESENTATION_KEYS`、不套视图（黄历择日曾因子调用的快照被清空丢 7 段）。
 新加结果形状（新的门面 / 嵌套结果）先想好它在阅读视图里长什么样，再进 `tests/test_result_view_catalogue.py` 的整表守卫。
 
