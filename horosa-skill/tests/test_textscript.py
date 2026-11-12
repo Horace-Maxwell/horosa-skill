@@ -525,8 +525,13 @@ def _facade_shapes(envelope: dict) -> list:
         {"ok": True, "result": {"run_id": "x", "subject": {"name": "张三"}, "tool_calls": [
             {"tool_name": "bazi_birth", "input": {"question": "事业"}, "summary": ["已排八字"], "warnings": [], "error": None}]},
          "summary": ["已读取对应 run 的本地完整记录。"]},
+        # 合参（v0.50.0）：逐技法 headline + 正文节选（evidence：text / note / 放进与没放进的段名）+ child_runs。
         {"ok": True, "question": "看看事业", "techniques": [{"tool": "bazi_birth", "technique": {"key": "bazi", "label": "八字"},
-         "summary": ["日主偏弱"], "section_titles": ["起盘信息"]}], "synthesis_contract": {"instructions": ["分歧必须披露"]}},
+         "headline": "日主偏弱", "summary": ["日主偏弱"], "section_titles": ["起盘信息"],
+         "evidence": {"text": "[起盘信息]\n日主偏弱", "note": "节选：放了 1 段", "sections_shown": ["起盘信息"],
+                      "sections_not_shown": ["大运"], "read_rest": "horosa_memory_show(run_id=\"x\")"}}],
+         "child_runs": [{"tool": "bazi_birth", "run_id": "x", "reused": True}], "warnings": ["这不是交叉印证"],
+         "synthesis_contract": {"instructions": ["分歧必须披露"]}},
         {"ok": True, "mode": "analysis_required", "report_template": {"role": "你是解盘助手"}, "ai_process": {"process": ["先读盘"]},
          "tool_result": {"ok": True, "tool": "bazi_birth", "input_normalized": {}, "summary": ["已排八字"]}},
         {"domain": "astro", "category": "planet", "key": "Sun", "title": "太阳", "tips": ["阳性"], "lines": ["阳性"],

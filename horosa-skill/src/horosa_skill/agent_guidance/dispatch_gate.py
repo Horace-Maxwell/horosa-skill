@@ -57,6 +57,8 @@ def dispatch_gate(
     open_questions: Callable[..., list[dict[str, Any]]],
 ) -> dict[str, Any]:
     from horosa_skill.engine.dispatch_plan import inputs_from_request, missing_facts_recovery, plan_all
+    from horosa_skill.engine.hecan_select import select as hecan_select
+    from horosa_skill.engine.hecan_select import split_tools
     from horosa_skill.engine.registry import resolve_tool_name
     from horosa_skill.engine.router import route
     from horosa_skill.errors import DispatchResolutionError
@@ -66,9 +68,18 @@ def dispatch_gate(
     request = _validated(model, payload)
     if request is None:
         return {"ok": True, "tool_name": tool_name, "enforced": True, "mode": "deferred_to_validation"}
-    explicit = [resolve_tool_name(name) or name for name in (getattr(request, "tools", None) or []) if name]
-    if is_hecan and explicit:
+    names, run_ids = split_tools(getattr(request, "tools", None)) if is_hecan else ([], [])
+    explicit = [resolve_tool_name(name) or name for name in names]
+    if is_hecan and (explicit or run_ids):
+        # 复用的 run_id 已经算过，不再问它的设置；只问要新算的技法。
         tools = explicit[: max(1, min(int(getattr(request, "max_tools", None) or 5), 8))]
+        if not tools:
+            return {"ok": True, "tool_name": tool_name, "enforced": True, "mode": "reused_runs_only"}
+    elif is_hecan:
+        try:
+            tools = hecan_select(request, max_tools=max(1, min(int(getattr(request, "max_tools", None) or 5), 8))).tools
+        except DispatchResolutionError:
+            return {"ok": True, "tool_name": tool_name, "enforced": True, "mode": "routing_refusal"}
     else:
         try:
             tools = route(request).tools

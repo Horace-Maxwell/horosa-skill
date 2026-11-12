@@ -274,6 +274,14 @@ def _insert_tool_call(conn: sqlite3.Connection, run_id: str, call_id: int | None
     return int(cursor.lastrowid)
 
 
+def _artifact_kind(meta: dict[str, Any], suffix: str) -> str:
+    """门面产物（文件名后缀 dispatch）按 record_meta.kind 认（dispatch_result / hecan_result）；技法产物是 tool_result。"""
+    if suffix != "dispatch":
+        return "tool_result"
+    kind = meta.get("kind")
+    return kind if kind in ("dispatch_result", "hecan_result") else "dispatch_result"
+
+
 def _call_from_envelope(envelope: dict[str, Any], tool: str, path: Path) -> dict[str, Any]:
     meta = envelope.get("record_meta") if isinstance(envelope.get("record_meta"), dict) else {}
     return {
@@ -383,7 +391,7 @@ def _restore_run(store: MemoryStore, conn: sqlite3.Connection, files: RunFiles, 
             entities = _entities_from_envelope(store, envelope, run_fields.get("query_text"))
     for path, tool, suffix, envelope in envelopes:
         meta = envelope.get("record_meta") if isinstance(envelope.get("record_meta"), dict) else {}
-        kind = "dispatch_result" if suffix == "dispatch" else "tool_result"
+        kind = _artifact_kind(meta, suffix)
         _insert_artifact(conn, files.run_id, call_ids.get(path.name), meta.get("tool_name") or tool, kind, path, _mtime_iso(path))
     _restore_reports(conn, files, manifest)
     for entity in entities:
@@ -464,7 +472,7 @@ def _adopt_files(
             else:
                 call_id = _insert_tool_call(conn, files.run_id, int(suffix), _call_from_envelope(envelope, tool, path))
         meta = envelope.get("record_meta") if isinstance(envelope.get("record_meta"), dict) else {}
-        kind = "dispatch_result" if suffix == "dispatch" else "tool_result"
+        kind = _artifact_kind(meta, suffix)
         _insert_artifact(conn, files.run_id, call_id, meta.get("tool_name") or tool, kind, path, _mtime_iso(path))
         report["adopted_artifacts"] += 1
         changed = True

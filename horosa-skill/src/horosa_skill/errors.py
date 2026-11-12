@@ -747,6 +747,16 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "query_memory_for_run_id",
     },
+    # 合参复用（v0.50.0）：tools 里的 run_id 存在，但里面没有算成的技法结果。
+    "hecan.run_not_reusable": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这个 run_id 里没有算成的技法结果，不能拿来合参。用 horosa_memory_query 找一条有技法结果的运行，或在 tools 里写技法名重新起盘。",
+            "This run_id holds no successful technique result, so it cannot be reused. Find a run with a technique result via"
+            " horosa_memory_query, or name the technique in tools to compute it.",
+        ),
+        "next_action": "query_memory_for_run_id",
+    },
     "memory.query.invalid_time": {
         "kind": "input",
         "prompt_to_user": bilingual(

@@ -204,8 +204,10 @@ def test_hecan_gate_is_the_dispatch_gate_with_a_named_operation() -> None:
     for name in ("hecan", "horosa_hecan"):
         verdict = validate_agent_preflight(name, {"query": "看看八字"})
         assert verdict["ok"] is False and verdict["code"] == "agent_guidance.required"
-        # v0.50：先路由再问——缺的是出生数据（事实），不是写死的「用哪种技法」。
+        # v0.50：先路由再问——缺的是出生数据（事实），不是写死的「用哪种技法」。合参没点名第二种时按领域配一对（八字 + 紫微），
+        # 两个技法缺同一件事实只问一次。
         assert [item["fact"] for item in verdict["missing_facts"]] == ["birth_data"]
+        assert verdict["missing_facts"][0]["tools"] == ["bazi_birth", "ziwei_birth"]
     assert validate_agent_preflight("hecan", {"defaults_accepted": True})["ok"] is True
     # 显式 `tools` 已经答了「用哪种技法」：闸门不再问一遍。
     named = validate_agent_preflight("hecan", {"query": "看看八字", "tools": ["bazi_birth"]})

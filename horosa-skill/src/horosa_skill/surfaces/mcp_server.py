@@ -545,12 +545,11 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         gate="hecan",
         call_kwargs={"include_results": True},
         doc=(
-            "合参 / cross-technique synthesis: run SEVERAL techniques on one question (router-selected or "
-            "explicit `tools`, capped by max_tools) under one group, then return a synthesis TEMPLATE — "
-            "per-technique evidence tables, cross-technique setting-consistency verdicts, and ai_fillable "
-            "slots (per-technique conclusion / convergence / divergence / final answer). Fill it from the "
-            "real exported sections; divergence must be disclosed, never averaged. This returns a template, "
-            "not a finished reading."
+            "合参 / cross-technique synthesis: run SEVERAL techniques on one question (explicit `tools` — names "
+            "or earlier run_ids, reused not recomputed — or a default pair for the question's domain; capped by "
+            "max_tools), then return a synthesis TEMPLATE: per-technique text excerpts, setting-consistency "
+            "verdicts, ai_fillable slots. Fill it from the real exported sections; divergence must be disclosed, "
+            "never averaged. Fewer than two techniques = not a cross-check (cross_validation=false)."
         ),
     )
 

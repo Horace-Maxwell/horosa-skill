@@ -36,6 +36,10 @@ class IntentClass:
     candidates: tuple[str, ...]
     ask_zh: str
     ask_en: str
+    # 合参（horosa_hecan）没点名技法时按这一类缺省起的一对技法（传统互参：三式互参、八字紫微互证）；空 = 这一类不替用户配对。
+    hecan_pair: tuple[str, ...] = ()
+    label_zh: str = ""
+    label_en: str = ""
 
     def matches(self, text: str) -> bool:
         return any(word in text for word in self.words) or any(re.search(p, text) for p in self.patterns)
@@ -95,6 +99,8 @@ DATE_SELECTION = IntentClass(
     ask_en="Which date range should be searched, for what purpose, and under which conditions? Choose a method: almanac, "
            "celestial (tianxing), Qi Men, BaZi…; to evaluate one already-chosen moment use the election chart; for one "
            "day's do's and don'ts use the almanac (huangli) or tongshu.",
+    # 择日不配对：每种择日法的条件树词表不同，同一份 conditions 交给两种方法是错的。
+    label_zh="择日", label_en="date selection",
 )
 
 # 强时运词：出现就是问「什么时候 / 运势」，先于「会不会」类判断。
@@ -114,6 +120,7 @@ LIFE_TIMING = IntentClass(
     ask_en="Which system should read the timing? BaZi (decade and annual luck), Zi Wei Dou Shu, solar return, profection, "
            "firdaria, ephemeris (transits), Liu Ren annual…; for the timing of one concrete matter a divination "
            "technique (Liu Yao, Qi Men, Da Liu Ren) also fits.",
+    hecan_pair=("bazi_direct", "ziwei_birth"), label_zh="运势", label_en="life timing",
 )
 
 DIVINATION = IntentClass(
@@ -133,6 +140,7 @@ DIVINATION = IntentClass(
            "各家结论可能不同，请指定一种（或用合参同时看几种）。",
     ask_en="Which divination technique should answer this? Liu Yao, Qi Men Dun Jia, Da Liu Ren, Xiao Liu Ren, tarot, "
            "horary astrology, Lingqi, geomancy. They can disagree, so name one (or use hecan to run several).",
+    hecan_pair=("liureng_gods", "qimen"), label_zh="起课占断（三式互参）", label_en="divination (Liu Ren + Qi Men)",
 )
 
 BUGUA = IntentClass(
@@ -143,6 +151,7 @@ BUGUA = IntentClass(
     ask_zh="「卜卦」指哪一种？六爻起卦（中式，按占时或摇卦起卦）/ 卜卦占星（西洋，按提问时刻起盘）。",
     ask_en="Which kind of 卜卦? Liu Yao (Chinese hexagram cast by the moment or coins) or horary astrology "
            "(Western chart of the question moment)?",
+    hecan_pair=("sixyao", "horary"), label_zh="卜卦（六爻 + 卜卦占星）", label_en="卜卦 (Liu Yao + horary)",
 )
 
 NATAL_CHOICE = IntentClass(
@@ -154,6 +163,7 @@ NATAL_CHOICE = IntentClass(
     ask_zh="按哪一种命理看？八字 / 紫微斗数 / 西洋本命盘 / 七政四余 / 印度占星。各家起盘口径不同，请指定一种（或用合参同时看几种）。",
     ask_en="Which natal system? BaZi, Zi Wei Dou Shu, Western natal chart, Qi Zheng Si Yu, Vedic. Their conventions "
            "differ, so name one (or use hecan to run several).",
+    hecan_pair=("bazi_birth", "ziwei_birth"), label_zh="命理（八字紫微互证）", label_en="natal reading (BaZi + Zi Wei)",
 )
 
 # 二十四节气名：单独出现时是历法查询（「2027年立春是什么时候」），归全年节气。

@@ -25,6 +25,8 @@ TEXT_KEYS = frozenset({
     "rendered_text", "export_text", "snapshot_text", "citation", "tips", "lines", "raw_title", "text",
     "titles", "section_titles", "selected_sections", "section_titles_detected", "missing_selected_sections",
     "unknown_detected_sections", "next_step",
+    # 合参（v0.50.0）：逐技法一句话 headline、正文节选的说明 note 与放进 / 没放进的段名。
+    "headline", "note", "sections_shown", "sections_not_shown",
 })
 SKIP_KEYS = frozenset({
     "input_normalized", "normalized_inputs", "input", "subject", "payload", "query_normalized",

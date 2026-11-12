@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -270,6 +271,40 @@ def _incomplete_record(record: dict[str, Any]) -> list[dict[str, Any]]:
     return problems
 
 
+def _attach_child_runs(service: HorosaSkillService, record: dict[str, Any], *, include_payload: bool) -> None:
+    """合参 run：它复用的技法结果存在别的 run 里。按 hecan_result 的 child_runs 把那几份 tool_result 产物接到这条记录后面
+    （`from_run` 标出处），读回合参就能看到全部子结果；`record["child_runs"]` 原样列出。"""
+    own = record.get("run_id")
+    children: list[dict[str, Any]] = []
+    for artifact in record.get("artifacts") or []:
+        if artifact.get("kind") == "hecan_result" and isinstance(artifact.get("payload"), dict):
+            children = [row for row in artifact["payload"].get("child_runs") or [] if isinstance(row, dict)]
+    if not children and not any(a.get("kind") == "hecan_result" for a in record.get("artifacts") or []):
+        return
+    if not children:
+        # 没带 payload 读（include_payload=false）：产物文件里才有 child_runs。
+        for artifact in record.get("artifacts") or []:
+            if artifact.get("kind") == "hecan_result" and artifact.get("exists"):
+                try:
+                    children = json.loads(Path(artifact["path"]).read_text(encoding="utf-8")).get("child_runs") or []
+                except (OSError, ValueError):
+                    children = []
+    record["child_runs"] = children
+    wanted: dict[str, set[str]] = {}
+    for row in children:
+        if row.get("run_id") and row.get("run_id") != own:
+            wanted.setdefault(str(row["run_id"]), set()).add(str(row.get("tool")))
+    for child_id, tools in wanted.items():
+        rows = service.store.query_runs(run_id=child_id, limit=1, include_payload=include_payload)
+        if not rows:
+            record.setdefault("artifacts", []).append(
+                {"kind": "tool_result", "tool_name": ",".join(sorted(tools)), "from_run": child_id, "exists": False, "path": None})
+            continue
+        for artifact in rows[0].get("artifacts") or []:
+            if artifact.get("kind") == "tool_result" and str(artifact.get("tool_name")) in tools:
+                record.setdefault("artifacts", []).append({**artifact, "from_run": child_id})
+
+
 def show_memory(service: HorosaSkillService, payload: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
     try:
         request = MemoryShowInput.model_validate(payload)
@@ -296,6 +331,11 @@ def show_memory(service: HorosaSkillService, payload: dict[str, Any], trace: dic
         }
     trace["run_id"] = request.run_id
     record = results[0]
+    try:
+        _attach_child_runs(service, record, include_payload=request.include_payload)
+    except (sqlite3.Error, OSError) as exc:
+        trace["error_code"] = "memory.store_unavailable"
+        raise store_unavailable(service, exc) from exc
     problems = _incomplete_record(record)
     result: dict[str, Any] = {"ok": True, "result": record, "complete": not problems,
                               "trace_id": trace["trace_id"], "group_id": trace["group_id"]}

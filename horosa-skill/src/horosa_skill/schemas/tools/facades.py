@@ -117,7 +117,8 @@ class DispatchInput(FlexibleModel):
 
 class HecanInput(DispatchInput):
     # 合参（v0.28.0）：一问多技法交叉印证。入参 = dispatch 全形（query + birth/subject + 确认字段），
-    # 另加 tools 显式指定技法（缺省由路由选盘）与 max_tools 上限。产出不是终稿而是**合参模板**
+    # 另加 tools 显式指定技法与 max_tools 上限。tools 里可混写此前运行的 run_id（复用存档结果，不重算；v0.50.0）；
+    # 不给 tools 时按问题领域缺省配一对（engine/hecan_select.py），不借 dispatch 的单技法路由。产出不是终稿而是**合参模板**
     # （ai_fillable：各技法结论槽 + 相互印证/分歧槽），分歧必须披露、不许平均——AI 填完即合参报告。
     tools: list[str] | None = None
     max_tools: int | None = 5
@@ -137,6 +138,7 @@ def resolve_technique_names(value: Any) -> Any:
     import difflib
     import re as _re
 
+    from horosa_skill.engine.hecan_select import is_run_id
     from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
     from horosa_skill.engine.synonyms import TOOL_SYNONYMS
     from horosa_skill.input_fields import FieldIssue, Parsed, clean_text
@@ -156,6 +158,11 @@ def resolve_technique_names(value: Any) -> Any:
     notes: list[str] = []
     for item in items:
         text = clean_text(item)
+        if is_run_id(text):
+            # 合参复用此前的运行（v0.50.0）：run_id 原样保留（小写），由合参从存档里取结果、不重算。
+            if text.lower() not in resolved:
+                resolved.append(text.lower())
+            continue
         hit = resolve_tool_name(text) or by_word.get(fold_to_simplified(text).lower())
         if hit is None:
             close = difflib.get_close_matches(text, [*TOOL_DEFINITIONS, *by_word], n=3, cutoff=0.5)

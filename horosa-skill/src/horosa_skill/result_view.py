@@ -641,6 +641,17 @@ def _shape_memory(value: dict[str, Any], request: ViewRequest, budget: Budget) -
                                        "see": f"tool_result artifact (response_tool=\"{name}\")"}
                                 for name, item in payload["results"].items()},
                 }
+            elif kind == "hecan_result":
+                # 合参模板：各技法的正文在同一条记录的 tool_result 阅读视图里（复用的子结果已由 memory_show 接上），节选不再重复一份。
+                artifact["payload"] = {
+                    **payload,
+                    "techniques": [
+                        {**row, "evidence": {key: value for key, value in row["evidence"].items() if key != "text"}
+                         | {"text_in": f"tool_result artifact (response_tool=\"{row.get('tool')}\")"}}
+                        if isinstance(row, dict) and isinstance(row.get("evidence"), dict) else row
+                        for row in payload.get("techniques") or []
+                    ],
+                }
             elif kind == "run_manifest":
                 artifact.pop("payload")
             artifacts.append(artifact)
