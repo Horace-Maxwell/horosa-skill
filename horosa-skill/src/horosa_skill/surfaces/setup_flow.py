@@ -477,7 +477,7 @@ def _run_setup(
     skill_dir: Path | None = None,
     vectors: bool | None = None,
 ) -> dict[str, Any]:
-    from horosa_skill.runtime.manager import _platform_dead_end_advice, host_platform_key, platform_has_payload
+    from horosa_skill.runtime.manager import host_platform_key, platform_dead_end_advice, platform_has_payload
 
     client_key = client.strip().lower()
     if client_key not in _CLIENT_NAMES:
@@ -561,7 +561,7 @@ def _run_setup(
         }
     elif not archive and not platform_has_payload(platform_key):
         no_runtime_reason = "no_payload_for_platform"
-        advice = _platform_dead_end_advice(platform_key)
+        advice = platform_dead_end_advice(platform_key)
         steps["install"] = {"ok": True, "skipped": True, "reason": no_runtime_reason, "platform": platform_key,
                             "why": advice.get("reason"), "next_action": advice.get("next_action")}
     else:

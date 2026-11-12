@@ -456,6 +456,11 @@ def _platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
     }
 
 
+# E-12（surface 批）：setup 在「本平台没有载荷」时跳过安装并给同一条出路——公开名供 surfaces 层用（tests/test_layering.py）。
+def platform_dead_end_advice(platform_name: str) -> dict[str, Any]:
+    return _platform_dead_end_advice(platform_name)
+
+
 def platform_has_payload(platform_name: str | None = None) -> bool:
     """这个宿主平台能不能装到离线载荷（原生或经 PLATFORM_FALLBACKS 仿真）。"""
     key = platform_name or _platform_key()
