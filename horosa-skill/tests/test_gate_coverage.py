@@ -42,6 +42,8 @@ def _arguments(mcp_name: str, *, confirmed: bool) -> dict:
         return {**sample, **extra}
     return {
         **BIRTH, **extra, "gender": 1, "query": "看看八字", "tools": ["bazi_birth"], "tool_name": "bazi_birth",
+        # dispatch / hecan 逐技法规划载荷（v0.50）：缺出生数据就结构化拒绝、根本不到 run_tool——出生数据放进 birth。
+        "birth": {**BIRTH, "gender": 1},
         "payload": {**BIRTH, "gender": 1, **extra}, "format": "json", "run_id": "r",
     }
 

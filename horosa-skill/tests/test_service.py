@@ -1671,6 +1671,7 @@ def test_dispatch_exposes_child_export_contracts_explicitly(tmp_path) -> None:
         {
             "query": "请用奇门和六壬综合分析",
             "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "context": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
             "save_result": True,
         }
     )
@@ -1712,6 +1713,7 @@ def test_service_can_attach_ai_answer_to_existing_run(tmp_path) -> None:
         {
             "query": "请用奇门分析事业",
             "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "context": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
             "save_result": True,
         }
     )
@@ -2623,6 +2625,7 @@ def test_dispatch_emits_group_trace_for_children(tmp_path) -> None:
         {
             "query": "请用奇门和六壬综合分析",
             "birth": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
+            "context": {"date": "2028/04/06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"},
             "save_result": True,
         },
         evaluation_case_id="dispatch_case",
@@ -3419,6 +3422,7 @@ def test_hecan_routes_and_returns_a_synthesis_template(tmp_path) -> None:
     result = service.hecan({
         "query": "综合奇门和六壬分析当前事业局势",
         "birth": build_sample_payloads()["qimen"],
+        "context": build_sample_payloads()["qimen"],  # 奇门 / 六壬按起课此刻（context），不按出生时刻
         "save_result": True,
     })
     assert result["ok"] is True
@@ -3444,6 +3448,7 @@ def test_hecan_accepts_explicit_tools_and_caps_them(tmp_path) -> None:
         "tools": ["bazi_birth", "ziwei_birth", "liureng_gods", "qimen", "taiyi", "jinkou", "sixyao"],
         "max_tools": 3,
         "birth": build_sample_payloads()["bazi_birth"],
+        "context": build_sample_payloads()["qimen"],
         "save_result": False,
     })
     assert result["ok"] is True

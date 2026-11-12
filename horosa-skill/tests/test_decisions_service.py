@@ -73,7 +73,7 @@ def test_off_state_carries_no_decision_fields(tmp_path: Path, monkeypatch) -> No
         monkeypatch.delenv(key, raising=False)
     service = _service(tmp_path, None)
     assert service.decision_layer is None
-    result = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert result.ok and result.decision_layer is None
     assert "decision_layer" not in result.model_dump(exclude_none=True)
     for envelope in result.results.values():
@@ -84,10 +84,10 @@ def test_off_state_carries_no_decision_fields(tmp_path: Path, monkeypatch) -> No
 
 
 def test_shadow_routing_never_changes_behaviour_but_self_reports(tmp_path: Path) -> None:
-    baseline = _service(tmp_path / "a", None).dispatch({"query": COMBO_QUERY, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    baseline = _service(tmp_path / "a", None).dispatch({"query": COMBO_QUERY, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     fake = FakeJev(_routing_script("bazi", "bazi_birth"))  # 与确定性路由（qimen + liureng_gods）刻意不一致
     shadow = _service(tmp_path / "b", DecisionLayer(_policy("shadow"), fake)).dispatch(
-        {"query": COMBO_QUERY, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True}
+        {"query": COMBO_QUERY, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True}
     )
     assert _behaviour(shadow) == _behaviour(baseline), "shadow invariance: selected tools / inputs / export text identical"
     layer_view = shadow.decision_layer
@@ -106,7 +106,7 @@ def test_enforce_routing_only_fills_a_no_match_and_deterministic_match_stays_aut
     layer = DecisionLayer(_policy("enforce"), fake, thresholds=LOCK)
     service = _service(tmp_path, layer)
     # 确定性路由命中 → 不采纳，哪怕 Jev 自信满满。
-    matched = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    matched = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert matched.selected_tools == ["liureng_gods", "qimen"]
     record = next(r for r in matched.decision_layer["records"] if r["surface"] == "dispatch")
     assert record["adopted"] is False and record["mode"] == "enforce" and "deterministic router matched" in record["reason"]
@@ -143,7 +143,7 @@ def test_provider_failure_degrades_closed_with_a_visible_warning(tmp_path: Path)
     notes: list[str] = []
     layer = DecisionLayer(_policy("enforce"), FailingJev(JevError("boom", code="jev.timeout")), thresholds=LOCK, degrade=notes.append)
     service = _service(tmp_path, layer)
-    result = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert result.ok and result.selected_tools == ["liureng_gods", "qimen"], "deterministic path ran"
     assert notes and "jev.timeout" in notes[0]
     assert result.decision_layer["records"] == [], "nothing adopted, nothing to self-report beyond the warning"
@@ -156,7 +156,7 @@ def test_gender_is_filled_only_with_lexicon_and_jev_agreeing_in_enforce(tmp_path
     query = "帮我老婆排紫微斗数看看事业"
     fake = FakeJev({"subject_gender": choice_answer("female", confidence=0.97), **_routing_script("ziwei", "ziwei_birth")})
     enforce = _service(tmp_path / "e", DecisionLayer(_policy("enforce"), fake, thresholds=LOCK))
-    result = enforce.dispatch({"query": query, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = enforce.dispatch({"query": query, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert result.selected_tools == ["ziwei_birth"]
     assert result.normalized_inputs["ziwei_birth"]["gender"] == "女"
     assert "决策层自用户原话抽取" in result.normalized_inputs["ziwei_birth"]["clarification_notes"]
@@ -165,7 +165,7 @@ def test_gender_is_filled_only_with_lexicon_and_jev_agreeing_in_enforce(tmp_path
     assert record["adopted"] is True and record["decision"]["evidence"] == ["老婆"] and record["decision"]["value"] == "女"
 
     shadow = _service(tmp_path / "s", DecisionLayer(_policy("shadow"), FakeJev({"subject_gender": choice_answer("female", confidence=0.97)})))
-    result = shadow.dispatch({"query": query, "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = shadow.dispatch({"query": query, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert "gender" not in result.normalized_inputs["ziwei_birth"]
     record = next(r for r in result.decision_layer["records"] if r["surface"] == "extract")
     assert record["adopted"] is False and record["reason"] == "shadow"
@@ -175,13 +175,13 @@ def test_gender_double_key_blocks_jev_without_lexicon_evidence_and_never_asks_wi
     fake = FakeJev({"subject_gender": choice_answer("male", confidence=0.99)})
     service = _service(tmp_path, DecisionLayer(_policy("enforce", ("extract",)), fake, thresholds=LOCK))
     # 原话说的是「老婆」（女性词表），Jev 却选 male → 双钥不齐，不填。
-    result = service.dispatch({"query": "帮我老婆排紫微斗数", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "帮我老婆排紫微斗数", "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert "gender" not in result.normalized_inputs["ziwei_birth"]
     record = next(r for r in result.decision_layer["records"] if r["surface"] == "extract")
     assert record["adopted"] is False and "double-key" in record["reason"]
     # 原话没有任何性别词 → 连问都不问（零调用、零 PII）。
     calls_before = len(fake.calls)
-    result = service.dispatch({"query": "帮我排紫微斗数", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "帮我排紫微斗数", "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert len(fake.calls) == calls_before and not [r for r in result.decision_layer["records"] if r["surface"] == "extract"]
     # 用户已经给了 gender → 不问不改。
     result = service.dispatch({"query": "帮我老婆排紫微斗数", "birth": {**BIRTH, "gender": 1}, "save_result": False, "agent_confirmed_settings": True})
@@ -195,7 +195,7 @@ def test_zhan_category_is_filled_in_enforce_and_only_reported_in_shadow(tmp_path
     js = RecordingJs()
     fake = FakeJev({"zhan_category": choice_answer("caiyun", confidence=0.88)})
     enforce = _service(tmp_path / "e", DecisionLayer(_policy("enforce", ("zhancat",)), fake, thresholds=LOCK), js)
-    result = enforce.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = enforce.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert result.selected_tools == ["liureng_gods"] and result.ok
     payload = next(p for name, p in js.payloads if name == "liureng")
     assert payload["zhanCategory"] == "caiyun"
@@ -204,7 +204,7 @@ def test_zhan_category_is_filled_in_enforce_and_only_reported_in_shadow(tmp_path
 
     js2 = RecordingJs()
     shadow = _service(tmp_path / "s", DecisionLayer(_policy("shadow", ("zhancat",)), FakeJev({"zhan_category": choice_answer("caiyun", confidence=0.88)})), js2)
-    result = shadow.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = shadow.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     payload = next(p for name, p in js2.payloads if name == "liureng")
     assert "zhanCategory" not in payload or payload["zhanCategory"] is None
     decisions = result.results["liureng_gods"].data["technique_card"]["decisions"]
@@ -220,7 +220,7 @@ def test_a_bug_in_the_decision_surface_degrades_instead_of_failing_the_technique
 
     monkeypatch.setattr(dispatch_module, "build_zhan_question", boom)
     service = _service(tmp_path, DecisionLayer(_policy("enforce", ("zhancat",)), FakeJev({}), thresholds=LOCK), RecordingJs())
-    result = service.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "六壬起课问下个月生意能不能赚钱", "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     envelope = result.results["liureng_gods"]
     assert envelope.ok, envelope.message
     assert any("决策层" in note and "ValueError" in note for note in envelope.warnings), envelope.warnings
@@ -230,7 +230,7 @@ def test_zhan_category_respects_user_value_and_general(tmp_path: Path) -> None:
     js = RecordingJs()
     fake = FakeJev({"zhan_category": choice_answer("general", confidence=0.95)})
     service = _service(tmp_path, DecisionLayer(_policy("enforce", ("zhancat",)), fake, thresholds=LOCK), js)
-    result = service.dispatch({"query": "六壬起课看看最近运势", "birth": BIRTH, "save_result": False, "agent_confirmed_settings": True})
+    result = service.dispatch({"query": "六壬起课看看最近运势", "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     payload = next(p for name, p in js.payloads if name == "liureng")
     assert not payload.get("zhanCategory"), "general → leave unset"
     assert result.results["liureng_gods"].data["technique_card"]["decisions"][0]["adopted"] is False
