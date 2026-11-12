@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from horosa_skill.cn_vocab import cn_field_validator
 from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _unadvertised
 
 
@@ -51,6 +52,17 @@ class LiuRengRunYearInput(LiuRengGodsInput):
 
 class GuaNamesInput(FlexibleModel):
     name: list[str]
+
+
+class GuaMeiyiInput(GuaNamesInput):
+    # 梅花易数卦义（/gua/meiyi）只认三爻经卦码（初→上，1 阳）；卦名（乾 / 兌 / ☰ / qian）按引擎自己的码表换成码。
+    # 此前别的写法（六爻码、重卦名、乱写）后端回 null、快照印「无」而 ok=true（v0.50.0 六爻同族清扫）。
+    @field_validator("name", mode="before")
+    @classmethod
+    def _trigram_codes(cls, value: Any) -> Any:
+        from horosa_skill.cn_vocab import parse_meiyi_names
+
+        return parse_meiyi_names(value)
 
 
 class QimenInput(BirthInput):
@@ -112,6 +124,8 @@ class XiaoLiuRenInput(FlexibleModel):
     # 晚子时双开关（占时影响时支序，见 references/late-zi.md）。
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
+    # v0.50.0：流派一张词表（cn_vocab）——此前「道家」「bogus」都悄悄按主流六宫起。
+    _vocab = cn_field_validator("xiaoliuren", "school")
 
 
 class FeiGongInput(FlexibleModel):
@@ -127,7 +141,10 @@ class FeiGongInput(FlexibleModel):
     dayGan: str | None = None
     dayZhi: str | None = None
     mingAge: int | None = None
-    mingGender: str | None = "male"
+    # 命主性别：同一个性别解析器（1 / 男 / male / 乾造…、0 / 女 / female / 坤造…）；缺省时读 `gender`，都没给按男（上游缺省）。
+    # 此前只认字面 "female"：「女」「Female」「0」都按男排命宫（v0.50.0 深审 C-14）。
+    mingGender: int | str | None = None
+    gender: int | str | None = _unadvertised()  # mingGender 的别名（同一解析器；两者不同 → tool.field_conflict）
     liuYueMonth: int | None = None
     koujing: str | None = "zheng"
     askEvent: str | None = None
@@ -142,6 +159,14 @@ class FeiGongInput(FlexibleModel):
     timeAlg: int | None = None
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
+    _vocab = cn_field_validator("feigong", "qiMode", "koujing")
+
+    @field_validator("mingGender", mode="before")
+    @classmethod
+    def _ming_gender(cls, value: Any) -> Any:
+        from horosa_skill.input_fields import field_validator_for, parse_gender
+
+        return field_validator_for(parse_gender, "mingGender")(value)
 
 
 class XiaoChengTuInput(FlexibleModel):
@@ -176,6 +201,7 @@ class XiaoChengTuInput(FlexibleModel):
     timeAlg: int | None = None
     after23NewDay: int | None = None
     lateZiHourUseNextDay: int | None = None
+    _vocab = cn_field_validator("xiaochengtu", "qiguaFa", "qiguaShu", "piKoujing")
 
 
 class GuiceInput(FlexibleModel):
@@ -267,6 +293,7 @@ class ZhengChuanInput(FlexibleModel):
     gong: str | None = None
     xqZhi: str | None = None
     xqYushu: int | None = None
+    _vocab = cn_field_validator("zhengchuan", "school", "yuan")
 
 
 class SanShiUnitedInput(FlexibleModel):
@@ -349,6 +376,8 @@ class GeomancyInput(BirthInput):
     # sync311 F12：housePlacement 图形入宫 / castNumbers 报数起卦十六数 / planetaryChart* 行星地占盘四键）；
     # 未传=None → 内核回落 profile 默认，旧盘字节零变；认不出的键回执 data.params_ignored。
     options: dict[str, Any] | None = None
+    # v0.50.0：传本 / 判读深度 / 黄道体系各一张词表（cn_vocab）——此前认不出的传本悄悄换成 european_classical。
+    _vocab = cn_field_validator("geomancy", "profile", "readingScope", "zodiacSystem")
 
 
 class TarotInput(BirthInput):
@@ -387,6 +416,7 @@ class LingqiInput(BirthInput):
     # 注家显示（yan 颜氏/he 何氏/chen 陈氏/liu 刘氏 + ke 课断 + shi 断诗）。段头恒出，
     # 开关只影响段内行——段集恒定是上游 parityAll 哨兵口径，不要拿它当条件段。
     zhuVisible: dict[str, Any] | None = None
+    _vocab = cn_field_validator("lingqi", "category")
 
 
 class SixYaoLineInput(FlexibleModel):

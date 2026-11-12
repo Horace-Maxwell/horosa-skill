@@ -33,6 +33,7 @@ from horosa_skill.service.options_cn import (
     _qimen_ken_payload,
     _qimen_local_route_reasons,
     _raise_js_option_error,
+    _resolved_day_switches,
     _sanshi_liureng_options,
 )
 
@@ -126,8 +127,9 @@ class SanshiRunners:
                     "lat": payload["lat"],
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。
-                    **_day_boundary_switches(options),
+                    # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。显式值只在顶层
+                    # （入口已把 options 里的写法合上来）；options 里的是已补缺省的生效值，供 JS 标签用。
+                    **_day_boundary_switches(payload),
                     "timeAlg": time_alg,
                     "ad": payload.get("ad", 1),
                 },
@@ -195,8 +197,12 @@ class SanshiRunners:
         return result
 
     def _run_taiyi_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 口径单源：顶层日界两开关（0/1 整数，JS buildOptions 按 `=== 1` 标「换日」）∪ options，options 优先。
-        options = {**_day_boundary_switches(payload), **(payload.get("options") or {})}
+        # 日界两开关只有一个生效值：入口已把 options 里的写法合到顶层（input_normalization._lift_day_switches）。农历前置与
+        # /taiyi/pan 只收显式值（缺省不发 = 后端缺省 1 / 1，与上游出厂缺省同值，live 守卫钉住），快照的「换日」行（JS buildOptions
+        # 按 `=== 1` 标）吃补了缺省的同一份值。此前缺省时快照印「24 点算第二天」而日柱按 23 点进位，options.after23NewDay
+        # 又只到了快照（盘头辛酉、正文壬戌）。
+        day_switches = _day_boundary_switches(payload)
+        options = {**(payload.get("options") or {}), **_resolved_day_switches(payload)}
         # 时间基准（上游 TaiYiMain TAIYI_PAGE_SETTINGS.timeBasis def 'direct'，TIME_BASIS_OPTIONS 两档）：
         # trueSolar 时 ken 按 nongli.birth 的真太阳时分量起局（上游 resolveCalculationDateTime，TaiYiCalc.js:204）。
         # 此前该档既不发也不施加，快照却标「真太阳时」—— ken 恒按钟表时起局。
@@ -223,8 +229,7 @@ class SanshiRunners:
                     "lat": payload["lat"],
                     "gpsLat": payload.get("gpsLat"),
                     "gpsLon": payload.get("gpsLon"),
-                    # 日界/晚子时开关与 ken 权威引擎同口径：仅显式给定时发送，缺省沿用后端默认(1/1)。
-                    **_day_boundary_switches(payload),
+                    **day_switches,
                     # 真太阳时基准要的是 nongli.birth = 真太阳时（上游太乙取农历不带 timeAlg = 后端缺省真太阳时）。
                     "timeAlg": 0 if time_basis == "trueSolar" else payload.get("timeAlg", 0),
                     "ad": payload.get("ad", 1),
@@ -254,8 +259,7 @@ class SanshiRunners:
                 "time": payload.get("time"),
                 "realSunTime": (nongli or {}).get("birth", ""),
                 "jiedelta": (nongli or {}).get("jiedelta", ""),
-                # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1）。
-                **_day_boundary_switches(payload),
+                **day_switches,
             },
         )
         self._require_ken_pan(ken_response, engine="kintaiyi", endpoint="/taiyi/pan")
@@ -289,7 +293,8 @@ class SanshiRunners:
         nongli = liureng.get("nongli") if isinstance(liureng, dict) and isinstance(liureng.get("nongli"), dict) else {}
         # 地分缺省 = 自动取占时支（上游 JinKouMain.js:902 diFenAuto:true → resolveJinKouDiFen 首次起课取
         # 占时支）。此前缺省发「子」给 ken（本地脚手架却取占时支），默认盘恒按子地分起。
-        difen = _jinkou_resolve_difen(payload.get("diFen") or options.get("diFen"), nongli.get("time"))
+        given_difen = payload.get("diFen") or options.get("diFen")
+        difen = _jinkou_resolve_difen(given_difen, nongli.get("time"))
         options["diFen"] = difen
         time_basis = options.get("timeBasis") or "direct"
         # 路由（上游 JinKouMain.assembleJinKouData:1255-1270 + schoolsAllDefault:1288）：五项流派/盘法全缺省才用
@@ -379,6 +384,12 @@ class SanshiRunners:
             "export_snapshot": self._augment_export_payload(technique="jinkou", snapshot_text=snapshot_text),
             "prerequisites": {"liureng": liureng},
             "route": js_route if isinstance(js_route, dict) else {"schoolOverrides": school_overrides},
+            # 起课方式（同六爻 data.cast_method）：金口诀恒以占时起课；手选的月将 / 占时 / 地分列在 manual_overrides。
+            "cast_method": "time",
+            "manual_overrides": [key for key, value in (("yueJiang", options.get("yueJiang") or options.get("yuejiang")),
+                                                        ("zhanShi", options.get("zhanShi") or options.get("zhanshi")),
+                                                        ("diFen", given_difen))
+                                 if value not in (None, "", "auto")],
         }
         # 只给**上游同判据**的本地路由（五项流派非缺省 / 两源日柱不齐）标声明过的本地算源；ken 畸形被迫回退本地
         # 不标 —— 依据卡照旧把它显示成「与声明不一致」（AGENTS §4 静默回退形状）。
@@ -486,7 +497,7 @@ class SanshiRunners:
         time_alg = int(str(time_alg_raw).strip())
         # 上游三式 options 的日界两键出厂 1 / 1（全局出厂「23 点算第二天」「晚子时用次日」），genParams / getQimenOptions /
         # getKintaiyiPan 都显式发送；显式给定则随之。
-        day_switches = {"after23NewDay": 1, "lateZiHourUseNextDay": 1, **_day_boundary_switches(payload)}
+        day_switches = _resolved_day_switches(payload)
         gender = payload.get("gender")
         sex = 0 if gender in (0, "0", False, "女", "female", "f") else 1
         shared = {

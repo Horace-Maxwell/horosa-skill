@@ -35,7 +35,8 @@ _DATETIME_RE = re.compile(
 
 # 当事人位置：这些键下面的那一层 dict 与顶层同样逐字段严判（dispatch 的 subject.birth 也是）。
 PARTY_KEYS = ("inner", "outer", "birth", "subject", "natal", "davison", "context")
-_DATE_KEYS = ("date", "guaDate")
+# 日期 → 它的纪元键（ad=-1 + 不带负号的日期在入口改写成带负号的日期，见 _fold_era）。
+_ERA_PAIRS = (("date", "ad"), ("guaDate", "guaAd"))
 _TIME_KEYS = ("time", "guaTime")
 _ZONE_KEYS = ("zone", "dirZone", "guaZone")
 _COORD_KEYS = (("lat", "lat"), ("lon", "lon"), ("dirLat", "lat"), ("dirLon", "lon"), ("guaLat", "lat"), ("guaLon", "lon"))
@@ -117,9 +118,14 @@ def _normalize_party(
     _apply_aliases(out, path=path, fields=fields)
     if fields is not None:
         _split_target_fields(out, path=path, issues=issues, fields=fields)
-    era_explicit = out.get("ad") is not None
-    for key in _DATE_KEYS:
-        _strict(out, key, path, issues, lambda v: F.parse_date(v, era_explicit=era_explicit), extras=True)
+    for date_key, era_key in _ERA_PAIRS:
+        era_explicit = out.get(era_key) is not None
+        _strict(out, date_key, path, issues, lambda v, explicit=era_explicit: F.parse_date(v, era_explicit=explicit), extras=True)
+        _fold_era(out, date_key, era_key, path, issues, fields)
+    if fields is not None:
+        _lift_day_switches(out, path, issues, fields)
+    for key in F.DAY_SWITCH_KEYS:
+        _strict(out, key, path, issues, lambda v, name=key: F.parse_day_switch(v, field_name=name))
     for key in _TIME_KEYS:
         # 空串钟点：模型要求钟点 → 「钟点未知」问用户；否则等于没给。
         _strict(out, key, path, issues, F.parse_time, drop_blank=key not in required)
@@ -173,6 +179,91 @@ def _strict(out: dict[str, Any], key: str, path: str, issues: _Issues, parse: An
                     expected_zh=f"只在一处给{('时刻' if extra_key == 'time' else '时区')}", expected_en=f"give the {extra_key} in one place only",
                     example=parsed.extra[extra_key], options=[parsed.extra[extra_key], given_value],
                 ))
+
+
+def _fold_era(out: dict[str, Any], date_key: str, era_key: str, path: str, issues: _Issues, fields: frozenset[str] | None) -> None:
+    """公元前只留一种写法（v0.50.0）：`ad=-1` + 不带负号的日期 → 带负号的日期 + `ad=-1`（上游 chartAtMoment 同形：
+    DateTime.format 出带符号的年、ad 随之）。
+
+    两种写法以前各技法读法不一：太乙的农历按公元前、年柱按公元；金口诀月将卯 / 戌；正传 / 小六壬 / 轨策 / 小成图 / 神数 ×14 /
+    灵棋 / 河洛 / 参评只看日期、ad 整个被丢——同一个「公元前 500 年」起出公元 500 年的盘。带负号的写法各技法一致，于是在入口改写一次。
+    没有声明 `ad` 的技法：纪元已经折进日期，`ad` 从载荷里拿掉（不再报「没有哪个设置读它」）。
+    带负号的日期 + `ad=1` 不改：择日 / 天星择日的 `ad` 管的是搜索窗的纪元，命主日期另由负号表达（两者可以不同）。"""
+    raw = out.get(era_key)
+    if raw is None:
+        return
+    if F.is_blank(raw):
+        del out[era_key]
+        return
+    try:
+        era = F.parse_era(raw)
+    except F.FieldIssue as issue:
+        issues.add(path + era_key, raw, issue)
+        return
+    out[era_key] = F.note_parsed(era, path + era_key)
+    date = out.get(date_key)
+    if not isinstance(date, str) or not date or path + date_key in {item["field"] for item in issues.items}:
+        return
+    if out[era_key] == -1 and not date.startswith("-"):
+        out[date_key] = f"-{date}"
+        F.add_input_note(
+            f"`{path}{era_key}`=-1：`{path}{date_key}` 按公元前读作 {out[date_key]}。",
+            f"`{path}{era_key}`=-1: `{path}{date_key}` was read as the BC date {out[date_key]}.",
+        )
+    if fields is not None and era_key not in fields:
+        del out[era_key]  # 纪元已折进日期；本技法本来就不读 ad
+
+
+# 技法的口径对象里也可能写日界两开关（上游奇门 / 太乙 options 就带）；三式合一另有三层口径对象。
+_OPTION_DICT_KEYS = ("options", "qimen_options", "taiyi_options", "liureng_options")
+
+
+def _lift_day_switches(out: dict[str, Any], path: str, issues: _Issues, fields: frozenset[str]) -> None:
+    """日界两开关只有一个生效值（v0.50.0）：顶层与口径对象（options / 三式合一的三层口径）里都可以写，入口合成一个顶层值，
+    口径对象里的那份拿掉；两处值不同 → tool.field_conflict。
+
+    以前各读各的：太乙的 options.after23NewDay 只到了快照的「换日」行，/nongli/time 与 /taiyi/pan 用顶层（缺省）——
+    盘头写 24 点换日、日柱却按 23 点进位；大六壬则把 options 里的这两个键当未知键拒掉。只对声明了这两个键的技法做。"""
+    for key in F.DAY_SWITCH_KEYS:
+        if key not in fields:
+            continue
+        sources: list[tuple[str, Any]] = []
+        if out.get(key) is not None and not F.is_blank(out.get(key)):
+            sources.append((path + key, out[key]))
+        for holder in _OPTION_DICT_KEYS:
+            nested = out.get(holder)
+            if isinstance(nested, dict) and key in nested:
+                value = nested[key]
+                out[holder] = {k: v for k, v in nested.items() if k != key}
+                if value is not None and not F.is_blank(value):
+                    sources.append((f"{path}{holder}.{key}", value))
+        if not sources:
+            continue
+        parsed: list[tuple[str, Any, int]] = []
+        for where, value in sources:
+            try:
+                parsed.append((where, value, F.parse_day_switch(value, field_name=key).value))
+            except F.FieldIssue as issue:
+                issues.add(where, value, issue)
+        if len(parsed) != len(sources):
+            out.pop(key, None)
+            continue
+        values = {item[2] for item in parsed}
+        if len(values) > 1:
+            listing = "、".join(f"`{where}`={value!r}" for where, value, _ in parsed)
+            issues.add(parsed[1][0], parsed[1][1], F.FieldIssue(
+                "tool.field_conflict", f"日界开关 {key} 给了两个不同的值（{listing}），不知道该用哪个。",
+                f"The day-boundary switch {key} was given two different values ({listing.replace('、', ', ')}); cannot tell which one is meant.",
+                expected_zh=f"只在一处给 {key}（顶层）", expected_en=f"give {key} in one place only (top level)", example=1,
+                options=sorted(values),
+            ))
+            out.pop(key, None)
+            continue
+        out[key] = parsed[0][2]
+        lifted = [where for where, _, _ in parsed if where != path + key]
+        if lifted:
+            F.add_input_note(f"{'、'.join(f'`{w}`' for w in lifted)} 按顶层 `{path}{key}` 读（日界开关只有一个生效值）。",
+                             f"{', '.join(f'`{w}`' for w in lifted)} was read as the top-level `{path}{key}` (one effective day-boundary switch).")
 
 
 def _strict_coordinates(out: dict[str, Any], path: str, issues: _Issues) -> None:

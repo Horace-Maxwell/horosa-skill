@@ -7,6 +7,7 @@ from typing import Any
 
 from horosa_skill.civil_calendar import _civil_ymd_exists, _parse_date_parts
 from horosa_skill.errors import ToolValidationError, bilingual, tool_code
+from horosa_skill.input_fields import DAY_SWITCH_DEFAULTS
 from horosa_skill.schemas.tools import (
     BaZiBirthInput,
     BirthInput,
@@ -29,6 +30,12 @@ def _day_boundary_switches(payload: dict[str, Any], keys: tuple[str, ...] = ("af
         if value is not None:
             switches[key] = 1 if value in (1, True, "1", "true", "True") else 0
     return switches
+
+
+def _resolved_day_switches(payload: dict[str, Any]) -> dict[str, int]:
+    """日界两开关的**生效值**（缺省 = 上游全局出厂 1 / 1，dayBoundary.js）。入口已把 options 里的写法合到顶层
+    （input_normalization._lift_day_switches），这里只补缺省：一份值同时喂农历前置、ken 请求与快照的「换日」行，三处不再各读各的。"""
+    return {key: _day_boundary_switches(payload, (key,)).get(key, default) for key, default in DAY_SWITCH_DEFAULTS.items()}
 
 
 def _liureng_remote_payload(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -388,6 +395,9 @@ def _qimen_effective_options(payload: dict[str, Any]) -> dict[str, Any]:
     raw = payload.get("options")
     if isinstance(raw, dict):
         options.update(raw)
+    # 日界两开关落成生效值（0 / 1 整数，缺省上游出厂 1 / 1）：JS 的标签按 `${value}` 查表（DAY_SWITCH_OPTIONS），
+    # 布尔 True 印成「true」、缺省印成空——奇门择日的「参数」行曾因此与同一张盘的「换日」行对不上。
+    options.update(_resolved_day_switches(options))
     method = options.get("qijuMethod")
     if method in (None, ""):
         options["qijuMethod"] = "zhirun"
@@ -507,8 +517,8 @@ def _qimen_ken_payload(payload: dict[str, Any], options: dict[str, Any], nongli:
         "time": payload.get("time"),
         "realSunTime": display_solar,
         "jiedelta": nongli.get("jiedelta", ""),
-        # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1）。
-        **_day_boundary_switches(options),
+        # 显式日界/晚子时开关直达权威引擎（缺省不发→引擎默认 1/1；显式值在顶层，见 _run_qimen_tool）。
+        **_day_boundary_switches(payload),
     }
 
 

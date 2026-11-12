@@ -173,8 +173,9 @@ def test_lat_without_lon_missing_date_and_bad_requests_refuse(tmp_path: Path) ->
                 {"action": "save", "name": "x", "data": "1962-03-05"}, {"action": "rename", "name": "x"},
                 {"action": "get"}):
         assert _code(lambda bad=bad: P.run_action(store, bad)).code == "profile.invalid_payload", bad
+    # 公元前只存一种写法（v0.50.0 _fold_era）：ad=-1 + 不带负号的日期存成带负号的日期 + ad=-1，与起盘入口同形。
     assert P.run_action(store, {"action": "save", "name": "公元前", "data": {"date": "0500-03-21", "ad": -1}})["profile"]["payload"] == {
-        "date": "0500-03-21", "ad": -1}
+        "date": "-0500-03-21", "ad": -1}
     assert _save(store, "妈\n妈", MOM_FIELDS())["profile"]["name"] == "妈 妈", "空白（含换行）折成一个空格，不存换行"
 
 

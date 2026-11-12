@@ -914,6 +914,10 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "给的是农历日期：先用 horosa_cn_calendar_month 查到对应的公历日（或向用户问公历生日），再按 YYYY-MM-DD 起盘。",
         "A lunar-calendar date was given: find the Gregorian day with horosa_cn_calendar_month (or ask the user for it), then retry with YYYY-MM-DD."),
         "next_action": "convert_lunar_date_then_retry"},
+    "tool.date_range_unsupported": {"kind": "input", "prompt_to_user": bilingual(
+        "这个技法的历法引擎算不了这个年份（details.accepted 是它的可靠域，多为公元 1–9999 年）：告诉用户本技法不支持该日期，换一个支持该年代的技法。",
+        "This technique's calendar engine cannot compute that year (details.accepted is its reliable range, usually AD 1–9999): tell the user it is unsupported and use a technique that covers that era."),
+        "next_action": "tell_user_unsupported"},
     "tool.invalid_coordinate": {"kind": "input", "prompt_to_user": bilingual(
         "经纬度读不懂或越界：纬度 31n13 / 31.22（±90）、经度 121e28 / 121.47（±180）；方向字母与字段不符时多半是经纬传反了。",
         "The coordinate was not understood or is out of range: latitude 31n13 / 31.22 (±90), longitude 121e28 / 121.47 (±180); a hemisphere letter that does not fit the field usually means lat and lon are swapped."),
@@ -1015,6 +1019,15 @@ TOOL_CODE_FAMILIES: dict[str, dict[str, _Any]] = {
         "next_action": "split_window",
     },
     "cast_geo_required": {"kind": "input", "next_action": "ask_user_for_place"},
+    # 「给了起课 / 起卦输入却用不了」（小六壬 nums、灵棋 counts…）：按 details.fields 改；都不给就以时起，绝不悄悄改成以时起。
+    "invalid_cast": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "起课 / 起卦给的输入用不了（details.fields 写了要什么）：照它改，或者整项不给、改用占时起课。",
+            "The casting input that was given cannot be used (details.fields says what is needed): fix it, or omit it to cast by time.",
+        ),
+        "next_action": "fix_field_and_retry",
+    },
     "invalid_option": {"kind": "input"},
     "invalid_setting": {"kind": "input"},
     "invalid_conditions": {"kind": "input"},
