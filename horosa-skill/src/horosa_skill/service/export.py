@@ -172,6 +172,21 @@ def _pick_section_data(title: str, *, input_normalized: dict[str, Any], response
     return None
 
 
+_SOLSTICE_EQUINOX = ("春分", "夏至", "秋分", "冬至")
+
+
+def _sections_not_requested(technique: str, input_normalized: dict[str, Any], preset_sections: list[str]) -> set[str]:
+    """节气盘：二分二至的盘段只在这次要了那个节气时才出（`jieqis` 缺省 = 四个都要；`seedOnly` = 只要节气表）。
+    段名取自 preset 本身（以分至名开头的段），不另列。"""
+    if technique != "jieqi":
+        return set()
+    terms = input_normalized.get("jieqis")
+    wanted = set(_SOLSTICE_EQUINOX) if not terms else {str(term).strip() for term in terms} & set(_SOLSTICE_EQUINOX)
+    if input_normalized.get("seedOnly"):
+        wanted = set()
+    return {title for title in preset_sections if title[:2] in _SOLSTICE_EQUINOX and title[:2] not in wanted}
+
+
 def _build_generated_export_snapshot(
     *,
     technique: str,
@@ -219,6 +234,13 @@ def _build_generated_export_snapshot(
         unknown_detected_sections = list(parsed_snapshot.get("unknown_detected_sections", []) or [])
         missing_selected_sections = list(parsed_snapshot.get("missing_selected_sections", []) or [])
 
+    # 这次调用没要的段（节气盘只查「立春」/ seedOnly：二分二至的盘本就不算）：不选、不占位、不算缺（深审 F13）。
+    not_requested = _sections_not_requested(technique, input_normalized, preset_sections)
+    if not_requested:
+        selected_sections = [title for title in selected_sections if title not in not_requested]
+        settings_used["sections"][technique] = selected_sections
+        missing_selected_sections = [title for title in missing_selected_sections if title not in not_requested]
+
     sections: list[dict[str, Any]] = []
     rendered_blocks: list[str] = []
     for index, title in enumerate(selected_sections, start=1):
@@ -265,6 +287,7 @@ def _build_generated_export_snapshot(
         "selected_sections": selected_sections,
         "unknown_detected_sections": unknown_detected_sections,
         "missing_selected_sections": missing_selected_sections,
+        **({"not_requested_sections": [title for title in preset_sections if title in not_requested]} if not_requested else {}),
         "sections": sections,
         "export_text": export_text,
         "format_source": "snapshot_parser" if parsed_snapshot else "generated_template",
