@@ -56,6 +56,16 @@ echo "token: $TOKEN"
 无令牌或令牌不对时返回 `401` 并带 `WWW-Authenticate: Bearer`；Host 头不在白名单里返回
 `421 Misdirected Request`。
 
+🔴 **`<host>` 用局域网 IP / 主机名时，先把它加进 Host 白名单。** 绑 `0.0.0.0` 只是「所有网卡都在听」，
+Host 白名单（DNS-rebinding 防护）默认只放行回环与 `host.docker.internal`：同网段机器用 `http://192.168.1.5:8765/mcp`
+来连会得到 421。启动横幅会列出「能直接连的地址」与「会被 421 的地址」，并给出原样可抄的一行，例如：
+
+```bash
+HOROSA_MCP_ALLOWED_HOSTS=192.168.1.5:*,mybox.local:* uv run horosa-skill serve --host 0.0.0.0 --port 8765 --token "$TOKEN"
+```
+
+421 的回包正文也写着被拒的 Host、当前白名单和要加的那一行。
+
 > **没有 TLS。** 本 server 只说 HTTP。跨机器使用时请放在反向代理（Caddy / nginx / Cloudflare Tunnel）
 > 后面，让代理终结 TLS，别把 8765 直接暴露到公网。
 

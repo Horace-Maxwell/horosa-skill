@@ -33,7 +33,8 @@ def _server(tmp_path, *, compact: bool = False):
 
 
 def _listed(mcp) -> dict[str, dict]:
-    return {tool.name: tool.model_dump(mode="json", by_alias=True) for tool in asyncio.run(mcp.list_tools())}
+    # 与 scripts/verify_mcp_list_budget.py 同口径：线上按 exclude_unset 写出（mcp/server/stdio.py），没设的 null 不算字节。
+    return {tool.name: tool.model_dump(mode="json", by_alias=True, exclude_unset=True) for tool in asyncio.run(mcp.list_tools())}
 
 
 @pytest.fixture(scope="module")

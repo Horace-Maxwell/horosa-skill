@@ -103,7 +103,8 @@ def test_no_mcp_tool_reaches_run_tool_unconfirmed(tmp_path: Path, compact: bool)
         name for name in _BY_MCP_NAME
         if not validate_agent_preflight(_BY_MCP_NAME[name], {k: v for k, v in SAMPLES[_BY_MCP_NAME[name]].items() if k in data_only})["ok"]
     ]
-    assert len(blocked) >= 90, len(blocked)
+    # 85：v0.50.0 起性别是事实（神数北极 / 南极 / 淳子、紫微择日的样例载荷补了 gender，数据齐了就不该被拦），92 → 88。
+    assert len(blocked) >= 85, len(blocked)
 
 
 @pytest.mark.parametrize("compact", [False, True], ids=["full", "compact"])

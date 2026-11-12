@@ -28,7 +28,7 @@ _CLIENT_RESTART_HINTS = {
 
 # 各客户端的工具总数上限（实测/官方文档，2026-09）：Cursor 全局约 40 个**静默丢弃**超出部分；
 # VS Code Copilot 与 OpenAI 兼容端 128（跨所有 server 共享）；Windsurf 100；Codex 无工具搜索，
-# 116 个工具的定义每轮都进上下文（约 7 万 token）。这些客户端默认发精简面（11 个门面工具，
+# 全量面（门面 + 全部技法）的工具定义每轮都进上下文（约 7 万 token）。这些客户端默认发精简面（只有门面工具，
 # 全部技法仍可经 horosa_tool_run 按名直达）；Claude Code / Claude Desktop 有工具搜索且无硬上限，
 # 保持全量平铺（按名可见 = 更好的发现性）。`--surface full|compact` 可覆盖。
 _CLIENT_COMPACT_DEFAULT = {
@@ -125,7 +125,12 @@ def _client_config_locations(
     codex_home = Path(env["CODEX_HOME"]) if env.get("CODEX_HOME") else home / ".codex"
     cline_tail = Path("globalStorage") / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"
     table: dict[str, list[Path]] = {
-        "claude-code": [home / ".claude.json", project / ".mcp.json"],
+        # 用户级状态文件跟着 CLAUDE_CONFIG_DIR 走（Claude Code 2.1.304 实测：设了它，`claude mcp add --scope user` 写的是
+        # `$CLAUDE_CONFIG_DIR/.claude.json`）；不认它的话 setup 注册成功、紧接着的回读却说「没配」。
+        "claude-code": [
+            (Path(env["CLAUDE_CONFIG_DIR"]).expanduser() if (env.get("CLAUDE_CONFIG_DIR") or "").strip() else home) / ".claude.json",
+            project / ".mcp.json",
+        ],
         "claude-desktop": [claude_desktop],
         "cursor": [home / ".cursor" / "mcp.json", project / ".cursor" / "mcp.json"],
         "vscode": [code_user / "mcp.json", project / ".vscode" / "mcp.json"],

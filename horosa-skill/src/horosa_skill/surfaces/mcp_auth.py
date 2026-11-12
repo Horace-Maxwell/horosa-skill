@@ -17,11 +17,7 @@ def build_transport_security(host: str, port: int) -> Any:
     """
     from mcp.server.transport_security import TransportSecuritySettings
 
-    extra = [
-        item.strip()
-        for item in (os.environ.get("HOROSA_MCP_ALLOWED_HOSTS", "") or "").split(",")
-        if item.strip()
-    ]
+    extra = allowed_hosts_extra()
     hosts = [
         f"{host}:*", "127.0.0.1:*", "localhost:*", "[::1]:*", "host.docker.internal:*", *extra
     ]
@@ -42,6 +38,9 @@ class StaticTokenVerifier:
     不是 OAuth，也不假装是：非回环绑定时至少要有**一道**门，而共享 token 是唯一能让
     Open WebUI / n8n / Dify 这类只会填一个 Authorization 头的客户端用起来的形式。
     比较走 `hmac.compare_digest`，不给计时侧信道。
+
+    🔴 C-21：比较的是 UTF-8 **字节**。`compare_digest` 收到含非 ASCII 字符的 str 会抛 TypeError，
+    于是一个带 `ö` 的 Bearer 头让整个请求变成 HTTP 500（而不是 401）；非 ASCII 的令牌本身也就永远用不了。
     """
 
     def __init__(self, token: str) -> None:
@@ -52,9 +51,19 @@ class StaticTokenVerifier:
 
         from mcp.server.auth.provider import AccessToken
 
-        if not token or not hmac.compare_digest(token, self._token):
+        if not token or not hmac.compare_digest(_token_bytes(token), _token_bytes(self._token)):
             return None
         return AccessToken(token=token, client_id="horosa-skill", scopes=[], expires_at=None)
+
+
+def _token_bytes(value: str) -> bytes:
+    # surrogateescape：HTTP 头按 latin-1 / 非法字节解出来的怪字符也编得回去，不抛
+    return value.encode("utf-8", "surrogateescape")
+
+
+def allowed_hosts_extra() -> list[str]:
+    """用户经 HOROSA_MCP_ALLOWED_HOSTS 追加的放行项（逗号分隔）。"""
+    return [item.strip() for item in (os.environ.get("HOROSA_MCP_ALLOWED_HOSTS", "") or "").split(",") if item.strip()]
 
 
 def build_auth_settings(host: str, port: int, token: str | None) -> Any:

@@ -8,7 +8,7 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
-from horosa_skill.errors import ToolValidationError
+from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.knowledge import retrieval
 from horosa_skill.textscript import fold_to_simplified, looks_traditional
 
@@ -490,10 +490,12 @@ def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     category = f"{payload.get('category') or ''}".strip()
     key = f"{payload.get('key') or ''}".strip()
     if domain not in bundles:
+        # MCP-08（surface 批，最小改动）：空 domain 旧报「Unknown knowledge domain: 」——说清缺了什么、能填什么。
         raise ToolValidationError(
-            f"Unknown knowledge domain: {domain}",
+            bilingual(f"知识库 domain {'缺失' if not domain else f'不认识：{domain}'}。可选值见 details.accepted。",
+                      f"Knowledge domain {'is missing' if not domain else f'is unknown: {domain}'}; see details.accepted."),
             code="knowledge.unknown_domain",
-            details={"domain": domain},
+            details={"domain": domain, "accepted": [*sorted(bundles), "user"]},  # "user" 由 service 层先接走（自备知识库）
         )
     if bundles[domain].get("schema") == "horosa.knowledge.helpdoc.v1":
         return _read_helpdoc_entry(bundles[domain], domain=domain, category=category, key=key)

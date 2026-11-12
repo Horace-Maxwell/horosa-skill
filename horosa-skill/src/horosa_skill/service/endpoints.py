@@ -187,7 +187,7 @@ def _java_chart_payload_candidates(endpoint: str, payload: dict[str, Any]) -> li
     decimal coordinates, with / without gps fields) — because older desktop builds reachable in external mode
     (`HOROSA_SERVER_ROOT`) accept different spellings. 🔴 v0.41.1: two families used to retry with `abs(gpsLon)`,
     i.e. a western birth re-cast at an eastern longitude and returned `ok=True` (New York → Central Asia). No incident
-    ever needed it; a live probe of all 110 techniques at three western-hemisphere places hit zero param errors.
+    ever needed it; a live probe of every technique (110 at the time) at three western-hemisphere places hit zero param errors.
     """
     first = _java_chart_payload(endpoint, payload)
     if endpoint not in _JAVA_CHART_DATE_ENDPOINTS and endpoint not in _JAVA_DATE_FALLBACK_ENDPOINTS:

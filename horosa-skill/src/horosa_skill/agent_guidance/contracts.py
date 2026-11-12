@@ -224,7 +224,7 @@ def _model_field_contract(tool_name: str) -> dict[str, Any]:
     }
 
 
-# 逐工具示例载荷。手写的只覆盖预测族那 9 个；其余 101 个技法 agent 只能拿字段表自己拼，拼错一次就是一轮
+# 逐工具示例载荷。手写的只覆盖预测族那 9 个；其余技法 agent 只能拿字段表自己拼，拼错一次就是一轮
 # 「invalid_payload → 问用户」。testing_payloads 的样例每个都经 live 实例跑通（section_harness / 全面自检），
 # 这里把它们作为示例下发：去掉可由 lat/lon 推导的 gpsLat/gpsLon、把自测说明换成「用户已确认」的写法。
 EXAMPLE_NOTE = (

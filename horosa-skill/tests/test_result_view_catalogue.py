@@ -175,7 +175,8 @@ def catalogue_calls(birth: dict[str, Any]) -> list[tuple[str, tuple[str, dict[st
     calls = [(name, (definition.mcp_name, {**payloads[name], **CONFIRM})) for name, definition in TOOL_DEFINITIONS.items()]
     calls.append(("dispatch", ("horosa_dispatch", {"query": "用八字和紫微看看我今年的事业", "birth": birth, **CONFIRM})))
     calls.append(("hecan", ("horosa_hecan", {"query": "今年事业如何", "tools": ["bazi_birth", "ziwei_birth", "qimen"],
-                                             "birth": birth, **CONFIRM})))
+                                             "birth": birth, "context": {**birth, "date": "2026-11-12", "time": "10:00:00"},
+                                             **CONFIRM})))  # 奇门是起课技法：v0.50.0 起合参按 context 的此刻起，不拿出生时刻
     return calls
 
 

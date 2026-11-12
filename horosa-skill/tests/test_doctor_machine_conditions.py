@@ -78,6 +78,7 @@ def test_warning_codes_in_source_are_all_registered() -> None:
         + inspect.getsource(doctor_checks._payload_outdated_warnings)
         + inspect.getsource(doctor_checks._env_rejection_warnings)
         + inspect.getsource(doctor_checks._js_engine_warnings)
+        + inspect.getsource(doctor_checks._toolsets_doctor_warnings)
     )
     literal = set(re.findall(r'"code": "([^"]+)"', source))
     assert literal == set(doctor_checks._DOCTOR_WARNING_CODES)

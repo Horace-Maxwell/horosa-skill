@@ -12,7 +12,7 @@ Rules every row follows:
   Kimi both read Claude Code's — and their extra fields would land in someone else's config);
 - set a timeout wherever the client's default is shorter than a 45 s cold start or a multi-minute 择日 scan, and make
   `client check` flag it when missing; where the client only takes an environment variable, say so in next_steps;
-- compact surface everywhere (11 facade tools; every technique still reachable through `horosa_tool_run`);
+- compact surface everywhere (the facade tools only; every technique still reachable through `horosa_tool_run`);
 - no file at all where none is documented (Trae: deep link + paste JSON) and no edits to files that hold other people's
   patches (dsh: a standalone patch file).
 """

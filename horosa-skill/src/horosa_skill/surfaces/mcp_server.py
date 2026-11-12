@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Any
@@ -17,7 +18,7 @@ from horosa_skill.agent_guidance import (
 )
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import (
-    COMPACT_SURFACE_TOOL_COUNT,  # noqa: F401 - 脚本与测试从这里读
+    COMPACT_SURFACE_TOOL_COUNT,
     FACADE_TOOL_COUNT,
     TOOL_DEFINITIONS,
     resolve_tool_name,
@@ -26,6 +27,7 @@ from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.result_view import READING, Budget, ViewRequest, compact_json, guidance_index, shape_result
 from horosa_skill.textscript import SIMPLIFIED
 from horosa_skill.textscript.localize import localize
+from horosa_skill.profiles import gate_view as _profile_gate_view
 from horosa_skill.schemas.common import DispatchEnvelope, ToolEnvelope
 from horosa_skill.schemas.tools import (
     AgentGuidanceInput,
@@ -43,17 +45,18 @@ from horosa_skill.schemas.tools import (
     TechniqueReportInput,
 )
 from horosa_skill.service import HorosaSkillService
-from horosa_skill.surfaces.mcp_catalog import register_prompts, register_resources
 from horosa_skill.surfaces.mcp_auth import (
     StaticTokenVerifier,
     build_auth_settings,
     build_transport_security,
 )
+from horosa_skill.surfaces.mcp_catalog import register_prompts, register_resources
 from horosa_skill.surfaces.mcp_elicitation import (
     _maybe_elicit_gate,
 )
 from horosa_skill.surfaces.mcp_errors import (
     _agent_preflight_error,
+    _ensure_error_contract,
     _gate_to_dispatch_envelope,
     _gate_to_envelope,
     _mcp_error_envelope,
@@ -61,7 +64,6 @@ from horosa_skill.surfaces.mcp_errors import (
     _mcp_internal_error_payload,
     _validation_error,
 )
-from horosa_skill.profiles import gate_view as _profile_gate_view
 from horosa_skill.surfaces.mcp_requests import (
     _mcp_payload,
     _merge_mcp_arguments,
@@ -88,11 +90,11 @@ from horosa_skill.surfaces.mcp_surface import (
     _ANN_REPORT_WRITE,
     _SERVER_ICON,
     _return_type,
-    _selected_toolsets,
     _server_profile,
     _tool_annotations,
     _tool_meta,
     _tool_title,
+    surface_plan,
 )
 
 # Server instructions：客户端把它当「这台服务器是干什么的」说明书常驻上下文。自 Claude Code 起
@@ -147,23 +149,35 @@ _JEV_TRIMS = (
 
 
 # 精简面（HOROSA_MCP_COMPACT=1）的 instructions：Cursor / VS Code / Codex / Gemini / Windsurf / Cline / Zed 默认就是
-# 精简面——多数客户端读到的说明书若写「120 tools」，而 tools/list 只给 11 个，模型就不知道技法该怎么到达。
+# 精简面——多数客户端读到的说明书若写全量的工具数，而 tools/list 只给精简面那几个，模型就不知道技法该怎么到达。
 # 这里把「覆盖面」一行与末段换成精简面的真实用法（同样受 2048 字节预算约束，测试两态都锁）。
 _FULL_COVERS = f"WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)"
-_COMPACT_COVERS = f"WHAT IT COVERS ({len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
+_COMPACT_COVERS = f"WHAT IT COVERS ({COMPACT_SURFACE_TOOL_COUNT} tools: {len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
 _FULL_TAIL = (
     f"HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} "
     "(horosa_tool_run reaches any technique\nby name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."
 )
 _COMPACT_TAIL = (
-    "horosa_tool_run(tool_name=…, request={…}); names: horosa://catalog/techniques or the\n"
-    "error of a wrong name. chart / horosa_astro_chart both work."
+    "horosa_tool_run(tool_name=…, request={…}) reaches every technique; names: horosa://catalog/\n"
+    "techniques (chart = horosa_astro_chart)."
 )
 
 
-def _server_instructions(*, decision_layer_on: bool, compact: bool = False) -> str:
+def _subset_covers(plan: dict[str, Any]) -> str:
+    groups = ",".join(plan["domains"])
+    if len(groups) > 20:  # 2048 字节预算：点名太长就只给组数（组名单在 horosa_agent_guidance 的 server_profile 里）
+        groups = f"{len(plan['domains'])} groups of"
+    return f"WHAT IT COVERS ({plan['total_tools']} tools; {groups or 'no'} techniques listed)"
+
+
+def _server_instructions(*, decision_layer_on: bool, compact: bool = False, plan: dict[str, Any] | None = None) -> str:
+    """initialize 说明书。`plan`（mcp_surface.surface_plan）给了就按**实际注册的**工具面写数目与通道（MCP-07）：
+    旧实现只分「全量 / 精简」两态，`HOROSA_TOOLSETS=astro` 时照样写「127 tools」，而 tools/list 只给几十个、
+    也没说剩下的技法经 horosa_tool_run 可达。"""
     text = _SERVER_INSTRUCTIONS
-    if compact:
+    if plan is not None and not plan["compact"] and plan["tool_run"]:
+        text = text.replace(_FULL_COVERS, _subset_covers(plan)).replace(_FULL_TAIL, _COMPACT_TAIL)
+    elif compact or (plan is not None and plan["compact"]):
         text = text.replace(_FULL_COVERS, _COMPACT_COVERS).replace(_FULL_TAIL, _COMPACT_TAIL)
     if not decision_layer_on:
         return text
@@ -253,11 +267,16 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     # SDK 2.x：全部按关键字传（位置参数里插进了 title / description——位置传的 instructions 会落成 serverInfo.title，
     # 模型就收不到说明书了）；host / port / 路径 / transport_security 改到 run() 上传（见 run_mcp_server）。
     # version 直接给构造器：1.x 的 FastMCP 不透传，serverInfo.version 曾回落成 SDK 自己的版本号（「Horosa Skill 1.29.0」）。
+    plan = surface_plan(settings)
+    if plan["resolved"]["problem"]:
+        # stdio 的协议流在 stdout；stderr 这一行进客户端的 MCP 日志（用户能看到），同一句话也在 server_profile 与 doctor 里。
+        sys.stderr.write(f"[horosa] {plan['resolved']['problem']}\n")
+        sys.stderr.flush()
     mcp = HorosaMCPServer(
         name="Horosa Skill",
         version=__version__,
         instructions=_server_instructions(
-            decision_layer_on=getattr(service, "decision_layer", None) is not None, compact=bool(settings.mcp_compact)
+            decision_layer_on=getattr(service, "decision_layer", None) is not None, plan=plan,
         ),
         website_url="https://github.com/Horace-Maxwell/horosa-skill",
         icons=[_SERVER_ICON],
@@ -311,7 +330,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
     def _register_service_facade(*, name: str, method: str, model: type, title: str, annotations: Any, doc: str,
                                  meta: dict[str, Any] | None = None, gate: str | None = None, raw: bool = False,
-                                 call_kwargs: dict[str, Any] | None = None) -> None:
+                                 call_kwargs: dict[str, Any] | None = None, envelope: bool = False) -> None:
         """门面工具 = 归一化入参 → service.<method>(payload)，统一兜底、签名、注解（v0.41.1 起表驱动）。
 
         method 按名在**调用时**取（`getattr(service, method)`）：测试会在建好 server 之后替换实例上的方法。
@@ -331,7 +350,13 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
                 return await _guarded_facade(mcp, name, _call)
 
-            return await _gated_run(mcp, gate=gate, payload=_merge_mcp_arguments(kwargs), run=_run, refuse=_as_is, operation=name)
+            result = _ensure_error_contract(
+                await _gated_run(mcp, gate=gate, payload=_merge_mcp_arguments(kwargs), run=_run, refuse=_as_is, operation=name)
+            )
+            if envelope and isinstance(result, dict) and "ok" not in result:
+                # MCP-08：成功结果也带 ok（与其余工具同形）；原有字段一个不少，只是多一个 ok:true 在最前面。
+                result = {"ok": True, **result}
+            return result
 
         facade.__name__ = facade.__qualname__ = name
         facade.__doc__ = doc
@@ -355,7 +380,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 guidance["server_profile"] = _server_profile(settings)
             return guidance
 
-        return await _guarded_facade(mcp, "horosa_agent_guidance", _run)
+        return _ensure_error_contract(await _guarded_facade(mcp, "horosa_agent_guidance", _run))
     horosa_agent_guidance.__doc__ = (
         "Return machine-readable guidance for agents before calling Horosa tools. "
         "Use this to decide which user settings must be clarified instead of silently defaulted."
@@ -396,6 +421,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         name="horosa_place_search",
         method="place_search",
         model=PlaceSearchInput,
+        envelope=True,
         title="地名检索 / place search",
         annotations=_ANN_QUERY,
         doc=(
@@ -546,8 +572,10 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 mcp, "horosa_report_from_tool", lambda: service.report_from_tool(_normalize_mcp_request(body, ReportFromToolInput))
             )
 
-        return await _gated_run(mcp, gate=tool_name if gated else None, payload=technique_payload, run=_run, refuse=_as_is,
-                                operation="horosa_report_from_tool")
+        return _ensure_error_contract(await _gated_run(
+            mcp, gate=tool_name if gated else None, payload=technique_payload, run=_run, refuse=_as_is,
+            operation="horosa_report_from_tool",
+        ))
     horosa_report_from_tool.__doc__ = (
         "One-shot: run a technique tool AND prepare its report. NOTE this re-casts the chart — if you "
         "already called the tool and hold a run_id, use horosa_report_render instead (avoids a duplicate "
@@ -581,9 +609,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
 
         return await _run_blocking(_read)
 
-    toolsets = _selected_toolsets()
-    if settings.mcp_compact or toolsets is not None:
-        # 精简模式（10 门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT=11 工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。：技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
+    toolsets = plan["resolved"]["effective"]
+    if plan["tool_run"]:
+        # 精简模式（门面 + tool_run = COMPACT_SURFACE_TOOL_COUNT 个工具）或 HOROSA_TOOLSETS 裁剪面：只要技法面被过滤就注册直呼通道。技法工具不平铺，注册一个按名直呼的通用工具（dispatch 关键词路由只覆盖部分技法，
         # 直呼通道保证全部技法（len(TOOL_DEFINITIONS)）可达）；澄清闸照常生效。
         async def horosa_tool_run(**kwargs: Any) -> ToolEnvelope:
             # tool_name 是路由参数、不是载荷：合并之前取走。未显式给出的公共字段是 None，由 `_merge_mcp_arguments`
@@ -692,12 +720,21 @@ def run_mcp_server(settings: Settings, *, transport: str, service: HorosaSkillSe
     if transport == "stdio":
         server.run(transport="stdio")
         return
-    network = {"host": settings.host, "port": settings.port,
-               "transport_security": build_transport_security(settings.host, settings.port)}
+    security = build_transport_security(settings.host, settings.port)
     if transport == "sse":
-        server.run(transport="sse", **network)
+        app = server.sse_app(transport_security=security, host=settings.host)
     else:
-        server.run(transport=transport, streamable_http_path="/mcp", **network)
+        app = server.streamable_http_app(streamable_http_path="/mcp", transport_security=security, host=settings.host)
+    # MCP-09：外层先用与 SDK 相同的判据看 Host，拒绝时 421 回包写清楚白名单与要加的 HOROSA_MCP_ALLOWED_HOSTS 那一行；
+    # 放行的请求原样交给 SDK（它自己的 DNS-rebinding 校验照旧再跑一遍）。所以这里自己起 uvicorn，参数与 SDK 的 run 一致。
+    import anyio
+    import uvicorn
+
+    from horosa_skill.surfaces.mcp_hosts import HostGuidanceMiddleware
+
+    config = uvicorn.Config(HostGuidanceMiddleware(app, list(security.allowed_hosts)), host=settings.host,
+                            port=settings.port, log_level=server.settings.log_level.lower())
+    anyio.run(uvicorn.Server(config).serve)
 
 
 def main() -> None:

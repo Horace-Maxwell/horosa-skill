@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from horosa_skill.civil_calendar import _civil_ymd_exists, _parse_date_parts
-from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.errors import ToolValidationError, bilingual, tool_code
 from horosa_skill.schemas.tools import (
     BaZiBirthInput,
     BirthInput,
@@ -261,7 +261,7 @@ def _raise_js_option_error(tool: str, js_result: Any) -> None:
             str(error.get("message") or f"{tool} 参数无效。"),
             f"{tool}: invalid option {error.get('field')!r}={error.get('value')!r} (allowed: {error.get('allowed')}).",
         ),
-        code=f"tool.{tool}_invalid_option",
+        code=tool_code(tool, "invalid_option"),
         details={k: error.get(k) for k in ("field", "value", "allowed") if k in error},
     )
 

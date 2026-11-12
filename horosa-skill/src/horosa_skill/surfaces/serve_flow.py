@@ -36,9 +36,44 @@ def _normalized_transport(value: str) -> str:
 
 
 def _mask_token(token: str | None) -> str:
+    """横幅里认令牌用：最多露出四分之一（C-21：旧写法 9 位令牌露 6 位）；短于 16 位一律不露。"""
     if not token:
         return ""
-    return f"{token[:4]}…{token[-2:]}" if len(token) > 8 else "****"
+    return f"{token[:2]}…{token[-2:]}" if len(token) >= 16 else "****"
+
+
+def _serve_banner(*, host: str, port: int, transport: str, token: str | None, skip_runtime_start: bool) -> str:
+    """HTTP 传输的启动横幅：只把**真能连上**的地址当连接地址给（MCP-09）。
+
+    🔴 旧横幅印 `http://{host}:{port}/mcp` 与照抄它的 `claude mcp add`：绑到 0.0.0.0 时那是一个连不上的地址，
+    而同网段机器用局域网 IP 来连会被 Host 白名单 421，横幅从头到尾不提 HOROSA_MCP_ALLOWED_HOSTS。
+    """
+    from horosa_skill.surfaces.mcp_auth import allowed_hosts_extra, build_transport_security
+    from horosa_skill.surfaces.mcp_hosts import describe_bind
+
+    path = "/sse" if transport == "sse" else "/mcp"
+    allowed = list(build_transport_security(host, port).allowed_hosts)
+    view = describe_bind(host, port, path, allowed, user_extra=allowed_hosts_extra())
+    primary = view["answering"][0] if view["answering"] else f"http://127.0.0.1:{port}{path}"
+    lines = [
+        f"Horosa Skill MCP 已绑定 {host}:{port}"
+        f"（{transport}{'（legacy）' if transport == 'sse' else ''}，{len(TOOL_DEFINITIONS)} 个技法工具）。",
+        "能直接连的地址：" + "、".join(view["answering"]),
+    ]
+    if token:
+        lines.append(f"访问令牌：已启用（Authorization: Bearer {_mask_token(token)}）。")
+    if view["blocked"]:
+        lines.append(
+            "同网段用这些地址来连会被 421 拒绝（Host 白名单 / DNS-rebinding 防护）：" + "、".join(view["blocked"])
+            + "。要放行，在启动 serve 的环境里加上这一行后重启："
+        )
+        lines.append(f"  {view['allowed_hosts_line']}")
+    lines.append(f"当前放行的 Host：{', '.join(view['allowed_hosts'])}")
+    lines.append(f"接入 Claude Code：claude mcp add horosa --transport http {primary}")
+    lines.append("其他客户端：uv run horosa-skill client config --format <client>（见 README「接入 AI 客户端」）。")
+    if not skip_runtime_start:
+        lines.append("正在启动本机 runtime（首次可能要几分钟）……")
+    return "\n".join(lines)
 
 
 def _start_stdio_runtime_warmup(manager: HorosaRuntimeManager) -> None:
@@ -125,16 +160,8 @@ def _run_serve(
     # 🔴 横幅必须在启动 runtime **之前**打印：start_local_services 可以阻塞到 45 秒
     # （首次更久），期间用户盯着一个没有任何输出的终端，无从判断是卡住了还是在装。
     if transport != "stdio":
-        path = "/sse" if transport == "sse" else "/mcp"
-        typer.echo(
-            f"Horosa Skill MCP 正在 http://{host}:{port}{path} 监听"
-            f"（{transport}{'（legacy）' if transport == 'sse' else ''}，{len(TOOL_DEFINITIONS)} 个技法工具）。\n"
-            + (f"访问令牌：已启用（Authorization: Bearer {_mask_token(token)}）。\n" if token else "")
-            + f"接入 Claude Code：claude mcp add horosa --transport http http://{host}:{port}{path}\n"
-            f"其他客户端：uv run horosa-skill client config --format <client>（见 README「接入 AI 客户端」）。\n"
-            + ("正在启动本机 runtime（首次可能要几分钟）……" if not skip_runtime_start else ""),
-            err=True,
-        )
+        typer.echo(_serve_banner(host=host, port=port, transport=transport, token=token,
+                                 skip_runtime_start=skip_runtime_start), err=True)
     started_now = False
     if not skip_runtime_start:
         if transport == "stdio":

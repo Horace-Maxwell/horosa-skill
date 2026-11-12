@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-4935_passed-3e7c6f?style=flat-square" alt="4935 passed" />
+  <img src="https://img.shields.io/badge/测试-5091_passed-3e7c6f?style=flat-square" alt="5091 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -168,7 +168,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 ## 接入 AI 客户端
 
 `setup --client <客户端>` 一条命令走完接入（v0.38.0）：探网（5 s）→ 装 / 校验离线 runtime →（`--vectors` 时）准备向量检索 → 写配置（自动定位、
-只动 horosa 条目、写前备份 `.horosa-bak`、原子替换）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.49.0；
+只动 horosa 条目、内容没变不写、首次改写前把原文件存为 `.horosa-bak`、原子替换并保留权限；终端里设的引擎 / 数据目录变量写进条目 env）→ **把 horosa-agent skill 装进该客户端读的 skills 目录**（v0.49.0；
 多数客户端读共享的 `~/.agents/skills`；`--no-skill` 跳过、`--skill-dir` 指定）→ doctor → 回读磁盘体检 → **用客户端将要执行的那条命令真起一次
 stdio server 并数工具** → 打印下一步。失败时 stderr 给出结构化失败包（`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`），退出码 2；写配置之前失败保证 `config_untouched: true`。只想看配置不落盘用 `client config`：
@@ -568,7 +568,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **4935 / 4935 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **5091 / 5091 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 133 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
@@ -584,7 +584,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 4935 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 5091 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

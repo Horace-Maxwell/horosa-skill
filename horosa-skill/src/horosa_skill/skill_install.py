@@ -1,7 +1,7 @@
 """Install the `horosa-agent` skill into an AI client's skills directory (v0.41.0).
 
 🔴 Why: `setup` used to write only the MCP config. A user who installed from the wheel (no checkout) then had an agent
-that could call 120 tools but had never read the clarify-before-call gate, the export-snapshot reading contract or
+that could call every tool but had never read the clarify-before-call gate, the export-snapshot reading contract or
 "never hand-calculate" — those live in `skills/horosa-agent/SKILL.md`, which only reached agents that opened this repo.
 Most clients now read Agent Skills from a fixed user-level folder (`~/.agents/skills` is the shared one), so `setup`
 copies the packaged bundle there (or into the client's own folder when it does not read the shared one).

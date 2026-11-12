@@ -5,7 +5,7 @@ import math
 import re
 from typing import Any
 
-from horosa_skill.errors import ToolValidationError, bilingual
+from horosa_skill.errors import ToolValidationError, bilingual, tool_code
 
 # --- 天星择日 / 奇门择日 helpers ------------------------------------------------------------
 
@@ -82,20 +82,20 @@ def _require_sane_window(
     if span is None:
         raise ToolValidationError(
             f"{tool} 无法解析搜索窗日期（需 YYYY-MM-DD）。",
-            code=f"tool.{tool}_bad_window",
+            code=tool_code(tool, "bad_window"),
             details={"startDate": start_date, "endDate": end_date,
                      "hint": "只接受 YYYY-MM-DD；时刻请用 startTime/endTime 单独给。"},
         )
     if span < 0:
         raise ToolValidationError(
             f"{tool} 搜索窗倒置：结束日期早于起始日期。",
-            code=f"tool.{tool}_inverted_window",
+            code=tool_code(tool, "inverted_window"),
             details={"startDate": start_date, "endDate": end_date, "span_days": span},
         )
     if span > max_span:
         raise ToolValidationError(
             f"{tool} 搜索窗 {span} 天超过上限 {max_span} 天。",
-            code=f"tool.{tool}_span_too_large",
+            code=tool_code(tool, "span_too_large"),
             details={
                 "span_days": span, "max_span_days": max_span,
                 # 上限是硬的：maxSpanDays 只能调低（_clamped_max_span），提示不再暗示可以调高，
@@ -124,7 +124,7 @@ def _require_cast_geo(payload: dict[str, Any], *, tool: str) -> None:
         return
     raise ToolValidationError(
         f"{tool} 按时刻起课需要起课地点的经纬度（缺 {'/'.join(missing)}）。",
-        code=f"tool.{tool}_cast_geo_required",
+        code=tool_code(tool, "cast_geo_required"),
         details={
             "missing": missing,
             "why": (

@@ -12,6 +12,7 @@ from horosa_skill.client_tools import resolve_uv_command
 from horosa_skill.config import Settings
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.surfaces.openclaw_smoke import _openclaw_setup_command
+from horosa_skill.surfaces.toolsets import doctor_warnings as _toolsets_doctor_warnings  # MCP-07（surface 批）
 
 
 def _network_hints() -> dict[str, Any]:
@@ -117,8 +118,14 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 _DOCTOR_WARNING_CODES = (
     "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
     "env:rejected_value", "env:invalid_url", "js_engine:unavailable",
+    "config:toolsets_invalid",  # MCP-07（surface 批）：HOROSA_TOOLSETS 一个合法值都没有 / 有不认识的值
 )
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
+    # MCP-07（surface 批）
+    "config:toolsets_invalid": {
+        "user_summary": "HOROSA_TOOLSETS 里有不认识的值：客户端只看到一部分技法工具（一个合法值都没有时只有门面工具 + horosa_tool_run）。",
+        "next_action": "改正 HOROSA_TOOLSETS（合法值见 doctor 的 warnings.detail）或删掉它，然后重启客户端。",
+    },
     "runtime.manifest_invalid": {
         "user_summary": "已装 runtime 的 runtime-manifest.json 缺失或损坏，doctor 无法信任这份安装。",
         "next_action": "重跑 `horosa-skill install --force`（会重新解包并写回清单）。",
@@ -762,6 +769,7 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
         *_internal_port_env_warnings(settings),
         *_payload_outdated_warnings(report),
         *_env_rejection_warnings(report["env_flags"]["rejected"]),
+        *_toolsets_doctor_warnings(),  # MCP-07（surface 批）
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
     report["advice"] = [

@@ -26,8 +26,9 @@ def test_every_code_in_the_package_classifies() -> None:
 
 def test_classification_layers() -> None:
     assert classify_code("tool.backend_param_error") == ("input", "exact")
-    assert classify_code("tool.qimenzeri_missing_window") == ("input", "suffix")
-    assert classify_code("tool.tianxing_invalid_conditions") == ("input", "suffix")
+    # A-5：按技法生成的码先经登记过的族（source="family"）；kind 与旧后缀规则一致
+    assert classify_code("tool.qimenzeri_missing_window") == ("input", "family")
+    assert classify_code("tool.tianxing_invalid_conditions") == ("input", "family")
     assert classify_code("tool.zhengchuan_calc_failed") == ("retry_or_doctor", "suffix")
     assert classify_code("tool.mundane_ingress_unavailable") == ("retry_or_doctor", "suffix")
     assert classify_code("runtime.install_download_failed") == ("runtime", "prefix")
@@ -43,7 +44,7 @@ def test_classification_layers() -> None:
 def test_recovery_for_fills_kind_prompt_next_action_and_hint() -> None:
     details = recovery_for("tool.qimenzeri_missing_window", {"tool": "qimenzeri"})
     rec = details["agent_recovery"]
-    assert rec["kind"] == "input" and rec["source"] == "suffix" and rec["code"] == "tool.qimenzeri_missing_window"
+    assert rec["kind"] == "input" and rec["source"] == "family" and rec["code"] == "tool.qimenzeri_missing_window"
     assert " / " in rec["prompt_to_user"]  # bilingual
     assert rec["next_action"] == "ask_user_or_fix_input"
     assert details["hint"] == rec["prompt_to_user"] and details["next_action"] == rec["next_action"]

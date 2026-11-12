@@ -17,8 +17,8 @@ uv run horosa-skill client config --format codex
 ```
 
 输出的 `toml_stdio` 已带真实绝对路径与全部硬约束字段，粘进 `~/.codex/config.toml` 即用。
-或直接原位合并（**只动 `[mcp_servers.horosa]` 表**，其余内容与注释逐字保留，写前自动备份
-`config.toml.horosa-bak`；目标不是合法 TOML 时会拒绝合并而不是覆盖）：
+或直接原位合并（**只动 `[mcp_servers.horosa]` 表**，其余内容与注释逐字保留；内容没变就不写，第一次改写前把原文件存为
+`config.toml.horosa-bak`（之后不再覆盖，后续改动另存带时间戳的备份），原子替换并保留文件权限；目标不是合法 TOML 时会拒绝合并而不是覆盖）：
 
 ```bash
 uv run horosa-skill client config --format codex --write ~/.codex/config.toml

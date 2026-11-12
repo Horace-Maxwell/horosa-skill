@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
+from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual, tool_code
 from horosa_skill.service._common import (
     _chart_at_moment_date_fields,
     _chart_body_lon_speed,
@@ -43,7 +43,7 @@ class HoraryElectionRunners:
                 f"{tool} 设置取值无效：{'；'.join(parts)}。",
                 f"{tool} setting(s) invalid: {'; '.join(parts)}.",
             ),
-            code=f"tool.{tool}_invalid_setting",
+            code=tool_code(tool, "invalid_setting"),
             details={"invalid": invalid},
         )
 

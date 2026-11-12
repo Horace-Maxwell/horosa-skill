@@ -8,7 +8,7 @@ from typing import Any
 
 import typer
 
-from horosa_skill.client_config.merge import _write_json_file
+from horosa_skill.client_config.merge import _commit_config, _write_json_file
 from horosa_skill.client_tools import (
     isolated_data_dir,
     isolated_runtime_ports,
@@ -128,7 +128,9 @@ def _write_openclaw_native_config(
         server_name=server_name,
         server_block=server_block,
     )
-    return _write_json_file(output_path, payload)
+    # C-16：这是用户自己的 OpenClaw 主配置（别家 server、模型 key 都在里面）——与其它客户端同一个落盘口：留底、原子、保权限。
+    _commit_config(output_path, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+    return output_path
 
 
 def _build_openclaw_config(

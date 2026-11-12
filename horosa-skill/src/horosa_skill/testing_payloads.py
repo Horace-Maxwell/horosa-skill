@@ -193,7 +193,7 @@ def build_sample_payloads() -> dict[str, dict]:
             ]},
         },
         "ziweizeri": {
-            **chart_birth, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
+            **chart_birth, "gender": 1, "pos": "福州", "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
             "conditions": {"kind": "group", "joiner": "all", "children": [
                 {"kind": "leaf", "type": "wuxing_ju", "params": {"values": ["3"]}},
             ]},
@@ -238,9 +238,9 @@ def build_sample_payloads() -> dict[str, dict]:
         "shaozi": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1},
         "tieban": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1},
         "fendjing": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
-        "beiji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
-        "nanji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
-        "chunzi": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1},
+        "beiji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1},
+        "nanji": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1},
+        "chunzi": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1},
         "xianqin": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},
         "cetian": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},
         "qizhengkin": {**confirmed, "date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, "gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},

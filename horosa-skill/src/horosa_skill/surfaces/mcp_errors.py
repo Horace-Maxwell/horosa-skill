@@ -101,7 +101,7 @@ def _mcp_internal_error_payload(exc: Exception) -> dict[str, Any]:
     # Last-resort structured error so an unexpected failure (e.g. a DOCX/PDF renderer or disk
     # I/O error during report generation) returns cleanly instead of breaking the MCP session.
     message = str(exc) or exc.__class__.__name__
-    details = {"exception_type": type(exc).__name__}
+    details = recovery_for("tool.internal_error", {"exception_type": type(exc).__name__})
     return {
         "ok": False,
         "code": "tool.internal_error",
@@ -119,7 +119,7 @@ def _mcp_validation_error_payload(operation_name: str, tool_name: str | None, ex
         for err in exc.errors(include_url=False)
     ]
     recovery = build_validation_recovery(operation_name=operation_name, errors=errors, tool_name=tool_name)
-    details = {"validation_errors": errors, "agent_recovery": recovery}
+    details = recovery_for("tool.invalid_payload", {"validation_errors": errors, "agent_recovery": recovery})
     message = f"{operation_name} payload failed validation; see details.agent_recovery."
     return {
         "ok": False,
@@ -128,6 +128,23 @@ def _mcp_validation_error_payload(operation_name: str, tool_name: str | None, ex
         "details": details,
         "error": {"code": "tool.invalid_payload", "message": message, "details": details},
     }
+
+
+def _ensure_error_contract(result: Any) -> Any:
+    """门面返回的 dict 若是 ok:false，保证顶层有 code / message、details 里有 agent_recovery.kind（MCP-08）。
+
+    service 层有几处直接 `return {"ok": False, ...}`（不走异常），旧实现就把它原样交给客户端：memory_show 的
+    `memory.run.not_found` 没有 agent_recovery。这里是所有门面出门前的最后一道：缺什么补什么，已有的不覆盖。
+    """
+    if not isinstance(result, dict) or result.get("ok") is not False:
+        return result
+    error = result.get("error") if isinstance(result.get("error"), dict) else {}
+    code = str(result.get("code") or error.get("code") or "tool.internal_error")
+    message = str(result.get("message") or error.get("message") or code)
+    details = recovery_for(code, result.get("details") if isinstance(result.get("details"), dict) else error.get("details"))
+    if not (details.get("agent_recovery") or {}).get("kind"):
+        details = recovery_for("tool.internal_error", details)
+    return {**result, "code": code, "message": message, "details": details}
 
 
 def _agent_preflight_error(tool_name: str, payload: dict[str, Any]) -> dict[str, Any] | None:

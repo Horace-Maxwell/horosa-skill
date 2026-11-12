@@ -31,6 +31,11 @@
 | v0.50.0-dev (2026-11-12) | 入参认不出就原样往下传：东八区 / 辰时 / 480 / 40n75 / 性别「其他」在不同技法上报错、按缺省或算错，MCP 顶层 place / 别名键被 SDK 丢掉 | 一个逐字段校验器（input_fields + input_normalization）管全部技法与嵌套当事人：读懂进 warnings、读不懂按字段结构化拒；MCP 接回未声明键；结果随性别而变的技法没性别就拒；全目录垃圾值用例守 |
 | v0.50.0-dev (2026-11-12) | dispatch 把同一份出生数据发给每个技法：奇门 / 塔罗 / 黄历按出生时刻起盘，太阳返照不知道推哪年，`preferences` 与用户原话到不了技法；没命中关键词 + 有出生数据一律起本命盘（「我和他合不合」也是），繁体一个关键词都不中 | 114 个技法登记时间角色（`engine/time_roles.py`）、逐技法规划载荷（`engine/dispatch_plan.py`，起课只读 `context`）、查询先归一再路由、意图类代替兜底；226 句意图语料必过 |
 | v0.50.0-dev (2026-11-12) | 澄清闸按字面键过滤问题：伪名（location / birth data / cast-input）给了还问、上海出生问南半球月令、`huangli {"date"}` 被空追问拦住、问题只有中文；带上确认标记连性别这种事实也放行；dispatch 闸是写死的四问 | 问题逐条解析「哪些键回答它 + 谓词 + 是否事实」（`agent_guidance/questions.py`），什么都不缺就放行、确认标记只回答设置；dispatch 先路由再取选中技法问题并集 |
+| v0.50.0-dev (2026-11-12) | `setup --client claude-code` 第二次必失败（`claude mcp add` / `add-json` 同名都拒），retry_command 是同一条必失败的命令；`-e K=V` 排在名字前把名字吞掉，精简面第一次就失败 | 先读 `$CLAUDE_CONFIG_DIR/.claude.json`：一致不动、不同 remove + add、失败用 add-json 装回；照真 CLI 抄的替身（含 PATH 上的真可执行文件）+ 负向对照 |
+| v0.50.0-dev (2026-11-12) | 终端里设了 `HOROSA_RUNTIME_ROOT` 跑 setup：配置不带它，探针却继承终端环境 → 全绿，GUI 客户端起的 server 用默认目录；无载荷平台 / 外部引擎时 setup 死在 install | env_carry 三表锁住登记表（引擎 / 数据变量写进每种 env、密钥永不写、行为开关只点名）；探针 = 最小环境 + 条目 env；无载荷 / 外部引擎跳过安装照写配置 |
+| v0.50.0-dev (2026-11-12) | `.horosa-bak` 每次覆盖（第二次跑完原文件就没了）、0600 配置写成 0644、Codex TOML 直写、OpenClaw 主配置无备份 | 单一落盘口 `_commit_config`：不变不写、首份备份永不覆盖 + 时间戳备份 5 份、原子替换保权限；逐格式测试 |
+| v0.50.0-dev (2026-11-12) | ok:false 信封不统一：无码的校验错误缺省 `horosa_skill_error` → 「重试 / 跑 doctor」；f-string 拼的错误码静态扫描看不见、两个族落不到恢复规则；dispatch 全失败顶层 code 为 null | 127 工具 × 三组坏参数机检不变量；ToolValidationError 缺省 `tool.invalid_input`；码族登记表 + pytest 下未登记码以 BaseException 红；每个码要有测试（债务表只减） |
+| v0.50.0-dev (2026-11-12) | `HOROSA_TOOLSETS` 拼错 = 悄悄全量；`all` = 128；说明书恒写 127；`serve --host 0.0.0.0` 横幅给出连不上的地址、局域网来连 421 不提变量；非 ASCII 令牌 500；485 个广告属性无描述；注释里的工具数全过期 | 写错往精简面倒并三处可见；说明书按注册计划生成；横幅 / 421 按 SDK 同一判据列可连地址与要加的那一行；令牌按字节比；共享字段词典 + 无描述不广告；字面量工具数守卫 |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -441,6 +446,33 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 **守卫**：`tests/test_gate_questions.py`（英文全覆盖；每个问题的回答键都是该技法字段或登记过的载荷键；性别事实 ×17 技法；
 南半球谓词；拒绝双语、无超长选项、≤12 KB）、`tests/test_gate_after_place.py`、`data/sensitive_settings.json` 新增 5 条行为例。
 负向对照：`is_fact` 恒 False → 17 红；谓词恒真 → 红；删一条英文 → 红；去掉闸前地名解析 → 红。
+### v0.50.0-dev / 2026-11-12 — 客户端接入、MCP 广告面与错误信封（审查批 surface）
+
+- **Claude Code 重跑**：`claude mcp add --scope user` 与 `add-json` 同名都以 `MCP server <name> already exists in user config`、退出码 1 拒绝
+  （2.1.304 在临时 HOME 实测，`contracts/third_party_facts.json` `claude-code.mcp-add-rerun`）。旧 setup 每次直接 `add`：第二次必失败，失败包的
+  retry_command 就是同一条命令。另一个更早就会咬人的：`-e` 是可变参数，`claude mcp add --scope user -e K=V horosa -- …` 把 `horosa` 当成
+  第二个环境变量（`Invalid environment variable format`），所以精简面 / 繁体输出（带 `-e`）**第一次**就失败——旧测试只断言了无 env 的情形。
+  修：`client_config/claude_cli.py` 读 → 比 → 换；替身 `tests/fake_claude.py` 照真 CLI 的四条行为写，其中一条测试把它包成 PATH 上的真
+  可执行文件跑三次 setup（不依赖任何内部函数名，换回旧写法第二次即红）。
+- **配置只因终端才通**：旧探针对非 Codex 客户端「继承整个环境」，终端里设了 `HOROSA_RUNTIME_ROOT` 而配置没写，探针照样绿；GUI 客户端
+  不读 shell 配置。旧测试里甚至断言了「cursor 探针环境里有终端的 HOROSA_MCP_TOKEN」——把缺陷写成了契约。修：`env_carry` 把
+  `config.ENV_FLAG_REGISTRY` 每个变量分进 CARRIED / NOT_CARRIED / FLAG_OWNED（测试锁三表恰好覆盖登记表），引擎 / 数据变量写进每种带 env
+  的格式，密钥按名字永不写（登记表没有「是否密钥」这一列，判据暂住 env_carry），行为开关只点名；探针 = 系统变量 + 装依赖的网络配置 + 条目
+  env；探针比对扩到数据目录与两个引擎地址。无载荷平台 / 外部引擎：跳过安装、照写配置（E-12）。
+- **备份**：`.horosa-bak` 每次覆盖，第二次跑完用户原文件就没了；写临时文件按 umask 建，0600 变 0644；Codex TOML 是唯一 `write_text` 直写；
+  OpenClaw 主配置无备份。旧测试断言了「第二次也留了 .horosa-bak」（那份是我们自己第一次的输出）。修：`_commit_config` 一个落盘口。
+- **错误信封**：无码的 `ToolValidationError` 缺省基类的 `horosa_skill_error`，后缀规则归 retry_or_doctor——`Invalid date` 被说成「重试 / 跑
+  doctor」。`code=f"tool.{tool}_inverted_window"` 拼出来的码 `verify_error_recovery.py` 的正则看不见，两个族不在任何规则里。修：缺省
+  `tool.invalid_input`；`errors.tool_code` + `TOOL_CODE_FAMILIES`（拼写不变）；pytest 下包内代码抛未登记码 → `UnregisteredErrorCode`
+  （BaseException，工具层 `except Exception` 吞不掉，否则这条检查自己就是「不会红的守卫」）；守卫要求每个码出现在测试里，现存 86 项进
+  `contracts/error_code_test_debt.json` 只减不增；`tests/test_mcp_error_contract.py` 对 127 个工具 × 三组坏参数机检（约 5 s）。
+- **广告面**：`HOROSA_TOOLSETS` 全拼错回落全量（fail-open）、`all` 多注册 tool_run（128）、说明书只分全量 / 精简两态；`serve --host 0.0.0.0`
+  横幅印 `http://0.0.0.0:…` 与照抄它的 `claude mcp add`，局域网来连被 Host 白名单 421 而全程不提 `HOROSA_MCP_ALLOWED_HOSTS`；
+  `hmac.compare_digest` 收到含非 ASCII 的 str 抛 TypeError → HTTP 500；485 个广告属性没有描述；注释 / skill 里写死的工具数全部过期。
+  修：解析挪进不依赖 SDK 的 `surfaces/toolsets.py`，写错往精简面倒、stderr / server_profile / doctor 同一句；说明书从注册计划生成（全部变体
+  ≤ 2048 B）；`surfaces/mcp_hosts.py` 用与 SDK 逐条相同的判据列出能连 / 会被拒的地址与要加的那一行，421 回包同样；令牌按 UTF-8 字节比；
+  `surfaces/mcp_field_docs.py` 一个字段名一句，说不清的技法旋钮不广告（照样按名接受）；`tests/test_catalogue_count_literals.py`。
+- **守卫**：每条修复都有负向对照（换回旧写法即红），见各提交说明。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 
