@@ -11,6 +11,9 @@ dependencies = [
   # SDK 2.x（v0.45.1 迁移，docs/LESSONS.md）：FastMCP → MCPServer；同一服务按 MCP-Protocol-Version 同时服务 2026-07-28
   # （MRTR：input_required 多轮）与更早修订（initialize + 会话 + 服务端发起的 elicitation）。新依赖都是纯 Python
   # （mcp-types / httpx2 / opentelemetry-api），编译件与 1.x 相同，win_arm64 照常。
+  # 报告里调用方写的 Markdown 按 CommonMark（+ GFM 表格 / 删除线）解析成块树，PDF 与 DOCX 画同一棵（reports/markdown.py，v0.50.0）。
+  # 本来就随 mcp[cli] → typer → rich 装着（MIT，纯 Python，含 mdurl）；直接声明是因为报告代码直接用它，不能靠别人的传递依赖。
+  "markdown-it-py>=3.0.0,<5",
   "mcp[cli]>=2.3.0,<3",
   # mcp 2.3 要求 pydantic>=2.12；下限跟上，免得旧 pydantic 环境装出一对不兼容的组合。
   "pydantic>=2.12.0",

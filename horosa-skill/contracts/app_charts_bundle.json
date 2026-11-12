@@ -2,8 +2,8 @@
   "_comment": "Provenance of horosa-core-js/dist/app-charts.cjs. Rebuild: node horosa-core-js/app-charts/build.mjs --source-root <Horosa-Public>; --check verifies.",
   "upstream_commit": "10fb75de980bb0a6e0d1f50c7ee93cc97a88d7de",
   "esbuild": "0.25.0",
-  "bundle_sha256": "57b1289b58e8127aae9c9080975f984dfcdc433a2c39527439b527cdc4119c0c",
-  "bundle_bytes": 5012639,
+  "bundle_sha256": "b95201deee0cd6c78b7d6b4f08775f5633325a76ff055a5c6e87dfc50f3898c0",
+  "bundle_bytes": 5013297,
   "kinds": [
     "natal_wheel",
     "bi_wheel",

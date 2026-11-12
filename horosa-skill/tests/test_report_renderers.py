@@ -73,7 +73,10 @@ def test_render_failure_degrades_to_txt(tmp_path: Path, monkeypatch) -> None:
     assert result["format"] == "txt"
     assert result["degraded_from"] == "pdf" and "字体炸了" in result["degrade_reason"]
     txt = Path(result["path"])
-    assert txt.suffix == ".txt" and "备用纯文本" in txt.read_text(encoding="utf-8")
+    # 退化的 TXT 是读者那份（与 PDF 同一串块），不是机器版 plain_text（v0.50.0，评审 R-01）
+    body = txt.read_text(encoding="utf-8")
+    assert txt.suffix == ".txt" and body.startswith("说明：") and "流年概览" in body and "总览：命主日元戊土。" in body
+    assert "备用纯文本" not in body
 
 
 def test_cancellation_during_a_render_propagates_instead_of_degrading(tmp_path, monkeypatch) -> None:
@@ -110,4 +113,35 @@ def test_a_pdf_without_any_cjk_font_degrades_to_txt_instead_of_tofu(tmp_path, mo
     result = renderers.render_report({"plain_text": "中文正文"}, output_path=tmp_path / "r.pdf", format_name="pdf")
     assert result["format"] == "txt" and result["degraded_from"] == "pdf"
     assert "CJK" in result["degrade_reason"]
-    assert (tmp_path / "r.txt").read_text(encoding="utf-8") == "中文正文"
+    assert (tmp_path / "r.txt").read_text(encoding="utf-8").endswith("中文正文\n")  # 没有人读块的极简文档：退回 plain_text
+
+
+def test_degraded_txt_is_the_readers_document_and_never_overwrites(tmp_path: Path, monkeypatch) -> None:
+    """评审 R-01：此前退化的 TXT 是机器版全文（Run ID / Trace ID、质量闸、交付清单、覆盖矩阵、机器建议、产物绝对路径），
+    而且直接写在同名 .txt 上，旁边已有的同名文件被盖掉。"""
+    from test_user_knowledge_and_chart_report import _chart_run, _service
+
+    from horosa_skill.reports import renderers
+
+    service = _service(tmp_path)
+    run = _chart_run(service)
+    run_id = run.memory_ref.run_id
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("排版失败")
+
+    monkeypatch.setattr(renderers, "_render_pdf", boom)
+    (tmp_path / "runs").mkdir(exist_ok=True)
+    (tmp_path / "runs" / "我的.txt").write_text("别人的文件", encoding="utf-8")
+    result = service.report_render({"run_id": run_id, "format": "pdf", "output_path": "我的.pdf",
+                                    "ai_answer_text": "## 总体结论\n\n今年宜守，**不宜**扩张。\n\n- 第一条"})
+    assert result["format"] == "txt" and result["degraded_from"] == "pdf"
+    assert result["degrade_reason"].startswith("PDF 排版时出错，改存为纯文本") and "排版失败" in result["degrade_reason"]
+    assert (tmp_path / "runs" / "我的.txt").read_text(encoding="utf-8") == "别人的文件"
+    body = Path(result["artifact_path"]).read_text(encoding="utf-8")
+    assert Path(result["artifact_path"]).name == "我的-2.txt"
+    assert body.startswith("说明：这份报告本应是 PDF")
+    for reader in ("核心结论", "今年宜守，不宜扩张。", "- 第一条", "完整盘面", "起盘信息"):
+        assert reader in body, reader
+    for machine in (run_id, "Run ID", "Trace ID", "交付检查清单", "覆盖矩阵", "AI should fill", str(tmp_path), "**"):
+        assert machine not in body, machine

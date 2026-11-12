@@ -785,6 +785,32 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "use_relative_output_path_or_allowlist_root",
     },
+    "report.output_path_unusable": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "output_path 用不了（details.reason：existing_file 已有文件且不是星阙写的报告，不替换 / store_area 是星阙自己的存储区 / "
+            "extension_mismatch 扩展名和 format 对不上 / name_too_long 文件名太长 / path_refused_by_system 系统不接受这条路径"
+            "（多半是整条太长）/ parent_not_directory 路径中间是个文件 / not_writable 目录没有写权限 / no_free_name 缺省文件名都被占了 / "
+            "write_failed 写盘失败）。换一个新文件名或目录后重试；不写 output_path 就落在缺省位置。除 write_failed 外都在起盘和写回"
+            "解读之前检查，被拒时什么都没有写。",
+            "output_path cannot be used (details.reason: existing_file = a file that is not a Horosa report is never replaced / "
+            "store_area = Horosa's own storage / extension_mismatch / name_too_long / path_refused_by_system / "
+            "parent_not_directory / not_writable / no_free_name / write_failed). Retry with a new file name or a directory; "
+            "omit output_path to use the default location. Every reason except write_failed is checked before the technique "
+            "runs and before the reading is recorded, so nothing was written.",
+        ),
+        "next_action": "fix_output_path_and_retry",
+    },
+    "report.ai_report_too_large": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这次给报告的解读文字超过上限（details.limit 字，details.largest_fields 列出最长的字段）。精简后重出，或分几份报告；"
+            "被拒时什么都没有写，也没有记到 run 上。",
+            "The reading passed to the report is over the limit (details.limit characters; details.largest_fields lists the "
+            "longest fields). Shorten it or split it across reports; nothing was written or recorded on the run.",
+        ),
+        "next_action": "shorten_ai_report_and_retry",
+    },
     "report.source_not_found": {"kind": "input", "next_action": "query_memory_for_run_id"},
     "report.no_chart_content": {
         "kind": "input",
@@ -796,6 +822,19 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
             "report on a charting technique.",
         ),
         "next_action": "read_tool_result_or_pick_charting_technique",
+    },
+    "report.chart_figure_unavailable": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "这个技法有盘，但这次没画成（details.figure_gaps 写明缺哪张、为什么：多半是补算那张盘要用的排盘引擎没在跑，"
+            "或星阙 app 画法这次不可用）。让引擎跑起来（调用一次任一技法工具即可）再重出 PNG；或改出 PDF 排盘报告，"
+            "正文照出、缺的那张会写明。",
+            "The technique has a chart, but it could not be drawn this time (details.figure_gaps says which figure and why: "
+            "usually the chart engine needed to compute it is not running, or the app chart renderer is unavailable). "
+            "Get the engine running (any technique call starts it) and render the PNG again, or render a PDF chart report: "
+            "the text is complete and the missing figure is stated.",
+        ),
+        "next_action": "start_engine_then_retry_or_render_pdf",
     },
     "report.no_calendar_content": {
         "kind": "input",

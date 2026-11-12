@@ -201,7 +201,8 @@ def test_long_listings_and_narrow_tables_flow_in_columns_with_reading_order(tmp_
     monkeypatch.setattr(SimpleDocTemplate, "build", spy)
     out = renderers.render_report(document, output_path=tmp_path / "p.pdf", format_name="pdf")
     assert out["format"] == "pdf"
-    panels = [f for f in stories[-1] if type(f).__name__ == "Panels"]
+    # 版式表外面包着排不下时的兜底（renderers._render_pdf.Guarded）：看里面那块
+    panels = [f for f in (getattr(f, "inner", f) for f in stories[-1]) if type(f).__name__ == "Panels"]
     # 两段都分栏排，且一行不丢、顺序不乱（分页时按剩余高度现切，见 renderers.Panels）。
     assert [len(p.rows) for p in panels] == [160, 99] and panels[0].panels >= 2 and panels[1].panels >= 2
     assert panels[0].rows[0] == [lines[0]] and panels[1].rows[-1] == rows[-1]
@@ -280,7 +281,8 @@ def archive_png(path: Path, name: str) -> bytes:
 def test_sentences_after_a_diamond_stay_body_text_and_emoji_do_not_become_tofu() -> None:
     kinds = [kind for kind, _, _ in renderers._md_lines("◆ 叠断\n◆ 兄弟数：3–9 人\n◆ 互见权厄孤刃并见，刑伤已定。")]
     assert kinds == ["heading", "text", "text"]
-    assert renderers._display_number("📍掌位：寅") == "▸掌位：寅"
+    # emoji 换符号挪到 PDF 专用的 _pdf_symbols（v0.50.0）：DOCX 原样保留 emoji
+    assert renderers._pdf_symbols("📍掌位：寅") == "▸掌位：寅" and renderers._display_number("📍掌位：寅") == "📍掌位：寅"
 
 
 def test_sanshiunited_does_not_redraw_its_inconsistent_qimen_sub_pan() -> None:
@@ -365,4 +367,4 @@ def test_short_tables_are_kept_whole(tmp_path: Path, monkeypatch: pytest.MonkeyP
     document = {"title": "大运", "style": "chart", "sections": [{"id": "a", "title": "大运", "body": table, "human_visible": True, "group": "chart"}]}
     renderers.render_report(document, output_path=tmp_path / "t.pdf", format_name="pdf")
     # 十行的大运表整张不拆：拆开时常剩「第10步」一行孤零零在下一页顶上。
-    assert any(isinstance(f, KeepTogether) for f in stories[-1])
+    assert any(isinstance(getattr(f, "inner", f), KeepTogether) for f in stories[-1])

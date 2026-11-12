@@ -36,18 +36,38 @@ _SETTING_CODES: dict[str, dict[str, str]] = {
 # 卜卦按自己的宫制），实际值以正文「起盘信息」为准；性别已在基本信息里。机读 JSON 的 technique_card 照常保留全部。
 _SETTINGS_SHOWN_ELSEWHERE = frozenset({"hsys", "zodiacal", "siderealAyanamsa", "gender"})
 
-def _setting_text(key: str, value: Any) -> str | None:
-    if value is None or value == "" or key in _SETTINGS_SHOWN_ELSEWHERE:
+def setting_reader_text(key: str, value: Any, *, standalone: bool = False) -> str | None:
+    """技法卡的一项设置 → 读者看得懂的字；None = 这一行不印。完整报告（附录 / 封面「关键设置」）与技法依据报告共用这一个
+    （v0.50.0，评审 R-09：此前技法依据报告印的是 `分宫制=1；古典口径=False；岁差=`）。
+
+    standalone=False（完整报告）：宫制 / 黄道 / 岁差 / 性别不列（正文「起盘信息」与基本信息里有实际值），没有码表的枚举不印。
+    standalone=True（技法依据报告，单独成文）：这几项照列（要不要省掉由维护者定，见 LESSONS），有码表的写字，没有码表的照原值写；
+    空值一律不列。"""
+    if value is None or str(value).strip() == "":
+        return None
+    if key in _SETTINGS_SHOWN_ELSEWHERE and not standalone:
         return None
     if isinstance(value, bool) or key in ("after23NewDay", "lateZiHourUseNextDay") and str(value) in ("0", "1"):
         return "是" if str(value).lower() in ("true", "1") else "否"
     mapped = _SETTING_CODES.get(key, {}).get(str(value))
     if mapped:
         return mapped
+    if standalone and key == "hsys":
+        from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
+
+        return HOUSE_SYSTEM_LABELS.get(str(value), str(value))
+    if standalone and key == "gender":
+        return _GENDER_LABELS.get(str(value).lower(), str(value))
+    if standalone:
+        return str(value)
     # 没有人读码表的枚举（贵人法 2、流派 donggong、主限法 core_alchabitius…）不印：印出来读者也看不懂。
     if isinstance(value, (int, float)) or re.fullmatch(r"[A-Za-z0-9_\-]+", str(value)):
         return None
     return str(value)
+
+
+def _setting_text(key: str, value: Any) -> str | None:
+    return setting_reader_text(key, value)
 
 _GENDER_LABELS = {"1": "男", "0": "女", "true": "男", "false": "女", "male": "男", "female": "女", "m": "男", "f": "女"}
 
@@ -59,6 +79,24 @@ def _coord_text(value: Any) -> str:
     degrees, hemisphere, minutes, seconds = match.groups()
     label = {"n": "北纬", "s": "南纬", "e": "东经", "w": "西经"}[hemisphere.lower()]
     return f"{label} {int(degrees)}°{int(minutes):02d}′" + (f"{int(seconds):02d}″" if seconds else "")
+
+def moment_text(input_normalized: Any) -> str:
+    """起盘时刻 / 时区 / 地点一行（技法依据报告每个技法下面一行）：只用存档入参里写着的值；缺哪项就不写哪项。"""
+    if not isinstance(input_normalized, dict):
+        return ""
+    when = " ".join(str(input_normalized.get(k)) for k in ("date", "time") if input_normalized.get(k))
+    zone = str(input_normalized.get("zone") or "")
+    place = str(input_normalized.get("place") or input_normalized.get("pos") or "")
+    coords = "，".join(_coord_text(input_normalized.get(k)) for k in ("lat", "lon") if input_normalized.get(k))
+    parts = []
+    if when:
+        parts.append(f"起盘时刻 {when}" + (f"（时区 {zone}）" if zone else ""))
+    elif zone:
+        parts.append(f"时区 {zone}")
+    if place or coords:
+        parts.append("地点 " + (place + (f"（{coords}）" if coords else "") if place else coords))
+    return "；".join(parts)
+
 
 _BASIS_FIELDS = (
     ("name", "姓名"), ("gender", "性别"), ("date", "日期"), ("time", "时间"), ("zone", "时区"),

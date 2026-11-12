@@ -337,6 +337,7 @@ source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },
+    { name = "markdown-it-py" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
     { name = "python-docx" },
@@ -370,6 +371,7 @@ dev = [
 requires-dist = [
     { name = "cryptography", specifier = ">=45.0.0" },
     { name = "httpx", specifier = ">=0.28.0" },
+    { name = "markdown-it-py", specifier = ">=3.0.0,<5" },
     { name = "mcp", extras = ["cli"], specifier = ">=2.3.0,<3" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'vectors'", specifier = ">=1.26" },

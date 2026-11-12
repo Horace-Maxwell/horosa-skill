@@ -33,6 +33,10 @@ def _labeler(script: str) -> Any:
     return lambda text: convert(text, script)
 
 
+# 临时文件名不带目标文件名：`.{目标名}.xxxxxxxx.tmp` 比目标名长 14 字节，文件名上限（output_path.MAX_NAME_BYTES）就得替它留余量。
+_TMP_PREFIX = ".horosa-report-"
+
+
 def render_report(
     document: dict[str, Any], *, output_path: Path, format_name: str, script: str = SIMPLIFIED
 ) -> dict[str, Any]:
@@ -49,7 +53,7 @@ def render_report(
     # Render to a temp sibling first, then atomically os.replace() into place. A mid-render failure
     # (python-docx / reportlab raising, disk error) thus can never leave a truncated/corrupt artifact
     # at output_path — the destination is only touched once a complete file exists.
-    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=_TMP_PREFIX, suffix=".tmp")
     os.close(fd)
     tmp_path = Path(tmp_name)
     technique_report = _is_technique_report(document)
@@ -60,6 +64,7 @@ def render_report(
             document = _technique_report_human_document(document)
         if normalized != "markdown":
             document = localize_document(document, script)
+    warnings: list[str] = []
     try:
         if normalized == "json":
             tmp_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -72,7 +77,7 @@ def render_report(
         elif normalized == "docx":
             _render_docx(document, tmp_path, script)
         else:  # pdf
-            _render_pdf(document, tmp_path, script)
+            warnings = _render_pdf(document, tmp_path, script)
         payload = tmp_path.read_bytes()
         final_path = _place_rendered(tmp_path, output_path)
     except BaseException as exc:
@@ -80,11 +85,14 @@ def render_report(
         # Only an ordinary render failure degrades to TXT. Ctrl-C, SystemExit and an MCP cancel (BaseException) must
         # propagate — before v0.41.1 they came back as a "successful" degraded report.
         if normalized in {"docx", "pdf"} and isinstance(exc, Exception):
-            # 渲染失败降级：自动改存 TXT（纯文本全文），绝不静默丢内容——结果里如实标注降级。
-            degraded = _render_txt_degraded(document, output_path)
+            # 渲染失败降级：自动改存 TXT（同一份人读内容的纯文本），绝不静默丢内容——结果里如实标注降级。
+            degraded = _render_txt_degraded(document, output_path, script=script, format_name=normalized)
             if degraded is not None:
                 degraded["degraded_from"] = normalized
-                degraded["degrade_reason"] = f"{type(exc).__name__}: {exc}"
+                degraded["degrade_reason"] = (
+                    f"{normalized.upper()} 排版时出错，改存为纯文本，内容与 {normalized.upper()} 版相同"
+                    f"（技术原因：{type(exc).__name__}: {exc}）"
+                )
                 return degraded
         raise
     return {
@@ -93,6 +101,7 @@ def render_report(
         "file_size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
         **({"requested_output_path": str(output_path)} if final_path != output_path else {}),
+        **({"warnings": warnings} if warnings else {}),
     }
 
 
@@ -100,7 +109,7 @@ def write_artifact(payload: bytes, *, output_path: Path, format_name: str) -> di
     """已经生成好的字节（PNG 盘图 / ICS 日历）落盘：同 render_report 的临时文件 + 原子替换（半截文件不会出现在目标路径）、
     目标被占用时另存旁边的空闲名字；返回同一形状的结果。"""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=_TMP_PREFIX, suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "wb") as handle:
@@ -186,23 +195,127 @@ def _technique_report_human_document(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _render_txt_degraded(document: dict[str, Any], intended_path: Path) -> dict[str, Any] | None:
-    # DOCX/PDF 渲染异常时的兜底：把报告全文（plain_text 或 JSON）写成 UTF-8 TXT 落在同名 .txt。
+def _render_txt_degraded(
+    document: dict[str, Any], intended_path: Path, *, script: str = SIMPLIFIED, format_name: str = "pdf"
+) -> dict[str, Any] | None:
+    """DOCX/PDF 渲染异常时的兜底：同一份**人读**内容写成 UTF-8 纯文本（v0.50.0，评审 R-01）。
+
+    此前写的是 document["plain_text"]——机器版全文：run / trace id、质量闸、交付清单、覆盖矩阵、机器回填的「建议」、
+    产物绝对路径，读者拿到的是一份内部记录。现在按渲染器同一串块（layout.body_blocks）出文字：封面信息、所问、核心结论、
+    盘面、AI 解读、附录，开头一句白话说明为什么是纯文本。落在同名 .txt；那个名字已有文件就用 -2、-3（不盖掉别的文件）。"""
     try:
-        txt_path = intended_path.with_suffix(".txt")
-        text = document.get("plain_text")
-        if not isinstance(text, str) or not text.strip():
-            text = json.dumps(document, ensure_ascii=False, indent=2)
-        txt_path.write_text(text, encoding="utf-8")
-        payload = txt_path.read_bytes()
+        text = _reader_text(document, script=script, format_name=format_name)
+        candidate = intended_path.with_suffix(".txt")
+        for index in range(1, 100):
+            target = candidate if index == 1 else candidate.with_name(f"{candidate.stem}-{index}.txt")
+            try:
+                with open(target, "x", encoding="utf-8", newline="\n") as handle:
+                    handle.write(text)
+                break
+            except FileExistsError:
+                continue
+        else:
+            return None
+        payload = target.read_bytes()
         return {
-            "path": str(txt_path),
+            "path": str(target),
             "format": "txt",
             "file_size": len(payload),
             "sha256": hashlib.sha256(payload).hexdigest(),
         }
     except OSError:
         return None
+
+
+def _markdown_plain(text: str) -> str:
+    """调用方 Markdown → 纯文本（块树同 PDF / DOCX）：列表留 - / 1.，引用留 >，表格一行一行用 | 隔开。"""
+    from horosa_skill.reports import markdown as md
+
+    lines: list[str] = []
+
+    def walk(blocks: list[Any], indent: str = "") -> None:
+        for block in blocks:
+            if isinstance(block, (md.Paragraph, md.Heading)):
+                lines.extend(indent + line for line in md.plain(block.spans).split("\n"))
+            elif isinstance(block, md.ListBlock):
+                for number, item in enumerate(block.items, start=block.start):
+                    marker = f"{number}. " if block.ordered else "- "
+                    head = item[0] if item and isinstance(item[0], md.Paragraph) else None
+                    first = md.plain(head.spans).split("\n") if head else [""]
+                    lines.append(indent + marker + first[0])
+                    lines.extend(indent + " " * len(marker) + line for line in first[1:])
+                    walk(item[1:] if head else item, indent + " " * len(marker))
+            elif isinstance(block, md.Quote):
+                walk(block.children, indent + "> ")
+            elif isinstance(block, md.Code):
+                lines.extend(indent + "    " + line for line in block.text.split("\n"))
+            elif isinstance(block, md.Table):
+                for row in [block.header, *block.rows]:
+                    lines.append(indent + " | ".join(md.plain(cell) for cell in row))
+            elif isinstance(block, md.Rule):
+                lines.append(indent + "———")
+            lines.append("")
+
+    walk(md.parse(text))
+    return "\n".join(lines).strip()
+
+
+def _engine_plain(text: str) -> str:
+    """引擎导出段 → 纯文本：去掉行内 ** 与反引号，长小数照人读版取 4 位；表格行原样（| 隔开本就是纯文本）。"""
+    out = []
+    for line in str(text or "").splitlines():
+        if _MD_TABLE_SEP_RE.match(line):
+            continue
+        out.append(_display_number(_plain(line)).rstrip())
+    return "\n".join(out).strip()
+
+
+def _reader_text(document: dict[str, Any], *, script: str = SIMPLIFIED, format_name: str = "pdf") -> str:
+    """降级 TXT 的正文：与 PDF / DOCX 同一串块，只换成纯文字。没有任何人读内容（极简的测试文档）时退回 plain_text。"""
+    t = _labeler(script)
+    kind = format_name.upper()
+    out: list[str] = [
+        t(f"说明：这份报告本应是 {kind}，排版时出了问题，改存为纯文本。内容与 {kind} 版相同；盘图画不出来，见同一报告的 PDF 或 PNG。"),
+        "",
+    ]
+    title = str(document.get("cover_title") or document.get("title") or "")
+    if title:
+        out += [title, "=" * min(40, max(8, len(title) * 2)), ""]
+    generated = _local_date(document.get("generated_at"))
+    if generated:
+        out += [t("生成于") + f" {generated}", ""]
+    content_start = len(out)
+    human_sections = _human_sections(document)
+    for section in human_sections:
+        if section.get("group") == "basis":
+            out += [f"【{section.get('title') or t('基本信息')}】", _engine_plain(str(section.get("body") or "")), ""]
+    ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
+    # 只印真有的所问（没写问题时 PDF 印一句缺省话「整体综合解盘」，那不算内容）
+    question = str(document.get("intro_text") or document.get("user_question") or ai_report.get("analysis_focus") or "")
+    if question.strip() and document.get("style") != "chart":
+        out += [f"【{document.get('intro_heading') or t('解读目标')}】", _markdown_plain(question), ""]
+    figures = [f for f in document.get("figures") or [] if isinstance(f, dict)]
+    for block in body_blocks(document, t):
+        if block.kind == "card":
+            out += [f"【{block.text}】", _markdown_plain(block.body), ""]
+        elif block.kind == "heading":
+            out += [block.text, "-" * min(40, max(8, len(block.text) * 2))]
+        elif block.kind == "body":
+            out += [_markdown_plain(block.body), ""]
+        elif block.kind in {"part", "orphan_figures"}:
+            out += ["", f"==== {block.text} ====", ""]
+        elif block.kind == "note":
+            out += [block.text, ""]
+        elif block.kind == "figures" and figures:
+            names = "、".join(str(f.get("title") or "") for f in figures if f.get("title"))
+            out += [t("盘图（纯文本里画不出）：") + names, ""]
+        elif block.kind == "section":
+            heading = f"{block.cite} · {block.text}" if block.cite else block.text
+            out += [heading, "-" * min(40, max(8, len(heading) * 2)), _engine_plain(block.body), ""]
+    if not any(line.strip() for line in out[content_start:]):
+        fallback = document.get("plain_text")
+        out.append(fallback if isinstance(fallback, str) and fallback.strip() else json.dumps(document, ensure_ascii=False, indent=2))
+    return "\n".join(out).rstrip() + "\n"
 
 
 _MD_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
@@ -360,14 +473,21 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
             set_cell_shading(cell, "EEF6F2")
             set_cell_border(cell)
             p = cell.paragraphs[0]
-            run = p.add_run(header[idx] if idx < len(header) else "")
-            style_run(run, size=9.6, bold=True, color="0F766E")
+            head = header[idx] if idx < len(header) else ""
+            if isinstance(head, _MdCell):
+                add_spans(p, head.spans, size=9.6, bold=True, color="0F766E")
+            else:
+                style_run(p.add_run(head), size=9.6, bold=True, color="0F766E")
         for data_row in rows:
             row = table.add_row()
             for idx, cell in enumerate(row.cells):
                 cell.width = widths[idx]
                 set_cell_border(cell)
-                add_inline_runs(cell.paragraphs[0], data_row[idx] if idx < len(data_row) else "", size=9.6)
+                value = data_row[idx] if idx < len(data_row) else ""
+                if isinstance(value, _MdCell):
+                    add_spans(cell.paragraphs[0], value.spans, size=9.6)
+                else:
+                    add_inline_runs(cell.paragraphs[0], value, size=9.6)
         doc.add_paragraph()
 
     def add_inline_runs(paragraph: Any, text: str, *, size: float = 10.2, color: str = "14211F", bold_label: bool = False) -> None:
@@ -456,6 +576,95 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         style_run(run, size=16 if level == 1 else 12.5, bold=True, color="14211F" if level == 1 else "0F766E")
         doc.add_paragraph()
 
+    def add_hyperlink(paragraph: Any, url: str, text: str, *, size: float, bold: bool, italic: bool, strike: bool) -> None:
+        # 真超链接（w:hyperlink + 外部关系），不是蓝色文字。
+        from docx.opc.constants import RELATIONSHIP_TYPE as RT
+
+        rel_id = paragraph.part.relate_to(url, RT.HYPERLINK, is_external=True)
+        link = OxmlElement("w:hyperlink")
+        link.set(qn("r:id"), rel_id)
+        run = paragraph.add_run(text)
+        style_run(run, size=size, bold=bold, color="0F766E")
+        run.italic = italic or None
+        run.font.strike = strike or None
+        run.font.underline = True
+        link.append(run._r)
+        paragraph._p.append(link)
+
+    def add_spans(paragraph: Any, spans: list[Any], *, size: float = 10.2, color: str = "14211F", bold: bool = False) -> None:
+        # 调用方 Markdown 的行内片段 → Word run：粗 / 斜 / 删除线 / 行内代码 / 换行 / 超链接；文字原样（不改数字、不换 emoji）。
+        for span in spans:
+            if span.brk:
+                paragraph.add_run().add_break()
+                continue
+            if span.href:
+                add_hyperlink(paragraph, span.href, span.text, size=size, bold=bold or span.bold, italic=span.italic, strike=span.strike)
+                continue
+            run = paragraph.add_run(span.text)
+            style_run(run, size=size, bold=bold or span.bold, color="0F766E" if span.code else color)
+            if span.italic:
+                run.italic = True
+            if span.strike:
+                run.font.strike = True
+
+    _LIST_STYLES = {(False, 0): "List Bullet", (False, 1): "List Bullet 2", (False, 2): "List Bullet 3",
+                    (True, 0): "List Number", (True, 1): "List Number 2", (True, 2): "List Number 3"}
+
+    def add_markdown(text: str, target: Any = None, *, depth: int = 0, quote: bool = False, tables: list[Any] | None = None,
+                     toc: bool = False) -> None:
+        # 调用方 Markdown 的块树（reports/markdown.py，PDF 画同一棵）。target = 文档或卡片格子；卡片里的表格交给 tables，排在卡片下方。
+        from horosa_skill.reports import markdown as md
+
+        target = doc if target is None else target
+        color, size = ("66706D", 9.8) if quote else ("14211F", 10.2)
+
+        def blocks_into(blocks: list[Any], depth: int, quote: bool) -> None:
+            for block in blocks:
+                if isinstance(block, md.Paragraph):
+                    p = target.add_paragraph()
+                    if depth or quote:
+                        p.paragraph_format.left_indent = Inches(0.25 * (depth + (1 if quote else 0)))
+                    add_spans(p, block.spans, size=size if not quote else 9.8, color=color if not quote else "66706D")
+                elif isinstance(block, md.Heading):
+                    p = target.add_paragraph()
+                    p.paragraph_format.space_before = Pt(6)
+                    if toc and block.level <= 2 and not depth and not quote:
+                        set_outline_level(p, 1)  # 解读正文的一、二级标题进 Word 目录（与 PDF 同）
+                    add_spans(p, block.spans, size=11, bold=True, color="0F766E")
+                elif isinstance(block, md.ListBlock):
+                    style_name = _LIST_STYLES[(block.ordered, min(depth, 2))]
+                    for number, item in enumerate(block.items, start=block.start):
+                        p = target.add_paragraph(style=style_name)
+                        if block.ordered and block.start != 1 and number == block.start:
+                            pass  # Word 的编号从 1 起；起始号不同的情形少见，内容照印
+                        rest = item
+                        if item and isinstance(item[0], md.Paragraph):
+                            add_spans(p, item[0].spans, size=size, color=color)
+                            rest = item[1:]
+                        blocks_into(rest, depth + 1, quote)
+                elif isinstance(block, md.Quote):
+                    blocks_into(block.children, depth, True)
+                elif isinstance(block, md.Code):
+                    p = target.add_paragraph()
+                    p.paragraph_format.left_indent = Inches(0.25 * (depth + 1))
+                    for index, code_line in enumerate(block.text.split("\n")):
+                        if index:
+                            p.add_run().add_break()
+                        style_run(p.add_run(code_line), size=9.2, color="0F766E")
+                elif isinstance(block, md.Table):
+                    header = [_MdCell.of(cell) for cell in block.header]
+                    rows = [[_MdCell.of(cell) for cell in row] for row in block.rows]
+                    if tables is not None:
+                        tables.append({"header": header, "rows": rows})
+                    else:
+                        add_data_table(header, rows)
+                elif isinstance(block, md.Rule):
+                    p = target.add_paragraph()
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    style_run(p.add_run("· · ·"), size=9, color="66706D")
+
+        blocks_into(md.parse(text), depth, quote)
+
     def add_card(title_text: str, body_text: str, *, accent: str = "0F766E") -> None:
         table = doc.add_table(rows=1, cols=1)
         table.autofit = False
@@ -470,15 +679,8 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         p = cell.paragraphs[0]
         title_run = p.add_run(title_text)
         style_run(title_run, size=12.5, bold=True, color=accent)
-        for kind, payload in _split_markdown_blocks(body_text):
-            if kind == "table":
-                # 卡片内表格：渲染在卡片下方为独立真表格（表格嵌单元格在窄卡内可读性差）。
-                pass_through_tables.append(payload)
-                continue
-            for paragraph in _paragraphs(payload):
-                p = cell.add_paragraph()
-                run = p.add_run(paragraph)
-                style_run(run, size=10.2, color="14211F")
+        # 卡片内表格：渲染在卡片下方为独立真表格（表格嵌单元格在窄卡内可读性差）。
+        add_markdown(body_text, cell, tables=pass_through_tables)
         doc.add_paragraph()
         while pass_through_tables:
             payload = pass_through_tables.pop(0)
@@ -627,7 +829,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     doc.add_paragraph()
 
     add_heading_block(str(document.get("intro_heading") or t("解读目标")))
-    add_text(display_question)
+    add_markdown(display_question)
     human_sections = [s for s in _human_sections(document) if isinstance(s, dict)]
     for section in human_sections:
         if section.get("group") == "basis":
@@ -639,8 +841,8 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
             add_card(block.text, block.body, accent=_DOCX_ACCENTS[block.role])
         elif block.kind == "heading":
             add_heading_block(block.text, level=_DOCX_HEADING_LEVELS[block.role])
-        elif block.kind == "body":
-            add_text(block.body)
+        elif block.kind == "body":  # 调用方写的（解读正文 / 摘要）：Markdown 块树
+            add_markdown(block.body, toc=True)
         elif block.kind == "part":
             doc.add_page_break()
             add_heading_block(block.text)
@@ -660,11 +862,23 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     props.title = _core_prop_text(document.get("title") or t("结构化咨询报告"))
     props.author = "Horosa Skill"
     props.subject = _core_prop_text(source_meta.get("technique_label") or source_meta.get("tool_name") or "")
-    keywords = document.get("search_index") if isinstance(document.get("search_index"), dict) else {}
-    keyword_list = keywords.get("keywords") if isinstance(keywords.get("keywords"), list) else []
-    short_keywords = [str(k).strip() for k in keyword_list if str(k).strip() and len(str(k).strip()) <= 24]
-    props.keywords = _core_prop_text(", ".join(short_keywords[:12]))
+    # 文件属性的关键词给人检索用（评审 R-14）：技法名 + 正文里真有的章名。此前取检索索引的键，混着「直接回答」「证据绑定」
+    # 这类模板内部用语与 bazi_birth 这类内部标识。
+    candidates = [source_meta.get("technique_label"), *(section.get("title") for section in _human_sections(document))]
+    short_keywords = [str(k).strip() for k in candidates
+                      if k and str(k).strip() and len(str(k).strip()) <= 24 and not _INTERNAL_KEYWORD_RE.match(str(k).strip())]
+    props.keywords = _core_prop_text(", ".join(dict.fromkeys(short_keywords[:12])))
     props.comments = "Generated by Horosa Skill report renderer"
+    # python-docx 的模板自带 2013-12-23 的创建 / 修改时间与空的修改人：写成这次生成的时刻（评审 R-14）。
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    props.created = now
+    props.modified = now
+    props.last_modified_by = "Horosa Skill"
+    props.revision = 1
+    props.language = _docx_lang(script)
+    _docx_apply_language_and_font_fallback(doc, script, font_name, qn)
 
     # 页脚：报告标题 + 「第 X 页 / 共 Y 页」域（与 PDF 页脚对齐）。
     doc.sections[0].different_first_page_header_footer = True  # 封面不印页脚（与 PDF 一致）
@@ -699,6 +913,10 @@ _MD_CODE_RE = re.compile(r"`([^`]+)`")
 # 键：最长 14 字；带括注 / 数字的星名（「金 (12th; 5R12R)」）放宽到 24 字。键里不能有逗号 / 句号 / 分号——那是句子。
 _LABEL_LINE_RE = re.compile(r"^((?:[^：:|*`\[\]，。；]{1,14})|(?=[^：:]*[()（）0-9])[^：:|*`\[\]，。；]{15,24})([：:])(.+)$")
 _LISTING_MIN_LINES = 14  # 连续这么多条互不相干的短行才分栏排（几行的小段照常一行一段）
+# PDF 版面的「长」：格子 / 键值的值超过这么多字就按可跨页的方式排；标题超过这么多字就不进标题条（见 _render_pdf）。
+_LONG_CELL_CHARS = 400
+_LONG_HEADING_CHARS = 120
+_PANEL_MIN_ROW_HEIGHT = 12.0  # 分栏清单一行的最小高度（8.8 pt 字、行距 12.4 + 上下各 1.6 内边距，取保守下限）
 
 
 def _is_time_colon(label: str, value: str) -> bool:
@@ -782,13 +1000,91 @@ def _plain(text: str) -> str:
 _LONG_FLOAT_RE = re.compile(r"(?<![\d.])(-?\d+\.\d{4})\d{3,}(?![\d.])")
 
 
-_EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF]\ufe0f?")
-
-
 def _display_number(text: str) -> str:
-    """人读版里把 7 位以上小数（引擎原文的 `误差0.7548645849180389`）四舍五入到 4 位；彩色 emoji（📍）换成 ▸——PDF 字体
-    都没有彩色字形（Apple Color Emoji 是位图字体，reportlab 嵌不了），不换就是方块。机读 JSON 不经这里，仍是原文。"""
-    return _EMOJI_RE.sub("▸", _LONG_FLOAT_RE.sub(lambda m: f"{float(m.group(0)):.4f}", text))
+    """人读版里把 7 位以上小数（引擎原文的 `误差0.7548645849180389`）四舍五入到 4 位。只对引擎原文；机读 JSON 不经这里。
+    emoji 不在这里换（v0.50.0）：DOCX 原样保留（Word 有彩色字体兜底），PDF 在 _pdf_symbols 里按含义换成画得出的符号。"""
+    return _LONG_FLOAT_RE.sub(lambda m: f"{float(m.group(0)):.4f}", text)
+
+
+# ── PDF 里的 emoji 与符号（v0.50.0，评审 R-02）────────────────────────────────
+# PDF 只能嵌 TrueType 轮廓字体，彩色 emoji（Apple Color Emoji / Segoe UI Emoji 是位图或 COLR）一个都画不出来。此前只把
+# U+1F300–1FAFF 一段换成 ▸：✅ ❌ ⚠️ ⭐ 1️⃣ 不在这一段，印成方块；🔴 / 🟢、👍 / 👎 全成 ▸，意思反了也看不出。
+# 现在：先去掉不占位的修饰（变体选择符、零宽连接、肤色），键帽数字成圈码，常见的按含义换（不同含义换成不同符号，红绿灯保留颜色）；
+# 其余符号由 _wrap_missing_glyphs_chain 按真实字体的 cmap 判：主字体和补字链都画不了才换成 ▸。DOCX 不经这里，原样保留 emoji。
+_INVISIBLE_MARKS = frozenset([0xFE0E, 0xFE0F, 0x200D, *range(0x1F3FB, 0x1F400), *range(0xE0020, 0xE0080)])
+_KEYCAP = 0x20E3
+_KEYCAP_DIGITS = {"0": "⓪", "1": "①", "2": "②", "3": "③", "4": "④", "5": "⑤", "6": "⑥", "7": "⑦", "8": "⑧", "9": "⑨", "#": "#", "*": "*"}
+_RED, _ORANGE, _AMBER, _GREEN, _BLUE, _PURPLE, _BROWN = "#c53030", "#dd6b20", "#b7791f", "#2f855a", "#2b6cb0", "#6b46c1", "#8b5a2b"
+_PDF_SYMBOLS: dict[str, tuple[str, str | None]] = {
+    # 对 / 错
+    "✅": ("✓", _GREEN), "✔": ("✓", None), "☑": ("✓", None), "🆗": ("✓", None),
+    "❌": ("✗", _RED), "❎": ("✗", None), "✖": ("✗", None), "🚫": ("✗", _RED), "⛔": ("✗", _RED),
+    # 星 / 提示
+    "⭐": ("★", _AMBER), "🌟": ("★", _AMBER), "✨": ("✦", _AMBER), "💫": ("✦", None),
+    "❗": ("!", _RED), "❕": ("!", None), "‼": ("!!", _RED), "❓": ("?", None), "❔": ("?", None), "⁉": ("!?", None),
+    "💡": ("◆", _AMBER), "📌": ("▸", None), "📍": ("▸", None), "👉": ("▸", None), "🔹": ("◆", _BLUE), "🔸": ("◆", _ORANGE),
+    "🔺": ("▲", _RED), "🔻": ("▼", _RED), "📈": ("↗", _GREEN), "📉": ("↘", _RED),
+    "👍": ("⊕", _GREEN), "👎": ("⊖", _RED),
+    # 方向
+    "➡": ("→", None), "⬅": ("←", None), "⬆": ("↑", None), "⬇": ("↓", None), "↗": ("↗", None), "↘": ("↘", None),
+    "🔄": ("⟳", None), "🔁": ("⟳", None),
+    # 红绿灯：同一个圆点，颜色不同（意思不同就印得不同）
+    "🔴": ("●", _RED), "🟠": ("●", _ORANGE), "🟡": ("●", _AMBER), "🟢": ("●", _GREEN), "🔵": ("●", _BLUE),
+    "🟣": ("●", _PURPLE), "🟤": ("●", _BROWN), "⚫": ("●", None), "⚪": ("○", None),
+    "🟥": ("■", _RED), "🟧": ("■", _ORANGE), "🟨": ("■", _AMBER), "🟩": ("■", _GREEN), "🟦": ("■", _BLUE),
+    "🟪": ("■", _PURPLE), "🟫": ("■", _BROWN), "⬛": ("■", None), "⬜": ("□", None),
+    "🔟": ("⑩", None),
+}
+
+
+def _pdf_symbols(markup: str) -> str:
+    """PDF 段落标记里的 emoji → 画得出的符号（只动标签外的文字）。见上方表的说明。"""
+    if markup.isascii():
+        return markup
+    out: list[str] = []
+    in_tag = False
+    index, size = 0, len(markup)
+    while index < size:
+        ch = markup[index]
+        if in_tag:
+            out.append(ch)
+            in_tag = ch != ">"
+            index += 1
+            continue
+        if ch == "<":
+            in_tag = True
+            out.append(ch)
+            index += 1
+            continue
+        code = ord(ch)
+        # 键帽：数字 / # / * + (FE0F) + U+20E3
+        if ch in _KEYCAP_DIGITS:
+            follow = index + 1
+            if follow < size and ord(markup[follow]) == 0xFE0F:
+                follow += 1
+            if follow < size and ord(markup[follow]) == _KEYCAP:
+                out.append(_KEYCAP_DIGITS[ch])
+                index = follow + 1
+                continue
+        if code in _INVISIBLE_MARKS or code == _KEYCAP:
+            index += 1
+            continue
+        mapped = _PDF_SYMBOLS.get(ch)
+        if mapped is not None:
+            text, color = mapped
+            out.append(f'<font color="{color}">{text}</font>' if color else text)
+        else:
+            out.append(ch)
+        index += 1
+    return "".join(out)
+
+
+def _is_symbol(ch: str) -> bool:
+    """会被「画不了就换 ▸」的字：符号（So）与 emoji 区。字母、汉字从不换（v0.43 起的规矩：正文文字补不了就原样留）。"""
+    import unicodedata
+
+    code = ord(ch)
+    return unicodedata.category(ch) == "So" or 0x1F000 <= code <= 0x1FAFF or 0x2600 <= code <= 0x27BF
 
 
 _CITE_RE = re.compile(r"\[(E\d+)\]")
@@ -806,6 +1102,71 @@ def _md_inline(text: str, anchors: frozenset[str] = frozenset()) -> str:
         escaped = _CITE_RE.sub(lambda m: f'<a href="#{m.group(1)}" color="#0f766e">[{m.group(1)}]</a>'
                                if m.group(1) in anchors else m.group(0), escaped)
     return escaped
+
+
+def _md_spans_markup(spans: list[Any], anchors: frozenset[str] = frozenset()) -> str:
+    """调用方 Markdown 的行内片段（reports/markdown.Span）→ reportlab 段落标记。不四舍五入数字（那只对引擎原文）。
+    [E3] 段号照旧链到报告里真有的盘面段；链接是真链接（只有 http / https / mailto，解析时已筛过）。"""
+    out: list[str] = []
+    for span in spans:
+        if span.brk:
+            out.append("<br/>")
+            continue
+        text = _esc(span.text)
+        if span.code:
+            text = f'<font color="#0f766e">{text}</font>'
+        elif anchors:
+            text = _CITE_RE.sub(lambda m: f'<a href="#{m.group(1)}" color="#0f766e">[{m.group(1)}]</a>'
+                                if m.group(1) in anchors else m.group(0), text)
+        if span.strike:
+            text = f"<strike>{text}</strike>"
+        if span.italic:
+            text = f"<i>{text}</i>"
+        if span.bold:
+            text = f"<b>{text}</b>"
+        if span.href:
+            text = f'<a href="{html.escape(span.href, quote=True)}" color="#0f766e"><u>{text}</u></a>'
+        out.append(text)
+    return "".join(out)
+
+
+_LINES_PER_FLOWABLE = 40
+# 兜底（_render_pdf 里的 Guarded）摊开过的块：只给测试看「这块是正常排出来的，还是靠兜底」。
+LAYOUT_SPILLS: list[str] = []
+
+
+def _line_groups(spans: list[Any], size: int) -> list[list[Any]]:
+    """按换行把一段的行内片段切成每组至多 size 行（组间的那个换行去掉：组本身就是新的一行）。"""
+    groups: list[list[Any]] = [[]]
+    lines = 0
+    for span in spans:
+        if span.brk:
+            lines += 1
+            if lines % size == 0:
+                groups.append([])
+                continue
+        groups[-1].append(span)
+    return [group for group in groups if group] or [[]]
+
+
+def _code_markup(text: str) -> str:
+    """代码块：保留缩进与换行（空格转不断行空格），不解释里面的任何记号。"""
+    return "<br/>".join(html.escape(line).replace(" ", "&nbsp;") for line in str(text).split("\n")) or "&nbsp;"
+
+
+class _MdCell(str):
+    """调用方 Markdown 表格的一格：字符串值 = 纯文字（量列宽、判空列用），`spans` = 行内片段（PDF / DOCX 各自画）。"""
+
+    spans: list[Any]
+
+    @classmethod
+    def of(cls, spans: list[Any]) -> _MdCell:
+        cell = cls("".join(span.text for span in spans))
+        cell.spans = spans
+        return cell
+
+    def markup(self, anchors: frozenset[str] = frozenset()) -> str:
+        return _md_spans_markup(self.spans, anchors)
 
 
 def _md_lines(text: str) -> list[tuple[str, str, str]]:
@@ -902,12 +1263,15 @@ def _panel_count(widths: list[int], *, budget: int) -> int:
 
 
 
-def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPLIFIED) -> None:
+def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPLIFIED) -> list[str]:
+    """排版并写出 PDF；返回要告诉调用方的事（如：没有可嵌入的中文字体）。"""
     cite_anchors = frozenset(
         str(section.get("cite_id")) for section in _human_sections(document) if section.get("group") == "chart" and section.get("cite_id")
     )
 
     def inline(text: str) -> str:
+        if isinstance(text, _MdCell):
+            return text.markup(cite_anchors)
         return _md_inline(text, cite_anchors)
 
     from reportlab.lib.pagesizes import A4
@@ -919,6 +1283,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         CondPageBreak, Flowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
     )
     from reportlab.platypus.flowables import HRFlowable
+    from reportlab.platypus.tables import Table as RLTable
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
     from reportlab.pdfbase.ttfonts import TTFont
@@ -926,13 +1291,28 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     _extend_kinsoku()
     font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
     t = _labeler(script)
+    # 本机没有能嵌入的中文 TrueType：PDF 用 reportlab 自带的 CID 字体（不嵌入，由阅读器的中文字体显示）。此前静默如此（评审 R-16）：
+    # 换台电脑打开字形可能不同、个别符号缺字。结果的 warnings 与 PDF 封面都写明，并说怎么办。
+    font_note = "" if isinstance(pdfmetrics.getFont(font_name), TTFont) else t(
+        "本机没有可嵌入的中文字体，这份 PDF 的中文由阅读器自带的字体显示（未嵌入）：换一台电脑打开，字形可能不同，个别符号可能缺字。"
+        "装一款中文 TrueType 字体（如 Noto Sans CJK）后重出即可嵌入。")
     # 主字体缺字形的生僻字（Ext-B 起，如《灵棋经》里的 𡛸 𤣥 𥦗）交给补字字体画——不补就是方块。下面所有 Paragraph 都经它。
     patch_glyphs = _pdf_glyph_fallback(pdfmetrics, TTFont, font_name, bold_font_name, script)
     # 带标签 PDF（PDF/UA-1，reports/pdf_tagging.py）：段落打 P / H 标签，版式表的底色与框线标 Artifact，数据表格子是 TH / TD。
     from horosa_skill.reports import pdf_tagging as tagging
 
     _Paragraph = tagging.TaggedParagraph
-    Table = tagging.layout_table  # noqa: N806 - 下文所有版式表沿用原名；数据表显式用 tagging.data_table
+    def _own_font(table: Any) -> Any:
+        # reportlab 画字符串格子（含占位的空串）前会 setFont 成格子样式的字体，缺省是不嵌入的 Helvetica——PDF 里就多了一款没嵌入的
+        # 字体，「PDF/UA-1」的声明就不成立（评审 R-15）。每张表的格子字体都设成报告字体。
+        table.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), font_name)]))
+        return table
+
+    def Table(*args: Any, **kwargs: Any) -> Any:  # noqa: N802 - 下文所有版式表沿用原名
+        return _own_font(tagging.layout_table(*args, **kwargs))
+
+    def data_table(*args: Any, **kwargs: Any) -> Any:
+        return _own_font(tagging.data_table(*args, **kwargs))
     heading_tags = {
         "HorosaCoverTitle": "H1", "HorosaPart": "H1",
         "HorosaHeading": "H2", "HorosaSection0": "H2", "HorosaTocTitle": "H2",
@@ -952,7 +1332,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 args = (latin_styles[style.name], *args[1:])
             else:
                 kwargs["style"] = latin_styles[style.name]
-        paragraph = _Paragraph(patch_glyphs(text), *args, **kwargs)
+        paragraph = _Paragraph(patch_glyphs(_pdf_symbols(text)), *args, **kwargs)
         paragraph.pdf_tag = heading_tags.get(str(getattr(paragraph.style, "name", "")).removesuffix("Latin"), "P")
         return paragraph
 
@@ -1065,7 +1445,8 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
         ]
         style += [("SPAN", (0, r), (-1, r)) for r, _ in spans]
-        return Table(cells, colWidths=[content_width / per_row] * per_row, style=TableStyle(style))
+        # splitInRow：「所问」一类长值（上千字）独占的那一行可以续到下一页，不让封面整份排不下。
+        return Table(cells, colWidths=[content_width / per_row] * per_row, style=TableStyle(style), splitInRow=1)
 
     section_styles = [
         ParagraphStyle("HorosaSection0", parent=heading, fontSize=14, leading=19, spaceBefore=0, spaceAfter=0),
@@ -1077,6 +1458,8 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
     bullet_style = ParagraphStyle("HorosaBullet", parent=base, leftIndent=14, bulletIndent=3, spaceAfter=2,
                                   bulletFontName=font_name)  # 列表序号与正文同一字体（缺省是不嵌入的 Helvetica）
     quote_style = ParagraphStyle("HorosaQuote", parent=base, leftIndent=12, textColor=muted, fontSize=9.2)
+    code_style = ParagraphStyle("HorosaCode", parent=base, fontSize=8.8, leading=13, textColor=green, backColor=stripe,
+                                borderPadding=(3, 4, 3, 4), spaceBefore=3, spaceAfter=6, wordWrap="CJK")
     muted_note = ParagraphStyle("HorosaMutedNote", parent=base, fontSize=8.8, leading=13, textColor=muted)
     kv_label = ParagraphStyle("HorosaKvLabel", parent=base, fontName=bold_font_name, fontSize=8.8, leading=13,
                               textColor=muted, spaceAfter=0)
@@ -1135,7 +1518,190 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
 
         return pdf_flowables(figures, content_width=content_width, font=font_name, bold_font=bold_font_name,
                              styles=figure_styles, colors=colors, paragraph=Paragraph, esc=_esc, t=t,
-                             table=tagging.layout_table, figure=tagging.TaggedFigure)
+                             table=Table, figure=tagging.TaggedFigure)
+
+    frame_height = page_height - top_margin - bottom_margin - 12
+
+    class Guarded(Flowable):
+        """包住一块版式表：照常排；只有在一整页上都排不下、它自己又拆不开时，才把格子里的内容摊成段落照排。"""
+
+        def __init__(self, inner: Any) -> None:
+            super().__init__()
+            self.inner = inner
+            self.keepWithNext = getattr(inner, "keepWithNext", 0)
+
+        def __getattr__(self, name: str) -> Any:  # 目录 / 书签标记、测试读的格子都在里面那块上
+            if name == "inner":
+                raise AttributeError(name)
+            return getattr(self.inner, name)
+
+        def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
+            canvas = self.__dict__.get("canv")
+            self.width, self.height = (self.inner.wrapOn(canvas, avail_width, avail_height) if canvas is not None
+                                       else self.inner.wrap(avail_width, avail_height))
+            return self.width, self.height
+
+        def split(self, avail_width: float, avail_height: float) -> list[Any]:
+            canvas = self.__dict__.get("canv")
+            parts = (self.inner.splitOn(canvas, avail_width, avail_height) if canvas is not None
+                     else self.inner.split(avail_width, avail_height))
+            if parts or avail_height < frame_height * 0.95:
+                return parts
+            LAYOUT_SPILLS.append(type(self.inner).__name__)
+            return _spill(self.inner)
+
+        def getSpaceBefore(self) -> float:  # noqa: N802 - reportlab 接口名
+            return self.inner.getSpaceBefore()
+
+        def getSpaceAfter(self) -> float:  # noqa: N802 - reportlab 接口名
+            return self.inner.getSpaceAfter()
+
+        def drawOn(self, canvas: Any, x: float, y: float, _sW: float = 0) -> None:  # noqa: N802 - reportlab 接口名
+            self.inner.drawOn(canvas, x, y, _sW)
+
+    card_box = colors.HexColor("#dfe7e1")
+
+    class CardPiece(Flowable):
+        """卡片的一块：里面的段落照常排（能拆就跟着拆），外面画白底、框线与左侧色条（标 Artifact）。
+        首块画上框、末块画下框；拆开时前半不画下框、后半不画上框——跨页的卡片看起来就是一张续到下一页的卡。"""
+
+        _PAD_X = 11
+
+        def __init__(self, inner: Any, accent: Any, *, first: bool, last: bool) -> None:
+            super().__init__()
+            self.inner, self.accent, self.first, self.last = inner, accent, first, last
+            self._content = [inner]  # 测试与书签沿用「容器」的读法
+            self._pad_top = 7 if first else 2
+            self._pad_bottom = 7 if last else 2
+
+        def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
+            canvas = self.__dict__.get("canv")
+            inner_width = avail_width - 2 * self._PAD_X
+            room = avail_height - self._pad_top - self._pad_bottom
+            _, height = (self.inner.wrapOn(canvas, inner_width, room) if canvas is not None
+                         else self.inner.wrap(inner_width, room))
+            self.width, self.height = avail_width, height + self._pad_top + self._pad_bottom
+            return self.width, self.height
+
+        def split(self, avail_width: float, avail_height: float) -> list[Any]:
+            canvas = self.__dict__.get("canv")
+            inner_width = avail_width - 2 * self._PAD_X
+            room = avail_height - self._pad_top - 2
+            parts = (self.inner.splitOn(canvas, inner_width, room) if canvas is not None
+                     else self.inner.split(inner_width, room))
+            if len(parts) < 2:
+                return []
+            return [CardPiece(parts[0], self.accent, first=self.first, last=False),
+                    *[CardPiece(part, self.accent, first=False, last=self.last and index == len(parts) - 2)
+                      for index, part in enumerate(parts[1:])]]
+
+        def draw(self) -> None:
+            canvas = self.canv
+            tagged = isinstance(canvas, tagging.TaggingCanvas)
+            if tagged:
+                canvas.artifact_begin()
+            canvas.saveState()
+            canvas.setFillColor(colors.white)
+            canvas.rect(0, 0, self.width, self.height, fill=1, stroke=0)
+            canvas.setStrokeColor(card_box)
+            canvas.setLineWidth(0.6)
+            canvas.line(self.width, 0, self.width, self.height)
+            if self.first:
+                canvas.line(0, self.height, self.width, self.height)
+            if self.last:
+                canvas.line(0, 0, self.width, 0)
+            canvas.setStrokeColor(self.accent)
+            canvas.setLineWidth(3)
+            canvas.line(0, 0, 0, self.height)
+            canvas.restoreState()
+            if tagged:
+                canvas.artifact_end()
+            self.inner.drawOn(canvas, self._PAD_X, self._pad_bottom)
+
+    def settle_keep_with_next(story: list[Any]) -> list[Any]:
+        """标题与它下面的第一块排在同一页（评审 R-10）。不用 reportlab 的 keepWithNext：它把标题与下一块包成 KeepTogether，
+        下一块本身是 KeepTogether（整张不拆的小表、盘图）时内层量出来恒为「无限高」，于是每次都强制换页——标题跟着盘图去了下一页，
+        上一页留下大半空白。这里自己分组：
+        - 下一块是 KeepTogether：把标题（与中间的间距）放进它的内容开头；
+        - 下一块不到四分之一页高：标题与它包成一个 KeepTogether；
+        - 下一块很长（一大段结论、长表、分栏清单）：不整组挪页，只要求标题下面至少还有 40 mm。
+        「完整盘面」这类部分标题的换页高度也在这里按「标题 + 下面第一块正文」现量（_part_room）。"""
+        for index, flowable in enumerate(story):
+            if getattr(flowable, "_horosa_part_break", False):
+                flowable.height = _part_room(story[index + 1:])
+        out: list[Any] = []
+        index = 0
+        while index < len(story):
+            flowable = story[index]
+            if not getattr(flowable, "keepWithNext", 0) or isinstance(flowable, Spacer):
+                out.append(flowable)
+                index += 1
+                continue
+            group = [flowable]
+            nxt = index + 1
+            while nxt < len(story) and isinstance(story[nxt], Spacer) and not isinstance(story[nxt], CondPageBreak):
+                group.append(story[nxt])
+                nxt += 1
+            for member in group:
+                member.keepWithNext = 0
+            following = story[nxt] if nxt < len(story) else None
+            if isinstance(following, KeepTogether):
+                following._content[0:0] = group
+                index = nxt
+            elif following is not None and not isinstance(following, CondPageBreak) and _height(following) <= frame_height * 0.25:
+                if getattr(following, "keepWithNext", 0):  # 连着的小标题：留给下一轮与它自己的下一块分组
+                    out.extend(group)
+                    index = nxt
+                    continue
+                out.append(KeepTogether([*group, following]))
+                index = nxt + 1
+            else:
+                out.append(CondPageBreak(40 * mm))
+                out.extend(group)
+                index = nxt
+        return out
+
+    def _height(flowable: Any) -> float:
+        """一块的自然高度；KeepTogether 量里面的内容（它自己的 wrap 恒报「无限高」）；量不了当作一整页。"""
+        try:
+            if isinstance(flowable, KeepTogether):
+                return sum(_height(item) for item in flowable._content)
+            _, height = flowable.wrap(content_width, frame_height)
+            extra = flowable.getSpaceBefore() + flowable.getSpaceAfter() if hasattr(flowable, "getSpaceBefore") else 0
+            return float(height) + float(extra)
+        except Exception:  # noqa: BLE001 - 量不了：按一整页算（最坏是多换一次页）
+            return frame_height
+
+    def _part_room(following: list[Any]) -> float:
+        """部分标题要接着排需要的高度：标题与间距 + 后面的小标题 + 第一块正文（比一页还高 → 当作要一整页）。"""
+        need = 0.0
+        for flowable in following:
+            if isinstance(flowable, CondPageBreak):
+                continue
+            need += _height(flowable)
+            if not isinstance(flowable, Spacer) and getattr(flowable, "_horosa_toc", None) is None:
+                break  # 第一块正文量完了
+        return min(max(need, frame_height * 0.4), frame_height)
+
+    def _spill(flowable: Any) -> list[Any]:
+        out: list[Any] = []
+        cells = getattr(flowable, "_cellvalues", None)
+        content = getattr(flowable, "_content", None)
+        if cells is not None:
+            for row in cells:
+                for cell in row:
+                    for leaf in cell if isinstance(cell, (list, tuple)) else [cell]:
+                        if isinstance(leaf, str):
+                            if leaf.strip():
+                                out.append(Paragraph(_esc(leaf), base))
+                        elif isinstance(leaf, Flowable):
+                            out.extend(_spill(leaf) if hasattr(leaf, "_cellvalues") else [leaf])
+        elif isinstance(content, list):
+            for leaf in content:
+                out.extend(_spill(leaf) if hasattr(leaf, "_cellvalues") or hasattr(leaf, "_content") else [leaf])
+        elif hasattr(flowable, "rows"):  # Panels：一行一段
+            out.extend(Paragraph(inline(" ".join(str(c) for c in row)), base) for row in flowable.rows)
+        return out
 
     def compose(pages: dict[str, int]) -> list[Any]:
         # 每遍排版都现组一份 story：flowable 被 wrap/split 过就不能再排（multiBuild 复用同一批对象会 LayoutError）。
@@ -1171,16 +1737,30 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                     ]
                 ),
             )
+            if len(text) > _LONG_HEADING_CHARS:  # 一页都放不下的「标题」（调用方给的超长章名）：不进标题条，按标题字号的段落排
+                block = Paragraph((f'<a name="{anchor}"/>' if anchor else "") + _esc(text), section_styles[min(level, 1)])
             story.append(CondPageBreak(60 * mm if level == 0 else 40 * mm))  # 标题不落在页底孤零零一行
             story.append(Spacer(1, 10))
-            story.append(mark(block, level, text))
-            story.append(Spacer(1, 6))
+            # 标题和它下面的第一块排在同一页（评审 R-10：标题后面是整张不拆的表时，表挪到下一页、标题留在页底）
+            story.append(keep_with_next(mark(block, level, text)))
+            story.append(keep_with_next(Spacer(1, 6)))
+
+        def keep_with_next(flowable: Any) -> Any:
+            flowable.keepWithNext = 1
+            return flowable
 
         def add_part(text: str, *, new_page: bool = True) -> None:
-            # 「完整盘面」另起一页；「附录」通常只有几行，够地方就接着排，不为它空出半页。
-            story.append(PageBreak() if new_page else CondPageBreak(70 * mm))
-            if not new_page:
-                story.append(Spacer(1, 12))
+            # 「完整盘面」「AI 解读」原则上另起一页；但上一页只印了寥寥几行（所问 + 一句结论）时就接着排，不留一页大半空白
+            # （评审 R-17：解读报告第 3 页只有两行）。「附录」通常只有几行，够地方就接着排。
+            if new_page:
+                # 高度在 settle_keep_with_next 里按「部分标题 + 它下面第一块正文」现量：放得下才接着排，放不下就换页
+                # （只看剩余比例时，部分标题留在页上、下面的盘图挪去下一页，又是半页空白）。
+                part_break = CondPageBreak(frame_height * 0.62)
+                part_break._horosa_part_break = True
+                story.append(part_break)
+            else:
+                story.append(CondPageBreak(70 * mm))
+            story.append(Spacer(1, 12))
             block = Table(
                 [[Paragraph(_esc(text), part_style)]],
                 colWidths=[content_width],
@@ -1258,7 +1838,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 ("TOPPADDING", (0, 0), (-1, -1), 1.6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1.6),
             ]
-            return tagging.data_table(data, colWidths=col_widths, style=TableStyle(style), hAlign="LEFT",
+            return data_table(data, colWidths=col_widths, style=TableStyle(style), hAlign="LEFT",
                                       header_rows=1 if header else 0)
 
         class Panels(Flowable):
@@ -1277,13 +1857,20 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 per_panel = -(-len(rows) // self.panels)
                 return panel_table(self.header, rows, per_panel, self.panels, self.widths)
 
+            def _screen_cap(self, avail_height: float) -> int:
+                # 一屏每栏最多放得下几行：每行至少 _PANEL_MIN_ROW_HEIGHT 高。只拿这么多行去量——此前每一页都把剩下的全部行
+                # 建成表再量（二分里还要建十几次），8000 行的清单渲染 70 多秒（评审 C-17，按页数平方增长）。
+                return max(1, int(avail_height // _PANEL_MIN_ROW_HEIGHT) + 1)
+
             def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
-                self._table = self._build(self.rows)
+                # 剩下的行比一屏放得下的上限还多：只建上限那么多行，量出的高度已经超过可用高度，排版器随后调 split。
+                cap = self._screen_cap(max(avail_height, 1.0)) * self.panels
+                self._table = self._build(self.rows if len(self.rows) <= cap else self.rows[:cap])
                 self.width, self.height = self._table.wrap(avail_width, avail_height)
                 return self.width, self.height
 
             def split(self, avail_width: float, avail_height: float) -> list[Any]:
-                low, high, best = 1, -(-len(self.rows) // self.panels), 0
+                low, high, best = 1, min(-(-len(self.rows) // self.panels), self._screen_cap(avail_height)), 0
                 while low <= high:  # 二分：这一屏每栏最多放几行
                     mid = (low + high) // 2
                     _, height = self._build(self.rows[: mid * self.panels]).wrap(avail_width, avail_height)
@@ -1302,7 +1889,11 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 self._table.drawOn(self.canv, 0, 0)
 
         def add_data_table(header: list[str], rows: list[list[str]]) -> None:
+            story.extend(data_table_flowables(header, rows))
+
+        def data_table_flowables(header: list[str], rows: list[list[str]]) -> list[Any]:
             # Markdown 管道表 → PDF 真表格：按内容分配列宽、表头底纹 + repeatRows 跨页重复表头 + 隔行浅底。
+            # 格子是 _MdCell（调用方 Markdown 表）时印它自己的行内标记，量宽仍按纯文字。
             header, rows = _drop_empty_columns(header, rows)
             transposed = _transpose_wide_table(header, rows)
             was_transposed = transposed[0] is not header
@@ -1317,16 +1908,17 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 # 窄长表（小运 / 流年 / 宫位表…）：一栏只占半页宽，拖好几页——并排成两三栏。
                 panel_width = (content_width - 4 * mm * (panels - 1)) / panels
                 widths = _column_widths(header, rows, panel_width, 9 * mm)
-                story.append(Panels(header, rows, panels, widths))
-                story.append(Spacer(1, 6))
-                return
+                return [Panels(header, rows, panels, widths), Spacer(1, 6)]
             data = [[Paragraph(inline(h), table_head) for h in header]]
             for row in rows:
                 data.append([Paragraph(inline(row[idx] if idx < len(row) else ""), table_cell) for idx in range(cols)])
             # 短值的窄表（五行力量：木 / 7.7%）不拉满整行：按内容定宽、靠左，省得两列各占半页空着。
             natural = sum(w * 4.6 + 14 for w in col_max)
             table_width = content_width if was_transposed or natural > content_width * 0.6 else max(natural * 1.25, content_width * 0.4)
-            table = tagging.data_table(
+            # 格子里有长文（一格上千字）：允许从行内断开续到下一页（splitInRow），否则一格比一页高就整份 LayoutError、
+            # 退成 TXT（评审 R-03）。只对这种表开：普通表的行照旧整行挪页，不在行中间断。
+            tall = any(len(_plain(cell)) > _LONG_CELL_CHARS for row in rows for cell in row)
+            table = data_table(
                 data,
                 header_rows=1,
                 colWidths=(_label_first_widths(header, rows, content_width) if was_transposed
@@ -1334,18 +1926,34 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 repeatRows=1,
                 style=TableStyle(table_style_for(len(rows))),
                 hAlign="LEFT",
+                splitInRow=1 if tall else 0,
             )
             # 十几行以内的表整张不拆（拆了常剩一两行孤零零在下一页顶上，如大运第 10 步）。
-            story.append(KeepTogether([table]) if len(rows) <= 14 else table)
-            story.append(Spacer(1, 6))
+            return [KeepTogether([table]) if len(rows) <= 14 and not tall else table, Spacer(1, 6)]
 
         def add_kv_grid(pairs: list[tuple[str, str]]) -> None:
+            # 值是一大段的（上千字）不进对照表：键成一行粗体、值按正文段落排，可以跨页（评审 R-03：一格比一页高 → LayoutError →
+            # 整份退成 TXT）。其余照旧成表；顺序不变。
+            run: list[tuple[str, str]] = []
+            for key, value in pairs:
+                if len(value) <= _LONG_CELL_CHARS:
+                    run.append((key, value))
+                    continue
+                if run:
+                    add_kv_table(run)
+                    run = []
+                story.append(keep_with_next(Paragraph(_esc(key), kv_label)))
+                story.append(Paragraph(inline(value), base))
+            if run:
+                add_kv_table(run)
+
+        def add_kv_table(pairs: list[tuple[str, str]]) -> None:
             # 连续的「键：值」行（起盘信息、命宫、节气…）排成两列对照表：键一列对齐，值不再被行距拉散。
             # 键列固定 30mm（同一报告里各段对齐），键特别长才放宽，封顶 44mm。
             label_width = min(max(max(_visual_width(k) for k, _ in pairs) * 1.75 * mm + 8 * mm, 30 * mm), 44 * mm)
             data = [[Paragraph(_esc(k), kv_label), Paragraph(inline(v), kv_value)] for k, v in pairs]
             story.append(
-                tagging.data_table(  # 键列是行表头（TH Scope=Row）
+                data_table(  # 键列是行表头（TH Scope=Row）
                     data,
                     header_rows=0,
                     header_cols=1,
@@ -1410,7 +2018,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                     # 段内小标题：进 PDF 书签（第三级），不进目录（目录只到两级，保证一页放得下）。
                     sub = Paragraph(inline(body), inner_heading)
                     sub._horosa_outline = (2, _plain(body))
-                    story.append(sub)
+                    story.append(keep_with_next(sub))
                 elif kind in {"bullet", "ordered"}:
                     story.append(Paragraph(inline(body), bullet_style, bulletText=marker))
                 elif kind == "quote":
@@ -1424,28 +2032,87 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 else:
                     add_text(payload)
 
+        def md_flowables(blocks: list[Any], indent: float = 0.0, quote: bool = False, depth: int = 0, toc: bool = False) -> list[Any]:
+            """调用方 Markdown 的块树 → flowable（reports/markdown.py；DOCX 画同一棵树）。不做键值对照表、不改数字。"""
+            from horosa_skill.reports import markdown as md
+
+            body_style = md_style("HorosaMd", base, indent, quote)
+            out: list[Any] = []
+            for block in blocks:
+                if isinstance(block, md.Paragraph):
+                    # 一段里换行很多（AI 一行一条写了几千行）：每 _LINES_PER_FLOWABLE 行一个段落对象。reportlab 拆段时把剩下的
+                    # 全部行重新断一遍，一个几千行的段落按页数平方变慢（评审 C-17：8000 行 72 秒）；分组后每次只重断一组。
+                    groups = _line_groups(block.spans, _LINES_PER_FLOWABLE)
+                    for index, group in enumerate(groups):
+                        style = body_style if index == len(groups) - 1 else md_style("HorosaMdTight", base, indent, quote, tight=True)
+                        out.append(Paragraph(_md_spans_markup(group, cite_anchors), style))
+                elif isinstance(block, md.Heading):
+                    sub = Paragraph(_md_spans_markup(block.spans, cite_anchors), md_style("HorosaMdHeading", inner_heading, indent, quote))
+                    if toc and block.level <= 2 and not indent and not quote:
+                        # 解读正文自己的一、二级标题进目录（第二级）：读者翻解读报告要找的就是这些（评审 R-17）
+                        mark(sub, 1, md.plain(block.spans))
+                    else:
+                        sub._horosa_outline = (2, md.plain(block.spans))  # 更细的小标题：书签第三级，不进目录
+                    out.append(keep_with_next(sub))
+                elif isinstance(block, md.ListBlock):
+                    item_style = md_style("HorosaMdItem", bullet_style, indent + 14, quote, bullet_at=indent + 3)
+                    for number, item in enumerate(block.items, start=block.start):
+                        marker = f"{number}." if block.ordered else ("•" if depth == 0 else "◦")
+                        rest = item
+                        if item and isinstance(item[0], md.Paragraph):
+                            out.append(Paragraph(_md_spans_markup(item[0].spans, cite_anchors), item_style, bulletText=marker))
+                            rest = item[1:]
+                        else:
+                            out.append(Paragraph("", item_style, bulletText=marker))
+                        out.extend(md_flowables(rest, indent + 14, quote, depth + 1))
+                elif isinstance(block, md.Quote):
+                    out.extend(md_flowables(block.children, indent + 12, True, depth))
+                elif isinstance(block, md.Code):
+                    out.append(Paragraph(_code_markup(block.text), md_style("HorosaMdCode", code_style, indent + 6, quote)))
+                elif isinstance(block, md.Table):
+                    header = [_MdCell.of(cell) for cell in block.header]
+                    rows = [[_MdCell.of(cell) for cell in row] for row in block.rows]
+                    out.extend(data_table_flowables(header, rows))
+                elif isinstance(block, md.Rule):
+                    out.append(tagging.ArtifactHR(width="100%", thickness=0.5, color=line, spaceBefore=4, spaceAfter=4))
+            return out
+
+        md_styles: dict[tuple[str, float, bool, float | None], Any] = {}
+
+        def md_style(name: str, parent: Any, indent: float, quote: bool, bullet_at: float | None = None, tight: bool = False) -> Any:
+            key = (name, indent, quote, bullet_at)
+            if key not in md_styles:
+                extra: dict[str, Any] = {"leftIndent": parent.leftIndent + indent if bullet_at is None else indent}
+                if tight:
+                    extra["spaceAfter"] = 0
+                if bullet_at is not None:
+                    extra["bulletIndent"] = bullet_at
+                if quote:
+                    extra.update(textColor=muted, fontSize=min(parent.fontSize, 9.6))
+                md_styles[key] = ParagraphStyle(f"{name}{len(md_styles)}", parent=parent, **extra)
+            return md_styles[key]
+
+        def add_markdown(text: str, *, toc: bool = False) -> None:
+            from horosa_skill.reports import markdown as md
+
+            story.extend(md_flowables(md.parse(text), toc=toc))
+
         def add_note_card(title_text: str, body_text: str, *, accent: Any = green) -> None:
-            rows = [
-                [Paragraph(_esc(title_text), ParagraphStyle("CardTitle", parent=subheading, textColor=accent))],
-                *[[Paragraph(inline(paragraph), base)] for paragraph in _paragraphs(body_text)],
-            ]
-            story.append(
-                Table(
-                    rows,
-                    colWidths=[content_width],
-                    style=TableStyle(
-                        [
-                            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                            ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#dfe7e1")),
-                            ("LINEBEFORE", (0, 0), (0, -1), 3, accent),
-                            ("LEFTPADDING", (0, 0), (-1, -1), 11),
-                            ("RIGHTPADDING", (0, 0), (-1, -1), 11),
-                            ("TOPPADDING", (0, 0), (-1, -1), 7),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                        ]
-                    ),
-                )
-            )
+            # 卡片 = 标题 + 正文各块，每块包一层 CardPiece 画框与左侧色条：块与块之间、一段长文内部都能照常跨页
+            # （评审 C-17 / R-03：此前整张卡是一张表，一段 2000 字的结论比一页高 → LayoutError → 整份退成 TXT；
+            # 拆成一行一块的表又让每页重排剩下的全部行，几千行时按页数平方变慢）。正文里的表格排在卡片下方（DOCX 同样处理）。
+            from horosa_skill.reports import markdown as md
+
+            blocks = md.parse(body_text)
+            tables = [block for block in blocks if isinstance(block, md.Table)]
+            inner = md_flowables([block for block in blocks if not isinstance(block, md.Table)]) or [Paragraph(_esc(t("无")), base)]
+            title = Paragraph(_esc(title_text), ParagraphStyle("CardTitle", parent=subheading, textColor=accent))
+            pieces = [title, *inner]
+            for index, flowable in enumerate(pieces):
+                piece = CardPiece(flowable, accent, first=index == 0, last=index == len(pieces) - 1)
+                story.append(keep_with_next(piece) if index == 0 else piece)
+            for table in tables:
+                story.extend(md_flowables([table]))
             story.append(Spacer(1, 9))
 
         ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
@@ -1498,6 +2165,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 Table(
                     [[Paragraph(inline(paragraph), cover_note_style)] for paragraph in _paragraphs(display_question)],
                     colWidths=[content_width],
+                    splitInRow=1,
                     style=TableStyle([
                         ("LINEBEFORE", (0, 0), (0, -1), 2.4, amber),
                         ("LEFTPADDING", (0, 0), (-1, -1), 10),
@@ -1510,6 +2178,9 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         if generated:
             story.append(Spacer(1, 14))
             story.append(Paragraph(_esc(t("生成于") + f" {generated} · " + t("星阙 Horosa")), cover_footnote_style))
+        if font_note:
+            story.append(Spacer(1, 8))
+            story.append(Paragraph(_esc(font_note), cover_footnote_style))
 
         if len(human_sections) >= 4:
             # 条目少的目录直接排在封面下方，不单独占一页（十来行的目录独占一页、封面又空三分之二，两页都浪费）。
@@ -1523,7 +2194,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         if not chart_style:
             story.append(PageBreak())
             add_heading(str(document.get("intro_heading") or t("解读目标")))
-            add_body(display_question)
+            add_markdown(display_question)
         # 摘要照 STORM 的 lead：能单独读、句句带段号；细读放在盘面之后，读者先看到「算出了什么」再看「怎么解」。
         accents = {"green": green, "blue": colors.HexColor("#2563eb"), "amber": amber}
         for block in body_blocks(document, t):
@@ -1531,8 +2202,8 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 add_note_card(block.text, block.body, accent=accents[block.role])
             elif block.kind == "heading":
                 add_heading(block.text, level=_PDF_HEADING_LEVELS[block.role])
-            elif block.kind == "body":
-                add_body(block.body)
+            elif block.kind == "body":  # 调用方写的（解读正文 / 摘要）：Markdown 块树
+                add_markdown(block.body, toc=True)
             elif block.kind == "part":
                 # 「完整盘面」另起一页；「附录」通常只有几行，够地方就接着排。
                 add_part(block.text, new_page=block.role != "appendix")
@@ -1552,7 +2223,10 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 story.extend(figure_flowables())
         if toc_at is not None:
             story.insert(toc_at, toc_table(entries, pages))
-        return story
+        story = settle_keep_with_next(story)
+        # 最后一道：任何一块在整页上都排不下又拆不开时，只把这一块拆成段落照排，其余版面不受影响（评审 R-03 的兜底；
+        # 此前一块 LayoutError 就整份退成 TXT）。
+        return [Guarded(flowable) if isinstance(flowable, (RLTable, KeepTogether, Panels)) else flowable for flowable in story]
 
     title_text =str(document.get("title") or t("咨询报告"))
 
@@ -1629,6 +2303,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
 
     canvas_class.dest_labels = dest_labels
     canvas_class.ua_claim = ua_claim
+    canvas_class.initial_font = font_name
     for _ in range(3):
         pages_seen.clear()
         doc._horosa_level = 0
@@ -1638,6 +2313,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         page_total["value"] = doc.page
         if stable:
             break
+    return [font_note] if font_note else []
 
 
 def _docx_font_name(script: str = SIMPLIFIED) -> str:
@@ -1674,6 +2350,53 @@ def _docx_traditional_font_name(script: str) -> str:
         if Path(noto).exists():
             return "Noto Sans CJK HK" if hk else "Noto Sans CJK TC"
     return "Arial"
+
+
+_INTERNAL_KEYWORD_RE = re.compile(r"^(?:[a-z0-9]+(?:[_\-][a-z0-9]+)*|[0-9a-f]{16,})$")
+# 字体在打开文档的电脑上没有时，Word 按字体表里的备用名 / 字符集 / 字族找替身（不同平台各有一款中文字体）。
+# charset：86 = GB2312（简体），88 = Big5（繁体），按十六进制写。
+_DOCX_FONT_FALLBACK = {
+    "sc": {"altName": "Microsoft YaHei", "serif_altName": "SimSun", "charset": "86"},
+    "tc": {"altName": "Microsoft JhengHei", "serif_altName": "PMingLiU", "charset": "88"},
+}
+
+
+def _docx_lang(script: str) -> str:
+    return "zh-CN" if script == SIMPLIFIED else "zh-HK" if script == TRADITIONAL_HK else "zh-TW"
+
+
+def _docx_apply_language_and_font_fallback(doc: Any, script: str, font_name: str, qn: Any) -> None:
+    """文档语言与字体替身（评审 R-14）：模板的 w:lang 是 en-US（东亚文字也标 en-US），拼写检查与断行都按英文来；
+    正文字体是出报告那台电脑上的字体名（PingFang SC / 宋体…），换平台打开没有这款字体时 Word 只能乱猜。"""
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    from docx.oxml import OxmlElement
+
+    lang = _docx_lang(script)
+    for lang_element in doc.styles.element.iter(qn("w:lang")):
+        lang_element.set(qn("w:val"), lang)
+        lang_element.set(qn("w:eastAsia"), lang)
+    defaults = doc.styles.element.find(qn("w:docDefaults"))
+    rpr = defaults.find(qn("w:rPrDefault")).find(qn("w:rPr")) if defaults is not None else None
+    if rpr is not None and rpr.find(qn("w:lang")) is None:
+        element = OxmlElement("w:lang")
+        element.set(qn("w:val"), lang)
+        element.set(qn("w:eastAsia"), lang)
+        rpr.append(element)
+    kind = _DOCX_FONT_FALLBACK["sc" if script == SIMPLIFIED else "tc"]
+    serif = any(word in font_name for word in ("Song", "Ming", "Sim", "宋", "明"))
+    entry = (
+        f'<w:font w:name="{html.escape(font_name, quote=True)}">'
+        f'<w:altName w:val="{kind["serif_altName"] if serif else kind["altName"]}"/>'
+        f'<w:charset w:val="{kind["charset"]}"/><w:family w:val="{"roman" if serif else "swiss"}"/>'
+        '<w:pitch w:val="variable"/></w:font>'
+    )
+    try:
+        table = doc.part.part_related_by(RT.FONT_TABLE)
+    except KeyError:
+        return
+    blob = table.blob.decode("utf-8")
+    if f'w:name="{html.escape(font_name, quote=True)}"' not in blob and "</w:fonts>" in blob:
+        table._blob = blob.replace("</w:fonts>", entry + "</w:fonts>").encode("utf-8")
 
 
 def _docx_apply_base_styles(doc: Any, font_name: str, qn: Any, Pt: Any, RGBColor: Any) -> None:
@@ -1727,6 +2450,7 @@ _PDF_GLYPH_FALLBACK_CANDIDATES: dict[str, tuple[str, ...]] = {
     "tc": ("C:/Windows/Fonts/mingliub.ttc", "C:/Windows/Fonts/simsunb.ttf", *_SYMBOL_FALLBACKS),
 }
 _GLYPH_FALLBACK_FROM = 0x80  # ASCII（含标记 <b>、&amp;、href 键）永远不会被包
+_SYMBOL_PLACEHOLDERS = ("▸", "•", "·")  # 画不了的符号换成第一个画得出的
 
 
 def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font: str) -> str:
@@ -1737,11 +2461,13 @@ def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font
 def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str, Any]]) -> str:
     """把主字体画不了的字按补字链找第一款画得了的字体，同字体的相邻字连成段包进 `<font name=…>`；
 
-    补不了的字、主字体有的字原样留着，其余逐字节不变。primary / 链上的码位集合都只需支持 `in`。
+    补不了的文字、主字体有的字原样留着（正文文字从不替换）；**符号**（So / emoji 区）主字体与补字链都画不了时换成 ▸
+    （v0.50.0，评审 R-02：按真实 cmap 判，不按码位段猜）。标签内不动。primary / 链上的码位集合都只需支持 `in`。
     """
     out: list[str] = []
     run: list[str] = []
     run_font: str | None = None
+    in_tag = False
 
     def flush() -> None:
         nonlocal run, run_font
@@ -1749,8 +2475,22 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
             out.append(f'<font name="{run_font}">{"".join(run)}</font>')
         run, run_font = [], None
 
+    def drawable(code: int) -> bool:
+        return code in primary or any(code in covered for _, covered in chain)
+
+    placeholder = next((c for c in _SYMBOL_PLACEHOLDERS if drawable(ord(c))), "")
     for ch in markup:
         code = ord(ch)
+        if in_tag or ch == "<":
+            flush()
+            out.append(ch)
+            in_tag = ch != ">"
+            continue
+        if code >= _GLYPH_FALLBACK_FROM and not drawable(code) and _is_symbol(ch):
+            ch = placeholder
+            if not ch:
+                continue
+            code = ord(ch)
         font = None
         if code >= _GLYPH_FALLBACK_FROM and code not in primary:
             font = next((name for name, covered in chain if code in covered), None)
@@ -1786,8 +2526,7 @@ def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_
         pdfmetrics.registerFontFamily(font.fontName, normal=font.fontName, bold=font.fontName,
                                       italic=font.fontName, boldItalic=font.fontName)
         chain.append((font.fontName, set(font.face.charToGlyph)))
-    if not chain:
-        return identity
+    # 没有补字字体时也要过一遍：画不了的符号照样换掉（文字仍原样，逐字节不变）
     return lambda markup: _wrap_missing_glyphs_chain(markup, drawable, chain)
 
 

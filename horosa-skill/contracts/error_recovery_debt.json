@@ -1,6 +1,6 @@
 {
   "_comment": "Ratchet baseline for error raise sites whose literal message is not bilingual (CJK + Latin). May only go down; refresh with `uv run python scripts/verify_error_recovery.py --update-baseline`. Code classification (every code must reach a recovery rule) is a hard rule, not a baseline.",
-  "non_bilingual_messages": 98,
+  "non_bilingual_messages": 94,
   "per_file": {
     "agent_guidance/catalog.py": 1,
     "client_config/openclaw.py": 2,
@@ -19,7 +19,7 @@
     "runtime/windows_jar_patch.py": 6,
     "service/api/dispatch.py": 2,
     "service/api/memory.py": 1,
-    "service/api/reports.py": 10,
+    "service/api/reports.py": 6,
     "service/api/tools.py": 1,
     "service/enrich.py": 1,
     "service/options_zeri.py": 3,
@@ -34,5 +34,5 @@
     "service/runners/zeri.py": 7,
     "surfaces/openclaw_smoke.py": 2
   },
-  "codes_seen": 233
+  "codes_seen": 236
 }

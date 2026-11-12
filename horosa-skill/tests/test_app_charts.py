@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from horosa_skill.reports import app_charts
-from horosa_skill.reports.figures import drawing_to_png, extract_figures, figure_drawing, is_drawn
+from horosa_skill.reports.figures import drawing_to_png, extract_figures, figure_drawing, figure_notes, is_drawn
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = PKG_ROOT / "horosa-core-js" / "dist" / "app-charts.cjs"
@@ -392,7 +392,7 @@ def test_every_tspan_carries_its_own_x() -> None:
 @needs_node
 def test_drawing_conventions_of_the_skill_drawing_are_not_printed_under_app_boards() -> None:
     """规格的 legend 只描述 skill 自绘图（「每宫自上而下：八神 / 九星 天盘干…」）；换成 app 遁甲盘后版式不同，不再印。"""
-    from horosa_skill.reports.figures import figure_notes
+    pass
 
     spec = next(f for f in _figures("qimen") if f.get("kind") == "grid9")
     assert spec.get("app_svg") and not any("每宫自上而下" in n for n in figure_notes(spec, str))
@@ -488,3 +488,13 @@ def test_the_render_process_exits_as_soon_as_its_output_is_written() -> None:
     # 不空等：本机正常 0.2 s，被定时器拖住是 2.6 s；门槛给慢的 CI 机器留了余量。
     _out, elapsed = render([])
     assert elapsed < 1.8, f"render-charts took {elapsed:.2f} s with nothing to draw: something keeps the event loop alive again"
+
+
+@needs_node
+def test_jinkou_without_a_run_year_drops_the_apps_on_screen_hint_and_says_why() -> None:
+    """评审 R-11：结果没有行年（[行年] 无）时 app 在右下格只印「起盘后显示行年/旬日/旺衰/神煞」——给页面上还没起盘的人看的
+    界面提示，印进报告是错话。adapter 去掉这句、不造数据，图下说明右下格为什么空着。"""
+    spec = next(f for f in _figures("jinkou") if f.get("app_kind") == "jinkou")
+    assert "起盘后显示" not in spec["app_svg"] and "贵神" in spec["app_svg"]
+    assert any("右下格" in line and "没有行年" in line for line in spec.get("lines") or [])
+    assert any("没有行年" in note for note in figure_notes(spec, str))

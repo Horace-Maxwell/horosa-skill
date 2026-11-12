@@ -90,3 +90,5 @@
 | run / artifact / memory | 每次调用落一条可检索记录（SQLite FTS + JSON artifact + AI 回答写回）。 |
 | Jev（TypeSafe） | 可选云端决策层，默认关：只回类型化的选择 / 概率，不生成文本；`HOROSA_JEV_SCOPE=meta` 只发脱敏问题文本，`snapshot` 才发导出快照（faithfulness / hecan 面需要）；决策进 `technique_card.decisions[]`，`horosa-skill jev status` / `jev events` 查看；`HOROSA_JEV_API_KEY` 永不打印、不进配置文件。 |
 | `HOROSA_REPORT_OUTPUT_ROOTS` | 报告类工具允许写入的额外根目录白名单（`output_path` 是不可信输入）；越界报 `report.output_path_not_allowed` 且不落盘。 |
+| `figure_gaps` | 报告结果（PDF / DOCX / PNG）里「哪张盘图没画出来、为什么」的说明行；PNG 一张都画不出时改回 `report.chart_figure_unavailable`，details 同名字段（v0.50.0）。 |
+| `answer_source` | 报告结果里印的解读来自哪：`request` = 这次传入的，`stored` = run 上先前写回的（v0.50.0）。 |

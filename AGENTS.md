@@ -1531,6 +1531,34 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **PDF / PNG 字体的注册名 = 前缀 + 字体文件身份摘要（v0.48.0）。** reportlab 对 TrueType 同名再注册静默忽略，只按候选序号命名会让
   别的文件拿回旧字体（Windows 上序号 0 恰是真字体，CI 两条红）。守卫 `tests/test_pdf_font_registration_identity.py`。
 
+### 9.3.1c 报告落盘与版面健壮性（v0.50.0-dev）
+
+- **`output_path` 先查后写（`reports/output_path.py`）。** 次序：参数 / 格式 / 样式 → 取 run → 事前检查（无副作用）→ 排版落盘 → **之后**才写回解读
+  （结果 `answer_source`）；`report_from_tool` 在起盘之前查。名字长度在任何 stat 之前查（整条路径超 PATH_MAX 时 stat 抛 OSError）。
+  已有文件只替换记忆库 artifacts 表里记着的 `report_*`（`_is_recorded_report`），存储区（记忆库 + -wal/-shm、trace、档案、知识库、runtime）
+  一律不写——输出根就是存档目录。缺省名带样式、`reserve_set` 原子占（多张 PNG 整组）。错误码 `report.output_path_unusable`（`details.reason`）。
+  run 取到之后的错误带 `details.run_id`。加覆盖开关之前先问维护者。
+- **调用方文字走块树（`reports/markdown.py`）。** 核心结论、摘要、解读正文、建议、所问 = CommonMark + GFM 表格 / 删除线，PDF 与 DOCX 画同一棵；
+  CommonMark 不认的中文成对 `**` / `~~` 补认；原始 HTML 按字面（只认 `<br>`）。键值对照表、长小数取 4 位只给引擎导出段（`add_body`）。
+  解读的 `#` / `##` 进目录第二级。核心结论 = `direct_answer`，只给 `ai_answer_text` 时取 `first_statement`，没有句子不印卡。
+  调用方文字合计上限 `AI_REPORT_MAX_CHARS`（200,000，`report.ai_report_too_large`）。
+- **一块排不下不许拖垮整份 PDF。** 新的版式块要么能拆（段落、`CardPiece`、开 `splitInRow` 的表），要么由 `Guarded` 兜底（只摊开这一块，
+  `LAYOUT_SPILLS` 记一笔）；测试断言「正常排出、不靠兜底」。长内容按屏 / 按组量（`Panels._screen_cap`、`_LINES_PER_FLOWABLE`），
+  别每页重排剩余全部——测试按「四倍内容不到八倍时间」量。**别用 reportlab 的 `keepWithNext`**：它把标题与下一块包成 KeepTogether，
+  下一块若本身是 KeepTogether（小表、盘图），内层 wrap 恒报「无限高」→ 每次强制换页（一份 12 页的报告撑到 20 多页）。标题分组由
+  `settle_keep_with_next` 自己做（并进下一块的 KeepTogether / 短块合包 / 长块只要求 40 mm），量高度用 `_height`（KeepTogether 量内容）。
+  「完整盘面」「AI 解读」按「部分标题 + 第一块正文」现量换页高度（`_part_room`），放得下就接着排。
+- **PDF/UA 声明按实际引用的字体判（`TaggingCanvas.fonts_all_embedded`）。** canvas 初始字体（`initial_font`）、表格 `FONTNAME`
+  （`_own_font`）、矢量图起始字体（`TaggedFigure` 设 `initialFontName`）都是报告字体；新加会 `setFont` 的地方照此办。CID 回退时结果 `warnings`
+  与封面写明。
+- **PDF 的符号：** `_pdf_symbols` 按含义换 emoji（不同含义不同符号），`_wrap_missing_glyphs_chain` 只对符号按 cmap 兜底成 ▸；文字补不了照旧原样。
+  DOCX 保留 emoji、写生成时刻、按输出文字的 `w:lang`、字体表备用名 + 字符集（`_docx_apply_language_and_font_fallback`）。PNG 写 dpi = 72 × 倍率。
+- **退化 TXT 是读者那份（`_reader_text`）**，同一串人读块 + 开头说明，不写机器版 plain_text；同名 .txt 已有就 -2。
+- **缺图要说清（`report.chart_figure_unavailable`）。** 有盘没画成：PNG 回这个码、消息先说缺哪张；三种产物都叫 `figure_gaps`；
+  `attach_app_svgs(undrawn=)` 交回丢掉的 app 专属图。app 的界面提示（「起盘后显示…」）在 adapter 里剔除，说明走 adapter 回的 `note`。
+- **技法依据报告给人读：** 设置经 `setting_reader_text(standalone=True)`（与完整报告同一函数），空值不列，「设置确认」与运行 id 只在 JSON；
+  每个技法一行起盘时刻 / 地点。工具结果里给 AI 的卡片（`render_technique_card_markdown` 缺省）不变。
+
 ### 9.3.1b 盘图 · app 信息板（河洛 / 神数，v0.49.0-dev）
 
 - **先量再画。** 河洛、神数各页中栏多是「信息板」（标签 / 值卡片）。加一块之前先证明它比正文多东西：SSR 出 app 的板方法，抽出全部文字

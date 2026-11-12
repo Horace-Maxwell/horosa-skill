@@ -261,9 +261,12 @@ def render_figure_pngs(figures: list[dict[str, Any]], *, script: str, t: Any = s
                 break
             scale *= PNG_LONG_EDGE_MAX / max(canvas.size) * 0.995
         buffer = io.BytesIO()
-        canvas.save(buffer, format="PNG", optimize=True)
+        # 物理尺寸：图按 pt 画、每 pt 放大 scale 个像素，所以分辨率是 72 × scale dpi。不写（评审 R-17）时排版软件按 72 dpi 读，
+        # 一张 1568 px 的盘图被当成 55 cm 宽插进文档。
+        dpi = round(72 * scale)
+        canvas.save(buffer, format="PNG", optimize=True, dpi=(dpi, dpi))
         out.append({"title": title, "kind": spec.get("kind"), "width": canvas.width, "height": canvas.height,
-                    "png": buffer.getvalue()})
+                    "dpi": dpi, "png": buffer.getvalue()})
     return out
 
 

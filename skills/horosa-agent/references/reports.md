@@ -63,6 +63,15 @@ text the report fills in. It is `false` until you supply `direct_answer` (or `an
 `section_coverage_matrix` shows which chart sections you actually explained. A targeted answer that skips sections
 is still deliverable, so report those gaps rather than padding them.
 
+**Markdown in what you write is rendered** (v0.50.0): CommonMark plus pipe tables and `~~strike~~` — emphasis, links (real
+hyperlinks), lists (nested / ordered), quotes, code blocks, tables; a single newline is a line break; raw HTML is printed
+as text (only `<br>` is a break). Numbers you write are printed as written. The 核心结论 box is your `direct_answer`; when
+you pass only `ai_answer_text` it is the first real sentence of the reading (headings, tables and labels skipped) — no
+sentence, no box. Your `#` / `##` headings go into the table of contents. Everything you pass in one call
+(`ai_report` fields + `ai_answer_text`) is capped at 200,000 characters: above that `report.ai_report_too_large`
+(`details.largest_fields`), nothing written. The result's `answer_source` says whether the reading printed is the one you
+passed (`request`) or one stored on the run earlier (`stored`).
+
 **PDF and DOCX print only what you wrote.** Nothing is filled in for you: a section you leave out does not appear under
 「AI 解读」. The chart data is always there under 完整盘面, so write the reading itself and do not restate the chart. Only the
 JSON report carries deterministic text, for section coverage.
@@ -126,4 +135,13 @@ uv run horosa-skill report from-tool liureng_gods \
 否则 `report.output_path_not_allowed`（`details.allowed_roots` 列出可写根，不写任何文件）。这三个工具的 MCP annotations 标 `destructiveHint=true`
 （会覆盖同名文件），客户端可能要求确认。
 
-结果里出现下面的字段时**必须告诉用户**，不要只报「已生成」：`requested_output_path` = 目标正被别的程序占用（多半开着上一版），新报告另存到 `artifact_path`，旧文件没动；`degraded_from` + `degrade_reason` = 没能生成该格式，已退化成纯文本（`format` 是 `txt`，全文都在）。
+v0.50.0 起 `output_path` 在起盘、写回解读**之前**整体检查（`report_from_tool` 被拒时不起盘、不存档）：给目录 → 缺省文件名写在里面；
+没写扩展名 → 补上，结果 `output_path_adjustment` 写明；下面这些回 `report.output_path_unusable`，`details.reason` 说是哪一种、什么都没写：
+`existing_file`（点名的文件已在、又不是星阙写过的报告——这条 run 的存档 / manifest、用户自己的文件一律不替换；要不要加覆盖开关待维护者定）、
+`store_area`（记忆库、trace、档案、自备知识库、runtime 目录）、`extension_mismatch`（`.docx` 配 `format:"pdf"` 这类）、`name_too_long`、
+`path_refused_by_system`、`parent_not_directory`、`not_writable`、`no_free_name`；写盘时才暴露的问题是 `write_failed`。
+缺省文件名带样式（`_chart_report_` / `_analysis_report_`），同一秒内的调用各得各的名字（`-2`、`-3`）。不认识的 `format` 回 `report.format_unsupported`（`details.accepted` 列出可选值）。
+run 取到之后的每个错误都带 `details.run_id`。
+
+结果里出现下面的字段时**必须告诉用户**，不要只报「已生成」：`requested_output_path` = 目标正被别的程序占用（多半开着上一版），新报告另存到 `artifact_path`，旧文件没动；`degraded_from` + `degrade_reason` = 没能生成该格式，已退化成纯文本（`format` 是 `txt`；内容就是那份 PDF / DOCX 的人读内容，开头一句说明）；
+`figure_gaps` = 哪张盘图没画出来、为什么；`warnings` = 例如本机没有可嵌入的中文字体（PDF 的中文由阅读器字体显示，封面也写明）。

@@ -154,5 +154,20 @@ def settle(figures: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[st
     return out, notes
 
 
+# 说明的后半句只在「报告照出」时成立；PNG 只有这一张图、一个文件都没写成时由 `standing_alone` 拿掉。
+_REST_UNAFFECTED = "；其余盘图与正文不受影响。"
+
+
 def failure_note(tool_name: str, reason: str) -> str:
-    return f"{title(tool_name)}没有画出：出报告时补算这张盘没有成功（{reason}）；其余盘图与正文不受影响。"
+    return f"{title(tool_name)}没有画出：出报告时补算这张盘没有成功（{reason}）{_REST_UNAFFECTED}"
+
+
+def app_only_note(spec: dict[str, Any]) -> str:
+    """只有星阙 app 画法的盘（没有自绘版）这次没画成：此前整张静默不出，读者和调用方都不知道少了一张。"""
+    reason = spec.get("renderer_note") or "星阙 app 画法已关闭（HOROSA_APP_CHARTS=0）"
+    return f"{spec.get('title') or '盘图'}没有画出：这张盘只有星阙 app 的画法，这次不可用（{reason}）。"
+
+
+def standing_alone(note: str) -> str:
+    """同一句说明，用在「没有别的图、也没有正文」的场合（PNG 一张都没出）。"""
+    return note.replace(_REST_UNAFFECTED, "。")

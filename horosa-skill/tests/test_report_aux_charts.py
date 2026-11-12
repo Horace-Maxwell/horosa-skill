@@ -429,6 +429,59 @@ def run_payload_methods(service: HorosaSkillService, run: dict[str, Any]) -> lis
     return chart["data"]["methods"]
 
 
+# ───────────────────────────── nothing could be drawn: say what is missing, not "no chart layout" ─────────────────────────────
+
+def test_png_with_only_an_undrawable_chart_names_the_gap_with_its_own_code(tmp_path: Path) -> None:
+    """Engine not running + a technique whose only figure is computed at report time: before v0.50.0 the PNG request came back
+    as `report.no_chart_content` ("this technique has no chart layout"), with the real reason buried in details."""
+    from horosa_skill.errors import ToolValidationError, recovery_for
+
+    client = CaptureClient()
+    service = _service(tmp_path, client)
+    run, _artifact = _stored(service, "tianxing")
+    client.probe = lambda endpoint="/common/time", payload=None: False  # type: ignore[method-assign]
+    with pytest.raises(ToolValidationError) as caught:
+        service.report_render({"run_id": run["run_id"], "format": "png", "output_path": "t.png"})
+    error = caught.value
+    assert error.code == "report.chart_figure_unavailable"
+    zh, en = str(error).split(" / ", 1)
+    assert zh.startswith("选中时刻星盘没有画出") and "排盘引擎没有在运行" in zh, "the gap leads the message"
+    assert "没有盘式" not in zh.split("不是这个技法", 1)[0] and "其余盘图与正文不受影响" not in zh, "no reassurance about a body that does not exist"
+    assert "could not be drawn" in en
+    assert error.details["figure_gaps"] and error.details["fallback_format"] == "pdf" and error.details["run_id"] == run["run_id"]
+    assert not (tmp_path / "runs" / "t.png").exists()
+    assert recovery_for("report.chart_figure_unavailable", None)["agent_recovery"]["kind"] == "runtime"
+    # the same gap, one field name, in the document formats that still have something to print
+    result = service.report_render({"run_id": run["run_id"], "format": "pdf", "style": "chart", "output_path": "t.pdf"})
+    assert result["figure_gaps"] and result["figure_gaps"][0].startswith("选中时刻星盘没有画出")
+    assert result["figure_gaps"][0] in result["summary"]
+
+
+def test_a_technique_without_a_chart_layout_still_gets_no_chart_content(tmp_path: Path) -> None:
+    from horosa_skill.errors import ToolValidationError
+
+    service = _service(tmp_path, CaptureClient())
+    run, _artifact = _stored(service, "nongli_time")
+    with pytest.raises(ToolValidationError) as caught:
+        service.report_render({"run_id": run["run_id"], "format": "png"})
+    assert caught.value.code == "report.no_chart_content" and "figure_gaps" not in caught.value.details
+
+
+def test_an_undrawn_app_only_figure_is_named_as_a_gap(tmp_path: Path) -> None:
+    """金口诀 only has the app's drawing. With the app renderer unavailable the figure used to vanish without a word and a
+    PNG request blamed the technique."""
+    from horosa_skill.errors import ToolValidationError
+
+    service = _service(tmp_path, CaptureClient())
+    service.js_client.render_app_charts = lambda figures: None  # type: ignore[attr-defined]
+    run, artifact = _stored(service, "jinkou")
+    figures, notes = service._report_figures(service.report_builder.build_figures(run=run, source_artifact=artifact), run, artifact)
+    assert figures == [] and len(notes) == 1 and "只有星阙 app 的画法" in notes[0] and "app-charts bundle unavailable" in notes[0]
+    with pytest.raises(ToolValidationError) as caught:
+        service.report_render({"run_id": run["run_id"], "format": "png"})
+    assert caught.value.code == "report.chart_figure_unavailable"
+
+
 # ───────────────────────────── where the note is printed ─────────────────────────────
 
 def test_figure_gaps_are_printed_under_the_figure_heading() -> None:

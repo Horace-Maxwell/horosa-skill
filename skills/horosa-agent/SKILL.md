@@ -44,12 +44,15 @@ horosa_report_render {run_id, tool_name:"qimen", format:"docx", ai_report:{execu
 
 报告 `output_path` 可省（写到报告输出目录的缺省产物路径）；给了则相对路径按输出目录解析，绝对路径必须在输出目录或
 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单目录内，越界返回 `report.output_path_not_allowed` 且不写文件——别替用户猜别的目录。
+给的是目录就用缺省文件名写在里面；没写扩展名会补上（结果 `output_path_adjustment`）；扩展名与 `format` 不符、名字过长、
+点名一个**不是星阙报告**的已有文件（含这条 run 自己的存档）都回 `report.output_path_unusable`（`details.reason`），起盘与写回之前就拒、什么都不写。
 
 **完整排盘报告**（用户只要「把盘出成 PDF」、不要解读）：`report_render` / `report_from_tool` 传 `style:"chart"`——
 不要 `ai_report`，收录全部盘面段落 + 盘图（星盘轮 / 合盘双圈 / 紫微 / 奇门 / 六壬 / 六爻 / 太乙 / 七政 / 南印方盘 / 90° 度盘，择日画选中时刻的盘；取自引擎数据）+ 基本信息 + 技法依据附录，
 带目录 / 书签 / 页码；引擎没产出的段只在附录「本次未产出」列名。缺省 `style:"analysis"` 仍是解读报告，
 没有 AI 解读时返回 `mode:"analysis_required"`。别为了出盘面 PDF 编一份解读塞进 `ai_report`。解析 / 注册表 / 知识检索 / 紫微规则库类工具没有盘面，
-出 chart 报告会回 `report.no_chart_content`——直接读工具结果。
+出 chart 报告会回 `report.no_chart_content`——直接读工具结果。有盘却没画成（补算要的引擎没在跑、app 画法不可用）时 PNG 回
+`report.chart_figure_unavailable`，PDF / DOCX / PNG 结果带 `figure_gaps`（缺哪张、为什么）——如实转告用户。
 
 **盘图 / 日历**（不要解读、不要 `ai_report`）：`format:"png"` = 盘图本身（一张盘一个文件，客户端能显示图片时直接内嵌；
 超出返回上限的只给文件链接，结果 `inline_images` 写明）；没有中文 TrueType 字体回 `report.png_font_unavailable`（改出 PDF）。

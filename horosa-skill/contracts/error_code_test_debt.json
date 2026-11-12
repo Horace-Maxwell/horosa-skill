@@ -29,7 +29,6 @@
     "openclaw.native_config.invalid_json",
     "openclaw.native_config.invalid_shape",
     "place.engine_failed",
-    "report.export_contract_missing",
     "report.from_tool.invalid_payload",
     "report.render.invalid_payload",
     "report.source_not_found",
