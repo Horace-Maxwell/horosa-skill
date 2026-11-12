@@ -709,7 +709,8 @@ def test_claude_code_without_claude_on_path_prints_the_command(tmp_path: Path, m
     assert report["config_mode"] == "printed"
     assert report["steps"]["config"]["executed"] is False
     assert report["steps"]["config"]["command"].startswith("claude mcp add --scope user horosa ")
-    assert " -- " in report["steps"]["config"]["command"]
+    # 分隔符：POSIX 是 ` -- `；Windows 写成 ` "--" `（npm 的 claude.ps1 会吞掉裸 `--`，见 claude_cli.shell_text）。
+    assert (' "--" ' if os.name == "nt" else " -- ") in report["steps"]["config"]["command"]
     assert report["steps"]["client_check"]["skipped"] is True
     assert report["next_steps"][0].startswith("先执行：claude mcp add")
 
