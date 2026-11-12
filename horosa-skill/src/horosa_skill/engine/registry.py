@@ -281,15 +281,20 @@ FACADE_TOOL_COUNT = 13
 COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
 
 
-# 古典格局派生分析 (星阙 v2.6.7): astrochart/astrochart_like 的 [古典格局] 段来自 /astroextra/analysis
-# (护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/行星时/埃及历/巴比伦/格局/分布/气质/almutem/吉化-extraLots)。
-# 与前端同源:按需 fetch、优雅降级(失败→不挂载→该段不出)。[古典](逐曜状态/围攻/围绕)直接读 /chart 响应,无需此 fetch。
-# 调波盘同属上游 ASTRO_LIKE_EXPORT_KEYS 族，盘面形状与本命盘一致 → 同样吃得下派生分析。
-# （上游把 harmonic 放在 skipClassical 名单里是 UI 侧的性能取舍，headless 无此顾虑，多出的
-# [古典格局] 是 skill 相对上游的 extra，不是漂移。）
-# mundane 也纳入：它已走 `_build_astro_snapshot_text`，开门控即得 [埃及历]。但**不要**因此
-# 给 mundane 登记 [古典格局]——世俗盘无该段是既定结论（docs/LESSONS.md）。
-CLASSICAL_ANALYSIS_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart", "harmonic", "mundane", "draconic", "relocation"})
+# 西占盘族（本命 + 五张派生盘 + 世运）：[埃及历] 与 [信息] 互容接纳过滤吃**本盘**（上游 buildAstroSnapshotContent 对任意盘
+# 按 fields 产出，astroAiSnapshot.js:1731；派生盘快照同一 builder，derivedAstroSnapshot.js），所以全族都挂。
+ASTRO_CHART_FAMILY_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart", "harmonic", "mundane", "draconic", "relocation"})
+
+# 古典格局派生分析 (星阙 v2.6.7)：[古典格局] 段来自 /astroextra/analysis（护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/
+# 行星时/格局/分布/气质/almutem…），按需 fetch、优雅降级（失败→该段不出）。[古典]（逐曜状态/围攻/围绕）直接读 /chart 响应。
+# 🔴 只挂上游会挂的盘（钉版 pipeline.js:513-518 CLASSICAL_SKIP_KEYS / CLASSICAL_SKIP_DERIVED）：后端按常规黄道以**本命参数**
+# 重算，挂到改黄道读数框架的派生盘（十三分 chart13 / 十二分 chart12 / 希腊分 hellen_chart / 调波 harmonic / 龙盘 draconic）上
+# 就是「本命结论冒充派生盘结论」——v0.50.0 前这五张盘的 [古典格局] 与本命逐字节相同（审计 C-01）。
+# 重置盘保留（钉版注释「本命语义仍成立」：分析照本命出生地算，与上游钉版逐字同口径）。上游 HEAD（2026-11-11 dacdc905，
+# pipeline.js:543-560）改成重置盘的 [古典格局] 按重置后地点算、随重置盘快照进正文——re-vendor 时跟进（见 LESSONS v0.50.0-dev
+# 「派生盘的 [古典格局]」）。世运盘不挂（上游 mundane 不是 astrochart 族、preset 无此段；LESSONS v0.14.0）。
+# 占星地图（acg）的本命盘段在 runner 里按 "chart" 挂（上游 locastro 同保留）。
+CLASSICAL_ANALYSIS_TOOLS = frozenset({"chart", "relocation"})
 
 # 本命四盘缺省的严格接纳（service `_apply_chart_request_defaults` 补 0；说明与上游出处见 service/text/chart_family.py）。
 STRONG_RECEPTION_DEFAULT_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart"})

@@ -6,7 +6,7 @@
   },
   "totals": {
     "missing_sections": 8,
-    "extra_sections": 29,
+    "extra_sections": 25,
     "absent_keys": 0,
     "keys_with_debt": 17
   },
@@ -42,15 +42,13 @@
     "draconic": {
       "missing": [],
       "extra": [
-        "月宿",
-        "古典格局"
+        "月宿"
       ]
     },
     "dwadasamsa": {
       "missing": [],
       "extra": [
-        "月宿",
-        "古典格局"
+        "月宿"
       ]
     },
     "extrareturns": {
@@ -82,7 +80,6 @@
       "missing": [],
       "extra": [
         "月宿",
-        "古典格局",
         "调波位置",
         "同频合相"
       ]
@@ -90,8 +87,7 @@
     "hellenastro": {
       "missing": [],
       "extra": [
-        "月宿",
-        "古典格局"
+        "月宿"
       ]
     },
     "indiachart": {

@@ -8,7 +8,8 @@ from typing import Any
 from horosa_skill import __version__
 from horosa_skill import predictive_text as _ptext
 from horosa_skill.decisions.layer import current_decision_records
-from horosa_skill.engine.registry import CLASSICAL_ANALYSIS_TOOLS, EGYPT_AXIS_KEYS, TOOL_DEFINITIONS
+from horosa_skill.engine.astro_snapshot import classical_backend_overrides_from_fields
+from horosa_skill.engine.registry import ASTRO_CHART_FAMILY_TOOLS, CLASSICAL_ANALYSIS_TOOLS, EGYPT_AXIS_KEYS, TOOL_DEFINITIONS
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.reports.technique_card import build_technique_card
 from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
@@ -477,11 +478,11 @@ class EnrichMixin:
         )
         return enriched
 
-    # 哪些工具吃古典派生分析，见 engine.registry.CLASSICAL_ANALYSIS_TOOLS。
+    # 哪些工具挂 [埃及历] / 吃古典派生分析，见 engine.registry.ASTRO_CHART_FAMILY_TOOLS / CLASSICAL_ANALYSIS_TOOLS。
     _CLASSICAL_ANALYSIS_TOOLS = CLASSICAL_ANALYSIS_TOOLS
 
     def _attach_classical_analysis(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
-        if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
+        if tool_name not in ASTRO_CHART_FAMILY_TOOLS:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data
@@ -490,6 +491,8 @@ class EnrichMixin:
         egypt = self._build_egypt_section(response_data, payload)
         if egypt:
             response_data = {**response_data, "_egyptSection": egypt}
+        if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
+            return response_data
         for key in ("date", "zone", "lat", "lon"):
             if not payload.get(key):
                 return response_data
@@ -511,6 +514,10 @@ class EnrichMixin:
                     "hsys": payload.get("hsys"),
                     "zodiacal": payload.get("zodiacal"),
                     "siderealAyanamsa": payload.get("siderealAyanamsa"),
+                    # 上游请求体是 `{...chartObj.params}`：/chart 回显的整套盘参数，含这张盘的非缺省古典口径（界系 / 三分 /
+                    # 交点 / 容许度体系 / 点度计数…，后端 analyze_chart 按它们算）。此前只转发上面十来个键，用户改了口径
+                    # 主盘照改、[古典格局] 却仍按缺省口径算（审计 C-01 附注；westNodeType / termsVariant / orbSystem 等实测改结果）。
+                    **classical_backend_overrides_from_fields(payload),
                     # [M-1][Q-340/T-321]（上游 aiExport.js:6742 fixedStarOrbParamsFor）：恒星轨随盘（此前硬编 1°，
                     # 用户给了 starOrb/starOrbMode 时 [古典格局] 的恒星命中与主盘口径分叉）。
                     **_fixed_star_orb_params(payload),
