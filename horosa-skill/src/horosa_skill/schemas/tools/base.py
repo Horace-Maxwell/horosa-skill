@@ -49,7 +49,7 @@ class FlexibleModel(BaseModel):
     def _house_system_vocabulary(cls, value: Any, info: Any) -> Any:
         from horosa_skill.input_fields import field_validator_for, parse_house_system
 
-        family = "india" if info.field_name == "indiaHsys" else cls.HSYS_FAMILY
+        family = "india" if info.field_name == "indiaHsys" else ("india-hsys" if cls.HSYS_FAMILY == "india" else cls.HSYS_FAMILY)
         return field_validator_for(lambda v: parse_house_system(v, family=family), info.field_name)(value)
 
     @field_validator("zodiacal", mode="before", check_fields=False)

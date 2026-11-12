@@ -25,6 +25,12 @@ _REQUEST_NOTES: ContextVar[list[str] | None] = ContextVar("horosa_mcp_request_no
 _RAW_ARGUMENTS: ContextVar[dict[str, Any] | None] = ContextVar("horosa_mcp_raw_arguments", default=None)
 # 技法输入模型：这一层只校验、原样交给 run_tool（它再归一化一次并把解读说明写进 warnings）。
 _TECHNIQUE_MODELS = frozenset(definition.input_model for definition in TOOL_DEFINITIONS.values())
+# 错误文案里的技法名：一个模型只服务一个技法时用它的名字（神数 14 支共用一个模型，写不出具体哪支就写「technique」）。
+_MODEL_TOOL_NAMES = {
+    model: names[0]
+    for model in _TECHNIQUE_MODELS
+    if len(names := [name for name, definition in TOOL_DEFINITIONS.items() if definition.input_model is model]) == 1
+}
 
 
 @contextmanager
@@ -47,7 +53,7 @@ def _normalize_mcp_request(raw_request: Any, model: type[BaseModel], *, tool_nam
         if model not in _TECHNIQUE_MODELS:
             raise
         # 技法模型：与 run_tool 同一份逐字段错误（每个字段一条恢复条目），不是整份闸门问卷。
-        raise tool_error_from_validation(exc, tool_name=tool_name or model.__name__, payload=body) from exc
+        raise tool_error_from_validation(exc, tool_name=tool_name or _MODEL_TOOL_NAMES.get(model, "technique"), payload=body) from exc
     return normalized.model_dump(exclude_none=True)
 
 

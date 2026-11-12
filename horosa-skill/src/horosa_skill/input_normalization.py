@@ -512,6 +512,10 @@ def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any
     if leaf in ("lat", "lon") and not F.is_blank(payload.get("pos")) and F.is_blank(payload.get("place")):
         zh += f"（`pos`={payload.get('pos')!r} 只是盘头显示名，不解析坐标：要按地名起盘请传 `place`）"
         en += f" (`pos`={payload.get('pos')!r} is a display label only and is not resolved; pass `place` to resolve a place name)"
+    resolution = payload.get("placeResolution") if isinstance(payload.get("placeResolution"), dict) else {}
+    if leaf == "zone" and resolution.get("zone_source") == "not_filled_no_date":
+        zh = "时区：给了 place，但这个技法没有日期，地名换算不出当天的 UTC 偏移（夏令时、历史改制）——请直接给 zone（如 +08:00）"
+        en = "the time zone: place was given, but this technique has no date, so the place cannot be turned into that day's UTC offset; pass zone (e.g. +08:00)"
     if leaf in ("inner", "outer"):
         others = [key for key, value in payload.items() if isinstance(value, dict) and key not in ("inner", "outer")]
         zh = "合盘两人：inner = 第一人（本人）、outer = 第二人，各带 {date, time, zone, lat, lon}" + (f"；收到的 {others} 不是这两个键" if others else "")

@@ -646,15 +646,20 @@ _INDIA_HOUSE_SYSTEM_ALIASES: dict[str, int] = {
 
 def house_system_table(family: str = "astro") -> dict[int, str]:
     """宫制索引 → 名称。西占 = astro_rulers.HOUSE_SYSTEM_LABELS（报告人话化用的同一张表），印占 = astro_sidereal 那张。"""
-    if family == "india":
+    if family in ("india", "india-hsys"):
         from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS
 
-        return dict(INDIA_HOUSE_SYSTEM_LABELS)
+        table = dict(INDIA_HOUSE_SYSTEM_LABELS)
+        if family == "india-hsys":
+            # 印占模型上的通用 `hsys`：上游印占页的请求照带页面通用宫制（缺省 1，录制见 tests/fixtures/sync311_w3b_india_live.json），
+            # 印占后端只在没有 indiaHsys / 流派预设时才按印占表读它——所以多收一个 1。`indiaHsys` 严格按印占表。
+            table = dict(sorted({**table, 1: "Alcabitus（页面通用缺省；印占按 indiaHsys / 流派预设）"}.items()))
+        return table
     return {int(key): label for key, label in HOUSE_SYSTEM_LABELS.items()}
 
 
 def _house_system_names(family: str) -> dict[str, int]:
-    names = dict(_INDIA_HOUSE_SYSTEM_ALIASES if family == "india" else _HOUSE_SYSTEM_ALIASES)
+    names = dict(_INDIA_HOUSE_SYSTEM_ALIASES if family.startswith("india") else _HOUSE_SYSTEM_ALIASES)
     for index, label in house_system_table(family).items():
         names.setdefault(_name_key(label), index)
     return names
@@ -666,7 +671,7 @@ def parse_house_system(value: Any, *, family: str = "astro") -> Parsed:
 
     def issue(zh: str, en: str) -> FieldIssue:
         return FieldIssue("tool.invalid_house_system", zh, en, expected_zh="宫制索引或名称：" + " ".join(pairs),
-                          expected_en="a house-system index or name: " + " ".join(pairs), example=3 if family != "india" else 0,
+                          expected_en="a house-system index or name: " + " ".join(pairs), example=0 if family.startswith("india") else 3,
                           options=[{"value": index, "label": label} for index, label in table.items()])
 
     if isinstance(value, bool):

@@ -360,8 +360,8 @@ class ToolsAPI:
         except ToolValidationError as exc:
             trace["error_code"] = exc.code
             raise
+        raw_payload = payload if isinstance(payload, dict) else {}  # 含 placeResolution：缺 zone 的提示要知道 place 给过
         payload, place_records = self.pop_place_records(payload)
-        raw_payload = payload if isinstance(payload, dict) else {}
         try:
             # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
             # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。

@@ -126,7 +126,8 @@ def test_compact_tool_run_accepts_the_mcp_spelling(tmp_path) -> None:
 
 def test_input_contract_and_hecan_accept_the_mcp_spelling() -> None:
     assert build_tool_input_contract("horosa_cn_qimen")["tool_name"] == "qimen"
-    assert HecanInput.model_validate({"query": "x", "tools": ["horosa_cn_bazi_birth"]}).tools == ["horosa_cn_bazi_birth"]
+    # v0.50.0（IN-15）：tools 在校验层就解析成注册表键（MCP 名、中文名、逗号串都收；认不出的给近似名）。
+    assert HecanInput.model_validate({"query": "x", "tools": ["horosa_cn_bazi_birth"]}).tools == ["bazi_birth"]
 
 
 # --- 2. flat birth fields for dispatch / hecan -----------------------------------------------------------------

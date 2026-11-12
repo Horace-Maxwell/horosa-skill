@@ -15,6 +15,7 @@ from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.errors import RECOVERY_TABLE, ToolValidationError
 from horosa_skill.input_fields import input_notes_scope
 from horosa_skill.input_normalization import normalize_request_payload
+from horosa_skill.service.text.chinese import resolve_sixyao_cast
 
 BASE = {"date": "1990-05-03", "time": "08:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
 
@@ -405,3 +406,101 @@ def test_every_technique_refuses_garbage_in_every_field_of_a_known_kind(service:
             assert entries[0]["code"] in codes, (tool_name, field, value, entries[0]["code"])
             continue
         raise AssertionError(f"{tool_name}.{field}={value!r} was not refused (ok={envelope.ok}, code={envelope.code})")
+
+
+# ───────────────────────── 六爻手动起卦（IN-07）：给了却用不了 = 报错，绝不悄悄改成以时起卦 ─────────────────────────
+
+
+
+def test_sixyao_coin_values_are_read_with_moving_lines() -> None:
+    cast = resolve_sixyao_cast({"lines": [{"value": v} for v in (9, 7, 8, 7, 6, 7)]})
+    assert cast["method"] == "manual"
+    assert [(line["value"], line["change"]) for line in cast["lines"]] == [(1, True), (1, False), (0, False), (1, False), (0, True), (1, False)]
+    assert cast["notes"]  # 铜钱值读法进 warnings
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"lines": [{"value": 1}] * 7},
+        {"lines": [{"value": 1}] * 5},
+        {"lines": [{"value": 2}] * 6},
+        {"lines": [{"value": 9, "change": False}, *[{"value": 1}] * 5]},
+        {"gua_code": "1111010"},
+        {"gua_code": "1234"},
+        {"numbers": [3, 5]},
+        {"changed_code": "111111"},
+        {"lines": [{"value": 1}] * 6, "gua_code": "000000"},
+    ],
+)
+def test_sixyao_unusable_cast_input_is_refused(payload: dict[str, Any]) -> None:
+    with pytest.raises(ToolValidationError) as caught:
+        resolve_sixyao_cast(payload)
+    assert caught.value.code in {"tool.sixyao_invalid_lines", "tool.sixyao_invalid_cast"}
+
+
+def test_sixyao_names_go_to_the_engine_table_with_a_traditional_fallback() -> None:
+    cast = resolve_sixyao_cast({"gua_code": "火天大有", "changed_code": "乾為天"})
+    assert cast["method"] == "gua_name" and cast["gua_name"] == ["火天大有"]
+    assert cast["changed_name"] == ["乾為天", "乾为天"]  # 逐字折叠、「乾」不折成「干」
+    assert resolve_sixyao_cast({"gua_code": "111101"})["method"] == "gua_code"
+    assert resolve_sixyao_cast({})["method"] == "time"
+
+
+# ───────────────────────── 推运目标年（IN-13） ─────────────────────────
+
+
+def test_year_only_target_becomes_that_years_birthday() -> None:
+    from horosa_skill.service.enrich import _apply_yearly_target
+
+    effective = {"date": "1990-05-03", "time": "08:00:00", "datetime": "2026"}
+    _apply_yearly_target("solarreturn", effective)
+    assert effective["datetime"] == "2026-05-03 08:00"
+    leap = {"date": "1992-02-29", "time": "08:00:00", "datetime": "2026"}
+    _apply_yearly_target("givenyear", leap)
+    assert leap["datetime"] == "2026-03-01 08:00"  # 上游 returnPickerSeed：平年落 3/1
+    dated = {"date": "1990-05-03", "time": "08:00:00", "datetime": "2026-05-03"}
+    _apply_yearly_target("givenyear", dated)
+    assert dated["datetime"] == "2026-05-03 08:00"  # givenyear 后端不收纯日期
+
+
+def test_year_field_on_a_predictive_tool_is_read_as_the_target() -> None:
+    model = TOOL_DEFINITIONS["solarreturn"].input_model
+    out = normalize_request_payload({**BASE, "year": 2026}, model=model)
+    assert out["datetime"] == "2026" and "year" not in out
+
+
+def test_year_only_target_is_refused_where_it_has_no_yearly_meaning(service: Any) -> None:
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool("pd", {**BASE, "datetime": "2026", "agent_confirmed_settings": True}, save_result=False)
+    assert caught.value.code == "tool.invalid_datetime"
+
+
+# ───────────────────────── 神数时刻（C-14）、合参技法名（IN-15） ─────────────────────────
+
+
+@pytest.mark.parametrize("bad", ["abc", "25:00", "08:61"])
+def test_shenshu_split_refuses_an_unreadable_time_instead_of_midnight(bad: str) -> None:
+    from horosa_skill.service.options_cn import _split_birth_ymdhm
+
+    with pytest.raises(ToolValidationError) as caught:
+        _split_birth_ymdhm({"date": "1990-05-03", "time": bad})
+    assert caught.value.code == "tool.invalid_time"
+    assert _split_birth_ymdhm({"date": "1990-05-03"})["hour"] == 0  # 没给钟点 = 模型缺省 00:00（留给维护者定）
+
+
+def test_hecan_tools_accept_a_comma_string_and_chinese_names() -> None:
+    from pydantic import ValidationError
+
+    from horosa_skill.schemas.tools.facades import HecanInput
+
+    assert HecanInput.model_validate({"query": "q", "tools": "八字、紫微斗数,horosa_cn_qimen"}).tools == ["bazi_birth", "ziwei_birth", "qimen"]
+    with pytest.raises(ValidationError) as caught:
+        HecanInput.model_validate({"query": "q", "tools": ["bazi_brth"]})
+    assert "bazi_birth" in str(caught.value)
+
+
+@pytest.mark.parametrize("tool_name", ["solarreturn", "lunarreturn", "givenyear", "profection", "solararc"])
+def test_predictive_defaults_turn_a_year_into_that_years_birthday(service: Any, tool_name: str) -> None:
+    effective = service._apply_upstream_predictive_defaults(tool_name, {**BASE, "datetime": "2026"})
+    assert effective["datetime"] == "2026-05-03 08:00"
