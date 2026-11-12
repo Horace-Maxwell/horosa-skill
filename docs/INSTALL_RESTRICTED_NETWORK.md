@@ -24,7 +24,7 @@ uv run horosa-skill install
   → `https://<镜像>/O/R/releases/download/...`），镜像按顺序试，原始 URL 永远排最后兜底。
 - 同一个开关同时作用于 **runtime 清单、runtime 归档、wheel 资产 URL**：`client config --launcher uvx-wheel` 生成的配置
   会直接把镜像后的 wheel URL 写进去（`launcher.alternatives` 列出全部候选）。
-- 下载支持断点续传（`.part` 落在 `<runtime_root>/downloads/`，重跑 `install` 接着传）、按设置重试；校验 sha256。
+- 下载支持断点续传（`.part` 落在 `<runtime_root>/downloads/`，按归档的 sha256 定名并带一份记来历的 `.part.json`，重跑 `install` 接着传；续传带 `If-Range`，资源变了就从头下；续出来对不上 sha256 会自动从头再下一次）。断线时**有进展的那几次不算重试次数**；同一个归档同一时间只有一个 `install` 在下。一律校验 sha256：清单里本平台没有 sha256 时**拒装**（`runtime.install_sha256_missing`），除非你用 `--sha256` 自己给出摘要（v0.50.0 起；此前是不声不响地不校验）。
 
 ## 2. API 直链 + 本地归档：`install --archive`
 
@@ -84,6 +84,9 @@ uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill client config --f
 | `runtime.install_sha256_mismatch` | 所有地址给的归档都与清单 sha256 不符（单个镜像给错文件时会自动换下一个） | 换镜像或走直链；别 `--force` 跳过校验 |
 | `runtime.install_archive_invalid` | `--archive` 给的文件读不了：`details.detected_format` 为 `html` / `json`（下到了网页或接口报错）、`empty` / `unknown`（不是归档）、`zip` / `tar.gz`（下载没下完） | 重新下载本平台归档，带 `--sha256` 再装 |
 | `runtime.install_sha256_invalid` | `--sha256` 的值不是 64 位十六进制 | 从 `runtime-manifest.json` 的 `platforms.<平台>.sha256` 抄 |
+| `runtime.install_sha256_missing` | 清单里本平台的条目没有 sha256，下载来的归档无从校验（清单与归档都在本机时放行，结果里有 `runtime.install_unverified` 告警） | 从发布页拿到 sha256 后 `install --sha256 <摘要>`；或去掉自定义清单用官方的 |
+| `runtime.install_manifest_invalid` | `--manifest-url` 给的本地文件不是清单（`details.reason`：HTML 页面 / 空文件 / 不是 JSON / 没有 `platforms`） | 重新下载 `runtime-manifest.json` |
+| `runtime.install_download_in_progress` | 另一个 `install` 正在下载同一个归档（`details.holder`） | 等它结束；它失败了再重跑，会续传 |
 | `runtime.install_start_in_progress` | runtime 正在启动，这时换目录会把启动器脚下的文件搬走；已装的 runtime 没动 | 等启动结束（`horosa-skill runtime status`）后重跑 `install` |
 | `runtime.install_long_path` | Windows 路径超 260 且未开长路径 | 设 `HOROSA_RUNTIME_ROOT=C:\horosa` 或开注册表 `LongPathsEnabled` |
 | `runtime.path_not_ascii` | Windows 上 runtime 根含非 ASCII 字符（随包 java.exe / Swiss Ephemeris 按 ANSI 读路径，装了也起不来） | `HOROSA_RUNTIME_ROOT=C:\horosa`（纯 ASCII）后重跑 `install` |
@@ -106,7 +109,11 @@ whether the release manifest is reachable (status / latency / error). Plain `doc
 prefixes that replace `https://github.com` for the manifest, the runtime archives *and* the wheel URL
 (`client config --launcher uvx-wheel` writes the mirrored URL into the client config; `launcher.alternatives`
 lists every candidate). The original URL is always the last fallback; downloads resume (`.part` under
-`<runtime_root>/downloads/`) and are sha256-checked.
+`<runtime_root>/downloads/`, named by the archive's sha256 with a `.part.json` recording where it came from; resuming sends
+`If-Range`, and a resumed file that fails the sha256 is downloaded once more from scratch). Interrupted attempts that made
+progress do not count against the retries, and only one `install` downloads a given archive at a time. Everything is
+sha256-checked: a manifest entry without a sha256 is refused (`runtime.install_sha256_missing`) unless you pass the digest
+yourself with `--sha256` (since v0.50.0; before that the check was silently skipped).
 
 **2. Assets API + local archive** — when `api.github.com` works but `github.com` does not: list
 `releases/latest` assets, download your platform archive **and** `runtime-manifest.json` with
@@ -123,7 +130,10 @@ lists every candidate). The original URL is always the last fallback; downloads 
 local services never go through a proxy. Set `SSL_CERT_FILE` for a private CA and `UV_NATIVE_TLS=1` so uv
 trusts the system store. On Windows PowerShell 5.1 pass JSON via `--input`/`--output` files, not pipes.
 
-Error codes: `runtime.install_manifest_fetch_failed` (try a mirror / the API path), `runtime.install_download_failed`
+Error codes: `runtime.install_manifest_fetch_failed` (try a mirror / the API path), `runtime.install_manifest_invalid` (the
+local manifest file is not a manifest: `details.reason` says HTML page / empty / not JSON / no `platforms`),
+`runtime.install_sha256_missing` (no digest for this platform — pass `--sha256` from a source you trust),
+`runtime.install_download_in_progress` (another install is downloading the same archive — wait for it), `runtime.install_download_failed`
 (re-run to resume), `runtime.install_sha256_mismatch` (every address served a different file; one bad mirror just moves on to the next
 candidate — switch mirrors, never skip verification), `runtime.install_start_in_progress` (the runtime is starting and
 swapping now would pull files out from under the launcher; the installed runtime is untouched — wait for

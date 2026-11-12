@@ -551,6 +551,38 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "pass_a_64_hex_sha256",
     },
+    # 清单条目没有摘要 = 下载来的归档无从校验（C-15 / E-15：旧行为是一声不吭地不校验）。
+    "runtime.install_sha256_missing": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "发布清单里本平台的条目没有 sha256，下载来的归档无法校验，所以没有安装（已装的 runtime 没动）。从可信来源"
+            "（发布页）拿到归档的 sha256，用 `install --sha256 <摘要>` 重试；或者换用官方清单（不设 HOROSA_RUNTIME_MANIFEST_URL）。",
+            "The release manifest has no sha256 for this platform, so a downloaded archive cannot be verified and nothing was "
+            "installed (the installed runtime was not touched). Get the archive's sha256 from a source you trust (the release "
+            "page) and retry with `install --sha256 <digest>`, or use the official manifest (unset HOROSA_RUNTIME_MANIFEST_URL).",
+        ),
+        "next_action": "pass_sha256_from_a_trusted_source_or_use_the_official_manifest",
+    },
+    "runtime.install_manifest_invalid": {
+        "kind": "environment",
+        "prompt_to_user": bilingual(
+            "给安装器的清单文件不是 runtime 发布清单（details.reason 说它实际是什么）。重新下载发布页的 runtime-manifest.json，"
+            "或去掉 --manifest-url / HOROSA_RUNTIME_MANIFEST_URL 用官方清单。",
+            "The manifest file given to the installer is not a runtime release manifest (details.reason says what it is). "
+            "Download runtime-manifest.json from the release page again, or drop --manifest-url / HOROSA_RUNTIME_MANIFEST_URL "
+            "to use the official manifest.",
+        ),
+        "next_action": "redownload_manifest_or_use_the_official_one",
+    },
+    "runtime.install_download_in_progress": {
+        "kind": "retry_or_doctor",
+        "prompt_to_user": bilingual(
+            "另一个 install 正在下载同一个归档（details.holder）。等它结束后看它的结果；它失败了再重跑，会从断点续传。",
+            "Another install is downloading the same archive (details.holder). Wait for it and check its result; if it fails, "
+            "rerun and the download resumes.",
+        ),
+        "next_action": "wait_for_the_other_install",
+    },
     # 清数据被拒不是「没装 / 去体检」：数据目录指到了家目录 / 根 / 包着 runtime 根的地方（v0.50.0-dev，E-01）。
     "runtime.purge_refused": {
         "kind": "input",

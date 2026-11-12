@@ -226,6 +226,27 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _parse_manifest_text(text: str) -> tuple[dict[str, Any] | None, str | None]:
+    """清单文本 → (清单, None)；不是 JSON / 不是清单时 (None, 原因)，原因说成「它其实是什么」（HTML 登录页 / 接口报错 / 别的 JSON）。"""
+    stripped = text.lstrip("\ufeff \t\r\n")
+    try:
+        payload = json.loads(stripped)
+    except ValueError:
+        lowered = stripped[:512].lower()
+        if lowered.startswith(("<!doctype", "<html", "<?xml")) or "<html" in lowered:
+            return None, "the content is an HTML page (a login / error page?)"
+        return None, "the file is empty" if not stripped else "the content is not JSON"
+    if not isinstance(payload, dict) or not isinstance(payload.get("platforms"), dict):
+        return None, "the JSON has no `platforms` object (an API error body, or some other file?)"
+    return payload, None
+
+
+def _is_local_location(value: str) -> bool:
+    """file:// 或本地路径（含 Windows 盘符）。http(s) 与任何别的 scheme 都不算本地。"""
+    parsed = urlparse(value)
+    return parsed.scheme == "file" or parsed.scheme == "" or (len(parsed.scheme) == 1 and value[1:3] in {":\\", ":/"})
+
+
 def _is_url(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https", "file"}
@@ -686,6 +707,9 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                             "trace_id": trace["trace_id"],
                             "group_id": trace["group_id"],
                         }
+                # 版本短路之后才判摘要：什么都不下载时没有东西要校验（重跑 setup 不该因此被拒）。
+                if not expected_sha256:
+                    self._refuse_or_note_unverified(manifest_location, source, platform_name, install_warnings)
 
             self._require_install_disk_space(asset_meta)
             self.runtime_root.mkdir(parents=True, exist_ok=True)
@@ -1932,6 +1956,23 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
 
         return mirror_candidates(url)
 
+    # 一次下载里「有进展」的尝试不计入重试次数，但总轮数封顶：一个每次只给几字节就断的源不能把 install 拖成无限循环。
+    _MAX_PROGRESSING_ROUNDS = 50
+    DOWNLOAD_OWNER = "runtime-download"
+
+    def _partial_paths(self, source: str, expected_sha256: str | None) -> tuple[Path, Path, Path]:
+        """断点文件、旁注（url / etag / 长度 / sha）、下载锁 —— 按**内容**定名，不按文件名。
+
+        🔴 v0.50.0-dev（E-09）：旧实现用 `downloads/<文件名>.part`。同名的另一个资产（发布 repack、换了版本却同名、
+        另一个镜像给的坏字节）留下的半截会被当成前半截续上，最后 sha 对不上；两个 install 同时跑还会争同一个文件。
+        有期望 sha 时按 sha 定名（同一份内容从哪个镜像续都对），没有时按 URL 定名。
+        """
+        filename = Path(urlparse(source).path).name or "runtime-archive"
+        key = (expected_sha256 or "").strip().lower() or hashlib.sha256(source.encode("utf-8")).hexdigest()
+        downloads_dir = self.runtime_root / "downloads"
+        stem = f"{filename}.{key[:16]}"
+        return downloads_dir / f"{stem}.part", downloads_dir / f"{stem}.part.json", downloads_dir / f"{stem}.lock"
+
     def _download_with_resume(
         self,
         source: str,
@@ -1943,14 +1984,44 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
     ) -> Path:
         """流式下载 + HTTP Range 断点续传 + 有限退避重试 + 多镜像回退。
 
-        .part 分块存 runtime_root/downloads（跨 install 调用可续传）；206 续写、200 重下兜底；416 看 Content-Range：
-        分块已到头就直接用，否则丢掉从头下。给了 `expected_sha256` 就逐候选校验：镜像回 200 + 错误页时丢掉分块换下一个，
-        回退才覆盖「内容不对」，不只是 HTTP 报错。progress(done, total|None) 供 CLI 回调。
+        断点存 runtime_root/downloads（跨 install 调用可续传），按内容定名并带旁注（`_partial_paths`）；续传带 `If-Range`
+        （资源变了服务器回 200 整份，不会把新尾巴接到旧前半截上）。206 续写、200 重下；416 看 Content-Range：分块已到头就直接用，
+        否则丢掉从头下。给了 `expected_sha256` 就逐候选校验：续出来的文件对不上时先丢掉断点**从头再下一次**，仍不对才算这个候选坏了。
+        有进展的尝试不消耗重试次数（慢网上断三次不该等于失败）。同一份内容同时只有一个进程在下（下载锁）。
+        progress(done, total|None) 供 CLI 回调。
         """
         filename = Path(urlparse(source).path).name or "runtime-archive"
-        downloads_dir = self.runtime_root / "downloads"
-        downloads_dir.mkdir(parents=True, exist_ok=True)
-        part_path = downloads_dir / f"{filename}.part"
+        part_path, sidecar_path, lock_path = self._partial_paths(source, expected_sha256)
+        part_path.parent.mkdir(parents=True, exist_ok=True)
+        if not try_pid_lock(lock_path, stale_after_seconds=6 * 3600.0, owner=self.DOWNLOAD_OWNER):
+            holder = describe_lock(lock_path) or {}
+            raise RuntimeInstallError(
+                bilingual(
+                    f"另一个 install（pid {holder.get('pid')}）正在下载同一个 runtime 归档。等它结束再看结果，不用重复下载。",
+                    f"Another install (pid {holder.get('pid')}) is downloading the same runtime archive. Wait for it to finish; "
+                    "there is no need to download it twice.",
+                ),
+                code="runtime.install_download_in_progress",
+                details={"lock": str(lock_path), "holder": holder},
+            )
+        try:
+            return self._download_locked(source, temp_dir, filename=filename, part_path=part_path, sidecar_path=sidecar_path,
+                                         attempts=attempts, progress=progress, expected_sha256=expected_sha256)
+        finally:
+            release_lock(lock_path)
+
+    def _download_locked(
+        self,
+        source: str,
+        temp_dir: Path,
+        *,
+        filename: str,
+        part_path: Path,
+        sidecar_path: Path,
+        attempts: int | None,
+        progress: Any | None,
+        expected_sha256: str | None,
+    ) -> Path:
         candidates = self._mirror_candidates(source)
         # v0.38.0 B6：慢网 / 企业代理下可调（HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS / _ATTEMPTS）。
         if attempts is None:
@@ -1960,13 +2031,24 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         failures: list[str] = []
         download_started = time.monotonic()
         checksum_failed = False
+        rounds = 0
+        self._drop_partial_if_foreign(part_path, sidecar_path, source=source, expected_sha256=expected_sha256)
+        self._sweep_legacy_partials(part_path.parent)
         for candidate in candidates:
             checksum_failed = False
-            for attempt in range(attempts):
+            fruitless = 0           # 没有任何进展的失败次数：这个才和 attempts 比
+            clean_retry_used = False
+            while fruitless < attempts and rounds < self._MAX_PROGRESSING_ROUNDS:
+                rounds += 1
+                offset = part_path.stat().st_size if part_path.exists() else 0
+                done = offset
                 try:
-                    offset = part_path.stat().st_size if part_path.exists() else 0
-                    headers = {"Range": f"bytes={offset}-"} if offset else {}
-                    done = offset
+                    headers: dict[str, str] = {}
+                    if offset:
+                        headers["Range"] = f"bytes={offset}-"
+                        validator = self._sidecar_validator(sidecar_path)
+                        if validator:
+                            headers["If-Range"] = validator  # 资源变了 → 服务器回 200 整份，不续到旧前半截上
                     stale_part = False
                     with httpx.Client(timeout=httpx.Timeout(connect_timeout, read=read_timeout), follow_redirects=True) as client:
                         with client.stream("GET", candidate, headers=headers) as response:
@@ -1978,12 +2060,13 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                                 if response.status_code == 206:
                                     mode = "ab"
                                     total = offset + int(response.headers.get("Content-Length") or 0) or None
-                                    done = offset
                                 else:
-                                    # 服务器不支持 Range（或无 .part）→ 从头重下。
+                                    # 服务器不支持 Range / If-Range 判定资源变了 / 没有断点 → 从头重下。
                                     mode = "wb"
                                     total = int(response.headers.get("Content-Length") or 0) or None
                                     done = 0
+                                self._write_sidecar(sidecar_path, source=source, url=candidate, response=response,
+                                                    total=total, expected_sha256=expected_sha256)
                                 with open(part_path, mode) as handle:
                                     for chunk in response.iter_bytes(chunk_size=1024 * 1024):
                                         handle.write(chunk)
@@ -1991,16 +2074,22 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                                         if progress is not None:
                                             progress(done, total)
                     if stale_part:
-                        part_path.unlink(missing_ok=True)
+                        self._drop_partial(part_path, sidecar_path)
                         failures.append(f"{candidate}: HTTP 416, dropped a stale partial of {offset} bytes")
                         continue
                     if expected_sha256 and _sha256_file(part_path).lower() != expected_sha256.lower():
-                        part_path.unlink(missing_ok=True)  # 坏字节不能留给下一个候选当断点续传的前半截
+                        self._drop_partial(part_path, sidecar_path)  # 坏字节不能留给下一个候选当断点续传的前半截
+                        if offset and not clean_retry_used:
+                            # 续出来的不对：可能是前半截有问题，不一定是这个源坏了。从头干净地再下一次。
+                            clean_retry_used = True
+                            failures.append(f"{candidate}: sha256 mismatch after resuming at {offset} bytes, retrying from scratch")
+                            continue
                         failures.append(f"{candidate}: sha256 mismatch")
                         checksum_failed = True
                         break
                     target = temp_dir / filename
                     shutil.move(str(part_path), str(target))
+                    sidecar_path.unlink(missing_ok=True)
                     # v0.38.1 R1：真机矩阵要证明「真的下载过」——把这次传输的事实带回 install 结果。
                     self._last_download = {
                         "url": candidate, "mirror_used": candidate != source, "bytes": done, "resumed_from": offset,
@@ -2020,8 +2109,11 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                         code="runtime.install_write_failed",
                         details={"target": str(part_path)},
                     ) from exc
-                if attempt < attempts - 1:
-                    time.sleep((3 ** attempt))  # 1s/3s 退避（最后一次不等）
+                if done > offset:
+                    continue  # 有进展（断在半路）：马上续，不计数也不等
+                fruitless += 1
+                if fruitless < attempts:
+                    time.sleep(3 ** (fruitless - 1))  # 1s/3s 退避（最后一次不等）
         if checksum_failed:
             raise RuntimeValidationError(
                 bilingual("所有下载地址给的归档都与清单的 sha256 不符。", "Every source served an archive that fails the manifest sha256."),
@@ -2039,30 +2131,114 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             },
         )
 
+    @staticmethod
+    def _sweep_legacy_partials(downloads_dir: Path) -> None:
+        """v0.50.0 前按文件名存的断点（`<文件名>.part`，没有旁注）：新代码不会再续它们，留着只是占几百 MB。
+        新格式的断点在写第一个字节前就有旁注，所以「没有旁注的 .part」只可能是旧的。"""
+        try:
+            leftovers = [p for p in downloads_dir.glob("*.part") if not p.with_name(p.name + ".json").exists()]
+        except OSError:
+            return
+        for path in leftovers:
+            try:
+                path.unlink()
+            except OSError:
+                pass  # 删不掉（Windows 上被占用）不影响这次下载
+
+    @staticmethod
+    def _drop_partial(part_path: Path, sidecar_path: Path) -> None:
+        part_path.unlink(missing_ok=True)
+        sidecar_path.unlink(missing_ok=True)
+
+    def _drop_partial_if_foreign(self, part_path: Path, sidecar_path: Path, *, source: str, expected_sha256: str | None) -> None:
+        """断点的来历对不上就不续：没有旁注（来历不明）、旁注记的是别的资产 / 别的 sha、或比旁注记的总长还长。"""
+        if not part_path.exists():
+            sidecar_path.unlink(missing_ok=True)
+            return
+        meta = self._read_sidecar(sidecar_path)
+        if meta is None:
+            self._drop_partial(part_path, sidecar_path)
+            return
+        same_content = (expected_sha256 or "").lower() == str(meta.get("sha256") or "").lower()
+        if not same_content or (not expected_sha256 and meta.get("source") != source):
+            self._drop_partial(part_path, sidecar_path)
+            return
+        length = meta.get("length")
+        if isinstance(length, int) and part_path.stat().st_size > length:
+            self._drop_partial(part_path, sidecar_path)
+
+    @staticmethod
+    def _read_sidecar(sidecar_path: Path) -> dict[str, Any] | None:
+        try:
+            meta = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return meta if isinstance(meta, dict) else None
+
+    def _sidecar_validator(self, sidecar_path: Path) -> str | None:
+        meta = self._read_sidecar(sidecar_path) or {}
+        etag = meta.get("etag")
+        if isinstance(etag, str) and etag and not etag.startswith("W/"):  # If-Range 只认强校验值
+            return etag
+        modified = meta.get("last_modified")
+        return modified if isinstance(modified, str) and modified else None
+
+    @staticmethod
+    def _write_sidecar(sidecar_path: Path, *, source: str, url: str, response: Any, total: int | None,
+                       expected_sha256: str | None) -> None:
+        payload = {
+            "source": source, "url": url, "etag": response.headers.get("ETag"),
+            "last_modified": response.headers.get("Last-Modified"), "length": total,
+            "sha256": (expected_sha256 or "").lower() or None,
+        }
+        tmp = sidecar_path.with_name(sidecar_path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        fsretry.replace(tmp, sidecar_path)
+
     def _read_json_location(self, location: str) -> dict[str, Any]:
-        if _is_url(location):
-            parsed = urlparse(location)
-            if parsed.scheme == "file":
-                return json.loads(self._file_url_to_path(location).read_text(encoding="utf-8"))
+        """读发布清单。读不到 / 不是 JSON / 不是清单 → 结构化错误，带上「它实际是什么」（E-15：旧实现本地清单是 JSONDecodeError traceback）。"""
+        if _is_url(location) and urlparse(location).scheme != "file":
             last_error: Exception | None = None
+            failures: list[str] = []
             for candidate in self._mirror_candidates(location):
                 try:
                     with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                         response = client.get(candidate)
                         response.raise_for_status()
-                        payload = response.json()
-                    # 镜像常回 200 + 错误页（HTML，或 {"message": …}）：内容不对同样换下一个候选，原始 URL 永远是最后一个。
-                    if not isinstance(payload, dict) or "platforms" not in payload:
-                        raise ValueError(bilingual(f"{candidate} 返回的不是 runtime 清单", f"{candidate} did not return a runtime manifest"))
-                    return payload
-                except (httpx.HTTPError, ValueError) as exc:
+                        payload, problem = _parse_manifest_text(response.text)
+                except httpx.HTTPError as exc:
                     last_error = exc
+                    failures.append(f"{candidate}: {type(exc).__name__}: {exc}"[:240])
+                    continue
+                if payload is not None:
+                    return payload
+                # 镜像常回 200 + 错误页（HTML，或 {"message": …}）：内容不对同样换下一个候选，原始 URL 永远是最后一个。
+                failures.append(f"{candidate}: {problem}"[:240])
             raise RuntimeInstallError(
-                f"Failed to fetch runtime manifest: {last_error}",
+                bilingual(
+                    f"取不到 runtime 发布清单（{location}）：{failures[-1] if failures else last_error}",
+                    f"Could not fetch the runtime release manifest ({location}): {failures[-1] if failures else last_error}",
+                ),
                 code="runtime.install_manifest_fetch_failed",
-                details={"location": location},
+                details={"location": location, "failures": failures[-6:]},
             ) from last_error
-        return json.loads(Path(location).expanduser().read_text(encoding="utf-8"))
+        path = self._file_url_to_path(location) if _is_url(location) else Path(location).expanduser()
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise RuntimeInstallError(
+                bilingual(f"读不了 runtime 清单文件 {path}：{exc.strerror or exc}", f"Cannot read the runtime manifest file {path}: {exc.strerror or exc}"),
+                code="runtime.install_manifest_fetch_failed",
+                details={"location": location, "path": str(path)},
+            ) from exc
+        payload, problem = _parse_manifest_text(text)
+        if payload is None:
+            raise RuntimeInstallError(
+                bilingual(f"{path} 不是 runtime 发布清单：{problem}", f"{path} is not a runtime release manifest: {problem}"),
+                code="runtime.install_manifest_invalid",
+                details={"location": location, "path": str(path), "reason": problem},
+            )
+        return payload
 
     def _file_url_to_path(self, location: str) -> Path:
         parsed = urlparse(location)
@@ -2171,6 +2347,37 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
             return try_pid_lock(lock_path, stale_after_seconds=960.0, owner=owner)
         except LockDirNotWritableError as exc:
             raise self._root_not_writable_error(exc.cause) from exc
+
+    @staticmethod
+    def _refuse_or_note_unverified(manifest_location: str, asset_url: str, platform_name: str,
+                                   install_warnings: list[dict[str, Any]]) -> None:
+        """清单里本平台条目没有 sha256（C-15 / E-15）。
+
+        🔴 旧实现：没有摘要 = 不校验，一声不吭。下载走网络（还可能经镜像）时这等于关掉了唯一的完整性检查 —— 拒绝，
+        除非用户自己用 `--sha256` 给出摘要。清单和归档**都在本机**（file:// 或本地路径，自建 / 离线拷贝的场景）时没有
+        网络这一跳，用户对两样东西都负责：放行，但在结果的 warnings 里明说没校验。
+        """
+        if _is_local_location(manifest_location) and _is_local_location(asset_url):
+            install_warnings.append({
+                "code": "runtime.install_unverified",
+                "message": bilingual(
+                    "本机清单里这个平台的条目没有 sha256，归档没有经过校验就装了（清单与归档都在本机，按你自己提供的处理）。",
+                    "The local manifest has no sha256 for this platform, so the archive was installed unverified "
+                    "(both the manifest and the archive are on this machine and treated as yours).",
+                ),
+                "platform": platform_name,
+            })
+            return
+        raise RuntimeValidationError(
+            bilingual(
+                f"发布清单里 {platform_name} 的条目没有 sha256，下载来的归档无法校验，所以不装。要装就从可信来源拿到这个归档的 "
+                "sha256，用 `install --sha256 <摘要>` 再跑一次。",
+                f"The release manifest has no sha256 for {platform_name}, so a downloaded archive cannot be verified and was "
+                "not installed. Get the archive's sha256 from a source you trust and rerun with `install --sha256 <digest>`.",
+            ),
+            code="runtime.install_sha256_missing",
+            details={"manifest_url": manifest_location, "asset_url": asset_url, "platform": platform_name},
+        )
 
     @staticmethod
     def _normalize_sha256_pin(value: str | None) -> str | None:
