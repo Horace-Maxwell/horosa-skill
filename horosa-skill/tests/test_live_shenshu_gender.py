@@ -21,8 +21,9 @@ def _pair(tmp_path, tool: str, a: dict, b: dict):
     service = make_service(tmp_path)
     first = service.run_tool(tool, a, save_result=False)
     second = service.run_tool(tool, b, save_result=False)
-    if not (first.ok and second.ok):
-        pytest.skip(f"{tool} backend unavailable: {first.error or second.error}")
+    # 闸已确认 runtime 活着且是显式点名的实例：这里再出错就是失败，不是「后端不可用」的跳过（C-18 第 2 项——
+    # 这条函数体里的 skip 曾让 live lane 在后端报错时整组静默放行）。
+    assert first.ok and second.ok, f"{tool}: {first.error or second.error}"
     return first.data["snapshot_text"], second.data["snapshot_text"]
 
 

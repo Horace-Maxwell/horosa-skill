@@ -51,8 +51,8 @@ from horosa_skill.service.text.western import (
 
 FIXTURE = json.loads((Path(__file__).resolve().parent / "fixtures" / "sync313_western_live.json").read_text(encoding="utf-8"))
 _UPSTREAM_SRC = Path(os.environ.get("HOROSA_SOURCE_ROOT") or "/nonexistent") / "Horosa-Web" / "astrostudyui" / "src"
-needs_upstream = pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+needs_upstream = pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="[upstream-checkout] drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 
 def _split(text: str) -> dict[str, str]:

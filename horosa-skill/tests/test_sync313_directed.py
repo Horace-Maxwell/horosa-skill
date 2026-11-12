@@ -40,11 +40,11 @@ CASES = [(tech, name) for tech in TECHS for name in ("default", "custom")]
 BIRTH = {**LIVE["birth"], "agent_confirmed_settings": True}
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" if _UPSTREAM_ROOT else None
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 requires_upstream = pytest.mark.skipif(
     UPSTREAM_UI is None or not (UPSTREAM_UI / "node_modules" / "@babel" / "parser").is_dir()
     or not (UPSTREAM_UI / "src" / "utils" / "directedFigures.js").is_file(),
-    reason="HOROSA_SOURCE_ROOT (upstream checkout with node_modules and utils/directedFigures.js) not set",
+    reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout with node_modules and utils/directedFigures.js) not set",
 )
 NOW_UTC = datetime(2026, 10, 30, 4, 0, 0, tzinfo=timezone.utc)
 

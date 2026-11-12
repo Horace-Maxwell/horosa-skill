@@ -51,7 +51,7 @@ FIXTURE = {tool: _resolve(case) for tool, case in _RAW.items() if not tool.start
 DOUBLE = ("neroman", "bezzafigure", "jayprofection", "prog", "vedicprog")
 SINGLE = ("tianxing", "prenatalsyzygy")
 
-needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not on PATH")
 
 
 class _Client:

@@ -159,7 +159,7 @@ def test_a_symlinked_child_is_unlinked_not_followed(tmp_path: Path, monkeypatch:
     try:
         os.symlink(elsewhere, settings.data_dir / "runs", target_is_directory=True)
     except OSError:
-        pytest.skip("this account cannot create symlinks")
+        pytest.skip("[host] this account cannot create symlinks")
     manager = _manager(settings, monkeypatch)
 
     manager.uninstall(purge_data=True, yes=True)

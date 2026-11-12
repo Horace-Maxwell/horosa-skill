@@ -233,7 +233,7 @@ def test_profile_run_reaches_the_engine_exactly_like_the_explicit_run(tmp_path: 
     assert _engine_payload(js, "ziwei_birth") != sent_profile, "对照：换一个时刻引擎载荷就变（上面的相等不是空比较）"
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+@pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 def test_real_engine_profile_run_equals_the_explicit_run(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     service = HorosaSkillService(settings, store=MemoryStore(settings))

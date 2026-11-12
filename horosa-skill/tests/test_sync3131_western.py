@@ -45,7 +45,7 @@ from horosa_skill.surfaces.mcp_schema import advertise_hidden_fields
 _ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 _UI = Path(_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _ROOT else None
 requires_upstream = pytest.mark.skipif(
-    _UI is None or not (_UI / "utils" / "astroAiSnapshot.js").is_file(), reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
+    _UI is None or not (_UI / "utils" / "astroAiSnapshot.js").is_file(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
 )
 
 _BIRTH = {"date": "1990-05-04", "time": "12:30:00", "zone": "+08:00", "lat": "31n14", "lon": "121e30", "agent_confirmed_settings": True}

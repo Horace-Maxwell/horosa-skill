@@ -281,7 +281,7 @@ def test_show_says_what_is_missing_instead_of_claiming_a_full_record(tmp_path: P
 
 def _readonly(folder: Path) -> None:
     if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
-        pytest.skip("需要 POSIX 权限位，且不能以 root 跑")
+        pytest.skip("[platform] 需要 POSIX 权限位，且不能以 root 跑")
     for path in folder.glob("memory.db*"):
         if path.name.endswith(("-wal", "-shm")):
             path.unlink()

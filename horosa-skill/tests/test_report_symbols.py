@@ -67,7 +67,7 @@ def test_no_symbol_reaches_the_pdf_that_its_font_cannot_draw(tmp_path: Path, mon
     primary_name = target[0].style.fontName
     face = getattr(pdfmetrics.getFont(primary_name), "face", None)
     if face is None:
-        pytest.skip("本机没有中文 TrueType，PDF 用不嵌入的 CID 字体：量不了 cmap（R-16 另有说明）")
+        pytest.skip("[host] 本机没有中文 TrueType，PDF 用不嵌入的 CID 字体：量不了 cmap（R-16 另有说明）")
     for paragraph in target:
         for ch, font in _drawn_chars(paragraph.text, primary_name):
             covered = pdfmetrics.getFont(font).face.charToGlyph

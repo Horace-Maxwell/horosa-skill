@@ -183,7 +183,7 @@ def test_new_figures_render_in_pdf_and_docx(tmp_path: Path) -> None:
         media = [n for n in archive.namelist() if n.startswith("word/media/")]
     assert "南印方盘" in xml and "白羊 · 第11宫" in xml  # 方盘画成 Word 表格
     if renderers._drawing_font_files(renderers.SIMPLIFIED) is None:
-        pytest.skip("本机没有可供 Pillow 使用的 TTF 中文字体（CID 回退）")
+        pytest.skip("[host] 本机没有可供 Pillow 使用的 TTF 中文字体（CID 回退）")
     assert len(media) == 4  # 太乙 / 量化盘星盘 / 90° 度盘 / 合盘双圈
 
 

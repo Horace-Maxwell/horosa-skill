@@ -34,7 +34,7 @@ _ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 _WEB = Path(_ROOT) / "Horosa-Web" if _ROOT else None
 _INDIA_SRV = _WEB / "astropy" / "websrv" / "webindiasrv.py" if _WEB else None
 requires_upstream = pytest.mark.skipif(
-    _INDIA_SRV is None or not _INDIA_SRV.is_file(), reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
+    _INDIA_SRV is None or not _INDIA_SRV.is_file(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
 )
 
 # 每个死键一个非缺省值（形状照 india_chart 同名键）。

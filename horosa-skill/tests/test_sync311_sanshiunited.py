@@ -37,7 +37,7 @@ FIXTURE_COMMENT = (
     "trimmed to the fields the engines read (replay proven byte-identical); regenerate with the scratchpad recorder "
     "over tests/test_sync311_sanshiunited.SCENARIOS."
 )
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 # ─────────────────────────────── 录制 / 回放 ───────────────────────────────
 

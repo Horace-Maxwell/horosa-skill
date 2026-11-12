@@ -29,9 +29,9 @@ CORE_JS_SRC = PKG / "horosa-core-js" / "src"
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _UPSTREAM_ROOT else None
 requires_upstream = pytest.mark.skipif(
-    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="HOROSA_SOURCE_ROOT (upstream checkout) not set"
+    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 
 class _NoBackend(HorosaApiClient):
@@ -292,11 +292,8 @@ def test_ziwei_juji_patterns_split_in_vendored_table() -> None:
     assert re.fullmatch(r"格局命中\(\d+ 格\)", out[1]) and out[1] != "格局命中(51 格)"
 
 
-try:
-    from test_local_js_tools import make_service, requires_runtime  # noqa: E402
-except Exception:  # pragma: no cover - 门禁模块不可导入时 live 用例整体跳过
-    make_service = None
-    requires_runtime = pytest.mark.skip(reason="test_local_js_tools gate unavailable")
+# 闸模块导入失败就该红：旧写法 except → `pytest.mark.skip("gate unavailable")`，live lane 上整组静默放行（C-18 第 2 项）。
+from test_local_js_tools import make_service, requires_runtime  # noqa: E402
 
 
 @requires_runtime

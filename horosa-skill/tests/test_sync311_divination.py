@@ -29,7 +29,7 @@ CORE_JS_SRC = PKG / "horosa-core-js" / "src"
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _UPSTREAM_ROOT else None
 requires_upstream = pytest.mark.skipif(
-    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="HOROSA_SOURCE_ROOT (upstream checkout) not set"
+    UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
 
 # /nongli/time 真实形状（live 9977 实测 2026-09-24 10:58 上海）：timeAlg=0 → birth 为真太阳时、时柱甲午。

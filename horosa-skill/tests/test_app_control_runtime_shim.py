@@ -84,7 +84,7 @@ def test_the_finder_only_wraps_registered_modules(shim) -> None:
 
 
 def test_parse_times_stub_matches_the_real_extension_surface(shim) -> None:
-    np = pytest.importorskip("numpy")
+    np = pytest.importorskip("numpy", reason="[host] numpy not installed (the [vectors] extra)")
     module = types.ModuleType("astropy.time._parse_times")
     shim._fill_parse_times(module)
     assert module.dt_pars.names == ("delim", "start", "stop", "break_allowed") and module.dt_pars.isalignedstruct

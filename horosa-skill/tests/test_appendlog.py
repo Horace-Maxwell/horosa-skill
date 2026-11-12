@@ -53,7 +53,7 @@ def test_concurrent_processes_append_every_line_intact(tmp_path: Path) -> None:
     assert len(lines) == PROCS * COUNT and len(ids) == PROCS * COUNT, (len(lines), len(ids))
 
 
-@pytest.mark.skipif(os.name != "nt", reason="the CRT-emulated O_APPEND race only exists on Windows")
+@pytest.mark.skipif(os.name != "nt", reason="[platform] the CRT-emulated O_APPEND race only exists on Windows")
 def test_crt_append_really_loses_lines_on_windows(tmp_path: Path) -> None:
     crt = (
         "def write(path, line):\n"
@@ -65,7 +65,7 @@ def test_crt_append_really_loses_lines_on_windows(tmp_path: Path) -> None:
     )
     ids = _parseable_ids(_run_writers(tmp_path, crt))
     if len(ids) == PROCS * COUNT:
-        pytest.skip("this host did not reproduce the CRT race this run (the guard above still holds)")
+        pytest.skip("[host] this host did not reproduce the CRT race this run (the guard above still holds)")
     assert len(ids) < PROCS * COUNT
 
 

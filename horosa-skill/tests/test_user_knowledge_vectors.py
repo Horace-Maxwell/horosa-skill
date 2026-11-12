@@ -15,7 +15,7 @@ from horosa_skill.knowledge import index as kindex
 from horosa_skill.knowledge import user as uk
 from horosa_skill.knowledge import vectors
 
-np = pytest.importorskip("numpy")
+np = pytest.importorskip("numpy", reason="[host] numpy not installed (the [vectors] extra)")
 
 CONCEPTS = {"弱": 0, "衰": 0, "旺": 1, "强": 1, "财": 2, "钱": 2, "富": 2, "官": 3, "杀": 3, "印": 4, "紫": 5, "命": 5}
 
@@ -110,7 +110,7 @@ def test_a_tampered_model_file_is_not_used(tmp_path: Path, monkeypatch: pytest.M
 
 
 @pytest.mark.skipif(not (vectors.deps_available() and os.environ.get("HOROSA_EMBED_MODEL_DIR")),
-                    reason="需要 [vectors] 依赖 + HOROSA_EMBED_MODEL_DIR 指向已下好的 bge-small-zh 模型")
+                    reason="[opt-in] 需要 [vectors] 依赖 + HOROSA_EMBED_MODEL_DIR 指向已下好的 bge-small-zh 模型")
 def test_real_bge_model_finds_the_paraphrase(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     assert vectors.model_ready(settings)

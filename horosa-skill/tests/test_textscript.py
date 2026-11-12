@@ -8,10 +8,11 @@ import ast
 import asyncio
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import pytest
+from skips import needs_upstream as _needs_upstream
+from skips import upstream_path
 
 from horosa_skill.textscript import (
     SIMPLIFIED,
@@ -155,10 +156,10 @@ def test_every_character_rule_is_well_formed_and_takes_effect() -> None:
             assert convert(f"，{char}，", TRADITIONAL)[1] == rule["default"], char
 
 
-UPSTREAM_ROOT = Path(os.environ.get("HOROSA_SOURCE_ROOT") or PKG.parent.parent / "Horosa-Public")
-UPSTREAM_DIR = UPSTREAM_ROOT / "Horosa-Web" / "astrostudyui" / "src" / "utils" / "scriptConvert"
+# 只认 HOROSA_SOURCE_ROOT：旧写法回落到「本仓旁边的 Horosa-Public」，维护机上那份版本不对时比的是错的上游。
+UPSTREAM_DIR = upstream_path("Horosa-Web/astrostudyui/src/utils/scriptConvert") or Path("/nonexistent")
 UPSTREAM_RULES = UPSTREAM_DIR / "hantRules.js"
-needs_upstream = pytest.mark.skipif(not UPSTREAM_RULES.is_file(), reason="needs the upstream Horosa-Public checkout next to this repo")
+needs_upstream = _needs_upstream("Horosa-Web/astrostudyui/src/utils/scriptConvert/hantRules.js")
 
 
 def _upstream_consts() -> dict:

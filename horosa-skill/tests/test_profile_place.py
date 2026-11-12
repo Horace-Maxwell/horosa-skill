@@ -21,7 +21,7 @@ from horosa_skill.service import HorosaSkillService
 CORE_JS = Path(__file__).resolve().parents[1] / "horosa-core-js"
 requires_engine = pytest.mark.skipif(
     shutil.which("node") is None or not (CORE_JS / "node_modules" / "tz-lookup" / "tz.js").is_file(),
-    reason="node + horosa-core-js node_modules (npm ci --omit=dev) required",
+    reason="[host] node + horosa-core-js node_modules (npm ci --omit=dev) required",
 )
 
 

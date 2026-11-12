@@ -95,7 +95,7 @@ def test_every_painted_thing_is_tagged_or_an_artifact(tmp_path: Path) -> None:
         assert len(_MARK_OPEN.findall(stream)) == stream.count(b"EMC")
 
 
-@pytest.mark.skipif(not os.environ.get("HOROSA_VERAPDF"), reason="HOROSA_VERAPDF 未指向 veraPDF（需要 Java）")
+@pytest.mark.skipif(not os.environ.get("HOROSA_VERAPDF"), reason="[opt-in] HOROSA_VERAPDF 未指向 veraPDF（需要 Java）")
 def test_verapdf_says_pdf_ua_1(tmp_path: Path) -> None:
     pdf = tmp_path / "report.pdf"
     pdf.write_bytes(_report(tmp_path / "work"))

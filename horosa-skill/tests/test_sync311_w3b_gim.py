@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from fakes import FakeClient
+from skips import needs_upstream, upstream_path
 
 from horosa_skill.config import Settings
 from horosa_skill.errors import ToolValidationError
@@ -24,7 +25,7 @@ from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 
 GUOLAO_FIX = json.loads((FIXTURES / "sync311_w3b_guolao_live.json").read_text(encoding="utf-8"))
 
@@ -302,10 +303,10 @@ def test_eminence_four_points_row_counts_pars_spirit(tmp_path) -> None:
     assert f"精神点{house}宫" in row, row
 
 
-UPSTREAM_ASTROCONST = Path("/Users/horacedong/Desktop/Horosa-Public/Horosa-Web/astrostudyui/src/constants/AstroConst.js")
+UPSTREAM_ASTROCONST = upstream_path("Horosa-Web/astrostudyui/src/constants/AstroConst.js")
 
 
-@pytest.mark.skipif(not UPSTREAM_ASTROCONST.is_file(), reason="needs the upstream Horosa-Public checkout")
+@needs_upstream("Horosa-Web/astrostudyui/src/constants/AstroConst.js")
 def test_shared_astroconst_shim_string_ids_equal_upstream_values() -> None:
     """shim 里每个字符串常量都必须逐值等于上游 constants/AstroConst.js 同名常量（猜值会静默对不上排盘 objects[].id）。"""
     shim = (Path(__file__).resolve().parents[1] / "horosa-core-js" / "src" / "constants" / "AstroConst.js").read_text(encoding="utf-8")

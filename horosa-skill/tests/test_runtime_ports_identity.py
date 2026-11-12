@@ -191,7 +191,7 @@ def test_listener_pids_finds_a_real_listener(listening_server) -> None:
     工具缺席时 skip 而不是把空列表当成通过：那样这条守卫会在最需要它的环境里静默失效。
     """
     if not _listener_lookup_available():
-        pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
+        pytest.skip("[platform] 本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
     port, proc = listening_server
     pids = _listener_pids_with_patience(port)
     assert pids, f"端口上明明有监听进程，却一个持有者都查不出来（{_listener_diagnostics(port)}）"
@@ -236,7 +236,7 @@ def test_a_stranger_on_our_port_is_classified_foreign(listening_server, tmp_path
     工具缺席时 skip：没有监听查询就退到第三级证据，那条另有用例（`no_evidence_at_all`）。
     """
     if not _listener_lookup_available():
-        pytest.skip("本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
+        pytest.skip("[platform] 本平台的监听查询工具不可用（Linux 需 iproute2 的 ss）")
     # 托管 runner 满负载下第一次查询可能空：先耐心确认查得到持有者，再判归属（否则 unknown 会被误当成 foreign 失败）
     assert _listener_pids_with_patience(listening_server[0]), f"监听查询空手而归（{_listener_diagnostics(listening_server[0])}）"
     port, _proc = listening_server

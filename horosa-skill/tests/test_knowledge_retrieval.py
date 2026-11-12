@@ -412,7 +412,7 @@ def test_searching_does_not_queue_behind_another_sessions_writer(tmp_path: Path)
 
 
 def test_a_large_vector_backlog_is_worked_off_a_bounded_slice_at_a_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    np = pytest.importorskip("numpy")
+    np = pytest.importorskip("numpy", reason="[host] numpy not installed (the [vectors] extra)")
 
     class Stub:
         calls = 0
@@ -434,7 +434,7 @@ def test_a_large_vector_backlog_is_worked_off_a_bounded_slice_at_a_time(tmp_path
 
 def test_a_settled_index_with_vectors_does_not_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """开了向量后，什么都没变时也不能写库：否则每次检索又要拿写锁。"""
-    np = pytest.importorskip("numpy")
+    np = pytest.importorskip("numpy", reason="[host] numpy not installed (the [vectors] extra)")
 
     class Stub:
         def embed(self, texts, *, query=False, batch=16):

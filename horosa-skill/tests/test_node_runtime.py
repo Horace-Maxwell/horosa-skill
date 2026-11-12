@@ -17,7 +17,7 @@ from horosa_skill.engine.js_client import HorosaJsEngineClient
 from horosa_skill.errors import ToolTransportError, recovery_for
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
-posix_only = pytest.mark.skipif(os.name == "nt", reason="shell-script node stand-ins need a POSIX shell")
+posix_only = pytest.mark.skipif(os.name == "nt", reason="[platform] shell-script node stand-ins need a POSIX shell")
 
 
 @pytest.fixture(autouse=True)

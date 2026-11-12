@@ -257,7 +257,7 @@ def test_live_apparent_sunrise_moves_the_backend_sunrise_earlier(tmp_path) -> No
 _UPSTREAM = Path(os.environ.get("HOROSA_SOURCE_ROOT", "")) / "Horosa-Web/astrostudyui/src/components/guolao/GuoLaoMoiraWheel.js"
 
 
-@pytest.mark.skipif(not os.environ.get("HOROSA_SOURCE_ROOT") or not _UPSTREAM.is_file(), reason="needs HOROSA_SOURCE_ROOT")
+@pytest.mark.skipif(not os.environ.get("HOROSA_SOURCE_ROOT") or not _UPSTREAM.is_file(), reason="[upstream-checkout] needs HOROSA_SOURCE_ROOT")
 def test_independent_aspect_table_matches_upstream() -> None:
     src = _UPSTREAM.read_text(encoding="utf-8")
     block = src[src.index("const MOIRA_ASPECTS = ["):src.index("const MOIRA_DEFAULT_ASPECTS")]

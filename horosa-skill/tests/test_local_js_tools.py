@@ -34,7 +34,7 @@ from horosa_skill.service import HorosaSkillService
 _CHART_EXPLICIT = bool(os.environ.get("HOROSA_CHART_SERVER_ROOT"))
 _JAVA_EXPLICIT = bool(os.environ.get("HOROSA_SERVER_ROOT"))
 _EXPLICIT_HINT = (
-    "live gates only run against an explicitly named instance — "
+    "[no-runtime] live gates only run against an explicitly named instance — "
     "export HOROSA_CHART_SERVER_ROOT / HOROSA_SERVER_ROOT (boot one with "
     "scripts/start_vendored_instance.sh); default-port stacks are untrusted (AGENTS §8)"
 )
@@ -111,7 +111,7 @@ _INSTALLED_REGISTRY = installed_runtime_registry_version(Settings.from_env().run
 requires_current_runtime_contract = pytest.mark.skipif(
     runtime_contract_is_stale(_INSTALLED_REGISTRY, AI_EXPORT_SETTINGS_VERSION),
     reason=(
-        f"installed runtime payload export_registry_version={_INSTALLED_REGISTRY} < this tree's "
+        f"[version-skew] installed runtime payload export_registry_version={_INSTALLED_REGISTRY} < this tree's "
         f"AI_EXPORT_SETTINGS_VERSION={AI_EXPORT_SETTINGS_VERSION}: the engines predate the upstream sync these "
         "assertions pin (version skew, not a regression)"
     ),
@@ -122,7 +122,7 @@ def _runtime_skip_reason() -> str:
     if not (_CHART_EXPLICIT and _JAVA_EXPLICIT):
         return _EXPLICIT_HINT
     return (
-        f"Horosa runtime unusable — chart {CHART_SERVER_ROOT}, Java {JAVA_SERVER_ROOT} "
+        f"[no-runtime] Horosa runtime unusable — chart {CHART_SERVER_ROOT}, Java {JAVA_SERVER_ROOT} "
         f"({'java_routes_dead' if _JAVA_LISTENING and not _JAVA_USABLE else 'not_listening'})"
     )
 
@@ -135,7 +135,7 @@ requires_chart = pytest.mark.skipif(
     not CHART_UP,
     reason=(
         _EXPLICIT_HINT if not _CHART_EXPLICIT
-        else f"Horosa chart service not listening on {CHART_SERVER_ROOT}"
+        else f"[no-runtime] Horosa chart service not listening on {CHART_SERVER_ROOT}"
     ),
 )
 
@@ -615,7 +615,7 @@ ASTRODATA_DB_PRESENT = (
 ).is_file()
 
 
-@pytest.mark.skipif(not ASTRODATA_DB_PRESENT, reason="astrodata sqlite not vendored in this checkout")
+@pytest.mark.skipif(not ASTRODATA_DB_PRESENT, reason="[upstream-checkout] astrodata sqlite not vendored in this checkout")
 def test_astrodata_search_and_person_detail(tmp_path) -> None:
     # 名人星盘库：FTS 检索 → 单人详情（含可直接排盘的出生数据）。纯本地 sqlite，只读。
     service = make_service(tmp_path)
@@ -1542,8 +1542,10 @@ def test_shenshu_runs_via_chart_service(tmp_path, technique) -> None:
     service = make_service(tmp_path)
     payload = {"date": "1998-02-20", "time": "20:48:00", "after23NewDay": 1, **_SHENSHU_PAYLOAD_EXTRA.get(technique, {})}
     result = service.run_tool(technique, payload, save_result=False)
-    if not result.ok and result.error and result.error.code == "transport.shenshu_snapshot_unavailable":
-        pytest.skip(f"chart service build too old to emit a {technique} snapshot")
+    if not result.ok and result.error and result.error.code == "transport.shenshu_snapshot_unavailable" \
+            and runtime_contract_is_stale(_INSTALLED_REGISTRY, AI_EXPORT_SETTINGS_VERSION):
+        # 只有已装 payload 早于本树时才是「偏斜」；当前 runtime 还拿不到快照就是回归，不许跳（C-18 第 2 项）。
+        pytest.skip(f"[version-skew] chart service build too old to emit a {technique} snapshot")
     assert result.ok is True, result.error
     snapshot = result.data["snapshot_text"]
     assert snapshot, f"{technique} returned an empty snapshot"

@@ -151,7 +151,7 @@ def test_codex_toml_goes_through_the_atomic_writer(tmp_path: Path, monkeypatch: 
     assert target.resolve() in [path.resolve() for path in calls]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX 权限位")
+@pytest.mark.skipif(os.name == "nt", reason="[platform] POSIX 权限位")
 def test_openclaw_native_config_is_backed_up_and_keeps_its_mode(tmp_path: Path) -> None:
     target = tmp_path / "openclaw.json"
     original = json.dumps({"models": {"key": "user-secret"}, "mcp": {"servers": {"other": {"command": "x"}}}})

@@ -205,7 +205,7 @@ def test_prefs_are_hidden_from_tools_list_but_documented_in_guidance() -> None:
 _ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 _GUOLAO_DIR = Path(_ROOT) / "Horosa-Web" / "astrostudyui" / "src" / "components" / "guolao" if _ROOT else None
 requires_upstream = pytest.mark.skipif(
-    _GUOLAO_DIR is None or not _GUOLAO_DIR.is_dir(), reason="HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
+    _GUOLAO_DIR is None or not _GUOLAO_DIR.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (Horosa-Public checkout) not set"
 )
 
 

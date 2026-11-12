@@ -57,7 +57,7 @@ def test_guard_catches_a_script_that_prints_non_ascii_data() -> None:
     assert found == ["data_bad.py"]
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+@pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
 def test_knowledge_bundle_script_requires_a_source_root() -> None:
     env = {k: v for k, v in os.environ.items() if k != "HOROSA_SOURCE_ROOT"}
     completed = subprocess.run(

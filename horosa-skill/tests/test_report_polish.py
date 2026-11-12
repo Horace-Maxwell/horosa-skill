@@ -266,7 +266,7 @@ def test_docx_carries_the_wheel_as_a_picture(tmp_path: Path) -> None:
         media = [n for n in archive.namelist() if n.startswith("word/media/")]
         xml = archive.read("word/document.xml").decode("utf-8")
     if renderers._drawing_font_files(renderers.SIMPLIFIED) is None:
-        pytest.skip("本机没有可供 Pillow 使用的 TTF 中文字体（CID 回退）")
+        pytest.skip("[host] 本机没有可供 Pillow 使用的 TTF 中文字体（CID 回退）")
     assert media and archive_png(tmp_path / "w.docx", media[0]).startswith(b"\x89PNG")
     assert 'w:w="11906"' in xml and 'w:h="16838"' in xml  # A4（与 PDF 同纸张）
 
