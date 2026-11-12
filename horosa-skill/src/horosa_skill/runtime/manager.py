@@ -1129,50 +1129,51 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         `<data_dir>/knowledge/`，而提示语只说删 memory/runs/traces（v0.43 知识库审查 H1）。要连它一起删须再给
         purge_knowledge=True。**命主档案（`<data_dir>/profiles/`，用户给的出生信息）同一口径**：缺省保留，purge_profiles=True 才删。
         """
-        from horosa_skill.knowledge.user import STATE_DIRNAME, knowledge_dir
-        from horosa_skill.profiles import profiles_dir
+        from horosa_skill.runtime import purge
 
-        removal_plan: list[str] = []
-        kept: list[str] = []
+        runtime_paths: list[Path] = []
         for path in (self.current_dir, self.runtime_root / "previous", self.runtime_root / "downloads"):
             if path.exists():
-                removal_plan.append(str(path))
-        removal_plan.extend(str(path) for path in sorted(self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*")) if path.is_dir())
+                runtime_paths.append(path)
+        runtime_paths.extend(path for path in sorted(self.runtime_root.glob(f"{_INSTALL_TEMP_PREFIX}*")) if path.is_dir())
         state_path = self.settings.runtime_state_path
         if state_path.exists():
-            removal_plan.append(str(state_path))
+            runtime_paths.append(state_path)
         data_dir = self.settings.data_dir
-        if purge_data and data_dir.exists():
-            notes_dir = knowledge_dir(self.settings)
-            protected: set[Path] = set()
-            if not purge_knowledge:
-                protected |= {notes_dir.resolve(), (data_dir / STATE_DIRNAME).resolve()}
-            if not purge_profiles:
-                protected.add(profiles_dir(self.settings).resolve())
-            if not any(path.exists() for path in protected):
-                # 要保留的（知识库 / 回收站 / 命主档案）都没有，或都显式要删：整个数据目录删掉（与此前一致）。
-                removal_plan.append(str(data_dir))
-            else:
-                for child in sorted(data_dir.iterdir()):
-                    resolved = child.resolve()
-                    # 知识库 / 状态目录 / 命主档案本身，或包含它们的子目录（知识库配在数据目录更深处时）：整体保留，不深入挑删。
-                    if any(p.is_relative_to(resolved) for p in protected):
-                        kept.append(str(child))
-                        continue
-                    if str(child) not in removal_plan:
-                        removal_plan.append(str(child))
-            if purge_knowledge and notes_dir.exists() and not notes_dir.resolve().is_relative_to(data_dir.resolve()):
-                removal_plan.append(str(notes_dir))  # 知识库配在数据目录之外：显式连它一起删时单独列出
+        data_plan = purge.DataPurgePlan()
+        if purge_data:
+            # 🔴 先判「这个目录可能整个不是我们的」，再谈删什么：拒绝发生在任何删除之前，dry-run 与真删同一口径。
+            self._refuse_purge_if_not_ours(data_dir, what="data_dir")
+            data_plan = purge.plan_data_purge(self.settings, purge_knowledge=purge_knowledge, purge_profiles=purge_profiles)
+            for path in data_plan.remove:
+                if not path.resolve().is_relative_to(data_dir.resolve()):
+                    self._refuse_purge_if_not_ours(path, what="knowledge_dir")  # 配在数据目录外的知识库同一把尺
+        removal_plan = [str(path) for path in (*runtime_paths, *data_plan.remove)]
+        if data_plan.rmdir_data_dir and data_dir.exists():
+            removal_plan.append(str(data_dir))
+        kept = [str(path) for path in data_plan.kept]
+        left_in_place = [str(path) for path in data_plan.left_in_place]
+        report: dict[str, Any] = {
+            "kept": kept,
+            "left_in_place": left_in_place,
+            "purge_data": purge_data,
+            "purge_knowledge": purge_knowledge,
+            "purge_profiles": purge_profiles,
+        }
+        if data_plan.outside_data_dir:
+            report["outside_data_dir"] = [str(path) for path in data_plan.outside_data_dir]
+        if left_in_place:
+            report["left_in_place_note"] = bilingual(
+                "数据目录里这些不是本工具写的，原地保留；数据目录因此也留着。",
+                "These entries in the data directory were not written by this tool and are left in place, so the data directory itself stays.",
+            )
 
         if not yes:
             return {
                 "ok": True,
                 "dry_run": True,
                 "would_remove": removal_plan,
-                "kept": kept,
-                "purge_data": purge_data,
-                "purge_knowledge": purge_knowledge,
-                "purge_profiles": purge_profiles,
+                **report,
                 "next_action": (
                     "确认无误后追加 --yes 执行删除；用户数据默认保留（--purge-data 删 memory/runs/traces/reports，"
                     "自备知识库与其回收站、命主档案仍保留，除非再加 --purge-knowledge / --purge-profiles）。"
@@ -1189,10 +1190,15 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
         for text in removal_plan:
             path = Path(text)
             try:
-                if path.is_dir():
-                    _rmtree_force(path)  # 嵌入式 JDK 的部分文件在 Windows 上带只读位，裸 rmtree 会 PermissionError
-                elif path.exists():
-                    path.unlink()
+                if path == data_dir:
+                    # 数据目录本身只 rmdir：计划之后才冒出来的文件（别的进程刚写的）不是清单上的东西，留着并如实报。
+                    try:
+                        path.rmdir()
+                    except OSError:
+                        left_in_place.extend(str(child) for child in sorted(path.iterdir()) if str(child) not in left_in_place)
+                        continue
+                else:
+                    purge.remove_owned(path)
                 removed.append(text)
             except OSError as exc:
                 raise RuntimeInstallError(
@@ -1200,9 +1206,47 @@ class HorosaRuntimeManager(MacLauncherPatchMixin, WindowsBootJarPatchMixin):
                     code="runtime.uninstall_failed",
                     details={"path": text, "removed_so_far": removed, **({"stop_error": stop_error} if stop_error else {})},
                 ) from exc
-        return {"ok": True, "dry_run": False, "removed": removed, "kept": kept, "purge_data": purge_data,
-                "purge_knowledge": purge_knowledge, "purge_profiles": purge_profiles,
+        return {"ok": True, "dry_run": False, "removed": removed, **report,
                 **({"stop_error": stop_error} if stop_error else {})}
+
+    def _refuse_purge_if_not_ours(self, path: Path, *, what: str) -> None:
+        from horosa_skill.runtime import purge
+
+        reason = purge.refusal_reason(path, runtime_root=self.runtime_root)
+        if reason is None:
+            return
+        why_zh, why_en = {
+            "filesystem_root": ("是文件系统的根", "is a filesystem root"),
+            "home": ("就是你的家目录", "is your home directory"),
+            "above_home": ("是家目录的上级", "is a parent of your home directory"),
+            "contains_runtime_root": ("把 runtime 根包在里面", "contains the runtime root"),
+        }[reason]
+        label_zh, label_en, env_name = {
+            "data_dir": ("数据目录", "The data directory", "HOROSA_SKILL_DATA_DIR"),
+            "knowledge_dir": ("自备知识库目录", "The knowledge folder", "HOROSA_USER_KNOWLEDGE_DIR"),
+        }[what]
+        candidates = [str(child) for child in purge.owned_children_present(path)] if what == "data_dir" else []
+        raise RuntimeValidationError(
+            bilingual(
+                f"{label_zh} {path} {why_zh}：里面的东西不可能都是本工具写的，--purge-data 在这里一样都不删"
+                f"（runtime 也没有动）。把 {env_name} 指回一个专用目录，或手工删除 details.skill_named_children 里你确认要删的。",
+                f"{label_en} {path} {why_en}: not everything in it can belong to this tool, so --purge-data removes "
+                f"nothing here (the runtime was not touched either). Point {env_name} at a dedicated directory, or "
+                f"delete by hand the entries in details.skill_named_children that you are sure about.",
+            ),
+            code="runtime.purge_refused",
+            details={
+                "reason": reason,
+                "data_dir": str(self.settings.data_dir),
+                "path": str(path),
+                "runtime_root": str(self.runtime_root),
+                "skill_named_children": candidates,
+                "next_action": bilingual(
+                    "不带 --purge-data 的 `uninstall --yes` 照常可用（只删 runtime）。",
+                    "`uninstall --yes` without --purge-data still works (it removes the runtime only).",
+                ),
+            },
+        )
 
     def doctor(self) -> dict[str, Any]:
         with self.tracer.span(workflow_name="runtime.doctor", metadata={"entrypoint": "runtime.doctor"}) as trace:

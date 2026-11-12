@@ -161,7 +161,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 | 终端里 `uvx` 能跑、GUI 客户端里起不来 | GUI 客户端不继承 shell PATH；重跑 `client config`（现在写绝对路径），`client check` 报 `command_not_on_path` 即此症 |
 | Windows 用户名带空格 / 中文时服务起不来 | v0.38.0 起启动器给每个路径参数加了引号；升级后 `runtime restart` |
 | 升级 | `uv run horosa-skill upgrade`（同版本不重复下载） |
-| 卸载 | `uv run horosa-skill uninstall`（默认仅打印将删清单，`--yes` 执行，`--purge-data` 才动用户数据） |
+| 卸载 | `uv run horosa-skill uninstall`（默认仅打印将删清单，`--yes` 执行，`--purge-data` 才动用户数据：只删本工具自己写的文件，数据目录里别的东西原地保留并列在 `left_in_place`） |
 
 </details>
 

@@ -520,6 +520,20 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "pass_a_64_hex_sha256",
     },
+    # 清数据被拒不是「没装 / 去体检」：数据目录指到了家目录 / 根 / 包着 runtime 根的地方（v0.50.0-dev，E-01）。
+    "runtime.purge_refused": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "`--purge-data` 没有执行：数据目录指在一个不可能整个归本工具的位置（details.reason：home / above_home / "
+            "filesystem_root / contains_runtime_root）。什么都没有删。把 HOROSA_SKILL_DATA_DIR 指回专用目录后重试，"
+            "或者手工删除 details.skill_named_children 里确认要删的；不带 --purge-data 的卸载照常可用。",
+            "`--purge-data` did nothing: the data directory points somewhere that cannot belong to this tool alone "
+            "(details.reason: home / above_home / filesystem_root / contains_runtime_root). Nothing was deleted. Point "
+            "HOROSA_SKILL_DATA_DIR at a dedicated directory and retry, or delete by hand the entries in "
+            "details.skill_named_children you are sure about; uninstalling without --purge-data still works.",
+        ),
+        "next_action": "point_data_dir_at_a_dedicated_directory_or_delete_by_hand",
+    },
     "runtime.platform_unsupported": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

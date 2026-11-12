@@ -323,7 +323,7 @@ def upgrade(
 
 @app.command(help="Uninstall the offline runtime (dry-run by default; --yes to execute). 卸载 runtime（默认只打印将删清单）。")
 def uninstall(
-    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given; saved birth profiles are KEPT unless --purge-profiles. 同时删除用户数据（不可恢复；自备知识库与命主档案默认保留）。"),
+    purge_data: bool = typer.Option(False, "--purge-data", help="Also delete user data (memory.db / runs / traces / reports). Your knowledge folder and its trash are KEPT unless --purge-knowledge is also given; saved birth profiles are KEPT unless --purge-profiles. Only files this tool wrote are deleted: anything else in the data directory is left in place and listed as `left_in_place`. 同时删除用户数据（不可恢复；自备知识库与命主档案默认保留；数据目录里不是本工具写的文件原地保留）。"),
     purge_knowledge: bool = typer.Option(False, "--purge-knowledge", help="With --purge-data: also delete your own knowledge notes and their trash. 连自备知识库一起删（不可恢复）。"),
     purge_profiles: bool = typer.Option(False, "--purge-profiles", help="With --purge-data: also delete your saved birth profiles (horosa_profile). 连命主档案一起删（不可恢复）。"),
     yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
