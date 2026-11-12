@@ -246,7 +246,9 @@ def test_every_dated_technique_sees_one_bc_form(tool: str) -> None:
 
 
 # 以前丢掉 ad（或一半用 ad、一半用日期）的技法 + 公元前改由入口统一后需要自己读带符号年的两个（巴比伦、老黄历）。
-_BC_LIVE = ("taiyi", "jinkou", "zhengchuan", "lingqi", "tieban", "sanshiunited", "chart", "babylon", "calendar_month", "huangli", "heluo")
+# 灵棋经不在表里：它的卦由占时种子定，上游 computeTimeSeed 取的是年份数字不带纪元，公元前 500 年与公元 500 年同卦（上游行为，
+# 只有 [起盘信息] 的占时行不同）——入口一致性由上面的全目录用例保证。
+_BC_LIVE = ("taiyi", "jinkou", "zhengchuan", "tieban", "sanshiunited", "chart", "babylon", "calendar_month", "huangli", "heluo")
 
 
 @requires_runtime
