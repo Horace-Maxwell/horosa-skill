@@ -112,7 +112,7 @@ def test_publish_script_only_ever_makes_drafts() -> None:
     assert "--publish" not in [a for line in PUBLISH.splitlines() if not line.lstrip().startswith("#") for a in line.split()], (
         "the darwin-only public publish path is gone"
     )
-    assert "runtime-manifest.json" not in PUBLISH.split("=== [8/8] draft release", 1)[1], "the draft upload never carries the manifest"
+    assert "runtime-manifest.json" not in PUBLISH.split("=== [9/9] draft release", 1)[1], "the draft upload never carries the manifest"
     assert "gh workflow run release-runtime.yml" in PUBLISH
     assert "gh run watch" in PUBLISH
 

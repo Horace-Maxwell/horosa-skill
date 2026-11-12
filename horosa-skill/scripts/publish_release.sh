@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 发布的维护机半边（v0.38.0 A5 起）：seed（darwin-arm64 payload）→ darwin manifest（本地校验用）→ SBOM → MCPB → wheel →
-# SHA256SUMS → verify → `--draft` 把 seed / .mcpb / wheel / SBOM 放上一个 **draft** release → `--dispatch` 触发
+# 发布的维护机半边（v0.38.0 A5 起）：seed（darwin-arm64 payload）→ JS 引擎资产（v0.50.0-dev E-02）→ darwin manifest（本地校验用）
+# → SBOM → MCPB → wheel → SHA256SUMS → verify → `--draft` 把 seed / JS 引擎资产 / .mcpb / wheel / SBOM 放上一个 **draft** release → `--dispatch` 触发
 # `release-runtime.yml`（托管 runner 从 seed 派生 Windows 半、装双平台清单、三台真机矩阵；`publish=true` 才转公开）。
 #
 # 为什么要有它：v0.27.0 首发时这串是手打的，SBOM（OPERATIONS.md 明列的必要资产、生成器一直躺在
@@ -13,7 +13,7 @@
 #
 # 用法：
 #   bash horosa-skill/scripts/publish_release.sh                       # 构建 + 校验，不上传（安全默认）
-#   bash horosa-skill/scripts/publish_release.sh --draft               # 另建/复用 draft release，上传 seed / .mcpb / wheel / SBOM
+#   bash horosa-skill/scripts/publish_release.sh --draft               # 另建/复用 draft release，上传 seed / JS 引擎资产 / .mcpb / wheel / SBOM
 #   bash horosa-skill/scripts/publish_release.sh --draft --dispatch    # 再触发 release-runtime.yml（publish=false）并 gh run watch
 #   之后：python horosa-skill/scripts/sync_windows_release.py --check --tag vX.Y.Z --draft   # 期望 [OK]
 #         gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true               # 转公开 latest
@@ -47,6 +47,9 @@ PY
 )"
 TAG="v${VERSION}"
 TAR="horosa-runtime-darwin-arm64-${TAG}.tar.gz"
+# v0.50.0-dev E-02：平台无关的 JS 引擎资产（纯 JS + 生产 node_modules）。没有离线 runtime 的平台（Linux / Intel Mac / Docker /
+# pip 网关）靠它拿到引擎；资产名来自 contracts/release_platforms.json 的 core_js.asset。
+CORE_JS="horosa-core-js-${TAG}.tar.gz"
 # 资产 URL 钉 tag（v0.38.0 A3）：`releases/latest/download/...` 的 URL 让 pin-forward（清单指着上一版的包）从清单本身
 # 看不出来；钉了 tag，release-completeness / sync_windows_release --check 只读清单就能判。安装器仍从 latest 取清单。
 BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
@@ -66,28 +69,35 @@ if [ "${DRAFT}" = "1" ]; then
   fi
 fi
 
-echo "=== [1/8] darwin runtime payload（705MB 级，缓存命中时数分钟）==="
+echo "=== [1/9] darwin runtime payload（705MB 级，缓存命中时数分钟）==="
 bash "${SKILL}/scripts/package_runtime_payload.sh"
 
-echo "=== [2/8] darwin-only runtime-manifest.json ==="
+echo "=== [2/9] JS 引擎资产 ${CORE_JS}（任何平台；确定性归档，同一棵树同一份字节）==="
+# 刚才的 [1/9] 已在 horosa-core-js 跑过 npm install --omit=dev：node_modules 正是锁里的生产依赖，构建脚本逐版本核对。
+python3 "${SKILL}/scripts/build_core_js_asset.py" --out-dir "${DIST}"
+[ -f "${DIST}/${CORE_JS}" ] || { echo "build_core_js_asset.py 没产出 ${CORE_JS}" >&2; exit 1; }
+
+echo "=== [3/9] darwin-only runtime-manifest.json ==="
 python3 "${SKILL}/scripts/generate_release_manifest.py" \
   --version "${VERSION}" \
   --darwin-archive "${DIST}/${TAR}" \
   --darwin-url "${BASE_URL}/${TAR}" \
+  --core-js-archive "${DIST}/${CORE_JS}" \
+  --core-js-url "${BASE_URL}/${CORE_JS}" \
   --output "${DIST}/runtime-manifest.json"
 
-echo "=== [3/8] SBOM（v0.27.0 漏过的那件）==="
+echo "=== [4/9] SBOM（v0.27.0 漏过的那件）==="
 python3 "${SKILL}/scripts/generate_sbom.py" \
   --project-root "${SKILL}" \
   --runtime-manifest "${DIST}/runtime-manifest.json" \
   --output "${DIST}/horosa-skill-sbom.json"
 
-echo "=== [4/8] MCPB bundle（Claude Desktop 一键安装；server.json 的 mcpb package 直指它）==="
+echo "=== [5/9] MCPB bundle（Claude Desktop 一键安装；server.json 的 mcpb package 直指它）==="
 bash "${SKILL}/scripts/build_mcpb.sh" "${DIST}"
 MCPB="horosa-skill-${VERSION}.mcpb"
 [ -f "${DIST}/${MCPB}" ] || { echo "build_mcpb.sh 没产出 ${MCPB}" >&2; exit 1; }
 
-echo "=== [5/8] wheel（零安装资产：uvx --from <wheel URL>，免 git、免 PyPI；v0.38.0 B3）==="
+echo "=== [6/9] wheel（零安装资产：uvx --from <wheel URL>，免 git、免 PyPI；v0.38.0 B3）==="
 # 纯 Python wheel，与 PyPI 通道用的是同一个 `uv build`；README/SKILL/server.json 里钉版本的 URL 直指它，
 # release-completeness.yml 断言它在场并真跑一次 `uvx --from <URL> horosa-skill --version`。
 WHEEL="horosa_skill-${VERSION}-py3-none-any.whl"
@@ -95,8 +105,8 @@ rm -f "${DIST}/${WHEEL}"
 ( cd "${SKILL}" && uv build --wheel --out-dir "${DIST}" )
 [ -f "${DIST}/${WHEEL}" ] || { echo "uv build 没产出 ${WHEEL}（hatchling 会把 horosa-skill 归一成 horosa_skill）" >&2; exit 1; }
 
-echo "=== [6/8] SHA256SUMS.txt ==="
-( cd "${DIST}" && shasum -a 256 "${TAR}" "${MCPB}" "${WHEEL}" > SHA256SUMS.txt && cat SHA256SUMS.txt )
+echo "=== [7/9] SHA256SUMS.txt ==="
+( cd "${DIST}" && shasum -a 256 "${TAR}" "${CORE_JS}" "${MCPB}" "${WHEEL}" > SHA256SUMS.txt && cat SHA256SUMS.txt )
 # server.json 的 mcpb package 带 fileSha256，客户端安装前会校验它 —— 这里回填，别让它留空发出去。
 python3 - "${SKILL}/../server.json" "${DIST}/${MCPB}" <<'BACKFILL'
 import hashlib, json, sys
@@ -118,19 +128,21 @@ else:
     print("server.json: mcpb fileSha256 已是最新")
 BACKFILL
 
-echo "=== [7/8] verify_runtime_release.py ==="
+echo "=== [8/9] verify_runtime_release.py ==="
 python3 "${SKILL}/scripts/verify_runtime_release.py" \
   --darwin-archive "${DIST}/${TAR}" \
+  --core-js-archive "${DIST}/${CORE_JS}" \
   --manifest "${DIST}/runtime-manifest.json"
 
 if [ "${DRAFT}" != "1" ]; then
-  echo "=== [8/8] 未上传（安全默认）。要进流水线：$0 --draft [--dispatch] ==="
+  echo "=== [9/9] 未上传（安全默认）。要进流水线：$0 --draft [--dispatch] ==="
   exit 0
 fi
 
-echo "=== [8/8] draft release ${TAG}：seed / .mcpb / wheel / SBOM（清单与 Windows 半由 release-runtime.yml 补齐）==="
+echo "=== [9/9] draft release ${TAG}：seed / JS 引擎资产 / .mcpb / wheel / SBOM（清单与 Windows 半由 release-runtime.yml 补齐）==="
 # 🔴 只上 draft、绝不上清单：清单只在两平台齐了才由流水线放上去，公开由 publish job 在 [OK] 之后做。
-DRAFT_ASSETS=("${DIST}/${TAR}" "${DIST}/${MCPB}" "${DIST}/${WHEEL}" "${DIST}/horosa-skill-sbom.json")
+# JS 引擎资产与 seed 同一次上 draft：assemble 从 draft 取回同一份字节写进双平台清单（流水线不重打它）。
+DRAFT_ASSETS=("${DIST}/${TAR}" "${DIST}/${CORE_JS}" "${DIST}/${MCPB}" "${DIST}/${WHEEL}" "${DIST}/horosa-skill-sbom.json")
 if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
   IS_DRAFT="$(gh release view "${TAG}" --repo "${REPO}" --json isDraft -q .isDraft)"
   if [ "${IS_DRAFT}" != "true" ]; then
@@ -141,7 +153,7 @@ if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
 else
   gh release create "${TAG}" "${DRAFT_ASSETS[@]}" --repo "${REPO}" --draft \
     --title "${TAG}" \
-    --notes "Draft：seed / .mcpb / wheel / SBOM 已上传；Windows 半、双平台清单、SHA256SUMS 由 release-runtime.yml 补齐后转公开。发布说明请随后编辑补全。"
+    --notes "Draft：seed / JS 引擎资产 / .mcpb / wheel / SBOM 已上传；Windows 半、双平台清单、SHA256SUMS 由 release-runtime.yml 补齐后转公开。发布说明请随后编辑补全。"
 fi
 echo "draft ${TAG} 就绪。"
 

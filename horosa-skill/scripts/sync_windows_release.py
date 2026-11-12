@@ -100,9 +100,42 @@ def latest_tag() -> str:
     return out.strip()
 
 
-def release_assets(tag: str) -> list[str]:
+def release_asset_details(tag: str) -> dict[str, dict]:
+    """name → {digest, size} for every uploaded asset (`gh release view` works for drafts too). GitHub's own `digest`
+    (`sha256:…`) is what the core-js check compares the manifest's sha256 with (v0.50.0-dev, E-02)."""
     data = gh_json(["release", "view", tag, "--repo", REPO, "--json", "assets"]) or {}
-    return [a["name"] for a in data.get("assets", [])]
+    details: dict[str, dict] = {}
+    for asset in data.get("assets", []):
+        digest = str(asset.get("digest") or "")
+        details[asset["name"]] = {
+            "digest": digest.removeprefix("sha256:").lower() if digest.startswith("sha256:") else None,
+            "size": asset.get("size") if isinstance(asset.get("size"), int) else None,
+        }
+    return details
+
+
+def release_assets(tag: str) -> list[str]:
+    return list(release_asset_details(tag))
+
+
+def fetch_sums(tag: str) -> str | None:
+    """The release's SHA256SUMS.txt (draft or public), None when absent."""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["gh", "release", "download", tag, "--repo", REPO, "--pattern", "SHA256SUMS.txt",
+                            "--dir", tmp, "--clobber"], check=True, capture_output=True)
+            return (Path(tmp) / "SHA256SUMS.txt").read_text(encoding="utf-8")
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def parse_sums(text: str | None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in (text or "").splitlines():
+        parts = line.split()
+        if len(parts) == 2 and len(parts[0]) == 64:
+            out[parts[1].lstrip("*")] = parts[0].lower()
+    return out
 
 
 def fetch_manifest(tag: str | None = None, *, draft: bool = False) -> dict | None:
@@ -128,8 +161,52 @@ def fetch_manifest(tag: str | None = None, *, draft: bool = False) -> dict | Non
 _PINNED_URL = re.compile(r"/releases/download/(v[^/]+)/")
 
 
-def assess_from(tag: str, assets: list[str], manifest: dict | None, contract: dict | None = None) -> dict:
-    """Pure completeness verdict for one release from its asset names + manifest (v0.38.0 A3, contract-driven)."""
+def core_js_required(version: str, contract: dict | None = None) -> bool:
+    contract = contract or load_platform_contract()
+    spec = contract.get("core_js") or {}
+    return bool(spec) and _vtuple(spec["since"]) <= _vtuple(version)
+
+
+def core_js_asset(version: str, contract: dict | None = None) -> str:
+    contract = contract or load_platform_contract()
+    return contract["core_js"]["asset"].format(version=version)
+
+
+def assess_core_js(tag: str, assets: list[str], manifest: dict | None, contract: dict,
+                   asset_details: dict[str, dict] | None, sums: str | None) -> dict:
+    """The JS engine asset (v0.50.0-dev, E-02): on the release, in the manifest under `core_js`, pinned to this tag, and the
+    manifest's sha256 / size equal to what was uploaded — GitHub's asset `digest` first, SHA256SUMS.txt as the fallback.
+    A digest nobody published counts as a gap: an installer cannot verify bytes the release does not vouch for."""
+    version = tag.lstrip("v")
+    spec = contract.get("core_js") or {}
+    if not core_js_required(version, contract):
+        return {"required": False}
+    asset = core_js_asset(version, contract)
+    entry = (manifest or {}).get(spec.get("manifest_key") or "core_js")
+    entry = entry if isinstance(entry, dict) else {}
+    url = str(entry.get("url") or "")
+    pinned = _PINNED_URL.search(url)
+    detail = (asset_details or {}).get(asset) or {}
+    published = detail.get("digest") or parse_sums(sums).get(asset)
+    declared = str(entry.get("sha256") or "").lower()
+    return {
+        "required": True, "asset": asset, "present": asset in assets, "in_manifest": bool(entry), "url": url,
+        "url_tag_matches": bool(pinned) and pinned.group(1) == tag and url.endswith("/" + asset),
+        "sha256": declared or None,
+        "digest_checked": asset_details is not None or sums is not None,
+        "published_sha256": published,
+        "digest_matches": bool(declared) and declared == published,
+        "size_matches": detail.get("size") is None or detail.get("size") == entry.get("size"),
+    }
+
+
+def assess_from(tag: str, assets: list[str], manifest: dict | None, contract: dict | None = None, *,
+                asset_details: dict[str, dict] | None = None, sums: str | None = None) -> dict:
+    """Pure completeness verdict for one release from its asset names + manifest (v0.38.0 A3, contract-driven).
+
+    `asset_details` (name → {digest, size}) and `sums` (SHA256SUMS.txt text) let the core-js check compare digests; `assess`
+    always passes them. Without either, the core-js digest cannot be judged and is reported as a gap.
+    """
     contract = contract or load_platform_contract()
     version = tag.lstrip("v")
     expected = expected_platforms(version, contract)
@@ -160,12 +237,14 @@ def assess_from(tag: str, assets: list[str], manifest: dict | None, contract: di
         "manifest_dual": all(p in platforms_in_manifest for p in expected),
         "win_zip": f"horosa-runtime-win32-x64-v{version}.zip",
         "darwin_tar": f"horosa-runtime-darwin-arm64-v{version}.tar.gz",
+        "core_js": assess_core_js(tag, assets, manifest, contract, asset_details, sums),
     }
 
 
 def assess(tag: str, *, draft: bool = False) -> dict:
     """Live verdict for `tag` (a published tag's manifest is fetched by tag URL; a draft's via gh)."""
-    return assess_from(tag, release_assets(tag), fetch_manifest(tag, draft=draft))
+    details = release_asset_details(tag)
+    return assess_from(tag, list(details), fetch_manifest(tag, draft=draft), asset_details=details, sums=fetch_sums(tag))
 
 
 def gaps(a: dict) -> list[str]:
@@ -184,6 +263,23 @@ def gaps(a: dict) -> list[str]:
         missing.append(f"horosa-skill-{a['version']}.mcpb")
     if a["wheel_required"] and not a["has_wheel"]:
         missing.append(a["wheel"])
+    core = a.get("core_js") or {}
+    if core.get("required"):
+        if not core["present"]:
+            missing.append(f"JS engine asset ({core['asset']})")
+        if not core["in_manifest"]:
+            missing.append("core_js in manifest")
+        else:
+            if not core["url_tag_matches"]:
+                missing.append(f"core_js manifest url not pinned to this tag's {core['asset']} ({core['url']})")
+            if not core["sha256"]:
+                missing.append("core_js manifest sha256")
+            elif not core["published_sha256"]:
+                missing.append(f"published digest for {core['asset']} (no asset digest, no SHA256SUMS line)")
+            elif not core["digest_matches"]:
+                missing.append(f"core_js manifest sha256 {core['sha256'][:12]}… != published {core['published_sha256'][:12]}…")
+            if not core["size_matches"]:
+                missing.append(f"core_js manifest size != uploaded {core['asset']} size")
     return missing
 
 
@@ -240,6 +336,13 @@ def build_and_verify(a: dict) -> tuple[Path, Path]:
     print("\n[darwin] downloading the macOS archive from the release…")
     run(["gh", "release", "download", a["tag"], "--repo", REPO, "--pattern", a["darwin_tar"],
          "--dir", str(DIST), "--clobber"])
+    core = a.get("core_js") or {}
+    core_args: list[str] = []
+    if core.get("required"):
+        # v0.50.0-dev E-02: the manifest is regenerated here, so the JS engine asset must ride along or it drops out of it.
+        print("\n[core-js] downloading the JS engine asset from the release…")
+        run(["gh", "release", "download", a["tag"], "--repo", REPO, "--pattern", core["asset"], "--dir", str(DIST), "--clobber"])
+        core_args = ["--core-js-archive", f"dist/runtime/{core['asset']}"]
 
     base = f"https://github.com/{REPO}/releases/download/{a['tag']}"  # tag-pinned (v0.38.0 A3)
     print("\n[manifest] regenerating dual-platform runtime-manifest.json…")
@@ -247,12 +350,14 @@ def build_and_verify(a: dict) -> tuple[Path, Path]:
          "--version", version, "--url-base", base,
          "--darwin-archive", f"dist/runtime/{a['darwin_tar']}",
          "--windows-archive", f"dist/runtime/{a['win_zip']}",
+         *core_args,
          "--output", "dist/runtime/runtime-manifest.json"], cwd=SKILL_ROOT)
 
     print("\n[checksums] writing SHA256SUMS.txt over both archives (keeping the release's .mcpb / .whl lines)…")
     import hashlib
     lines = []
-    for name in (a["darwin_tar"], a["win_zip"]):
+    archive_names = [a["darwin_tar"], a["win_zip"], *([core["asset"]] if core.get("required") else [])]
+    for name in archive_names:
         digest = hashlib.sha256((DIST / name).read_bytes()).hexdigest()
         lines.append(f"{digest}  {name}")
     # v0.38.1 R15：流水线的 SHA256SUMS 还列着 .mcpb / .whl；这里只重算两个归档，其余行原样保留，
@@ -265,7 +370,7 @@ def build_and_verify(a: dict) -> tuple[Path, Path]:
             previous = (Path(tmp) / "SHA256SUMS.txt").read_text(encoding="utf-8")
     except (OSError, subprocess.CalledProcessError):
         previous = ""
-    lines = merge_sha256sums(previous, lines, {a["darwin_tar"], a["win_zip"]})
+    lines = merge_sha256sums(previous, lines, set(archive_names))
     (DIST / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     print("\n".join("  " + ln for ln in lines))
 
@@ -273,6 +378,7 @@ def build_and_verify(a: dict) -> tuple[Path, Path]:
     run(["uv", "run", "python", "scripts/verify_runtime_release.py",
          "--darwin-archive", f"dist/runtime/{a['darwin_tar']}",
          "--windows-archive", f"dist/runtime/{a['win_zip']}",
+         *core_args,
          "--manifest", "dist/runtime/runtime-manifest.json"], cwd=SKILL_ROOT)
     return win_zip, darwin_tar
 
@@ -296,10 +402,17 @@ def main(argv: list[str]) -> int:
     print(f"  manifest asset:      {'yes' if a['has_manifest_asset'] else 'NO'}")
     print(f"  mcpb asset:          {'yes' if a['has_mcpb'] else 'NO'}")
     print(f"  wheel asset:         {'yes' if a['has_wheel'] else ('NO' if a['wheel_required'] else 'n/a (< 0.38.0)')}")
+    core = a.get("core_js") or {}
+    if core.get("required"):
+        print(f"  core-js asset:       {'yes' if core['present'] else 'NO':3s}  manifest: {'yes' if core['in_manifest'] else 'NO':3s}"
+              f"  digest ok: {'yes' if core['digest_matches'] else 'NO'}")
+    else:
+        print("  core-js asset:       n/a (before its `since`)")
 
     missing = gaps(a)
     if not missing:
-        print(f"\n[OK] {tag} carries every expected platform + manifest + mcpb{' + wheel' if a['wheel_required'] else ''} — complete.")
+        extras = (" + wheel" if a["wheel_required"] else "") + (" + JS engine asset" if (a.get("core_js") or {}).get("required") else "")
+        print(f"\n[OK] {tag} carries every expected platform + manifest + mcpb{extras} — complete.")
         return 0
 
     print(f"\n[GAP: {', '.join(missing)}]")

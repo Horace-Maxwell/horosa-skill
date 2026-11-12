@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import tarfile
@@ -401,11 +402,107 @@ def _assert_manifest_size(manifest: dict, platform_key: str, archive: Path) -> N
         raise SystemExit(f"manifest {platform_key}.size={size} but {archive.name} is {actual} bytes")
 
 
+CONTRACT_PATH = Path(__file__).resolve().parents[1] / "contracts" / "release_platforms.json"
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", text or "")[:3])
+
+
+def load_contract(path: Path = CONTRACT_PATH) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def core_js_problems(manifest: dict, archive: Path | None, contract: dict) -> list[str]:
+    """The platform-independent JS engine asset (v0.50.0-dev, E-02): its manifest entry, and its bytes when given.
+
+    Required from the contract's `core_js.since` on: a manifest for such a release without the entry is a release Linux /
+    Intel Mac users cannot get the engine from. With the archive: same sha256 / size as the entry, the contract's root and
+    required entries, every npm dependency of its own package.json, version and node floor equal to the entry's, and no
+    member that could land outside the root (links, absolute paths, `..`).
+    """
+    spec = contract.get("core_js") or {}
+    if not spec:
+        return ["contracts/release_platforms.json has no core_js section"] if archive is not None else []
+    version = str(manifest.get("version") or "")
+    key = str(spec.get("manifest_key") or "core_js")
+    required = _version_tuple(spec["since"]) <= _version_tuple(version)
+    asset_name = str(spec["asset"]).format(version=version)
+    entry = manifest.get(key)
+    problems: list[str] = []
+    if not isinstance(entry, dict):
+        if required:
+            problems.append(f"manifest has no `{key}` entry; the JS engine asset {asset_name} is required since {spec['since']}")
+        if archive is not None:
+            problems.append(f"--core-js-archive given but the manifest has no `{key}` entry")
+        return problems
+    url = str(entry.get("url") or "")
+    if not url.endswith("/" + asset_name):
+        problems.append(f"{key}.url must end with /{asset_name}: {url!r}")
+    pinned = re.search(r"/releases/download/(v[^/]+)/", url)
+    if pinned and pinned.group(1) != f"v{version}":
+        problems.append(f"{key}.url is pinned to {pinned.group(1)}, not v{version} (pin-forward): {url}")
+    if not _HEX64.match(str(entry.get("sha256") or "")):
+        problems.append(f"{key}.sha256 must be 64 lowercase hex digits, got {entry.get('sha256')!r}")
+    size = entry.get("size")
+    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+        problems.append(f"{key}.size must be a positive integer byte count, got {size!r}")
+    for field in ("archive_type", "node_floor", "root"):
+        if entry.get(field) != spec.get(field):
+            problems.append(f"{key}.{field} is {entry.get(field)!r}, contract says {spec.get(field)!r}")
+    if entry.get("version") != version:
+        problems.append(f"{key}.version {entry.get('version')!r} != manifest version {version!r}")
+    if archive is None:
+        return problems
+    if archive.name != asset_name:
+        problems.append(f"core-js archive is named {archive.name}, expected {asset_name}")
+    if entry.get("sha256") != _sha256(archive):
+        problems.append(f"{key}.sha256 does not match {archive.name}")
+    if size != archive.stat().st_size:
+        problems.append(f"{key}.size={size} but {archive.name} is {archive.stat().st_size} bytes")
+    root = str(spec.get("root"))
+    try:
+        with tarfile.open(archive, "r:gz") as tar:
+            members = tar.getmembers()
+            handle = tar.extractfile(f"{root}/package.json")
+            package = json.loads(handle.read().decode("utf-8")) if handle else {}
+    except (OSError, KeyError, tarfile.TarError, ValueError) as exc:
+        return [*problems, f"{archive.name} is not a readable tar.gz with {root}/package.json ({type(exc).__name__}: {exc})"]
+    names = {member.name.rstrip("/") for member in members}
+    for member in members:
+        name = member.name
+        if not (name == root or name.startswith(root + "/")) or name.startswith("/") or ".." in name.split("/"):
+            problems.append(f"{archive.name}: member outside {root}/: {name}")
+        if not (member.isfile() or member.isdir()):
+            problems.append(f"{archive.name}: {name} is not a plain file or directory")
+    wanted = [f"{root}/{entry_name}" for entry_name in spec.get("required_entries") or []]
+    wanted += [f"{root}/node_modules/{dep}/package.json" for dep in sorted((package.get("dependencies") or {}))]
+    missing = [name for name in wanted if name not in names]
+    if missing:
+        problems.append(f"{archive.name} is missing required entries: {', '.join(missing)}")
+    if package.get("version") != version:
+        problems.append(f"{archive.name}: {root}/package.json version {package.get('version')!r} != {version!r}")
+    if (package.get("engines") or {}).get("node") != entry.get("node_floor"):
+        problems.append(f"{archive.name}: engines.node {(package.get('engines') or {}).get('node')!r} != {key}.node_floor")
+    return problems
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify Horosa runtime release archives and manifest.")
     parser.add_argument("--darwin-archive", default=None, help="Path to the macOS (darwin-arm64) runtime archive.")
     parser.add_argument("--windows-archive", default=None, help="Path to the Windows (win32-x64) runtime archive.")
     parser.add_argument("--linux-archive", default=None, help="Path to the Linux (linux-x64) runtime archive.")
+    parser.add_argument("--core-js-archive", default=None,
+                        help="Path to the platform-independent JS engine asset (horosa-core-js-v<ver>.tar.gz; v0.50.0-dev E-02).")
     parser.add_argument("--manifest", required=True, help="Path to the release manifest JSON.")
     parser.add_argument("--expect-platforms", default=None,
                         help="Comma-separated platform keys the manifest must contain EXACTLY (e.g. darwin-arm64,win32-x64).")
@@ -448,8 +545,17 @@ def main() -> None:
         _assert_manifest_size(manifest, "linux-x64", linux_archive)
         verified_archives["linux"] = str(linux_archive)
 
+    # v0.50.0-dev E-02: from the contract's `core_js.since` on, the manifest must list the JS engine asset (Linux / Intel Mac /
+    # Docker / pip installs get the engine only from it); with --core-js-archive the bytes are checked against the entry.
+    core_js_archive = Path(args.core_js_archive).expanduser().resolve() if args.core_js_archive else None
+    core_js_issues = core_js_problems(manifest, core_js_archive, load_contract())
+    if core_js_issues:
+        raise SystemExit("core-js asset gate failed:\n- " + "\n- ".join(core_js_issues))
+    if core_js_archive is not None:
+        verified_archives["core_js"] = str(core_js_archive)
+
     if not verified_archives:
-        parser.error("At least one archive (darwin, windows, or linux) must be provided.")
+        parser.error("At least one archive (darwin, windows, linux, or core-js) must be provided.")
 
     length_limit = payload_longest_entry_limit()
     length_problems = check_entry_lengths(measured_lengths, length_limit)

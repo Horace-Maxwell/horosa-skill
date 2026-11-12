@@ -124,7 +124,7 @@ jobs:
           fi
           NAME="horosa_skill-${VERSION}-py3-none-any.whl"
           if ! gh api "repos/${REPO}/releases/tags/${TAG}" --jq '.assets[].name' | grep -qx "${NAME}"; then
-            echo "::error::latest release ${TAG} is missing ${NAME} — publish script step [5/8] builds it with \`uv build --wheel\`; the zero-install commands in README/SKILL/server.json point at this exact URL."
+            echo "::error::latest release ${TAG} is missing ${NAME} — publish script step [6/9] builds it with \`uv build --wheel\`; the zero-install commands in README/SKILL/server.json point at this exact URL."
             exit 1
           fi
           URL="https://github.com/${REPO}/releases/download/${TAG}/${NAME}"
