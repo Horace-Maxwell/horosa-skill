@@ -56,6 +56,13 @@ Horosa Skill 现在有三层评测：
 诱导复述（「我月亮在天蝎对吧」/「我抽到的月亮是逆位吧」）必须 contradicted；
 纯解读语（不引具体盘面值）不许扣分；技法名短语（「从六爻动向看」）不许误判成爻位断言。
 
+**三种结论**（v0.50.0-dev）：`status` = `pass` / `fail` / `not_assessed`。答案里一条可核对的断言都没有时是 `not_assessed`
+（`ok: null`、`faithfulness_ratio: null`，`message` 列出找过哪些断言族）——不扣分，但也**不是通过**；此前零断言报 ok=true、
+ratio 1.0，「Your day master is Jia wood」对着戊日主的盘也是满分。CLI 退出码：通过 0、失败 1、没评估 3。
+v4 族（只认引擎明写的值，不推算）：日主（日主 / 日元 / 日干 / day master：天干、五行、阴阳各比答案说了的那几项）、
+英文四柱（year pillar Geng Wu）、格局（名单里的「XX格」对 `gejuYongShen` 的主格 / 变格 / 杂格）、大运干支（对引擎排出的每一步）。
+用神**不判**：引擎给的是多派对照（扶抑 / 格局 / 调候 / 病药各有喜用），没有单一结论可比。
+
 ```bash
 uv run horosa-skill benchmark faithfulness --run-id <run_id> --answer-file answer.txt
 ```
@@ -82,20 +89,25 @@ extract 未晋升——精度 1.0、填错 0、改写一致 1.0，但 ECE 0.104�
 ## 运行方式
 
 ```bash
-uv run horosa-skill benchmark run
-uv run horosa-skill benchmark run --skip-runtime
+uv run horosa-skill benchmark run                  # 带运行时：全量；--require-full 时没跑全以 2 退出
+uv run horosa-skill benchmark run --skip-runtime   # 只跑不需要运行时的几条（约 120 条里 3 条）
 uv run python scripts/run_full_self_check.py --rounds 2
 ```
 
+`--skip-runtime` 只是冒烟：报告顶层 `verdict` = `pass` / `pass_partial` / `fail`，旁边是 `coverage`（executed / skipped / total）
+与一行 `summary`；退出码 失败 1、`--require-full` 下没跑全 2。
+
 ## 当前指标
 
+- `verdict` + `coverage`（executed / skipped / total / ratio）
+- `pass_rate`（通过数 / **全部** case）与 `pass_rate_executed`（通过数 / 执行数）
 - `cases_passed / cases_executed`
-- `pass_rate`
 - dispatch `selection_ok`
 - export `required_sections_ok`
 - export `required_fragments_ok`
 - knowledge `required_fragments_ok`
-- faithfulness：`claims_total / supported / invented / contradicted / faithfulness_ratio`
+- tool case 红时的 `missing_sections` / `missing_fragments`
+- faithfulness：`status`（pass / fail / not_assessed）+ `claims_total / supported / invented / contradicted / faithfulness_ratio`
 
 ## 已知盲区
 

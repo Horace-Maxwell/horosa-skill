@@ -61,10 +61,15 @@ def test_invented_bare_ganzhi_outside_the_computed_universe() -> None:
 
 
 def test_interpretation_without_factual_claims_is_not_penalized() -> None:
-    """纯解读语（不引具体盘面值）不该被扣——失败必须是具体的编造/矛盾，不是「话多」。"""
+    """纯解读语（不引具体盘面值）不该被扣——失败必须是具体的编造/矛盾，不是「话多」。
+
+    但也不是「通过」（2026-11-11 深审 B-2）：零断言此前给 ok=true、ratio 1.0，「Your day master is Jia wood」对着戊日主
+    的盘也是满分。现在是第三种结论 not_assessed：ok=None（不是 False，不扣分）、ratio=None，并说出找过哪些断言族。"""
     report = verify_answer("整体格局稳健，建议先立足本业，再徐图扩张。", _facts())
-    assert report["ok"] is True and report["metrics"]["claims_total"] == 0
-    assert report["metrics"]["faithfulness_ratio"] == 1.0
+    assert report["ok"] is None and report["status"] == "not_assessed" and report["metrics"]["claims_total"] == 0
+    assert report["metrics"]["faithfulness_ratio"] is None
+    chinese, english = report["message"].split(" / ", 1)
+    assert "没有评估" in chinese and "日主" in chinese and "not a pass" in english and "day master" in english
 
 
 def test_extract_facts_reads_the_envelope_shapes() -> None:
@@ -350,3 +355,101 @@ def test_period_boundary_gated_without_tables() -> None:
     facts = extract_facts({"tool": "chart", "data": {"snapshot_text": "[起盘信息]\n日期：1990-01-01 12:00"}})
     assert facts["period_rows"] == {}
     assert verify_answer("土星期从 2005 年开始。", facts)["claims"] == []
+
+
+# ── 2026-11-11 深审 B-2：三种结论 + 日主 / 英文四柱 / 格局 / 大运（只认引擎明写的值） ─────────────────────────────
+
+import json  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+LIVE_BAZI = json.loads((Path(__file__).parent / "fixtures" / "faithfulness_bazi_live.json").read_text(encoding="utf-8"))
+
+
+def _live_facts():
+    return extract_facts(LIVE_BAZI)
+
+
+def test_the_live_engine_shape_yields_day_master_structure_and_luck_pillars() -> None:
+    facts = _live_facts()
+    day = LIVE_BAZI["data"]["bazi"]["fourColumns"]["day"]
+    assert facts["day_master"]["stem"] == day["stem"]["cell"] == day["ganzi"][0]
+    assert facts["geju"] and LIVE_BAZI["data"]["bazi"]["gejuYongShen"]["geju"]["name"].removesuffix("格") in facts["geju"]
+    assert len(facts["dayun"]) >= 8
+
+
+def test_a_wrong_day_master_in_english_fails_instead_of_passing_with_no_claims() -> None:
+    """审计复现：「Your day master is Jia wood」对着别的日主，此前零断言 → ok=true、ratio 1.0。"""
+    facts = _live_facts()
+    assert facts["day_master"]["stem"] != "甲"
+    report = verify_answer("Your day master is Jia wood and you will get rich next year.", facts)
+    assert report["status"] == "fail" and report["ok"] is False
+    assert [c["type"] for c in report["claims"]] == ["day_master"] and report["claims"][0]["status"] == "contradicted"
+
+
+def test_day_master_claims_are_judged_on_stem_element_and_polarity_as_stated() -> None:
+    facts = _live_facts()
+    master = facts["day_master"]
+    english = {"甲": "Jia", "乙": "Yi", "丙": "Bing", "丁": "Ding", "戊": "Wu", "己": "Ji", "庚": "Geng", "辛": "Xin", "壬": "Ren", "癸": "Gui"}
+    element_en = {"木": "wood", "火": "fire", "土": "earth", "金": "metal", "水": "water"}
+    right = [f"日主{master['stem']}{master['element']}", f"日元为{master['stem']}", f"Your day master is {english[master['stem']]} {element_en[master['element']]}.",
+             f"day master: {element_en[master['element']]}"]
+    for text in right:
+        assert verify_answer(text, facts)["status"] == "pass", text
+    other_element = next(e for e in element_en if e != master["element"])
+    other_polar = "yin" if master["polar"] == "阳" else "yang"
+    for text in (f"日主{other_element}", f"day master is {other_polar} {element_en[master['element']]}"):
+        assert verify_answer(text, facts)["status"] == "fail", text
+
+
+def test_english_pillar_wording_is_checked_like_the_chinese() -> None:
+    facts = _live_facts()
+    pinyin_stem = {"甲": "Jia", "乙": "Yi", "丙": "Bing", "丁": "Ding", "戊": "Wu", "己": "Ji", "庚": "Geng", "辛": "Xin", "壬": "Ren", "癸": "Gui"}
+    pinyin_branch = {"子": "Zi", "丑": "Chou", "寅": "Yin", "卯": "Mao", "辰": "Chen", "巳": "Si", "午": "Wu", "未": "Wei", "申": "Shen",
+                     "酉": "You", "戌": "Xu", "亥": "Hai"}
+    day = facts["pillars"]["日"]
+    good = verify_answer(f"The day pillar is {pinyin_stem[day[0]]} {pinyin_branch[day[1]]}.", facts)
+    assert good["status"] == "pass" and good["claims"][0]["type"] == "ganzhi_pillar"
+    wrong = "甲子" if day != "甲子" else "乙丑"
+    bad = verify_answer(f"Day pillar: {pinyin_stem[wrong[0]]}-{pinyin_branch[wrong[1]]}", facts)
+    assert bad["status"] == "fail" and bad["claims"][0]["expected"] == day
+
+
+def test_structure_and_luck_pillar_claims_only_count_names_the_engine_wrote() -> None:
+    facts = _live_facts()
+    stated = LIVE_BAZI["data"]["bazi"]["gejuYongShen"]["geju"]["name"]
+    other = "七杀格" if stated != "七杀格" else "正官格"
+    steps = list(facts["dayun"])
+    assert verify_answer(f"{stated}，大运走到{steps[3]}。", facts)["status"] == "pass"
+    bad = verify_answer(f"这是{other}。", facts)
+    assert bad["status"] == "fail" and bad["claims"][0]["type"] == "geju"
+    missing = next(gz for gz in ("甲子", "乙丑", "丙寅", "丁卯") if gz not in facts["dayun"])
+    assert verify_answer(f"现行大运{missing}", facts)["claims"][0]["status"] == "contradicted"
+    # 「性格」「风格」不是格局断言；用神各派不一，引擎没有单一结论，不判
+    assert verify_answer("性格开朗，风格稳健，用神为水。", facts)["status"] == "not_assessed"
+
+
+def test_a_family_without_engine_truth_is_not_judged() -> None:
+    """族门槛：引擎没给日主 / 格局 / 大运（比如这是紫微盘）时，这几族不判，也不拿空真值判红。"""
+    report = verify_answer("日主甲木，七杀格，大运癸未。", _facts())
+    assert all(c["type"] not in {"day_master", "geju", "dayun"} for c in report["claims"])
+
+
+@pytest.mark.parametrize(("answer", "code"), [("年柱乙亥。", 0), ("年柱甲子。", 1), ("一切顺利。", 3)])
+def test_the_cli_exit_code_separates_fail_from_not_assessed(answer: str, code: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    from typer.testing import CliRunner
+
+    from horosa_skill.surfaces import cli
+
+    class _Service:
+        def _load_report_source(self, run_id, tool):
+            return {}, {"payload": {"tool": "bazi_birth", "data": {"bazi": {"fourColumns": {"year": {"ganzi": "乙亥"}}}}},
+                        "tool_name": "bazi_birth"}
+
+        def faithfulness_opinion(self, report, export_text):
+            return None
+
+    monkeypatch.setattr(cli, "_service", lambda: _Service())
+    result = CliRunner().invoke(cli.app, ["benchmark", "faithfulness", "--run-id", "r1", "--answer-text", answer])
+    assert result.exit_code == code, result.output
