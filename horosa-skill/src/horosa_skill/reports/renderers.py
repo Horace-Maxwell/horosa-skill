@@ -84,11 +84,14 @@ def render_report(
         # Only an ordinary render failure degrades to TXT. Ctrl-C, SystemExit and an MCP cancel (BaseException) must
         # propagate — before v0.41.1 they came back as a "successful" degraded report.
         if normalized in {"docx", "pdf"} and isinstance(exc, Exception):
-            # 渲染失败降级：自动改存 TXT（纯文本全文），绝不静默丢内容——结果里如实标注降级。
-            degraded = _render_txt_degraded(document, output_path)
+            # 渲染失败降级：自动改存 TXT（同一份人读内容的纯文本），绝不静默丢内容——结果里如实标注降级。
+            degraded = _render_txt_degraded(document, output_path, script=script, format_name=normalized)
             if degraded is not None:
                 degraded["degraded_from"] = normalized
-                degraded["degrade_reason"] = f"{type(exc).__name__}: {exc}"
+                degraded["degrade_reason"] = (
+                    f"{normalized.upper()} 排版时出错，改存为纯文本，内容与 {normalized.upper()} 版相同"
+                    f"（技术原因：{type(exc).__name__}: {exc}）"
+                )
                 return degraded
         raise
     return {
@@ -190,23 +193,127 @@ def _technique_report_human_document(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _render_txt_degraded(document: dict[str, Any], intended_path: Path) -> dict[str, Any] | None:
-    # DOCX/PDF 渲染异常时的兜底：把报告全文（plain_text 或 JSON）写成 UTF-8 TXT 落在同名 .txt。
+def _render_txt_degraded(
+    document: dict[str, Any], intended_path: Path, *, script: str = SIMPLIFIED, format_name: str = "pdf"
+) -> dict[str, Any] | None:
+    """DOCX/PDF 渲染异常时的兜底：同一份**人读**内容写成 UTF-8 纯文本（v0.50.0，评审 R-01）。
+
+    此前写的是 document["plain_text"]——机器版全文：run / trace id、质量闸、交付清单、覆盖矩阵、机器回填的「建议」、
+    产物绝对路径，读者拿到的是一份内部记录。现在按渲染器同一串块（layout.body_blocks）出文字：封面信息、所问、核心结论、
+    盘面、AI 解读、附录，开头一句白话说明为什么是纯文本。落在同名 .txt；那个名字已有文件就用 -2、-3（不盖掉别的文件）。"""
     try:
-        txt_path = intended_path.with_suffix(".txt")
-        text = document.get("plain_text")
-        if not isinstance(text, str) or not text.strip():
-            text = json.dumps(document, ensure_ascii=False, indent=2)
-        txt_path.write_text(text, encoding="utf-8")
-        payload = txt_path.read_bytes()
+        text = _reader_text(document, script=script, format_name=format_name)
+        candidate = intended_path.with_suffix(".txt")
+        for index in range(1, 100):
+            target = candidate if index == 1 else candidate.with_name(f"{candidate.stem}-{index}.txt")
+            try:
+                with open(target, "x", encoding="utf-8", newline="\n") as handle:
+                    handle.write(text)
+                break
+            except FileExistsError:
+                continue
+        else:
+            return None
+        payload = target.read_bytes()
         return {
-            "path": str(txt_path),
+            "path": str(target),
             "format": "txt",
             "file_size": len(payload),
             "sha256": hashlib.sha256(payload).hexdigest(),
         }
     except OSError:
         return None
+
+
+def _markdown_plain(text: str) -> str:
+    """调用方 Markdown → 纯文本（块树同 PDF / DOCX）：列表留 - / 1.，引用留 >，表格一行一行用 | 隔开。"""
+    from horosa_skill.reports import markdown as md
+
+    lines: list[str] = []
+
+    def walk(blocks: list[Any], indent: str = "") -> None:
+        for block in blocks:
+            if isinstance(block, (md.Paragraph, md.Heading)):
+                lines.extend(indent + line for line in md.plain(block.spans).split("\n"))
+            elif isinstance(block, md.ListBlock):
+                for number, item in enumerate(block.items, start=block.start):
+                    marker = f"{number}. " if block.ordered else "- "
+                    head = item[0] if item and isinstance(item[0], md.Paragraph) else None
+                    first = md.plain(head.spans).split("\n") if head else [""]
+                    lines.append(indent + marker + first[0])
+                    lines.extend(indent + " " * len(marker) + line for line in first[1:])
+                    walk(item[1:] if head else item, indent + " " * len(marker))
+            elif isinstance(block, md.Quote):
+                walk(block.children, indent + "> ")
+            elif isinstance(block, md.Code):
+                lines.extend(indent + "    " + line for line in block.text.split("\n"))
+            elif isinstance(block, md.Table):
+                for row in [block.header, *block.rows]:
+                    lines.append(indent + " | ".join(md.plain(cell) for cell in row))
+            elif isinstance(block, md.Rule):
+                lines.append(indent + "———")
+            lines.append("")
+
+    walk(md.parse(text))
+    return "\n".join(lines).strip()
+
+
+def _engine_plain(text: str) -> str:
+    """引擎导出段 → 纯文本：去掉行内 ** 与反引号，长小数照人读版取 4 位；表格行原样（| 隔开本就是纯文本）。"""
+    out = []
+    for line in str(text or "").splitlines():
+        if _MD_TABLE_SEP_RE.match(line):
+            continue
+        out.append(_display_number(_plain(line)).rstrip())
+    return "\n".join(out).strip()
+
+
+def _reader_text(document: dict[str, Any], *, script: str = SIMPLIFIED, format_name: str = "pdf") -> str:
+    """降级 TXT 的正文：与 PDF / DOCX 同一串块，只换成纯文字。没有任何人读内容（极简的测试文档）时退回 plain_text。"""
+    t = _labeler(script)
+    kind = format_name.upper()
+    out: list[str] = [
+        t(f"说明：这份报告本应是 {kind}，排版时出了问题，改存为纯文本。内容与 {kind} 版相同；盘图画不出来，见同一报告的 PDF 或 PNG。"),
+        "",
+    ]
+    title = str(document.get("cover_title") or document.get("title") or "")
+    if title:
+        out += [title, "=" * min(40, max(8, len(title) * 2)), ""]
+    generated = _local_date(document.get("generated_at"))
+    if generated:
+        out += [t("生成于") + f" {generated}", ""]
+    content_start = len(out)
+    human_sections = _human_sections(document)
+    for section in human_sections:
+        if section.get("group") == "basis":
+            out += [f"【{section.get('title') or t('基本信息')}】", _engine_plain(str(section.get("body") or "")), ""]
+    ai_report = document.get("ai_report") if isinstance(document.get("ai_report"), dict) else {}
+    # 只印真有的所问（没写问题时 PDF 印一句缺省话「整体综合解盘」，那不算内容）
+    question = str(document.get("intro_text") or document.get("user_question") or ai_report.get("analysis_focus") or "")
+    if question.strip() and document.get("style") != "chart":
+        out += [f"【{document.get('intro_heading') or t('解读目标')}】", _markdown_plain(question), ""]
+    figures = [f for f in document.get("figures") or [] if isinstance(f, dict)]
+    for block in body_blocks(document, t):
+        if block.kind == "card":
+            out += [f"【{block.text}】", _markdown_plain(block.body), ""]
+        elif block.kind == "heading":
+            out += [block.text, "-" * min(40, max(8, len(block.text) * 2))]
+        elif block.kind == "body":
+            out += [_markdown_plain(block.body), ""]
+        elif block.kind in {"part", "orphan_figures"}:
+            out += ["", f"==== {block.text} ====", ""]
+        elif block.kind == "note":
+            out += [block.text, ""]
+        elif block.kind == "figures" and figures:
+            names = "、".join(str(f.get("title") or "") for f in figures if f.get("title"))
+            out += [t("盘图（纯文本里画不出）：") + names, ""]
+        elif block.kind == "section":
+            heading = f"{block.cite} · {block.text}" if block.cite else block.text
+            out += [heading, "-" * min(40, max(8, len(heading) * 2)), _engine_plain(block.body), ""]
+    if not any(line.strip() for line in out[content_start:]):
+        fallback = document.get("plain_text")
+        out.append(fallback if isinstance(fallback, str) and fallback.strip() else json.dumps(document, ensure_ascii=False, indent=2))
+    return "\n".join(out).rstrip() + "\n"
 
 
 _MD_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
