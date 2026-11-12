@@ -876,6 +876,7 @@ def _run_setup(
     )
     config_text = (
         f"配置计划写到 {target}" if (dry_run or not write) and target is not None
+        else f"配置已是最新（{target} 未改动）" if mode == "merge" and target is not None and steps["config"].get("changed") is False
         else f"配置已写入 {target}" if mode == "merge" and target is not None
         else "Claude Code 用户级注册已是最新（未改动）" if mode == "claude-mcp-add" and steps["config"].get("status") == "unchanged"
         else "已更新 Claude Code 用户级注册（remove + add）" if mode == "claude-mcp-add" and steps["config"].get("status") == "updated"

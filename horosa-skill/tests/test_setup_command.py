@@ -177,6 +177,7 @@ def test_full_offline_flow_is_idempotent(tmp_path: Path) -> None:
     # 覆盖掉：用户真正的原文件（如果有）第二次就没了。内容没变就不写、不备份，才是重跑应有的样子。
     assert second["steps"]["config"]["changed"] is False and second["steps"]["config"]["backup"] is None
     assert not list(tmp_path.glob("mcp.json.horosa-bak*")), "本来就没有原文件：没什么可备份的"
+    assert "配置已是最新" in second["summary"] and "配置已写入" in first["summary"]
 
 
 def _manifest_without(tmp_path: Path, platform: str) -> str:
