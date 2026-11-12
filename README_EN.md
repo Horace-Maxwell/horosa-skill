@@ -77,7 +77,7 @@ AI clients connect over MCP (stdio / streamable-http) or the JSON-first CLI to t
 
 ## Current stable baseline
 
-**Current version: `Horosa Skill 0.49.0` (114 callable tools; the public latest release is on the Releases page).**
+**Current version: `Horosa Skill 0.50.0` (114 callable tools; the public latest release is on the Releases page).**
 
 This release line brings the capability surface roughly to parity with the desktop app — and adds a trust stack no other metaphysics tool ships:
 
@@ -358,7 +358,7 @@ Every tool call returns a uniform envelope (the full envelope is what the CLI pr
 
 ```json
 {
-  "ok": true, "tool": "qimen", "version": "0.49.0",
+  "ok": true, "tool": "qimen", "version": "0.50.0",
   "input_normalized": {}, "data": {}, "summary": [],
   "warnings": [], "memory_ref": {}, "error": null
 }
@@ -408,7 +408,7 @@ No checkout needed: **zero-install (no git, no PyPI)** — every release ships a
 straight from its URL; `HOROSA_RUNTIME_MIRROR` rewrites the wheel URL and the runtime URLs alike:
 
 ```bash
-WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.49.0/horosa_skill-0.49.0-py3-none-any.whl"
+WHL="https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl"
 uvx --from "$WHL" horosa-skill install                    # install the offline runtime (same as above)
 uvx --from "$WHL" horosa-skill doctor                     # health check
 uvx --from "$WHL" horosa-skill setup --client cursor       # zero-install one-command onboarding (picks `--launcher uvx-wheel`, writes the wheel URL)
@@ -419,7 +419,7 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # stdio for clients; `
 > The PyPI channel (`uvx horosa-skill …`) is wired but **not yet live** (it needs the maintainer's one-time Trusted Publisher setup); once on, the commands get shorter and behave the same.
 
 > [!NOTE]
-> 🐳 **Linux / Intel Mac / Docker (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only. On any other platform `horosa-skill install` (from 0.50.0) installs the **platform-independent JS engine asset** instead (`horosa-core-js-v<version>.tar.gz`, about 7 MB, under the runtime root's `core-js/`; it needs Node.js >= 20.10 on the machine — without one the engine is still installed and the result says what to install), so the local JS techniques (BaZi, Liuyao, Liuren, Heluo, Canping, Yizhangjing, tarot, almanac …) work; `install --engine-only` installs just that on any platform and `uninstall --engine-only` removes just that. Techniques computed by the Java / chart services (Ziwei, Western charts, the three cosmic boards, Shenshu …) go through the **MCP gateway**: point `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` at a host or another machine that has the runtime. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: it carries a pinned Node and the JS engine but no offline runtime, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.49.0/horosa_skill-0.49.0-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
+> 🐳 **Linux / Intel Mac / Docker (experimental)**: the offline runtime is published for macOS (arm64) and Windows (x64) only. On any other platform `horosa-skill install` (from 0.50.0) installs the **platform-independent JS engine asset** instead (`horosa-core-js-v<version>.tar.gz`, about 7 MB, under the runtime root's `core-js/`; it needs Node.js >= 20.10 on the machine — without one the engine is still installed and the result says what to install), so the local JS techniques (BaZi, Liuyao, Liuren, Heluo, Canping, Yizhangjing, tarot, almanac …) work; `install --engine-only` installs just that on any platform and `uninstall --engine-only` removes just that. Techniques computed by the Java / chart services (Ziwei, Western charts, the three cosmic boards, Shenshu …) go through the **MCP gateway**: point `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` at a host or another machine that has the runtime. An **experimental** `horosa-skill/Dockerfile` + `docker-compose.yml` ship with the repo (gateway image: it carries a pinned Node and the JS engine but no offline runtime, so those two variables are mandatory; binding 0.0.0.0 requires `HOROSA_MCP_TOKEN`); by hand, `pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl"` (the release wheel — PyPI is not open yet) then `horosa-skill serve --transport streamable-http` is the gateway.
 
 Troubleshooting install: `uv: command not found` -> install uv first (one-liner above); BaZi / Liuyao / Liuren … fail with `js_engine.cli_missing`, or `doctor` shows `js_engine.state: absent` -> this machine has no JS engine (Linux / Intel Mac / a pip gateway outside Docker / `install` never ran): `uv run horosa-skill install --engine-only` (any OS, about 7 MB), then install Node.js >= 20.10 so `node` is on PATH (or set `HOROSA_NODE_BIN`); doctor's `js_engine` should read `ready` with `engine_source: engine_asset` (offline: download `horosa-core-js-v<version>.tar.gz` from the release page and run `install --engine-only --archive <file> --sha256 <manifest core_js.sha256>`); slow/broken network -> re-run `install` (resumes from the partial download) or set `HOROSA_RUNTIME_MIRROR=<mirror-prefix>`; low disk / busy ports / an unfamiliar doctor code -> `doctor --explain` adds 6–10 plain-language lines on stderr (stdout stays JSON) and `advice[]` gives every issue / warning code a `user_summary` + `next_action`, `--probe-network` checks the manifest URL through every mirror (the default makes no external request); macOS: the runtime will not start and leaves no log, or `doctor` reports `quarantine:runtime_binaries` -> the browser-downloaded archive carries Gatekeeper's quarantine attribute, run the `xattr -dr com.apple.quarantine <runtime/current>` command from `quarantine.fix`, then `runtime restart`; Windows `runtime.path_not_ascii` (or doctor issue `windows:runtime_root_not_ascii`; bazi / ziwei / liureng fail and chart-side techniques report parameter errors) -> the runtime path contains non-ASCII characters (the default path under a Chinese user name does) and the bundled Java 17 and Swiss Ephemeris access files through narrow-character APIs: `setx HOROSA_RUNTIME_ROOT C:\horosa`, open a new terminal, restart your AI client, rerun `install` / `setup`; Windows `runtime.install_long_path` -> `doctor.windows.headroom_chars` below zero means install will refuse: set `HOROSA_RUNTIME_ROOT=C:\horosa` or enable `LongPathsEnabled` (v0.38.0 shortens the install temp prefix, ~20 characters more headroom); slow or proxied downloads -> `HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS` (default 120) and `HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS` (default 3, per mirror); a Windows Firewall prompt on first start or `doctor` warning `listener:not_loopback_only` -> the old launcher bound Java to 0.0.0.0; after upgrading run `uv run horosa-skill runtime restart` to re-apply the template (pins 127.0.0.1); services not starting under a Windows user name with spaces/CJK -> fixed in v0.38.0 (every path argument is quoted), `runtime restart` after upgrading; Codex showing a pile of errors or no tools on the first turn -> usually the timeouts are unset (Codex defaults 10 s/60 s): `uv run horosa-skill client check --client codex` names the missing keys and `client config --format codex --write ~/.codex/config.toml` merges the fix in place; `uvx` works in a terminal but a GUI client cannot start it -> GUI clients do not inherit your shell PATH, rerun `client config` (it now writes absolute paths) and `client check` reports `command_not_on_path`; upgrade -> `uv run horosa-skill upgrade` (skips the download when already current); uninstall -> `uv run horosa-skill uninstall` (dry-run by default).
 
@@ -459,7 +459,7 @@ uv run horosa-skill export registry
 
 `setup --client <client>` does the whole onboarding in one command (v0.38.0): network probe (5 s) → install / verify the
 offline runtime → (with `--vectors`) prepare vector search → write the config (auto-located, only the horosa entry, nothing written when unchanged, the original kept as `.horosa-bak` before the first change, atomic replace keeping permissions; engine / data-dir variables set in your shell go into the entry's env) →
-**install the horosa-agent skill into the skills folder that client reads** (v0.49.0; most clients read the shared
+**install the horosa-agent skill into the skills folder that client reads** (v0.50.0; most clients read the shared
 `~/.agents/skills`; `--no-skill` skips it, `--skill-dir` picks the folder) → doctor → re-read the file from disk → **start the server once over stdio with the exact command the client will run and count
 the tools** → print next steps. On failure a structured envelope goes to stderr (`step` / `code` / `config_untouched` /
 `backup_path` / `retry_command`) with exit code 2; failing before the config step guarantees `config_untouched: true`.
@@ -475,7 +475,7 @@ uv run horosa-skill client skill --client codex          # install only the skil
 ```
 
 The skill is the rule set agents read (clarify before calling / explain only from the returned snapshot / never hand-calculate);
-before v0.49.0 only agents that opened this repo saw it. The wheel now ships a copy and `setup` installs it. An existing
+before v0.50.0 only agents that opened this repo saw it. The wheel now ships a copy and `setup` installs it. An existing
 folder of the same name is left alone when another tool manages it (a symlink, e.g. `npx skills`) or when horosa-skill did
 not write it; a copy you edited is backed up as `horosa-agent.horosa-bak` before the update.
 

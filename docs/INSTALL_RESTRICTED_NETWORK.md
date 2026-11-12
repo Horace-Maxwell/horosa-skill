@@ -67,15 +67,15 @@ uv run horosa-skill install --engine-only --archive horosa-core-js-v<版本>.tar
 
 在一台能上网的机器上下载两件东西，拷到目标机：
 
-1. wheel：`https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.49.0/horosa_skill-0.49.0-py3-none-any.whl`
+1. wheel：`https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.0/horosa_skill-0.50.0-py3-none-any.whl`
 2. 本平台的 runtime 归档（同一 release 页）。
 
 目标机（只需 uv；Python ≥ 3.12 由 uv 自动准备——uv 本身也可从镜像或离线安装包装）：
 
 ```bash
-uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./horosa-runtime-win32-x64-v0.49.0.zip --sha256 <清单里的 sha256>
-uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill doctor
-uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill client config --format <client> --launcher uvx-wheel --write <配置文件>
+uvx --from ./horosa_skill-0.50.0-py3-none-any.whl horosa-skill install --archive ./horosa-runtime-win32-x64-v0.50.0.zip --sha256 <清单里的 sha256>
+uvx --from ./horosa_skill-0.50.0-py3-none-any.whl horosa-skill doctor
+uvx --from ./horosa_skill-0.50.0-py3-none-any.whl horosa-skill client config --format <client> --launcher uvx-wheel --write <配置文件>
 ```
 
 生成的配置里 `--from` 会指向线上 wheel URL；离线机器把它改成本地 wheel 路径即可（`uvx --from <本地 .whl>` 同样成立）。
@@ -143,7 +143,7 @@ manifest>`; online, `install --engine-only` (or plain `install` on those platfor
 in `<runtime root>/core-js/`, `uninstall --engine-only` removes only it, and it needs Node.js >= 20.10 (`node` on PATH or `HOROSA_NODE_BIN`).
 
 **3. Fully offline (USB)** — copy the wheel and the runtime archive from a connected machine, then
-`uvx --from ./horosa_skill-0.49.0-py3-none-any.whl horosa-skill install --archive ./<archive> --sha256 <digest>`; a local
+`uvx --from ./horosa_skill-0.50.0-py3-none-any.whl horosa-skill install --archive ./<archive> --sha256 <digest>`; a local
 `.whl` path works everywhere the release URL does.
 
 **Proxies & corporate CAs** — downloads honour `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`; loopback probes to the

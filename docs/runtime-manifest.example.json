@@ -1,15 +1,15 @@
 {
-  "version": "0.49.0",
+  "version": "0.50.0",
   "platforms": {
     "darwin-arm64": {
-      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.49.0/horosa-runtime-darwin-arm64-v0.49.0.tar.gz",
+      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.50.0/horosa-runtime-darwin-arm64-v0.50.0.tar.gz",
       "sha256": "REPLACE_WITH_REAL_SHA256",
       "archive_type": "tar.gz",
       "size": 737084194,
       "min_os": "11.0"
     },
     "win32-x64": {
-      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.49.0/horosa-runtime-win32-x64-v0.49.0.zip",
+      "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.50.0/horosa-runtime-win32-x64-v0.50.0.zip",
       "sha256": "REPLACE_WITH_REAL_SHA256",
       "archive_type": "zip",
       "size": 713054877,
@@ -17,11 +17,11 @@
     }
   },
   "core_js": {
-    "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.49.0/horosa-core-js-v0.49.0.tar.gz",
+    "url": "https://github.com/example/horosa-skill-repo/releases/download/v0.50.0/horosa-core-js-v0.50.0.tar.gz",
     "sha256": "REPLACE_WITH_REAL_SHA256",
     "archive_type": "tar.gz",
     "size": 6984463,
-    "version": "0.49.0",
+    "version": "0.50.0",
     "node_floor": ">=20.10.0",
     "root": "horosa-core-js"
   }
