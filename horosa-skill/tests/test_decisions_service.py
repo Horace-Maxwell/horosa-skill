@@ -108,11 +108,11 @@ def test_enforce_routing_only_fills_a_no_match_and_deterministic_match_stays_aut
     fake = FakeJev(_routing_script("reference_data", "xuanshi"))
     layer = DecisionLayer(_policy("enforce"), fake, thresholds=LOCK)
     service = _service(tmp_path, layer)
-    # 确定性路由命中 → 不采纳，哪怕 Jev 自信满满。
+    # 确定性路由命中 → 不采纳，哪怕 Jev 自信满满；enforce 下连问都不问（答案注定不被采纳，问题规格约 18.5 KB 不该出本机）。
     matched = service.dispatch({"query": COMBO_QUERY, "birth": BIRTH, "context": BIRTH, "save_result": False, "agent_confirmed_settings": True})
     assert matched.selected_tools == ["liureng_gods", "qimen"]
-    record = next(r for r in matched.decision_layer["records"] if r["surface"] == "dispatch")
-    assert record["adopted"] is False and record["mode"] == "enforce" and "deterministic router matched" in record["reason"]
+    assert not [r for r in matched.decision_layer["records"] if r["surface"] == "dispatch"]
+    assert not [call for call in fake.calls if call["surface"] == "dispatch"], "router matched + enforce: no request leaves the machine"
     # 确定性路由无解 → 采纳兜底。
     unmatched = service.dispatch({"query": "历史上有没有记载过类似这次的天象", "save_result": False, "agent_confirmed_settings": True})
     assert unmatched.selected_tools == ["xuanshi"] and "xuanshi" in unmatched.results

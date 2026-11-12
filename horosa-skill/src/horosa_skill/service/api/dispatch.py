@@ -303,6 +303,10 @@ class DispatchAPI:
         layer = self.decision_layer
         if layer is None or not layer.policy.surface_enabled("dispatch"):
             return deterministic
+        if error is None and layer.effective_mode("dispatch")[0] == "enforce":
+            # 确定性路由命中时决策层的答案永远不会被采纳；只有影子模式要拿它做一致性对照。enforce 下不发这次请求
+            # （每次约 18.5 KB 的问题规格出本机，换来一条注定 adopted=false 的记录）。
+            return deterministic
         state, redaction = build_meta_state(request.query, private_terms=self._private_terms())
         outcome = layer.ask(
             "dispatch",

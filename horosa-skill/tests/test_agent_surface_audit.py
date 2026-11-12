@@ -124,6 +124,21 @@ def test_compact_tool_run_accepts_the_mcp_spelling(tmp_path) -> None:
     assert unknown["ok"] is False and unknown["error"]["code"] == "tool.unknown"
 
 
+def test_knowledge_search_names_a_read_tool_that_exists_on_each_surface(tmp_path) -> None:
+    """精简面没有 horosa_knowledge_read：检索工具的描述要指向 horosa_tool_run(tool_name="knowledge_read")，全量面照旧点名精读工具。"""
+    for compact in (False, True):
+        settings, service = _service(tmp_path / str(compact))
+        settings.mcp_compact = compact
+        server = create_mcp_server(service, settings)
+        tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
+        description = tools["horosa_knowledge_search"].description
+        if compact:
+            assert "horosa_knowledge_read" not in tools
+            assert 'horosa_tool_run(tool_name="knowledge_read"' in description and "horosa_knowledge_read" not in description
+        else:
+            assert "horosa_knowledge_read" in tools and "pass it to horosa_knowledge_read" in description
+
+
 def test_input_contract_and_hecan_accept_the_mcp_spelling() -> None:
     assert build_tool_input_contract("horosa_cn_qimen")["tool_name"] == "qimen"
     # v0.50.0（IN-15）：tools 在校验层就解析成注册表键（MCP 名、中文名、逗号串都收；认不出的给近似名）。
