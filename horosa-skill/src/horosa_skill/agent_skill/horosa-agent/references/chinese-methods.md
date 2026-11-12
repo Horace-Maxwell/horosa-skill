@@ -7,7 +7,7 @@
 - Xingque-compatible default: `guirengType: 2`（星占法贵人）. Only use `guirengType: 0`
   （六壬法贵人）or `1`（遁甲法贵人）when the user explicitly requests that noble-person system or an
   existing saved case specifies it.
-- Ask about 贵人体系 / 昼夜贵人 only if the user does not accept Xingque defaults. 贵人 3（甲戊兼牛羊）/ 4（干合阳阴贵）
+- The gate asks about 贵人体系 / 昼夜贵人; `defaults_accepted: true` (after the user accepts defaults) keeps `guirengType: 2`. 贵人 3（甲戊兼牛羊）/ 4（干合阳阴贵）
   are available too (v0.40.0).
 - 起课 runs on the vendored 星阙 `LiuRengMain` engine: all **26 起课法** (`options.castMethod`, default `zheng`
   正时正将; `xuanshi` needs `xuanShiZhi`, `yanshu`/`baoshu` need `yanShuNum`), 换将 (`yueJiangMethod`), 分昼夜
@@ -19,13 +19,14 @@
   the 解读层 (常用神煞 / 毕法 / 占断向导 — the 占断向导 section appears only when `zhanCategory` ∈
   {hunyin/taichan/jibing/caiyun/…}); [三传] carries 递生递克 and the per-传 空/禄/马 badges.
 
-## Current-time casting (“用当前时间起一个大六壬盘” and similar)
+## Casting for the moment of the question (“用当前时间起一个大六壬盘” and similar)
 
-1. Read the current local date, time, and timezone.
-2. Include location/longitude/latitude if the user or client environment provides them.
-3. Call the tool (`liureng_gods` / `horosa_cn_liureng_gods`; same flow for qimen/jinkou/…).
-4. Explain only from the returned sections.
-5. Never replace the tool call with an ad-hoc calendar script for 干支/天盘/四课/三传.
+1. Take the current local date and time from your own context, and where the user is (ask if you do not know).
+   The server never uses its own clock as the user's "now".
+2. Direct tool: `date` / `time` / `place` = that moment and location, `question` = the user's words.
+   `horosa_dispatch` / `horosa_hecan`: the same moment goes in `context`; birth data goes in `birth`
+   (`time_basis` in the result says which moment each technique used).
+3. Explain only from the returned sections. Never replace the call with a calendar script for 干支 / 天盘 / 四课 / 三传.
 
 ## 奇门遁甲 — defaults and routing (v0.40.0)
 
@@ -70,15 +71,19 @@ normalized `勾→虎 / 雀→玄`.
 
 ## 六爻 (sixyao)
 
-- With explicit `lines` (manual 摇卦), they take priority; a `gua_code` without `lines` rebuilds the lines from the code.
-- Without `lines` (`[]`/`null`/absent), the tool casts **by time** with 星阙's own `buildTimeGua`: 上卦 = (年支序 + 农历月数
-  + 农历日数) % 8, 下卦 = + 时支序, 动爻 = % 6, where the 时柱 follows `timeAlg` (0 = 真太阳时, default). Same input is
-  deterministic; ask for 起卦方式 when the user has a preference.
-- 判读口径: `liuyaoSettings` (the 24 keys of 星阙's 六爻 gear: 流派 / 用神 / 飞伏 / 旬空 / 神煞 / 十六变 / 天时 …; see
-  `options_keys`). [断诀命中] and [占类断语] come from 星阙's doctrine library and depend on `askType` and these keys.
+- Manual cast: `lines` = six objects bottom to top with coin values `6` / `7` / `8` / `9` (6 and 9 move), or `0` / `1`
+  with `change`; or `gua_code` = a hexagram name (`火天大有`, `大有`, Traditional too) or a six-digit code. A cast that
+  cannot be used (seven lines, unknown name) is refused, never replaced by a time cast. `data.cast_method` says which.
+- No `lines` and no `gua_code`: cast **by the moment** with 星阙's own `buildTimeGua`: 上卦 = (年支序 + 农历月数 + 农历日数) % 8,
+  下卦 = + 时支序, 动爻 = % 6, where the 时柱 follows `timeAlg` (0 = 真太阳时, default). Same input = same hexagram.
+- `gender` (求测人) only labels the chart; default 男, shown on the technique card as a default.
+- 判读口径: `liuyaoSettings` (24 keys: 流派 `school`, 占类 `askType`, 用神 / 飞伏 / 旬空 / 神煞 …; see `options_keys`).
+  [断诀命中] and [占类断语] depend on `askType` and these keys — the gate asks for them.
 
 ## 神数 (14 tools)
 
+- Gender is a required fact for 铁板 `tieban`, 邵子 `shaozi`, 北极 `beiji`, 南极 `nanji`, 蠢子 `chunzi`, 策天 `cetian`,
+  七政四余钦 `qizhengkin`, 万化仙禽 `xianqin` and 神数正传 `zhengchuan` (except `xinyi`): ask, never assume.
 - `date`/`time` input (split into engine fields internally), 晚子时 switches forwarded, and a **typed** `options`
   object per tool (keys and allowed values in `horosa_agent_guidance(tool_name=…)` → `options_keys`; unknown keys are
   reported in `data.params_ignored`, never silently forwarded). `cetian`/`qizhengkin`/`xianqin` also take `gender` +

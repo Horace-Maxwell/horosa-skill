@@ -4,18 +4,20 @@
 
 ## Reading failures
 
-A failed tool returns `ok=False` with a structured `error.code` — it does not throw. Common codes:
-`tool.invalid_payload` (often with `details.agent_recovery` → ask the user), `tool.internal_error`
-(unexpected backend/format error), `tool.ken_compute_failed` (ken engine miss),
-`js_engine.node_unavailable` / `js_engine.timeout` (Node layer). Relay the error; never conclude
-“the technique is unavailable” from a single failure, and never invent an external dependency.
+A failed tool returns `ok: false` with a top-level `code`, `message` and `details.agent_recovery.kind` — it does not
+throw. `kind` says who can fix it: `input` (ask the user / fix the payload — see SKILL.md §6), `retry_or_doctor` (retry
+once, then suggest `horosa-skill doctor`), `transport` (cold start ≤ ~45 s: wait and retry once), `runtime` / `js_engine`
+(install or repair the local engine), `environment` (PATH / encoding / ports), `decision_layer` (the optional cloud layer
+was unavailable; the local path answered). Relay the error; never conclude "the technique is unavailable" from one
+failure, and never invent an external dependency (MongoDB, port 7897, the 星阙 desktop app, a remote database).
 
 ## Symptom table
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | qimen/taiyi/jinkou `source: null`, or chart disagrees with 星阙 desktop | Installed runtime is stale (pre-ken) — the JS layer fell back to its local scaffold | Re-install the current runtime release; for development set `HOROSA_CORE_JS_ROOT` to the repo's `horosa-core-js`. Not an algorithm failure. |
-| `agent_guidance.required` / `details.agent_recovery` returned | Clarification gate (by design) | Ask the user with `prompt_to_user`; then `agent_confirmed_settings: true` (or `defaults_accepted: true`); never self-confirm |
+| `agent_guidance.required` / `details.agent_recovery` returned | Clarification gate (by design) | Ask the user with `prompt_to_user`. Settings → retry with the answers + `agent_confirmed_settings: true` (or `defaults_accepted: true` when they accept defaults). Items with `fact: true` → put the user's answer in the payload; a flag never replaces them. Never self-confirm |
+| `warnings` non-empty | Not necessarily a failure: interpreted inputs, unused arguments, a cut text with its follow-up call, a fallback engine | Read each line; only 降级 / 结果不完整 / 缺段 lines mean a part is missing — name it to the user; make the follow-up call for cut text |
 | A section is missing from the export | Local tool/input issue or conditional section | Say the local run didn't return it; rerun `doctor` / `openclaw-check`; do NOT claim MongoDB/7897/Xingque-Desktop |
 | Four pillars disagree with the hour-23 matrix | Runtime predates upstream v2.2.1 | User re-installs the runtime ([`late-zi.md`](./late-zi.md)) |
 | No `horosa_*` tools in the agent session (`clientToolCount: 0`) | MCP server not attached to that workspace | Run openclaw setup/check below |
@@ -33,11 +35,13 @@ A failed tool returns `ok=False` with a structured `error.code` — it does not 
 ## Debug commands
 
 ```bash
-uv run horosa-skill doctor
-uv run horosa-skill tool list
-uv run horosa-skill client openclaw-check --workspace <workspace>
-uv run python scripts/run_full_self_check.py
+horosa-skill doctor            # machine-readable health report; --explain for prose
+horosa-skill selfcheck         # live check of the installed runtime
+horosa-skill tool list
+horosa-skill client openclaw-check --workspace <workspace>
 ```
+
+Inside a source checkout prefix them with `uv run`.
 
 OpenClaw onboarding:
 
@@ -50,11 +54,29 @@ For named OpenClaw agents, `<workspace>` must be the workspace that agent actual
 `~/.openclaw/workspace-horosabot` — passing `~/.openclaw/workspace` while the agent runs in
 `workspace-horosabot` verifies the wrong environment.
 
-Direct tool call (diagnostic only — use the env block from the generated mcporter config):
+Direct tool call (diagnostic only — use the env block from the generated client config):
 
 ```bash
-uv run horosa-skill tool run liureng_gods --stdin   # then pass JSON on stdin
+horosa-skill tool run liureng_gods --input payload.json --output result.json
 ```
+
+## Installing on a new machine
+
+`horosa-skill setup --client <key>` installs the offline runtime, writes the client config, installs this skill
+into the client's skills folder and test-starts the server (commands for a machine without `uv`: SKILL.md, last
+section). Client keys: `claude-code`, `claude-desktop`, `cursor`, `vscode`, `codex`, `gemini`, `windsurf` (= Devin
+Desktop, formerly Windsurf), `cline`, `zed`, `opencode`, `goose`, `kiro`, `copilot-cli`, `junie`, `qwen`, `kimi`,
+`qoder`, `codebuddy`, `trae` (prints an import link), `amp`, `warp`, `droid`, `augment`, `deepcode`, `dsh`.
+`horosa-skill client skill --client <key>` installs only this skill.
+
+- `setup` can be re-run (upgrade, changed options); `--dry-run` shows the plan without side effects; `--surface
+  full|compact` picks the tool surface. A failure is a stderr JSON with `step` / `code` / `config_untouched` /
+  `retry_command` (exit 2).
+- No github.com access: put `HOROSA_RUNTIME_MIRROR=<mirror prefix>` in front of the same commands, or
+  `setup --archive <local runtime archive>` (see `docs/INSTALL_RESTRICTED_NETWORK.md` in the repo).
+- Windows on ARM installs the x64 payload under emulation. Intel Macs and Linux have no offline payload: gateway mode
+  (`HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` pointing at a supported machine); `setup` then writes the config
+  and skips the install.
 
 ## Cross-platform notes
 

@@ -2,12 +2,25 @@
 
 > 读者：AI 客户端。何时读：调用 推运/返照/时运/主限 类工具前。策略总纲：[`../SKILL.md`](../SKILL.md)。
 
-**Do not call predictive tools with natal data alone.** Minimum real-call contracts:
+**Do not call predictive tools with natal data alone.** They need a target and, for return / directed charts, where
+the person is at that target.
+
+- **Target** `datetime`: `"2026"` or `"year": 2026` = that year's birthday moment (stated in `warnings`);
+  `"2026-05-03 08:00"` (ISO `T` works too). 「今年」 = the current year from your own context — say which year you used.
+- **Where** `dirZone` / `dirLat` / `dirLon`: when omitted the engine uses the natal zone and place (as 星阙). If the person
+  lives elsewhere, or the birth zone was a daylight-saving offset that does not apply at the target (China 1986–1991
+  summers, any DST country), pass them explicitly (`dirZone: "+08:00"`).
+
+```call
+horosa_predict_solarreturn {"date": "1990-05-03", "time": "08:00", "place": "上海", "datetime": "2026", "dirZone": "+08:00", "defaults_accepted": true, "clarification_notes": "用户要 2026 年太阳返照，人在上海，其余按默认"}
+```
+
+Minimum real-call contracts:
 
 | Tool | Required beyond birth data | Output must include |
 | --- | --- | --- |
-| `solarreturn` / `lunarreturn` | `datetime` + `dirZone` + `dirLat` + `dirLon` | natal chart + return chart + return aspects |
-| `givenyear` | `datetime` + `dirZone` + `dirLat` + `dirLon` | natal chart + given-year chart + aspects |
+| `solarreturn` / `lunarreturn` | `datetime` (+ `dirZone` / `dirLat` / `dirLon` when not the birth place / zone) | natal chart + return chart + return aspects |
+| `givenyear` | `datetime` (+ `dirZone` / `dirLat` / `dirLon` as above) | natal chart + given-year chart + aspects |
 | `solararc` / `profection` | `datetime` + `dirZone` | natal chart + progressed/profection chart + aspects |
 | `pd` | `pdtype` + `pdMethod` + `pdTimeKey` + `pdaspects` | real primary-direction table rows |
 | `pdchart` | `datetime` + `dirZone` + PD method settings | primary-direction chart table + aspects |
@@ -38,17 +51,9 @@
 - 星阙's AI mount can also scan a datetime *range* (`datetimeEnd` / `scanStep`, one segment per point); the skill does
   not implement that yet — call the tool once per target date.
 
-The same contracts are exposed through `uv run horosa-skill tool list`,
-`uv run horosa-skill agent guidance --tool <tool>`, MCP `horosa_agent_guidance`, and tool docstrings.
-Use before any predictive call:
-
-```bash
-uv run horosa-skill agent guidance --tool solarreturn
-uv run horosa-skill tool list
-```
-
-If the user asks “看今年运势” without target year/date and location, ask for the missing values. Do
-not silently use the current date or the birth location unless the user accepts that default.
+The same contracts come from `horosa_agent_guidance {"tool_name": "solarreturn"}` (CLI `horosa-skill agent guidance
+--tool solarreturn`). 「看今年运势」 names no technique: ask which one (dispatch answers it with
+`dispatch.technique_choice_required`), and ask where the person lives if it may differ from the birth place.
 
 ## Primary directions (`pd` / `pdchart`) engine surface — 星阙 v3.13.0 parity
 

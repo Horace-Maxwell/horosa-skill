@@ -1,96 +1,104 @@
-# Input payload defaults
+# Building payloads by hand
 
-> 读者：AI 客户端。何时读：构造技法调用载荷时。策略总纲：[`../SKILL.md`](../SKILL.md)。
+> Reader: an AI client. Read when you build a technique payload yourself. Basics (date / time / place /
+> zone / gender / profile) are in [`../SKILL.md`](../SKILL.md) §3; this sheet is the detail.
+> The authoritative per-technique contract is `horosa_agent_guidance {"tool_name": "<key>"}` →
+> `input_contract.example_payload` (live-tested), `ask_if_missing`, `safe_defaults`, `options_keys`.
 
-## Event-based Chinese methods (奇门/六壬/金口/太乙/六爻…)
+## Where fields go
 
-```json
-{
-  "date": "2028-04-06",
-  "time": "09:33:00",
-  "zone": "+08:00",
-  "lat": "31n13",
-  "lon": "121e28",
-  "gpsLat": 31.2167,
-  "gpsLon": 121.4667,
-  "ad": 1,
-  "after23NewDay": false
-}
+- MCP: fields at the top level of the tool call. A `request` object is merged in too (same key in both with
+  different values → the `request` value wins and `warnings` says so). Wrapper objects such as `payload` /
+  `arguments` are unpacked.
+- Accepted aliases (renamed, noted in `warnings`): `timezone` / `tz` → `zone`, `latitude` → `lat`,
+  `longitude` / `lng` → `lon`, `sex` → `gender`, `house_system` → `hsys`.
+- An argument no setting reads is **named in `warnings`** with the closest real name ("did you mean …"). It is
+  not an error, but it changed nothing: fix the name and rerun if it mattered.
+- `tools/list` advertises only the common fields of each tool. Long-tail knobs (`orbSystem`, `termsVariant`,
+  `extraBodies`, 紫微传本键, 神数 `options` …) are accepted at the top level by name; their lists are in
+  `options_keys`.
+
+## Event payload (cast techniques: 奇门 / 六壬 / 金口诀 / 太乙 / 六爻 / 塔罗 …)
+
+`date` / `time` = the moment of the question, `place` = where the user is, `question` = the user's words.
+
+```call
+horosa_cn_liureng_gods {"date": "2026-11-12", "time": "16:40", "place": "上海", "question": "能否成事", "defaults_accepted": true, "clarification_notes": "用户接受星阙默认（星占法贵人）"}
 ```
 
-## Birth-based methods (本命盘/八字/紫微/神数…)
+## Birth payload (本命盘 / 八字 / 紫微 / 神数 …)
 
-Include as much as possible:
-
-```json
-{
-  "date": "1995-06-03",
-  "time": "05:30:00",
-  "zone": "+08:00",
-  "lat": "31n13",
-  "lon": "121e28",
-  "gpsLat": 31.2167,
-  "gpsLon": 121.4667,
-  "ad": 1,
-  "name": "User",
-  "pos": "Shanghai"
-}
+```call
+horosa_astro_chart {"date": "1988-03-14", "time": "18:45", "place": "Chicago, IL", "name": "Ann", "hsys": 3, "zodiacal": 0, "agent_confirmed_settings": true, "clarification_notes": "User chose Placidus houses and the tropical zodiac"}
 ```
 
-## Field notes
+Without a place name: `"zone": "+08:00", "lat": "31n13", "lon": "121e28"` (or decimal `31.22` / `121.47`;
+`gpsLat` / `gpsLon` are decimal degrees). Never estimate coordinates or historical offsets from memory.
 
-- **Coordinates**: compact form `31n13` / `121e28` parses as 度+分 (121°28′), NOT scientific notation;
-  `gpsLat` / `gpsLon` are decimal degrees. Provide both when you have them.
-- **Timezone**: `zone` / `timezone` accept `+08:00`; `Z` / `UTC` / `GMT` normalize to `+00:00`; IANA
-  zone names convert using the chart date (DST-correct).
-- **BC dates**: write the date with a leading minus (`-0500-03-21`), or keep the unsigned date and pass `ad: -1` — the entry
-  rewrites the second form into the first, so every technique reads the same year. `ad` takes only `1` / `-1`. Techniques on
-  the local lunar-javascript calendar (老黄历 / 通书 / 河洛 / 参评 / 一掌经) cover AD 1–9999 only and refuse other years
-  with `tool.date_range_unsupported`.
-- **Casting inputs**: a supplied cast (小六壬 `nums`, 灵棋 `counts`, 六爻 `lines` / `gua_code`, 梅花卦义 trigram codes) is
-  used as given or refused (`tool.<tool>_invalid_cast` / `tool.invalid_option`) — never silently replaced by a time cast.
-  `data.cast_method` says how the result was cast. Unrecognised setting values (流派 / 口径 / 传本…) are refused with the
-  accepted list in `details.options`.
-- **Gender**: include `gender` for gender-sensitive tools (Ziwei, Bazi direct/luck flow, LiuReng
-  runyear, 演禽/策天/七政四余·张果, gendered reports).
-- **Bazi/Ziwei timing options**: include `timeAlg`, `after23NewDay`, `lateZiHourUseNextDay`, and
-  direct/luck-flow options when the user asks about timing. For 八字 / 紫微 / 奇门 / 太乙 / 农历 the `timeAlg`
-  default is `0` = 真太阳时 (longitude + equation-of-time correction, 星阙 default); `1` = 直接时间 (clock face).
-  Per-tool defaults are listed in `horosa_agent_guidance(tool_name=…)` → `safe_defaults`.
-- **Mainland-China birthplaces west of Beijing time**: `Asia/Urumqi` dates on/after 1949-10-01 are converted to
-  Beijing time like 星阙 does (`cnUnifiedZone=false` opts out); the conversion is disclosed in warnings and on the
-  technique card.
-- **Hour-23 inputs**: the two independent day-boundary switches change the pillars — canonical spec
-  and how to ask: [`late-zi.md`](./late-zi.md). The Western chart family (`chart`/`chart13`/`chart12`/`hellen_chart`/
-  `harmonic`/`draconic`/`relocation`) accepts them too (hidden knobs; headless default 1/1) and prints the 排盘规则 line.
-- **Western chart family (v0.40.0)**: the export text now mirrors 星阙's `buildAstroSnapshotContent` byte-for-byte — GFM tables
-  for 宫位宫头 / 星与虚点 / 相位 / 行星 / 希腊点 / 12分度, the [起盘信息] 古典口径 / 命主星 / 日主星·时主星 lines, and
-  `strongRecption` defaults to `0` like 星阙 (explicit values win). `relative` and `jieqi_year` [X宿盘] follow the upstream builders.
-- **Classical calibre keys and other enum settings (v0.50.0)**: every key behind the 古典口径 line (`termsVariant`, `triplicity`,
-  `westNodeType`, `westLilithType`, `sectBuffer`, `vocMode`, `orbSystem`, `lotProjection` …) and the enum knobs of `decennials`,
-  `qizhengelection`, `planet_cycles`, `horary` / `election` (`category`, `topicId`, `school`) are read through one vocabulary:
-  canonical values, case variants, Chinese names (`真交点`, `托勒密`, `月食`) and booleans where they mean something are read as the
-  canonical value (noted in warnings); anything else is refused with `tool.invalid_option` and the full list in `details.options` —
-  pick from that list, don't drop the setting. Orbs (`cazimiOrb` / `combustOrb` / `underBeamsOrb` / `antisciaOrb` / `starOrb`) also take
-  any number in range; `harmonic` must be a whole number 1–360 (no clamping). [古典格局] is attached to `chart` and `relocation` only
-  (relocation: analysed at the birth place, as 星阙); `chart13` / `chart12` / `hellen_chart` / `harmonic` / `draconic` carry no natal analysis.
-- **神数 (14 tools)**: inputs use `date` (YYYY-MM-DD) + `time` (HH:mm:ss) strings like every other
-  technique (the skill splits them into engine y/m/d/h/m internally), plus 晚子时 switches and a **typed**
-  `options` object: each tool accepts exactly the keys listed in
-  `horosa_agent_guidance(tool_name=…)` → `options_keys` (types / allowed values mirror the 星阙 engine);
-  unknown keys are not forwarded and are echoed back in `data.params_ignored`. The gate asks for gender on
-  北极 / 南极 / 蠢子数 and for the time zone on 铁板 / 邵子 / 蠢子数 / 太玄. `cetian` / `qizhengkin` / `xianqin` also take
-  `gender` + place.
-- **Long option vocabularies** (西占宫制 0–24, 卜卦 20 类 / 7 流派, 择日 37 用事, 七政宿度制 0–8, 印占大运 15 体系 / 6 流派,
-  世运规则集, 紫微 22 传本键, 八字盘法键, 三式起局 / 起课法 …) are **not** in `tools/list` (byte budget); read them from
-  `horosa_agent_guidance(tool_name=…)` → `options_keys` and pass the keys at the top level by name.
-- **Predictive tools**: natal data alone is NOT enough — target `datetime`, `dirZone`, `dirLat`,
-  `dirLon`, PD method settings per [`predictive.md`](./predictive.md).
-- Unknown extra fields are accepted (`extra="allow"`) and forwarded where meaningful; tools that don't
-  read a flag ignore it harmlessly.
+## Field formats and refusals
 
-### 八字 `southMonth`（上游 v3.11.2 起）
+| Field | Read | Refused (code) |
+| --- | --- | --- |
+| `date` | `1990-05-03`, `1990/5/3`, `1990.5.3`, `19900503`, `1990年5月3日`; BCE `-0500-03-21` (or the unsigned date + `ad: -1`) | `03/05/1990` (`tool.ambiguous_date`, both readings in `options`), `1990-02-30` (`tool.invalid_date`), 农历 (`tool.lunar_date_unsupported`) |
+| `time` | `08:00`, `08:00:00`, `0830`, `8点半`, `上午8点`, `8:30 PM` | `辰时` (`tool.time_is_shichen`), `不详` / `unknown` (`tool.time_unknown`), `25:00` (`tool.invalid_time`) |
+| `zone` | `+08:00`, `8`, `-5`, `5.5`, `UTC+8`, `东八区`, `E8` / `W5`, `北京时间`, IANA `Asia/Shanghai` | `480` (minutes? → `tool.invalid_zone`, fix it yourself), `CST` / `EST` / `IST` (several meanings → ask), DST gap / overlap with an IANA name (`tool.zone_ambiguous`) |
+| `lat` / `lon` | `31n13` / `121e28` (degrees + minutes), `31.22`, `31°13′N`, `北纬31.22` | `40n75` (minutes ≥ 60), out of range, swapped (`tool.invalid_coordinate`) |
+| `gender` | `男` / `女`, `1` / `0`, `乾造` / `坤造`, `male` / `female`, `先生` / `小姐` | anything else (`tool.invalid_gender`); missing where required (`tool.missing_gender` / gate fact) |
+| flags | JSON `true` | `"true"`, `1`, `"yes"` (`tool.confirmation_flag_not_boolean`) |
 
-- `southMonth`: `"none"`（星阙缺省，月柱同北半球）| `"chong"`（月支取对冲之支，月干按年干五虎遁重起；胎元 / 命宫 / 大运随之）。
-- 只对**南纬**出生生效（纬度串带 `s` 或 `gpsLat < 0`）；北纬传了也忽略。闸门会对南纬出生点名追问，别替用户默认。
-- 快照 [四柱与三元] 在南纬出「南半球月令：…」行；技法依据卡回显为「南半球月令」。Java 回退路径（byLon / 公元前）同名参数照发。
+Each refusal lists one entry per field in `details.agent_recovery.fix_fields` (`field`, `got`, `expected`,
+`example`, `options`). `must_ask_user: false` = rewrite it yourself; `true` = ask the user.
+
+**Zone and place together.** `place` without `zone` → the zone in force there on that date. An explicit
+`zone` offset is used as given, even when it contradicts the place (the summary says 「时区沿用显式给出的 zone」).
+`place` + `lat` / `lon` without `zone` → the zone is found from the coordinates and the date.
+Mainland-China places west of Beijing time (`Asia/Urumqi`) are put on Beijing time from 1949-10-01, like 星阙
+(`cnUnifiedZone: false` opts out); disclosed in `warnings` and on the technique card.
+
+**BCE dates.** Write `-0500-03-21`, or keep `0500-03-21` with `ad: -1` (rewritten to the same thing). `ad`
+takes only `1` / `-1`. 老黄历 / 通书 / 河洛 / 参评 / 一掌经 cover AD 1–9999 only (`tool.date_range_unsupported`).
+
+**Lunar birthday.** Find the Gregorian day with `horosa_cn_calendar_month` (`date` = any day of the Gregorian
+month to list; each day carries its 农历 date), then confirm the day with the user:
+
+```call
+horosa_cn_calendar_month {"date": "1990-05-01", "zone": "+08:00", "lon": "121e28", "defaults_accepted": true}
+```
+
+## Settings with vocabularies
+
+Every enumerated setting (宫制 `hsys`, 黄道 `zodiacal`, 古典口径 keys, 流派 / 传本 / 起局方式, 神数 `options`, horary
+`category` / `school`, election `topicId`, 择日 condition params …) is checked against its list. Canonical
+values, case variants, Chinese names (`Placidus`, `整宫制`, `真交点`, `托勒密`) and true/false where it means
+something are read (noted in `warnings`); anything else is refused with `tool.invalid_option` and the full list
+in `details.accepted` (some engines say `details.allowed` / `options`). Pick from that list or ask the user —
+never drop the setting silently. 西占 `hsys` indices: `1` = Alcabitus (星阙 default), `0` = Whole Sign,
+`3` = Placidus; `options_keys.hsys` has all 25. 印度盘 uses its own house table.
+
+## Casting inputs (manual casts)
+
+A cast the user supplies is used as given or refused — never silently replaced by a time cast. `data.cast_method`
+says how the result was cast.
+
+- 六爻 `lines`: six objects bottom to top, coin values `6` 老阴 (moving) / `7` 少阳 / `8` 少阴 / `9` 老阳 (moving),
+  e.g. `[{"value": 7}, {"value": 8}, {"value": 9}, {"value": 6}, {"value": 7}, {"value": 8}]`; or `0` / `1` with
+  `change`. Or `gua_code`: a hexagram name (`火天大有`, `大有`, Traditional too) or a six-digit code. No `lines`
+  and no `gua_code` = cast by the moment.
+- 小六壬 `nums` [月, 日, 时]; 灵棋 `counts`; 梅花卦义 `gua_meiyi` takes trigram names / symbols; 小成图 `dayan` needs an
+  explicit `seed` or `counts`.
+
+```call
+horosa_cn_sixyao {"date": "2026-11-12", "time": "16:40", "place": "上海", "question": "项目能成吗", "gua_code": "火天大有", "defaults_accepted": true, "clarification_notes": "用户摇得火天大有，其余按默认"}
+```
+
+## Other notes
+
+- **Hour 23**: two day-boundary switches — [`late-zi.md`](./late-zi.md).
+- **Predictive targets** (`datetime`, `year`, `dirZone` …) — [`predictive.md`](./predictive.md).
+- **八字 / 紫微 periods**: `period` = `{"liunian": [2026], "liuyue": [3], "liuri": [...], "liushi": [0-11]}`
+  (紫微 also `daxian`: the 大限 palace indices); adds the 「多运限·指定时段」 / 「运限」 section.
+- **八字 `southMonth`** (`none` default / `chong`): only for southern-hemisphere births; the gate asks only then.
+- **神数**: `date` / `time` like every technique plus a typed `options` object (keys in `options_keys`; unknown keys
+  come back in `data.params_ignored`).
+- **Western chart family**: [古典格局] is attached to `chart` and `relocation` only; `relocation` needs
+  `relocLat` / `relocLon` (without them it equals the natal chart).

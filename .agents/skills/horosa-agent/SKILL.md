@@ -29,22 +29,22 @@ Thin client-agnostic contract. The **single policy source** is
 1. **Never hand-calculate** any Horosa/星阙 technique (no shell/Python/JS/web formulas, no memorized
    tables). Every 盘/课/卦/运 comes from a `horosa` MCP tool call (`horosa_astro_chart`,
    `horosa_cn_qimen`, `horosa_cn_liureng_gods`, …) or the `horosa-skill` CLI.
-2. **Clarify before calling**: if a result-changing setting is missing (birth/event time, place,
-   timezone, gender, house system, 起局方式, 贵人体系, target year), ask the user a short question
-   with options first. Tools reject unconfirmed calls with `agent_guidance.required`; after the user
-   answers, retry with `agent_confirmed_settings: true` (or `defaults_accepted: true` when they
-   accept defaults) plus `clarification_notes`. Never self-confirm; never switch tools to bypass the
-   gate. In non-interactive runs (`codex exec`), surface the question as your final answer instead
+2. **Clarify before calling**: a missing fact (birth/event time, place, gender, the moment of the
+   question, the other person, target year) or an unanswered setting (house system, 起局方式, 贵人体系)
+   makes the tool refuse with `agent_guidance.required`; ask the user first. Settings: retry with
+   `agent_confirmed_settings: true` (or `defaults_accepted: true` when they accept defaults) plus
+   `clarification_notes`. Facts go in the payload — no flag replaces them. Never self-confirm; never
+   switch tools to bypass the gate. In non-interactive runs (`codex exec`), surface the question as your final answer instead
    of guessing.
-3. **Read results only from `export_snapshot.export_text` / `.sections`** — that text is the chart.
-   Do not restate numbers that are not in it, and do not invent sections it lacks.
+3. **Read results only from `data.export_snapshot.export_text`** — that text is the chart. Do not
+   restate numbers that are not in it. Cut text: `warnings` give the `horosa_memory_show` follow-up call.
 4. If `horosa` tools are absent from the tool list: first turn after a cold start may simply be too
    early (Codex waits ~1s for optional servers; the runtime warms in ~45s) — retry next turn. Still
    absent → the server is not configured; point the user at `examples/clients/codex.md`.
 5. Errors carry structured recovery: on `details.agent_recovery` with `must_ask_user: true`, relay
    `prompt_to_user` verbatim and stop; `must_ask_user: false` = fix the listed `fix_fields` yourself and retry
    (memory / report calls). On transport errors, suggest `horosa-skill doctor` / `horosa-skill selfcheck`.
-6. **Compact surface.** Codex gets the 11 facade tools by default (`HOROSA_MCP_COMPACT=1`); call any technique
+6. **Compact surface.** Codex gets the 13 facades + `horosa_tool_run` by default (`HOROSA_MCP_COMPACT=1`); call any technique
    by name via `horosa_tool_run(tool_name="qimen", …)` (the MCP name `horosa_cn_qimen` works too) — the catalogue
    is the `horosa://catalog/techniques` resource. A missing flat `horosa_*` name is not a missing technique.
 
