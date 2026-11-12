@@ -238,7 +238,8 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   每次拆页都把剩下的全部行重断。标题后面跟整张不拆的小表时，表挪到下一页、标题留在页底。pdffonts 里有不嵌入的 Helvetica 与 Times-Roman，
   元数据照样写 `pdfuaid:part=1`；本机没有中文 TrueType 时静默改用不嵌入的 CID 字体。
 - **根因**：reportlab 的表格行默认不能在行内断；`Table.split` / `Paragraph.split` 对剩余部分整体重排；`keepWithNext` 会把超高的下一块连标题
-  一起挪页（留下大半页空白）；canvas 每页开头、表格字符串格子（含占位空串）、矢量图起始状态都会 `setFont` 一次缺省字体，哪怕一个字都不画。
+  一起挪页（留下大半页空白），而下一块是 KeepTogether 时内层 wrap 恒报「无限高」，keepWithNext 每次都强制换页（本批中途引入、
+  实测时发现：同一份报告从 12 页撑到 22 页，改成自己分组）；canvas 每页开头、表格字符串格子（含占位空串）、矢量图起始状态都会 `setFont` 一次缺省字体，哪怕一个字都不画。
 - **修**：卡片逐块成 `CardPiece`（框与色条跟着段落跨页）；长值 / 长格（> 400 字）键成一行、值成段落，或表格开 `splitInRow`；`Guarded` 兜底
   只把在整页上都排不下又拆不开的那一块摊成段落（`renderers.LAYOUT_SPILLS` 给测试看是否靠兜底）；`Panels` 只拿一屏放得下的行去量；
   段内换行每 40 行一个段落对象；标题与短的下一块同页、长的下一块只要求标题下有 40 mm；`initialFontName`、表格 `FONTNAME`、

@@ -1460,8 +1460,10 @@ A global stability pass hardened these; keep them true when you touch the releva
   调用方文字合计上限 `AI_REPORT_MAX_CHARS`（200,000，`report.ai_report_too_large`）。
 - **一块排不下不许拖垮整份 PDF。** 新的版式块要么能拆（段落、`CardPiece`、开 `splitInRow` 的表），要么由 `Guarded` 兜底（只摊开这一块，
   `LAYOUT_SPILLS` 记一笔）；测试断言「正常排出、不靠兜底」。长内容按屏 / 按组量（`Panels._screen_cap`、`_LINES_PER_FLOWABLE`），
-  别每页重排剩余全部——测试按「四倍内容不到八倍时间」量。标题 `keepWithNext` 只对短的下一块（`settle_keep_with_next`），长块改要求 40 mm。
-  「完整盘面」「AI 解读」本页还剩六成就接着排。
+  别每页重排剩余全部——测试按「四倍内容不到八倍时间」量。**别用 reportlab 的 `keepWithNext`**：它把标题与下一块包成 KeepTogether，
+  下一块若本身是 KeepTogether（小表、盘图），内层 wrap 恒报「无限高」→ 每次强制换页（一份 12 页的报告撑到 20 多页）。标题分组由
+  `settle_keep_with_next` 自己做（并进下一块的 KeepTogether / 短块合包 / 长块只要求 40 mm），量高度用 `_height`（KeepTogether 量内容）。
+  「完整盘面」「AI 解读」按「部分标题 + 第一块正文」现量换页高度（`_part_room`），放得下就接着排。
 - **PDF/UA 声明按实际引用的字体判（`TaggingCanvas.fonts_all_embedded`）。** canvas 初始字体（`initial_font`）、表格 `FONTNAME`
   （`_own_font`）、矢量图起始字体（`TaggedFigure` 设 `initialFontName`）都是报告字体；新加会 `setFont` 的地方照此办。CID 回退时结果 `warnings`
   与封面写明。

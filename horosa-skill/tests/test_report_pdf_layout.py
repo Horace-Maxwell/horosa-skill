@@ -137,6 +137,10 @@ def test_the_callers_reading_has_a_documented_size_limit(tmp_path: Path) -> None
     assert from_tool.value.code == "report.ai_report_too_large"
 
 
+def spy_pages_total(spy) -> int:
+    return max(page for _title, _level, page in spy.outline)
+
+
 def test_reading_headings_are_in_the_toc_and_short_pages_are_not_left_mostly_empty(tmp_path: Path, monkeypatch) -> None:
     """评审 R-17：解读正文自己的一、二级标题不在目录里（目录只有「完整解盘正文」一行）；所问 + 一句结论之后强制换页，
     解读报告第 3 页只印两行。"""
@@ -150,4 +154,14 @@ def test_reading_headings_are_in_the_toc_and_short_pages_are_not_left_mostly_emp
     toc = [entry for entry, _page in spy.toc()]
     assert "一、依据" in toc and "二、建议" in toc and "细节" not in toc
     pages = {title: page for title, _level, page in spy.outline}
+    # 部分标题、「盘图」小标题与盘图在同一页：不孤零零留在页底，也不因为后面跟着整张不拆的块就被强制挤到下一页
+    # （reportlab 的 keepWithNext 遇到 KeepTogether 恒判「放不下」，一份 12 页的报告因此被撑到 20 多页）
+    assert pages["完整盘面"] == pages["盘图"], pages
+    assert spy_pages_total(spy) <= 14, pages
+
+    spy = _PdfSpy(monkeypatch)
+    document = {**_document([("起盘信息", "日期：2028-04-06")], human_direct_answer="今年宜守。"), "user_question": "今年如何？"}
+    renderers.render_report(document, output_path=tmp_path / "short.pdf", format_name="pdf")
+    pages = {title: page for title, _level, page in spy.outline}
+    # 盘面第一块很短：接着排在所问与结论下面，不另起一页留下大半页空白
     assert pages["完整盘面"] == pages["解读目标"], pages

@@ -1619,33 +1619,69 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
             self.inner.drawOn(canvas, self._PAD_X, self._pad_bottom)
 
     def settle_keep_with_next(story: list[Any]) -> list[Any]:
-        """标题「与下一块同页」只对短的下一块成立：下一块是整张不拆的小表、或不到四分之一页高，就整组挪页（评审 R-10）；
-        下一块很长（一大段结论、长表、分栏清单）时，整组挪页会在上一页留下大片空白（一段 2000 字的结论连标题一起挪走），
-        这时改成「标题下面至少还有 40 mm 才排，否则换页」，长块照常从标题下面开始、跨页续排。"""
-        out: list[Any] = []
+        """标题与它下面的第一块排在同一页（评审 R-10）。不用 reportlab 的 keepWithNext：它把标题与下一块包成 KeepTogether，
+        下一块本身是 KeepTogether（整张不拆的小表、盘图）时内层量出来恒为「无限高」，于是每次都强制换页——标题跟着盘图去了下一页，
+        上一页留下大半空白。这里自己分组：
+        - 下一块是 KeepTogether：把标题（与中间的间距）放进它的内容开头；
+        - 下一块不到四分之一页高：标题与它包成一个 KeepTogether；
+        - 下一块很长（一大段结论、长表、分栏清单）：不整组挪页，只要求标题下面至少还有 40 mm。
+        「完整盘面」这类部分标题的换页高度也在这里按「标题 + 下面第一块正文」现量（_part_room）。"""
         for index, flowable in enumerate(story):
-            if getattr(flowable, "keepWithNext", 0) and not isinstance(flowable, Spacer):
-                following = next((f for f in story[index + 1:] if not isinstance(f, Spacer)), None)
-                if following is not None and not _short_enough(following):
-                    flowable.keepWithNext = 0
-                    for spacer in story[index + 1:]:
-                        if not isinstance(spacer, Spacer):
-                            break
-                        spacer.keepWithNext = 0
-                    out.append(CondPageBreak(40 * mm))
-            out.append(flowable)
+            if getattr(flowable, "_horosa_part_break", False):
+                flowable.height = _part_room(story[index + 1:])
+        out: list[Any] = []
+        index = 0
+        while index < len(story):
+            flowable = story[index]
+            if not getattr(flowable, "keepWithNext", 0) or isinstance(flowable, Spacer):
+                out.append(flowable)
+                index += 1
+                continue
+            group = [flowable]
+            nxt = index + 1
+            while nxt < len(story) and isinstance(story[nxt], Spacer) and not isinstance(story[nxt], CondPageBreak):
+                group.append(story[nxt])
+                nxt += 1
+            for member in group:
+                member.keepWithNext = 0
+            following = story[nxt] if nxt < len(story) else None
+            if isinstance(following, KeepTogether):
+                following._content[0:0] = group
+                index = nxt
+            elif following is not None and not isinstance(following, CondPageBreak) and _height(following) <= frame_height * 0.25:
+                if getattr(following, "keepWithNext", 0):  # 连着的小标题：留给下一轮与它自己的下一块分组
+                    out.extend(group)
+                    index = nxt
+                    continue
+                out.append(KeepTogether([*group, following]))
+                index = nxt + 1
+            else:
+                out.append(CondPageBreak(40 * mm))
+                out.extend(group)
+                index = nxt
         return out
 
-    def _short_enough(flowable: Any) -> bool:
-        if isinstance(flowable, KeepTogether):
-            return True
-        if isinstance(flowable, CondPageBreak):
-            return False
+    def _height(flowable: Any) -> float:
+        """一块的自然高度；KeepTogether 量里面的内容（它自己的 wrap 恒报「无限高」）；量不了当作一整页。"""
         try:
+            if isinstance(flowable, KeepTogether):
+                return sum(_height(item) for item in flowable._content)
             _, height = flowable.wrap(content_width, frame_height)
-        except Exception:  # noqa: BLE001 - 量不了就当长块：不整组挪页（最坏是标题后面跟着换页）
-            return False
-        return height <= frame_height * 0.25
+            extra = flowable.getSpaceBefore() + flowable.getSpaceAfter() if hasattr(flowable, "getSpaceBefore") else 0
+            return float(height) + float(extra)
+        except Exception:  # noqa: BLE001 - 量不了：按一整页算（最坏是多换一次页）
+            return frame_height
+
+    def _part_room(following: list[Any]) -> float:
+        """部分标题要接着排需要的高度：标题与间距 + 后面的小标题 + 第一块正文（比一页还高 → 当作要一整页）。"""
+        need = 0.0
+        for flowable in following:
+            if isinstance(flowable, CondPageBreak):
+                continue
+            need += _height(flowable)
+            if not isinstance(flowable, Spacer) and getattr(flowable, "_horosa_toc", None) is None:
+                break  # 第一块正文量完了
+        return min(max(need, frame_height * 0.4), frame_height)
 
     def _spill(flowable: Any) -> list[Any]:
         out: list[Any] = []
@@ -1716,7 +1752,14 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         def add_part(text: str, *, new_page: bool = True) -> None:
             # 「完整盘面」「AI 解读」原则上另起一页；但上一页只印了寥寥几行（所问 + 一句结论）时就接着排，不留一页大半空白
             # （评审 R-17：解读报告第 3 页只有两行）。「附录」通常只有几行，够地方就接着排。
-            story.append(CondPageBreak(frame_height * 0.62) if new_page else CondPageBreak(70 * mm))
+            if new_page:
+                # 高度在 settle_keep_with_next 里按「部分标题 + 它下面第一块正文」现量：放得下才接着排，放不下就换页
+                # （只看剩余比例时，部分标题留在页上、下面的盘图挪去下一页，又是半页空白）。
+                part_break = CondPageBreak(frame_height * 0.62)
+                part_break._horosa_part_break = True
+                story.append(part_break)
+            else:
+                story.append(CondPageBreak(70 * mm))
             story.append(Spacer(1, 12))
             block = Table(
                 [[Paragraph(_esc(text), part_style)]],
