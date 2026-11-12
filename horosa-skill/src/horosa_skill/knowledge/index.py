@@ -219,7 +219,7 @@ def _connect(path: Path, *, timeout: float = 15.0) -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=DELETE")
     except BaseException:
         # 坏库在这里就报错：不关的话连接挂在异常的 traceback 上，调用方接着隔离（改名）坏库——Windows 上开着的文件改不了名
-        # （WinError 32），坏索引就永远重建不了（v0.50.1-dev，tests/winsim.py 在本机模拟）。
+        # （WinError 32），坏索引就永远重建不了（v0.50.0-dev，tests/winsim.py 在本机模拟）。
         conn.close()
         raise
     return conn

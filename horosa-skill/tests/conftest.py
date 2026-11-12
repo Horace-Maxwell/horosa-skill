@@ -105,7 +105,7 @@ def _never_touch_the_users_real_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path_f
 
 @pytest.fixture(autouse=True)
 def _windows_file_sharing(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
-    """本机按 Windows 的规则改名 / 删文件：开着的文件动不了（tests/winsim.py；v0.50.1-dev）。
+    """本机按 Windows 的规则改名 / 删文件：开着的文件动不了（tests/winsim.py；v0.50.0-dev）。
 
     v0.50.0 的 windows-smoke 红了 4 条 WinError 32（连接没关就删库 / 隔离坏库），本机全绿；知识索引的 `--rebuild` 在 Windows 上
     隔离不了坏库也是同一类。每条用例都在模拟下跑，这一类在 macOS / Linux 上当场红。专测 POSIX 语义、Windows 上本就跳过的用例

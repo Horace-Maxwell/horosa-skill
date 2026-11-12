@@ -48,7 +48,7 @@ _OTHER_TYPE_SUFFIXES = frozenset({
 MAX_NAME_BYTES = 240
 NAME_HEADROOM = 255 - MAX_NAME_BYTES
 
-# 整条路径的上限（v0.50.1-dev，windows-smoke）。此前只靠 stat 抛 ENAMETOOLONG 来发现：POSIX 上整条超过 PATH_MAX（macOS 1024、
+# 整条路径的上限（v0.50.0-dev，windows-smoke）。此前只靠 stat 抛 ENAMETOOLONG 来发现：POSIX 上整条超过 PATH_MAX（macOS 1024、
 # Linux 4096 字节）才会抛；Windows 没开长路径时上限是 MAX_PATH 260 个 UTF-16 单元，超了 stat 只说「不存在」，事前检查全过，
 # 到建目录 / 写文件时才是裸 OSError；开了长路径（32 767）则照常写成。现在按本机规则用字符串事前判，不碰文件系统。
 # 上限都含结尾的 NUL，所以能用的是「上限 − 1」。

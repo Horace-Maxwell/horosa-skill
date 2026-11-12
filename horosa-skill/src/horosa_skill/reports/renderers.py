@@ -2455,7 +2455,7 @@ _SYMBOL_PLACEHOLDERS = ("▸", "•", "·")  # 画不了的符号换成第一个
 
 # 「画得出」= cmap 指向的不是 0 号字形（.notdef，印出来就是方块）且那个字形有轮廓。reportlab 的 charToGlyph 把指向 0 号、
 # 指向空字形的码位也收着：宋体 SC 有 296 个这样的字（藏文、蒙文、彝文…），Windows 的回退字体对 emoji 也可能这样。
-# 空白与不占位的字本来就没有轮廓，只要不是 0 号就算（v0.50.1-dev）。
+# 空白与不占位的字本来就没有轮廓，只要不是 0 号就算（v0.50.0-dev）。
 _BLANK_CATEGORIES = frozenset({"Zs", "Zl", "Zp", "Cc", "Cf", "Mn", "Me"})
 _BLANK_CODES = frozenset({0x115F, 0x1160, 0x2800, 0x3164, 0xFFA0})  # 韩文填充符、盲文空格：画出来本就是空的
 

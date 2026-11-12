@@ -112,7 +112,7 @@ def extract(path: Path, destination: Path) -> str:
 
 
 def _portable_data_filter(member: tarfile.TarInfo, dest_path: str) -> tarfile.TarInfo | None:
-    """`tarfile.data_filter`，前面加三条，让同一个归档在哪个平台上解出来都一样（v0.50.1-dev，windows-smoke）：
+    """`tarfile.data_filter`，前面加三条，让同一个归档在哪个平台上解出来都一样（v0.50.0-dev，windows-smoke）：
 
     - 前导的 `/` 与 `\\` 都去掉（data_filter 只去 `/` 和本机的 os.sep：POSIX 上 `\\x` 原样成了文件名，Windows 上落进目录）；
     - 带盘符的名字（`C:/x`、`C:\\x`、`C:x`）一律拒绝：Windows 上它就是写到别的盘 / 绝对路径（data_filter 在那里拒），

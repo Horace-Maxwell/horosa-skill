@@ -1,4 +1,4 @@
-"""macOS 绿 ≠ Windows 绿：本机就能抓到的那几类（v0.50.1-dev，v0.50.0 main CI windows-smoke 红 13 条之后）。
+"""macOS 绿 ≠ Windows 绿：本机就能抓到的那几类（v0.50.0-dev，v0.50.0 main CI windows-smoke 红 13 条之后）。
 
 - 相对路径拿 `str(p.relative_to(root))` 当键 / 拿去比：Windows 上是 `runners\\mingli.py`，和写死的 `runners/mingli.py` 永远对不上
   （test_era_pairing 两红）。一律 `.as_posix()`。

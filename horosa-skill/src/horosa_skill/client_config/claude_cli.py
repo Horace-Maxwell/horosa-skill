@@ -94,7 +94,7 @@ def add_json_command(claude_bin: str, server_name: str, entry: Mapping[str, Any]
     return [claude_bin, "mcp", "add-json", "--scope", "user", server_name, json.dumps(dict(entry), ensure_ascii=False)]
 
 
-# Windows 上粘命令的人用 PowerShell（5.1 / 7）还是 cmd，看不出来（v0.50.1-dev，windows-smoke）。此前一律 list2cmdline：
+# Windows 上粘命令的人用 PowerShell（5.1 / 7）还是 cmd，看不出来（v0.50.0-dev，windows-smoke）。此前一律 list2cmdline：
 # 那是 cmd / C 运行库的规则，JSON 参数写成 "{\"type\": …}"——PowerShell 里反斜杠不是转义符，引号在第一个 \" 处就断了，
 # 粘进去 `Invalid JSON`；`&&` 在 Windows PowerShell 5.1 里是语法错误；npm 装的 claude 在 PowerShell 里是 claude.ps1，
 # 光写的 `--` 会被 PowerShell 当成「参数到此为止」吃掉，`-e` 就把后面的命令吞成环境变量。

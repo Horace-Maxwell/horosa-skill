@@ -62,7 +62,7 @@ def _age(path: Path, now: float) -> float:
 def _pid_alive(pid: int) -> bool:
     """写临时文件的进程还在不在；说不准就当在（不删）。
 
-    不能 `os.kill(pid, 0)`（v0.50.1-dev）：Windows 上信号 0 就是 CTRL_C_EVENT，os.kill 发的是控制台 Ctrl+C 事件（GenerateConsoleCtrlEvent），
+    不能 `os.kill(pid, 0)`（v0.50.0-dev）：Windows 上信号 0 就是 CTRL_C_EVENT，os.kill 发的是控制台 Ctrl+C 事件（GenerateConsoleCtrlEvent），
     不是「只问在不在」：目标不在同一控制台就报错（被这里当成「在」，残留永不清），在同一控制台则可能真把 Ctrl+C 发出去。
     runtime.procs.pid_alive 在 Windows 上走 OpenProcess（只读），POSIX 上才是信号 0。"""
     if pid <= 0:

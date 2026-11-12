@@ -1,4 +1,4 @@
-"""在 macOS / Linux 上模拟 Windows 的文件共享规则（v0.50.1-dev，main CI windows-smoke 红 13 条之后）。
+"""在 macOS / Linux 上模拟 Windows 的文件共享规则（v0.50.0-dev，main CI windows-smoke 红 13 条之后）。
 
 Windows 上**打开着**的文件不能改名、不能删：SQLite 与 Python 的 `open()` 打开文件时都不带 `FILE_SHARE_DELETE`，
 `os.replace` / `os.unlink` 撞上就是 `PermissionError: [WinError 32]`；含打开文件的目录同样删不掉、挪不动。

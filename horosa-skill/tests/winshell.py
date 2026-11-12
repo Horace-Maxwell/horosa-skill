@@ -1,4 +1,4 @@
-"""在任何平台上按 Windows 终端的规则拆一行命令（v0.50.1-dev）：setup 打印给 Windows 用户粘的命令，本机就能验它在
+"""在任何平台上按 Windows 终端的规则拆一行命令（v0.50.0-dev）：setup 打印给 Windows 用户粘的命令，本机就能验它在
 cmd 和 PowerShell 里各会变成什么 argv。
 
 - `cmd_argv`：cmd.exe 先看引号外有没有 `& | < > ^`、有没有 `%`（变量展开），再按 C 运行库（CommandLineToArgvW）的规则拆。
