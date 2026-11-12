@@ -265,6 +265,18 @@ def generate_tool_cases() -> list[dict[str, Any]]:
     return cases
 
 
+def benchmark_dataset(dataset_path: Path | None = None) -> dict[str, Any]:
+    """v2：手写 case（路由/知识/精选 parity）+ 注册表生成的逐工具 case 合并跑；id 冲突以手写为准。
+
+    README 里的用例数由 `verify_docs_sync.check_benchmark_counts` 对着 `len(benchmark_dataset()["cases"])` 锁定。
+    """
+    dataset = load_benchmark_dataset(dataset_path)
+    curated_ids = {case.get("id") for case in dataset.get("cases", [])}
+    return {**dataset, "cases": list(dataset.get("cases", [])) + [
+        case for case in generate_tool_cases() if case["id"] not in curated_ids
+    ]}
+
+
 from contextlib import contextmanager
 
 
@@ -312,12 +324,7 @@ def run_benchmark(
                 key for key in _HERMETIC_KEEP_ENV if os.environ.get(key)
             )}
             return report
-    dataset = load_benchmark_dataset(dataset_path)
-    # v2：手写 case（路由/知识/精选 parity）+ 注册表生成的逐工具 case 合并跑；id 冲突以手写为准。
-    curated_ids = {case.get("id") for case in dataset.get("cases", [])}
-    dataset = {**dataset, "cases": list(dataset.get("cases", [])) + [
-        case for case in generate_tool_cases() if case["id"] not in curated_ids
-    ]}
+    dataset = benchmark_dataset(dataset_path)
     sample_payloads = build_sample_payloads()
     skipped: list[str] = []
 
