@@ -649,12 +649,21 @@ def run_mcp_server(settings: Settings, *, transport: str, service: HorosaSkillSe
     if transport == "stdio":
         server.run(transport="stdio")
         return
-    network = {"host": settings.host, "port": settings.port,
-               "transport_security": build_transport_security(settings.host, settings.port)}
+    security = build_transport_security(settings.host, settings.port)
     if transport == "sse":
-        server.run(transport="sse", **network)
+        app = server.sse_app(transport_security=security, host=settings.host)
     else:
-        server.run(transport=transport, streamable_http_path="/mcp", **network)
+        app = server.streamable_http_app(streamable_http_path="/mcp", transport_security=security, host=settings.host)
+    # MCP-09：外层先用与 SDK 相同的判据看 Host，拒绝时 421 回包写清楚白名单与要加的 HOROSA_MCP_ALLOWED_HOSTS 那一行；
+    # 放行的请求原样交给 SDK（它自己的 DNS-rebinding 校验照旧再跑一遍）。所以这里自己起 uvicorn，参数与 SDK 的 run 一致。
+    import anyio
+    import uvicorn
+
+    from horosa_skill.surfaces.mcp_hosts import HostGuidanceMiddleware
+
+    config = uvicorn.Config(HostGuidanceMiddleware(app, list(security.allowed_hosts)), host=settings.host,
+                            port=settings.port, log_level=server.settings.log_level.lower())
+    anyio.run(uvicorn.Server(config).serve)
 
 
 def main() -> None:

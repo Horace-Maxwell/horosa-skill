@@ -132,7 +132,8 @@ def test_serve_allows_public_binding_when_explicitly_accepted(monkeypatch, tmp_p
 
 
 def test_masked_token_never_shows_the_whole_secret() -> None:
-    assert serve_flow._mask_token("s3cr3t-probe-value") == "s3cr…ue"
+    # C-21：旧值 "s3cr…ue"（18 位露 6 位）；现在最多露四分之一
+    assert serve_flow._mask_token("s3cr3t-probe-value") == "s3…ue"
     assert serve_flow._mask_token("short") == "****"
     assert serve_flow._mask_token(None) == ""
 
