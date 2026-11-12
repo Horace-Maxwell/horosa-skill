@@ -36,6 +36,12 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+# BuildError 的说明里有中文路径 / 文件名时，Windows 控制台缺省代码页会把 print 变成 UnicodeEncodeError（同 sync_windows_release.py）。
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8", errors="replace")
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 CORE_JS_DIRNAME = "horosa-core-js"
 ARCHIVE_ROOT = CORE_JS_DIRNAME  # top-level directory inside the archive (the installer and verifiers expect exactly this)
@@ -132,7 +138,7 @@ def npm_ci_stage(core_js: Path, work: Path) -> Path:
     if npm is None:
         raise BuildError("--npm-ci needs npm on PATH")
     done = subprocess.run([npm, "ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel=error"],
-                          cwd=str(work), capture_output=True, text=True, check=False)
+                          cwd=str(work), capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
     if done.returncode != 0:
         raise BuildError(f"npm ci --omit=dev failed: {done.stderr.strip()[-600:]}")
     return work
