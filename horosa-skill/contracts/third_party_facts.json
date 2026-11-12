@@ -801,6 +801,17 @@
         "horosa-skill/horosa-core-js/app-charts/adapters/tarot.js",
         "horosa-skill/src/horosa_skill/reports/app_charts.py"
       ]
+    },
+    {
+      "id": "markdown-it-py.commonmark-gfm",
+      "subject": "markdown-it-py",
+      "fact": "markdown-it-py 4.0.0 (MIT; pure Python, depends only on mdurl) was already in the lock via mcp[cli] -> typer -> rich and is declared directly since v0.50.0. MarkdownIt('commonmark', {'html': False, 'breaks': True}).enable(['table', 'strikethrough']) gives GFM pipe tables (th/td carry style='text-align:…') and ~~strike~~ (s_open/s_close); with html False raw HTML stays a text token (so `<br>` must be recognised by hand); breaks True turns single newlines into softbreak tokens; validateLink drops javascript: / vbscript: / file: / data: link targets, leaving the source text as literal text.",
+      "source_url": "https://markdown-it-py.readthedocs.io/en/latest/using.html",
+      "verified_on": "2026-11-12",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/markdown.py",
+        "horosa-skill/pyproject.toml"
+      ]
     }
   ]
 }

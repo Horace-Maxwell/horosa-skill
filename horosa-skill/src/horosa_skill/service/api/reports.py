@@ -42,6 +42,9 @@ _RULE_LOOKUP_TOOLS = frozenset({"ziwei_rules"})
 _ENGINE_ONLY_FORMATS = frozenset({"png", "ics"})
 _REPORT_FORMATS = ("json", "docx", "pdf", "png", "ics")
 _TECHNIQUE_REPORT_FORMATS = ("markdown", "json", "docx", "pdf")
+# 一份报告里调用方写的文字（ai_report 各字段 + ai_answer_text）合计上限，单位：字符。约 120 页 PDF；实测线性渲染，
+# 这个量 PDF / DOCX 各十秒内。超过回 report.ai_report_too_large，什么都不写（评审 C-17）。
+AI_REPORT_MAX_CHARS = 200_000
 _FORMAT_NOUNS = {"png": "PNG 盘图", "ics": "ICS 日历"}
 
 _REPORT_MIME = {
@@ -455,6 +458,7 @@ class ReportsAPI:
                 chart_style = not engine_only and self._report_style(request) == "chart"
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
                 run_loaded = True
+                self._check_ai_size(request.ai_report, request.ai_answer_text)
                 output_request = self._output_request(request.output_path, normalized_format)
                 if engine_only:
                     result = self._render_engine_only(request, run, source_artifact, normalized_format, trace, output_request)
@@ -618,6 +622,7 @@ class ReportsAPI:
             try:
                 normalized_format = self._normalize_report_format(request.format)
                 report_style = "analysis" if normalized_format in _ENGINE_ONLY_FORMATS else self._report_style(request)
+                self._check_ai_size(request.ai_report, request.ai_answer_text)
                 self._output_request(request.output_path, normalized_format)
             except ToolValidationError as exc:
                 trace["error_code"] = exc.code
@@ -784,6 +789,38 @@ class ReportsAPI:
             "trace_id": trace_id,
             "group_id": group_id,
         }
+
+    @staticmethod
+    def _check_ai_size(ai_report: Any, ai_answer_text: Any) -> None:
+        """调用方文字的总量上限（AI_REPORT_MAX_CHARS）。按字段计数，回最大的那几个字段，好让调用方知道删哪里。"""
+        sizes: dict[str, int] = {}
+
+        def walk(value: Any, path: str) -> None:
+            if isinstance(value, str):
+                sizes[path] = sizes.get(path, 0) + len(value)
+            elif isinstance(value, dict):
+                for key, item in value.items():
+                    walk(item, f"{path}.{key}" if path else str(key))
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    walk(item, path)
+
+        walk(ai_report or {}, "ai_report")
+        walk(ai_answer_text or "", "ai_answer_text")
+        total = sum(sizes.values())
+        if total <= AI_REPORT_MAX_CHARS:
+            return
+        largest = sorted(sizes.items(), key=lambda item: -item[1])[:3]
+        raise ToolValidationError(
+            bilingual(
+                f"这次传入的解读文字一共 {total:,} 字，超过一份报告的上限 {AI_REPORT_MAX_CHARS:,} 字（最长的是 "
+                + "、".join(f"{name} {size:,} 字" for name, size in largest) + "）。精简后重出，或分成几份报告。",
+                f"The reading passed in is {total:,} characters, over the per-report limit of {AI_REPORT_MAX_CHARS:,} (largest: "
+                + ", ".join(f"{name} {size:,}" for name, size in largest) + "). Shorten it, or split it across reports.",
+            ),
+            code="report.ai_report_too_large",
+            details={"limit": AI_REPORT_MAX_CHARS, "size": total, "largest_fields": [{"field": n, "chars": c} for n, c in largest]},
+        )
 
     def _normalize_report_format(self, value: str) -> str:
         normalized = str(value or "").lower().strip()
@@ -1009,15 +1046,14 @@ class ReportsAPI:
         if answer_text and not normalized.get("answer_text"):
             normalized["answer_text"] = answer_text
         if answer_text and not normalized.get("direct_answer"):
-            normalized["direct_answer"] = self._first_nonempty_line(answer_text)
-        return normalized
+            # 核心结论卡 = 解读里第一句真话（v0.50.0，评审 R-06）：此前取第一个非空行，常常就是标题「## 总体结论」本身。
+            # 标题、分隔线、表格、代码与自成一段的标签都跳过；一句都没有就不设，卡片不印。
+            from horosa_skill.reports.markdown import first_statement
 
-    def _first_nonempty_line(self, text: str) -> str:
-        for line in str(text or "").splitlines():
-            stripped = line.strip(" #*-：:")
-            if stripped:
-                return stripped[:240]
-        return str(text or "").strip()[:240]
+            statement = first_statement(answer_text)
+            if statement:
+                normalized["direct_answer"] = statement
+        return normalized
 
     def _run_has_report_ai(self, run: dict[str, Any]) -> bool:
         structured = run.get("ai_answer_structured")

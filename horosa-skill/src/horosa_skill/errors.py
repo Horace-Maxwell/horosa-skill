@@ -552,6 +552,16 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_output_path_and_retry",
     },
+    "report.ai_report_too_large": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "这次给报告的解读文字超过上限（details.limit 字，details.largest_fields 列出最长的字段）。精简后重出，或分几份报告；"
+            "被拒时什么都没有写，也没有记到 run 上。",
+            "The reading passed to the report is over the limit (details.limit characters; details.largest_fields lists the "
+            "longest fields). Shorten it or split it across reports; nothing was written or recorded on the run.",
+        ),
+        "next_action": "shorten_ai_report_and_retry",
+    },
     "report.invalid_format": {
         "kind": "input",
         "prompt_to_user": bilingual(
