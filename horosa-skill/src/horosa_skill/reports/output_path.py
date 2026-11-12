@@ -17,11 +17,13 @@ manifest 都能被一份报告盖掉，之后这条 run 再也出不了报告。
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from horosa_skill import winpaths
 from horosa_skill.errors import ToolValidationError, bilingual
 
 # 各格式落盘的扩展名（markdown 只有技法依据报告用）。
@@ -44,6 +46,18 @@ _OTHER_TYPE_SUFFIXES = frozenset({
 # 单个文件名的上限。各家文件系统是 255（APFS / ext4 按 UTF-8 字节，NTFS 按 UTF-16 单元）；留出多图的 `_12`、
 # 占用另存的 ` (99)`、撞名的 `-99` 这些后缀的余量。
 MAX_NAME_BYTES = 240
+NAME_HEADROOM = 255 - MAX_NAME_BYTES
+
+# 整条路径的上限（v0.50.1-dev，windows-smoke）。此前只靠 stat 抛 ENAMETOOLONG 来发现：POSIX 上整条超过 PATH_MAX（macOS 1024、
+# Linux 4096 字节）才会抛；Windows 没开长路径时上限是 MAX_PATH 260 个 UTF-16 单元，超了 stat 只说「不存在」，事前检查全过，
+# 到建目录 / 写文件时才是裸 OSError；开了长路径（32 767）则照常写成。现在按本机规则用字符串事前判，不碰文件系统。
+# 上限都含结尾的 NUL，所以能用的是「上限 − 1」。
+WINDOWS_MAX_PATH = 260
+WINDOWS_LONG_PATH_MAX = 32_767
+POSIX_PATH_MAX = {"darwin": 1024}
+DEFAULT_POSIX_PATH_MAX = 4096
+TEMP_NAME_UNITS = 32  # 渲染时同目录的临时文件 `.horosa-report-xxxxxxxx.tmp`（renderers._TMP_PREFIX）
+DEFAULT_NAME_UNITS = 120  # 给的是目录时，落进去的缺省文件名（run id + 技法 + 样式 + 时间戳）
 
 _RESERVE_ATTEMPTS = 1000
 
@@ -92,6 +106,37 @@ def names_a_directory(text: str, resolved: Path) -> bool:
 
 def _name_units(name: str) -> int:
     return max(len(name.encode("utf-8", "surrogatepass")), len(name.encode("utf-16-le", "surrogatepass")) // 2)
+
+
+def path_limit(*, os_name: str | None = None, platform: str | None = None, long_paths: bool | None = None) -> tuple[int, str]:
+    """(本机一条路径最多多长, 按什么数)。Windows 按 UTF-16 单元、看注册表的长路径开关；POSIX 按 UTF-8 字节。"""
+    if (os_name or os.name) == "nt":
+        enabled = winpaths.long_paths_enabled() if long_paths is None else long_paths
+        return (WINDOWS_LONG_PATH_MAX if enabled else WINDOWS_MAX_PATH) - 1, "utf-16"
+    return POSIX_PATH_MAX.get(platform or sys.platform, DEFAULT_POSIX_PATH_MAX) - 1, "utf-8"
+
+
+def _length(text: str, unit: str) -> int:
+    if unit == "utf-16":
+        return len(text.encode("utf-16-le", "surrogatepass")) // 2
+    return len(text.encode("utf-8", "surrogatepass"))
+
+
+def check_path_length(path: Path, *, requested: str, name_units: int | None = None) -> None:
+    """整条路径在本机放得下：所在目录 + 文件名（留出 `_12` / ` (99)` / `-99` 的余量，且不短于同目录的临时文件名）。
+    `name_units` = 最终文件名最多多长（给的是目录时用缺省文件名的长度）。纯字符串，不碰文件系统。"""
+    limit, unit = path_limit()
+    name = _length(path.name, unit) + NAME_HEADROOM if name_units is None else name_units
+    needed = _length(str(path.parent), unit) + 1 + max(name, TEMP_NAME_UNITS)
+    if needed > limit:
+        what = "UTF-16 单元" if unit == "utf-16" else "字节"
+        raise unusable(
+            "path_refused_by_system",
+            f"整条路径太长（约 {needed} 个{what}，本机上限 {limit}）。换一个短一点、层级浅一点的路径。",
+            f"the whole path is too long (about {needed} {'UTF-16 units' if unit == 'utf-16' else 'bytes'}; this system allows {limit}). "
+            "Use a shorter, shallower path.",
+            requested=requested, path_length=needed, limit=limit, unit=unit,
+        )
 
 
 def check_names(path: Path, *, requested: str) -> None:

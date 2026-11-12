@@ -231,14 +231,17 @@ class ReportsAPI:
         if not text:
             return output_paths.OutputRequest("default")
         resolved = self._report_output_path(text, default=Path(self.store.output_dir) / "report")
-        output_paths.check_names(resolved, requested=text)  # 先看名字（纯字符串），再碰文件系统
+        output_paths.check_names(resolved, requested=text)  # 先看名字与整条长度（纯字符串），再碰文件系统
+        output_paths.check_path_length(resolved, requested=text)
         protected = self._store_areas()
         output_paths.check_not_store_area(resolved, protected=protected, requested=text)
         if output_paths.names_a_directory(text, resolved):
+            output_paths.check_path_length(resolved / "report", requested=text, name_units=output_paths.DEFAULT_NAME_UNITS)
             output_paths.check_writable(resolved / "report", requested=text)
             return output_paths.OutputRequest("directory", resolved, {"requested": text, "reason": "directory"})
         path, adjustment = output_paths.with_format_suffix(resolved, format_name, requested=text)
         output_paths.check_names(path, requested=text)
+        output_paths.check_path_length(path, requested=text)
         output_paths.check_not_store_area(path, protected=protected, requested=text)
         output_paths.check_writable(path, requested=text)
         output_paths.check_replaceable(path, may_replace=self._is_recorded_report, requested=text)
