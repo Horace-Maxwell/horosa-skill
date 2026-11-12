@@ -2444,6 +2444,36 @@ _GLYPH_FALLBACK_FROM = 0x80  # ASCII（含标记 <b>、&amp;、href 键）永远
 _SYMBOL_PLACEHOLDERS = ("▸", "•", "·")  # 画不了的符号换成第一个画得出的
 
 
+# 「画得出」= cmap 指向的不是 0 号字形（.notdef，印出来就是方块）且那个字形有轮廓。reportlab 的 charToGlyph 把指向 0 号、
+# 指向空字形的码位也收着：宋体 SC 有 296 个这样的字（藏文、蒙文、彝文…），Windows 的回退字体对 emoji 也可能这样。
+# 空白与不占位的字本来就没有轮廓，只要不是 0 号就算（v0.50.0-dev）。
+_BLANK_CATEGORIES = frozenset({"Zs", "Zl", "Zp", "Cc", "Cf", "Mn", "Me"})
+_BLANK_CODES = frozenset({0x115F, 0x1160, 0x2800, 0x3164, 0xFFA0})  # 韩文填充符、盲文空格：画出来本就是空的
+
+
+def _drawable_codes(face: Any) -> frozenset[int]:
+    """这款字体真画得出的码位（按字形表核过，不只看 cmap）。按字体对象缓存：同一款字体每份 PDF 都要问。"""
+    cached = getattr(face, "_horosa_drawable", None)
+    if cached is not None:
+        return cached
+    import unicodedata
+
+    positions = getattr(face, "glyphPos", None) or []
+    drawable: set[int] = set()
+    for code, glyph in face.charToGlyph.items():
+        if not glyph:
+            continue
+        outlined = glyph + 1 >= len(positions) or positions[glyph + 1] > positions[glyph]
+        if outlined or code in _BLANK_CODES or unicodedata.category(chr(code)) in _BLANK_CATEGORIES:
+            drawable.add(code)
+    result = frozenset(drawable)
+    try:
+        face._horosa_drawable = result
+    except AttributeError:  # 替身对象不让加属性：不缓存，结果照样对
+        pass
+    return result
+
+
 def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font: str) -> str:
     """单款补字字体的写法（保留给调用方 / 测试）：等价于只有一环的补字链。"""
     return _wrap_missing_glyphs_chain(markup, primary, [(fallback_font, fallback)])
@@ -2533,9 +2563,9 @@ _CID_FONT_CHARSETS = {"STSong-Light": "gbk", "MSung-Light": "big5hkscs"}
 
 def _font_coverage(font: Any) -> Any | None:
     """字体画得出的码位（支持 `in`）：TrueType 用真实 cmap；reportlab 自带 CID 字体按字符集合；都不是返回 None。"""
-    glyphs = getattr(getattr(font, "face", None), "charToGlyph", None)
-    if glyphs is not None:
-        return set(glyphs)
+    face = getattr(font, "face", None)
+    if getattr(face, "charToGlyph", None) is not None:
+        return _drawable_codes(face)  # 按字形表核过（指向 .notdef / 空字形的码位不算）
     codec = _CID_FONT_CHARSETS.get(str(getattr(font, "fontName", "")))
     return _EncodableCoverage(codec) if codec else None
 
@@ -2552,7 +2582,7 @@ def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_
         return identity
     kind = "sc" if script == SIMPLIFIED else "tc"
     # 常规体与粗体都有的字才不需要补（CID 回退时两者是同一款）
-    drawable = primary if bold is primary else (primary & bold if isinstance(primary, set) and isinstance(bold, set)
+    drawable = primary if bold is primary else (primary & bold if isinstance(primary, frozenset) and isinstance(bold, frozenset)
                                                 else _AllOf(primary, bold))
     chain: list[tuple[str, Any]] = []
     for index, path in enumerate(_PDF_GLYPH_FALLBACK_CANDIDATES[kind]):
@@ -2563,7 +2593,7 @@ def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_
         # `<b>` 里的补字段同样落在补字字体上（它没有粗体），否则 reportlab 找不到该族的粗体映射直接抛错。
         pdfmetrics.registerFontFamily(font.fontName, normal=font.fontName, bold=font.fontName,
                                       italic=font.fontName, boldItalic=font.fontName)
-        chain.append((font.fontName, set(font.face.charToGlyph)))
+        chain.append((font.fontName, _drawable_codes(font.face)))
     # 没有补字字体时也要过一遍：画不了的符号照样换掉（文字仍原样，逐字节不变）
     return lambda markup: _wrap_missing_glyphs_chain(markup, drawable, chain)
 

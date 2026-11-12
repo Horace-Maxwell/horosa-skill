@@ -270,19 +270,10 @@ def _is_url(value: str) -> bool:
     return parsed.scheme in {"http", "https", "file"}
 
 def _windows_long_paths_enabled() -> bool:
-    """注册表里的 LongPathsEnabled。读不到就当没开（保守，宁可多给一次提示）。"""
-    if os.name != "nt":
-        return False
-    try:
-        import winreg  # type: ignore[import-not-found]
+    """注册表里的 LongPathsEnabled。读不到就当没开（保守，宁可多给一次提示）。读法在 winpaths（报告路径也用它）。"""
+    from horosa_skill import winpaths
 
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem"
-        ) as key:
-            value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
-            return int(value) == 1
-    except Exception:  # noqa: BLE001
-        return False
+    return winpaths.long_paths_enabled()
 
 
 _SMART_APP_CONTROL_STATES = {0: "off", 1: "on", 2: "evaluation"}

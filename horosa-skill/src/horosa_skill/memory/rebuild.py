@@ -60,15 +60,16 @@ def _age(path: Path, now: float) -> float:
 
 
 def _pid_alive(pid: int) -> bool:
+    """写临时文件的进程还在不在；说不准就当在（不删）。
+
+    不能 `os.kill(pid, 0)`（v0.50.0-dev）：Windows 上信号 0 就是 CTRL_C_EVENT，os.kill 发的是控制台 Ctrl+C 事件（GenerateConsoleCtrlEvent），
+    不是「只问在不在」：目标不在同一控制台就报错（被这里当成「在」，残留永不清），在同一控制台则可能真把 Ctrl+C 发出去。
+    runtime.procs.pid_alive 在 Windows 上走 OpenProcess（只读），POSIX 上才是信号 0。"""
     if pid <= 0:
         return False
-    try:
-        os.kill(pid, 0)  # 信号 0 只问「在不在」，不发任何信号
-    except ProcessLookupError:
-        return False
-    except (PermissionError, OSError):
-        return True  # 在，只是不归我们管
-    return True
+    from horosa_skill.runtime.procs import pid_alive
+
+    return pid_alive(pid) != "dead"
 
 
 def _read_json(path: Path) -> Any:
@@ -529,7 +530,7 @@ def rebuild_from_artifacts(
             (int(suffix) for files in inventory.runs.values() for _, _, suffix in files.artifacts if suffix.isdigit()), default=0
         )
         for files in sorted(inventory.runs.values(), key=lambda item: item.newest, reverse=True):
-            if deadline is not None and time.monotonic() > deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 report["complete"] = False
                 break
             report["scanned_runs"] += 1
@@ -570,7 +571,7 @@ def rebuild_from_artifacts(
             and conn.execute("SELECT 1 FROM tool_calls WHERE run_id = ? LIMIT 1", (row[0],)).fetchone()
         ]
     for run_id in missing_manifest:
-        if deadline is not None and time.monotonic() > deadline:
+        if deadline is not None and time.monotonic() >= deadline:
             report["complete"] = False
             break
         try:

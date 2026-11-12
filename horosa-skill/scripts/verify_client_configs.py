@@ -153,7 +153,7 @@ def _allowed(var: str, whitelist: tuple[str, ...]) -> bool:
 
 def _label(path: Path) -> str:
     try:
-        return str(path.relative_to(REPO_ROOT))
+        return path.relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return str(path)
 

@@ -46,7 +46,7 @@ def _offenders() -> list[str]:
     found: list[str] = []
     for path in sorted(SERVICE.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        rel = str(path.relative_to(SERVICE))
+        rel = path.relative_to(SERVICE).as_posix()  # 键与 ALLOWED 一样用 `/`（Windows 上 str() 是 `\`）
         for func in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
             for node in ast.walk(func):
                 if isinstance(node, ast.Dict):
@@ -74,7 +74,7 @@ def test_era_travels_only_with_its_own_date() -> None:
 
 
 def test_allowlist_is_not_stale() -> None:
-    names = {(str(p.relative_to(SERVICE)), n.name) for p in SERVICE.rglob("*.py")
+    names = {(p.relative_to(SERVICE).as_posix(), n.name) for p in SERVICE.rglob("*.py")
              for n in ast.walk(ast.parse(p.read_text(encoding="utf-8"))) if isinstance(n, ast.FunctionDef)}
     assert set(ALLOWED) <= names, set(ALLOWED) - names
 

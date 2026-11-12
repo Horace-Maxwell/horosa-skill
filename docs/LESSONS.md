@@ -17,6 +17,7 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交在 CI ubuntu 上红 8 条、维护机 macOS 全绿：doctor「新机器」用例只在有载荷的平台写过断言；报告用例只在有中文 TrueType 的机器写过断言——6 条里 3 条是真缺陷（CID 回退不补字 ✓☯🎉 进 PDF、空格子标签外 `() Tj`、DOCX 中文字体退成 Arial），另有无载荷平台 advice 叫人「装 730 MB」 | 按本机环境分支的用例在每台机器上把各支都跑：`conftest.font_host`（host / no_cjk_font / no_fonts）、doctor 用例的 `host` fixture 钉 `_platform_key`；CID 字体按 Adobe 字符集合（gbk / big5hkscs）量覆盖；推前在 Linux 容器里跑一遍受影响的用例 |
+| v0.50.0-dev (2026-11-12) | v0.50.0 发版提交本机门禁全绿，main CI windows-smoke 红 13 条：相对路径键带反斜杠、`with sqlite3.connect()` 不关连接删不了库、粗单调钟下预算 0 读完全部、开了长路径的 Windows 照写超长路径（没开的到建目录才裸 OSError）、Segoe UI Symbol 真画得出 🎉、tar 盘符名、给 Windows 粘的命令按 cmd 规则写 JSON；顺带查出知识索引 `--rebuild` 在 Windows 上隔离不了坏库、清残留用 `os.kill(pid, 0)` | conftest 让每条用例都在 `tests/winsim.py`（Windows 文件共享规则）下跑；源码守卫禁 `str(relative_to)` / 裸 `with sqlite3.connect` / procs 以外的 os.kill；预算判 ≥；整条路径按本机上限事前判；tar 过 `_portable_data_filter`；命令写成 PowerShell 与 cmd 同读（`tests/winshell.py` 两种拆法）|
 | v0.50.0-dev (2026-11-12) | JS 引擎只随 darwin / win32 两个 runtime 归档走：Linux、Intel Mac、Docker、pip 网关、没跑 install 的人一个都没有，八字 / 六爻 / 六壬 / 河洛 / 参评等全部 js_engine.cli_missing；install 在这些平台上只报「不支持」，Docker 镜像连 node 都没有 | 平台无关资产 `horosa-core-js-v<ver>.tar.gz`（确定性构建）随发布上 draft、进清单顶层 `core_js`、[GAP] 与 completeness 查缺件 / 摘要；install 在无载荷平台自动只装它、`--engine-only` 任何平台；Docker 自带钉版本 Node + 引擎 |
 | v0.50.0-dev (2026-11-12) | 客户端文档跟不上十三批改动：SKILL.md 说 profile 的 place 不解析（其实解析）、门面 13 写成 14 / 11、`warnings` 非空 = 不完整、确认标记万能、dispatch 什么都能接；示例从没对过 schema，`response_sections` 广告成字符串而服务自己的续读调用给整数 | SKILL.md 按弱客户端重写（45 KB → 27 KB，细节进 references）；示例一律 ```call 块，`tests/test_skill_examples.py` 离线逐条对工具面 / 字段 / 逐字段校验 / 闸门，文档批对共享引擎逐条真跑 |
 | v0.50.0-dev (2026-11-12) | 深审余项：缺 zone 时小六壬 KeyError、占时四技法 HTTP 500、神数 / 本地八字链悄悄按 +08:00；命主的 ad=-1 把择日窗口 / 流年 / 起课读成公元前；择日入参问题报「重试 / doctor」；卦义不认卦名；日子馆印 undefined；十年大运印英文星名；按设计不出的段印失败式占位 | 时地缺什么报什么（`place_fields_required`）、`ad` 只跟它配对的日期（`_ad_of_date`，源码扫描守卫）、`zeri_engine_input_error` 逐字段、`SECTIONS_NOT_PRODUCED_BY_DESIGN` 走 not_requested |
@@ -269,6 +270,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   空 Tj 2 条、DOCX 2 条、补字 2 条）。在 Linux 容器（python:3.12-slim，无字体 / DejaVu 两种镜像）里复现了 CI 的 8 条红，修后全绿。
 - **规则**：用例的结论取决于本机环境（字体、平台、已装工具）时，把环境当参数：fixture 模拟每一支、每台机器都跑，`[host]` skip 只留给模拟不出来的；
   「CI 上走另一支」不是 skip 的理由，常常正是缺陷所在。推之前怀疑是平台分支，就在 Linux 容器里先跑一遍受影响的用例。
+
+### v0.50.0-dev / 2026-11-12 — macOS 绿 ≠ Windows 绿：windows-smoke 红 13 条，本机用 `tests/winsim.py` 模拟 Windows 的文件共享规则
+
+- **症状**：v0.50.0 发版提交（45af5eaa）本机 25 步门禁全绿，main CI 的 windows-smoke（windows-latest）红 13 条，6513 过：
+  ① `test_era_pairing` 2 条——守卫拿 `str(path.relative_to(SERVICE))` 当键，Windows 上是 `runners\mingli.py`，ALLOWED 写的是 `/`；
+  ② `test_memory_facades` 4 条 WinError 32（memory.db / memory.db-shm）——测试自己的 `with sqlite3.connect()` 只提交不关，库删不掉；
+  ③ `test_memory_search` 3 条 not_scanned 为 0——Windows 的 `time.monotonic` 15.6 ms 一跳，「此刻 > 截止」在同一跳里永不成立，预算 0 读完了全部正文；
+  ④ `test_report_preflight` DID NOT RAISE——写死 25 段 × 200 字符（≈ 5000），开了长路径的 Windows（32 767）照常写成；
+  ⑤ `test_report_symbols`——🎉 / 👨👩👧 / ☯ 落在 Segoe UI Symbol 上：那款字体真有黑白字形，是用例把 macOS 的结果写死成「🎉 一定不在」；
+  ⑥ `test_runtime_archive_containment`——拿 `f"{tmp_path}/…"` 当绝对路径，Windows 上是盘符路径，tarfile 按绝对路径拒（正确）；
+  ⑦ `test_setup_command`——rollback 里的 add-json 按 list2cmdline 写，用例用 shlex 拆成 Invalid JSON。
+- **根因 / 判定**：①②⑤⑥ 是测试假设（产品对）；③ 是产品语义（预算判 `>`）在粗钟下失效；④ 的产品面：没开长路径的 Windows 上 stat 对超长路径
+  只说「不存在」，事前检查全过，到建目录才是裸 OSError；⑦ 的产品面：同一条文字真粘进 PowerShell 也是坏的（反斜杠不转义、5.1 不认 `&&`、
+  npm 的 claude.ps1 吃掉光写的 `--`）。按同一类顺查出两处 CI 看不到的产品缺陷：知识索引 `_connect` 在 PRAGMA 失败时不关连接（`--rebuild` 遇到坏头的
+  索引，隔离改名在 Windows 上必然 WinError 32）；v0.50.0 新加的 `rebuild._pid_alive` 用 `os.kill(pid, 0)`（Windows 上信号 0 = CTRL_C_EVENT）。
+- **修复**：每条先在本机复现再修。`tests/winsim.py`（按描述符查本进程开着的路径，拒绝 replace / rename / unlink / remove / rmdir；macOS F_GETPATH、
+  Linux /proc）由 conftest 自动装到每条用例——整套在它下面跑，除上述 4 条只多出 Windows 上本就跳过的 `test_a_reader_in_flight_keeps_a_complete_copy`
+  （标 `posix_file_semantics`）与 tempfile 的 POSIX 写法（豁免）；预算四处改 `>=`，三条用例加粗钟变体；`check_path_length` 按 `path_limit()`
+  （Windows 259 / 32 766 个 UTF-16 单元、macOS 1023 / Linux 4095 字节）事前判，仍是 `path_refused_by_system`；补字按字形表核（0 号、空字形不算）；
+  `_portable_data_filter`；`shell_text` 写两种终端同读的形式、装回旧条目用 `add`、多条每条一行、程序名写 `claude`；`_pid_alive` 走 `runtime.procs.pid_alive`。
+- **守卫**：`tests/test_windows_portability.py`（禁 `str(…relative_to…)`、禁裸 `with sqlite3.connect`、只有 procs.py 能调 os.kill，各带负向对照；模拟器自证会拒）；
+  每条修复的用例都在本机走 Windows 那一支（模拟器 / 粗钟 / `path_limit` 注入 / 替身字体 / `tests/winshell.py` 的 cmd 与 PowerShell 拆法），撤掉修复本机即红。
+- **规则**：AGENTS §9.5.2。只能推理、本机跑不了的：真 Windows 的 SQLite 锁时机、Segoe UI Symbol 的字形是否非空、PowerShell 5.1 / 7 与 claude.ps1 的真实拆法——
+  下一次 windows-smoke 与 Windows 维护机复验确认。
 
 ### v0.50.0-dev / 2026-11-12 — JS 引擎只随两个平台的 runtime 归档走：其它机器一个都没有（E-02）
 

@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from winsim import windows_sharing
 
 from horosa_skill.config import Settings
 from horosa_skill.knowledge import index as kindex
@@ -158,6 +159,21 @@ def test_a_broken_index_is_set_aside_and_rebuilt_and_reported(tmp_path: Path) ->
     assert catalog.index_ok and any(p.kind == "index" and "重建" in p.message for p in catalog.problems)
     assert list(path.parent.glob("index.sqlite.corrupt-*")), "坏文件留一份给排查用"
     assert uk.search_user(settings, "伤官")["engine"] == "fts5-bm25"
+
+
+@pytest.mark.parametrize("rebuild", [False, True])
+def test_a_broken_index_is_set_aside_under_windows_file_sharing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rebuild: bool) -> None:
+    """Windows 上开着的文件挪不走（tests/winsim.py 在本机模拟）。`--rebuild` 不先做只读比对，坏库在 `_connect` 的 PRAGMA 上就报错；
+    此前那条连接没关，挂在异常的 traceback 里，接着的隔离（改名）在 Windows 上 WinError 32，坏索引永远不重建。"""
+    refused = windows_sharing(monkeypatch)
+    _put(tmp_path, "八字.md", LONG_NOTE)
+    settings = _settings(tmp_path)
+    path = kindex.index_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"not a database" * 100)
+    catalog = uk.indexed_catalog(settings, rebuild=rebuild)
+    assert refused == []
+    assert catalog.index_ok and list(path.parent.glob("index.sqlite.corrupt-*"))
 
 
 def test_when_the_index_cannot_be_rebuilt_search_degrades_to_substring(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

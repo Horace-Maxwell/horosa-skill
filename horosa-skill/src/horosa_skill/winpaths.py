@@ -7,6 +7,7 @@ NTLM 凭据，被拒绝之前凭据已经送出去了（实测对不可路由地
 from __future__ import annotations
 
 import ntpath
+import os
 
 # 无论带什么扩展名都指向设备（`NUL.pdf`）：Windows 10 上是设备，Windows 11 上能建出资源管理器删不掉的文件。
 # 上标数字同样是保留名（learn.microsoft.com「Naming Files, Paths, and Namespaces」）；CONIN$ / CONOUT$ 是 CreateFile 的控制台特殊名。
@@ -49,3 +50,17 @@ def path_problem(text: str) -> tuple[str, str] | None:
         if segment and is_reserved_name(segment):
             return (f"「{segment}」是 Windows 保留设备名（NUL / CON / COM1…），内容不会进文件", f"'{segment}' is a reserved Windows device name (NUL / CON / COM1…), the content would not reach a file")
     return None
+
+
+def long_paths_enabled() -> bool:
+    """注册表里的 LongPathsEnabled（读注册表，不碰文件系统）。不是 Windows / 读不到就当没开（保守：宁可多拒一条太长的路径）。"""
+    if os.name != "nt":
+        return False
+    try:
+        import winreg  # type: ignore[import-not-found]
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
+            value, _ = winreg.QueryValueEx(key, "LongPathsEnabled")
+            return int(value) == 1
+    except (ImportError, OSError, TypeError, ValueError):  # 键不在（FileNotFoundError）、值不是数：按没开
+        return False

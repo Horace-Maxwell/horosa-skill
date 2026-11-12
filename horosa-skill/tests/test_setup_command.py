@@ -22,7 +22,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+import winshell
 from fake_claude import FakeClaude
+from horosa_skill.client_config import claude_cli
 from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT
 from horosa_skill.surfaces import runtime_helpers as runtime_helpers
 from horosa_skill.surfaces import setup_flow as setup_flow
@@ -467,11 +469,72 @@ def _in_process_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state_fi
 _CLAUDE_ARGS = ("--client", "claude-code", "--skip-install", "--no-probe-network", "--no-stdio-probe")
 
 
-def _replay(fake: FakeClaude, text: str) -> None:
-    """把 setup 打印的一行命令（可能用 `&&` 连着两条）原样喂回替身：打印出来的必须是能跑的命令。"""
-    for part in text.split(" && "):
-        completed = fake.run(shlex.split(part))
-        assert completed.returncode == 0, (part, completed.stderr)
+def _pasted(text: str, *, windows: bool = os.name == "nt") -> list[list[str]]:
+    """setup 打印的命令粘进终端后各条的 argv。Windows 上 cmd 与 PowerShell 都要读成同一个 argv（v0.50.0 windows-smoke：
+    此前按 cmd 的规则写 JSON 参数，这里却用 shlex 拆，`Invalid JSON`；而真粘进 PowerShell 同样是坏的）。"""
+    out: list[list[str]] = []
+    for part in winshell.commands(text, windows=windows):
+        if windows:
+            argv = winshell.cmd_argv(part)
+            assert winshell.powershell_argv(part) == argv, f"PowerShell 与 cmd 读成了两样：{part}"
+        else:
+            argv = shlex.split(part)
+        out.append(argv)
+    return out
+
+
+def _replay(fake: FakeClaude, text: str, *, windows: bool = os.name == "nt") -> None:
+    """把 setup 打印的命令（可能两条）原样喂回替身：打印出来的必须是能跑的命令。"""
+    for argv in _pasted(text, windows=windows):
+        completed = fake.run(argv)
+        assert completed.returncode == 0, (argv, completed.stderr)
+
+
+_WIN_UV = r"C:\Users\张 三\.local\bin\uv.exe"
+_WIN_OLD = {"type": "stdio", "command": r"C:\Program Files\uv\uv.exe",
+            "args": ["run", "--directory", r"C:\Users\张 三\horosa skill\horosa-skill", "horosa-skill", "serve"],
+            "env": {"MY_API_KEY": "sk-do-not-print", "HOROSA_SKILL_DATA_DIR": r"D:\星阙 数据", "HOROSA_MCP_COMPACT": "1"}}
+
+
+@pytest.mark.parametrize("fail_add", [False, True])
+def test_commands_printed_for_windows_paste_into_powershell_and_cmd(tmp_path: Path, fail_add: bool) -> None:
+    """Windows 那一支在本机跑：路径带空格、中文、反斜杠，旧条目有密钥（打印成 <NAME>）。rollback / restore_command / 执行过的
+    命令在 cmd 与 PowerShell 里都读成同一个 argv，重放回替身就回到旧条目（密钥值是占位）。"""
+    state = tmp_path / ".claude.json"
+    state.write_text(json.dumps({"mcpServers": {"horosa": _WIN_OLD}}), encoding="utf-8")
+    fake = FakeClaude(state, fail_add_times=1 if fail_add else 0)
+    outcome = claude_cli.register_user_server(
+        claude_bin=r"C:\Users\张 三\AppData\Roaming\npm\claude.cmd", server_name="horosa",
+        stdio_command=[_WIN_UV, "run", "--directory", r"C:\Users\张 三\horosa skill", "horosa-skill", "serve"],
+        env={"HOROSA_OUTPUT_SCRIPT": "zh-Hant"}, run=fake.run, config_path=state, os_name="nt",
+    )
+    printed = [outcome["command"], *outcome["commands"]]
+    for text in printed:
+        assert all(argv[0] == "claude" for argv in _pasted(text, windows=True))
+    assert "sk-do-not-print" not in json.dumps(outcome)
+    if fail_add:
+        assert outcome["ok"] is False and outcome["restored_previous"] is True
+        fake.run(["claude", "mcp", "remove", "--scope", "user", "horosa"])
+        _replay(fake, outcome["restore_command"], windows=True)
+    else:
+        assert outcome["status"] == "updated" and "\n" in outcome["rollback"] and "&&" not in outcome["rollback"]
+        _replay(fake, outcome["rollback"], windows=True)
+    assert fake.entry("horosa") == {**_WIN_OLD, "env": {**_WIN_OLD["env"], "MY_API_KEY": "<MY_API_KEY>"}}
+
+
+def test_windows_text_falls_back_to_cmd_only_when_no_common_form_exists() -> None:
+    """含 " $ ` % 的参数在 PowerShell 与 cmd 里没有同一种写法：退回 cmd 的写法（照样是 cmd 里能跑的）。add-json 的 JSON 就是这种，
+    所以装回旧条目能用 `add` 表达时一律用 `add`。"""
+    plain = ["claude", "mcp", "add", "--scope", "user", "horosa", "-e", "K=a b", "--", r"C:\x y\uv.exe", "serve"]
+    assert winshell.cmd_argv(claude_cli.shell_text(plain, os_name="nt")) == plain
+    assert winshell.powershell_argv(claude_cli.shell_text(plain, os_name="nt")) == plain
+    for odd in ('{"type": "http", "url": "https://x"}', "100%", "$HOME", "a`b"):
+        command = ["claude", "mcp", "add-json", "--scope", "user", "horosa", odd]
+        text = claude_cli.shell_text(command, os_name="nt")
+        assert text == subprocess.list2cmdline(command) and winshell.crt_argv(text) == command
+    assert claude_cli.restore_command("claude", "h", {"command": "uv", "args": ["serve"], "env": {}})[2] == "add"
+    assert claude_cli.restore_command("claude", "h", {"type": "http", "url": "https://x"})[2] == "add-json"
+    assert claude_cli.restore_command("claude", "h", {**_WIN_OLD, "timeout": 60})[2] == "add-json", "add 表达不了的键"
 
 
 def test_claude_code_user_scope_registers_through_the_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

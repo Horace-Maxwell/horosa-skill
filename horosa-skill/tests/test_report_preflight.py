@@ -8,12 +8,14 @@
 """
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 
 import pytest
 from fakes import FakeClient, FakeJsClient
 
+from horosa_skill import winpaths
 from horosa_skill.config import Settings
 from horosa_skill.errors import ToolValidationError, recovery_for
 from horosa_skill.memory.store import MemoryStore
@@ -216,9 +218,11 @@ def test_an_overlong_name_is_refused_in_the_envelope_and_a_long_legal_name_still
     with pytest.raises(ToolValidationError) as caught:
         service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "sub/" + "长" * 400 + ".json"})
     assert caught.value.details["reason"] == "name_too_long"
+    # 段数按本机上限算（v0.50.0 windows-smoke：写死 25 段 ≈ 5000 字符，开了长路径的 Windows 上限是 32 767，照常写成了）。
+    limit, _unit = output_paths.path_limit()
     with pytest.raises(ToolValidationError) as caught:
         service.report_render({"run_id": run_id, "format": "json", "style": "chart",
-                               "output_path": "/".join(["d" * 200] * 25) + "/x.json"})
+                               "output_path": "/".join(["d" * 200] * (limit // 201 + 2)) + "/x.json"})
     assert caught.value.code in {"report.output_path_unusable", "report.output_path_not_allowed"}
     assert not (tmp_path / "runs" / ("d" * 200)).exists()
     # 上限以内的长名字照常写成。临时文件名与目标文件名的长度无关（旧写法 `.{目标名}.xxxxxxxx.tmp` 比目标名长 14 字节，
@@ -238,9 +242,60 @@ def test_an_overlong_name_is_refused_in_the_envelope_and_a_long_legal_name_still
     assert not [p for p in (tmp_path / "runs").iterdir() if p.name.endswith(".tmp")]
 
 
-def test_a_location_that_cannot_be_written_is_refused(tmp_path: Path) -> None:
-    import os
+def test_path_limits_follow_the_platform() -> None:
+    assert output_paths.path_limit(os_name="nt", long_paths=False) == (259, "utf-16")
+    assert output_paths.path_limit(os_name="nt", long_paths=True) == (32_766, "utf-16")
+    assert output_paths.path_limit(os_name="posix", platform="darwin") == (1023, "utf-8")
+    assert output_paths.path_limit(os_name="posix", platform="linux") == (4095, "utf-8")
 
+
+@pytest.mark.parametrize("long_paths", [False, True])
+def test_windows_path_limits_are_checked_before_anything_is_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, long_paths: bool
+) -> None:
+    """按 Windows 的规则跑（本机模拟）：没开长路径时整条 260 个 UTF-16 单元。每一段都合法、合起来超了——此前 Windows 上
+    stat 只说「不存在」，事前检查全过，到建目录才是裸 OSError；开了长路径照常写成。按 UTF-16 数：𡛸 这类扩展 B 字算 2 个单元。"""
+    real = output_paths.path_limit
+    monkeypatch.setattr(output_paths, "path_limit", lambda: real(os_name="nt", long_paths=long_paths))
+    service = _service(tmp_path)
+    run_id = _run(service)
+    base = len(str(tmp_path / "runs")) + 1
+    if base > 198:  # 下面「给目录」那一例要留出 60 + 缺省文件名
+        pytest.skip("[host] 临时目录本身就太长，模拟不了 Windows 的 260 上限")
+    if long_paths and os.name == "nt" and not winpaths.long_paths_enabled():
+        pytest.skip("[host] 这台 Windows 没开长路径，真写不进超过 260 的路径")
+    deep = "/".join(["d" * 50] * ((259 - base) // 51 + 2)) + "/x.json"  # 每段都合法，整条刚好超过 259（ASCII：本机字节上限远够）
+    short = "a.json"
+    attempt = lambda name: service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": name})  # noqa: E731
+    if long_paths:
+        assert Path(attempt(deep)["artifact_path"]).is_file()
+    else:
+        with pytest.raises(ToolValidationError) as caught:
+            attempt(deep)
+        assert caught.value.details["reason"] == "path_refused_by_system"
+        assert caught.value.details["unit"] == "utf-16" and caught.value.details["limit"] == 259
+        assert not (tmp_path / "runs" / ("d" * 50)).exists(), "被拒时什么都没建"
+        with pytest.raises(ToolValidationError) as as_directory:  # 给目录：落进去的缺省文件名也要放得下
+            attempt("x" * (259 - base - 60) + "/")
+        assert as_directory.value.details["reason"] == "path_refused_by_system"
+    assert Path(attempt(short)["artifact_path"]).is_file()
+    wide = "𡛸" * 100 + ".json"  # 200 个 UTF-16 单元、405 字节：名字本身已经超了 240（按两种数法取大）
+    with pytest.raises(ToolValidationError) as caught:
+        attempt(wide)
+    assert caught.value.details["reason"] == "name_too_long"
+
+
+def test_windows_counts_utf16_units_not_code_points(monkeypatch: pytest.MonkeyPatch) -> None:
+    """扩展 B 字（𡛸）在 Windows 的路径长度里算 2 个单元。按码位数会放过一条 Windows 写不进去的路径。"""
+    real = output_paths.path_limit
+    monkeypatch.setattr(output_paths, "path_limit", lambda: real(os_name="nt", long_paths=False))
+    output_paths.check_path_length(Path("/a/" + "𡛸" * 100 + "/x.json"), requested="ok")  # 3 + 200 + 1 + 32 = 236
+    with pytest.raises(ToolValidationError) as caught:
+        output_paths.check_path_length(Path("/a/" + "𡛸" * 115 + "/x.json"), requested="x")  # 码位 152，UTF-16 266
+    assert caught.value.details == {"reason": "path_refused_by_system", "requested": "x", "path_length": 266, "limit": 259, "unit": "utf-16"}
+
+
+def test_a_location_that_cannot_be_written_is_refused(tmp_path: Path) -> None:
     service = _service(tmp_path)
     run_id = _run(service)
     (tmp_path / "runs" / "blocker").write_text("我是个文件", encoding="utf-8")

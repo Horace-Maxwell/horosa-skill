@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -77,7 +78,7 @@ def test_vectors_are_embedded_once_and_follow_edits_and_deletes(tmp_path: Path, 
     uk.indexed_catalog(settings)
     import sqlite3
 
-    with sqlite3.connect(kindex.index_path(settings)) as conn:
+    with closing(sqlite3.connect(kindex.index_path(settings))) as conn:
         assert conn.execute("SELECT COUNT(*) FROM chunk_vec").fetchone()[0] == 1  # 删掉的条目向量也删
 
 

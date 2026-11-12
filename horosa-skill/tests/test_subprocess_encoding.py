@@ -37,7 +37,7 @@ def text_mode_calls_without_encoding(source: str, filename: str = "<memory>") ->
 def test_no_text_mode_subprocess_call_relies_on_the_console_code_page() -> None:
     hits: list[str] = []
     for path in sorted(SRC.rglob("*.py")):
-        hits.extend(text_mode_calls_without_encoding(path.read_text(encoding="utf-8"), str(path.relative_to(SRC.parent))))
+        hits.extend(text_mode_calls_without_encoding(path.read_text(encoding="utf-8"), path.relative_to(SRC.parent).as_posix()))
     assert hits == [], "这些子进程调用 text=True 却没写 encoding=：Windows 上会按 cp1252/cp936 解码 → " + ", ".join(hits)
 
 

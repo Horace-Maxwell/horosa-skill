@@ -1852,6 +1852,25 @@ A global stability pass hardened these; keep them true when you touch the releva
   「CI 上走另一支」不是 `[host]` skip 的理由——v0.50.0 那 8 条红里 4 条是产品缺陷。疑似平台分支时推前在 Linux 容器里跑受影响的用例
   （维护机是 colima：`/private/tmp` 不共享，把 `git ls-files` 打 tar 管道进容器）。
 
+### 9.5.2 macOS 绿 ≠ Windows 绿：本机就能抓的那几类（v0.50.0-dev，windows-smoke 13 红）
+
+本机全绿、main CI 的 windows-smoke 红 13 条，七个原因里五个本机就能看见。写代码 / 写测试时按下面办，守卫在 `tests/test_windows_portability.py`。
+- **开着的文件动不了**：Windows 上 SQLite 与 `open()` 都不带 FILE_SHARE_DELETE，连接没关就改名 / 删库是 WinError 32（坏库永远隔离不了）。
+  `with sqlite3.connect()` 只提交**不关**——一律 `with closing(sqlite3.connect(...)) as conn, conn:`（守卫禁裸写法）；打开后 PRAGMA 失败要先关再抛
+  （`knowledge/index._connect`：异常的 traceback 会把连接挂到隔离那一步）。conftest 让每条用例都在 `tests/winsim.py` 下跑：本进程开着的路径
+  （含其下文件）拒绝 replace / rename / unlink / remove / rmdir，本机当场红；专测 POSIX 语义、Windows 上本就跳过的用例标 `posix_file_semantics`。
+- **路径键用 `/`**：`str(p.relative_to(root))` 在 Windows 是反斜杠，拿去当键或和写死的 `a/b.py` 比永远对不上——一律 `.as_posix()`（守卫禁 `str(…relative_to…)`）。
+- **时钟是粗的**：Windows 的 `time.monotonic` 15.6 ms 一跳。预算用完判「此刻 ≥ 截止」，别用 `>`（同一跳里永不成立，预算 0 会一口气做完）；
+  测预算的用例加「整段在同一跳里」的粗钟变体（`tests/test_memory_search.py::clock`）。
+- **路径长度按本机数**：Windows 没开长路径时整条 260 个 UTF-16 单元，stat 对超长路径只说「不存在」——事前按字符串判
+  （`reports/output_path.path_limit` / `check_path_length`，长路径开关读 `winpaths.long_paths_enabled`）；用例的「超长」按 `path_limit()` 造，别写死。
+- **归档名两边一个判法**：tar 解包过 `archives._portable_data_filter`（前导 `/` `\` 都去、盘符名与反斜杠 `..` 两边都拒）；测「绝对路径」别用
+  `f"{tmp_path}/…"`（Windows 上是盘符路径，另一回事）。
+- **给 Windows 用户粘的命令**：`claude_cli.shell_text` 写 PowerShell 与 cmd 都读成同一个 argv 的形式（参数里不放 JSON、`--` 加引号、多条每条一行），
+  执行一律 argv 列表不经 shell；`tests/winshell.py` 按两种终端拆命令，Windows 那一支在本机端到端重放。
+- **存活探针**：`os.kill(pid, 0)` 在 Windows 上是控制台 Ctrl+C，不是「只问在不在」——一律 `runtime.procs.pid_alive`（守卫：只有 procs.py 能调 os.kill）。
+- **字体随平台变**：Windows 的 Segoe UI Symbol 真有黑白 emoji；断言「画得出」（按字形表核，`renderers._drawable_codes`），别断言某个字一定被换掉。
+
 ### 9.6 发布 · 分发（release / distribution）
 
 - **发布件 = darwin seed + 派生的 win32-x64 + JS 引擎资产（≥ 0.50.0）+ wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动

@@ -132,6 +132,22 @@ def font_host(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -
     return request.param
 
 
+@pytest.fixture(autouse=True)
+def _windows_file_sharing(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """本机按 Windows 的规则改名 / 删文件：开着的文件动不了（tests/winsim.py；v0.50.0-dev）。
+
+    v0.50.0 的 windows-smoke 红了 4 条 WinError 32（连接没关就删库 / 隔离坏库），本机全绿；知识索引的 `--rebuild` 在 Windows 上
+    隔离不了坏库也是同一类。每条用例都在模拟下跑，这一类在 macOS / Linux 上当场红。专测 POSIX 语义、Windows 上本就跳过的用例
+    标 `@pytest.mark.posix_file_semantics`。"""
+    if request.node.get_closest_marker("posix_file_semantics") is None:
+        from winsim import windows_sharing
+
+        windows_sharing(monkeypatch)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "posix_file_semantics: 专测 POSIX 文件语义（开着也能替换 / 删），不装 Windows 共享规则的模拟")
+
 
 # ---- skip reasons carry a tag (tests/skips.py; v0.50.0-dev, C-18 #2 / #10) ----------------------------------------
 # An untagged skip is turned into a failure, and the run ends with the skips counted per tag. The hooks live in

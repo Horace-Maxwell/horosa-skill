@@ -88,6 +88,7 @@ def test_a_failed_replace_cleans_up_and_keeps_the_original(tmp_path: Path, monke
 
 
 @pytest.mark.skipif(os.name == "nt", reason="[platform] Windows 上打开着的文件不能被替换；那条路径由 fsretry 的重试承担")
+@pytest.mark.posix_file_semantics
 def test_a_reader_in_flight_keeps_a_complete_copy(tmp_path: Path) -> None:
     """改写走「新文件 + 替换」：正在读的会话拿到完整的旧内容。原地写时并发读者约 1.4% 读到 payload_error（2026-11-06 实测 26/1851）。"""
     store, run_id, artifact = _stored_run(tmp_path)

@@ -37,6 +37,33 @@ def test_the_guard_measures_the_real_cmap_and_never_replaces_text() -> None:
     assert wrap('<a href="#🎉">x</a>', primary, chain) == '<a href="#🎉">x</a>'  # 标签内不动
 
 
+class _Face:
+    """替身字体：cmap（码位 → 字形号）+ 字形表的位置（相邻两项相等 = 空字形）。"""
+
+    def __init__(self, cmap: dict[str, int], empty: set[int] = frozenset()) -> None:
+        self.charToGlyph = {ord(ch): glyph for ch, glyph in cmap.items()}
+        top = max(self.charToGlyph.values(), default=0) + 2
+        self.glyphPos, offset = [], 0
+        for glyph in range(top):
+            self.glyphPos.append(offset)
+            offset += 0 if glyph in empty else 10
+
+
+def test_a_symbol_font_that_really_draws_an_emoji_keeps_it() -> None:
+    """Windows 的 Segoe UI Symbol 有黑白的 🎉：补字链画得出就照画（本机替身模拟 Windows 那款字体）。"""
+    primary = {ord(c) for c in "x灵"}
+    segoe_like = ("SegoeLike", renderers._drawable_codes(_Face({"🎉": 3, "▸": 4, "☯": 5})))
+    assert renderers._wrap_missing_glyphs_chain("🎉x☯", primary, [segoe_like]) == '<font name="SegoeLike">🎉</font>x<font name="SegoeLike">☯</font>'
+
+
+def test_a_cmap_entry_without_a_real_glyph_is_not_drawable() -> None:
+    """cmap 里有、却指向 0 号字形（.notdef = 方块）或空字形：画不出，符号换成 ▸；空白本来就没有轮廓，照算。"""
+    face = _Face({"🎉": 0, "☯": 5, "▸": 6, " ": 7, "　": 8, "灵": 9}, empty={5, 7, 8})
+    assert renderers._drawable_codes(face) == {ord(c) for c in "▸ 　灵"}
+    chain = [("S", renderers._drawable_codes(face))]
+    assert renderers._wrap_missing_glyphs_chain("🎉☯x", {ord("x")}, chain) == '<font name="S">▸▸</font>x'
+
+
 def _drawn_chars(markup: str, primary: str) -> list[tuple[str, str]]:
     """标记里每个要画的非 ASCII 字 + 画它的字体名（<font name> 嵌套时取最内层）。"""
     import html
@@ -90,7 +117,11 @@ def test_no_symbol_reaches_the_pdf_that_its_font_cannot_draw(tmp_path: Path, mon
                 continue
             assert not renderers._is_symbol(ch), f"{ch!r} U+{ord(ch):04X} 在 {font} 里画不出来"
     text = "\n".join(p.text for p in target)
-    assert "️" not in text and "‍" not in text and "🎉" not in text
+    assert "️" not in text and "‍" not in text  # 不占位的修饰（变体选择符、零宽连接）一律去掉
+    # 🎉 留不留取决于本机字体：Windows 的 Segoe UI Symbol 真有黑白的 🎉 / 👨 / ☯，留下是对的（v0.50.0 windows-smoke 在这里红过：
+    # 旧断言把 macOS 的结果写死成「🎉 一定不在」）。留下的必须落在画得出它的字体里（上面逐字查过），画不出的换成 ▸。
+    # 连补字字体都没有（no_fonts）时 CID 主字体画不出 ▸（不在 GBK / Big5 里），退成「·」。
+    assert "🎉" in text or "▸" in text or (font_host == "no_fonts" and "🎉" not in text and "·" in text)
 
 
 def test_docx_keeps_real_emoji(tmp_path: Path) -> None:
