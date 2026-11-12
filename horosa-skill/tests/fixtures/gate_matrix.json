@@ -1,0 +1,3944 @@
+{
+ "acg": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "mode"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lsMode",
+    "mode",
+    "pointOrb"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "mode"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lsMode",
+    "mode",
+    "pointOrb"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "agepoint": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "apEvents",
+    "apMaxAge",
+    "apMethod",
+    "apYear",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "apEvents",
+    "apMaxAge",
+    "apMethod",
+    "apYear",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "astrodata": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "babylon": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "scheme/solstice"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "scheme/solstice"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "balbillus": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "mode",
+    "startPlanet",
+    "subRule",
+    "yearType",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "mode",
+    "startPlanet",
+    "subRule",
+    "yearType",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "bazi_birth": {
+  "bare": {
+   "ask": [
+    "birth data",
+    "gender",
+    "godKeyPos/minggongMethod/school",
+    "timeAlg/after23NewDay/lateZiHourUseNextDay"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "byLon",
+    "godKeyPos",
+    "minggongMethod",
+    "southMonth",
+    "timeAlg"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "godKeyPos/minggongMethod/school",
+    "timeAlg/after23NewDay/lateZiHourUseNextDay"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "byLon",
+    "godKeyPos",
+    "minggongMethod",
+    "southMonth",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "bazi_direct": {
+  "bare": {
+   "ask": [
+    "birth data",
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "adjustJieqi",
+    "after23NewDay"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "bazi_inverse": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "bazizeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "beiji": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "bezzafigure": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "bezzaOrb",
+    "hsys",
+    "targetDate",
+    "targetTime",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "bezzaOrb",
+    "hsys",
+    "targetDate",
+    "targetTime",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "calendar_month": {
+  "bare": {
+   "ask": [
+    "date",
+    "lon",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lon"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "canping": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "gender",
+    "method",
+    "timeAlg"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "method",
+    "timeAlg"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "cetian": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "location",
+    "time",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "chart": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "chart12": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "chart13": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "chunzi": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "time",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "decennials": {
+  "bare": {
+   "ask": [
+    "birth data",
+    "timeline settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "dayMethod",
+    "orderType",
+    "startMode"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "timeline settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "dayMethod",
+    "orderType",
+    "startMode"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "distributions": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "distMethod",
+    "distReleaser",
+    "distYear",
+    "distYears",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "distMethod",
+    "distReleaser",
+    "distYear",
+    "distYears",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "draconic": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "election": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "topicId"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "topicId"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "ephemeris": {
+  "bare": {
+   "ask": [
+    "includeTransits",
+    "natal data",
+    "startDate/endDate",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "includeTransits",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "export_parse": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "export_registry": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "extrareturns": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings",
+    "timelineStartYear/timelineCount"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings",
+    "timelineStartYear/timelineCount"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "feigong": {
+  "bare": {
+   "ask": [
+    "askEvent",
+    "dayGan/dayZhi",
+    "koujing",
+    "qiZhi / date-time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "koujing",
+    "qiMode"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "koujing",
+    "qiZhi / date-time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "koujing",
+    "qiMode"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "fendjing": {
+  "bare": {
+   "ask": [
+    "date",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "firdaria": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "geomancy": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "question",
+    "questionType"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "quesitedHouse",
+    "questionType",
+    "readingScope",
+    "zodiacSystem"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "germany": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "givenyear": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirLat/dirLon",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirLat/dirLon",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "gua_desc": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "gua_meiyi": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "guice": {
+  "bare": {
+   "ask": [
+    "askEvent",
+    "cast-input + date/time",
+    "qiguaFa",
+    "school"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "qiguaFa",
+    "school"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "school"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "qiguaFa",
+    "school"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "guolao_chart": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "harmonic": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "harmonic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "harmonic",
+    "orb"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "hellen_chart": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "lifespanMethod",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "heluo": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "gender",
+    "quHuaGong",
+    "timeAlg"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "huangdiOffset",
+    "quHuaGong",
+    "timeAlg"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "quHuaGong"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "huangdiOffset",
+    "quHuaGong",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "horary": {
+  "bare": {
+   "ask": [
+    "category",
+    "date/time/place",
+    "school"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "category",
+    "school"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "school"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "category",
+    "school"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "huangli": {
+  "bare": {
+   "ask": [
+    "date"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "huanglizeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "india_chart": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "indiaAyanamsa",
+    "indiaHsys"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "indiaAyanamsa",
+    "indiaHsys"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "indiaAyanamsa",
+    "indiaHsys"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "indiaAyanamsa",
+    "indiaHsys"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "india_rectify": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "location",
+    "rectifyEvents",
+    "rectifyWindowMinutes"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "rectifyRpSource",
+    "rectifyStepSeconds",
+    "rectifyWindowMinutes"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "rectifyEvents"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "rectifyRpSource",
+    "rectifyStepSeconds",
+    "rectifyWindowMinutes"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "indiazeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "indiaAyanamsa",
+    "maxSpanDays",
+    "nodeType",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "indiaAyanamsa",
+    "maxSpanDays",
+    "nodeType",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "jaynesprog": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "minorVariant",
+    "targetDate",
+    "targetTime",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "minorVariant",
+    "targetDate",
+    "targetTime",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "jayprofection": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "jayFrom",
+    "targetDate",
+    "targetTime",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "jayFrom",
+    "targetDate",
+    "targetTime",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "jieqi_birth": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "location"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "useLocalMao/byLon"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "jieqi_year": {
+  "bare": {
+   "ask": [
+    "location",
+    "year"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "jieqis"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "jingjue": {
+  "bare": {
+   "ask": [
+    "date",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "jinkou": {
+  "bare": {
+   "ask": [
+    "diFen",
+    "guirengType",
+    "question"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "diFen",
+    "guirengType",
+    "options.timeBasis",
+    "options.wuxing",
+    "options.流派五键"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "question"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "diFen",
+    "guirengType",
+    "options.timeBasis",
+    "options.wuxing",
+    "options.流派五键"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "keypoints": {
+  "bare": {
+   "ask": [
+    "mode",
+    "natal data",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "mode",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "mode",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "mode",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "knowledge_read": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "knowledge_registry": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "lingqi": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "question"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "category"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "liureng_gods": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "guirengType",
+    "isDiurnal",
+    "location",
+    "options",
+    "question"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "guirengType",
+    "isDiurnal",
+    "options.castMethod",
+    "options.timeAlg",
+    "options.wuxing"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "guirengType",
+    "isDiurnal",
+    "options",
+    "question"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "guirengType",
+    "isDiurnal",
+    "options.castMethod",
+    "options.timeAlg",
+    "options.wuxing"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "liureng_runyear": {
+  "bare": {
+   "ask": [
+    "gender",
+    "guaDate/guaYearGanZi",
+    "guirengType"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "guirengType",
+    "options.castMethod"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "guaDate/guaYearGanZi",
+    "guirengType"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "guirengType",
+    "options.castMethod"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "liurengzeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "lunarreturn": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirLat/dirLon",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirLat/dirLon",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "lunationphase": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "hsys",
+    "siderealAyanamsa",
+    "tradition",
+    "zodiacal"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "siderealAyanamsa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ad",
+    "hsys",
+    "siderealAyanamsa",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "michon": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "michonEqual",
+    "michonOrb",
+    "michonSwap",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "michonEqual",
+    "michonOrb",
+    "michonSwap",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "mundane": {
+  "bare": {
+   "ask": [
+    "ingressTerm",
+    "location",
+    "year"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "ingressTerm",
+    "mundaneType"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "nanji": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "neroman": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "nerK",
+    "nerKeepDec",
+    "nerOrb",
+    "nerT0",
+    "targetDate",
+    "targetTime",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "nerK",
+    "nerKeepDec",
+    "nerOrb",
+    "nerT0",
+    "targetDate",
+    "targetTime",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "nongli_time": {
+  "bare": {
+   "ask": [
+    "after23NewDay/lateZiHourUseNextDay/timeAlg",
+    "date/time",
+    "location"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "after23NewDay/lateZiHourUseNextDay/timeAlg"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "otherbu": {
+  "bare": {
+   "ask": [
+    "dice values",
+    "question"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "sign/house/planet"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "pd": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "pdMethod",
+    "pdProjection/pdFrame",
+    "pdTimeKey",
+    "pdtype",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "pdMethod",
+    "pdProjection/pdFrame",
+    "pdTimeKey",
+    "pdtype",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "pdchart": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "hsys",
+    "pdMethod",
+    "pdTimeKey",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "hsys",
+    "pdMethod",
+    "pdTimeKey",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "persiandirected": {
+  "bare": {
+   "ask": [
+    "direction",
+    "natal data",
+    "rateKey",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "direction",
+    "hsys",
+    "maxYears",
+    "rateKey",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "direction",
+    "rateKey",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "direction",
+    "hsys",
+    "maxYears",
+    "rateKey",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "planet_cycles": {
+  "bare": {
+   "ask": [
+    "aspect",
+    "p1/p2",
+    "startYear/endYear"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "center"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "planetaryages": {
+  "bare": {
+   "ask": [
+    "asOf",
+    "natal data",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "planetaryarc": {
+  "bare": {
+   "ask": [
+    "arcSource",
+    "datetime",
+    "natal data",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "arcSource",
+    "datetime",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "arcSource",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "arcSource",
+    "datetime",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "prenatalsyzygy": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "profection": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirZone",
+    "hsys",
+    "profGrain",
+    "profStart",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirZone",
+    "hsys",
+    "profGrain",
+    "profStart",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "prog": {
+  "bare": {
+   "ask": [
+    "minorVariant",
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "minorVariant",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "qimen": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "location",
+    "qijuMethod",
+    "question",
+    "sex"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "paiPanType",
+    "qijuMethod",
+    "sex",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "qijuMethod",
+    "question",
+    "sex"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "paiPanType",
+    "qijuMethod",
+    "sex",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "qimenzeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "qijuMethod",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "maxSpanDays",
+    "options",
+    "paiPanType",
+    "qijuMethod",
+    "sex",
+    "timeAlg",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "qijuMethod",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "maxSpanDays",
+    "options",
+    "paiPanType",
+    "qijuMethod",
+    "sex",
+    "timeAlg",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "qizhengelection": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "location",
+    "plate",
+    "ziZheng"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "eleLifeMode",
+    "nodeType/lilithType",
+    "plate",
+    "ziZheng"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "plate",
+    "ziZheng"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "eleLifeMode",
+    "nodeType/lilithType",
+    "plate",
+    "ziZheng"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "qizhengkin": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "location",
+    "time",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "qizhengzeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lilithType",
+    "maxSpanDays",
+    "nodeType",
+    "su28Mode",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lilithType",
+    "maxSpanDays",
+    "nodeType",
+    "su28Mode",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "relative": {
+  "bare": {
+   "ask": [
+    "inner/outer",
+    "relative"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "relative"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "relocation": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "relocLat/relocLon"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "returntimeline": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "startYear/count",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "sanshiunited": {
+  "bare": {
+   "ask": [
+    "date/time/location",
+    "question",
+    "submethod settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "liureng_options.castMethod",
+    "liureng_options.guirengType",
+    "qimen_options.qijuMethod",
+    "taiyi_options.timeBasis"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "question",
+    "submethod settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "liureng_options.castMethod",
+    "liureng_options.guirengType",
+    "qimen_options.qijuMethod",
+    "taiyi_options.timeBasis"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "sanshizeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "shaozi": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "time",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "shenyishu": {
+  "bare": {
+   "ask": [
+    "date",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "sixyao": {
+  "bare": {
+   "ask": [
+    "lines/gua_code",
+    "liuyaoSettings.askType",
+    "liuyaoSettings.school",
+    "question",
+    "timeAlg"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "gender",
+    "lateZiHourUseNextDay",
+    "liuyaoSettings.askType",
+    "liuyaoSettings.school",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "liuyaoSettings.askType",
+    "liuyaoSettings.school",
+    "timeAlg"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "gender",
+    "lateZiHourUseNextDay",
+    "liuyaoSettings.askType",
+    "liuyaoSettings.school",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "solararc": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "solarreturn": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirLat/dirLon",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "datetime",
+    "dirLat/dirLon",
+    "dirZone",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "suzhan": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "doubingSu28/houseStartMode"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "doubingSu28",
+    "houseStartMode",
+    "hsys"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "taixuan": {
+  "bare": {
+   "ask": [
+    "date",
+    "time",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "taiyi": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "gender/options",
+    "location"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "options.school",
+    "options.style",
+    "options.timeBasis",
+    "options.tn"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "gender/options"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "options.school",
+    "options.style",
+    "options.timeBasis",
+    "options.tn"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "taiyizeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "school",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "school",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "tarot": {
+  "bare": {
+   "ask": [
+    "date/time",
+    "question",
+    "spread"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "deck",
+    "spread"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "tianxing": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "hsys",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lotReversal/lotFortuneVariant/hermeticLotsReversal",
+    "precision",
+    "userAyanT0/userAyanDeg",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "lotReversal/lotFortuneVariant/hermeticLotsReversal",
+    "precision",
+    "userAyanT0/userAyanDeg",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "tieban": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "time",
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "zone"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "tongshefa": {
+  "bare": {
+   "ask": [
+    "four symbols"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "taiyin/taiyang/shaoyang/shaoyin"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "tongshu": {
+  "bare": {
+   "ask": [
+    "date",
+    "event",
+    "school"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "triplicityrulers": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "division",
+    "hsys",
+    "lifespan",
+    "system",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "division",
+    "hsys",
+    "lifespan",
+    "system",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "vedicprog": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "minorVariant",
+    "targetDate",
+    "targetTime",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "minorVariant",
+    "targetDate",
+    "targetTime",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "wangji": {
+  "bare": {
+   "ask": [
+    "date",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "wuzhao": {
+  "bare": {
+   "ask": [
+    "date",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "xianqin": {
+  "bare": {
+   "ask": [
+    "date",
+    "gender",
+    "time"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "lateZiHourUseNextDay",
+    "time"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "xiaochengtu": {
+  "bare": {
+   "ask": [
+    "askEvent",
+    "cast-input",
+    "qiguaFa"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "piKoujing",
+    "qiguaShu",
+    "yongGong"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "xiaoliuren": {
+  "bare": {
+   "ask": [
+    "askEvent",
+    "nums / date-time",
+    "school"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "school"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "xuanshi": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "yearsystem129": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "ys129Order",
+    "ys129StartPlanet",
+    "ys129SubRule",
+    "ys129YearType",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "technique settings",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "ys129Order",
+    "ys129StartPlanet",
+    "ys129SubRule",
+    "ys129YearType",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "yizhangjing": {
+  "bare": {
+   "ask": [
+    "annualMethod",
+    "date/time",
+    "dingYue",
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "annualMethod",
+    "dayunLength",
+    "dingYue",
+    "shenshaLayer",
+    "timeAlg"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "annualMethod",
+    "dingYue"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "annualMethod",
+    "dayunLength",
+    "dingYue",
+    "shenshaLayer",
+    "timeAlg"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "zhengchuan": {
+  "bare": {
+   "ask": [
+    "date/time/gender",
+    "gender",
+    "school",
+    "school-params"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "school"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "school-params"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "school"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "ziwei_birth": {
+  "bare": {
+   "ask": [
+    "after23NewDay/lateZiHourUseNextDay/timeAlg",
+    "birth data",
+    "gender",
+    "sihuaSchool/传本"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "sihuaSchool"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "after23NewDay/lateZiHourUseNextDay/timeAlg",
+    "sihuaSchool/传本"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "after23NewDay",
+    "sihuaSchool"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "ziwei_rules": {
+  "bare": {
+   "verdict": "pass"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "ziweizeri": {
+  "bare": {
+   "ask": [
+    "conditions",
+    "gender",
+    "location",
+    "startDate/endDate",
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "topic"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "maxSpanDays",
+    "options",
+    "zeriSnapshotExplainRows",
+    "zeriSnapshotMaxRows"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "zr": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "aiMode",
+    "basePoint",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "target time",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "aiMode",
+    "basePoint",
+    "hsys",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ }
+}
