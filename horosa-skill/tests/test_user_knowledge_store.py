@@ -103,9 +103,9 @@ def test_cache_sees_edits_made_outside_the_tool(tmp_path: Path) -> None:
     root = _kb(tmp_path)
     path = _put(root, "笔记.md", "第一版")
     settings = _settings(tmp_path)
-    assert uk.read_entry(settings, "笔记")["text"] == "第一版"
+    assert uk.unfence(uk.read_entry(settings, "笔记")["text"]) == "第一版"
     path.write_text("第二版，长一点", encoding="utf-8")
-    assert uk.read_entry(settings, "笔记")["text"] == "第二版，长一点"
+    assert uk.unfence(uk.read_entry(settings, "笔记")["text"]) == "第二版，长一点"
     path.unlink()
     assert uk.list_entries(settings) == []
 
@@ -152,11 +152,11 @@ def test_budget_is_fair_counts_the_marker_and_caps_the_entry_count(tmp_path: Pat
     # 长的先点名、短的后点名：短的整条给全，剩下的全给长的（此前长条目先拿一半，短条目用不完的份额浪费掉）。
     context = uk.build_context(settings, ["长", "短"], tool_name="chart")
     long_entry, short_entry = context["entries"]
-    assert short_entry["text"] == "乙" * 100 and long_entry["truncated"] is True
-    total = sum(len(e["text"]) for e in context["entries"])
+    assert uk.unfence(short_entry["text"]) == "乙" * 100 and long_entry["truncated"] is True
+    total = sum(len(uk.unfence(e["text"])) for e in context["entries"])  # 预算算正文，不算围栏
     assert 850 <= total <= 1000  # 出处小标题、截断标记都算进预算，且预算几乎用满
     # v0.45.0：长条目带的是「段落 + 出处小标题（行号）」，不是从头截断；还要读就照 read_more 翻页。
-    assert long_entry["text"].startswith("【") and long_entry["passages"][0]["lines"]
+    assert uk.unfence(long_entry["text"]).startswith("【") and long_entry["passages"][0]["lines"]
     assert long_entry["selection"] == "relevant" and 'knowledge_read(domain="user", key="长"' in long_entry["read_more"]
 
     for i in range(20):
@@ -243,8 +243,8 @@ def test_cli_add_from_a_gbk_file_and_trash_restore(tmp_path: Path, monkeypatch: 
     assert runner.invoke(cli.app, ["knowledge", "add", "三命", "--file", str(source)]).exit_code == 0
     added = runner.invoke(cli.app, ["knowledge", "add", "渊海", "--file", str(gbk)])
     assert added.exit_code == 0, added.output
-    assert uk.read_entry(Settings.from_env(), "渊海")["text"] == "渊海子平"
-    assert uk.read_entry(Settings.from_env(), "三命")["text"] == "三命通会"  # BOM 不进正文
+    assert uk.unfence(uk.read_entry(Settings.from_env(), "渊海")["text"]) == "渊海子平"
+    assert uk.unfence(uk.read_entry(Settings.from_env(), "三命")["text"]) == "三命通会"  # BOM 不进正文
     removed = json.loads(runner.invoke(cli.app, ["knowledge", "remove", "渊海"]).stdout)
     assert removed["trash_id"] and "knowledge restore" in removed["restore"]
     trash = json.loads(runner.invoke(cli.app, ["knowledge", "trash"]).stdout)

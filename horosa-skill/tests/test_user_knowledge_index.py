@@ -185,7 +185,7 @@ def test_long_entries_carry_the_passages_relevant_to_the_chart_not_the_opening(t
     assert item["selection"] == "relevant" and item["truncated"] is True
     assert "伤官" in item["text"] and "日主强弱" not in item["text"]  # 此前是从开头截：只会带到「总论」
     assert item["passages"] and all("伤官格" in p["heading"] for p in item["passages"])
-    assert item["text"].startswith("【总论 › 伤官格 · 第") and len(item["text"]) <= 1200
+    assert uk.unfence(item["text"]).startswith("【总论 › 伤官格 · 第") and len(uk.unfence(item["text"])) <= 1200
     # 存档只留引用：段落清单（行号 / 标题）留下，正文去掉。
     stored = uk.redact_for_storage(context)["entries"][0]
     assert "text" not in stored and stored["passages"] == item["passages"]
@@ -211,7 +211,7 @@ def test_read_pages_by_file_line_numbers_with_an_outline(tmp_path: Path) -> None
     outline = {o["heading"]: o["line"] for o in whole["outline"]}
     assert outline == {"总论": 6, "七杀格": 10, "伤官格": 14}
     page = uk.read_entry(settings, "八字", from_line=outline["七杀格"], max_lines=2)
-    assert page["text"].startswith("## 七杀格") and page["line_range"] == "10-11"
+    assert uk.unfence(page["text"]).startswith("## 七杀格") and page["line_range"] == "10-11"
     assert page["truncated"] is True and page["next_from_line"] == 12 and "第10–11行" in page["citation"]
 
 
