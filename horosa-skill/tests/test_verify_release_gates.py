@@ -84,5 +84,5 @@ def test_binary_entries_are_skipped() -> None:
 
 def test_shipped_sources_and_knowledge_packs_carry_no_host_paths() -> None:
     src = PKG_ROOT / "src" / "horosa_skill"
-    entries = {str(p.relative_to(src.parent)): p.read_bytes() for p in src.rglob("*") if p.is_file() and p.suffix in {".py", ".json", ".md", ".txt", ".ps1"}}
+    entries = {p.relative_to(src.parent).as_posix(): p.read_bytes() for p in src.rglob("*") if p.is_file() and p.suffix in {".py", ".json", ".md", ".txt", ".ps1"}}
     assert wheel.host_path_hits(entries) == []

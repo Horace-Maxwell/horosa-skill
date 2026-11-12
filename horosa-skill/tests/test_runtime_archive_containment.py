@@ -49,7 +49,7 @@ def _link(name: str, target: str, kind: bytes = tarfile.SYMTYPE) -> tuple[tarfil
 def _outside_is_untouched(sandbox: Path, extract_dir: Path) -> list[str]:
     """沙箱里解压目录之外出现的任何东西（归档本身除外）。"""
     return sorted(
-        str(p.relative_to(sandbox)) for p in sandbox.rglob("*")
+        p.relative_to(sandbox).as_posix() for p in sandbox.rglob("*")
         if extract_dir not in p.parents and p != extract_dir and p.suffix not in {".gz", ".zip"}
     )
 

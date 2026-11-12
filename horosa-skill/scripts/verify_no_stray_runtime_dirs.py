@@ -54,7 +54,7 @@ def scan_for_stray_dirs() -> list[str]:
                 key = str(path)
                 if key not in seen:
                     seen.add(key)
-                    found.append(str(path.relative_to(REPO_ROOT)))
+                    found.append(path.relative_to(REPO_ROOT).as_posix())
     return sorted(found)
 
 
