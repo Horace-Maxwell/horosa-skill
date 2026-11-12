@@ -98,13 +98,17 @@ def _child_failure(tool_name: str, payload: dict[str, Any], exc: ToolValidationE
     )
 
 
+_UNION_TAG = re.compile(r"(?:function-(?:after|before|wrap|plain)\[.*, )?[A-Z][A-Za-z0-9]*(?:Input|Model)\]?")
+
+
 def _one_error_per_field(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """`birth` 是几种出生模型的联合：pydantic 对每个分支各报一遍，`loc` 里夹着内部类名（BirthInput / ZiWeiBirthInput …）。
+    """`birth` 是几种出生模型的联合：pydantic 对每个分支各报一遍，`loc` 里夹着内部类名（BirthInput / ZiWeiBirthInput …）；
+    模型带 model_validator 时分支名是包装形 `function-after[_custom_terms_need_tables(), BirthInput]`。
     摘掉类名、按（位置, 类型）去重 → 每个字段一条。"""
     seen: set[tuple[str, str]] = set()
     out: list[dict[str, Any]] = []
     for error in errors:
-        loc = [part for part in (error.get("loc") or []) if not (isinstance(part, str) and re.fullmatch(r"[A-Z][A-Za-z0-9]*(Input|Model)", part))]
+        loc = [part for part in (error.get("loc") or []) if not (isinstance(part, str) and _UNION_TAG.fullmatch(part))]
         key = (".".join(str(part) for part in loc), str(error.get("type")))
         if key in seen:
             continue

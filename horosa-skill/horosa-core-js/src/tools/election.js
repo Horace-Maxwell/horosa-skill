@@ -11,7 +11,10 @@ import { buildFacts } from '../vendor/divination/engine/chartFacts.js';
 import { SIGN_ORDER } from '../vendor/divination/data/signs.js';
 import { CLASSICAL_PLANETS } from '../vendor/divination/data/planets.js';
 import { judgeLayerFromPlain } from '../vendor/utils/judgeLayerHeadless.js';
-import { checkSpecValue } from './specOptions.js';
+import { checkSpecValue } from '../shared/specOptions.js';
+
+// 主限时间钥匙的旧存档值：Python runner 按 returnCharts.js:106 兼容表换算（_ELECTION_PD_TIME_KEY_COMPAT），这里放行。
+const LEGACY_PD_TIME_KEYS = ['Cardan', 'Placidus'];
 
 // 买卖方向（上游 ElectionMain.js:379-384 下拉三档：''=不指定 / sell / buy）。
 const TRADE_SIDES = ['', 'sell', 'buy'];
@@ -90,7 +93,7 @@ export function runElectionTool(payload) {
     const spec = ELECTION_PARAM_BY_KEY[k];
     if (!spec) { ignoredParams.push(k); return; }
     // 值域按引擎词表判（specOptions.js）：认不出的不进第 4 层（不静默按缺省），回执 invalid。
-    const checked = checkSpecValue(spec, rawParams[k]);
+    const checked = checkSpecValue(spec, rawParams[k], k === 'pdTimeKey' ? LEGACY_PD_TIME_KEYS : []);
     if (checked.ok) { electionParams[k] = checked.value; } else { invalidParams.push({ key: k, value: rawParams[k], allowed: checked.allowed }); }
   });
   // 有效口径（四层合并）：Python 取「主限命中」时要用 eff.pdTimeKey —— 上游 ElectionMain.fetchPdHits

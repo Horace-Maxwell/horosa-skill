@@ -195,9 +195,7 @@ class BirthInput(FlexibleModel):
         """恒星轨的前端名 fixedStarOrb / fixedStarOrbMode 未声明（走 extra，键名保留），同一张词表在这里判。"""
         if not isinstance(data, dict) or not any(name in data for name in CLASSICAL_UNDECLARED_FIELDS):
             return data
-        from pydantic_core import PydanticCustomError
-
-        from horosa_skill.input_fields import FieldIssue, is_blank, issue_context, note_parsed
+        from horosa_skill.input_fields import FieldIssue, is_blank, note_parsed, pydantic_field_error
         from horosa_skill.western_vocab import classical_vocabulary
 
         out = dict(data)
@@ -210,9 +208,7 @@ class BirthInput(FlexibleModel):
             try:
                 out[name] = note_parsed(classical_vocabulary(name).parse(out[name]), name)
             except FieldIssue as issue:
-                raise PydanticCustomError(
-                    "horosa_field", "{message}", {"message": f"{issue.zh} / {issue.en}", "field": name, **issue_context(issue)},
-                ) from None
+                raise pydantic_field_error(issue, name) from None
         return out
 
     @model_validator(mode="after")
@@ -221,9 +217,7 @@ class BirthInput(FlexibleModel):
         上游回落本机编辑器仓；headless 没有仓 → 缺 customTermsDay 就拒（不替用户换回埃及界）。"""
         if getattr(self, "termsVariant", None) != 4 or (isinstance(self.customTermsDay, list) and len(self.customTermsDay) == 12):
             return self
-        from pydantic_core import PydanticCustomError
-
-        from horosa_skill.input_fields import FieldIssue, issue_context
+        from horosa_skill.input_fields import FieldIssue, pydantic_field_error
 
         issue = FieldIssue(
             "tool.invalid_option",
@@ -233,7 +227,7 @@ class BirthInput(FlexibleModel):
             expected_en="0 Egyptian / 1 Ptolemaic (critical) / 2 Ptolemaic (classical) / 3 Chaldean; or 4 with customTermsDay",
             example=0, options=classical_vocabulary_options("termsVariant"),
         )
-        raise PydanticCustomError("horosa_field", "{message}", {"message": f"{issue.zh} / {issue.en}", "field": "termsVariant", **issue_context(issue)})
+        raise pydantic_field_error(issue, "termsVariant")
 
     cazimiOrb: Any | None = Field(default=None, description="核心内(cazimi)容许度。")
     combustOrb: Any | None = Field(default=None, description="燃烧(combust)容许度。")

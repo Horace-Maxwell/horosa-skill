@@ -263,7 +263,7 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
     `_vocab_key` 吃小数点，`1.5` 与 `15` 撞键）。古典口径键值域取自 `CLASSICAL_PARAM_SPEC_NON_DEFAULT`，挂在 BirthInput（前端名 fixedStarOrb* 走模型级前置校验）；
     容许度类（float）另收量程内任意数（后端与判读层照算，`judgeLayerHeadless`「数值键不设档」是既定口径），`classical_backend_overrides` 对 float 不卡档（有意偏离上游，口径行照写）；
     `_calibre_phrase` 不在表里就不写（第二层）；`termsVariant=4` 缺表即拒。十年大运、调波（1–360 整数，越界拒、不夹）、七政择日、行星周期、卜卦 / 择日、宿占、世运卜卦、
-    占星地图落点宫制同机制。卜卦 / 择日的 `options` 字典在 JS 侧按引擎词表判（`horosa-core-js/src/tools/specOptions.js`，进既有的 `invalid_inputs` 回执；卜卦在起盘前就拒）。
+    占星地图落点宫制同机制。卜卦 / 择日的 `options` 字典在 JS 侧按引擎词表判（`horosa-core-js/src/shared/specOptions.js`，进既有的 `invalid_inputs` 回执；卜卦在起盘前就拒）。
   - `engine/registry.py`：`ASTRO_CHART_FAMILY_TOOLS`（[埃及历] 吃本盘，全族挂）与 `CLASSICAL_ANALYSIS_TOOLS = {chart, relocation}`（镜像钉版 skip 名单）分开；
     四个跳过键的 preset 去掉 `古典格局`（与上游 preset 同），`export_section_debt.json` 重算收紧。分析请求带 `classical_backend_overrides_from_fields(payload)`。
   - 重置盘：钉版（1108）照本命出生地挂分析（`chartObj` 是本命盘，注释「本命语义仍成立」），skill 同；上游 HEAD `dacdc905`（pipeline.js:543-560）改为按重置后地点、

@@ -11,7 +11,7 @@ import { runHorary } from '../vendor/divination/horary/horaryEngine.js';
 import { buildHorarySnapshot } from '../vendor/divination/horary/horarySnapshot.js';
 import { CATEGORY_DEF } from '../vendor/divination/horary/significators.js';
 import { horaryJudgeOpts, horaryBackendFields, HORARY_SCHOOLS, HORARY_PARAM_BY_KEY } from '../vendor/divination/horary/horarySchools.js';
-import { checkSpecValue } from './specOptions.js';
+import { checkSpecValue } from '../shared/specOptions.js';
 import { judgeLayerFromPlain } from '../vendor/utils/judgeLayerHeadless.js';
 
 // 起盘阵营（上游 HoraryMain CAMP_OPTIONS 的三个值；buildHorarySnapshot 只认 querent / 其它非 astrologer 值）。

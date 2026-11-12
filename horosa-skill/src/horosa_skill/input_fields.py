@@ -863,6 +863,13 @@ def field_validator_for(parse: Callable[[Any], Parsed], field_name: str) -> Call
     return validate
 
 
+def pydantic_field_error(issue: FieldIssue, field_name: str) -> Exception:
+    """模型级校验器（没有 loc 的 model_validator）用：同一个 horosa_field 错误，字段名放进 ctx（tool_error_from_validation 认它）。"""
+    from pydantic_core import PydanticCustomError
+
+    return PydanticCustomError("horosa_field", "{message}", {"message": f"{issue.zh} / {issue.en}", "field": field_name, **issue_context(issue)})
+
+
 def issue_context(issue: FieldIssue) -> dict[str, Any]:
     return {"code": issue.code, "zh": issue.zh, "en": issue.en, "expected": f"{issue.expected_zh} / {issue.expected_en}",
             "example": issue.example, "options": issue.options, "ask_user": issue.ask_user}
