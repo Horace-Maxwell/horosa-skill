@@ -5,7 +5,7 @@ import math
 import re
 from typing import Any
 
-from horosa_skill.civil_calendar import _civil_ymd_exists, _parse_date_parts
+from horosa_skill.civil_calendar import _ad_of_date, _civil_ymd_exists, _parse_date_parts
 from horosa_skill.errors import ToolValidationError, bilingual, tool_code
 from horosa_skill.input_fields import DAY_SWITCH_DEFAULTS
 from horosa_skill.schemas.tools import (
@@ -79,7 +79,8 @@ def _liureng_chart_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "lon": payload.get("guaLon") or payload.get("lon"),
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
-            "ad": payload.get("guaAd") or payload.get("ad", 1),
+            # 起课盘的纪元随它自己的日期（guaAd=-1 已在入口折进 guaDate 的负号）；命主的 ad 不跟到起课时刻上（深审余项）。
+            "ad": _ad_of_date(payload.get("guaDate") or payload.get("date")),
             "hsys": 0,
             "tradition": False,
             "predictive": False,
@@ -123,10 +124,12 @@ def _liureng_gods_payload(tool_name: str, payload: dict[str, Any], time_alg: int
     base = _liureng_remote_payload("liureng_gods", payload)
     if tool_name == "liureng_runyear":
         for key, gua_key in (("date", "guaDate"), ("time", "guaTime"), ("zone", "guaZone"),
-                             ("lat", "guaLat"), ("lon", "guaLon"), ("ad", "guaAd"),
+                             ("lat", "guaLat"), ("lon", "guaLon"),
                              ("after23NewDay", "guaAfter23NewDay")):
             if payload.get(gua_key) is not None and payload.get(gua_key) != "":
                 base[key] = payload[gua_key]
+        # 纪元随起课日期（guaAd 已折进 guaDate 的负号）；给了 guaDate 却没给 guaAd 时，旧写法沿用命主的 ad=-1。
+        base["ad"] = _ad_of_date(base.get("date"))
     if time_alg is not None:
         base["timeAlg"] = time_alg
     return base

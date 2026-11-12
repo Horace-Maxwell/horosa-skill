@@ -15,7 +15,7 @@ from horosa_skill.errors import (
 )
 from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from horosa_skill.service import _clock
-from horosa_skill.service._common import _finite_number, _ganzhi_year
+from horosa_skill.service._common import _ad_of_date, _finite_number, _ganzhi_year
 from horosa_skill.service._context import _capture_figure_data, _degrade, figure_capture
 from horosa_skill.service.options_cn import _day_boundary_switches
 from horosa_skill.service.text.chinese import (
@@ -323,7 +323,8 @@ class GuolaoRunners:
                     "gpsLon": payload.get("gpsLon"),
                     **_day_boundary_switches(payload),
                     "timeAlg": 0,
-                    "ad": payload.get("ad", 1),
+                    # 纪元随这一次取四柱的时刻（本命 = 出生日期，流年 = 流年时刻）；命主的 ad=-1 曾把流年读成公元前（深审余项）。
+                    "ad": _ad_of_date(date),
                 },
             )
         except Exception as exc:  # noqa: BLE001 — 四柱只影响神煞/虚实/化曜/月限的取值来源，不许带崩整盘
@@ -374,12 +375,13 @@ class GuolaoRunners:
             "lon": payload.get("lon"),
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
-            "ad": payload.get("ad", 1),
+            "ad": _ad_of_date(date_text),
         }
         transit_params = {
             **guolao_params,
             "date": f"{transit_date}".replace("-", "/", 2),
             "time": transit_time,
+            "ad": _ad_of_date(transit_date),  # 流年时刻自己的纪元，不沿用命主的
             "predictive": 1,
         }
         fields = guolao_fields if guolao_fields is not None else {}

@@ -67,10 +67,73 @@ def _clamped_max_span(payload: dict[str, Any], cap: int) -> int:
     return min(requested, cap)
 
 
+_WINDOW_FIELDS = ("startDate", "endDate")
+_WINDOW_EXPECTED = bilingual("公历日期 YYYY-MM-DD（公元前写 -0500-03-21；时刻放 startTime / endTime）",
+                             "a Gregorian date YYYY-MM-DD (BCE as -0500-03-21; put the clock time in startTime / endTime)")
+
+
+def window_field_error(
+    tool: str, code: str, zh: str, en: str, *, window: dict[str, Any], fields: tuple[str, ...] = _WINDOW_FIELDS,
+    expected: str | None = None, example: Any = "2028-04-01", next_action: str | None = None, extra: dict[str, Any] | None = None,
+) -> ToolValidationError:
+    """择日族的入参问题 → 逐字段错误（每个相关字段一条恢复条目，kind=input），绝不是「重试 / doctor」的引擎故障（深审余项）。"""
+    from horosa_skill.input_normalization import field_issues_error
+
+    message = bilingual(zh, en)
+    issues = [{"field": name, "code": code, "got": window.get(name), "expected": expected or _WINDOW_EXPECTED,
+               "example": example, "ask_user": False, "message": message} for name in fields]
+    error = field_issues_error(issues, extra_details={**window, **(extra or {})}, tool_name=tool)
+    if next_action:
+        error.details["agent_recovery"]["next_action"] = next_action
+    return error
+
+
+_OUT_OF_DOMAIN = re.compile(r"本地速算不适用|year -?\d+ is out of range|BC era not supported")
+
+
+def zeri_engine_input_error(tool: str, label: str, engine_code: Any, message: Any, *, window: dict[str, Any]) -> ToolValidationError | None:
+    """择日引擎（本地 JS 扫描或后端 /…scan）回报的失败里，哪些其实是入参问题 → 对应的逐字段错误；真故障返回 None。
+
+    以前一律 `tool.<技法>_scan_failed` / `tool.<技法>_engine_failed` / `tool.electionscan_failed`（恢复建议：重试、跑 doctor）：
+    公元前窗口、越过 9999 年、窗口读不出、条件树不合法都让调用方去重试一个注定再失败的请求。"""
+    code, text = f"{engine_code or ''}".strip(), f"{message or ''}".strip()
+    if _OUT_OF_DOMAIN.search(text):
+        return window_field_error(
+            tool, "tool.date_range_unsupported",
+            f"{label}的历法引擎算不了这个搜索窗的年份（可靠域公元 1–9999 年）：{text}",
+            f"{label}'s calendar engine cannot search that window (reliable range AD 1–9999): {text}",
+            window=window, next_action="tell_user_unsupported",
+            extra={"accepted": {"min_year": 1, "max_year": 9999}, "engine_code": code or None, "engine_message": text},
+        )
+    if code in ("invalid_date", "invalid_range", "invalid_time"):
+        return window_field_error(
+            tool, tool_code(tool, "bad_window"), f"{label}的搜索窗读不通：{text}", f"{label}: the search window is not usable: {text}",
+            window=window, extra={"engine_code": code, "engine_message": text},
+        )
+    if code == "span_too_large":
+        return window_field_error(
+            tool, tool_code(tool, "span_too_large"), f"{label}的搜索窗太长：{text}", f"{label}: the search window is too long: {text}",
+            window=window, next_action="split_window", extra={"engine_code": code, "engine_message": text},
+        )
+    if code == "invalid_coordinates":
+        return window_field_error(
+            tool, "tool.invalid_coordinate", f"{label}的经纬度读不通：{text}", f"{label}: the coordinates are not usable: {text}",
+            window=window, fields=("lat", "lon"), expected=bilingual("纬度 31n13 / 31.22，经度 121e28 / 121.47", "lat 31n13 / 31.22, lon 121e28 / 121.47"),
+            example="31n13", extra={"engine_code": code, "engine_message": text},
+        )
+    if code == "invalid_conditions":
+        return window_field_error(
+            tool, tool_code(tool, "invalid_conditions"), f"{label}的条件树不合法：{text}", f"{label}: the condition tree is invalid: {text}",
+            window=window, fields=("conditions",), expected=bilingual("条件类键与参数见本工具的 agent_guidance", "condition keys and params: see this tool's agent_guidance"),
+            example=None, extra={"engine_code": code, "engine_message": text},
+        )
+    return None
+
+
 def _require_sane_window(
-    start_date: str, end_date: str, *, max_span: int, tool: str, span_hint: str | None = None
+    start_date: str, end_date: str, *, max_span: int, tool: str, span_hint: str | None = None, lunar_js: bool = False,
 ) -> None:
-    """搜索窗必须可解析、非倒置、不超上限 —— 三者缺一都不能放行。
+    """搜索窗必须可解析、非倒置、不超上限 —— 三者缺一都不能放行（错误逐字段：startDate / endDate 各一条恢复条目）。
 
     🔴 `startDate`/`endDate` **不经** normalize_request_payload（它只管 date/time 等，见
     input_normalization），所以 agent 传什么就是什么。旧实现用 `_day_span(...) is not None` 判，
@@ -78,25 +141,26 @@ def _require_sane_window(
     而 JS 侧 wallToMs 照样能解析它们，于是超长窗口一路跑到超时。解析失败必须报错，不是放行。
     倒置窗口（end < start）得负数，`负数 > max` 恒 False，同样能溜过去。
     """
+    window = {"startDate": start_date, "endDate": end_date}
     span = _day_span(start_date, end_date)
     if span is None:
-        raise ToolValidationError(
-            f"{tool} 无法解析搜索窗日期（需 YYYY-MM-DD）。",
-            code=tool_code(tool, "bad_window"),
-            details={"startDate": start_date, "endDate": end_date,
-                     "hint": "只接受 YYYY-MM-DD；时刻请用 startTime/endTime 单独给。"},
+        raise window_field_error(
+            tool, tool_code(tool, "bad_window"), f"{tool} 无法解析搜索窗日期（需 YYYY-MM-DD）。",
+            f"{tool}: the search window dates cannot be read (YYYY-MM-DD).", window=window,
+            extra={"hint": "只接受 YYYY-MM-DD；时刻请用 startTime/endTime 单独给。"},
         )
     if span < 0:
-        raise ToolValidationError(
-            f"{tool} 搜索窗倒置：结束日期早于起始日期。",
-            code=tool_code(tool, "inverted_window"),
-            details={"startDate": start_date, "endDate": end_date, "span_days": span},
+        raise window_field_error(
+            tool, tool_code(tool, "inverted_window"), f"{tool} 搜索窗倒置：结束日期早于起始日期。",
+            f"{tool}: the search window is inverted (end before start).", window=window,
+            next_action="swap_window_bounds", extra={"span_days": span},
         )
     if span > max_span:
-        raise ToolValidationError(
-            f"{tool} 搜索窗 {span} 天超过上限 {max_span} 天。",
-            code=tool_code(tool, "span_too_large"),
-            details={
+        raise window_field_error(
+            tool, tool_code(tool, "span_too_large"), f"{tool} 搜索窗 {span} 天超过上限 {max_span} 天。",
+            f"{tool}: the search window of {span} days exceeds the {max_span}-day limit.", window=window,
+            next_action="split_window",
+            extra={
                 "span_days": span, "max_span_days": max_span,
                 # 上限是硬的：maxSpanDays 只能调低（_clamped_max_span），提示不再暗示可以调高，
                 # 否则 agent 会照着重试、再被同一条错误挡回来，白烧一轮往返。
@@ -105,35 +169,25 @@ def _require_sane_window(
                                      "maxSpanDays 只能调低，不能超过本上限。",
             },
         )
+    if lunar_js:
+        # 本地扫描引擎跑在 lunar-javascript 上（可靠域公元 1–9999 年，上游 lunarDomainGuard：域外不报错、节气错位、干支静默算错）。
+        # 以前奇门 / 八字 / 太乙 / 六壬择时报「搜索失败（重试 / doctor）」，黄历择吉报「须给起止日期」，紫微 / 三式择时照样出结果。
+        from horosa_skill.civil_calendar import (
+            LUNAR_JS_MAX_YEAR,
+            LUNAR_JS_MIN_YEAR,
+            _parse_date_parts,
+        )
 
-
-def _require_cast_geo(payload: dict[str, Any], *, tool: str) -> None:
-    """占时（按当下时刻起课）路径打 `/nongli/time` 前，先确认 lon/lat 真的有值。
-
-    🔴 v0.26.0 的实际故障：这五个工具（xiaoliuren / feigong / xiaochengtu / guice / zhengchuan）
-    的 schema 把 `lat` 列为可选、docstring 还写着「date/time/zone[+lon] 就够」，于是它们用
-    `payload.get("lat")` 取值，缺省时把 **`lat: null`** 发给 Java 层 → 回 `200001 param error`
-    → 用户只看到一句「本地 Horosa 后端返回 HTTP 500」。对照 qimen/taiyi 用的是 `payload["lat"]`（必填）。
-
-    ⚠️ 这个 bug 极易被误诊成「环境问题」：Java 的农历结果按**年**缓存，任何一次带 lat 的请求都会把
-    该年焐热，此后同年的无 lat 请求全部成功。所以它表现为「有时好有时坏」，v0.25.1 的台账据此把它
-    错归因成「本机无 Mongo」。复现务必换一个**冷年份**。
-    """
-    missing = [k for k in ("lon", "lat") if payload.get(k) in (None, "")]
-    if not missing:
-        return
-    raise ToolValidationError(
-        f"{tool} 按时刻起课需要起课地点的经纬度（缺 {'/'.join(missing)}）。",
-        code=tool_code(tool, "cast_geo_required"),
-        details={
-            "missing": missing,
-            "why": (
-                "起课要先经 /nongli/time 定四柱，该端点要求 lon+lat 均非空；缺任一个后端回 "
-                "200001 param error（表现为 HTTP 500）。"
-            ),
-            "hint": "提供 lon/lat（或 gpsLon/gpsLat），或改用直接给定 nums/干支 的免起课路径。",
-        },
-    )
+        years = [parts[0] for parts in (_parse_date_parts(start_date), _parse_date_parts(end_date)) if parts]
+        if any(not LUNAR_JS_MIN_YEAR <= year <= LUNAR_JS_MAX_YEAR for year in years):
+            raise window_field_error(
+                tool, "tool.date_range_unsupported",
+                f"{tool} 的本地扫描引擎（lunar-javascript）只算公元 {LUNAR_JS_MIN_YEAR}–{LUNAR_JS_MAX_YEAR} 年：搜索窗 {start_date} → {end_date} 在域外。",
+                f"{tool} scans on a local calendar engine (lunar-javascript) that only covers AD {LUNAR_JS_MIN_YEAR}–{LUNAR_JS_MAX_YEAR}: "
+                f"the window {start_date} → {end_date} is outside it.",
+                window=window, next_action="tell_user_unsupported",
+                extra={"accepted": {"min_year": LUNAR_JS_MIN_YEAR, "max_year": LUNAR_JS_MAX_YEAR}, "engine": "lunar-javascript"},
+            )
 
 
 def _electionscan_options(options: Any) -> dict[str, Any]:
