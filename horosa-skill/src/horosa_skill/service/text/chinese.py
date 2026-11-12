@@ -322,8 +322,10 @@ _SIXYAO_EXPECTED = (
 def _sixyao_issue(field: str, got: Any, zh: str, en: str) -> Any:
     from horosa_skill.input_normalization import field_issues_error
 
+    # lines 的问题沿用旧码 tool.sixyao_invalid_lines；gua_code / changed_code / numbers 用 tool.sixyao_invalid_cast。
+    code = "tool.sixyao_invalid_lines" if field.startswith("lines") else "tool.sixyao_invalid_cast"
     return field_issues_error([{
-        "field": field, "code": "tool.sixyao_invalid_cast", "got": got if isinstance(got, (str, int, float, bool, type(None))) else repr(got),
+        "field": field, "code": code, "got": got if isinstance(got, (str, int, float, bool, type(None))) else repr(got),
         "expected": bilingual(*_SIXYAO_EXPECTED), "example": "111101", "ask_user": False, "message": bilingual(zh, en),
     }])
 

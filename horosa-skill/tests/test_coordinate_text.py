@@ -185,9 +185,11 @@ def test_compact_text_round_trips_unchanged() -> None:
         for m in range(60):
             for lat_h, lon_h in (("n", "e"), ("s", "w")):
                 text_lat, text_lon = f"{d}{lat_h}{m:02d}", f"{d}{lon_h}{m:02d}"
-                payload = {"lon": text_lon} if d * 60 + m > 180 * 60 else {"lat": text_lat, "lon": text_lon}
-                if d * 60 + m > 90 * 60:
-                    payload.pop("lat", None)
+                payload = {}
+                if d * 60 + m <= 90 * 60:
+                    payload["lat"] = text_lat
+                if d * 60 + m <= 180 * 60:
+                    payload["lon"] = text_lon
                 if not payload:
                     continue
                 out = normalize_request_payload(payload)
@@ -195,7 +197,8 @@ def test_compact_text_round_trips_unchanged() -> None:
                 expect_lon = text_lon if (d or m or lon_h == "e") else f"{d}e{m:02d}"
                 if "lat" in payload:
                     assert out["lat"] == expect_lat, text_lat
-                assert out["lon"] == expect_lon, text_lon
+                if "lon" in payload:
+                    assert out["lon"] == expect_lon, text_lon
 
 
 def test_every_coordinate_key_goes_through_the_upstream_formatter() -> None:

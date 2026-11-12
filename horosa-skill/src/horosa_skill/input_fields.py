@@ -730,9 +730,10 @@ _NOTES: ContextVar[list[str] | None] = ContextVar("horosa_input_notes", default=
 
 
 @contextmanager
-def input_notes_scope() -> Iterator[list[str]]:
+def input_notes_scope(*, fresh: bool = False) -> Iterator[list[str]]:
+    """`fresh=True`：技法内部再调技法（择日铸展示盘、三式合一取奇门 / 太乙）用自己的一张表，内部载荷的说明不漏到用户的结果里。"""
     current = _NOTES.get()
-    if current is not None:
+    if current is not None and not fresh:
         yield current
         return
     notes: list[str] = []

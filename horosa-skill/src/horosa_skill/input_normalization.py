@@ -451,6 +451,9 @@ def field_issues_error(issues: list[dict[str, Any]], *, extra_details: dict[str,
             "kind": "input", "must_ask_user": must_ask, "reason": "invalid_field",
             "next_action": "ask_user_then_retry" if must_ask else "fix_field_and_retry",
             "fix_fields": fix_fields, "prompt_to_user": message,
+            # 与闸门 / 地名错误同名的键：只列要问用户的那些字段（问题原文 + 候选），客户端按同一套逻辑把它念给用户。
+            "ask_if_missing": [{"field": item["field"], "question": item["message"], **({"options": item["options"]} if item.get("options") else {})}
+                               for item in issues if item.get("ask_user")],
         },
     }
     return ToolValidationError(message, code=first["code"], details=details)
@@ -485,7 +488,7 @@ def tool_error_from_validation(exc: Any, *, tool_name: str, payload: dict[str, A
                        "ask_user": False, "message": bilingual(f"`{tool_name}` 的入参不合法。", f"Invalid payload for `{tool_name}`.")})
     codes = {item["code"] for item in issues}
     error = field_issues_error(issues, extra_details={"errors": validation_errors(exc)})
-    if len(codes) > 1 or "tool.invalid_payload" in codes:
+    if len(codes) > 1 or codes & {"tool.invalid_payload", "tool.missing_field"}:
         error = ToolValidationError(
             bilingual(f"`{tool_name}` 的入参不合法：", f"Invalid payload for tool `{tool_name}`:") + "\n" + str(error),
             code="tool.invalid_payload", details=error.details,

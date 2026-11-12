@@ -82,7 +82,9 @@ DESCRIPTION_CHAR_LIMIT = 150  # 字符；技法双语描述超长截断（全文
 
 def _enum_for(field: str, tool_name: str) -> dict[str, Any]:
     if field == "hsys":
-        table = INDIA_HOUSE_SYSTEM_LABELS if tool_name.startswith("india") else {int(k): v for k, v in _astro_house_table().items()}
+        # 哪张宫制表跟着校验层走（模型的 HSYS_FAMILY，schemas/tools/base.py）：广告的 enum 与真正收下的值同一张表。
+        family = getattr(TOOL_DEFINITIONS[tool_name].input_model, "HSYS_FAMILY", "astro") if tool_name in TOOL_DEFINITIONS else "astro"
+        table = INDIA_HOUSE_SYSTEM_LABELS if family == "india" else {int(k): v for k, v in _astro_house_table().items()}
         short = {"整宫制": "整宫", "Vehlow Equal": "Vehlow", "Polich Page": "PolichPage", "天顶为10宫中点等宫制": "MC10宫等宫"}
         legend = " ".join(f"{k}={short.get(table[k], table[k])}" for k in sorted(table))
         return {"enum": sorted(table), "description": legend}

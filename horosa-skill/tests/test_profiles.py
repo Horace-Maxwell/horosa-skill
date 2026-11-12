@@ -210,7 +210,7 @@ def test_explicit_fields_win_field_by_field_and_the_card_records_the_source(tmp_
 def test_lat_and_gps_lat_are_one_group_and_stored_decimals_survive(tmp_path: Path) -> None:
     js = RecordingJs()
     service = _service(tmp_path, js=js)
-    _save(service.profiles, "上海人", {"date": "1990-06-15", "time": "10:30", "zone": "+08:00", "lat": "31.2167", "lon": "121.4667"})
+    _save(service.profiles, "上海人", {"date": "1990-06-15", "time": "10:30", "zone": "+08:00", "lat": "31.2167", "lon": "121.4667", "gender": 1})
     plain = service.run_tool("bazi_birth", {"profile": "上海人", **CONFIRM}, save_result=False)
     # 十进制坐标原样（31.2167），不是从 31n13 重算的 31.216667——与显式给 31.2167 的起盘逐值相同。
     assert (plain.input_normalized["gpsLat"], plain.input_normalized["gpsLon"]) == (31.2167, 121.4667)
@@ -502,7 +502,10 @@ def test_dispatch_decision_layer_never_receives_profile_data(tmp_path: Path) -> 
     _save(service.profiles, "无性别", {key: value for key, value in MOM_FIELDS().items() if key != "gender"})
     # 两句原话都带性别词（「老婆」），S2 本来都会问；存了性别的那位不该问。
     service.dispatch({"query": "帮我老婆王秀英排紫微，湖南衡阳人", "birth": {"profile": "王秀英"}, "save_result": False, **CONFIRM})
-    service.dispatch({"query": "帮我老婆排紫微", "birth": {"profile": "无性别"}, "save_result": False, **CONFIRM})
+    # v0.50.0：影子模式不填性别、档案也没存 → 紫微拒绝并请问用户（tool.missing_gender）；决策层那一问照常发生。
+    with pytest.raises(ToolValidationError) as caught:
+        service.dispatch({"query": "帮我老婆排紫微", "birth": {"profile": "无性别"}, "save_result": False, **CONFIRM})
+    assert caught.value.code == "tool.missing_gender"
     sent = json.dumps([call["state"] for call in fake.calls], ensure_ascii=False)
     assert fake.calls, "影子模式确实问了（否则下面的断言是空比较）"
     for leaked in ("王秀英", "我妈", "湖南衡阳", "1962", MOM["notes"]):

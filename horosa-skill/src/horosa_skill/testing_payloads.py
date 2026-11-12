@@ -161,7 +161,8 @@ def build_sample_payloads() -> dict[str, dict]:
         "planet_cycles": {"startYear": 2019, "endYear": 2022, "p1": "Jupiter", "p2": "Saturn", "aspect": 0},
         "jieqi_birth": {**chart_birth},
         # 印度生时校正：date/time 是待校正锚点；小窗大步防样例载荷把 live 门禁拖慢。
-        "india_rectify": {**chart_birth, "pos": "福州", "rectifyWindowMinutes": 10, "rectifyStepSeconds": 120, "rectifyTopK": 3},
+        # 印占 hsys 走印占索引表（没有 1）：v0.50.0 起越表拒，样例给印占缺省 0（整宫 / Rashi）。
+        "india_rectify": {**chart_birth, "hsys": 0, "pos": "福州", "rectifyWindowMinutes": 10, "rectifyStepSeconds": 120, "rectifyTopK": 3},
         "qimenzeri": {
             **chart_birth, "pos": "福州",
             "startDate": "2028-04-01", "startTime": "00:00", "endDate": "2028-04-08", "endTime": "23:59",
@@ -293,10 +294,11 @@ def build_sample_payloads() -> dict[str, dict]:
             "zodiacal": 0,
             "relative": 0,
         },
-        "india_chart": {**chart_birth, "zodiacal": 1, "predictive": 1, "pdtype": 0, "pdMethod": "core_alchabitius", "pdTimeKey": "Ptolemy", "pdaspects": [0, 60, 90, 120, 180]},
+        "india_chart": {**chart_birth, "hsys": 0, "zodiacal": 1, "predictive": 1, "pdtype": 0, "pdMethod": "core_alchabitius", "pdTimeKey": "Ptolemy", "pdaspects": [0, 60, 90, 120, 180]},
         "ziwei_birth": {**east_birth, "gender": True, "timeAlg": 0},
         "ziwei_rules": {},
-        "bazi_birth": dict(east_birth),
+        # v0.50.0：八字没有性别不起盘（旧样例不给 → 上游「未知(按男排)」）；样例是文档，给出性别。
+        "bazi_birth": {**east_birth, "gender": 1},
         "bazi_direct": {**east_birth, "gender": True, "timeAlg": 0, "after23NewDay": 0, "adjustJieqi": False, "byLon": False, "phaseType": 0},
         "liureng_gods": {**east_birth, "after23NewDay": False},
         "liureng_runyear": {

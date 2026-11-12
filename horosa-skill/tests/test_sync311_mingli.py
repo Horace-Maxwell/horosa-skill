@@ -105,7 +105,8 @@ def test_after23_not_sent_to_java_when_unset_and_explicit_zero_reaches_ken(tmp_p
     base = {"date": "2026-05-27", "time": "23:30:00", **_SH}
     for tool, endpoint in (("nongli_time", "/nongli/time"), ("liureng_gods", "/liureng/gods"), ("ziwei_birth", "/ziwei/birth")):
         client.calls.clear()
-        assert service.run_tool(tool, dict(base), save_result=False).ok
+        # v0.50.0：紫微没有性别不起盘（与本用例无关的事实，补上）。
+        assert service.run_tool(tool, dict(base, **({"gender": 1} if tool == "ziwei_birth" else {})), save_result=False).ok
         sent = [p for ep, p in client.calls if ep == endpoint]
         assert sent and "after23NewDay" not in sent[0], f"{tool} 缺省时不得下发日界（旧代码下发 False）"
     client.calls.clear()
@@ -190,7 +191,7 @@ def test_bazi_late_zi_1_0_quadrant_and_lichun_boundary_goldens(tmp_path) -> None
       立春后 寅月申时 → 未、甲年丙寅起 → 辛未（命宫干支随立春整体翻转）。
     """
     service = _service(tmp_path, real={"bazi_local"})
-    env = service.run_tool("bazi_birth", {"date": "2026-05-27", "time": "23:30:00", **_SH, "timeAlg": 1,
+    env = service.run_tool("bazi_birth", {"date": "2026-05-27", "time": "23:30:00", **_SH, "gender": 1, "timeAlg": 1,
                                           "after23NewDay": 1, "lateZiHourUseNextDay": 0}, save_result=False)
     assert env.ok, env.error
     four = _section(env.data["snapshot_text"], "四柱与三元")
@@ -198,10 +199,10 @@ def test_bazi_late_zi_1_0_quadrant_and_lichun_boundary_goldens(tmp_path) -> None
     assert "命宫：庚子，" in four and "（起法：通行版）" in four, four
     # 缺省（不给日界键）= 上游出厂 (1,1) → 壬寅日 庚子时。本地 lunar 引擎缺键 = 不进位（→ 辛丑日 戊子时），
     # 所以 runner 必须显式补 1/1（同上游 genParams 读 defaultAfter23NewDay()）。
-    dflt = service.run_tool("bazi_birth", {"date": "2026-05-27", "time": "23:30:00", **_SH, "timeAlg": 1}, save_result=False)
+    dflt = service.run_tool("bazi_birth", {"date": "2026-05-27", "time": "23:30:00", **_SH, "gender": 1, "timeAlg": 1}, save_result=False)
     assert [_row(_section(dflt.data["snapshot_text"], "四柱与三元"), f"{p}柱")[1] for p in "日时"] == ["壬寅", "庚子"]
-    before = service.run_tool("bazi_birth", {"date": "2024-02-04", "time": "16:20:00", **_SH, "timeAlg": 1}, save_result=False)
-    after = service.run_tool("bazi_birth", {"date": "2024-02-04", "time": "16:35:00", **_SH, "timeAlg": 1}, save_result=False)
+    before = service.run_tool("bazi_birth", {"date": "2024-02-04", "time": "16:20:00", **_SH, "gender": 1, "timeAlg": 1}, save_result=False)
+    after = service.run_tool("bazi_birth", {"date": "2024-02-04", "time": "16:35:00", **_SH, "gender": 1, "timeAlg": 1}, save_result=False)
     b4 = _section(before.data["snapshot_text"], "四柱与三元")
     a4 = _section(after.data["snapshot_text"], "四柱与三元")
     assert [_row(b4, f"{p}柱")[1] for p in "年月日时"] == ["癸卯", "乙丑", "戊戌", "庚申"]
@@ -237,7 +238,7 @@ def test_bazi_java_only_knobs_and_bc_dates_route_to_java(tmp_path) -> None:
     不补负号就把公元前 100 年当公元 100 年本地起盘）。"""
     client = CaptureClient()
     service = _service(tmp_path, client=client, real={"bazi_local"})
-    env = service.run_tool("bazi_birth", {"date": "0100-05-15", "time": "10:30:00", **_SH, "ad": -1}, save_result=False)
+    env = service.run_tool("bazi_birth", {"date": "0100-05-15", "time": "10:30:00", **_SH, "gender": 1, "ad": -1}, save_result=False)
     assert env.ok, env.error
     sent = [p for ep, p in client.calls if ep == "/bazi/birth"]
     assert sent and sent[0]["date"] == "-0100-05-15"
@@ -482,9 +483,9 @@ from test_local_js_tools import make_service, requires_runtime
 def test_live_mingli_tools(tmp_path) -> None:
     """真后端 + 真引擎：日界缺省、八字本地优先、紫微传本/流派、宿占农历时支、节气岁差。"""
     service = make_service(tmp_path)
-    nl = service.run_tool("nongli_time", {"date": "2026-05-27", "time": "23:30:00", **_SH, "timeAlg": 1}, save_result=False)
+    nl = service.run_tool("nongli_time", {"date": "2026-05-27", "time": "23:30:00", **_SH, "gender": 1, "timeAlg": 1}, save_result=False)
     assert nl.ok and nl.data.get("dayGanZi") == "壬寅", "缺省 = 23 点换日（旧代码下发 False → 辛丑）"
-    bz = service.run_tool("bazi_birth", {"date": "2026-05-27", "time": "23:30:00", **_SH, "timeAlg": 1,
+    bz = service.run_tool("bazi_birth", {"date": "2026-05-27", "time": "23:30:00", **_SH, "gender": 1, "timeAlg": 1,
                                          "after23NewDay": 1, "lateZiHourUseNextDay": 0}, save_result=False)
     four = _section(bz.data["snapshot_text"], "四柱与三元")
     assert bz.ok and _row(four, "日柱")[1] == "壬寅" and _row(four, "时柱")[1] == "戊子"

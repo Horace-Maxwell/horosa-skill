@@ -82,10 +82,11 @@ def test_shenshu_old_backend_without_snapshot_errors_clearly(tmp_path) -> None:
 def test_shenshu_unparseable_date_errors_clearly(tmp_path) -> None:
     settings = Settings(server_root="http://127.0.0.1:9999", db_path=tmp_path / "m.db", output_dir=tmp_path / "runs")
     service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=FakeJsClient())
-    result = service.run_tool("wuzhao", {"date": "not-a-date", "time": "20:48:00"}, save_result=False)
-    assert result.ok is False
-    assert result.error is not None
-    assert result.error.code == "tool.shenshu_bad_date"
+    # v0.50.0：入口的逐字段校验先拦（tool.invalid_date，带字段级恢复）；runner 里的 tool.shenshu_bad_date 仍是第二道闸。
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool("wuzhao", {"date": "not-a-date", "time": "20:48:00"}, save_result=False)
+    assert caught.value.code == "tool.invalid_date"
+    assert caught.value.details["fields"][0]["field"] == "date"
 
 
 def test_service_tool_list_exposes_input_contracts(tmp_path) -> None:
@@ -154,8 +155,11 @@ def test_invalid_tool_payload_returns_agent_recovery_prompt(tmp_path) -> None:
     assert exc_info.value.code == "tool.invalid_payload"
     recovery = exc_info.value.details["agent_recovery"]
     assert recovery["must_ask_user"] is True
-    assert "调用 `chart` 前需要先确认" in recovery["prompt_to_user"]
-    assert any(item["field"] == "date/time/place" for item in recovery["ask_if_missing"])
+    # v0.50.0（IN-12）：每个缺的字段一条恢复条目（不是整份闸门问卷）；缺坐标的那条提示可改传 place。
+    fixes = {item["field"]: item for item in recovery["fix_fields"]}
+    assert {"date", "time", "zone", "lat", "lon"} <= set(fixes)
+    assert "place" in fixes["lat"]["expected"] and fixes["date"]["example"] == "1990-05-03"
+    assert {item["field"] for item in recovery["ask_if_missing"]} >= {"date", "time", "zone"}
 
 
 def test_service_starts_runtime_before_first_remote_call_when_probe_fails(tmp_path) -> None:
@@ -2349,7 +2353,7 @@ def test_late_zi_switch_threads_through_all_chart_flows(tmp_path) -> None:
     )
     client = CaptureClient()
     service = HorosaSkillService(settings, client=client, store=MemoryStore(settings), js_client=FakeJsClient())
-    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "agent_confirmed_settings": True}
+    base = {"date": "2026-05-27", "time": "23:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1, "agent_confirmed_settings": True}
 
     # v0.40：bazi_birth 改本地引擎优先（不打 /bazi/birth），其两开关穿透本地引擎由
     # test_sync311_mingli.py::test_bazi_day_boundary_defaults_reach_local_engine 看守。
@@ -3179,7 +3183,8 @@ def test_generic_9999_is_not_labelled_a_mongo_problem() -> None:
     hint = _java_result_code_hint('{"ResultCode" : 9999, "Result" : "begin 1, end 3, length 1"}')
     assert "MongoDB" not in hint, f"不得把参数 bug 指去查 Mongo: {hint}"
     assert "不等于" in hint, f"要显式否掉「9999 == app 注册问题」这个等式: {hint}"
-    assert "Result" in hint and "lat" in hint, "中性提示要指向 Result 原文并提醒核经纬度"
+    # v0.50.0（IN-12）：不再点名「先核 lat」——入参在入口逐字段校验过，提示只指向 Result 原文与发出去的字段，不替用户猜原因。
+    assert "Result" in hint and "发出去的字段" in hint and "lat" not in hint, "中性提示要指向 Result 原文与 details 里的字段"
 
 
 # --- tianxing 三个「用户拿到错答案」的 bug（v0.26.1）------------------------------------------

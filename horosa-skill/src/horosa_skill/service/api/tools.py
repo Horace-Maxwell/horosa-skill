@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
@@ -66,6 +67,10 @@ GENDER_DEPENDENT_TOOLS = frozenset({
 })
 
 
+# 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。
+_INSIDE_TECHNIQUE: ContextVar[bool] = ContextVar("horosa_inside_technique", default=False)
+
+
 def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
     target = payload.get("datetime")
     if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
@@ -76,7 +81,19 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
             "ask_user": False, "message": bilingual(f"`{tool_name}` 的目标时刻要具体到日期：只给年份「{target}」不知道是哪一天。",
                                                    f"`{tool_name}` needs a target date, not just the year '{target}'."),
         }])
-    if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None:
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    if payload.get("gender") is None and options.get("gender") is not None:
+        # 神数旧写法：性别写在 options 里（runner 会提升到顶层）——同一个解析器判它，认得就算给了。
+        from horosa_skill.input_fields import FieldIssue, parse_gender
+
+        try:
+            parse_gender(options["gender"])
+        except FieldIssue as issue:
+            raise field_issues_error([{"field": "options.gender", "code": issue.code, "got": options["gender"],
+                                       "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
+                                       "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
+        return
+    if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None and not _INSIDE_TECHNIQUE.get():
         raise field_issues_error([{
             "field": "gender", "code": "tool.missing_gender", "got": None,
             "expected": bilingual("1 / 男 / 乾造 = 男；0 / 女 / 坤造 = 女", "1 / 男 / male = male; 0 / 女 / female = female"),
@@ -554,14 +571,19 @@ class ToolsAPI:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), input_notes_scope() as input_notes:
+        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), input_notes_scope(fresh=_INSIDE_TECHNIQUE.get()) as input_notes:
             input_normalized, knowledge_selection, profile_uses, place_records = self._validated_tool_input(definition, payload, trace)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
                 profile_uses=profile_uses, place_records=place_records, input_notes=input_notes,
             )
             try:
-                envelope = self._success_envelope(call, self._compute_tool_result(call))
+                inside = _INSIDE_TECHNIQUE.set(True)
+                try:
+                    computed = self._compute_tool_result(call)
+                finally:
+                    _INSIDE_TECHNIQUE.reset(inside)
+                envelope = self._success_envelope(call, computed)
             except HorosaSkillError as exc:
                 trace["error_code"] = exc.code
                 envelope = _failure_envelope(

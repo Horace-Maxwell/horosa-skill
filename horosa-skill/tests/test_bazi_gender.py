@@ -29,9 +29,10 @@ def test_birth_input_unspecified_omits_gender() -> None:
     assert "gender" not in BaZiBirthInput.model_validate(BASE).model_dump(exclude_none=True)
 
 
-def test_direct_input_default_unchanged() -> None:
-    # BaZiDirectInput 的既有默认不受本次改动影响
-    assert BaZiDirectInput.model_validate(BASE).model_dump(exclude_none=True).get("gender") is True
+def test_direct_input_has_no_male_default() -> None:
+    # v0.50.0（IN-04）：八字直断不再缺省男命（旧断言「缺省 True」正是缺陷：女命不给性别就按男命排大运）；
+    # 没给性别由 run_tool 拒绝（tool.missing_gender，见 tests/test_input_fields.py）。
+    assert BaZiDirectInput.model_validate(BASE).model_dump(exclude_none=True).get("gender") is None
 
 
 def test_gender_label_maps_all_forms() -> None:
