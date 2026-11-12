@@ -99,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `114 / 114 ok=true` |
-| Engineering tests | `3487 / 3487 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `3643 / 3643 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 122 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `104` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`111` export techniques modeled; contract v16 mirrors desktop aiExport v60) |
@@ -445,7 +445,7 @@ uv run horosa-skill export registry
 ## Supported AI clients
 
 `setup --client <client>` does the whole onboarding in one command (v0.38.0): network probe (5 s) → install / verify the
-offline runtime → (with `--vectors`) prepare vector search → write the config (auto-located, only the horosa entry, `.horosa-bak` backup, atomic replace) →
+offline runtime → (with `--vectors`) prepare vector search → write the config (auto-located, only the horosa entry, nothing written when unchanged, the original kept as `.horosa-bak` before the first change, atomic replace keeping permissions; engine / data-dir variables set in your shell go into the entry's env) →
 **install the horosa-agent skill into the skills folder that client reads** (v0.49.0; most clients read the shared
 `~/.agents/skills`; `--no-skill` skips it, `--skill-dir` picks the folder) → doctor → re-read the file from disk → **start the server once over stdio with the exact command the client will run and count
 the tools** → print next steps. On failure a structured envelope goes to stderr (`step` / `code` / `config_untouched` /
@@ -582,7 +582,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 3487 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 3643 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

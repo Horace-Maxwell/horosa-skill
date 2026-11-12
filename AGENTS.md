@@ -1244,6 +1244,18 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **字典字面量不许重复键（v0.48.0）。** 后写的静默覆盖先写的，CI 也不跑 ruff：`tests/test_no_duplicate_dict_keys.py` 用 AST 扫 src/ 与 scripts/。
 - **上游后端不读的键照收、不广告、不下发、给了就警告**（v0.48.0 印度校时 11 个死键，同宿占的处理；证据逐行写在 `INDIA_RECTIFY_DEAD_KEYS` 注释里）。
   后端 `str(x).split(',')` 的键在 skill 边界把数组并成逗号串（`prashnaSchools` / `rectifyCustomRp`）。
+- **错误信封不变量（v0.50.0-dev）。** 任何 ok:false 都有顶层 code、message 与 `details.agent_recovery.kind`；入参错误是 input。
+  `tests/test_mcp_error_contract.py` 对全量面每个工具 × 三组坏参数机检；门面出门前 `_ensure_error_contract` 补齐 service 直接 return 的失败；
+  无码的 `ToolValidationError` 是 `tool.invalid_input`。错误码只写字面量，按技法生成的码走 `errors.tool_code(tool, family)`（族登记在
+  `TOOL_CODE_FAMILIES`），**禁 `code=f"…"`**；pytest 下包内代码抛未登记码以 `UnregisteredErrorCode`（BaseException）红；每个码要在测试里出现，
+  `contracts/error_code_test_debt.json` 只减（`verify_error_recovery.py`）。
+- **工具面与说明书同源（v0.50.0-dev）。** `surfaces/toolsets.surface_plan` 一份计划，注册代码、initialize 说明书、server_profile 都从它算；
+  `HOROSA_TOOLSETS` 一个合法值都没有 → 精简技法面（不是全量），问题进 stderr / server_profile / doctor；`all` 就是全量。
+  源码与 skill 里不写死工具数（`tests/test_catalogue_count_literals.py`）。
+- **广告层零无描述属性（v0.50.0-dev）。** 一个字段名一句描述，住 `surfaces/mcp_field_docs.py`；说不清的技法旋钮不广告（按名照收、计入隐藏旋钮）；
+  不过闸的门面不广告闸门三键；闭集（报告 format / style）给 enum；合盘 inner / outer 带形状。`verify_mcp_list_budget.py` 守。
+- **HTTP 传输说真话（v0.50.0-dev）。** 横幅与 421 回包用 `surfaces/mcp_hosts.py`（判据与 SDK 逐条相同）列能连 / 会被拒的地址与要加的
+  `HOROSA_MCP_ALLOWED_HOSTS=…` 一行；防护本身不动。Bearer 按 UTF-8 字节比（非 ASCII 曾 500）；令牌掩码最多露四分之一。
 
 ### 9.3 导出 · 快照 · 引擎移植（export / snapshot / vendored engines）
 
@@ -1541,6 +1553,13 @@ A global stability pass hardened these; keep them true when you touch the releva
   返回），doctor 必须给 `host_platform / payload_platform / emulated / arch`；**darwin-x64 永不回退到 arm64**（Rosetta 反向不成立，
   `test_intel_mac_is_refused_even_when_an_arm64_payload_exists` 是负向对照）；平台键看芯片不看宿主 Python（Rosetta 下的 x86_64
   Python 仍拿 arm64 载荷）；载荷或清单声明的 `min_os` 必须在下载前、解压后各查一次（`runtime.install_os_too_old`）。
+
+- **setup 重跑幂等、配置不靠终端（v0.50.0-dev）。** Claude Code 用户级注册先读 `$CLAUDE_CONFIG_DIR/.claude.json`（缺省 ~/.claude.json）：一致不动、
+  不同 remove + add、失败用 add-json 装回；`claude mcp add` 的名字必须排在 `-e` 前（`client_config/claude_cli.py`）。终端里非缺省的引擎 / 数据变量
+  写进每种带 env 的客户端条目，密钥永不写，行为开关只点名（`client_config/env_carry.py`，三表锁登记表）；stdio 探针用客户端真给的环境
+  （最小系统变量 + 条目 env）。无载荷平台 / 外部引擎跳过安装、照写配置。
+- **配置落盘只有一个口（v0.50.0-dev）。** `client_config/merge._commit_config`：内容不变不写不备份；首份 `.horosa-bak` 是用户原文件、永不覆盖，
+  之后另存时间戳备份（留 5 份）；原子替换、保留原权限位（备份同权限）；Codex TOML 与 OpenClaw 主配置同样走它。
 
 ### 9.5 测试 · CI · 跨平台（tests / CI / cross-platform）
 

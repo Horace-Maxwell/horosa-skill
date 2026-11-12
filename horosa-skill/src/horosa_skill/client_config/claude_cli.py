@@ -2,7 +2,7 @@
 
 Claude Code 的命令行只会「新增」：同名条目已存在时 `claude mcp add` 与 `claude mcp add-json` 都以
 `MCP server <name> already exists in user config` 退出码 1 结束（2.1.304 实测，见 contracts/third_party_facts.json 的
-`claude-code.mcp-add`）。所以「重跑 setup」必须自己做三件事：读、比、换（remove + add）。
+`claude-code.mcp-add-rerun`）。所以「重跑 setup」必须自己做三件事：读、比、换（remove + add）。
 
 读的是 Claude Code 自己的用户级状态文件（`$CLAUDE_CONFIG_DIR/.claude.json`，缺省 `~/.claude.json`，顶层 `mcpServers`）；
 写一律走官方命令，不手改那份文件。读不到（位置变了 / 文件坏了）时退回「先 add，撞上已存在再 remove + add」。

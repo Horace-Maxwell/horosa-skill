@@ -12,6 +12,12 @@ uv run horosa-skill setup --client claude-code --scope project  # 只写当前�
 `claude` 不在 PATH 时不会替你猜路径：注册命令原样打印在 `steps.config.command`，复制执行即可；
 失败包在 stderr（`step` / `code` / `config_untouched` / `retry_command`），退出码 2。
 
+重跑是安全的：setup 先读 Claude Code 的用户级配置（`$CLAUDE_CONFIG_DIR/.claude.json`，缺省 `~/.claude.json`），
+注册已是最新时 `steps.config.status` 为 `unchanged`、一条命令都不跑；参数变了（例如换成 `--surface compact`）就
+`claude mcp remove` + `claude mcp add`，报 `updated` 与 `changes`，`steps.config.rollback` 是能直接粘进终端的回滚命令。
+（`claude mcp add` 不会覆盖同名注册，所以不要指望再跑一遍 `add` 来更新。）终端里设着的非缺省 `HOROSA_RUNTIME_ROOT` /
+`HOROSA_SKILL_DATA_DIR` / 引擎地址会作为 `-e` 写进注册。
+
 ## 只生成注册命令（不落盘，stdio 直连）
 
 让 CLI 生成带真实绝对路径的注册命令，复制执行即可：

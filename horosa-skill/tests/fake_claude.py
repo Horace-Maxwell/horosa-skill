@@ -1,4 +1,4 @@
-"""`claude mcp …` 的替身：行为照 Claude Code 2.1.304 实测抄（contracts/third_party_facts.json 的 `claude-code.mcp-add`）。
+"""`claude mcp …` 的替身：行为照 Claude Code 2.1.304 实测抄（contracts/third_party_facts.json 的 `claude-code.mcp-add-rerun`）。
 
 既能当模块用（`FakeClaude(state).run(argv)`，进程内、哪个平台都跑），也能当可执行文件用
 （`python fake_claude.py mcp add …`，状态文件按真 CLI 的规则找：`$CLAUDE_CONFIG_DIR/.claude.json`，否则 `~/.claude.json`）。

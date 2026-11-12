@@ -56,6 +56,18 @@
       ]
     },
     {
+      "id": "claude-code.mcp-add-rerun",
+      "subject": "claude-code",
+      "fact": "Observed on Claude Code 2.1.304 in a temp HOME: `claude mcp add` and `claude mcp add-json` both refuse an existing name (`MCP server <name> already exists in user config`, exit 1), so re-registering is `remove` + `add` (`remove` of a missing name exits 1); `-e` is variadic, so the server name must come before it (`add --scope user -e K=V <name> -- cmd` fails with `Invalid environment variable format: <name>`); user scope is stored as {type, command, args, env} under top-level `mcpServers` of `$CLAUDE_CONFIG_DIR/.claude.json` (default `~/.claude.json`); `claude mcp get` health-checks by spawning the server.",
+      "source_url": "https://docs.claude.com/en/docs/claude-code/mcp",
+      "verified_on": "2026-11-11",
+      "affects": [
+        "horosa-skill/src/horosa_skill/client_config/claude_cli.py",
+        "horosa-skill/src/horosa_skill/surfaces/setup_flow.py",
+        "horosa-skill/tests/fake_claude.py"
+      ]
+    },
+    {
       "id": "claude-desktop.config",
       "subject": "claude-desktop",
       "fact": "claude_desktop_config.json under ~/Library/Application Support/Claude (macOS) / %APPDATA%\\Claude (Windows); .mcpb bundles install via Settings → Extensions; GUI clients do not inherit the shell PATH (absolute `uv` path required).",
