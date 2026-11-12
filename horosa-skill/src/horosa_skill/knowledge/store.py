@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from collections.abc import Iterator
@@ -8,7 +9,7 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
-from horosa_skill.errors import ToolValidationError
+from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.knowledge import retrieval
 from horosa_skill.textscript import fold_to_simplified, looks_traditional
 
@@ -374,16 +375,10 @@ def _build_liureng_house_entry(bundle: dict[str, Any], jiang_name: str, tian_bra
 def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
     index = load_knowledge_index()
-    domains = [domain] if domain else sorted(bundles)
+    domains = [canonical_domain(domain)] if domain else sorted(bundles)
     result_domains: list[dict[str, Any]] = []
     for name in domains:
-        bundle = bundles.get(name)
-        if not bundle:
-            raise ToolValidationError(
-                f"Unknown knowledge domain: {name}",
-                code="knowledge.unknown_domain",
-                details={"domain": name},
-            )
+        bundle = bundles[name]
         if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
             result_domains.append(
                 {
@@ -486,15 +481,9 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     bundles = load_knowledge_bundles()
-    domain = f"{payload.get('domain') or ''}".strip()
+    domain = canonical_domain(payload.get("domain"))
     category = f"{payload.get('category') or ''}".strip()
     key = f"{payload.get('key') or ''}".strip()
-    if domain not in bundles:
-        raise ToolValidationError(
-            f"Unknown knowledge domain: {domain}",
-            code="knowledge.unknown_domain",
-            details={"domain": domain},
-        )
     if bundles[domain].get("schema") == "horosa.knowledge.helpdoc.v1":
         return _read_helpdoc_entry(bundles[domain], domain=domain, category=category, key=key)
     if domain == "astro":
@@ -702,6 +691,93 @@ _TIER_SCORE = {3: 100.0, 2: 60.0, 1: 30.0, 0: 0.0}  # 全等 > 名字里含 > �
 _RELEVANCE_SPAN = 30.0  # 相关度压进 [0, 30)：档内按相关度排，永远越不过上一档
 
 
+# 自备知识库的域 id 与叫法。字面量与 knowledge/user.py 的 USER_DOMAIN 相同（那边 import 本模块，反过来会成环；测试钉两处相等）。
+USER_DOMAIN = "user"
+_USER_DOMAIN_NAMES = ("自备知识库", "自备", "笔记", "我的笔记", "用户笔记", "notes", "my notes", "user notes")
+_DOMAIN_KEY_NOISE = re.compile(r"[\s_\-·・/／()（）]+")
+
+
+def _domain_key(name: Any) -> str:
+    """域名比较用的键：全半角 / 繁简 / 大小写归一，再去掉空白与连接符（`Bazi-Pithy`、`bazi pithy`、`八字四柱·操作手册` 都认）。"""
+    return _DOMAIN_KEY_NOISE.sub("", retrieval.normalize(f"{name or ''}"))
+
+
+@lru_cache(maxsize=1)
+def domain_names() -> dict[str, str]:
+    """归一后的叫法 → 域 id。来源只有三处：域 id、手册自己的显示名（整名 / 「·」前半 / 去括号）、查询点名领域用的 `_DOMAIN_WORDS`。
+
+    先登记的不被覆盖：「八字」是 `_DOMAIN_WORDS` 里排第一的 bazi，不是名字里也带「八字」的断语库。
+    """
+    bundles = load_knowledge_bundles()
+    names: dict[str, str] = {}
+
+    def add(name: str, domain: str) -> None:
+        key = _domain_key(name)
+        if key:
+            names.setdefault(key, domain)
+
+    for domain in sorted(bundles):
+        add(domain, domain)
+    for name in (USER_DOMAIN, *_USER_DOMAIN_NAMES):
+        add(name, USER_DOMAIN)
+    for word, targets in _DOMAIN_WORDS.items():
+        add(word, targets[0])
+    for domain in sorted(bundles):
+        label = f"{bundles[domain].get('label') or ''}"
+        head = label.rsplit("·", 1)[0].strip()
+        for name in (label, head, re.sub(r"[（(].*?[）)]", "", head)):
+            add(name, domain)
+    return names
+
+
+def domain_listing(*, with_user: bool = True) -> list[dict[str, str]]:
+    """可用的域：[{domain, label}]。报错与 registry 用同一份。"""
+    bundles = load_knowledge_bundles()
+    listing = [{"domain": domain, "label": f"{bundles[domain].get('label') or ''}"} for domain in sorted(bundles)]
+    if with_user:
+        listing.append({"domain": USER_DOMAIN, "label": _USER_DOMAIN_NAMES[0]})
+    return listing
+
+
+def unknown_domain_error(name: Any, *, with_user: bool = True) -> ToolValidationError:
+    text = f"{name or ''}".strip()
+    listing = domain_listing(with_user=with_user)
+    names = domain_names()
+    near = difflib.get_close_matches(_domain_key(text), list(names), n=3, cutoff=0.6)
+    suggestions = list(dict.fromkeys(names[key] for key in near if with_user or names[key] != USER_DOMAIN))
+    hint_zh = f"是不是：{'、'.join(suggestions)}？" if suggestions else ""
+    hint_en = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
+    # 消息里只放显示名的前半：整名里有「 / 」，会和双语分隔符撞上（完整显示名在 details.valid_domains）。
+    shown_zh = "、".join(f"{row['domain']}（{row['label'].rsplit('·', 1)[0].strip()}）" if row["label"] else row["domain"] for row in listing)
+    return ToolValidationError(
+        bilingual(
+            f"没有这个知识域：{text}。{hint_zh}可用的域（id 或中文名都行，繁简、大小写不限）：{shown_zh}。",
+            f"Unknown knowledge domain: {text}.{hint_en} Valid domains (an id or its Chinese display name, either script, any case): "
+            f"{', '.join(row['domain'] for row in listing)}.",
+        ),
+        code="knowledge.unknown_domain",
+        details={"domain": text, "valid_domains": listing, "suggestions": suggestions},
+    )
+
+
+def canonical_domain(name: Any, *, with_user: bool = False) -> str:
+    """`domain` 参数 → 域 id。认 id、显示名、繁体、任意大小写；认不出抛一条带可用清单的双语错误（三处入口同一条）。
+
+    `with_user`：自备知识库（user）在这个入口能不能用。内置语料自己的函数不认它。
+    """
+    domain = domain_names().get(_domain_key(name))
+    if domain is None or (domain == USER_DOMAIN and not with_user):
+        raise unknown_domain_error(name, with_user=with_user)
+    return domain
+
+
+def domain_also_named(name: Any) -> tuple[str, ...]:
+    """这个叫法在 `_DOMAIN_WORDS` 里还指着哪些别的域（「八字」→ 过滤用 bazi，另有 bazi_pithy）：过滤只取一个域，其余要说出来。"""
+    key = _domain_key(name)
+    return next((targets[1:] for word, targets in _DOMAIN_WORDS.items() if _domain_key(word) == key), ())
+
+
+
 @dataclass(frozen=True)
 class SearchDoc:
     domain: str
@@ -844,17 +920,11 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
     query = f"{payload.get('query') or ''}".strip()
     if not query:
         raise ToolValidationError(
-            "knowledge search requires a non-empty `query`",
+            bilingual("检索词是空的：给 query 一个词。", "knowledge search requires a non-empty `query`"),
             code="knowledge.search.empty_query",
             details={},
         )
-    domain_filter = f"{payload.get('domain') or ''}".strip() or None
-    if domain_filter and domain_filter not in load_knowledge_bundles():
-        raise ToolValidationError(
-            f"Unknown knowledge domain: {domain_filter}",
-            code="knowledge.unknown_domain",
-            details={"domain": domain_filter},
-        )
+    domain_filter = canonical_domain(payload.get("domain")) if f"{payload.get('domain') or ''}".strip() else None
     try:
         limit = int(payload.get("limit") or 8)
     except (TypeError, ValueError):

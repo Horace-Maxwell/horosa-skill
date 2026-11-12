@@ -201,10 +201,11 @@ class ToolsAPI:
             ) from exc
 
     def _local_knowledge_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if f"{payload.get('domain') or ''}".strip() == user_knowledge.USER_DOMAIN:
+        domain, _notes = knowledge_search.resolve_domain(payload.get("domain"))
+        if domain == user_knowledge.USER_DOMAIN:
             return {"domain": user_knowledge.USER_DOMAIN, "user_knowledge": self._user_knowledge_summary()}
-        registry = build_knowledge_registry(domain=payload.get("domain"))
-        if not payload.get("domain"):
+        registry = build_knowledge_registry(domain=domain or None)
+        if not domain:
             registry = {**registry, "user_knowledge": self._user_knowledge_summary()}
         return registry
 
@@ -212,7 +213,7 @@ class ToolsAPI:
         if f"{payload.get('query') or ''}".strip():
             # 检索已有专门的门面 horosa_knowledge_search（v0.45.0）；knowledge_read 带 query 的老用法照旧可用。
             return self._search_knowledge(payload)
-        domain = f"{payload.get('domain') or ''}".strip()
+        domain, _notes = knowledge_search.resolve_domain(payload.get("domain"))
         if domain == user_knowledge.USER_DOMAIN:
             return user_knowledge.read_entry(self.settings, payload.get("key") or payload.get("category") or "",
                                              from_line=payload.get("from_line"), max_lines=payload.get("max_lines"))
