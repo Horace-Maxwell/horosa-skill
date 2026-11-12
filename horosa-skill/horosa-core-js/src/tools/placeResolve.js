@@ -31,8 +31,13 @@ const SEPARATORS = /[,，、;；/|·・()（）\[\]【】「」]+/;
 // One normalised form for queries, names, aliases and qualifiers: NFKC (full-width → ASCII), upstream's own
 // Traditional→Simplified city-character map, lower case, upstream's accent fold, St./Mt./Ft. spelled out, then
 // everything that is not a letter or digit dropped ("Xi'an" = "xian", "New York" = "newyork", "臺北" = "台北").
+const PLAIN_ASCII = /^[A-Za-z0-9 ]*$/;
+const ABBREVIATED = /\b(st|ste|mt|ft)\b/i;
 export function placeKey(text) {
-	let t = `${text ?? ''}`.normalize('NFKC');
+	const raw = `${text ?? ''}`;
+	// Fast path (most of the 50 000 library names): plain ASCII words, no St./Mt./Ft. to spell out.
+	if (PLAIN_ASCII.test(raw) && !ABBREVIATED.test(raw)) return raw.toLowerCase().replace(/ +/g, '');
+	let t = raw.normalize('NFKC');
 	t = foldTrad(t, CITY_TRAD_SIMP).toLowerCase();
 	t = foldAscii(t);
 	t = t.replace(/\b(st|ste)\.?\s+/g, (m, w) => (w === 'st' ? 'saint ' : 'sainte '))
@@ -197,8 +202,9 @@ async function buildIndex() {
 		for (const e of adminByName.get(target) || []) addKey(qualifiers, placeKey(alias), `A:${e.id}`);
 	}
 
-	// Anchors each entry satisfies (its ancestors / its country), computed once.
-	for (const e of entries) {
+	// Anchors each entry satisfies (its ancestors / its country) and its "where" chain: computed on first use (only
+	// pool members ever need them; building them for all 50 000 rows up front doubled every place call's start-up).
+	const buildAnchors = (e) => {
 		const anchors = new Set();
 		const addAdmin = (a) => {
 			anchors.add(`A:${a.id}`);
@@ -227,10 +233,11 @@ async function buildIndex() {
 				}
 			}
 		}
-		e.anchors = anchors;
-		e.where = whereChain(e, ancestors);
-	}
-	for (const e of entries) if (!e.admin && !e.code) {
+		return anchors;
+	};
+	LAZY.anchorsOf = buildAnchors;
+	LAZY.whereOf = (e) => whereChain(e, ancestors);
+	for (const e of CURATED_ROWS(entries)) {
 		for (const part of `${e.region}`.split(/[·・]/).filter(Boolean)) addKey(qualifiers, placeKey(part), `K:${placeKey(part)}`);
 	}
 
@@ -250,6 +257,12 @@ async function buildIndex() {
 
 	return { entries, places, qualifiers, aliases, aliasProblems, unresolvable, adminByName };
 }
+
+const CURATED_ROWS = (entries) => entries.filter((e) => !e.admin && !e.code);
+// Per-entry facts computed on first use (set by buildIndex). Only pool members ever need them.
+const LAZY = { anchorsOf: null, whereOf: null };
+const anchorsOf = (e) => (e._anchors ??= LAZY.anchorsOf(e));
+const whereOf = (e) => (e._where ??= LAZY.whereOf(e));
 
 function whereChain(e, ancestors) {
 	if (e.code) {
@@ -315,7 +328,7 @@ function distinct(ix, hits) {
 		kept.push(h);
 	}
 	if (kept.length > 1 && kept.every((h) => h.e.admin)) {
-		const isAncestor = (a, d) => d.e.anchors.has(`A:${a.e.id}`);
+		const isAncestor = (a, d) => anchorsOf(d.e).has(`A:${a.e.id}`);
 		for (const top of kept) {
 			const others = kept.filter((h) => h !== top);
 			if (!others.every((h) => isAncestor(top, h))) continue;
@@ -382,9 +395,9 @@ function segmentCjk(ix, text) {
 function applyQualifiers(pool, quals) {
 	if (!quals.length) return { hits: pool, unverified: [] };
 	const unverified = [];
-	const hits = pool.filter((h) => quals.every((q) => q.anchors.some((a) => (a.startsWith('S:') ? h.e.anchors.has(`C:${a.slice(2)}`) : h.e.anchors.has(a)))));
+	const hits = pool.filter((h) => quals.every((q) => q.anchors.some((a) => (a.startsWith('S:') ? anchorsOf(h.e).has(`C:${a.slice(2)}`) : anchorsOf(h.e).has(a)))));
 	for (const q of quals) {
-		const verified = q.anchors.some((a) => !a.startsWith('S:') && hits.some((h) => h.e.anchors.has(a)));
+		const verified = q.anchors.some((a) => !a.startsWith('S:') && hits.some((h) => anchorsOf(h.e).has(a)));
 		if (!verified) unverified.push(q.text);
 	}
 	return { hits, unverified };
@@ -481,7 +494,7 @@ function suggestions(ix, key, limit) {
 // ---------------------------------------------------------------- verdict
 
 function view(h) {
-	return { name: h.e.name, region: h.e.region, en: h.e.en, gpsLat: h.e.lat, gpsLon: h.e.lng, where: h.e.where, library: h.e.lib === 'S' ? 'cities' : 'citiesFull' };
+	return { name: h.e.name, region: h.e.region, en: h.e.en, gpsLat: h.e.lat, gpsLon: h.e.lng, where: whereOf(h.e), library: h.e.lib === 'S' ? 'cities' : 'citiesFull' };
 }
 
 function upstreamView(c) {
