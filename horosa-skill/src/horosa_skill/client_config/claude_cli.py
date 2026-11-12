@@ -10,7 +10,9 @@ Claude Code 的命令行只会「新增」：同名条目已存在时 `claude mc
 from __future__ import annotations
 
 import json
+import ntpath
 import os
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -92,11 +94,60 @@ def add_json_command(claude_bin: str, server_name: str, entry: Mapping[str, Any]
     return [claude_bin, "mcp", "add-json", "--scope", "user", server_name, json.dumps(dict(entry), ensure_ascii=False)]
 
 
+# Windows 上粘命令的人用 PowerShell（5.1 / 7）还是 cmd，看不出来（v0.50.1-dev，windows-smoke）。此前一律 list2cmdline：
+# 那是 cmd / C 运行库的规则，JSON 参数写成 "{\"type\": …}"——PowerShell 里反斜杠不是转义符，引号在第一个 \" 处就断了，
+# 粘进去 `Invalid JSON`；`&&` 在 Windows PowerShell 5.1 里是语法错误；npm 装的 claude 在 PowerShell 里是 claude.ps1，
+# 光写的 `--` 会被 PowerShell 当成「参数到此为止」吃掉，`-e` 就把后面的命令吞成环境变量。
+# 两边都认的写法：只含 _WINDOWS_BARE 里字符的参数原样写；其余（以及 `--`）用双引号括起来——双引号里 cmd 只认 %，
+# PowerShell 只认 $ 和 `，两边都不拿反斜杠转义。含 " $ ` % 或以 \ 结尾的参数没有两边都对的写法，整条退回 cmd 写法。
+_WINDOWS_BARE = re.compile(r"[A-Za-z0-9_.:\\/=+-]+\Z")
+_WINDOWS_NO_COMMON_FORM = frozenset('"$`%')
+
+
+def _windows_token(arg: str) -> str | None:
+    if arg != "--" and _WINDOWS_BARE.match(arg):
+        return arg
+    if any(ch in _WINDOWS_NO_COMMON_FORM for ch in arg) or arg.endswith("\\"):
+        return None
+    return f'"{arg}"'
+
+
 def shell_text(command: list[str], *, os_name: str | None = None) -> str:
-    """把一条命令写成**能直接粘进终端**的一行：POSIX 用 shlex，Windows 用 list2cmdline（JSON 参数里的引号都转义好）。"""
+    """把一条命令写成**能直接粘进终端**的一行：POSIX 用 shlex；Windows 用 PowerShell 与 cmd 都认的写法
+    （见上；没有共同写法时退回 cmd 的 list2cmdline）。"""
     if (os_name or os.name) == "nt":
+        tokens = [_windows_token(arg) for arg in command]
+        if all(token is not None for token in tokens):
+            return " ".join(token for token in tokens if token is not None)
         return subprocess.list2cmdline(command)
     return shlex.join(command)
+
+
+def shell_sequence(lines: list[str], *, os_name: str | None = None) -> str:
+    """几条命令依次执行：POSIX 用 `&&`；Windows 每条一行（Windows PowerShell 5.1 不认 `&&`，cmd 与 PowerShell 都认换行）。"""
+    return ("\n" if (os_name or os.name) == "nt" else " && ").join(lines)
+
+
+def restore_command(claude_bin: str, server_name: str, entry: Mapping[str, Any]) -> list[str]:
+    """把旧条目装回去的命令。能用 `add` 表达的（stdio，只有 type / command / args / env）就用 `add`：参数里没有 JSON，
+    哪个终端都粘得进去；`add` 写出的就是这四个键。表达不了的（别的键、http 条目）才用 `add-json`。"""
+    command, args, env = entry.get("command"), entry.get("args", []), entry.get("env", {})
+    if (set(entry) <= {"type", "command", "args", "env"} and entry.get("type", "stdio") == "stdio"
+            and isinstance(command, str) and command and isinstance(args, list) and all(isinstance(a, str) for a in args)
+            and isinstance(env, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())):
+        return add_command(claude_bin, server_name, [command, *args], env)
+    return add_json_command(claude_bin, server_name, entry)
+
+
+def _program_name(claude_bin: str, *, os_name: str | None = None) -> str:
+    """给人看的命令里写程序名，不写本机绝对路径。Windows 上 which 找到的是 `claude.CMD` / `claude.exe`：写 `claude`，
+    让用户的终端自己按 PATHEXT 找（PowerShell 里 npm 装的是 claude.ps1，cmd 里是 claude.cmd）。"""
+    if not claude_bin:
+        return "claude"
+    if (os_name or os.name) == "nt":
+        stem, ext = ntpath.splitext(ntpath.basename(claude_bin))
+        return stem if ext.lower() in {".exe", ".cmd", ".bat", ".com", ".ps1"} else stem + ext
+    return Path(claude_bin).name
 
 
 def _tail(text: str | None) -> str:
@@ -114,7 +165,7 @@ def _without_secret_values(entry: Mapping[str, Any]) -> tuple[dict[str, Any], li
 
 def register_user_server(
     *, claude_bin: str, server_name: str, stdio_command: list[str], env: Mapping[str, str],
-    run: RunClaude, config_path: Path | None = None,
+    run: RunClaude, config_path: Path | None = None, os_name: str | None = None,
 ) -> dict[str, Any]:
     """让用户级条目等于期望值，并说清做了什么。
 
@@ -124,12 +175,13 @@ def register_user_server(
     - `updated`：此前有且不同，`remove` + `add`，`changes` 列出差异；`add` 失败时把旧条目用 `add-json` 装回去。
     失败返回 `{ok: False, failed_command, returncode, stdout, stderr, touched, restored_previous?, restore_command?}`；
     `touched` = 用户原来的注册此刻是不是已经变了（决定 setup 失败包里的 `config_untouched`）。
-    `rollback` / `restore_command` 是能直接粘进终端的命令；旧条目 env 里名字像密钥的值不回显（`rollback_redacted` 点名）。
+    `rollback` / `restore_command` 是能直接粘进终端的命令（Windows 上 PowerShell 与 cmd 都能粘；多条时每条一行）；
+    旧条目 env 里名字像密钥的值不回显（`rollback_redacted` 点名）。`os_name` 只给测试用（在本机走 Windows 那一支）。
     """
-    program = Path(claude_bin).name if claude_bin else "claude"
+    program = _program_name(claude_bin, os_name=os_name)
 
     def display(command: list[str]) -> str:  # 给人看的命令不带本机绝对路径
-        return shell_text([program, *command[1:]])
+        return shell_text([program, *command[1:]], os_name=os_name)
 
     wanted = desired_entry(stdio_command, env)
     add = add_command(claude_bin, server_name, stdio_command, env)
@@ -170,7 +222,7 @@ def register_user_server(
     report["touched"] = True
     completed = call(add)
     shown_previous, hidden = _without_secret_values(existing) if existing is not None else ({}, [])
-    restore_shown = display(add_json_command(claude_bin, server_name, shown_previous)) if existing is not None else None
+    restore_shown = display(restore_command(claude_bin, server_name, shown_previous)) if existing is not None else None
     redacted = {"rollback_redacted": hidden} if hidden else {}
     if completed.returncode != 0:
         restored = None
@@ -186,7 +238,7 @@ def register_user_server(
         return failed(add, completed, restored_previous=restored,
                       **({"restore_command": restore_shown} if restore_shown else {}), **redacted)
     changes = entry_changes(existing, wanted) if existing is not None else []
-    rollback = display(remove) + (f" && {restore_shown}" if restore_shown else "")
+    rollback = shell_sequence([display(remove), *([restore_shown] if restore_shown else [])], os_name=os_name)
     return {
         **report, "ok": True, "status": "updated", "changes": changes, "rollback": rollback,
         "stdout": _tail(completed.stdout), **redacted,
