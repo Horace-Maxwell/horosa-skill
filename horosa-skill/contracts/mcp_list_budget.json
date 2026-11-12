@@ -7,7 +7,7 @@
     "tool_input_schema_bytes": 5000
   },
   "instructions_bytes": 2035,
-  "full_bytes": 257657,
+  "full_bytes": 258156,
   "full_tools": 127,
   "full_max_tool_input_schema_bytes": 3274,
   "compact_bytes": 21745,

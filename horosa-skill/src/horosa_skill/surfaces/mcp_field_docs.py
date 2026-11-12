@@ -35,6 +35,8 @@ _CURATED: dict[str, str] = {
     "q": "检索词",
     "location": "地点",
     "pdMethod": "主限算法",
+    "godKeyPos": "神煞按哪柱查：年（缺省）/日/年日",
+    "houseStartMode": "0=八字公式起盘（缺省） 1=ASC 起盘",
     "pdTimeKey": "主限时间钥（弧度→年）",
     # 门面：记忆库
     "run_id": "存档 id（horosa_memory_query 可查）",
