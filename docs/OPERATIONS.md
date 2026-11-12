@@ -195,6 +195,8 @@ v0.38.0 起 attestation 由 `release-runtime.yml` 的 `assemble` job 对两份�
   - runtime 根必须纯 ASCII：`HOROSA_RUNTIME_ROOT=C:\horosa` 后重装（随包 JDK 与 Swiss Ephemeris 按 ANSI 读路径；自动迁移未做）
 - 报告工具报 `report.output_path_not_allowed`
   - `output_path` 是不可信输入：只能落在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS` 白名单根内（提示注入防线，不是 bug）
+- 报告工具报 `report.output_path_unusable`
+  - 看 `details.reason`：`existing_file`（已有文件不是星阙写的报告，不替换）、`store_area`、`extension_mismatch`、`name_too_long` 等；起盘与写回之前就拒，什么都没写（v0.50.0）
 - 工具返回 `runtime.starting`（带 `retry_after_seconds`）
   - 后端仍在冷启动；按给定秒数重试。首启与 Windows ARM 仿真慢，`HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 缺省已按仿真放大
 - Jev（`HOROSA_JEV*`，默认关）

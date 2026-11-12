@@ -16,6 +16,10 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-11) | 报告的 `output_path` 能点名 run 自己的存档 / manifest（输出根就是 `<data>/runs`），整份替换后这条 run 再也出不了报告；路径检查排在写回解读之后，被拒时答案已记到 run 上；`report_from_tool` 被拒时技法已跑完存好 | 事前检查（无副作用）挪到起盘 / 写回之前；已有文件只替换记在记忆库里的报告；存储区不写；缺省名带样式且原子占名；守卫 `tests/test_report_preflight.py` |
+| v0.50.0-dev (2026-11-11) | 调用方 Markdown 逐行正则认：斜体 / 删除线 / 链接 / 代码块原样印符号，「Note: …」进键值表，调用方的小数被四舍五入；换成 CommonMark 后中文 `**结论：**今年` 又不认 | `reports/markdown.py` 一棵块树 PDF / DOCX 共用；同一段文字里 CommonMark 没认下的成对 ** / ~~ 补认；键值表与取整只对引擎段 |
+| v0.50.0-dev (2026-11-11) | 一段 2000 字的结论、一格 3000 字的表格、2000 字的章名都让整份 PDF `LayoutError` 退成 TXT；几千行的解读按页数平方变慢（8000 行 72 s）；PDF/UA 声明下藏着不嵌入的 Helvetica / Times-Roman | 卡片拆成逐块的 `CardPiece`、长值 / 长格可跨页、`Guarded` 兜底只摊开一块；分栏与长段按屏 / 按组量；初始字体、表格字体、矢量图起始字体都设成报告字体，声明按实际引用的字体判 |
+| v0.50.0-dev (2026-11-11) | PDF 的 emoji 只换 U+1F300–1FAFF 一段（旧断言只测 📍，恰在段内）；退化 TXT 是机器版全文；技法依据报告印 `分宫制=1`；盘图没画成时 PNG 说「这个技法没有盘式」；金口诀印 app 的「起盘后显示…」 | 按含义换符号 + 按真实 cmap 兜底；TXT 用同一串人读块；`setting_reader_text` 共用；`report.chart_figure_unavailable` + `figure_gaps`；adapter 剔除界面提示 |
 | v0.49.1-dev (2026-11-09) | 太乙 / 三式合一择时的 92 天上限是由 60 秒墙钟倒推的估计；Windows x64 实测单扫描 69 / 82 秒，上限窗口必然 `js_engine.timeout` | 扫描那一次调用的墙钟按窗口给（天数 × 4 秒、封顶 540 秒，客户端按 600 秒配），`engine_timeout_at_least` 只抬不降 |
 | v0.49.0 (2026-11-10) | 推 main 后 CI 红在塔罗测试：DOCX 断言写在「没有中文字体就返回」之前；CI 的 Ubuntu 没有中文 TTF，DOCX 本来就不栅格化盘图。本机有字体，门禁和 preflight 全绿 | 断言挪到字体判断之后；新增一条在每台机器上模拟无字体的测试，把只在 CI 走到的分支拉回本机。tag 前 CI 闸拦住了，没发出去 |
 | v0.49.0 (2026-11-10) | 发版前预估 lane 预算：windows-latest 在 v0.48.0 已用 2504 / 2700 s（93%），v0.49.0 的测试多约 8%（本机 472 → 509 s），照比例会贴着上限 | nt 预算 2700 → 3600；仿真 lane 加时 2700 → 1800，总数仍 5400 s，job 超时不变。看上一版的注解提前加，别等草稿被杀 |
@@ -201,6 +205,63 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-11 — 报告落盘：`output_path` 能盖掉 run 自己的存档；检查排在写回之后
+
+- **现象**（2026-11-11 深度评审，R-04 / R-05 / R-08 / R-12 / R-17 / C-05）：`horosa_report_render` 的 `output_path` 点名这条 run 的存档 JSON，
+  报告把它整份替换（12976 → 157107 字节），之后这条 run 再出报告是 `report.export_contract_missing`——丢数据。路径被拒时 AI 解读已经写回到 run，
+  下一次不带答案的调用就把它印成报告；`report_from_tool` 被拒时技法已经跑完、多存一条 run，错误里却没有 run_id；给目录退化成目录旁的 TXT；
+  `x.docx` + `format:"pdf"` 写出装着 PDF 的 .docx；300 字的文件名 / 整条路径超长抛裸 `OSError`；缺省名只精确到秒，排盘版与解读版同一秒互相盖。
+- **根因**：v0.40.0 的路径闸只回答「在不在输出根里」；而输出根恰好就是存档目录。其余检查都散在写盘那一刻。
+- **修**：`reports/output_path.py`——无副作用的检查（名字长度先于任何 stat、存储区、扩展名、可写、已有文件）在取 run 之后、起盘 / 写回之前做；
+  已有文件只有「记忆库 artifacts 表里有一条 `report_*` 记着这个路径」才替换（多张 PNG 的 `_1` / `_2` 同样），否则 `existing_file`；
+  缺省名与目录里的缺省名用 `O_CREAT|O_EXCL` 原子占（多张 PNG 整组占）。写回挪到产物落盘之后，结果给 `answer_source`。
+- **守卫**：`tests/test_report_preflight.py`（24 条）；负向对照：去掉已有文件检查 / 存储区 / 整组占名 / stat 的 OSError 包装，各自转红。
+  第一版超长名测试「因为错误的原因通过」：上限 240 时旧的临时名前缀 254 字节，恰好没超 255；改成直接量 `mkstemp` 前缀后才会红。
+- **规则**：接收路径的工具，事前检查与副作用分开、检查在一切写入之前；「在允许的根里」不等于「可以写」——根里还住着别人的文件。
+
+### v0.50.0-dev / 2026-11-11 — 调用方 Markdown 要按 CommonMark 解析，但中文「**结论：**今年」这种写法 CommonMark 不认
+
+- **现象**（R-07 / R-06）：渲染器逐行认 Markdown（两个正则）：`*斜体*`、`~~删除线~~`、链接、`<br>`、代码块、嵌套列表都原样印成符号；
+  「Note: …」被排进键值对照表；调用方写的 0.7548645849180389 被改成 0.7549；DOCX 没有真超链接。核心结论卡取第一个非空行，常常就是「## 总体结论」。
+- **根因**：引擎导出段与调用方文字走同一套逐行规则；后者是 Markdown，前者不是。
+- **修**：`reports/markdown.py`（markdown-it-py，CommonMark + GFM 表格 / 删除线，`html: False`、`breaks: True`）出一棵块树，PDF 与 DOCX 画同一棵；
+  键值表与长小数取 4 位只留给引擎段。核心结论 = 第一句真话（跳过标题、表格、标签、删除线），一句都没有就不印。
+  坑：CommonMark 的左右侧定界规则对中文不友好——收尾 `**` 前是标点、后是汉字时不算定界（`**结论：**今年`），整段原样留成文字。
+  在同一段文字里对 CommonMark 没认下的成对 `**` / `~~` 再补认一次（单个 `*` 不补：乘号、星号）。
+- **守卫**：`tests/test_report_markdown.py`（11 条），负向对照：渲染器换回逐行规则、结论换回第一行、去掉补认，各自转红。
+
+### v0.50.0-dev / 2026-11-11 — PDF 版面：一块排不下就整份退 TXT、长内容按页数平方变慢、声明 PDF/UA 却引用不嵌入的字体
+
+- **现象**（R-03 / R-10 / C-17 / R-15 / R-16）：卡片是一张表、一格就是一段结论——2000 字时比一页高，`LayoutError` 让整份 PDF 退成 TXT；
+  键值行的值、表格的一格、超长章名同理。8000 行的解读 72 s：分栏清单每页把剩下的全部行建成表再量（二分里还要建十几次），一段几千行的段落
+  每次拆页都把剩下的全部行重断。标题后面跟整张不拆的小表时，表挪到下一页、标题留在页底。pdffonts 里有不嵌入的 Helvetica 与 Times-Roman，
+  元数据照样写 `pdfuaid:part=1`；本机没有中文 TrueType 时静默改用不嵌入的 CID 字体。
+- **根因**：reportlab 的表格行默认不能在行内断；`Table.split` / `Paragraph.split` 对剩余部分整体重排；`keepWithNext` 会把超高的下一块连标题
+  一起挪页（留下大半页空白）；canvas 每页开头、表格字符串格子（含占位空串）、矢量图起始状态都会 `setFont` 一次缺省字体，哪怕一个字都不画。
+- **修**：卡片逐块成 `CardPiece`（框与色条跟着段落跨页）；长值 / 长格（> 400 字）键成一行、值成段落，或表格开 `splitInRow`；`Guarded` 兜底
+  只把在整页上都排不下又拆不开的那一块摊成段落（`renderers.LAYOUT_SPILLS` 给测试看是否靠兜底）；`Panels` 只拿一屏放得下的行去量；
+  段内换行每 40 行一个段落对象；标题与短的下一块同页、长的下一块只要求标题下有 40 mm；`initialFontName`、表格 `FONTNAME`、
+  `Drawing.initialFontName` 都设成报告字体，`TaggingCanvas.fonts_all_embedded` 为真才写 PDF/UA；CID 回退时结果 `warnings` + 封面写明。
+  调用方文字合计上限 200,000 字（`report.ai_report_too_large`）。
+- **守卫**：`tests/test_report_pdf_layout.py`、`tests/test_report_metadata.py`；时间用「四倍行数不到八倍时间」量（旧代码约十五倍）。
+  全量 veraPDF 本机没装，这次没重跑；字体这一条现在是真的。
+
+### v0.50.0-dev / 2026-11-11 — 报告给读者的那几处：emoji、退化 TXT、技法依据报告、缺图、金口诀占位
+
+- **现象**（R-02 / R-01 / R-09 / R-13 / R-11 / R-14）：PDF 只把 U+1F300–1FAFF 换成 ▸，✅ ❌ ⚠️ ⭐ 1️⃣ 是方块，🔴 / 🟢 都成 ▸；旧断言只测 📍——
+  恰好在那一段里，所以一直是绿的（「因为错误的原因通过」）。退化的 TXT 写的是机器版 plain_text（run / trace id、质量闸、交付清单、绝对路径）。
+  技法依据报告印 `古典口径=False；分宫制=1；岁差=` 和「已与用户确认设置=True」。引擎没在跑时推运类 PNG 回「这个技法没有盘式」；
+  只有 app 画法的盘画不出时整张悄悄丢掉。金口诀结果没有行年时，app 的右下格只印界面提示「起盘后显示行年/旬日/旺衰/神煞」。
+  DOCX 的创建时间是 2013-12-23、w:lang 是 en-US。
+- **修**：`_pdf_symbols` 按含义换（红绿灯同一个 ● 保留颜色），`_wrap_missing_glyphs_chain` 对**符号**按真实 cmap 兜底成 ▸（文字照旧原样，
+  v0.43 起的规矩不变）；DOCX 保留 emoji。退化 TXT 由 `_reader_text` 按同一串人读块出、开头一句白话。`source.setting_reader_text` 完整报告与
+  技法依据报告共用。`report.chart_figure_unavailable` + 三种产物统一 `figure_gaps`。金口诀 adapter 剔除那句界面提示、回 note 印在图下（不造行年）。
+  DOCX 写生成时刻、按输出文字的 w:lang、字体表的备用名与字符集。
+- **守卫**：`tests/test_report_symbols.py`、`test_degraded_txt_is_the_readers_document_and_never_overwrites`、
+  `test_the_technique_report_speaks_words_not_codes`、`tests/test_report_aux_charts.py` 新三条、`test_jinkou_without_a_run_year_…`；负向对照各自转红。
+- **没改的**：ICS 的多日全天事件仍用 `DURATION:PnD`（不自己数天数，AGENTS §9.3.1 的旧规矩）；只有一个时刻的事件不写 DTEND（RFC 5545：
+  DATE-TIME 无 DTEND 即瞬时）；PRODID 的 `//ZH` 是合法的语言段。
 
 ### v0.49.1-dev / 2026-11-09 — 太乙 / 三式合一择时：上限放行的 92 天窗口在 60 秒墙钟下必然超时
 
