@@ -1527,6 +1527,10 @@ _SHENSHU_EXPECTED = {
 # kinastro-* need gender (+ place for cetian/qizhengkin/xianqin) to compute a full chart.
 _SHENSHU_PAYLOAD_EXTRA = {
     "shaozi": {"gender": 1},
+    # v0.50.0：北极 / 南极 / 淳子缺性别也拒（与闸门同一份名单；实测北极 / 南极的大运条文随性别变）。
+    "beiji": {"gender": 1},
+    "nanji": {"gender": 1},
+    "chunzi": {"gender": 1},
     "tieban": {"gender": 1},
     "xianqin": {"gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},
     "cetian": {"gender": 1, "lat": "31n13", "lon": "121e28", "gpsLat": 31.2167, "gpsLon": 121.4667, "zone": "+08:00"},

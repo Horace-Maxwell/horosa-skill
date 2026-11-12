@@ -68,6 +68,7 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
 # 「事实」同源（agent_guidance.questions.GENDER_FACT_TOOLS，1 / 0 两种性别逐行实测）——合并深审两批时曾是两份：入口 12 个、
 # 闸门 17 个，正传 / 北极 / 南极 / 紫微择日缺性别时 CLI 与直调照样按男排（实测这四个的大运 / 条文 / 命局随性别变）。
 from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS as GENDER_DEPENDENT_TOOLS  # noqa: E402
+from horosa_skill.agent_guidance.questions import gender_required  # noqa: E402
 
 
 # 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。
@@ -96,7 +97,7 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
                                        "expected": bilingual(issue.expected_zh, issue.expected_en), "example": issue.example,
                                        "options": issue.options, "ask_user": True, "message": bilingual(issue.zh, issue.en)}]) from None
         return
-    if tool_name in GENDER_DEPENDENT_TOOLS and payload.get("gender") is None and not _INSIDE_TECHNIQUE.get():
+    if gender_required(tool_name, payload) and payload.get("gender") is None and not _INSIDE_TECHNIQUE.get():
         raise field_issues_error([{
             "field": "gender", "code": "tool.missing_gender", "got": None,
             "expected": bilingual("1 / 男 / 乾造 = 男；0 / 女 / 坤造 = 女", "1 / 男 / male = male; 0 / 女 / female = female"),

@@ -59,6 +59,17 @@ GENDER_FACT_TOOLS: frozenset[str] = frozenset({
     "bazi_birth", "bazi_direct", "ziwei_birth", "ziweizeri", "liureng_runyear", "canping", "heluo", "yizhangjing",
     "zhengchuan", "shaozi", "tieban", "beiji", "nanji", "chunzi", "xianqin", "cetian", "qizhengkin",
 })
+
+
+def gender_required(tool: str, payload: dict[str, Any]) -> bool:
+    """这次调用的结果是否依赖性别（技法入口 tool.missing_gender 与闸门共用）。神数正传的铁算心易是查询层：不排生辰、不分男女。"""
+    if tool not in GENDER_FACT_TOOLS:
+        return False
+    if tool == "zhengchuan" and str(payload.get("school") or "").strip().lower() == "xinyi":
+        return False
+    return True
+
+
 # 选项超过这么多就不在追问里逐条列出（除非请求本身碰了这个设置）：说缺省值和怎么改。
 MAX_SPELLED_OPTIONS = 8
 

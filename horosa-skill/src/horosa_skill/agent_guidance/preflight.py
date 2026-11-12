@@ -121,7 +121,8 @@ def open_questions(tool_name: str, payload: dict[str, Any], *, confirmed: bool) 
             continue
         if not gate_questions.applies(tool_name, question, payload) or gate_questions.answered(tool_name, question, payload):
             continue
-        if confirmed and not gate_questions.is_fact(tool_name, question):
+        # 性别事实按这次的载荷判（神数正传·铁算心易是查询层，不分男女）：与技法入口的 tool.missing_gender 同一个 gender_required。
+        if confirmed and not (gate_questions.is_fact(tool_name, question) and gate_questions.gender_required(tool_name, payload)):
             continue
         items.append(gate_questions.present(tool_name, question, payload))
     return items

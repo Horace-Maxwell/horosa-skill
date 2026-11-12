@@ -181,3 +181,12 @@ def test_gender_requirement_has_one_source_for_gate_and_entry() -> None:
 
     assert GENDER_DEPENDENT_TOOLS == GENDER_FACT_TOOLS
     assert {"zhengchuan", "beiji", "nanji", "ziweizeri"} <= GENDER_DEPENDENT_TOOLS
+
+
+def test_zhengchuan_xinyi_query_layer_never_needs_gender() -> None:
+    """铁算心易是查询层（不排生辰、不分男女）：入口与闸门都不要性别；其余流派照样要。"""
+    from horosa_skill.agent_guidance.questions import gender_required
+
+    assert gender_required("zhengchuan", {"school": "xinyi"}) is False
+    assert gender_required("zhengchuan", {"school": "tieban", "date": "1990-05-03"}) is True
+    assert gender_required("bazi_birth", {}) is True and gender_required("qimen", {}) is False
