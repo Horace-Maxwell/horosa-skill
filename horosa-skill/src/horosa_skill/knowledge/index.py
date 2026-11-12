@@ -212,10 +212,16 @@ def fts5_available() -> bool:
 def _connect(path: Path, *, timeout: float = 15.0) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=timeout, isolation_level=None)
-    # 隐私：删掉的条目尽量不在库文件里留残页（secure_delete 把释放的页清零；FTS5 段合并前的旧词条不保证）。
-    # 用回滚日志而非 WAL：读写都很短，WAL 的并发优势用不上，少一个常驻的 -wal 文件。
-    conn.execute("PRAGMA secure_delete=ON")
-    conn.execute("PRAGMA journal_mode=DELETE")
+    try:
+        # 隐私：删掉的条目尽量不在库文件里留残页（secure_delete 把释放的页清零；FTS5 段合并前的旧词条不保证）。
+        # 用回滚日志而非 WAL：读写都很短，WAL 的并发优势用不上，少一个常驻的 -wal 文件。
+        conn.execute("PRAGMA secure_delete=ON")
+        conn.execute("PRAGMA journal_mode=DELETE")
+    except BaseException:
+        # 坏库在这里就报错：不关的话连接挂在异常的 traceback 上，调用方接着隔离（改名）坏库——Windows 上开着的文件改不了名
+        # （WinError 32），坏索引就永远重建不了（v0.50.1-dev，tests/winsim.py 在本机模拟）。
+        conn.close()
+        raise
     return conn
 
 

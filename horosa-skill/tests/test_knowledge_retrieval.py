@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -387,7 +388,7 @@ def test_an_emptied_chunks_table_is_rebuilt_not_reported_as_zero_hits(tmp_path: 
     _put(tmp_path, "a.md", "七杀的笔记。")
     settings = _settings(tmp_path)
     uk.search_user(settings, "七杀")
-    with sqlite3.connect(kindex.index_path(settings)) as conn:
+    with closing(sqlite3.connect(kindex.index_path(settings))) as conn, conn:
         conn.execute("DELETE FROM chunks")
     assert uk.search_user(settings, "七杀")["matches"]
 

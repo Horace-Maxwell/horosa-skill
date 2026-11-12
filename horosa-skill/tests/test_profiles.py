@@ -13,6 +13,7 @@ import subprocess
 import sys
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -719,7 +720,7 @@ def test_a_store_that_already_holds_both_scripts_keeps_working(tmp_path: Path) -
 
     store = _store(tmp_path)
     _save(store, "妈妈", {"date": "1962-03-05"})
-    with sqlite3.connect(store.path) as db:  # 旧版写法：键 = name_key（不折繁简）
+    with closing(sqlite3.connect(store.path)) as db, db:  # 旧版写法：键 = name_key（不折繁简）
         db.execute("INSERT INTO profiles (key, name, fields_json, aliases_json, place, notes, created_at, updated_at)"
                    " VALUES ('媽媽', '媽媽', '{\"date\": \"1961-01-01\"}', '[]', NULL, NULL, '2026-01-01', '2026-01-01')")
     assert sorted(store.names()) == ["妈妈", "媽媽"]

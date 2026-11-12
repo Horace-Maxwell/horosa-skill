@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 from typer.testing import CliRunner
 
 from fakes import FakeClient, FakeJsClient
+from winsim import windows_sharing
 from horosa_skill.config import Settings
 from horosa_skill.errors import ToolValidationError, classify_code
 from horosa_skill.memory.store import MemoryStore
@@ -291,12 +293,16 @@ def _readonly(folder: Path) -> None:
 
 
 @pytest.mark.parametrize("call", ["query", "show", "answer"])
-def test_a_store_that_cannot_be_opened_gives_a_structured_error(tmp_path: Path, call: str) -> None:
-    """此前只读数据目录上 memory_query 抛裸 sqlite3.OperationalError。"""
+def test_a_store_that_cannot_be_opened_gives_a_structured_error(tmp_path: Path, call: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """此前只读数据目录上 memory_query 抛裸 sqlite3.OperationalError。
+
+    按 Windows 的规则删库（开着的文件删不掉，tests/winsim.py）：v0.50.0 这里在 windows-smoke 上 WinError 32——是测试自己的
+    `with sqlite3.connect()` 只提交不关；本机照样绿。"""
+    windows_sharing(monkeypatch)
     service = _service(tmp_path)
     run_id = _run(service)
     data = tmp_path / "data"
-    with sqlite3.connect(data / "memory.db") as conn:
+    with closing(sqlite3.connect(data / "memory.db")) as conn:  # `with connect()` 只提交不关：Windows 上库就删不掉
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     service.store.db_path.unlink()  # 读不到库：连接时就会失败
     (data / "memory.db").mkdir()  # 占位：路径是目录，sqlite 打不开
@@ -421,12 +427,15 @@ def test_stale_temp_files_are_reported_and_only_swept_when_asked(tmp_path: Path)
     assert not stale.exists() and live.exists(), "活着的写者的临时文件不动"
 
 
-def test_quarantine_is_visible_to_later_processes_and_never_deleted(tmp_path: Path) -> None:
-    """此前坏库被隔离后，新库是空的，检索只是「没有结果」：没有警告，别的进程更不知道。"""
+def test_quarantine_is_visible_to_later_processes_and_never_deleted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """此前坏库被隔离后，新库是空的，检索只是「没有结果」：没有警告，别的进程更不知道。
+
+    按 Windows 的规则跑（tests/winsim.py）：隔离坏库时本进程任何一个没关的连接都会让改名失败，坏库就永远隔离不了。"""
+    refused = windows_sharing(monkeypatch)
     service = _service(tmp_path)
     run_id = _run(service)
     db = tmp_path / "data" / "memory.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     for path in (tmp_path / "data").glob("memory.db-*"):
         path.unlink()
@@ -440,6 +449,7 @@ def test_quarantine_is_visible_to_later_processes_and_never_deleted(tmp_path: Pa
     assert any(backups[0].name in line and "rebuild" not in line.split("/")[0] for line in result["warnings"])
     assert backups[0].exists()
     assert healed.store.corruption_recovery["rebuild"]["complete"] is True
+    assert refused == []
 
 
 def test_runs_on_disk_without_rows_trigger_a_warning(tmp_path: Path) -> None:
