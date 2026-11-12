@@ -274,6 +274,15 @@ class MundaneRunners:
         # 地区盘（上游 MUNDANE_TYPES 'region'）：底盘 = 预置建置盘（regionKey），不求入宫时刻——另走一条流程。
         if f"{payload.get('mundaneType') or ''}".strip() == "region":
             return self._run_mundane_region_chart(payload, settings)
+        defaulted = [key for key in ("zone", "lat", "lon") if not payload.get(key)]
+        if defaulted:
+            # 上游有成文缺省（MundaneMain :589-591 / :615-623）：照用，但说出来（v0.50.0 深审余项：以前悄悄按 +08:00 / 北回归线起盘）。
+            from horosa_skill.agent_guidance.questions import ZONE_DOCUMENTED_DEFAULTS
+            from horosa_skill.input_fields import add_input_note
+
+            zh, en = ZONE_DOCUMENTED_DEFAULTS["mundane"]
+            names = " / ".join(f"`{key}`" for key in defaulted)
+            add_input_note(zh.format(missing=names), en.format(missing=names))
         seed_payload = {
             "year": year,
             "ad": payload.get("ad", 1),

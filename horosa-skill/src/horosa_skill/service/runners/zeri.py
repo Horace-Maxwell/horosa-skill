@@ -11,6 +11,7 @@ from horosa_skill.errors import (
     ToolTransportError,
     ToolValidationError,
     bilingual,
+    classify_code,
     engine_tool_code,
     tool_code,
 )
@@ -26,6 +27,7 @@ from horosa_skill.service.options_zeri import (
     _require_sane_window,
     _zeri_explain_rows,
     _zeri_snapshot_row_opts,
+    zeri_engine_input_error,
 )
 
 _HM_TAIL_RE = re.compile(r"\s\d{1,2}:\d{1,2}$")
@@ -39,6 +41,16 @@ def _explain_at_text(value: Any) -> str:
     text = _to_slash_date(str(value or "").strip())
     return f"{text}:00" if _HM_TAIL_RE.search(text) else text
 
+
+
+def _declared_only(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """展示盘载荷只带择日技法自己声明的键（+ 入口 / 闸门键）：调用方多给的、入口已说「没有哪个设置读它」的键
+    （如 huanglizeri 的 `hour`）不许再流进基底技法——以前 hour=25 让展示盘（老黄历）在 JS 里崩成「铸盘失败，重试 / doctor」。"""
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+    from horosa_skill.input_normalization import NON_TECHNIQUE_KEYS
+
+    declared = set(getattr(TOOL_DEFINITIONS[tool_name].input_model, "model_fields", {}))
+    return {k: v for k, v in payload.items() if k in declared or k in NON_TECHNIQUE_KEYS or k.startswith("_")}
 
 class ZeriRunners:
     @staticmethod
@@ -119,7 +131,10 @@ class ZeriRunners:
         ).get("segments") or [cfg]
         base = {
             "zone": _electionscan_zone(payload.get("zone")),
-            "ad": payload.get("ad", 1),
+            # 搜索窗的纪元随窗口日期本身（前导负号 = 公元前，后端 parse_civil_date 认）；`ad` 是命主日期的纪元（入口已折进
+            # `date` 的负号），不许拿来读窗口——否则公元前生人的 ad=-1 会把 2028 年的窗口读成公元前 2028 年（深审余项）。
+            # 上游天星择日同样恒发 ad: 1（TianxingElectionMain.buildScanPayload）。
+            "ad": 1,
             "gpsLat": payload.get("gpsLat"),
             "gpsLon": payload.get("gpsLon"),
             "lat": payload.get("lat"),
@@ -149,7 +164,7 @@ class ZeriRunners:
         for index, segment in enumerate(segments, start=1):
             _progress_tick(index - 1, total_segments, f"天星择时：扫描第 {index}/{total_segments} 段")
             raw = self._call_remote("/electionscan/scan", {**base, **segment})
-            data = self._require_electionscan_ok(raw, endpoint="/electionscan/scan")
+            data = self._require_electionscan_ok(raw, endpoint="/electionscan/scan", tool="tianxing", label="天星择日", window=cfg)
             lists.append(list(data.get("intervals") or []))
             truncated = truncated or bool(data.get("truncated"))
             eval_points += int(((data.get("stats") or {}).get("evalPoints")) or 0)
@@ -237,7 +252,8 @@ class ZeriRunners:
         """
         t_raw = _explain_at_text(payload.get("explainAt"))
         raw = self._call_remote("/electionscan/explain", {**base, "t": t_raw})
-        data = self._require_electionscan_ok(raw, endpoint="/electionscan/explain")
+        data = self._require_electionscan_ok(raw, endpoint="/electionscan/explain", tool="tianxing", label="天星择日",
+                                             window={"explainAt": payload.get("explainAt")})
         tree = data.get("tree") if isinstance(data, dict) else None
         js = self._tianxing_js(
             {"action": "explain_section", "t": data.get("t") or t_raw, "tree": ui_tree, "explain": tree},
@@ -438,7 +454,7 @@ class ZeriRunners:
         # 这把帮手写出来就是为了根治它，此处此前漏改。
         max_span = _clamped_max_span(payload, _QIMENZERI_MAX_SPAN_DAYS)
         _require_sane_window(
-            start_date, end_date, max_span=max_span, tool="qimenzeri",
+            start_date, end_date, max_span=max_span, tool="qimenzeri", lunar_js=True,
             # 奇门择日的上限成因与 tianxing 不同：JS 子进程有 60s 墙钟（js_engine_timeout_seconds），
             # 扫描约 2s/月窗，所以引擎自带的 1830 天上限会把超时撑爆约 30 倍。提示保留这条成因。
             span_hint="把窗口拆成多段分别搜索；maxSpanDays 只能调低。"
@@ -476,6 +492,9 @@ class ZeriRunners:
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):
             error = scan_data.get("error") or {}
+            input_error = zeri_engine_input_error("qimenzeri", "奇门择日", error.get("code"), error.get("message"), window=cfg)
+            if input_error is not None:
+                raise input_error
             raise ToolValidationError(
                 f"奇门择日搜索失败：{error.get('message') or '未知错误'}",
                 code=engine_tool_code("qimenzeri", error.get("code"), "scan_failed"),
@@ -733,7 +752,7 @@ class ZeriRunners:
         max_span = _clamped_max_span(
             payload, self._ZERI_MAX_SPAN_DAYS.get(tool_name, self._ZERI_DEFAULT_MAX_SPAN_DAYS)
         )
-        _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name)
+        _require_sane_window(start_date, end_date, max_span=max_span, tool=tool_name, lunar_js=True)
 
         cfg = {"startDate": start_date, "startTime": start_time, "endDate": end_date, "endTime": end_time}
         geo = {k: payload.get(k) for k in ("zone", "gpsLon", "gpsLat", "lon", "lat", "pos")
@@ -777,6 +796,9 @@ class ZeriRunners:
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):
             error = scan_data.get("error") or {}
+            input_error = zeri_engine_input_error(tool_name, label, error.get("code"), error.get("message"), window=cfg)
+            if input_error is not None:
+                raise input_error
             raise ToolValidationError(
                 f"{label}搜索失败：{error.get('message') or '未知错误'}",
                 code=engine_tool_code(tool_name, error.get("code"), "scan_failed"),
@@ -794,6 +816,7 @@ class ZeriRunners:
                                      "startDate", "startTime", "endDate", "endTime",
                                      "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
                                      "nongli", "jieqi_year_prev", "jieqi_year_current")}
+        base_payload = _declared_only(tool_name, base_payload)
         base_payload["date"] = pan_date or start_date
         base_payload["time"] = pan_time or start_time or "00:00:00"
         # 派生盘的纪元随它自己的时刻（chartAtMoment / 后端 reset_ad_for_date）：调用方的 ad 不跟到命中时刻上——入口会把
@@ -822,6 +845,14 @@ class ZeriRunners:
             # Java 9999 与真正的接线错误长得一模一样 —— 本轮 live 验证为区分这两者做了整轮排查，
             # 而那轮排查本可以由这一行错误信息省掉。
             base_err = base_env.error
+            if base_err is not None and classify_code(base_err.code)[0] == "input":
+                # 展示盘因入参被拒（时区 / 坐标 / 设置值…）：这是调用方要改的输入，原样带出它的逐字段错误，不是「重试 / doctor」。
+                raise ToolValidationError(
+                    bilingual(f"{label}的展示盘（{spec['base_tool']}）不收这份输入：{base_err.message}",
+                              f"{label}: the display chart ({spec['base_tool']}) rejected the input: {base_err.message}"),
+                    code=base_err.code,
+                    details={**(base_err.details or {}), "base_tool": spec["base_tool"], "pan_moment": pan_moment},
+                )
             raise ToolTransportError(
                 f"{label}的展示盘（{spec['base_tool']}）铸盘失败，命中区间已算出但无法出盘："
                 f"{(base_err.message if base_err else '') or '未知错误'}",
@@ -918,6 +949,7 @@ class ZeriRunners:
                                      "startDate", "startTime", "endDate", "endTime",
                                      "zeriSnapshotMaxRows", "zeriSnapshotExplainRows",
                                      "su28Mode", "nodeType", "lilithType", "fuOrb")}
+        base_payload = _declared_only(tool_name, base_payload)
         base_payload.update({"date": pan_date or start_date,
                              "ad": _ad_of_date(pan_date or start_date),  # 派生盘纪元随自己的时刻
                              "time": pan_time or start_time or "00:00:00",
@@ -1034,7 +1066,7 @@ class ZeriRunners:
         base_request: dict[str, Any] = {
             **cfg,
             "zone": _electionscan_zone(payload.get("zone")),
-            "ad": payload.get("ad", 1),
+            "ad": 1,  # 窗口日期自带纪元（见 tianxing 同处说明）；命主的 ad 不读窗口
             "conditions": compiled,
         }
         for key in ("lat", "lon", "gpsLat", "gpsLon", "pos", "hsys", "zodiacal", "siderealAyanamsa",
@@ -1058,7 +1090,7 @@ class ZeriRunners:
         for index, segment in enumerate(segments, start=1):
             _progress_tick(index - 1, total_segments, f"{label}：扫描第 {index}/{total_segments} 段")
             raw = self._call_remote(spec["scan"], {**base_request, **segment})
-            data = self._require_electionscan_ok(raw, endpoint=spec["scan"])
+            data = self._require_electionscan_ok(raw, endpoint=spec["scan"], tool=tool_name, label=label, window=cfg)
             lists.append(list(data.get("intervals") or []))
             truncated = truncated or bool(data.get("truncated"))
         _progress_tick(total_segments, total_segments, f"{label}：缝合区间")
@@ -1103,7 +1135,8 @@ class ZeriRunners:
         if payload.get("explainAt"):
             t_raw = _explain_at_text(payload.get("explainAt"))
             raw = self._call_remote(spec["explain"], {**base_request, "t": t_raw})
-            data = self._require_electionscan_ok(raw, endpoint=spec["explain"])
+            data = self._require_electionscan_ok(raw, endpoint=spec["explain"], tool=tool_name, label=label,
+                                                 window={"explainAt": payload.get("explainAt")})
             if isinstance(data, dict) and data.get("tree") is not None:
                 explain_payload = {"t": data.get("t") or t_raw, "tree": data.get("tree")}
 

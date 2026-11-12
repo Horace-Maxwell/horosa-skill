@@ -138,7 +138,7 @@ class SanshiRunners:
         def _jieqi_year(target_year: int) -> Any:
             return self._call_remote(
                 "/jieqi/year",
-                {"year": target_year, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": payload.get("ad", 1), "timeAlg": time_alg},
+                {"year": target_year, "zone": payload["zone"], "lat": payload["lat"], "lon": payload["lon"], "time": payload["time"], "gpsLat": payload.get("gpsLat"), "gpsLon": payload.get("gpsLon"), "ad": -1 if target_year < 0 else 1, "timeAlg": time_alg},
             )
 
         prev_year = payload.get("jieqi_year_prev")

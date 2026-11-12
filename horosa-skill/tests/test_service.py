@@ -2718,7 +2718,9 @@ def test_tianxing_fails_loudly_on_electionscan_error_envelope(tmp_path) -> None:
     payload = {**build_sample_payloads()["tianxing"], "startDate": "1999-01-01", "endDate": "1999-03-01"}
     result = service.run_tool("tianxing", payload, save_result=False)
     assert result.ok is False, "span_too_large 必须报错，绝不能变成零命中"
-    assert result.error.code == "tool.electionscan_failed"
+    # v0.50.0 深审余项：后端回报的 span_too_large 是入参问题 → 逐字段输入错误（以前 tool.electionscan_failed + 「重试 / doctor」）。
+    assert result.error.code == "tool.tianxing_span_too_large"
+    assert result.error.details["agent_recovery"]["kind"] == "input"
     assert result.error.details["scan_error"]["err"] == "span_too_large"
 
 
@@ -2801,7 +2803,7 @@ def test_cetian_text_key_appends_classics(tmp_path) -> None:
     calls: list[str] = []
     original = service.client.call
     service.client.call = lambda e, p: (calls.append(e) or original(e, p))  # type: ignore[method-assign]
-    base = {"date": "1998-02-20", "time": "20:48", "gender": 1}
+    base = {"date": "1998-02-20", "time": "20:48", "zone": "+08:00", "gender": 1}
     plain = service.run_tool("cetian", base, save_result=False)
     assert plain.ok is True, plain.error
     assert "/cetian/texts" not in calls and "[判词原文]" not in plain.data["snapshot_text"]
@@ -3133,10 +3135,12 @@ def test_time_cast_tools_demand_geo_before_hitting_nongli(tmp_path) -> None:
         "zhengchuan": {"date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "school": "tieban", "gender": 1},
     }
     for tool, payload in cases.items():
-        result = service.run_tool(tool, {**payload, "agent_confirmed_settings": True}, save_result=False)
-        assert result.ok is False, f"{tool}: 缺 lat 时不该成功"
-        assert result.error.code == f"tool.{tool}_cast_geo_required", f"{tool}: {result.error.code}"
-        assert "lat" in result.error.details["missing"], tool
+        # v0.50.0 深审余项：时地缺什么都走同一个逐字段错误（tool.missing_field；旧码 tool.<技法>_cast_geo_required 只管 lat / lon，
+        # 缺 zone 时照样把 null 发给 /nongli/time——全目录守卫见 tests/test_zone_requirement.py）。
+        with pytest.raises(ToolValidationError) as caught:
+            service.run_tool(tool, {**payload, "agent_confirmed_settings": True}, save_result=False)
+        assert caught.value.code == "tool.missing_field", f"{tool}: {caught.value.code}"
+        assert "lat" in caught.value.details["missing"], tool
 
 
 def test_time_cast_geo_guard_names_only_what_is_missing(tmp_path) -> None:
@@ -3145,8 +3149,9 @@ def test_time_cast_geo_guard_names_only_what_is_missing(tmp_path) -> None:
         "date": "2031-05-20", "time": "12:30:00", "zone": "+08:00", "lon": "121e28",
         "school": "dao", "askEvent": "问事", "agent_confirmed_settings": True,
     }
-    result = service.run_tool("xiaoliuren", payload, save_result=False)
-    assert result.error.details["missing"] == ["lat"], "给了 lon 就不该再报 lon"
+    with pytest.raises(ToolValidationError) as caught:
+        service.run_tool("xiaoliuren", payload, save_result=False)
+    assert caught.value.details["missing"] == ["lat"], "给了 lon 就不该再报 lon"
 
 
 def test_java_result_codes_are_translated_not_swallowed() -> None:

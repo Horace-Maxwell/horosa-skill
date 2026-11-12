@@ -265,7 +265,8 @@ class DecennialsInput(BirthInput):
     @field_validator("startMode", "orderType", "dayMethod", "calendarType", "aiMode", mode="before")
     @classmethod
     def _decennial_vocabulary(cls, value: Any, info: Any) -> Any:
-        from horosa_skill.western_vocab import DECENNIAL_VOCABULARIES, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import DECENNIAL_VOCABULARIES
 
         return parse_with(DECENNIAL_VOCABULARIES[info.field_name], info.field_name, value)
     aiL1Idx: int | None = 0

@@ -637,17 +637,7 @@
    "verdict": "block"
   },
   "sample": {
-   "ask": [
-    "zone"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "after23NewDay",
-    "lateZiHourUseNextDay",
-    "time"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -3167,17 +3157,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "zone"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "after23NewDay",
-    "lateZiHourUseNextDay",
-    "time"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"

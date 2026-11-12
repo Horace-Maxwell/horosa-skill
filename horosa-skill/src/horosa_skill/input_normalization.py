@@ -48,6 +48,8 @@ FIELD_ALIASES: dict[str, str] = {
     "house_system": "hsys", "houseSystem": "hsys", "houses": "hsys",
     "sex": "gender",
     "birth_date": "date", "birthDate": "date", "birth_time": "time", "birthTime": "time",
+    # 择日主题：runner 曾私下 `topicId or topic` 读它，不经词表、入口却说「没有哪个设置读它」（深审余项）。
+    "topic": "topicId",
 }
 # 不是技法参数、但合法出现在载荷里的键（入口 / 闸门 / 派生）：不报「未知参数」。
 NON_TECHNIQUE_KEYS = frozenset({
@@ -210,7 +212,8 @@ def _fold_era(out: dict[str, Any], date_key: str, era_key: str, path: str, issue
     两种写法以前各技法读法不一：太乙的农历按公元前、年柱按公元；金口诀月将卯 / 戌；正传 / 小六壬 / 轨策 / 小成图 / 神数 ×14 /
     灵棋 / 河洛 / 参评只看日期、ad 整个被丢——同一个「公元前 500 年」起出公元 500 年的盘。带负号的写法各技法一致，于是在入口改写一次。
     没有声明 `ad` 的技法：纪元已经折进日期，`ad` 从载荷里拿掉（不再报「没有哪个设置读它」）。
-    带负号的日期 + `ad=1` 不改：择日 / 天星择日的 `ad` 管的是搜索窗的纪元，命主日期另由负号表达（两者可以不同）。"""
+    带负号的日期 + `ad=1` 不改（负号本身就是纪元）。`ad` 只属于它配对的那个日期：择日的搜索窗、起课时刻、流年时刻各按自己日期的
+    负号定纪元（runner 用 `_ad_of_date`，守卫 tests/test_era_pairing.py），命主的 ad=-1 不跟到别的日期上。"""
     raw = out.get(era_key)
     if raw is None:
         return
@@ -484,8 +487,8 @@ def _lift_nested_party(out: dict[str, Any], fields: frozenset[str]) -> None:
 
 def _apply_aliases(out: dict[str, Any], *, path: str, fields: frozenset[str] | None) -> None:
     for alias, canonical in FIELD_ALIASES.items():
-        if alias not in out or (fields is not None and alias in fields):
-            continue
+        if alias not in out or (fields is not None and (alias in fields or canonical not in fields)):
+            continue  # 模型自己声明了别名键，或根本没有规范键（改名只会把「没人读」的提示换成另一个名字）
         value = out.pop(alias)
         if canonical in out and out[canonical] is not None and out[canonical] != value:
             F.add_input_note(f"`{path}{alias}` 与 `{path}{canonical}` 都给了且不同：按 `{canonical}`，`{alias}` 已忽略。",
@@ -561,7 +564,8 @@ def field_issues_error(
     first = issues[0]
     must_ask = any(item.get("ask_user") for item in issues)
     heading = technique_heading(tool_name)
-    message = "\n".join([*([heading] if heading else []), *(item["message"] for item in issues)])
+    # 同一句说明对几个字段都成立时（择日窗口的 startDate / endDate）只说一遍。
+    message = "\n".join([*([heading] if heading else []), *dict.fromkeys(item["message"] for item in issues)])
     fix_fields = [{key: item[key] for key in ("field", "code", "got", "expected", "example", "options") if key in item} for item in issues]
     details: dict[str, Any] = {
         "field": first["field"], "got": first["got"], "expected": first["expected"], "example": first["example"],
@@ -626,6 +630,13 @@ _MISSING_TEXT: dict[str, tuple[str, str, Any]] = {
     "lon": ("经度 121e28 / 121.47；或传 `place`（地名）", "the longitude 121e28 / 121.47; or pass `place` (a place name)", "121e28"),
     "gender": ("性别 1 男 / 0 女", "the gender, 1 male / 0 female", 1),
 }
+
+
+def missing_fields_error(fields: list[str] | tuple[str, ...], *, tool_name: str, payload: dict[str, Any]) -> ToolValidationError:
+    """模型里不必填、这次调用却要的字段（占时起课的时地、读时区的神数…）→ 与 pydantic「缺字段」同一份逐字段条目
+    （同一段说明、同样提示「或传 place」、用户才知道的事实标 ask_user），码 tool.missing_field；details.missing 列出字段名。"""
+    issues = [_missing_entry(name, name, tool_name, payload) for name in fields]
+    return field_issues_error(issues, extra_details={"missing": list(fields)}, tool_name=tool_name)
 
 
 def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:

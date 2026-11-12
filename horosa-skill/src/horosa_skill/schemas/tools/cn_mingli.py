@@ -218,6 +218,13 @@ class CalendarMonthInput(FlexibleModel):
     tongshu: dict[str, Any] | None = Field(default=None, description="通书 {school,event,liexiuUse,mingYear}；school 键见 guidance")
     rizi: dict[str, Any] | None = Field(default=None, description="日子馆 {event, year, topN, persons:[{name,date,time,zone,gender,role}]}；给了 persons 才产 [日子馆·个性化择日]/[当事人八字]。")
 
+    @field_validator("rizi", mode="before")
+    @classmethod
+    def _rizi_roles(cls, value: Any) -> Any:
+        from horosa_skill.cn_vocab import parse_rizi
+
+        return parse_rizi(value)
+
 
 class HuangliInput(FlexibleModel):
     # 老黄历日课：纯前端本地推演（lunar-javascript + 择日表），零后端往返，故无需 zone/经纬。

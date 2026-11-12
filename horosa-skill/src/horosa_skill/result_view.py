@@ -637,7 +637,9 @@ def _shape_memory(value: dict[str, Any], request: ViewRequest, budget: Budget) -
                 artifact["payload"] = {
                     **{key: item for key, item in payload.items()
                        if key not in ("results", "result_export_contracts", "normalized_inputs")},
+                    # warnings 留在占位里：调度结果自己的说明行写着「原文见 results.<tool>.warnings」，每个面上这条路径都得是真的（深审余项）。
                     "results": {name: {"ok": item.get("ok") if isinstance(item, dict) else None,
+                                       "warnings": list(item.get("warnings") or []) if isinstance(item, dict) else [],
                                        "see": f"tool_result artifact (response_tool=\"{name}\")"}
                                 for name, item in payload["results"].items()},
                 }

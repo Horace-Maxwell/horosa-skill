@@ -19,8 +19,13 @@ from horosa_skill.engine.registry import (
 )
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.exports import build_export_registry, parse_export_content
-from horosa_skill.input_fields import input_notes_scope
-from horosa_skill.input_normalization import field_issues_error, normalize_request_payload, tool_error_from_validation
+from horosa_skill.input_fields import input_notes_scope, is_blank
+from horosa_skill.input_normalization import (
+    field_issues_error,
+    missing_fields_error,
+    normalize_request_payload,
+    tool_error_from_validation,
+)
 from horosa_skill.knowledge import (
     build_knowledge_registry,
     read_knowledge_entry,
@@ -71,7 +76,7 @@ def _redact_knowledge_text(envelope: dict[str, Any]) -> dict[str, Any]:
 # 「事实」同源（agent_guidance.questions.GENDER_FACT_TOOLS，1 / 0 两种性别逐行实测）——合并深审两批时曾是两份：入口 12 个、
 # 闸门 17 个，正传 / 北极 / 南极 / 紫微择日缺性别时 CLI 与直调照样按男排（实测这四个的大运 / 条文 / 命局随性别变）。
 from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS as GENDER_DEPENDENT_TOOLS  # noqa: E402
-from horosa_skill.agent_guidance.questions import gender_required  # noqa: E402
+from horosa_skill.agent_guidance.questions import gender_required, place_fields_required  # noqa: E402
 
 
 # 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。
@@ -92,7 +97,13 @@ def _key_paths(payload: Any) -> frozenset[str]:
     return frozenset(paths)
 
 
-def _require_result_facts(tool_name: str, payload: dict[str, Any]) -> None:
+def _require_result_facts(tool_name: str, payload: dict[str, Any], raw_payload: dict[str, Any] | None = None) -> None:
+    # 时地：入参模型里不必填、这次起盘却要的字段（占时起课的 date/time/zone/lat/lon、读时区的神数与本地八字链的 zone）。
+    # 以前缺 zone 时 /nongli/time 收到 null → HTTP 500 / KeyError，或后端悄悄按 +08:00 算（v0.50.0 深审余项）。
+    legacy = payload.get("options") if isinstance(payload.get("options"), dict) else {}  # 神数旧写法：核心键写在 options 里（runner 提升）
+    missing = [key for key in place_fields_required(tool_name, payload) if is_blank(payload.get(key)) and is_blank(legacy.get(key))]
+    if missing:
+        raise missing_fields_error(missing, tool_name=tool_name, payload={**(raw_payload or {}), **payload})
     target = payload.get("datetime")
     if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
         # 只给年份的目标时刻只对「有那一年含义」的技法成立（返照 / 流年 / 小限 / 太阳弧，见 enrich._apply_yearly_target）。
@@ -450,7 +461,7 @@ class ToolsAPI:
             trace["error_code"] = error.code
             raise error from exc
         input_normalized = validated.model_dump(exclude_none=True)
-        _require_result_facts(tool_name, input_normalized)
+        _require_result_facts(tool_name, input_normalized, raw_payload)
         return (
             _apply_chart_request_defaults(tool_name, input_normalized),
             knowledge_selection,

@@ -24,7 +24,7 @@ from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 
 CONFIRM = {"agent_confirmed_settings": True}
-BASE = {"date": "1998-02-20", "time": "20:48:00", **CONFIRM}
+BASE = {"date": "1998-02-20", "time": "20:48:00", "zone": "+08:00", **CONFIRM}  # 读时区的神数没有 zone 不起盘（questions.ZONE_FACT_TOOLS）
 PLACE = {"zone": "+08:00", "lat": "31n13", "lon": "121e28"}
 # 上游无头起课种子（TaiXuanMain.js:141-152 / JingJueMain.js:105-117）：((1998·10000+2·100+20)·10000+20·100+48) mod 1e9
 SEED_19980220_2048 = 802202048
@@ -218,7 +218,7 @@ def test_shenshu_unknown_options_are_receipted_and_not_forwarded(tmp_path) -> No
     assert result.data["params_ignored"] == ["bogusKnob"] and "useKey" in result.data["params_applied"]
     assert any("bogusKnob" in warning for warning in result.warnings)
     # 旧 options 是整包并进请求体：写在 options 里的核心键（gender/zone…）照收（顶层未给时提升为顶层），不算「未识别」。
-    promoted = _run(service, "tieban", {**BASE, "options": {"gender": 0, "zone": "-05:00"}})
+    promoted = _run(service, "tieban", {**{k: v for k, v in BASE.items() if k != "zone"}, "options": {"gender": 0, "zone": "-05:00"}})
     sent = client.sent("/tieban/pan")[-1]
     assert (sent["gender"], sent["zone"]) == (0, "-05:00")
     assert promoted.data["params_ignored"] == [] and {"gender", "zone"} <= set(promoted.data["params_applied"])

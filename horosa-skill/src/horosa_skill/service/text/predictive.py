@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from horosa_skill import predictive_text as _ptext
+from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 from horosa_skill.engine.decennials import (
     DECENNIAL_CALENDAR_ACTUAL,
     DECENNIAL_DAY_METHOD_HEPHAISTIO,
@@ -898,6 +899,15 @@ def _build_firdaria_snapshot_text(response: dict[str, Any]) -> str:
     return _render_snapshot_text(lines)
 
 
+# 上游 AstroDecennials.js AI_MODE_ITEMS（:44-61）：[基于X起运] 段首行印选项标签，不是内部值。
+_DECENNIAL_AI_MODE_LABELS = {
+    "l1_all": "输出所有L1（年主星+时间）",
+    "l2_in_l1": "输出某个L1下全部L2（月主星+时间）",
+    "l3_in_l2": "输出某个L2下全部L3（日主星+时间）",
+    "l4_in_l3": "输出某个L3下全部L4（时主星+时间）",
+}
+
+
 def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str, Any], ai_state: dict[str, Any]) -> str:
     chart = response.get("chart", {}) if isinstance(response, dict) else {}
     params = response.get("params", {}) if isinstance(response, dict) else {}
@@ -915,7 +925,14 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
         if settings.get("calendarType") == DECENNIAL_CALENDAR_ACTUAL
         else "360天/年（按30天/月换算）"
     )
-    start_label = f"得时光体（{resolved}）" if settings.get("startMode") == DECENNIAL_START_MODE_SECT_LIGHT else settings.get("startMode", resolved)
+    # 行星名照上游 utils/decennials.js：getDecennialStartLabel 得时光体括注短名（AstroTxtMsg：日 / 月）、其余与「实际起运」/ 段名 /
+    # 逐期行用长名（AstroMsgCN：太阳 / 木星）——此前一律印英文 id（Sun / Jupiter）。
+    resolved_name = _astro_msg(resolved)
+    start_mode = settings.get("startMode") or DECENNIAL_START_MODE_SECT_LIGHT
+    start_label = (f"得时光体（{_astro_msg(resolved, short=True)}）" if start_mode == DECENNIAL_START_MODE_SECT_LIGHT
+                   else _astro_msg(start_mode))
+    # 「名义」区间只在 360 天口径下附（上游 getDecennialNominalHint：calendarType !== traditional → ''）。
+    show_nominal = settings.get("calendarType") != DECENNIAL_CALENDAR_ACTUAL
 
     def safe_idx(index: Any, length: int) -> int:
         if length <= 0:
@@ -937,9 +954,11 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
     l3 = l3_list[l3_idx] if l3_list else None
 
     def node_line(prefix: str, item: dict[str, Any], idx: int) -> str:
-        return f"{prefix}-{idx + 1}：{item.get('planet', '无')}-{item.get('date', '无')}{'（名义：' + item.get('nominal', '') + '）' if item.get('nominal') else ''}{'-当前' if item.get('active') else ''}"
+        planet = _astro_msg(item.get("planet")) or "无"
+        nominal = f"（名义：{item.get('nominal')}）" if show_nominal and item.get("nominal") else ""
+        return f"{prefix}-{idx + 1}：{planet}-{item.get('date', '无')}{nominal}{'-当前' if item.get('active') else ''}"
 
-    output_lines: list[str] = [f"AI输出模式：{mode}"]
+    output_lines: list[str] = [f"AI输出模式：{_DECENNIAL_AI_MODE_LABELS.get(mode, _DECENNIAL_AI_MODE_LABELS['l1_all'])}"]
     if not list_data:
         output_lines.append("无推运数据")
     elif mode == "l1_all":
@@ -965,10 +984,11 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
         [
             (
                 "起盘信息",
+                # 上游 AstroDecennials.appendBirthAndChart（:118-150）：真太阳时只在盘上有时才印；出生时间后缀星期。
                 "\n".join(
                     [
-                        f"出生时间：{birth_text}",
-                        f"真太阳时：{true_solar}",
+                        f"出生时间：{birth_text}{(' ' + str(chart.get('dayofweek'))) if isinstance(chart, dict) and chart.get('dayofweek') else ''}",
+                        *([f"真太阳时：{true_solar}"] if true_solar and true_solar != "无" else []),
                         f"经纬度：{params.get('lon', '—')} {params.get('lat', '—')}",
                         f"时区：{params.get('zone', '—')}",
                     ]
@@ -979,7 +999,8 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
                 "\n".join(
                     [
                         f"黄道：{chart.get('zodiacal', params.get('zodiacal', 0)) if isinstance(chart, dict) else params.get('zodiacal', 0)}",
-                        f"宫制：{params.get('hsys', 0)}",
+                        # 上游 AstroConst.HouseSys[hsys]（宫制名，不是索引）
+                        f"宫制：{HOUSE_SYSTEM_LABELS.get(str(params.get('hsys', 0)), params.get('hsys', 0))}",
                         f"盘型：{'日生盘' if chart.get('isDiurnal') else '夜生盘'}" if isinstance(chart, dict) and chart.get("isDiurnal") is not None else "盘型：无",
                     ]
                 ),
@@ -989,14 +1010,14 @@ def _build_decennials_snapshot_text(response: dict[str, Any], settings: dict[str
                 "\n".join(
                     [
                         f"起运主星：{start_label}",
-                        f"实际起运：{resolved}",
+                        f"实际起运：{resolved_name}",
                         f"分配次序：{order_label}",
                         f"日限体系：{day_label}",
                         f"时间口径：{cal_label}",
                     ]
                 ),
             ),
-            (f"基于{resolved}起运", "\n".join(output_lines).strip() or "无"),
+            (f"基于{resolved_name}起运", "\n".join(output_lines).strip() or "无"),
         ]
     )
 

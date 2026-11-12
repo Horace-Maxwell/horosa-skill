@@ -247,7 +247,9 @@ class RemoteMixin:
 
     # --- 天星择日 / 奇门择日（上游 v3.7.0 / v3.7.1）------------------------------------------
 
-    def _require_electionscan_ok(self, result: Any, *, endpoint: str) -> dict[str, Any]:
+    def _require_electionscan_ok(
+        self, result: Any, *, endpoint: str, tool: str | None = None, label: str | None = None, window: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Fail loudly when /electionscan/scan returned a failure envelope.
 
         Same family as `_require_ken_pan` (AGENTS §4「HTTP 200 也回失败信封，永不信状态码」):
@@ -260,6 +262,14 @@ class RemoteMixin:
         if isinstance(result, dict) and not result.get("err"):
             return result
         detail = result if not isinstance(result, dict) else {"err": result.get("err"), "detail": result.get("detail")}
+        if tool and isinstance(detail, dict):
+            # 入参问题（窗口越出历法域、窗口读不通、条件树 / 坐标不合法）→ 逐字段输入错误，不是「重试 / doctor」（深审余项）。
+            from horosa_skill.service.options_zeri import zeri_engine_input_error
+
+            input_error = zeri_engine_input_error(tool, label or tool, detail.get("err"), detail.get("detail"), window=window or {})
+            if input_error is not None:
+                input_error.details.update({"endpoint": endpoint, "scan_error": detail})
+                raise input_error
         raise ToolTransportError(
             "Horosa 征象搜索端点未返回结果。",
             code="tool.electionscan_failed",

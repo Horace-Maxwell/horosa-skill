@@ -252,7 +252,8 @@ class QizhengElectionInput(BirthInput):
     @field_validator("kind", "plate", "ziZheng", "eleLifeMode", "nodeType", "lilithType", "body", mode="before")
     @classmethod
     def _qizheng_vocabulary(cls, value: Any, info: Any) -> Any:
-        from horosa_skill.western_vocab import QIZHENG_ELECTION_VOCABULARIES, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import QIZHENG_ELECTION_VOCABULARIES
 
         return parse_with(QIZHENG_ELECTION_VOCABULARIES[info.field_name], info.field_name, value)
 
@@ -306,7 +307,8 @@ class HoraryInput(BirthInput):
     @field_validator("category", "school", mode="before")
     @classmethod
     def _horary_vocabulary(cls, value: Any, info: Any) -> Any:
-        from horosa_skill.western_vocab import divination_vocabularies, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import divination_vocabularies
 
         return parse_with(divination_vocabularies()["horary"][info.field_name], info.field_name, value)
 
@@ -362,6 +364,7 @@ class ElectionInput(BirthInput):
     @field_validator("topicId", "school", mode="before")
     @classmethod
     def _election_vocabulary(cls, value: Any, info: Any) -> Any:
-        from horosa_skill.western_vocab import divination_vocabularies, parse_with
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import divination_vocabularies
 
         return parse_with(divination_vocabularies()["election"][info.field_name], info.field_name, value)

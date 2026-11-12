@@ -213,3 +213,37 @@ def test_shenshu_female_labels_normalise_to_zero() -> None:
     model = TOOL_DEFINITIONS["tieban"].input_model
     for label in ("女", "Female", "坤造", 0, "0"):
         assert normalize_request_payload({"date": "1998-02-20", "gender": label}, model=model)["gender"] == 0
+
+
+# ───────────── 日子馆当事人的角色（v0.50.0 深审余项）─────────────
+# 以前不传 role：[日子馆·个性化择日] 印「undefined（甲）」，[当事人八字] 的「合婚」行（按 self / spouse 找人）整行缺席。
+# 负向对照（实跑过）：CalendarMonthInput 的 rizi 校验器改成原样返回 → 本组三例红。
+
+def _rizi(*persons: dict[str, Any]) -> dict[str, Any]:
+    return {"date": "2028-04-06", "zone": "+08:00", "rizi": {"event": "嫁娶", "persons": list(persons)}}
+
+
+def test_rizi_first_person_defaults_to_self_and_names_are_read() -> None:
+    model = TOOL_DEFINITIONS["calendar_month"].input_model
+    out = model.model_validate(_rizi({"name": "甲", "date": "1990-05-03"}, {"name": "乙", "date": "1992-03-02", "role": "配偶"}))
+    assert [p["role"] for p in out.rizi["persons"]] == ["self", "spouse"]
+
+
+def test_rizi_later_person_without_role_is_asked() -> None:
+    with pytest.raises(ToolValidationError) as caught:
+        TOOL_DEFINITIONS["calendar_month"].input_model.model_validate(_rizi({"name": "甲", "date": "1990-05-03"}, {"name": "乙", "date": "1992-03-02"}))
+    assert caught.value.details["fields"][0]["field"] == "rizi.persons[1].role"
+    assert caught.value.details["fields"][0]["ask_user"] is True
+
+
+def test_rizi_unknown_role_is_refused() -> None:
+    with pytest.raises(ToolValidationError) as caught:
+        TOOL_DEFINITIONS["calendar_month"].input_model.model_validate(_rizi({"name": "甲", "date": "1990-05-03", "role": "boss"}))
+    assert caught.value.code == "tool.invalid_option"
+    assert {o["value"] for o in caught.value.details["fields"][0]["options"]} == {"self", "spouse", "family"}
+
+
+@requires_node
+def test_rizi_roles_are_the_vendored_snapshot_labels() -> None:
+    source = (CORE / "vendor" / "calendar" / "riziSnapshot.js").read_text(encoding="utf-8")
+    assert "const ROLE_LABEL = { self: '本人', spouse: '配偶', family: '家人' };" in source

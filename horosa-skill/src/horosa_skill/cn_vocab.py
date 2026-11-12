@@ -9,9 +9,21 @@
 """
 from __future__ import annotations
 
+import json
+import re
+from functools import cache
+from pathlib import Path
 from typing import Any
 
-from horosa_skill.input_fields import FieldIssue, Parsed, Vocabulary, clean_text, field_validator_for, is_blank
+from horosa_skill.input_fields import (
+    FieldIssue,
+    Parsed,
+    Vocabulary,
+    clean_text,
+    field_validator_for,
+    is_blank,
+    parse_with,
+)
 
 V = Vocabulary
 
@@ -136,13 +148,6 @@ CN_VOCABULARIES: dict[str, dict[str, Vocabulary]] = {
 }
 
 
-def parse_with(vocabulary: Vocabulary, field_name: str, value: Any) -> Any:
-    """BeforeValidator 体：None / 空串 = 没给（交给模型 / runner 的缺省），其余必须读成规范值。"""
-    if value is None or is_blank(value):
-        return None
-    return field_validator_for(vocabulary.parse, field_name)(value)
-
-
 def validate_cn_field(tool: str, field_name: str, value: Any) -> Any:
     vocabulary = CN_VOCABULARIES[tool][field_name]
     if tool == "ziwei_birth" and field_name == "timeAlg":
@@ -230,3 +235,104 @@ def parse_meiyi_names(value: Any) -> Any:
     if issues:
         raise field_issues_error(issues)
     return out
+
+
+# 六十四卦（初→上，1 = 阳）：data/gua64_names.json 由 vendored 上游 GuaConst.Gua64 生成（六爻 guaByName 同表同简名规则），
+# tests/test_gua_desc_names.py 在 node 在场时与 JS 表逐行对拍。
+_GUA64_PATH = Path(__file__).parent / "data" / "gua64_names.json"
+
+
+@cache
+def gua64_rows() -> tuple[tuple[str, str, str], ...]:
+    return tuple(tuple(row) for row in json.loads(_GUA64_PATH.read_text(encoding="utf-8"))["rows"])
+
+
+def parse_gua_desc_names(value: Any) -> Any:
+    """gua_desc.name：每一项读成六位卦码（六位 0/1 码原样；全名「水火既济」、简名「既济」「乾」、繁体、带「卦」字都认）。
+    认不出 → tool.invalid_option（options = 最接近的卦名，details.accepted = 六十四卦全表）。以前认不出的名字原样发给后端，
+    [卦象] 印一行「X：无」或干脆没有，ok=true（v0.50.0 深审余项）。"""
+    import difflib
+
+    from horosa_skill.input_fields import add_input_note
+    from horosa_skill.input_normalization import field_issues_error
+    from horosa_skill.textscript import fold_to_simplified
+
+    rows = gua64_rows()
+    by_name = {**{full: (code, full) for code, full, _short in rows}, **{short: (code, full) for code, full, short in rows}}
+    labels = [*by_name]
+    items = value if isinstance(value, list) else [value]
+    out: list[str] = []
+    issues: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        text = clean_text(item) if item is not None else ""
+        if re.fullmatch(r"[01]{6}", text):
+            out.append(text)
+            continue
+        hit = None
+        for candidate in dict.fromkeys((text, fold_to_simplified(text))):
+            key = candidate[:-1] if candidate.endswith("卦") and len(candidate) > 1 else candidate
+            hit = by_name.get(candidate) or by_name.get(key)
+            if hit:
+                break
+        if hit is None:
+            close = difflib.get_close_matches(fold_to_simplified(text), labels, n=5, cutoff=0.3)
+            issues.append({"field": f"name[{index}]", "code": "tool.invalid_option", "got": item,
+                           "expected": "六位 0/1 码（初→上，1 阳）或卦名（全名 水火既济 / 简名 既济、乾）/ six 0/1 digits or a hexagram name",
+                           "example": "111111", "ask_user": False,
+                           "options": [{"value": by_name[name][0], "label": by_name[name][1]} for name in close],
+                           "message": f"认不出卦：{item!r}（六十四卦里没有这个名字）。 / Unrecognized hexagram: {item!r} (no such name among the 64)."})
+            continue
+        out.append(hit[0])
+        add_input_note(f"`name[{index}]`「{item}」按卦码 {hit[0]}（{hit[1]}）读。", f"`name[{index}]` '{item}' was read as hexagram code {hit[0]} ({hit[1]}).")
+    if issues:
+        raise field_issues_error(issues, extra_details={"accepted": [{"value": code, "label": full} for code, full, _ in rows]},
+                                 tool_name="gua_desc")
+    return out
+
+
+# 日子馆当事人的角色（vendored riziSnapshot.ROLE_LABEL：self 本人 / spouse 配偶 / family 家人）。上游页面第一个当事人恒是「本人」
+# （RiziMain 初始 persons=[{role:'self'}]），再添加的人由用户选角色；skill 以前不传 role → 快照印「undefined（甲）」（深审余项）。
+RIZI_ROLE = V("role", {"self": ("本人", "自己", "我", "命主"), "spouse": ("配偶", "伴侣", "夫", "妻", "丈夫", "妻子"),
+                       "family": ("家人", "亲属")}, labels={"self": "本人", "spouse": "配偶", "family": "家人"})
+
+
+def parse_rizi(value: Any) -> Any:
+    """calendar_month.rizi：每个当事人的 role 读成 self / spouse / family；第一个人没给按「本人」（上游初始当事人，进 warnings），
+    其后的人没给 → 逐字段问（不替用户定是配偶还是家人）；认不出 → tool.invalid_option。"""
+    from horosa_skill.input_fields import add_input_note
+    from horosa_skill.input_normalization import field_issues_error
+
+    if not isinstance(value, dict) or not isinstance(value.get("persons"), list):
+        return value
+    persons: list[Any] = []
+    issues: list[dict[str, Any]] = []
+    for index, person in enumerate(value["persons"]):
+        if not isinstance(person, dict):
+            persons.append(person)
+            continue
+        field = f"rizi.persons[{index}].role"
+        raw = person.get("role")
+        if raw is None or is_blank(raw):
+            if index == 0:
+                add_input_note(f"`{field}` 没给：第一个当事人按「本人」（上游日子馆的初始当事人）。",
+                               f"`{field}` not given: the first person is read as self (the upstream page's initial person).")
+                persons.append({**person, "role": "self"})
+                continue
+            issues.append({"field": field, "code": "tool.missing_field", "got": None, "expected": "self 本人 / spouse 配偶 / family 家人",
+                           "example": "spouse", "ask_user": True, "options": RIZI_ROLE.accepted,
+                           "message": f"缺 `{field}`：第 {index + 1} 个当事人是配偶还是家人？ / Missing `{field}`: is person {index + 1} the spouse or family?"})
+            persons.append(person)
+            continue
+        try:
+            parsed = RIZI_ROLE.parse(raw)
+        except FieldIssue as issue:
+            issues.append({"field": field, "code": issue.code, "got": raw, "expected": f"{issue.expected_zh} / {issue.expected_en}",
+                           "example": "spouse", "ask_user": False, "options": issue.options, "message": f"{issue.zh} / {issue.en}"})
+            persons.append(person)
+            continue
+        if parsed.note_zh:
+            add_input_note(f"`{field}`{parsed.note_zh}", f"`{field}` {parsed.note_en}")
+        persons.append({**person, "role": parsed.value})
+    if issues:
+        raise field_issues_error(issues, tool_name="calendar_month")
+    return {**value, "persons": persons}

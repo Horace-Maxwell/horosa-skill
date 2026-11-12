@@ -5,7 +5,6 @@
     "client.command_failed",
     "client.invalid_json",
     "family:base_chart_failed",
-    "family:cast_geo_required",
     "jev.auth",
     "jev.config",
     "jev.connection",

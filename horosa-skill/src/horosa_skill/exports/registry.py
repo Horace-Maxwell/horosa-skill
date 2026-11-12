@@ -581,8 +581,28 @@ AI_EXPORT_DEFAULT_OFF_SECTIONS = {
     "astrochart": ["古典·世界范式盘"],          # 恒定教义（逐盘不变）
     "calendar": ["所选吉日·完整日课", "年度吉日榜", "本月逐日表"],   # [Q-457/458/459]
     "huangli": ["年度吉日榜"],                  # [Q-458/T-421] 全年 Top 榜
+    "huanglizeri": ["年度吉日榜"],              # 派生键随基底（同 qimenzeri ← qimen）
     "tongshu": ["本月逐日表"],                  # [Q-459/T-422] 整月逐日
     "babylon": ["数理星历", "吉日历", "年历预测"],   # [Q-443/T-406] 三页签体系教义
+}
+
+# 按设计**永不产出**的预设段（技法工具 → {段: 理由}）——第四态（v0.50.0 深审余项）。这些工具与别的工具共用一个导出键（段表照上游），
+# 但这个工具本身从来算不出那几段：缺席不是「本次没算出来」，导出里不占位、不算缺，`export_snapshot.not_requested_sections` 列名、
+# `not_requested_reasons` 给理由（与节气盘「这次没要的分至盘」同一机制，service/export._sections_not_requested）。
+# 默认关段（上表）缺席时同样归入「这次没要」。守卫 tests/test_sections_not_produced.py（live：照样例跑，断言它们真的从不出现）。
+SECTIONS_NOT_PRODUCED_BY_DESIGN: dict[str, dict[str, str]] = {
+    "chart13": {
+        "古典格局": "13 宫盘是派生盘：本命口径的 /astroextra/analysis 只挂本命盘与重置盘（engine.registry.CLASSICAL_ANALYSIS_TOOLS；"
+                "上游 pipeline.js CLASSICAL_SKIP_KEYS 同理：不让本命结论冒充派生盘结论）",
+        "占星地图": "占星地图（行星地理投影线）由独立工具 horosa_astro_acg 产出，不进本盘快照",
+    },
+    **{tool: {
+        "断卦结构": "卦义查询只查卦辞、不起卦：没有六爻盘就没有断卦结构（要完整断卦请用 sixyao）",
+        "断诀命中": "同上：没有六爻盘就没有断诀命中",
+        "占类断语": "同上：没有六爻盘就没有占类断语",
+    } for tool in ("gua_desc", "gua_meiyi")},
+    "ziwei_rules": {title: "紫微规则库只列规则、不排命盘：没有命盘就没有这一段（要命盘请用 ziwei_birth）"
+                    for title in ("身宫", "来因宫", "八字大运", "运限概览", "运限", "流派叠层")},
 }
 
 AI_EXPORT_OPTIONAL_SECTIONS = {

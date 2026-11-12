@@ -150,7 +150,8 @@ def test_place_and_name_are_declared_on_technique_tools(server) -> None:
 
 def test_top_level_name_is_kept(server) -> None:
     mcp, seen = server
-    _call(mcp, "horosa_cn_xiaoliuren", {"date": "1990-06-15", "time": "10:30", "name": "张三", **CONFIRM})
+    _call(mcp, "horosa_cn_xiaoliuren", {"date": "1990-06-15", "time": "10:30", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
+                                         "name": "张三", **CONFIRM})
     assert seen and seen[0].get("name") == "张三"
 
 

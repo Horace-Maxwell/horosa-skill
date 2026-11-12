@@ -1028,7 +1028,6 @@ TOOL_CODE_FAMILIES: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "split_window",
     },
-    "cast_geo_required": {"kind": "input", "next_action": "ask_user_for_place"},
     # 「给了起课 / 起卦输入却用不了」（小六壬 nums、灵棋 counts…）：按 details.fields 改；都不给就以时起，绝不悄悄改成以时起。
     "invalid_cast": {
         "kind": "input",
