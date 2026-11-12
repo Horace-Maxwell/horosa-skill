@@ -136,3 +136,13 @@ def test_live_india_bc_window_is_an_input_error(tmp_path) -> None:
     env = make_service(tmp_path).run_tool("indiazeri", {**S["indiazeri"], **WINDOW}, save_result=False)
     assert env.ok is False and env.error.code == "tool.date_range_unsupported", env.error
     assert env.error.details["agent_recovery"]["kind"] == "input"
+
+
+def test_real_backend_failure_stays_a_retryable_transport_error(tmp_path) -> None:
+    from horosa_skill.errors import ToolTransportError
+
+    with pytest.raises(ToolTransportError) as caught:
+        _service(tmp_path)._require_electionscan_ok({"err": "worker_crashed", "detail": "segfault"},
+                                                    endpoint="/indiaelectionscan/scan", tool="indiazeri", label="印度择时", window=WINDOW)
+    assert caught.value.code == "tool.electionscan_failed"
+    assert classify_code(caught.value.code)[0] == "retry_or_doctor"

@@ -26,7 +26,7 @@ _NODE_DUMP = (
 
 
 def _js_rows() -> list[list[str]]:
-    out = subprocess.run(["node", "-e", _NODE_DUMP], cwd=ROOT, capture_output=True, text=True, check=True, timeout=60)
+    out = subprocess.run(["node", "-e", _NODE_DUMP], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True, timeout=60)
     return json.loads(out.stdout)
 
 

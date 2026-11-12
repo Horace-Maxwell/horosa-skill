@@ -2718,7 +2718,9 @@ def test_tianxing_fails_loudly_on_electionscan_error_envelope(tmp_path) -> None:
     payload = {**build_sample_payloads()["tianxing"], "startDate": "1999-01-01", "endDate": "1999-03-01"}
     result = service.run_tool("tianxing", payload, save_result=False)
     assert result.ok is False, "span_too_large 必须报错，绝不能变成零命中"
-    assert result.error.code == "tool.electionscan_failed"
+    # v0.50.0 深审余项：后端回报的 span_too_large 是入参问题 → 逐字段输入错误（以前 tool.electionscan_failed + 「重试 / doctor」）。
+    assert result.error.code == "tool.tianxing_span_too_large"
+    assert result.error.details["agent_recovery"]["kind"] == "input"
     assert result.error.details["scan_error"]["err"] == "span_too_large"
 
 
