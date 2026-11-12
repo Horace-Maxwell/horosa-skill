@@ -107,10 +107,16 @@ def test_png_figures_are_the_chart_report_figures(tmp_path: Path) -> None:
 
 def test_png_refuses_a_run_without_a_figure_and_writes_nothing(tmp_path: Path, glyphs_ok: None) -> None:
     service = _service(tmp_path)
-    run_id = _run(service, "bazi_birth")  # 八字没有盘式
+    run_id = _run(service, "nongli_time")  # 农历换算没有盘式
     with pytest.raises(ToolValidationError) as refused:
         service.report_render({"run_id": run_id, "format": "png"})
     assert refused.value.code == "report.no_chart_content" and refused.value.details["format"] == "png"
+    assert not list((tmp_path / "runs").rglob("*.png"))
+    # 八字自 v0.49.0 起有盘（只有 app 画法）。这里的假 JS 引擎画不了它：此前那张图被悄悄丢掉，PNG 回「这个技法没有盘式」；
+    # 现在说的是哪张图、为什么没画出来（v0.50.0，report.chart_figure_unavailable）。
+    with pytest.raises(ToolValidationError) as undrawn:
+        service.report_render({"run_id": _run(service, "bazi_birth"), "format": "png"})
+    assert undrawn.value.code == "report.chart_figure_unavailable" and "八字命盘没有画出" in str(undrawn.value)
     assert not list((tmp_path / "runs").rglob("*.png"))
     # 同一个码的 prompt_to_user 此前只讲「这个工具没有盘面，对八字等起盘类技法出」——八字 PNG 被拒时自相矛盾。
     prompt = RECOVERY_TABLE["report.no_chart_content"]["prompt_to_user"]

@@ -274,14 +274,17 @@ def plan(tool_name: str, data: Any, figures: list[dict[str, Any]]) -> list[tuple
     return requests
 
 
-def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, client: Any) -> list[dict[str, Any]]:
-    """给能换的规格配上 app 原版 SVG（`app_svg`），其余标 `renderer: builtin` + 原因。返回新列表，不改入参。"""
+def attach_app_svgs(
+    figures: list[dict[str, Any]], tool_name: str, data: Any, client: Any, *, undrawn: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """给能换的规格配上 app 原版 SVG（`app_svg`），其余标 `renderer: builtin` + 原因。返回新列表，不改入参。
+    `undrawn`：调用方给一个列表，这里把「只有 app 画得出、这次没画成而整张不出」的规格放进去（报告据此写明少了哪张）。"""
     out = [dict(spec) for spec in figures]
     requests = plan(tool_name, data, out) if enabled() else []
     for spec in out:
         spec.setdefault("renderer", "builtin")
     if not requests:
-        return _drop_undrawn_app_only(out)
+        return _drop_undrawn_app_only(out, undrawn)
     results = None
     failure = "app-charts bundle unavailable"
     render = getattr(client, "render_app_charts", None)
@@ -300,13 +303,16 @@ def attach_app_svgs(figures: list[dict[str, Any]], tool_name: str, data: Any, cl
         else:
             reason = failure if results is None else str((result or {}).get("error") or "render failed")
             out[index]["renderer_note"] = f"app {request['kind']}: {reason}"
-    return _drop_undrawn_app_only(out)
+    return _drop_undrawn_app_only(out, undrawn)
 
 
-def _drop_undrawn_app_only(figures: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _drop_undrawn_app_only(figures: list[dict[str, Any]], undrawn: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """kind="app" 的盘没有自绘版：app 没画出来就整张不出（规格里本就只有图名，留着只会印一个空框）。
     补算的那张（`aux`）留给 aux_charts.settle：它要据此留下被换的原图并写明原因。"""
-    return [spec for spec in figures if spec.get("kind") != "app" or spec.get("app_svg") or spec.get("aux")]
+    kept = [spec for spec in figures if spec.get("kind") != "app" or spec.get("app_svg") or spec.get("aux")]
+    if undrawn is not None:
+        undrawn.extend(spec for spec in figures if not any(spec is item for item in kept))
+    return kept
 
 
 # ───────────────────────────── SVG 规整 ─────────────────────────────

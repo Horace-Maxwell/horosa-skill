@@ -581,6 +581,8 @@ class ReportsAPI:
                 "answer_writeback": answer_writeback,
                 **_render_outcome_fields(rendered),
                 **self._output_adjustment_fields(output_request, rendered["path"]),
+                # 缺了哪张盘图、为什么：三种产物（PDF / DOCX / PNG）与失败时的 details 都叫 figure_gaps。
+                **({"figure_gaps": list(document["figure_gaps"])} if document.get("figure_gaps") else {}),
                 "summary": [f"已生成 {rendered['format'].upper()} 结构化报告：{artifact['artifact_path']}", *_render_outcome_notes(rendered),
                             *self._output_adjustment_notes(output_request, rendered["path"]), *answer_notes,
                             *document.get("figure_gaps", [])],
@@ -862,8 +864,9 @@ class ReportsAPI:
                 notes.append(note)
         if not figures:
             return figures, notes
-        figures, settle_notes = aux_charts.settle(attach_app_svgs(figures, tool_name, data, self.js_client))
-        return figures, notes + settle_notes
+        undrawn: list[dict[str, Any]] = []
+        figures, settle_notes = aux_charts.settle(attach_app_svgs(figures, tool_name, data, self.js_client, undrawn=undrawn))
+        return figures, notes + settle_notes + [aux_charts.app_only_note(spec) for spec in undrawn]
 
     def _aux_figure(self, tool_name: str, data: dict[str, Any], payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
         """补算一张盘图（不存档：runner 走 run_tool(save_result=False) 或直接打端点）。不会因此启动 runtime——引擎没在跑
@@ -910,7 +913,23 @@ class ReportsAPI:
             images = render_figure_pngs(figures, script=script, t=_labeler(script)) if figures else []
         except PngFontUnavailable:
             images = None  # 缺字体：下面照旧按字体问题报
-        if not figures or images == []:  # 没有盘式 / 只有 app 画得出的盘这次没转成
+        if (not figures or images == []) and figure_gaps:
+            # 这个技法有盘，只是这次没画成（补算要的引擎没在跑、app 画法不可用）：先说缺了什么，不说「这个技法没有盘式」。
+            from horosa_skill.reports import aux_charts
+
+            gaps = [aux_charts.standing_alone(note) for note in figure_gaps]
+            raise ToolValidationError(
+                bilingual(
+                    f"{' '.join(gaps)}`{chart['tool_name']}` 的 PNG 就是这张图，所以这次一个文件都没有写——不是这个技法没有盘式。"
+                    "排除上面的原因后重出；或改出 PDF 排盘报告：正文照出，缺的那张会写明。",
+                    f"The chart figure of `{chart['tool_name']}` could not be drawn this time (details.figure_gaps says which "
+                    "figure and why), so no PNG was written. The technique does have a chart: fix the cause and render again, "
+                    "or render a PDF chart report, which keeps the full text and states which figure is missing.",
+                ),
+                code="report.chart_figure_unavailable",
+                details={"tool_name": chart["tool_name"], "format": "png", "figure_gaps": gaps, "fallback_format": "pdf"},
+            )
+        if not figures or images == []:  # 没有盘式 / 正文与数据对不上整张不画
             raise ToolValidationError(
                 bilingual(
                     f"`{chart['tool_name']}` 这次结果里没有能画的盘图（这个技法没有盘式，或正文与数据对不上、整张不画）。"
@@ -919,7 +938,7 @@ class ReportsAPI:
                     "text and the data disagree so the figure is skipped). Read the tool result directly, or render a PDF chart report.",
                 ),
                 code="report.no_chart_content",
-                details={"tool_name": chart["tool_name"], "format": "png", **({"figure_gaps": figure_gaps} if figure_gaps else {})},
+                details={"tool_name": chart["tool_name"], "format": "png"},
             )
         try:
             if images is None:  # 第一次因缺字体失败：重来一次，让下面按字体问题给出可操作的报错
@@ -944,7 +963,7 @@ class ReportsAPI:
                         "path": rendered["path"]} for image, rendered in zip(images, outputs)]
         return outputs, {"title": f"{chart['label']} · 盘图", "figures": figure_list,
                          "headline": f"已生成 PNG 盘图 {len(outputs)} 张：{'、'.join(r['path'] for r in outputs)}",
-                         **({"warnings": figure_gaps} if figure_gaps else {})}
+                         **({"figure_gaps": figure_gaps, "warnings": list(figure_gaps)} if figure_gaps else {})}
 
     def _ics_outputs(
         self, request: Any, run: dict[str, Any], chart: dict[str, Any], script: str, default: Path,

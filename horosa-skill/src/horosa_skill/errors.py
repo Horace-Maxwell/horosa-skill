@@ -573,6 +573,19 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "read_tool_result_or_pick_charting_technique",
     },
+    "report.chart_figure_unavailable": {
+        "kind": "runtime",
+        "prompt_to_user": bilingual(
+            "这个技法有盘，但这次没画成（details.figure_gaps 写明缺哪张、为什么：多半是补算那张盘要用的排盘引擎没在跑，"
+            "或星阙 app 画法这次不可用）。让引擎跑起来（调用一次任一技法工具即可）再重出 PNG；或改出 PDF 排盘报告，"
+            "正文照出、缺的那张会写明。",
+            "The technique has a chart, but it could not be drawn this time (details.figure_gaps says which figure and why: "
+            "usually the chart engine needed to compute it is not running, or the app chart renderer is unavailable). "
+            "Get the engine running (any technique call starts it) and render the PNG again, or render a PDF chart report: "
+            "the text is complete and the missing figure is stated.",
+        ),
+        "next_action": "start_engine_then_retry_or_render_pdf",
+    },
     "report.no_calendar_content": {
         "kind": "input",
         "prompt_to_user": bilingual(
