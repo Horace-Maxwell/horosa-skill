@@ -19,6 +19,17 @@
       "min_os_note": "Windows 10 1809 / Server 2019: the oldest host the embedded x64 JDK 17 + Node 22 + CPython 3.12 support"
     }
   },
+  "core_js": {
+    "_comment": "v0.50.0-dev E-02: the platform-independent JS engine (pure JS + production node_modules). Built by scripts/build_core_js_asset.py, uploaded to the draft by publish_release.sh, listed in the release manifest under the top-level `core_js` key (never under `platforms`: old installers and --expect-platforms read that set) by generate_release_manifest.py --core-js-archive. The installer fetches it wherever no runtime archive supplies the engine (Linux, Intel Mac, `install --engine-only`). Consumers: verify_runtime_release.py, sync_windows_release.py --check, verify_published_release.py (release-completeness.yml), the installer's ENGINE_ASSET_* constants (lockstep test).",
+    "since": "0.50.0",
+    "asset": "horosa-core-js-v{version}.tar.gz",
+    "archive_type": "tar.gz",
+    "manifest_key": "core_js",
+    "root": "horosa-core-js",
+    "node_floor": ">=20.10.0",
+    "required_entries": ["bin/cli.mjs", "package.json", "src/tools/index.js", "dist/app-charts.cjs"],
+    "label": "JS engine only (any OS; needs Node >= 20.10 on PATH)"
+  },
   "aliases": {
     "win32-arm64": {
       "installs": "win32-x64",
