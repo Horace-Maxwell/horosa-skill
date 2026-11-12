@@ -95,22 +95,31 @@ def search_all(settings: Any, payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# 自备知识库那一路自己说的话，按域检索时原样带出：改写成了什么、封顶前有几段、库是不是空的、哪些文件没读入。
+USER_EXTRAS = ("total_passages", "expanded_query", "library", "suggestions", "warnings")
+
+
 def _search(settings: Any, payload: dict[str, Any], query: str, domain: str, limit: int, offset: int) -> dict[str, Any]:
     if domain == user_knowledge.USER_DOMAIN:
         mine = user_knowledge.search_user(settings, query, limit=limit, offset=offset)
         return {"mode": "search", "query": query, "domain": domain, "limit": limit, "offset": offset,
                 "total_matched": mine["total_matched"], "next_offset": mine["next_offset"], "engine": mine["engine"],
                 "matches": mine["matches"],
-                **{key: mine[key] for key in ("expanded_query", "warnings") if key in mine}}
+                **{key: mine[key] for key in USER_EXTRAS if key in mine}}
     # 每边取到 offset + limit 条就够：两边的条目互不相同，融合后的前 N 条必在各自的前 N 条里。
     depth = offset + limit
     builtin = store.search_knowledge({**payload, "query": query, "limit": limit}, depth=depth)
     mine = _user_side(settings, query, depth) if not domain else {"matches": [], "total_matched": 0}
     # 同名同档靠 RRF 比不出来：精确命中（键 / 中文名 / 笔记标题全等）是用户在点名要这一条，排在融合结果前面。
+    # 「这条笔记还有几段没列出」挂在该笔记的第一条命中上；融合后那一条可能不在这一页，改挂到这一页里它的第一条。
+    more = {match["key"]: match.pop("more_in_note") for match in mine["matches"] if "more_in_note" in match}
     fused = [match for match, _ in retrieval.rrf([builtin["matches"], mine["matches"]], key=_match_key)]
     ordered = sorted(fused, key=lambda match: not match.get("exact"))
     total = int(builtin["total_matched"]) + int(mine["total_matched"])
     page = ordered[offset : offset + limit]
+    for match in page:
+        if match.get("domain") == user_knowledge.USER_DOMAIN and match.get("key") in more:
+            match["more_in_note"] = more.pop(match["key"])
     next_offset = offset + len(page)
     result = {
         **{key: value for key, value in builtin.items() if key not in ("matches", "total_matched", "limit")},

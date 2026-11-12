@@ -175,3 +175,124 @@ def test_the_readmes_name_the_same_formats_as_the_code() -> None:
     formats = " / ".join(f"`{suffix}`" for suffix in uk.SUFFIXES)
     for name in ("README.md", "README_EN.md"):
         assert formats in (root / name).read_text(encoding="utf-8"), f"{name} 没写 {formats}"
+
+
+# ---- 同一条笔记的命中封顶要说出来，定义那一段要留下（N2）
+
+SHASHA = ("# 七杀笔记\n\n#八字 #十神\n\n## 七杀的基本意思\n七杀又叫偏官，是克我而与我阴阳相同的那个十神。老师说：七杀有制为权，无制为祸。\n\n"
+          "## 七杀格\n月令透七杀，身强喜食神制杀，身弱喜印化杀。忌财生杀。\n\n## 羊刃驾杀\n羊刃与七杀并见，杀刃相停，主武贵。\n")
+
+
+def _read(settings: Settings, read: dict) -> str:
+    return uk.read_entry(settings, read["key"], from_line=read.get("from_line"), max_lines=read.get("max_lines"))["text"]
+
+
+def test_a_capped_note_keeps_the_passage_that_defines_the_term_and_says_what_it_left_out(tmp_path: Path) -> None:
+    """冷客户端复现：笔记开头就是「七杀又叫偏官…」，搜「七杀」返回后两段、total_matched 3、next_offset null，定义永远拿不到。"""
+    _put(tmp_path, "七杀笔记.md", SHASHA)
+    _put(tmp_path, "紫微随记.txt", "紫微随记\n七杀星在命宫，主刚烈。\n")
+    settings = _settings(tmp_path)
+    result = knowledge_search.search_all(settings, {"query": "七杀", "domain": "user"})
+    mine = [m for m in result["matches"] if m["key"] == "七杀笔记"]
+    assert len(mine) == 2 and any("七杀又叫偏官" in m["snippet"] for m in mine)  # 定义那一段在留下的两段里
+    assert result["total_matched"] == 3 and result["total_passages"] == 4  # 封顶后能翻到 3 条，封顶前命中 4 段
+    more = mine[0]["more_in_note"]
+    assert "more_in_note" not in mine[1]  # 只在该笔记的第一条命中上说一次
+    assert more["count"] == 1 and len(more["read"]) == 1
+    chinese, english = more["note"].split(" / ", 1)
+    assert "还有 1 段命中没有列" in chinese and "1 more matching passage" in english
+    # 给的精读参数拿去就能读，读到的正是没列出的那一段
+    assert more["read"][0] == {"domain": "user", "key": "七杀笔记", "from_line": 11, "max_lines": 2}
+    assert _read(settings, more["read"][0]).strip() == "## 羊刃驾杀\n羊刃与七杀并见，杀刃相停，主武贵。"
+
+
+def test_every_matching_passage_of_a_capped_note_is_either_listed_or_handed_over_as_a_read(tmp_path: Path) -> None:
+    sections = "\n\n".join(f"## 第{n}节\n\n空亡在第{n}节里又出现一次：" + "旬空之说，各家不同。" * 12 for n in range(1, 8))
+    _put(tmp_path, "长笔记.md", "# 长笔记\n\n空亡者，旬中无干之支也：这是开头的定义。" + "先讲来历。" * 30 + "\n\n" + sections)
+    settings = _settings(tmp_path)
+    result = uk.search_user(settings, "空亡")
+    listed = result["matches"]
+    assert len(listed) == 2 and "这是开头的定义" in "".join(_read(settings, m["read"])[:400] for m in listed)
+    more = listed[0]["more_in_note"]
+    assert result["total_passages"] == 2 + more["count"] and more["count"] == len(more["read"]) >= 5
+    for read in more["read"]:
+        assert "空亡" in _read(settings, read)
+    spans = sorted((r["from_line"], r["from_line"] + r["max_lines"] - 1) for r in more["read"])
+    assert spans == sorted(set(spans))
+
+
+def test_an_uncapped_search_carries_no_cap_fields(tmp_path: Path) -> None:
+    _put(tmp_path, "a.md", "空亡者，虚也。")
+    result = uk.search_user(_settings(tmp_path), "空亡")
+    assert "total_passages" not in result and "more_in_note" not in result["matches"][0]
+
+
+def test_the_left_out_notice_survives_fusion_with_bundled_results(tmp_path: Path) -> None:
+    _put(tmp_path, "七杀笔记.md", SHASHA)
+    for limit in (8, 2, 1):
+        page = knowledge_search.search_all(_settings(tmp_path), {"query": "七杀", "limit": limit})["matches"]
+        mine = [m for m in page if m["domain"] == "user"]
+        if mine:  # 这一页里只要有这条笔记的命中，就得有一条带着说明
+            assert sum("more_in_note" in m for m in mine) == 1 and "more_in_note" in mine[0], limit
+
+
+# ---- 空的自备知识库、当前工具面上的精读工具（N3）
+
+
+def test_searching_an_empty_notes_library_says_where_it_is_and_how_to_fill_it(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    result = knowledge_search.search_all(settings, {"query": "七杀", "domain": "user"})
+    library = result["library"]
+    assert result["total_matched"] == 0
+    assert library["exists"] is False and library["count"] == 0 and library["dir"] == str(uk.knowledge_dir(settings))
+    chinese, english = library["how_to_add"].split(" / ", 1)
+    assert "文件夹还不存在" in chinese and "does not exist yet" in english
+    for suffix in uk.SUFFIXES:
+        assert suffix in chinese and suffix in english
+    # 文件夹在、但里面只有不读的格式：也算空，并且说出有几个文件没读入
+    _put(tmp_path, "book.pdf", "%PDF")
+    library = knowledge_search.search_all(settings, {"query": "七杀", "domain": "user"})["library"]
+    assert library["exists"] is True and library["count"] == 0 and library["not_indexed"] == 1
+    assert "还没有读入任何笔记" in library["how_to_add"]
+    # 有笔记了就不再带
+    _put(tmp_path, "a.md", "空亡者，虚也。")
+    assert "library" not in knowledge_search.search_all(settings, {"query": "七杀", "domain": "user"})
+    # 不限域的检索不拿空库说事
+    assert "library" not in knowledge_search.search_all(_settings(tmp_path / "other"), {"query": "七杀"})
+
+
+@pytest.mark.parametrize("compact", [False, True])
+def test_the_read_hint_names_a_tool_this_surface_really_exposes(tmp_path: Path, compact: bool) -> None:
+    """精简面没有 horosa_knowledge_read：结果里照旧写它，冷客户端照着调得到 Unknown tool。"""
+    import asyncio
+    import json
+    import re
+
+    from mcp.client import Client
+
+    from horosa_skill.service import HorosaSkillService
+    from horosa_skill.surfaces.mcp_server import create_mcp_server
+
+    _put(tmp_path, "七杀笔记.md", SHASHA)
+    settings = _settings(tmp_path, mcp_compact=compact)
+    mcp = create_mcp_server(HorosaSkillService(settings), settings)
+
+    async def run() -> tuple[set[str], dict, dict]:
+        async with Client(mcp) as client:
+            names = {tool.name for tool in (await client.list_tools()).tools}
+            found = json.loads((await client.call_tool("horosa_knowledge_search", {"query": "七杀", "domain": "user"})).content[0].text)
+            hint_tool = re.search(r"horosa_\w+", found["how_to_read"]).group(0)
+            read = found["matches"][0]["read"]
+            arguments = read if hint_tool == "horosa_knowledge_read" else {"tool_name": "knowledge_read", "request": read}
+            body = json.loads((await client.call_tool(hint_tool, arguments)).content[0].text)
+            return names, found, body
+
+    names, found, body = asyncio.run(run())
+    chinese, english = found["how_to_read"].split(" / ", 1)
+    for half in (chinese, english):
+        first = re.search(r"horosa_\w+", half).group(0)
+        assert first in names, f"{first} 不在这个工具面上"
+        if compact:
+            assert set(re.findall(r"horosa_\w+", half)) <= names
+    assert ("horosa_knowledge_read" in names) is (not compact)
+    assert body["ok"] is True and "月令透七杀" in json.dumps(body, ensure_ascii=False)  # 照着提示调，真的读到了

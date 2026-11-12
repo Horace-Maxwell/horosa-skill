@@ -466,11 +466,59 @@ class SearchResult:
     total: int = 0
     problems: list[str] = field(default_factory=list)  # 降级了什么：向量算不出来等。检索照常返回
     used_index: bool = True  # 这次结果真的来自索引；退回逐条匹配时报 substring，不能照旧写 fts5-bm25
+    passages: int = 0  # 封顶前一共命中几段；total 是封顶后能翻到的条数。两者不等 = 有段落因「同一条目最多几块」没列出
+    hidden: dict[str, list[Chunk]] = field(default_factory=dict)  # 条目 id → 因封顶没列出的块（按原文顺序），调用方据此给精读参数
+
+
+def _defining(group: list[Hit], entry: Any, terms: tuple[str, ...]) -> Hit | None:
+    """一条笔记的命中里「讲这个词是什么」的那一块：小节标题里有这个词的最靠前一块，没有就取正文里出现这个词的最靠前一块。
+
+    BM25 偏爱短块：定义常在开头一段里和别的话写在一起，分数排不进前两块，封顶时被挤掉的正是它。"""
+    def has(text: str) -> bool:
+        folded = normalize(text)
+        return any(term in folded for term in terms)
+
+    ordered = sorted(group, key=lambda hit: hit.chunk.ordinal)
+    for hit in ordered:
+        if hit.chunk.heading and has(hit.chunk.heading[-1]):
+            return hit
+    for hit in ordered:
+        if has(entry.text[hit.chunk.start : hit.chunk.end]):
+            return hit
+    return None
+
+
+def _cap_per_entry(resolved: list[Hit], entries: dict[str, Any], terms: tuple[str, ...],
+                   per_entry: int) -> tuple[list[Hit], dict[str, list[Chunk]]]:
+    """同一条目最多留 per_entry 块：按分数取前几块，其中必须有讲这个词的那一块（不在就顶掉最后一个名额）。
+
+    返回 (留下的命中——名次仍按各条目第几次出现排, 每条目没列出的块)。"""
+    groups: dict[str, list[Hit]] = {}
+    for hit in resolved:
+        groups.setdefault(hit.entry_id, []).append(hit)
+    chosen: dict[str, list[Hit]] = {}
+    hidden: dict[str, list[Chunk]] = {}
+    for entry_id, group in groups.items():
+        keep = group[:per_entry]
+        if len(group) > per_entry and per_entry > 0:
+            defining = _defining(group, entries[entry_id], terms)
+            if defining is not None and defining not in keep:
+                keep = [*keep[: per_entry - 1], defining]
+            hidden[entry_id] = sorted((hit.chunk for hit in group if hit not in keep), key=lambda chunk: chunk.ordinal)
+        chosen[entry_id] = keep
+    seen: Counter[str] = Counter()
+    kept: list[Hit] = []
+    for hit in resolved:
+        slot = seen[hit.entry_id]
+        if slot < len(chosen[hit.entry_id]):
+            kept.append(chosen[hit.entry_id][slot])
+            seen[hit.entry_id] += 1
+    return kept, hidden
 
 
 def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int = 8, offset: int = 0,
            per_entry: int = PER_ENTRY_HITS, use_index: bool = True, raw_query: str = "") -> SearchResult:
-    """块级检索。同一条目最多 per_entry 块。entries = {id: UserKnowledgeEntry}。
+    """块级检索。同一条目最多 per_entry 块（没列出的记在 result.hidden，封顶前的段数在 result.passages）。entries = {id: UserKnowledgeEntry}。
 
     use_index=False（索引没对齐）时逐条子串计分；块从正文现切，不读索引里可能过期的区间。
     索引本身读不了（sqlite3.Error）由调用方决定怎么恢复（user.search_user 隔离重建一次）。"""
@@ -511,10 +559,9 @@ def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int =
             except (sqlite3.Error, ValueError, RuntimeError, OSError) as exc:
                 result.problems.append(f"向量检索这次没用上（{type(exc).__name__}: {exc}），结果来自 BM25。")
         chunk_cache: dict[str, list[Chunk]] = {}
-        per: Counter[str] = Counter()
-        hits: list[Hit] = []
+        resolved: list[Hit] = []
         for eid, ordinal, score in ranked:
-            if eid not in entries or per[eid] >= per_entry:
+            if eid not in entries:
                 continue
             chunk = known.get((eid, ordinal))
             if chunk is None:
@@ -522,12 +569,12 @@ def search(settings: Any, entries: dict[str, Any], query: Query, *, limit: int =
                 if ordinal >= len(chunks):
                     continue
                 chunk = chunks[ordinal]
-            per[eid] += 1
-            hits.append(Hit(eid, chunk, round(score, 4)))
+            resolved.append(Hit(eid, chunk, round(score, 4)))
     finally:
         if connection is not None:
             connection.close()
-    result.hits, result.total = hits[offset : offset + limit], len(hits)
+    hits, result.hidden = _cap_per_entry(resolved, entries, query.terms, per_entry)
+    result.hits, result.total, result.passages = hits[offset : offset + limit], len(hits), len(resolved)
     return result
 
 

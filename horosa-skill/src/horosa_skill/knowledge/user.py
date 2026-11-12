@@ -1225,10 +1225,54 @@ def _guarded_search(settings: Any, catalog: Catalog, by_id: dict[str, Any], pars
     return result
 
 
-def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -> dict[str, Any]:
-    """块级检索（BM25，中文双字切分）：每条命中带标题路径、原文件行号、摘要、引用串，同一条目最多两块。
+MORE_READS = 12  # more_in_note.read 一次最多给几段的精读参数（再多就按 outline 自己翻）
 
-    整句零命中时改写一次（去问句外壳、切开连写的词），结果带 `expanded_query`。"""
+
+def _more_in_note(entry: UserKnowledgeEntry, chunks: list[Any], cap: int) -> dict[str, Any]:
+    """同一条笔记里因「每条最多列 cap 段」没列出的命中段：几段 + 每段现成的精读参数（原文件行号）。"""
+    reads = []
+    for chunk in chunks[:MORE_READS]:
+        first, last = chunk.line_start + entry.line_offset + 1, chunk.line_end + entry.line_offset + 1
+        reads.append({"domain": USER_DOMAIN, "key": entry.id, "from_line": first, "max_lines": last - first + 1})
+    count = len(chunks)
+    return {
+        "count": count,
+        "note": bilingual(
+            f"这条笔记还有 {count} 段命中没有列在上面（同一条笔记最多列 {cap} 段，免得一个长文件占满结果）；逐段精读用 read 里的参数。",
+            f"{count} more matching passage(s) in this note are not listed (at most {cap} per note, so one long file cannot fill "
+            "the page); read each one with the objects in `read`.",
+        ),
+        "read": reads,
+        **({"truncated": True} if count > len(reads) else {}),
+    }
+
+
+def library_status(catalog: Catalog) -> dict[str, Any]:
+    """自备知识库现在什么样：文件夹在哪、在不在、读入了几条、怎么加。库是空的时候检索结果带上它，0 条命中才有个说法。"""
+    skipped = not_indexed(catalog)
+    state_zh = "文件夹还不存在" if not catalog.exists else "文件夹里还没有读入任何笔记"
+    state_en = "the folder does not exist yet" if not catalog.exists else "no note has been read from the folder yet"
+    return {
+        "dir": str(catalog.root),
+        "exists": catalog.exists,
+        "count": len(catalog.entries),
+        **({"not_indexed": skipped["total"]} if skipped else {}),
+        "how_to_add": bilingual(
+            f"自备知识库是空的（{state_zh}）：把 {'、'.join(SUFFIXES)} 文本笔记放进 dir 指的文件夹（不存在就新建），"
+            "下一次检索就能搜到，不用重启；也可以用命令 `horosa-skill knowledge add <名> --file <文件>`。",
+            f"Your notes library is empty ({state_en}): put {', '.join(SUFFIXES)} text notes into the folder named in `dir` "
+            "(create it if missing) and the next search will find them, no restart needed; "
+            "or run `horosa-skill knowledge add <name> --file <file>`.",
+        ),
+    }
+
+
+def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -> dict[str, Any]:
+    """块级检索（BM25，中文双字切分）：每条命中带标题路径、原文件行号、摘要、引用串。
+
+    同一条目最多列 index.PER_ENTRY_HITS 块，其中必有讲这个词的那一块；没列出的记在该条目第一条命中的 `more_in_note`
+    （段数 + 现成的精读参数），封顶前的总段数在 `total_passages`。整句零命中时改写一次（去问句外壳、切开连写的词），
+    结果带 `expanded_query`。库是空的（文件夹不存在 / 没有读入任何笔记）时带 `library`。"""
     import sqlite3
 
     from horosa_skill.knowledge import index as kindex
@@ -1253,6 +1297,7 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
             found = _guarded_search(settings, catalog, by_id, parsed, limit=limit, offset=offset, raw_query=query)
     folded = retrieval.normalize(query).strip()
     matches = []
+    told: set[str] = set()
     for hit in found.hits:
         entry = by_id[hit.entry_id]
         lines = _lines_label(entry, hit.chunk.line_start, hit.chunk.line_end)
@@ -1266,6 +1311,9 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
             "read": {"domain": USER_DOMAIN, "key": entry.id, "from_line": int(first_line)},
             **({"exact": True} if retrieval.normalize(entry.title) == folded else {}),
         })
+        if found.hidden.get(entry.id) and entry.id not in told:
+            told.add(entry.id)
+            matches[-1]["more_in_note"] = _more_in_note(entry, found.hidden[entry.id], kindex.PER_ENTRY_HITS)
     notes = list(found.problems)
     skipped = not_indexed(catalog)
     if skipped:
@@ -1273,8 +1321,10 @@ def search_user(settings: Any, query: str, *, limit: int = 8, offset: int = 0) -
         notes.append(skipped["message"])
     return {"matches": matches, "total_matched": found.total, "offset": offset, "limit": limit,
             "next_offset": offset + len(matches) if offset + len(matches) < found.total else None,
+            **({"total_passages": found.passages} if found.passages != found.total else {}),
             "engine": _engine(settings, catalog) if found.used_index else "substring",
             **({"expanded_query": expanded} if expanded else {}),
+            **({"library": library_status(catalog)} if not catalog.entries else {}),
             **({"warnings": notes} if notes else {})}
 
 
