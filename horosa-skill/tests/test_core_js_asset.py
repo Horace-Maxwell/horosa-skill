@@ -157,3 +157,17 @@ def test_the_real_tree_builds_with_every_contracted_entry(tmp_path: Path) -> Non
     for dep in package["dependencies"]:
         assert f"{spec['root']}/node_modules/{dep}/package.json" in names, dep
     assert not any("/node_modules/esbuild" in name or "/node_modules/d3/" in name for name in names), "dev deps leaked"
+
+
+def test_lockfile_root_mirrors_package_json() -> None:
+    """package-lock.json 的根条目（packages[""]）必须与 package.json 逐字段一致。
+
+    v0.50.0 发布时 package.json 的 engines 说明改了、锁文件没跟：发布第 1 步 `npm install --omit=dev` 把锁文件改写，
+    第 2 步 build_core_js_asset 见树不干净拒绝出资产——红在发版当场。改 package.json 后跑 `npm install --package-lock-only`。"""
+    core = PKG_ROOT / "horosa-core-js"
+    package = json.loads((core / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((core / "package-lock.json").read_text(encoding="utf-8"))
+    root = lock["packages"][""]
+    assert lock["name"] == package["name"] and lock["version"] == package["version"] == root["version"]
+    for key in ("dependencies", "devDependencies", "engines", "license"):  # bin 被 npm 规范化（去掉 ./），不比
+        assert root.get(key) == package.get(key), f"package-lock.json 根条目的 {key} 与 package.json 不一致"

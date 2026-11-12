@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.0-dev (2026-11-12) | v0.50.0 发版第 1 步 `npm install --omit=dev` 改写了 horosa-core-js 的 package-lock.json（package.json 的 engines 说明改过、锁文件没跟），第 2 步 JS 引擎资产见树不干净拒绝出包——红在发版当场，CI 全绿看不出 | `test_lockfile_root_mirrors_package_json` 让 CI 先红；改 package.json 后跑 `npm install --package-lock-only` 一并提交 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交在 CI ubuntu 上红 8 条、维护机 macOS 全绿：doctor「新机器」用例只在有载荷的平台写过断言；报告用例只在有中文 TrueType 的机器写过断言——6 条里 3 条是真缺陷（CID 回退不补字 ✓☯🎉 进 PDF、空格子标签外 `() Tj`、DOCX 中文字体退成 Arial），另有无载荷平台 advice 叫人「装 730 MB」 | 按本机环境分支的用例在每台机器上把各支都跑：`conftest.font_host`（host / no_cjk_font / no_fonts）、doctor 用例的 `host` fixture 钉 `_platform_key`；CID 字体按 Adobe 字符集合（gbk / big5hkscs）量覆盖；推前在 Linux 容器里跑一遍受影响的用例 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交本机门禁全绿，main CI windows-smoke 红 13 条：相对路径键带反斜杠、`with sqlite3.connect()` 不关连接删不了库、粗单调钟下预算 0 读完全部、开了长路径的 Windows 照写超长路径（没开的到建目录才裸 OSError）、Segoe UI Symbol 真画得出 🎉、tar 盘符名、给 Windows 粘的命令按 cmd 规则写 JSON；顺带查出知识索引 `--rebuild` 在 Windows 上隔离不了坏库、清残留用 `os.kill(pid, 0)` | conftest 让每条用例都在 `tests/winsim.py`（Windows 文件共享规则）下跑；源码守卫禁 `str(relative_to)` / 裸 `with sqlite3.connect` / procs 以外的 os.kill；预算判 ≥；整条路径按本机上限事前判；tar 过 `_portable_data_filter`；命令写成 PowerShell 与 cmd 同读（`tests/winshell.py` 两种拆法）|
 | v0.50.0-dev (2026-11-12) | JS 引擎只随 darwin / win32 两个 runtime 归档走：Linux、Intel Mac、Docker、pip 网关、没跑 install 的人一个都没有，八字 / 六爻 / 六壬 / 河洛 / 参评等全部 js_engine.cli_missing；install 在这些平台上只报「不支持」，Docker 镜像连 node 都没有 | 平台无关资产 `horosa-core-js-v<ver>.tar.gz`（确定性构建）随发布上 draft、进清单顶层 `core_js`、[GAP] 与 completeness 查缺件 / 摘要；install 在无载荷平台自动只装它、`--engine-only` 任何平台；Docker 自带钉版本 Node + 引擎 |
@@ -248,6 +249,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.0-dev / 2026-11-12 — 锁文件跟不上 package.json：发版第 2 步才红
+
+- **症状**：`publish_release.sh --draft` 第 1 步（darwin 载荷）在 horosa-core-js 里跑 `npm install --omit=dev`，把 package-lock.json 根条目的
+  `engines["//"]` 改成 package.json 的新说明；第 2 步 `build_core_js_asset.py` 要求资产等于已提交的树，见锁文件改了就拒绝。没有任何东西上传。
+- **根因**：深审守卫批改了 package.json 的 engines 说明，没重生锁文件；CI 只跑 `npm ci`（不改锁文件），看不出两者不一致。
+- **修复**：提交同步后的锁文件；`tests/test_core_js_asset.py::test_lockfile_root_mirrors_package_json` 逐字段比根条目（dependencies /
+  devDependencies / engines / license；`bin` 会被 npm 去掉 `./`，不比）。负向对照：旧锁文件下红。
+- **规则**：改 horosa-core-js/package.json 任何字段，同一提交里跑 `npm install --package-lock-only` 并提交锁文件。
 
 ### v0.50.0-dev / 2026-11-12 — macOS 绿 ≠ CI 绿（又一次）：按本机字体 / 平台分支的用例只在维护机那一支写过断言
 
