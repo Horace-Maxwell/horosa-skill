@@ -33,6 +33,10 @@ def _labeler(script: str) -> Any:
     return lambda text: convert(text, script)
 
 
+# 临时文件名不带目标文件名：`.{目标名}.xxxxxxxx.tmp` 比目标名长 14 字节，文件名上限（output_path.MAX_NAME_BYTES）就得替它留余量。
+_TMP_PREFIX = ".horosa-report-"
+
+
 def render_report(
     document: dict[str, Any], *, output_path: Path, format_name: str, script: str = SIMPLIFIED
 ) -> dict[str, Any]:
@@ -49,7 +53,7 @@ def render_report(
     # Render to a temp sibling first, then atomically os.replace() into place. A mid-render failure
     # (python-docx / reportlab raising, disk error) thus can never leave a truncated/corrupt artifact
     # at output_path — the destination is only touched once a complete file exists.
-    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=_TMP_PREFIX, suffix=".tmp")
     os.close(fd)
     tmp_path = Path(tmp_name)
     technique_report = _is_technique_report(document)
@@ -100,7 +104,7 @@ def write_artifact(payload: bytes, *, output_path: Path, format_name: str) -> di
     """已经生成好的字节（PNG 盘图 / ICS 日历）落盘：同 render_report 的临时文件 + 原子替换（半截文件不会出现在目标路径）、
     目标被占用时另存旁边的空闲名字；返回同一形状的结果。"""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=f".{output_path.name}.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(dir=str(output_path.parent), prefix=_TMP_PREFIX, suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "wb") as handle:

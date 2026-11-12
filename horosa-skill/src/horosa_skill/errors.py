@@ -536,6 +536,31 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "use_relative_output_path_or_allowlist_root",
     },
+    "report.output_path_unusable": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "output_path 用不了（details.reason：existing_file 已有文件且不是星阙写的报告，不替换 / store_area 是星阙自己的存储区 / "
+            "extension_mismatch 扩展名和 format 对不上 / name_too_long 文件名太长 / path_refused_by_system 系统不接受这条路径"
+            "（多半是整条太长）/ parent_not_directory 路径中间是个文件 / not_writable 目录没有写权限 / no_free_name 缺省文件名都被占了 / "
+            "write_failed 写盘失败）。换一个新文件名或目录后重试；不写 output_path 就落在缺省位置。除 write_failed 外都在起盘和写回"
+            "解读之前检查，被拒时什么都没有写。",
+            "output_path cannot be used (details.reason: existing_file = a file that is not a Horosa report is never replaced / "
+            "store_area = Horosa's own storage / extension_mismatch / name_too_long / path_refused_by_system / "
+            "parent_not_directory / not_writable / no_free_name / write_failed). Retry with a new file name or a directory; "
+            "omit output_path to use the default location. Every reason except write_failed is checked before the technique "
+            "runs and before the reading is recorded, so nothing was written.",
+        ),
+        "next_action": "fix_output_path_and_retry",
+    },
+    "report.invalid_format": {
+        "kind": "input",
+        "prompt_to_user": bilingual(
+            "format 不在可选范围内（details.allowed）。解读 / 排盘报告用 pdf、docx 或 json；只要盘图用 png；只要日期日历用 ics。",
+            "format is not one of the allowed values (details.allowed). Use pdf, docx or json for a reading / chart report, "
+            "png for the chart figure alone, ics for a calendar of the dates.",
+        ),
+        "next_action": "retry_with_allowed_format",
+    },
     "report.source_not_found": {"kind": "input", "next_action": "query_memory_for_run_id"},
     "report.no_chart_content": {
         "kind": "input",

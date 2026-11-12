@@ -13,6 +13,7 @@ from horosa_skill import winpaths
 from horosa_skill.agent_guidance import build_validation_recovery
 from horosa_skill.engine.registry import resolve_tool_name
 from horosa_skill.errors import ToolValidationError, bilingual, validation_errors
+from horosa_skill.reports import output_path as output_paths
 from horosa_skill.reports import render_report
 from horosa_skill.reports.calendar_ics import CALENDAR_TOOLS, extract_calendar, render_ics
 from horosa_skill.reports.chart_png import PngFontUnavailable, render_figure_pngs
@@ -40,6 +41,7 @@ _RULE_LOOKUP_TOOLS = frozenset({"ziwei_rules"})
 # 只含引擎数据、不要 AI 解读的两种格式：PNG = 盘图本身，ICS = 结果里现成日期的日历（v0.48.0）。
 _ENGINE_ONLY_FORMATS = frozenset({"png", "ics"})
 _REPORT_FORMATS = ("json", "docx", "pdf", "png", "ics")
+_TECHNIQUE_REPORT_FORMATS = ("markdown", "json", "docx", "pdf")
 _FORMAT_NOUNS = {"png": "PNG 盘图", "ics": "ICS 日历"}
 
 _REPORT_MIME = {
@@ -334,17 +336,128 @@ class ReportsAPI:
             )
         return resolved
 
+    def _output_request(self, requested: str | None, format_name: str) -> output_paths.OutputRequest:
+        """`output_path` 的事前检查（没有副作用，起盘 / 写回之前就能做）：过输出根的闸，再看它是目录还是文件、扩展名和 format
+        对不对得上、名字是否过长、所在位置写不写得进去。问题一律 `report.output_path_not_allowed` / `report.output_path_unusable`。"""
+        text = "" if requested is None else f"{requested}".strip()
+        if not text:
+            return output_paths.OutputRequest("default")
+        resolved = self._report_output_path(text, default=Path(self.store.output_dir) / "report")
+        output_paths.check_names(resolved, requested=text)  # 先看名字（纯字符串），再碰文件系统
+        protected = self._store_areas()
+        output_paths.check_not_store_area(resolved, protected=protected, requested=text)
+        if output_paths.names_a_directory(text, resolved):
+            output_paths.check_writable(resolved / "report", requested=text)
+            return output_paths.OutputRequest("directory", resolved, {"requested": text, "reason": "directory"})
+        path, adjustment = output_paths.with_format_suffix(resolved, format_name, requested=text)
+        output_paths.check_names(path, requested=text)
+        output_paths.check_not_store_area(path, protected=protected, requested=text)
+        output_paths.check_writable(path, requested=text)
+        output_paths.check_replaceable(path, may_replace=self._is_recorded_report, requested=text)
+        return output_paths.OutputRequest("file", path, adjustment, requested=text)
+
+    def _store_areas(self) -> list[Path]:
+        """报告不能写进去的存储区（output_path.check_not_store_area）：记忆库文件及其 -wal / -shm / -journal、trace、档案、
+        自备知识库、runtime。存档目录 `<data>/runs` 本身就是报告输出根，那里的存档与 manifest 靠「已有文件只替换报告」护着。"""
+        from horosa_skill.profiles import profiles_dir
+
+        settings = self.settings
+        areas: list[Path] = []
+        db_path = getattr(self.store, "db_path", None) or settings.db_path
+        if db_path is not None:
+            db = Path(db_path).expanduser()
+            areas += [db, *(db.with_name(db.name + suffix) for suffix in ("-wal", "-shm", "-journal"))]
+        for directory in (settings.trace_dir, profiles_dir(settings), settings.user_knowledge_dir, settings.runtime_root):
+            if directory is not None:
+                areas.append(Path(directory).expanduser())
+        resolved: list[Path] = []
+        for area in areas:
+            try:
+                resolved.append(area.resolve())
+            except (OSError, ValueError):
+                resolved.append(area.absolute())
+        return resolved
+
+    def _is_recorded_report(self, path: Path) -> bool:
+        """这个文件是不是报告自己写的（记忆库 artifacts 表里有一条 report_* 记着这个路径）。读不了记忆库就当不是。"""
+        try:
+            with self.store.connect() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM artifacts WHERE path = ? AND kind LIKE 'report\\_%' ESCAPE '\\' LIMIT 1", (str(path),)
+                ).fetchone()
+        except Exception:  # noqa: BLE001 — 记忆库坏了 / 被锁：保守地不替换
+            return False
+        return row is not None
+
+    def _claim_output(
+        self, request: output_paths.OutputRequest, default: Path, count: int = 1
+    ) -> tuple[list[Path], list[Path]]:
+        """落盘路径（`count` 张图各一个文件）。调用方点名的文件：没有就原子地占住；已有的只替换报告自己写过的。缺省名 /
+        目录里的缺省名：整组占住一个没人用的名字（同一秒内两次调用各得各的）。返回（路径, 占位文件）；占位文件由调用方在
+        finally 里逐个 `output_paths.release`。"""
+        if request.kind == "file" and request.path is not None:
+            targets = output_paths.numbered(request.path, count)
+            placeholders = output_paths.claim_exact(targets, may_replace=self._is_recorded_report, requested=request.requested)
+            return targets, placeholders
+        target = default if request.kind == "default" or request.path is None else request.path / default.name
+        reserved = output_paths.reserve_set(target, count)
+        return reserved, list(reserved)
+
+    @staticmethod
+    def _output_adjustment_fields(request: output_paths.OutputRequest, path: Any) -> dict[str, Any]:
+        return {"output_path_adjustment": request.adjustment} if request.adjustment else {}
+
+    @staticmethod
+    def _output_adjustment_notes(request: output_paths.OutputRequest, path: Any) -> list[str]:
+        if not request.adjustment:
+            return []
+        if request.adjustment["reason"] == "directory":
+            return [f"output_path 给的是目录（{request.adjustment['requested']}），报告以缺省文件名写在其中：{path}"]
+        return [f"output_path 没有写 {request.adjustment['extension']} 扩展名，已补上：{path}"]
+
+    @staticmethod
+    def _write_failed(exc: OSError, path: Any) -> ToolValidationError:
+        """写盘时才暴露的问题（磁盘满、目标被占用且旁边没有空名字、事前检查没覆盖到的文件系统限制）：不让裸 OSError 穿出信封。"""
+        reason = f"{type(exc).__name__}: {exc.strerror or exc}"
+        return output_paths.unusable(
+            "write_failed",
+            f"报告写不到 {path}（{reason}）。换一个 output_path，或不写 output_path 用缺省位置。",
+            f"the report could not be written to {path} ({reason}). Choose another output_path, or omit it to use the default location.",
+            path=str(path), errno=exc.errno,
+        )
+
     def report_render(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """次序（v0.50.0）：校验参数 → 格式 / 样式 → 取 run → `output_path` 事前检查 → 排文档 → 渲染落盘 → **之后**才把这次的
+        AI 解读写回 run。此前写回在路径检查之前：路径被拒，解读却已经记在 run 上，下一次不带答案的调用就把它印成了报告。
+        run 取到之后抛出的每个错误都带 `details.run_id`。"""
         with self.tracer.span(
             workflow_name="report.render",
             metadata={"entrypoint": "report.render", "payload": payload},
         ) as trace:
             try:
                 request = ReportRenderInput.model_validate(payload)
+            except ValidationError as exc:
+                trace["error_code"] = "report.render.invalid_payload"
+                errors = validation_errors(exc)
+                raise ToolValidationError(
+                    "Invalid payload for report render.",
+                    code="report.render.invalid_payload",
+                    details={
+                        "errors": errors,
+                        "agent_recovery": build_validation_recovery(operation_name="report_render", errors=errors),
+                    },
+                ) from exc
+            reserved: list[Path] = []
+            run_loaded = False
+            try:
                 normalized_format = self._normalize_report_format(request.format)
+                engine_only = normalized_format in _ENGINE_ONLY_FORMATS
+                chart_style = not engine_only and self._report_style(request) == "chart"
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
-                if normalized_format in _ENGINE_ONLY_FORMATS:
-                    result = self._render_engine_only(request, run, source_artifact, normalized_format, trace)
+                run_loaded = True
+                output_request = self._output_request(request.output_path, normalized_format)
+                if engine_only:
+                    result = self._render_engine_only(request, run, source_artifact, normalized_format, trace, output_request)
                     trace["run_id"] = request.run_id
                     trace["artifact_path"] = result["artifact_path"]
                     trace["success"] = True
@@ -354,8 +467,9 @@ class ReportsAPI:
                     ai_report=request.ai_report,
                     ai_answer_text=request.ai_answer_text,
                 )
-                chart_style = self._report_style(request) == "chart"
-                if not chart_style and not normalized_ai_report and not self._run_has_report_ai(run):
+                answer_text = self._report_ai_answer_text(normalized_ai_report) if normalized_ai_report else ""
+                stored_answer = self._run_has_report_ai(run)
+                if not chart_style and not normalized_ai_report and not stored_answer:
                     template = self.report_builder.build_template(
                         run=run,
                         source_artifact=source_artifact,
@@ -373,18 +487,18 @@ class ReportsAPI:
                         trace_id=trace["trace_id"],
                         group_id=trace["group_id"],
                     )
-                answer_writeback = self._record_report_ai_if_present(
-                    run=run,
-                    tool_name=source_tool_name,
-                    ai_report=normalized_ai_report,
-                    format_name=normalized_format,
-                )
-                if answer_writeback:
-                    run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
+                answer_source = "request" if answer_text else "stored" if stored_answer else None
+                # 文档按「写回之后 run 的样子」来排（写回是整份替换，不是合并），写回本身留到产物落盘之后。
+                run_view = run if not answer_text else {
+                    **run,
+                    "user_question": run.get("user_question") or run.get("query_text"),
+                    "ai_answer_text": answer_text,
+                    "ai_answer_structured": copy.deepcopy(normalized_ai_report),
+                }
                 language = self._report_language(request)
                 script = self._report_script(language)
                 document = self.report_builder.build_document(
-                    run=run,
+                    run=run_view,
                     source_artifact=source_artifact,
                     language=language,
                     title=request.title,
@@ -407,21 +521,22 @@ class ReportsAPI:
                         code="report.no_chart_content",
                         details={"tool_name": tool_name, "style": "chart"},
                     )
-                output_path = self._report_output_path(
-                    request.output_path,
-                    default=self.store.default_report_path(
-                        run_id=request.run_id,
-                        tool_name=tool_name,
-                        format_name=normalized_format,
-                    ),
-                )
                 # 盘图换成星阙 app 原版画法（reports/app_charts.py）；在转文字之前配，app 图里的字跟正文一起转。
                 document["figures"], figure_gaps = self._report_figures(document.get("figures") or [], run, source_artifact)
                 if figure_gaps:
                     document["figure_gaps"] = figure_gaps
                 # 报告是给人读的整份文本：存档里仍是简体原文，只有落盘的这一份按设置转文字。
                 document = localize_document(document, script)
-                rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
+                # 缺省名带上样式：同一条 run 的排盘版与解读版一眼分得开，也不会同一秒内互相盖掉。
+                [output_path], reserved = self._claim_output(output_request, self.store.default_report_path(
+                    run_id=request.run_id,
+                    tool_name=f"{tool_name}_{'chart' if chart_style else 'analysis'}",
+                    format_name=normalized_format,
+                ))
+                try:
+                    rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
+                except OSError as exc:
+                    raise self._write_failed(exc, output_path) from exc
                 artifact = self.store.record_report_artifact(
                     run_id=request.run_id,
                     tool_name=tool_name,
@@ -430,34 +545,44 @@ class ReportsAPI:
                     trace_id=trace["trace_id"],
                     group_id=trace["group_id"],
                 )
-            except ValidationError as exc:
-                trace["error_code"] = "report.render.invalid_payload"
-                errors = validation_errors(exc)
-                raise ToolValidationError(
-                    "Invalid payload for report render.",
-                    code="report.render.invalid_payload",
-                    details={
-                        "errors": errors,
-                        "agent_recovery": build_validation_recovery(operation_name="report_render", errors=errors),
-                    },
-                ) from exc
+                # 产物已经在盘上，这时才把这次的解读记到 run 上。
+                answer_writeback = self._record_report_ai_if_present(
+                    run=run,
+                    tool_name=source_tool_name,
+                    ai_report=normalized_ai_report,
+                    format_name=normalized_format,
+                )
+            except ToolValidationError as exc:
+                if run_loaded:
+                    exc.details.setdefault("run_id", request.run_id)
+                trace["error_code"] = exc.code
+                raise
             except ValueError as exc:
                 trace["error_code"] = "report.render.failed"
                 raise ToolValidationError(
                     str(exc),
                     code="report.render.failed",
-                    details={"payload": payload},
+                    details={"payload": payload, **({"run_id": request.run_id} if run_loaded else {})},
                 ) from exc
+            finally:
+                for placeholder in reserved:
+                    output_paths.release(placeholder)
 
+            answer_notes = []
+            if answer_source == "stored" and (request.ai_answer_text is not None or request.ai_report):
+                answer_notes.append("这次传入的 ai_answer_text / ai_report 里没有可用的正文，报告印的是存档里已有的那份解读（answer_source=stored）。")
             result = {
                 **artifact,
                 "file": _file_card(artifact.get("artifact_path"), rendered["format"]),
                 "document_schema": document["schema"],
                 "title": document["title"],
                 "source": document["source"],
+                "answer_source": answer_source,
                 "answer_writeback": answer_writeback,
                 **_render_outcome_fields(rendered),
+                **self._output_adjustment_fields(output_request, rendered["path"]),
                 "summary": [f"已生成 {rendered['format'].upper()} 结构化报告：{artifact['artifact_path']}", *_render_outcome_notes(rendered),
+                            *self._output_adjustment_notes(output_request, rendered["path"]), *answer_notes,
                             *document.get("figure_gaps", [])],
                 "trace_id": trace["trace_id"],
                 "group_id": trace["group_id"],
@@ -474,7 +599,6 @@ class ReportsAPI:
         ) as trace:
             try:
                 request = ReportFromToolInput.model_validate(payload)
-                normalized_format = self._normalize_report_format(request.format)
             except ValidationError as exc:
                 trace["error_code"] = "report.from_tool.invalid_payload"
                 errors = validation_errors(exc)
@@ -487,6 +611,15 @@ class ReportsAPI:
                     },
                 ) from exc
 
+            # 起盘之前把能查的都查完（v0.50.0）：格式、样式、output_path。此前这些在起盘并存档之后才查，被拒的调用白跑一次技法、
+            # 多存一条 run，错误里还没有那条 run 的 id。
+            try:
+                normalized_format = self._normalize_report_format(request.format)
+                report_style = "analysis" if normalized_format in _ENGINE_ONLY_FORMATS else self._report_style(request)
+                self._output_request(request.output_path, normalized_format)
+            except ToolValidationError as exc:
+                trace["error_code"] = exc.code
+                raise
             # 两种写法都收（chart / horosa_astro_chart）；后面按注册表键取存档与模板，所以先归一。
             request.tool_name = resolve_tool_name(request.tool_name) or request.tool_name
             if normalized_format == "ics" and request.tool_name not in CALENDAR_TOOLS:
@@ -526,7 +659,7 @@ class ReportsAPI:
                 ai_report=request.ai_report,
                 ai_answer_text=request.ai_answer_text,
             )
-            if not normalized_ai_report and self._report_style(request) != "chart" and normalized_format not in _ENGINE_ONLY_FORMATS:
+            if not normalized_ai_report and report_style != "chart" and normalized_format not in _ENGINE_ONLY_FORMATS:
                 run, source_artifact = self._load_report_source(result.memory_ref.run_id, request.tool_name)
                 template = self.report_builder.build_template(
                     run=run,
@@ -558,7 +691,7 @@ class ReportsAPI:
                     "run_id": result.memory_ref.run_id,
                     "tool_name": request.tool_name,
                     "format": normalized_format,
-                    "style": self._report_style(request),
+                    "style": report_style,
                     # 只转发调用方真写了的 language：缺省值转过去会被当成「显式 zh-CN」，盖掉全局的繁体设置。
                     **({"language": request.language} if request.language else {}),
                     "title": request.title,
@@ -653,21 +786,34 @@ class ReportsAPI:
     def _normalize_report_format(self, value: str) -> str:
         normalized = str(value or "").lower().strip()
         if normalized not in _REPORT_FORMATS:
-            raise ValueError(f"format must be one of: {', '.join(_REPORT_FORMATS)}")
+            raise ToolValidationError(
+                bilingual(f"不认识的报告格式：{value}（可选 {' / '.join(_REPORT_FORMATS)}）",
+                          f"Unknown report format: {value} (choose one of {', '.join(_REPORT_FORMATS)})"),
+                code="report.invalid_format",
+                details={"format": f"{value}", "allowed": list(_REPORT_FORMATS)},
+            )
         return normalized
 
     def _render_engine_only(
-        self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], format_name: str, trace: dict[str, Any]
+        self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], format_name: str, trace: dict[str, Any],
+        output_request: output_paths.OutputRequest,
     ) -> dict[str, Any]:
         """PNG 盘图 / ICS 日历：只含引擎数据，不需要也不使用 ai_report（给了也不写回记忆，结果里如实说明）。"""
         chart = self.report_builder.chart_source(run=run, source_artifact=source_artifact)
         script = self._report_script(self._report_language(request))
         tool_name = chart["tool_name"]
         default = self.store.default_report_path(run_id=request.run_id, tool_name=tool_name, format_name=format_name)
-        if format_name == "png":
-            outputs, extra = self._png_outputs(request, run, source_artifact, chart, script, default)
-        else:
-            outputs, extra = self._ics_outputs(request, run, chart, script, default)
+        claimed: list[Path] = []
+        try:
+            if format_name == "png":
+                outputs, extra = self._png_outputs(request, run, source_artifact, chart, script, default, output_request, claimed)
+            else:
+                outputs, extra = self._ics_outputs(request, run, chart, script, default, output_request, claimed)
+        except OSError as exc:
+            raise self._write_failed(exc, claimed[0] if claimed else default) from exc
+        finally:
+            for placeholder in claimed:
+                output_paths.release(placeholder)
         artifacts, cards = [], []
         for rendered in outputs:
             artifact = self.store.record_report_artifact(
@@ -689,7 +835,8 @@ class ReportsAPI:
             "source": chart["source"],
             "answer_writeback": None,
             **_render_outcome_fields(outputs[0]),
-            "summary": [headline, *notes],
+            **self._output_adjustment_fields(output_request, outputs[0]["path"]),
+            "summary": [headline, *notes, *self._output_adjustment_notes(output_request, outputs[0]["path"])],
             **({"warnings": warnings} if warnings else {}),
             "trace_id": trace["trace_id"],
             "group_id": trace["group_id"],
@@ -752,14 +899,9 @@ class ReportsAPI:
             return self._aux_guolao_chart_moira(payload, data)
         return self._aux_qizhengzeri_moira(payload, data)
 
-    def _numbered_paths(self, output_path: Path, count: int) -> list[Path]:
-        """一张图一个文件：多张时在文件名后加 _1、_2…（同一目录，仍在已校验的输出根之内）。"""
-        if count == 1:
-            return [output_path]
-        return [output_path.with_name(f"{output_path.stem}_{index}{output_path.suffix}") for index in range(1, count + 1)]
-
     def _png_outputs(
-        self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], chart: dict[str, Any], script: str, default: Path
+        self, request: Any, run: dict[str, Any], source_artifact: dict[str, Any], chart: dict[str, Any], script: str, default: Path,
+        output_request: output_paths.OutputRequest, claimed: list[Path],
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         figures, figure_gaps = self._report_figures(self.report_builder.build_figures(run=run, source_artifact=source_artifact), run, source_artifact)
         figures = localize_document(figures, script)
@@ -795,9 +937,9 @@ class ReportsAPI:
                 code="report.png_font_unavailable",
                 details={"tool_name": chart["tool_name"], "missing_characters": exc.missing[:40], "fallback_format": "pdf"},
             ) from exc
-        output_path = self._report_output_path(request.output_path, default=default)
-        outputs = [write_artifact(image["png"], output_path=path, format_name="png")
-                   for image, path in zip(images, self._numbered_paths(output_path, len(images)))]
+        paths, reserved = self._claim_output(output_request, default, len(images))
+        claimed.extend(reserved)
+        outputs = [write_artifact(image["png"], output_path=path, format_name="png") for image, path in zip(images, paths)]
         figure_list = [{"title": image["title"], "kind": image["kind"], "width": image["width"], "height": image["height"],
                         "path": rendered["path"]} for image, rendered in zip(images, outputs)]
         return outputs, {"title": f"{chart['label']} · 盘图", "figures": figure_list,
@@ -805,7 +947,8 @@ class ReportsAPI:
                          **({"warnings": figure_gaps} if figure_gaps else {})}
 
     def _ics_outputs(
-        self, request: Any, run: dict[str, Any], chart: dict[str, Any], script: str, default: Path
+        self, request: Any, run: dict[str, Any], chart: dict[str, Any], script: str, default: Path,
+        output_request: output_paths.OutputRequest, claimed: list[Path],
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         extraction = extract_calendar(chart["tool_name"], chart["data"], input_normalized=chart["input_normalized"],
                                       label=chart["label"], run_id=str(request.run_id))
@@ -813,7 +956,8 @@ class ReportsAPI:
             raise self._no_calendar_content(chart["tool_name"], extraction.skipped)
         text = render_ics(extraction.events, run_id=str(request.run_id), dtstamp=_run_stamp(run),
                           calendar_name=f"{chart['label']} · 星阙 Horosa", text=_labeler(script))
-        output_path = self._report_output_path(request.output_path, default=default)
+        [output_path], reserved = self._claim_output(output_request, default)
+        claimed.extend(reserved)
         rendered = write_artifact(text.encode("utf-8"), output_path=output_path, format_name="ics")
         skipped = extraction.skipped
         extra: dict[str, Any] = {"title": f"{chart['label']} · 日历", "event_count": len(extraction.events),
@@ -940,12 +1084,14 @@ class ReportsAPI:
                 ) from exc
 
             normalized_format = str(request.format or "markdown").lower().strip()
-            if normalized_format not in {"markdown", "json", "docx", "pdf"}:
+            if normalized_format not in _TECHNIQUE_REPORT_FORMATS:
                 raise ToolValidationError(
-                    "format must be one of: markdown, json, docx, pdf",
+                    bilingual(f"不认识的技法依据报告格式：{request.format}（可选 {' / '.join(_TECHNIQUE_REPORT_FORMATS)}）",
+                              f"Unknown technique report format: {request.format} (choose one of {', '.join(_TECHNIQUE_REPORT_FORMATS)})"),
                     code="report.technique.invalid_format",
-                    details={"format": request.format},
+                    details={"format": request.format, "allowed": list(_TECHNIQUE_REPORT_FORMATS)},
                 )
+            output_request = self._output_request(request.output_path, normalized_format)
 
             scope = "group" if request.group_id else "run"
             cards, source_runs = self._collect_technique_cards(
@@ -971,7 +1117,7 @@ class ReportsAPI:
             scope_id = document["scope_id"] or "latest"
             suffix = "md" if normalized_format == "markdown" else normalized_format
             base = self.store.default_report_path(run_id=str(scope_id), tool_name="technique", format_name="json")
-            output_path = self._report_output_path(request.output_path, default=base.with_suffix(f".{suffix}"))
+            [output_path], reserved = self._claim_output(output_request, base.with_suffix(f".{suffix}"))
             script = self.settings.output_script
             try:
                 # 技法依据报告交简体原文：渲染器生成人读版 / markdown 后整体转一次（模板标签也要转，见 render_report）。
@@ -980,6 +1126,11 @@ class ReportsAPI:
                 raise ToolValidationError(
                     str(exc), code="report.technique.render_failed", details={"format": normalized_format}
                 ) from exc
+            except OSError as exc:
+                raise self._write_failed(exc, output_path) from exc
+            finally:
+                for placeholder in reserved:
+                    output_paths.release(placeholder)
             document = localize_document(document, script)
 
             result = {
@@ -994,10 +1145,12 @@ class ReportsAPI:
                 "file_size": rendered.get("file_size"),
                 "file": _file_card(rendered["path"], rendered["format"]),
                 **_render_outcome_fields(rendered),
+                **self._output_adjustment_fields(output_request, rendered["path"]),
                 "document": document,
                 "summary": [
                     f"已生成技法依据报告（{document['technique_count']} 个技法）：{rendered['path']}",
                     *_render_outcome_notes(rendered),
+                    *self._output_adjustment_notes(output_request, rendered["path"]),
                     *(
                         []
                         if document["consistency"]["all_clear"]
@@ -1048,7 +1201,12 @@ class ReportsAPI:
         runs = self.store.query_runs(run_id=run_id, tool=tool_name, include_payload=True, limit=1)
         if not runs:
             raise ToolValidationError(
-                f"Run not found: {run_id}",
+                bilingual(
+                    f"找不到这条运行记录：{run_id}" + (f"（工具 {tool_name}）" if tool_name else "")
+                    + "。用 horosa_memory_query 查到要导出的那条记录，再用它的 run_id 重试。",
+                    f"Run not found: {run_id}" + (f" (tool {tool_name})" if tool_name else "")
+                    + ". Use horosa_memory_query to find the run you want to export, then retry with its run_id.",
+                ),
                 code="report.run_not_found",
                 details={"run_id": run_id, "tool_name": tool_name},
             )
@@ -1070,7 +1228,12 @@ class ReportsAPI:
             ]
         if not candidates:
             raise ToolValidationError(
-                "No reportable tool artifact found for this run.",
+                bilingual(
+                    f"这条运行记录（{run_id}）里没有可以出报告的技法结果" + (f"（没有 {tool_name} 的结果）" if tool_name else "")
+                    + "。用 horosa_memory_show 看它存了哪些工具的结果，或重新起盘。",
+                    f"Run {run_id} holds no technique result that can be reported" + (f" (nothing from {tool_name})" if tool_name else "")
+                    + ". Use horosa_memory_show to see which tool results it holds, or run the technique again.",
+                ),
                 code="report.source_not_found",
                 details={"run_id": run_id, "tool_name": tool_name},
             )
@@ -1092,7 +1255,11 @@ class ReportsAPI:
             and isinstance(data.get("export_snapshot"), dict)
         ):
             raise ToolValidationError(
-                "Selected artifact does not contain a complete export contract.",
+                bilingual(
+                    f"这条运行记录里 {source_tool} 的结果没有完整的导出文本（多半是起盘失败时存下的），出不了报告。重新起盘后再出。",
+                    f"The stored {source_tool} result in this run has no complete export text (most likely saved from a failed "
+                    "run), so it cannot be reported. Run the technique again, then render.",
+                ),
                 code="report.export_contract_missing",
                 details={
                     "run_id": run_id,
