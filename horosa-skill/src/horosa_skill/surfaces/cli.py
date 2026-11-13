@@ -50,6 +50,7 @@ from horosa_skill.surfaces.runtime_helpers import (
     _install_progress_printer,
 )
 from horosa_skill.surfaces.setup_flow import (
+    _default_setup_launcher,
     _SetupFailure,
     _run_setup,
     _setup_skill_step,
@@ -1192,13 +1193,14 @@ def client_config(
     ),
     server_name: str = typer.Option("horosa", help="Server name key written into the MCP config."),
     write: Path | None = typer.Option(None, help="Optional output file path (also printed to stdout)."),
-    launcher: str = typer.Option(
-        "uv",
+    launcher: str | None = typer.Option(
+        None,
         "--launcher",
         help=(
             "How the client starts the server: `uv` (source checkout) / `uvx-wheel` (zero-install from the "
             "release wheel asset — no git, no PyPI; honours HOROSA_RUNTIME_MIRROR) / `uvx-git` (zero-install "
             "from this repo; needs git + github.com) / `uvx` (PyPI, not live yet). "
+            "Default: `uv` inside a source checkout, otherwise `uvx-wheel` (same as setup). "
             "mcporter/openclaw formats always use the checkout."
         ),
     ),
@@ -1222,6 +1224,8 @@ def client_config(
     ),
 ) -> None:
     """按客户端生成即用 MCP 配置（自动注入真实绝对路径，无手填占位符）。"""
+    # 缺省与 setup 同：wheel / uvx 装出来的包旁边没有 pyproject.toml，`uv` 会报「Path must point to …」（v0.50.2-dev 前即如此）。
+    launcher = _opt(launcher, None) or _default_setup_launcher(_opt(skill_root, None))
     payload, _stdio_command, _surface_env = _build_client_config_payload(
         format_name=format_name, skill_root=skill_root, server_name=server_name, launcher=launcher, surface=surface,
         output_script=str(_opt(output_script, "zh-Hans")), entry=str(_opt(entry, "auto")), vectors=bool(_opt(vectors, False)),

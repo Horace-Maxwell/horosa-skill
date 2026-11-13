@@ -99,7 +99,8 @@ def add_json_command(claude_bin: str, server_name: str, entry: Mapping[str, Any]
 # 粘进去 `Invalid JSON`；`&&` 在 Windows PowerShell 5.1 里是语法错误；npm 装的 claude 在 PowerShell 里是 claude.ps1，
 # 光写的 `--` 会被 PowerShell 当成「参数到此为止」吃掉，`-e` 就把后面的命令吞成环境变量。
 # 两边都认的写法：只含 _WINDOWS_BARE 里字符的参数原样写；其余（以及 `--`）用双引号括起来——双引号里 cmd 只认 %，
-# PowerShell 只认 $ 和 `，两边都不拿反斜杠转义。含 " $ ` % 或以 \ 结尾的参数没有两边都对的写法，整条退回 cmd 写法。
+# PowerShell 只认 $ 和 `，两边都不拿反斜杠转义。含 " $ ` % 或以 \ 结尾的参数没有两边都对的写法，整条退回 cmd 写法；
+# 退回时 `--` 照样写成 "--"（cmd 里一样是 --）：v0.50.2-dev 本机粘贴矩阵里路径只含 % 时，PowerShell + claude.ps1 就差这一个 `--`。
 _WINDOWS_BARE = re.compile(r"[A-Za-z0-9_.:\\/=+-]+\Z")
 _WINDOWS_NO_COMMON_FORM = frozenset('"$`%')
 
@@ -119,7 +120,7 @@ def shell_text(command: list[str], *, os_name: str | None = None) -> str:
         tokens = [_windows_token(arg) for arg in command]
         if all(token is not None for token in tokens):
             return " ".join(token for token in tokens if token is not None)
-        return subprocess.list2cmdline(command)
+        return " ".join('"--"' if arg == "--" else subprocess.list2cmdline([arg]) for arg in command)
     return shlex.join(command)
 
 

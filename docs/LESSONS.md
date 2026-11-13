@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.2-dev (2026-11-13) | `client config` 打印给人粘的命令：claude-code 那条光写 `--`，PowerShell + npm 的 claude.ps1 一律坏（setup 的同一条早修了，走的是另一个拼法）；VS Code 的 Windows 命令只有 cmd 写法；wheel 用户不带 `--launcher` 直接报错；HTTP 提示 `serve serve` | 打印命令只留 `claude_cli.shell_text` 一个生成函数；JSON 参数 cmd / PowerShell 各一条、会被 code.cmd 拆坏的路径不给；缺省 launcher 与 setup 同；真终端粘贴用例 + 五处负向对照 |
 | v0.50.2-dev (2026-11-12) | server 没有控制台时（pythonw 起、或宿主以 DETACHED 方式起）每次技法调用都弹 node 的控制台窗口：15 处 `subprocess` 里只有启动器带 `CREATE_NO_WINDOW`；排查时一度把被测解释器自己的窗口算成 node 的 | `winproc.NO_WINDOW` 接到每个 spawn；AST 守卫扫全部 `subprocess.*`；探针按窗口属主进程计数，不凭推断归因。同轮：v0.50.1 候选在本机门禁红 2 条（CI 绿）——用例默认了 runner 开着长路径、有建链接特权 | 按本机能力分支，跳过原因带 `[host]` |
 | v0.50.1 (2026-11-12) | 发版矩阵三条 lane 同红一条：`test_client_config_launcher_uvx_emits_absolute_command_when_found` 断言 `warnings` 不在，而 lane 的 pytest 环境设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，产品按设计在 warnings 里点名；ARM 仿真上脱敏线性用例 2.06 s 撞 2 s 线 | 用例先清 `HOROSA_*`；时间上限按「要拦的回归」定（旧实现 43.7 s → 线 10 s），不按维护机速度定 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版第 1 步 `npm install --omit=dev` 改写了 horosa-core-js 的 package-lock.json（package.json 的 engines 说明改过、锁文件没跟），第 2 步 JS 引擎资产见树不干净拒绝出包——红在发版当场，CI 全绿看不出 | `test_lockfile_root_mirrors_package_json` 让 CI 先红；改 package.json 后跑 `npm install --package-lock-only` 一并提交 |
@@ -251,6 +252,32 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.2-dev / 2026-11-13 — `client config` 打印的命令粘进 PowerShell 是坏的；wheel 用户不带 --launcher 直接报错
+
+- **现象**（Windows 原生复验 v0.50.1，粘贴矩阵：发布版 wheel 打印的每条命令 × cmd / Windows PowerShell 5.1 / pwsh 7.6 × 替身
+  claude.exe、npm 的 claude.ps1 + claude.cmd、VS Code 的 code.cmd、uvx.exe × 五种数据目录，替身记录收到的 argv）：110 条里 19 条不对，
+  VS Code 那条在 PowerShell 里根本没有可用写法（不计入）。
+  ① `client config --format claude-code` 的 `command`（README 教用户复制的那条）在 PowerShell + npm 装的 claude 里任何路径都坏：
+  光写的 `--` 被 claude.ps1 当成参数结束符吃掉，`-e` 是可变参数，把后面的启动命令吞成环境变量。setup 打印的同一条命令没事——
+  v0.50.0-dev 修 setup 时写了 `claude_cli.shell_text`，`client config` 仍走另一个拼法 `_format_cli_command`。
+  ② VS Code 的 `cli_command_windows` 是 cmd 写法（`"{\"name\": …}"`）：PowerShell 5.1 / 7 里一律坏；cmd 里路径带 `&` 也坏（cmd 的引号状态
+  在每个 `"` 处翻转，JSON 字符串的内容正好落在引号外）；路径以 `\` 结尾时 `\\"` 被拼成 `\\\"`，JSON 坏掉。
+  ③ wheel / uvx 装出来的包跑 `client config --format X`（不带 `--launcher`）报「Path must point to the horosa-skill package directory…」：
+  缺省 launcher 写死 `uv`，而 setup 早就按「有没有 pyproject.toml」选 `uvx-wheel`。④ `alternative_http.note` 写成 `… horosa-skill serve serve`。
+- **修**：claude-code 的 `command` 与 HTTP 那条都走 `claude_cli.shell_text`；没有共同写法（`$` `` ` `` `%`、尾随 `\`）时退回 cmd 写法，但 `--`
+  仍写成 `"--"`（路径只含 `%` 时 PowerShell 那边就差这一个）。VS Code 给两条：`cli_command_windows`（cmd）与新增 `cli_command_powershell`
+  （同一段 C 运行库转义放进单引号字面量；5.1 与 7 调 .cmd 都走旧式传参），路径里有 `& | < > ^ %` 时两条都不给、改给
+  `cli_command_windows_note` 指向 install_link / setup；POSIX 的 `cli_command` 改 `shlex.quote`（路径带 `'` 不再断）。`client config` 的
+  `--launcher` 缺省与 setup 同（`_default_setup_launcher`）。
+- **核对**：修后同一矩阵（多了 VS Code 的 PowerShell 一条）114 条里 106 条对；剩下 8 条都是路径含 `$` 时 PowerShell 展开变量——没有
+  共同写法，`shell_text` 注释早有说明，cmd 那边都对。PowerShell 写法另测九种路径：`&` `^` 两种被 code.cmd 那一跳拆坏，正是不给命令的那组。
+- **守卫**：`tests/test_client_config_paste.py`——claude-code 命令按 `winshell` 在 cmd / PowerShell 两种拆法下得到同一个 argv（含 `--`）；
+  退回 cmd 写法仍有 `"--"`；VS Code 两条按「code.cmd 再拆一遍」的模型往返出原 JSON，危险路径不给命令；wheel 形状缺省 `uvx-wheel`；
+  Windows 上真起 cmd / powershell / pwsh 粘一遍（替身 .cmd / .ps1 记 argv）。负向对照：五处修复逐个撤回，每处都有用例红。
+- **顺带踩的**：第一版矩阵用 `.bat` 文件模拟 cmd，`%` 的处理与交互粘贴不同（批处理里单个 `%` 被吃掉），改用 `cmd /d /s /c "<一行>"`；
+  替身 `.cmd` 里写中文路径会被 OEM 代码页读坏，替身目录不放中文。
+- **规则**：同一类输出（给人粘的命令）只留一个生成函数；`--` 与 JSON 这类参数的「两种终端都对」要用真终端验，模型拆不出 `.cmd` 的二次解析。
 
 ### v0.50.2-dev / 2026-11-12 — server 没有控制台时，每次调用都弹 node 的控制台窗口
 

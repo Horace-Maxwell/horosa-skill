@@ -1871,7 +1871,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **归档名两边一个判法**：tar 解包过 `archives._portable_data_filter`（前导 `/` `\` 都去、盘符名与反斜杠 `..` 两边都拒）；测「绝对路径」别用
   `f"{tmp_path}/…"`（Windows 上是盘符路径，另一回事）。
 - **给 Windows 用户粘的命令**：`claude_cli.shell_text` 写 PowerShell 与 cmd 都读成同一个 argv 的形式（参数里不放 JSON、`--` 加引号、多条每条一行），
-  执行一律 argv 列表不经 shell；`tests/winshell.py` 按两种终端拆命令，Windows 那一支在本机端到端重放。
+  执行一律 argv 列表不经 shell；`tests/winshell.py` 按两种终端拆命令，Windows 那一支在本机端到端重放。setup 与 `client config` 打印的命令
+  都走它，别另写一个拼命令的函数（v0.50.2-dev 前 `client config` 的那条光写 `--`，PowerShell + npm 的 claude.ps1 一律坏）。带 JSON 的参数
+  （VS Code `--add-mcp`）没有共同写法：cmd、PowerShell 各一条；目标是 `.cmd`（code.cmd）时 cmd 会再拆一遍，路径里有 `& | < > ^ %` 就不给命令。
+  这类结论用真终端验（`tests/test_client_config_paste.py` 起 cmd / Windows PowerShell / pwsh），只用模型拆不够。
 - **存活探针**：`os.kill(pid, 0)` 在 Windows 上是控制台 Ctrl+C，不是「只问在不在」——一律 `runtime.procs.pid_alive`（守卫：只有 procs.py 能调 os.kill）。
 - **字体随平台变**：Windows 的 Segoe UI Symbol 真有黑白 emoji；断言「画得出」（按字形表核，`renderers._drawable_codes`），别断言某个字一定被换掉。
 - **lane 的环境 ≠ CI 的环境**（v0.50.1 发版矩阵三 lane 同红）：lane 的 pytest 设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，断言「没有 warnings」

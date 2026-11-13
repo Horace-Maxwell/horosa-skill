@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import typer
 
 from horosa_skill import __version__, clients_extra
-from horosa_skill.client_config import env_carry
+from horosa_skill.client_config import claude_cli, env_carry
 from horosa_skill.client_config.locations import (
     _CLIENT_COMPACT_DEFAULT,
     _CLIENT_COMPACT_REASON,
@@ -48,6 +49,25 @@ def _quote_cli_arg(value: str) -> str:
 
 def _format_cli_command(parts: list[str]) -> str:
     return " ".join(_quote_cli_arg(part) for part in parts)
+
+
+# VS Code 在 Windows 上的 `code` 是批处理 code.cmd：粘进去的一行先被终端拆，再被 cmd.exe 照 code.cmd 的 %* 拆，最后 Code.exe 按
+# C 运行库拆。JSON 里必有双引号，cmd 与 PowerShell 没有共同写法（不像 claude_cli.shell_text），各给一条，内部都按 C 运行库转义
+# （引号前的反斜杠加倍、引号写成 \"）：cmd 整段双引号括起；PowerShell 放进单引号字面量（' 写成 ''；5.1 与 7 调 .cmd 都走旧式传参）。
+# cmd 的引号状态在每个 " 处翻转（不看反斜杠），JSON 字符串的内容正好落在引号外：路径里有 & | < > ^ % 时两条都会被 cmd 拆坏，
+# 这时不给命令。v0.50.2-dev 本机实测：cmd / Windows PowerShell 5.1 / pwsh 7.6 × 九种路径（空格、中文、'、&、%、$、^、括号、尾随 \）。
+_CMD_SPLITS_INSIDE_JSON = frozenset("&|<>^%")
+
+
+def _vscode_windows_commands(config_json: str) -> dict[str, str]:
+    if any(char in _CMD_SPLITS_INSIDE_JSON for char in config_json):
+        return {"cli_command_windows_note": "路径里有 & | < > ^ % 之一，cmd / PowerShell 都会把 `code --add-mcp` 拆坏：点 install_link，"
+                                            "或跑 `horosa-skill setup --client vscode` 直接写 mcp.json，或把 servers 合并进用户级 mcp.json。"}
+    escaped = re.sub(r'(\\*)"', lambda match: match.group(1) * 2 + '\\"', config_json)
+    return {
+        "cli_command_windows": f'code --add-mcp "{escaped}"',
+        "cli_command_powershell": "code --add-mcp '" + escaped.replace("'", "''") + "'",
+    }
 
 
 def _wheel_cache_dir() -> Path:
@@ -285,10 +305,11 @@ def _build_client_config_payload(
     elif key == "claude-code":
         payload = {
             "note": "运行下面这一条命令即可把 Horosa 注册进 Claude Code（stdio 直连，无需常驻 serve）；或把 mcpServers 合并进项目的 .mcp.json / ~/.claude.json。",
-            # 🔴 必须走 _format_cli_command：checkout / uv 路径里有空格（`C:\Users\John Doe\…`、
-            # `/Users/x/My Projects`）时，裸 join 出来的命令会把路径拆成两个参数 —— README 教的
-            # 就是这条复制粘贴命令。精简面顺带带上 `-e HOROSA_MCP_COMPACT=1`，与 setup 的写法一致。
-            "command": _format_cli_command(
+            # 🔴 必须走 claude_cli.shell_text（与 setup 同一个）：checkout / uv 路径里有空格（`C:\Users\John Doe\…`、
+            # `/Users/x/My Projects`）时，裸 join 出来的命令会把路径拆成两个参数 —— README 教的就是这条复制粘贴命令；
+            # Windows 上光写的 `--` 会被 npm 装的 claude.ps1 吃掉（v0.50.2-dev 前这里还是光写）。精简面顺带带上
+            # `-e HOROSA_MCP_COMPACT=1`，与 setup 的写法一致。
+            "command": claude_cli.shell_text(
                 ["claude", "mcp", "add", server_name]
                 + [item for key, value in (surface_env or {}).items() for item in ("-e", f"{key}={value}")]
                 + ["--", *stdio_command]
@@ -305,10 +326,11 @@ def _build_client_config_payload(
             **({"env_note": "精简面：给这条命令加 `-e HOROSA_MCP_COMPACT=1`"} if use_compact else {}),
             "alternative_http": {
                 # 跟随 launcher：uvx/uvx-git 用户没有 checkout，`uv run` 那条对他们不成立。
-                "note": ("或先 `" + (" ".join(stdio_command[:-2]) if launcher_key != "uv"
-                                     else "uv run --directory <checkout>/horosa-skill horosa-skill")
-                         + " serve` 再注册 HTTP 端点："),
-                "command": f"claude mcp add {server_name} --transport http http://127.0.0.1:8765/mcp",
+                # stdio_command 以 `serve --transport stdio` 结尾：去掉后两个就是 HTTP 的 serve（v0.50.2-dev 前多拼了一个 serve）。
+                "note": ("或先 `" + (claude_cli.shell_text(stdio_command[:-2]) if launcher_key != "uv"
+                                     else "uv run --directory <checkout>/horosa-skill horosa-skill serve")
+                         + "` 再注册 HTTP 端点："),
+                "command": claude_cli.shell_text(["claude", "mcp", "add", server_name, "--transport", "http", "http://127.0.0.1:8765/mcp"]),
             },
         }
     elif key == "claude-desktop":
@@ -412,14 +434,14 @@ def _build_client_config_payload(
         if surface_env:
             vscode_file_entry["env"] = surface_env
         payload = {
-            "note": "点击 install_link 一键安装进 VS Code；或运行 cli_command；或把 servers 合并进用户级 mcp.json。",
+            "note": "点击 install_link 一键安装进 VS Code；或在终端运行 cli_command（Windows：cmd 用 cli_command_windows，"
+                    "PowerShell 用 cli_command_powershell）；或把 servers 合并进用户级 mcp.json。",
             "config_path": str(_preferred_config_path("vscode")),
             "servers": {server_name: vscode_file_entry},
             "install_link": f"vscode:mcp/install?{quote(vscode_config, safe='')}",
-            # 单引号只在 POSIX shell 里成立；cmd.exe / PowerShell 会把它当字面量 → JSON 解析失败。
-            # 两条都给，让 Windows 用户不用自己猜转义。
-            "cli_command": f"code --add-mcp '{vscode_config}'",
-            "cli_command_windows": "code --add-mcp \"" + vscode_config.replace('"', '\\"') + "\"",
+            # 单引号只在 POSIX shell 里成立；cmd.exe / PowerShell 各有一条（见 _vscode_windows_commands）。
+            "cli_command": "code --add-mcp " + shlex.quote(vscode_config),
+            **_vscode_windows_commands(vscode_config),
             "tool_surface": tool_surface,
         }
     elif key in {"gemini", "windsurf", "cline", "zed"}:
