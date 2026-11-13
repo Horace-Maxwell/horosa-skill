@@ -259,7 +259,7 @@
       "mode": "curated",
       "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
       "extracts": [],
-      "upstream_sha256": "b7aaf0de5ad5c6b4728edbc6c7bf8372d3d4c0defff3b198c73fdd935a03d580"
+      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
     },
     "constants/ZWText.js": {
       "upstream": "constants/ZWText.js",

@@ -1,10 +1,10 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
-  "upstream_git_sha": "10fb75de980bb0a6e0d1f50c7ee93cc97a88d7de",
-  "upstream_git_committed_at": "2026-11-03T22:37:18-05:00",
-  "upstream_app_version": "3.13.2",
-  "aiexport_settings_version": 60,
-  "skill_mirrored_version": 60,
+  "upstream_git_sha": "e55c3a669bd1222c036a0b1a68b6b473e14ed63e",
+  "upstream_git_committed_at": "2026-11-12T14:35:09-05:00",
+  "upstream_app_version": "3.14.0",
+  "aiexport_settings_version": 65,
+  "skill_mirrored_version": 65,
   "upstream_checked_at_package_version": "0.50.1",
   "upstream_preset_keys": [
     "agepoint",
@@ -22,6 +22,7 @@
     "chunzi",
     "decennials",
     "distributions",
+    "dongya",
     "draconic",
     "dwadasamsa",
     "election",
@@ -96,8 +97,10 @@
     "tarot",
     "tianxing",
     "tieban",
+    "timelords",
     "tongshefa",
     "tongshu",
+    "transformchart",
     "triplicityrulers",
     "vedicprog",
     "wuzhao",
@@ -107,14 +110,16 @@
     "yearsystem129",
     "yizhangjing",
     "zhengchuan",
+    "zhufang",
     "ziwei",
     "ziweizeri",
+    "zodiacsystems",
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 405,
+    "files_compared": 422,
     "files_unmatched": 28,
-    "tree_sha256": "289c84324265ebc864bfcca635604e4fed9fdf054aed9535be729a54fce511ae"
+    "tree_sha256": "7ec8fe3fa765f083cd7efa425884502b85955c49c85c3fabf0f55b37eb44ea8f"
   },
   "runtime_source": {
     "sentinels_verified": 7

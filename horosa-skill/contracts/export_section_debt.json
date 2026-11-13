@@ -2,13 +2,13 @@
   "_comment": "上游 preset 段级欠账基线（棘轮：只减不增）。回填后跑 --update-baseline 收紧。",
   "source": {
     "kind": "upstream",
-    "aiexport_settings_version": 60
+    "aiexport_settings_version": 65
   },
   "totals": {
     "missing_sections": 8,
-    "extra_sections": 25,
+    "extra_sections": 27,
     "absent_keys": 0,
-    "keys_with_debt": 17
+    "keys_with_debt": 19
   },
   "keys": {
     "acg": {
@@ -96,6 +96,12 @@
         "未能计算"
       ]
     },
+    "indiazeri": {
+      "missing": [],
+      "extra": [
+        "未能计算"
+      ]
+    },
     "persiandirected": {
       "missing": [],
       "extra": [
@@ -128,6 +134,12 @@
       "missing": [],
       "extra": [
         "单时判读"
+      ]
+    },
+    "transformchart": {
+      "missing": [],
+      "extra": [
+        "月宿"
       ]
     }
   }

@@ -615,7 +615,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   （对上游 READ-ONLY）。脚本拷的是上游**工作树**、把 HEAD sha 写进 `contracts/upstream_python_requirements.txt` 首行；上游 HEAD 有未推送提交时 pin 不能前移（`--write-state` 的 `pin_to_record` 拒写），首行要改回记录的 pin（`test_requirements_provenance_header_names_the_recorded_upstream_pin`，v0.47.0）。**顶层共享件必须显式补**：上游把子逻辑上提为 vendor 根级单文件时（如
   v3.5.0 全年份域的 `Horosa-Web/vendor/kin_year_domain.py`，被 16 个 ken/神数 引擎懒 import），逐引擎
   目录枚举的 sync 清单会漏它 → 重同步后**域外（BC/远期）请求静默 500**。守卫 =
-  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 60）。
+  `verify_vendor_runtime_sources.py` 断言该文件 + vendored aiExport `AI_EXPORT_SETTINGS_VERSION` **等于** `MIRRORED_UPSTREAM_AIEXPORT_VERSION`（今 65）。
   上游 v3.12.0 起 `aiExport.js` / `aiAnalysisContext.js` 是**门面 + 同名目录**（版本号与预设段在 `aiExport/presets.js`）：读源码的脚本与测试
   一律读「本文件 + 该目录」（`scripts/_upstream_preset.read_aiexport_source`，测试里 `read_facade_source`），只读门面会读不到实现。
   vendored 的 `aiExport/` 整棵进 `verify_upstream_sync.SENTINEL_TREES` 逐文件比对（v0.46.1）——sync 脚本每加一条 rsync，守卫同一提交里加同一棵树。

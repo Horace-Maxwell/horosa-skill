@@ -4,6 +4,10 @@ from copy import deepcopy
 from typing import Any
 
 AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
+# v17 (v0.51.0): 上游 v3.14.0（aiExport v60→v65）全量重同步。v61：astrochart / astrochart_like / relocation / locastro(acg)
+#   [盘面细节]、mundane [世运周期表]；v62：indiachart [Yoga 判定表] / [印占补充表]、relative [八重合]（首位）；v64：babylon
+#   [天象实算]、新技法键 dongya / zhufang；v65：indiachart [穿界时刻]，indiazeri = 印占全文段 + 择时三段。新技法键另有
+#   transformchart / zodiacsystems（辅盘）、timelords（星运）。AI_EXPORT_PLANET_INFO_TECHNIQUES 拆出「只进释义表」一组。
 # v16 (v0.46.0): 上游 v3.12.0/v3.13.0（aiExport v58→v60）全量重同步。v59：germany [赤纬接触] 自 [汉堡学派要素] 拆出
 #   （缺省流派也产，上游 AI_SECTION_SPLITS 拆段迁移）；v60：germany [中点坐标]/[公式求解]。同轮补段键（加段不升上游迁移闸）：
 #   distributions [伙伴星期]、indiachart 从日过运/过运×大运联动/Tajika 年主/年 Yoginī/Patyāyinī 五段 + 改名
@@ -38,8 +42,8 @@ AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
 #   geomancy 升 v3.5.1 地占大改版段表、primarydirect 段名对齐 v48、sixyao [断卦结构] 富化。
 # v8: 新技法 yizhangjing/acg/astrodata 入册，heluo/canping 补全生涯流年与断验段，fengshui 扩十三派。
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
-AI_EXPORT_SETTINGS_VERSION = 16
-AI_EXPORT_SECTION_MIGRATION_VERSION = 16
+AI_EXPORT_SETTINGS_VERSION = 17
+AI_EXPORT_SECTION_MIGRATION_VERSION = 17
 # 镜像基线（机读）：vendored aiExport.js 的版本，也就是本注册表**对账所依据**的上游版本。
 #
 # ⚠️ 语义澄清（v0.23.0 的教训）：这个数字表示「对到了哪一版」，**不**表示「该版的段全都有了」。
@@ -52,7 +56,8 @@ AI_EXPORT_SECTION_MIGRATION_VERSION = 16
 # v0.40.0（2026-09）：重同步至上游 v3.11.1+（HEAD 9b74714b，aiExport v58）。
 # v0.46.0（2026-10）：重同步至上游 v3.13.0（HEAD 965af0f4，aiExport v60；v3.12.0 起 aiExport.js 是门面 +
 #   aiExport/ 目录，版本号在 aiExport/presets.js —— 读源码一律经 scripts/_upstream_preset.read_aiexport_source）。
-MIRRORED_UPSTREAM_AIEXPORT_VERSION = 60
+# v0.51.0（2026-11）：重同步至上游 v3.14.0（HEAD e55c3a66，aiExport v65）。
+MIRRORED_UPSTREAM_AIEXPORT_VERSION = 65
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",
