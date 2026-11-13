@@ -1094,6 +1094,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ask_if_missing=[
             {"field": "date", "question": "要看哪一天的黄历？（公历 YYYY-MM-DD）"},
         ],
+        do_not_assume=[
+            # 上游 v3.14.0 huangliDay.dayNineStarOf：九星值日 = 日紫白 zibai.dayCenter，不再是 lunar-javascript 的排法。
+            "「九星值日」按星阙日紫白排：离冬至 / 夏至最近的甲子换遁，置闰年在甲午换遁；闰期约 30 日"
+            "（如 2020-06-20 ~ 07-19、2031-12-20 ~ 2032-01-18）与部分万年历不同，别拿别家的九星去改结果。",
+        ],
         output_contract=["今日宜忌", "值神值宿", "冲煞·胎神·方位", "时辰吉凶"],
     ),
     "tongshu": _policy(
