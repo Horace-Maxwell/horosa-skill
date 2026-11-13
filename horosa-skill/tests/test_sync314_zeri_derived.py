@@ -75,6 +75,10 @@ def test_huanglizeri_nine_star_scan_and_display_both_use_day_zibai(tmp_path: Pat
     )
     assert [row["start"] for row in turn.data["intervals"]] == ["2020-07-20"]
     assert "九星值日：九紫火" in turn.data["snapshot_text"]
+    # 口径写进指引（结果会变的口径，调用方要读得到）
+    from horosa_skill.agent_guidance import TOOL_GUIDANCE
+
+    assert "日紫白" in TOOL_GUIDANCE["huanglizeri"]["intent"] and "2020-06-20" in TOOL_GUIDANCE["huanglizeri"]["intent"]
 
 
 @pytest.mark.parametrize(("zeri_key", "base_key"), [*ZERI_DERIVED_KEYS, ("huanglizeri", "huangli")])

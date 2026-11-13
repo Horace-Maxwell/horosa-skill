@@ -200,6 +200,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "**展示盘按 huangli 自己的算源铸**（与直接调该工具逐字同段）；"
             "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
             "\n日粒度：命中的是整**日**，不是时辰。通书五流派口径由 school 决定，结果敏感。"
+            "\n九星值日（nine_star 条件与展示盘的「九星值日」行）按日紫白：离冬至 / 夏至最近的甲子换遁，遇闰在甲午先换"
+            "（与风水紫白飞星同一口径，上游 v3.14.0）；闰期那 30 天（如 2020-06-20 … 07-19）与通行历算库的九星不同。"
             "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "yi_has（宜含事项） / ji_not（忌避事项） / jianchu（建除十二神） / tianshen_dao（黄黑道） / zhixiu（值宿(廿八宿)） / jishen_has（吉神宜趋） / xiongsha_not（凶煞回避） / nine_star（九星值日） / chong_shengxiao（冲煞生肖） / day_ganzhi（日干支） / nayin_wuxing（日纳音五行） / liuyao（六曜）；…共 26 类，完整表见 vendored huangliZeriConditionTypes。"
