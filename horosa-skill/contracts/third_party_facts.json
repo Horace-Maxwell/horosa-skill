@@ -654,6 +654,16 @@
       ]
     },
     {
+      "id": "reportlab.tounicode-astral",
+      "subject": "reportlab",
+      "fact": "reportlab 4.4.10 (read in the installed src/reportlab/pdfbase/ttfonts.py) builds each embedded TrueType subset's ToUnicode CMap in the module-level makeToUnicodeCMap(fontname, subset), called by name from TTFont.addObjects, writing every entry as \"<%02X> <%04X>\" % (index, code_point): a code point above U+FFFF (CJK Ext-B drawn by SimSun-ExtB, emoji drawn by Segoe UI Symbol) comes out as 5 hex digits instead of a UTF-16BE surrogate pair, so the glyph shows but copy / search / extraction return garbage (pypdf: 'Odd-length string'). The renderer rewrites only those entries.",
+      "source_url": "https://pypi.org/project/reportlab/4.4.10/",
+      "verified_on": "2026-11-13",
+      "affects": [
+        "horosa-skill/src/horosa_skill/reports/renderers.py"
+      ]
+    },
+    {
       "id": "pikepdf.macos-floor",
       "subject": "pikepdf",
       "fact": "pikepdf macOS arm64 wheels need macOS 14 (10.0–10.13) or macOS 15 (10.14+, e.g. 10.17.0); win_amd64 / win_arm64 cp312 wheels exist (with lxml 6.1.3). Not used as a dependency because Horosa promises macOS 11+.",

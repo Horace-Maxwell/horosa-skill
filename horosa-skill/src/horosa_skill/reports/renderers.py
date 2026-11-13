@@ -2671,11 +2671,33 @@ def _face_index(TTFont: Any, path: str, names: tuple[str, ...] | None) -> int | 
 # （v0.48.0 Windows 原生复验：110 份 PDF 解析了 728 次、106 秒）。
 _TTF_CACHE: dict[tuple[Any, str, int, int], Any] = {}
 
+# reportlab（4.4.10 仍如此）的 ToUnicode CMap 把码位写成 `<%04X>`：基本平面以外的字（扩展 B 生僻字、Segoe UI Symbol 画的 emoji）
+# 写成 5 位十六进制，不是合法的 UTF-16BE——PDF 照样显示，复制 / 检索 / 读屏拿到的是乱码（pypdf 报 Odd-length string）。
+# 只改写这些条目为代理对；基本平面的条目逐字节不变（v0.50.2-dev Windows 原生复验）。
+_ASTRAL_CMAP_ENTRY = re.compile(r"^(<[0-9A-F]{2}>) <([0-9A-F]{5,6})>$", re.M)
+
+
+def _patch_to_unicode_cmap() -> None:
+    from reportlab.pdfbase import ttfonts
+
+    upstream = ttfonts.makeToUnicodeCMap
+    if getattr(upstream, "horosa_utf16", False):
+        return
+
+    def make_to_unicode_cmap(fontname: str, subset: list[int]) -> str:
+        return _ASTRAL_CMAP_ENTRY.sub(
+            lambda match: f"{match.group(1)} <{chr(int(match.group(2), 16)).encode('utf-16-be').hex().upper()}>",
+            upstream(fontname, subset))
+
+    make_to_unicode_cmap.horosa_utf16 = True  # type: ignore[attr-defined]
+    ttfonts.makeToUnicodeCMap = make_to_unicode_cmap
+
 
 def _load_ttf(TTFont: Any, prefix: str, path: str, names: tuple[str, ...] | None) -> Any | None:
     """注册名 = 前缀 + 字体文件身份（路径 + 子字体序号）的短摘要。reportlab 的 registerFont 对 TrueType **只认第一次**：
     同名再注册静默忽略、getFont 仍回旧字体。此前注册名只看候选表序号（HorosaSC0…），候选表一变（测试钉字体、
     或 Windows 上序号 0 恰是真字体）就拿回别的文件——v0.48.0 windows-smoke 因此两条红。"""
+    _patch_to_unicode_cmap()  # 所有嵌进 PDF 的 TrueType 都从这里载入
     if not Path(path).exists():
         return None
     index = _face_index(TTFont, path, names)

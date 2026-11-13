@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.2-dev (2026-11-13) | PDF 里扩展 B 生僻字与 emoji 画得出、拿不回：reportlab 的 ToUnicode 把基本平面以外的码位写成 5 位十六进制，复制 / 检索 / 读屏得到乱码；e2e 只核「没方块」，抽文字时 pypdf 的告警才露出来 | 字体载入口改写这些条目为 UTF-16 代理对（基本平面逐字节不变）；单元 + Windows 真字体用例核 ToUnicode；第三方事实入账 |
 | v0.50.2-dev (2026-11-13) | `client config` 打印给人粘的命令：claude-code 那条光写 `--`，PowerShell + npm 的 claude.ps1 一律坏（setup 的同一条早修了，走的是另一个拼法）；VS Code 的 Windows 命令只有 cmd 写法；wheel 用户不带 `--launcher` 直接报错；HTTP 提示 `serve serve` | 打印命令只留 `claude_cli.shell_text` 一个生成函数；JSON 参数 cmd / PowerShell 各一条、会被 code.cmd 拆坏的路径不给；缺省 launcher 与 setup 同；真终端粘贴用例 + 五处负向对照 |
 | v0.50.2-dev (2026-11-12) | server 没有控制台时（pythonw 起、或宿主以 DETACHED 方式起）每次技法调用都弹 node 的控制台窗口：15 处 `subprocess` 里只有启动器带 `CREATE_NO_WINDOW`；排查时一度把被测解释器自己的窗口算成 node 的 | `winproc.NO_WINDOW` 接到每个 spawn；AST 守卫扫全部 `subprocess.*`；探针按窗口属主进程计数，不凭推断归因。同轮：v0.50.1 候选在本机门禁红 2 条（CI 绿）——用例默认了 runner 开着长路径、有建链接特权 | 按本机能力分支，跳过原因带 `[host]` |
 | v0.50.1 (2026-11-12) | 发版矩阵三条 lane 同红一条：`test_client_config_launcher_uvx_emits_absolute_command_when_found` 断言 `warnings` 不在，而 lane 的 pytest 环境设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，产品按设计在 warnings 里点名；ARM 仿真上脱敏线性用例 2.06 s 撞 2 s 线 | 用例先清 `HOROSA_*`；时间上限按「要拦的回归」定（旧实现 43.7 s → 线 10 s），不按维护机速度定 |
@@ -252,6 +253,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.2-dev / 2026-11-13 — PDF 里的生僻字与 emoji 画得出、拿不回
+
+- **现象**（Windows 原生复验 v0.50.1，e2e 的「Markdown + emoji 解读」一项）：PDF 里 🌟 ✨ 换成 ★ ✦、🚀 💰 由 Segoe UI Symbol 画出，没有方块；
+  但用 pypdf 抽文字时连报 `Odd-length string (b'1F680')`，抽出的文字里没有 🚀 💰。最小复现：`render_report` 一段含 𡛸𤣥𥦗（扩展 B，
+  SimSun-ExtB 画）与 🚀💰 的文字，嵌入字体的 ToUnicode 513 条里 5 条是 5 位十六进制。
+- **根因**：reportlab 4.4.10 `ttfonts.makeToUnicodeCMap` 一律 `"<%02X> <%04X>"`：码位超过 U+FFFF 就写出 5 位，不是合法的 UTF-16BE。字形照画，
+  复制 / 检索 / 读屏 / 文本抽取拿到乱码。Windows 上最常见（SimSun-ExtB 与 Segoe UI Symbol 真有这些字形），别的平台装了同类字体一样。
+- **修**：`renderers._patch_to_unicode_cmap`（在 `_load_ttf` 里装，所有嵌进 PDF 的 TrueType 都从那里载入；幂等）把这类条目改写成代理对；
+  基本平面的条目逐字节不变，别的 PDF 字节不受影响。上游哪天修了，正则不再匹配，补丁自然失效。
+- **核对**：修后同一复现 0 条非法；pypdf 抽出 𡛸𤣥𥦗🚀💰 五个字全在，不再告警。
+- **守卫**：`tests/test_pdf_glyph_fallback.py`——补丁后的函数对 U+216F8 / U+1F680 写 `D845DEF8` / `D83DDE80`、基本平面原样、调两次不层层包；
+  Windows 真字体用例核整份 PDF 的 ToUnicode 都是合法 UTF-16、能映回原字。负向对照：补丁改成直接 return → 两条红。第三方事实
+  `reportlab.tounicode-astral` 入账。
+- **规则**：验 PDF 文字只看「没方块」不够，要连 ToUnicode（复制 / 检索拿回的字）一起核；抽取工具的告警是信号，不是噪声。
 
 ### v0.50.2-dev / 2026-11-13 — `client config` 打印的命令粘进 PowerShell 是坏的；wheel 用户不带 --launcher 直接报错
 

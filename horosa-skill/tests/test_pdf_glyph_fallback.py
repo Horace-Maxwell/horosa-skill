@@ -52,3 +52,42 @@ def test_windows_pdf_embeds_the_extb_font_for_rare_chars(tmp_path: Path) -> None
     base_fonts = lambda p: set(re.findall(rb"/BaseFont\s*/[A-Z]{6}\+([A-Za-z0-9-]+)", Path(p).read_bytes()))  # noqa: E731
     assert b"SimSun-ExtB" in base_fonts(tmp_path / "rare.pdf"), base_fonts(tmp_path / "rare.pdf")
     assert b"SimSun-ExtB" not in base_fonts(tmp_path / "plain.pdf"), "没有生僻字时不嵌补字字体"
+
+
+# ---- v0.50.2-dev：基本平面以外的字（扩展 B、emoji）在 ToUnicode 里写成 UTF-16 代理对，复制 / 检索才拿得回原字 ----
+
+
+def test_to_unicode_cmap_writes_astral_code_points_as_surrogate_pairs() -> None:
+    from reportlab.pdfbase import ttfonts
+
+    renderers._patch_to_unicode_cmap()
+    renderers._patch_to_unicode_cmap()  # 幂等：不会层层包
+    cmap = ttfonts.makeToUnicodeCMap("F", [0x41, 0x4E00, 0x216F8, 0x1F680])
+    entries = re.findall(r"^<([0-9A-F]{2})> <([0-9A-F]+)>$", cmap.split("beginbfchar", 1)[1], re.M)
+    assert entries == [("00", "0041"), ("01", "4E00"), ("02", "D845DEF8"), ("03", "D83DDE80")], cmap
+
+
+def _cmap_entries(raw: bytes) -> list[tuple[str, str]]:
+    import zlib
+
+    entries: list[tuple[str, str]] = []
+    for match in re.finditer(rb"/Length (\d+)[^>]*>>\s*stream\r?\n", raw):
+        try:
+            data = zlib.decompress(raw[match.end():match.end() + int(match.group(1))]).decode("latin-1")
+        except zlib.error:
+            continue
+        if "beginbfchar" in data:
+            entries += re.findall(r"<([0-9A-Fa-f]+)> <([0-9A-Fa-f]+)>", data.split("beginbfchar", 1)[1])
+    return entries
+
+
+@pytest.mark.skipif(not _HAVE_WINDOWS_FONTS, reason="[platform] needs the Windows system fonts (Microsoft YaHei + SimSun-ExtB)")
+def test_windows_pdf_maps_rare_chars_and_emoji_back_to_unicode(tmp_path: Path) -> None:
+    """Windows 上扩展 B 由 SimSun-ExtB、emoji 由 Segoe UI Symbol 画：此前它们的 ToUnicode 条目是 5 位十六进制（非法）。"""
+    out = tmp_path / "astral.pdf"
+    assert renderers.render_report({"title": f"灵棋经 {RARE}", "intro_text": f"象曰：{RARE}，吉。🚀💰"},
+                                   output_path=out, format_name="pdf")["format"] == "pdf"
+    entries = _cmap_entries(out.read_bytes())
+    assert entries and all(len(dst) % 4 == 0 for _src, dst in entries), [e for e in entries if len(e[1]) % 4]
+    mapped = {bytes.fromhex(dst).decode("utf-16-be") for _src, dst in entries}
+    assert set(RARE) <= mapped and {"🚀", "💰"} <= mapped, sorted(c for c in mapped if ord(c[0]) > 0xFFFF)
