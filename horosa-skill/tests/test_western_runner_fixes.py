@@ -152,7 +152,10 @@ def test_live_derived_charts_and_forwarded_calibre(tmp_path: Path) -> None:
         moved = _section(_text(service.run_tool("chart", {**_BIRTH, **extra}, save_result=False)), "古典格局")
         assert moved and moved != base, extra
     reloc = service.run_tool("relocation", {**_BIRTH, "relocLat": "40n43", "relocLon": "74w00"}, save_result=False)
-    assert _section(_text(reloc), "古典格局") == base  # 钉版：重置盘挂本命出生地的分析
+    # 上游 v3.14.0：重置盘的 [古典格局] 按重置后地点算（pipeline.js relocated 分支；AstroRelocationLab 用重置后参数请求）——
+    # 等于同一时刻在重置地点起的盘，而不是本命出生地那份。
+    at_reloc = _section(_text(service.run_tool("chart", {**_BIRTH, "lat": "40n43", "lon": "74w00"}, save_result=False)), "古典格局")
+    assert _section(_text(reloc), "古典格局") == at_reloc != base
 
 
 # ───────────────────────── C-10：分钟进位 ─────────────────────────
