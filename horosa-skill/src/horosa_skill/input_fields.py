@@ -566,6 +566,16 @@ def parse_coordinate(value: Any, *, axis: str) -> Parsed:
         if pre and post and pre != post:
             raise _coord_issue(axis, f"{zh_axis} {raw!r} 同时写了 {pre} 和 {post}。", f"{en_axis.capitalize()} {raw!r} carries both {pre} and {post}.")
         hemi = pre or post
+        # 「31d13m12s」：度、分、秒三段齐全且秒数字后面紧贴一个 s（无空格、无秒号）——s 是「秒」还是「南」说不清：问，不猜（审计 F01 回归）。
+        if post == "S" and not pre and dms.group("sec") and re.search(r"\d[sS]$", text.strip()):
+            south = -(float(dms.group("deg")) + float(dms.group("min") or 0) / 60 + float(dms.group("sec")) / 3600)
+            raise _coord_issue(
+                axis,
+                f"{zh_axis} {raw!r} 末尾的 s 说不清是「秒」还是「南（S）」。请写成 31°13′12″N / 31°13′12″S 这类不含糊的形式。",
+                f"{en_axis.capitalize()} {raw!r}: the trailing s could mean seconds or South. Write it unambiguously, e.g. 31°13′12″N or 31°13′12″S.",
+                options=[{"value": round(-south, 6), "label": "s = 秒（北纬 / north）"}, {"value": round(south, 6), "label": "S = 南纬 / south"}],
+                ask_user=True,
+            )
         if hemi and hemi not in hemis:
             raise _coord_issue(axis, f"{zh_axis} {raw!r} 用了 {hemi}：{zh_axis}只认 {' / '.join(hemis)}（经纬度是不是传反了？）。",
                                f"{en_axis.capitalize()} {raw!r} uses {hemi}; only {' / '.join(hemis)} apply (are latitude and longitude swapped?).")

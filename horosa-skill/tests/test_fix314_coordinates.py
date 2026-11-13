@@ -37,3 +37,18 @@ def test_other_spellings_read_as_before(text: str, expected: float) -> None:
 @pytest.mark.parametrize("text,expected", [("74°00′W", -74.0), ("151°12′E", 151.2), ("58°24′W", -58.4)])
 def test_longitude_hemispheres(text: str, expected: float) -> None:
     assert _value(parse_coordinate(text, axis="lon")) == pytest.approx(expected, abs=1e-6)
+
+
+@pytest.mark.parametrize("text", ["31d13m12s", "31d13m12S"])
+def test_trailing_letter_s_after_seconds_is_ambiguous_and_asked(text: str) -> None:
+    """度分秒齐全、秒后紧贴 s：「秒」还是「南」说不清 → 按字段拒绝并请用户选（修 F01 时曾把它读成南纬 −31.22°，提交后自查发现）。"""
+    from horosa_skill.input_fields import FieldIssue
+
+    with pytest.raises(FieldIssue) as excinfo:
+        parse_coordinate(text, axis="lat")
+    assert {round(o["value"], 4) for o in excinfo.value.options} == {31.22, -31.22}
+
+
+def test_spaced_or_marked_south_after_seconds_still_reads_south() -> None:
+    assert _value(parse_coordinate("31°13′12″S", axis="lat")) == pytest.approx(-31.22, abs=1e-6)
+    assert _value(parse_coordinate("31 13 12 S", axis="lat")) == pytest.approx(-31.22, abs=1e-6)
