@@ -54,6 +54,9 @@
 > [!NOTE]
 > 它不是又造一个简化占算器，而是把星阙已有的本地算法、星历与导出协议，整理成一层**适合 GitHub 分发、适合 AI 调用、适合长期本地管理**的接口。桌面端算出来是什么，这里就是什么——而且每个结论都能回答「这盘怎么来的」。
 
+> [!TIP]
+> **不想安装？** 在 ChatGPT 里直接用托管版：[Horosa 星阙插件](https://chatgpt.com/plugins/plugin_asdk_app_6aee791ab12481918a546e97d0d69a2b)。免费、免注册、匿名，输入和结果不写入磁盘；包含 23 个常用计算工具（[服务源码](https://github.com/Horace-Maxwell/horosa-public-service)）。完整 114 技法、本地记忆和报告导出仍需安装本仓。
+
 <details>
 <summary><b>完整特性清单</b></summary>
 

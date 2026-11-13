@@ -29,6 +29,9 @@
 
 Clone the repo, install the offline runtime once, and let Claude, Codex, Open WebUI, OpenClaw, etc. call <strong>114</strong> real techniques on your own machine — Western natal / predictive / horary / electional, BaZi / Zi Wei / Da Liu Ren / the Three Styles, and all <strong>14 Shen Shu</strong> systems — read the full Xingque AI-export protocol, return stable structured output, and persist every analysis as a retrievable local record. Every answer ships with a deterministic provenance card, a cited methodology knowledge base, a chart-fact faithfulness evaluator, and a multi-technique synthesis contract. Works offline, value-for-value identical to the Xingque desktop app.
 
+> [!TIP]
+> **Don't want to install anything?** Use the hosted version in ChatGPT: [Horosa 星阙 plugin](https://chatgpt.com/plugins/plugin_asdk_app_6aee791ab12481918a546e97d0d69a2b). Free, no sign-up, anonymous; inputs and results are never written to disk. It carries 23 common calculation tools ([service source](https://github.com/Horace-Maxwell/horosa-public-service)). The full 114 techniques, local memory and report export still need this repo.
+
 ---
 
 ## In one sentence
