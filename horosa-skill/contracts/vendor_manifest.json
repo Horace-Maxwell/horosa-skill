@@ -3262,6 +3262,49 @@
           "why": "同 utils/timeLordTables.js：钉到共享 AstroText shim。"
         }
       ]
+    },
+    "utils/kinAstroFieldsSync.js": {
+      "upstream": "utils/kinAstroFieldsSync.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 东亚诸术 / 诸方杂术两页的共同依赖：normBinaryGender（性别归一成 '0' / '1'，缺省 '1' 男）。整份 vendored，依赖 dateStrSafe / lunarDomainGuard / lunar-javascript 都已在树里。",
+      "deviations": []
+    },
+    "utils/geoName.js": {
+      "upstream": "utils/geoName.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 eastAsiaSnapshot.geoChangeFieldsPatch 的依赖（选点地名并入 pos 字段的补丁）；零 import 的纯函数，整份 vendored 以免为它开 stub。",
+      "deviations": []
+    },
+    "dongya/eastAsiaArts.js": {
+      "upstream": "utils/eastAsiaArts.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 新技法「东亚诸术」的算法层：藏历（浦派时轮历）/ 藏占（八卦 Parkha · 九宫 Mewa · 魂命煞）/ 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年 / 易卦星盘与推运，全部纯算术。依赖 baziFenYe / baziLunarLocal.eastAsiaPillarFacts / fengshui liqiCore · zibai · fengshuiData / gua GuaConst 均已在树里。",
+      "deviations": []
+    },
+    "dongya/eastAsiaSnapshot.js": {
+      "upstream": "utils/eastAsiaSnapshot.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 东亚诸术的页面 / 无头挂载共用层：eastAsiaParamsFromFields（字段 → 入参）、EAST_ASIA_PAGE_SETTINGS（口径词表与出厂值）、buildEastAsiaModel（出生资料 + 本命盘 → 整页数据）、eastAsiaSnapshotLines（七段快照）。tools/dongya.js 逐个调它们，不自排版。",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "../components/astro/AstroHelper.js",
+          "stub": "// headless：AstroHelper 顶层 import d3 + DOM helper，不能整份载入；这两个函数只被 geoChangeFieldsPatch（页面左栏选点的字段补丁）用到。\nfunction convertLatToStr(){ throw new Error('eastAsiaSnapshot.geoChangeFieldsPatch 是页面专用（headless 没有 AstroHelper.convertLatToStr）'); }\nfunction convertLonToStr(){ throw new Error('eastAsiaSnapshot.geoChangeFieldsPatch 是页面专用（headless 没有 AstroHelper.convertLonToStr）'); }",
+          "why": "上游 AstroHelper.js 顶层依赖 d3 与 DOM，headless 不可载入；convertLatToStr / convertLonToStr 只服务页面左栏选点的 geoChangeFieldsPatch（skill 的地点由 Python 侧 place 解析）。stub 定义同名函数、调到即抛明确错误（stub 审计要求）。"
+        }
+      ]
+    },
+    "zhufang/zhufangArts.js": {
+      "upstream": "utils/zhufangArts.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 新技法「诸方杂术」的前端层：玛雅历（长计历 / 卓尔金 / 哈布 / 九夜神 / 十三日组，关联常数可调）与十三月亮历纯算，zhufangParamsFromFields / ZHUFANG_PAGE_SETTINGS / localZhufangModel / zhufangSnapshotLines（四段快照；人类图 / 灵名字母两段排版后端 /astroextra/zhufang 的结果）。网络件 utils/zhufangRemote.js 不 vendor——请求由 Python 发。",
+      "deviations": []
+    },
+    "zhufang/zhufangRequest.js": {
+      "mode": "bespoke",
+      "why": "自上游 utils/zhufangRemote.js（网络件：import request + ServerRoot，fetchZhufangRemote 发 POST /astroextra/zhufang）逐字抽出的两处纯逻辑——请求体映射（params + hdTrueNode 0/1 + spiritQuadrant）与回包判据（两块都没有 = 没取到）。HTTP 由 Python 发（AGENTS §4：JS 层不说 HTTP），整份 vendor 只会剩空壳；源 sha 由 derived_sha256 看守，源一动即红、逐字核对后 --restamp。",
+      "derived_from": "utils/zhufangRemote.js",
+      "derived_sha256": "ab444423b5efcda8f4700f81c9f1cd00442a16ccefa317ac08d607110bc22690"
     }
   }
 }
