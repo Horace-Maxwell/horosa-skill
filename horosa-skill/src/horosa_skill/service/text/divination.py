@@ -44,6 +44,19 @@ _GEOMANCY_QUESTION_HOUSE = {
     "religion": 9, "enemy": 7, "death": 8,
 }
 _GEOMANCY_QUESTION_TYPES = tuple(_GEOMANCY_QUESTION_HOUSE)
+# 问类显示名 = 上游 GeomancyMain.QUESTION_TYPE_OPTIONS 的 short（v3.14.0 questionTypeText）：后端 reading 只回程序键
+# questionType、从不回 questionTypeZh，旧快照因此写成「问类：career」；逐值对拍见 tests/test_sync314_cn_b_ports.py。
+_GEOMANCY_QUESTION_SHORT = {
+    "life": "命运", "health": "健康", "wealth": "财富", "marriage": "婚姻", "career": "事业", "children": "子女",
+    "journey": "旅行", "religion": "宗教", "enemy": "诉讼", "death": "遗产", "custom": "自订",
+}
+
+
+def _geomancy_question_type_text(zh: Any, key: Any) -> str:
+    """上游 GeomancyMain.questionTypeText(zh, key)：后端给了中文名用后端的，没给按本表取，表里没有才显示键名。"""
+    if zh:
+        return f"{zh}"
+    return _GEOMANCY_QUESTION_SHORT.get(key) or (f"{key}" if key else "—")
 
 
 def _geomancy_time_seed(parts: dict[str, int]) -> int:
@@ -86,7 +99,7 @@ def _build_geomancy_snapshot_text(response: dict[str, Any]) -> str:
     # [起卦信息]：问题/问类/上升 + 传本设置（仅注记非默认口径）。
     info = [
         f"问题：{reading.get('question') or '—'}",
-        f"问类：{reading.get('questionTypeZh') or reading.get('questionType') or '—'}",
+        f"问类：{_geomancy_question_type_text(reading.get('questionTypeZh'), reading.get('questionType'))}",
         f"上升图形：{(reading.get('ascendantFigure') or {}).get('nameZh') or ''}（上升星座 {reading.get('ascendantSignZh') or ''}）",
     ]
     tb: list[str] = []

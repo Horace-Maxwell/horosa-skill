@@ -459,8 +459,8 @@ class FakeClient(HorosaApiClient):
             return {
                 "reading": {
                     "question": payload.get("question") or "",
+                    # 真后端只回程序键 questionType，从不回 questionTypeZh（中文名由快照按上游 questionTypeText 取）
                     "questionType": payload.get("questionType") or "custom",
-                    "questionTypeZh": "事业",
                     "profileId": payload.get("profile") or "european_classical",
                     "ascendantFigure": _gfig("获得", "太阳", "火"),
                     "ascendantSignZh": "白羊",
