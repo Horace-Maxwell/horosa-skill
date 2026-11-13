@@ -36,7 +36,11 @@ def test_no_fallback_font_means_byte_identical_markup(monkeypatch: pytest.Monkey
     monkeypatch.setitem(renderers._PDF_GLYPH_FALLBACK_CANDIDATES, "sc", ("/nonexistent/font.ttf",))
     pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
     patch = renderers._pdf_glyph_fallback(pdfmetrics, TTFont, "STSong-Light", "STSong-Light", renderers.SIMPLIFIED)
-    assert patch(f"灵{RARE}") == f"灵{RARE}"
+    # 上游 v3.14.0 同步：没登记进星阙罕见字表的扩展 B 字照旧一字不动（𠀀 / 𪜀 不在表里）……
+    assert patch("灵𠀀𪜀") == "灵𠀀𪜀"
+    # ……登记过的三个（灵棋经四库本异体字）哪款字体都画不出时换成表里的通行写法（reports/rare_chars.py，
+    # tests/test_sync314_appcharts_rare_chars.py）。此前这里断言原样不动——那正是印成方块的那条路。
+    assert patch(f"灵{RARE}") == "灵姻玄窗"
 
 
 _HAVE_WINDOWS_FONTS = os.name == "nt" and Path("C:/Windows/Fonts/msyh.ttc").exists() and Path("C:/Windows/Fonts/simsunb.ttf").exists()

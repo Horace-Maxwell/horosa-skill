@@ -479,6 +479,8 @@ def _charset(font_name: str) -> Any | None:
 def _swap_text_fonts(node: Any, text_font: str, bold_font: str) -> None:
     from reportlab.graphics.shapes import String
 
+    from horosa_skill.reports import rare_chars
+
     covered = {name: _charset(name) for name in {text_font, bold_font}}
     chain = _symbol_chain()
 
@@ -492,6 +494,9 @@ def _swap_text_fonts(node: Any, text_font: str, bold_font: str) -> None:
                 continue
             child.fontName = bold_font if role == "bold" else text_font
             charset = covered.get(child.fontName)
+            if charset is not None and any(rare_chars.is_rare(ord(ch)) for ch in child.text):
+                # 盘上的罕见字（灵棋 / 太玄的古字）哪款字体都画不出：照 app 换成通行写法 / 〔拆字〕（reports/rare_chars.py）
+                child.text = rare_chars.safe_text(child.text, lambda code: code in charset or any(code in glyphs for _n, _p, _i, glyphs in chain))
             missing = {ord(ch) for ch in child.text if not ch.isspace() and ord(ch) not in charset} if charset is not None else set()
             if missing:
                 need = {ord(ch) for ch in child.text if not ch.isspace()}

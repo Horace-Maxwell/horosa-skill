@@ -1,6 +1,6 @@
 {
   "_comment": "Tarot card pictures copied byte for byte from the pinned Horosa-Public tree (scripts/sync_tarot_art.py). Upstream records no source or licence for these scans; see contracts/third_party_facts.json tarot-art.provenance.",
-  "upstream_commit": "10fb75de980bb0a6e0d1f50c7ee93cc97a88d7de",
+  "upstream_commit": "e55c3a669bd1222c036a0b1a68b6b473e14ed63e",
   "upstream_path": "Horosa-Web/astrostudyui/public/tarot-art",
   "files": {
     "egyptian/death.jpg": {

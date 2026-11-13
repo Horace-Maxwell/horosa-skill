@@ -17,5 +17,5 @@ export function renderFeigong(data) {
   const size = 560;
   let svg = match[0].replace(/^<svg/, `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"`);
   // 飞宫页在「卜其他」的皇极式布局里（.horosa-huangji-redesign）：--horosa-huangji-* 按该页亮色令牌解析
-  return { svg, width: size, height: size, themeScope: 'horosa-huangji-redesign' };
+  return { svg, width: size, height: size, themeScope: 'horosa-astro-redesign horosa-huangji-redesign' };
 }

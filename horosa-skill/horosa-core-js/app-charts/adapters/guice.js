@@ -157,5 +157,5 @@ export function renderGuice(data) {
   const H = Math.ceil(y - 14 + PAD);
   const board = `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="14" fill="${CNX.cardBg}" stroke="${CNX.lineStrong}" stroke-width="1"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${board}${out.join('')}</svg>`;
-  return { svg, width: W, height: H, themeScope: 'horosa-huangji-redesign' };
+  return { svg, width: W, height: H, themeScope: 'horosa-astro-redesign horosa-huangji-redesign' };
 }

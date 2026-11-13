@@ -319,6 +319,9 @@ def _reader_text(document: dict[str, Any], *, script: str = SIMPLIFIED, format_n
 
 
 _MD_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
+# 表体里判「这一行是下一张表的表头」用的严格分隔行：每格至少三个连字符（上游 v3.14.0 `utils/mdTableParse.js`
+# STRICT_TABLE_SEP；表体里的 `| - | - |` 占位行不算分隔行）。
+_MD_TABLE_STRICT_SEP_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$")
 
 
 def _split_markdown_blocks(text: str) -> list[tuple[str, Any]]:
@@ -353,6 +356,12 @@ def _split_markdown_blocks(text: str) -> list[tuple[str, Any]]:
             rows: list[list[str]] = []
             j = i + 2
             while j < len(lines) and "|" in lines[j] and lines[j].strip().startswith("|"):
+                # 两张表紧挨着（中间没空行，如印占「星盘信息」的宫头表 + 星点表）：下一行是严格分隔行且列数相同 = 这一行是
+                # 下一张表的表头，本表到此为止。此前把它和分隔行吞成两行正文，两张表并成一张、中间多一行「--- | ---」
+                # （上游 v3.14.0 `isNextTableStart`，导出 Word / PDF 同修）。
+                following = lines[j + 1] if j + 1 < len(lines) else ""
+                if _MD_TABLE_STRICT_SEP_RE.match(following) and len(parse_row(lines[j])) == len(parse_row(following)):
+                    break
                 cells = parse_row(lines[j])
                 # 列数对齐表头（缺补空、多截断），保证表格矩形。
                 if len(cells) < len(header):
@@ -2484,7 +2493,11 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
 
     补不了的文字、主字体有的字原样留着（正文文字从不替换）；**符号**（So / emoji 区）主字体与补字链都画不了时换成 ▸
     （v0.50.0，评审 R-02：按真实 cmap 判，不按码位段猜）。标签内不动。primary / 链上的码位集合都只需支持 `in`。
+    一个例外照星阙 app（v3.14.0 `rareChars.js`）：登记过的罕见字（扩展 B 及以后）哪款字体都画不出时，换成它的通行写法，没有
+    通行写法的写成〔拆字说明〕——回退写法自己画不出、或没登记的字仍旧原样（reports/rare_chars.py）。
     """
+    from horosa_skill.reports import rare_chars
+
     out: list[str] = []
     run: list[str] = []
     run_font: str | None = None
@@ -2500,13 +2513,23 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
         return code in primary or any(code in covered for _, covered in chain)
 
     placeholder = next((c for c in _SYMBOL_PLACEHOLDERS if drawable(ord(c))), "")
-    for ch in markup:
+    pending: list[str] = []  # 罕见字的回退写法：逐字接着走下面同一套补字
+    source = iter(markup)
+    while True:
+        ch = pending.pop(0) if pending else next(source, "")
+        if not ch:
+            break
         code = ord(ch)
         if in_tag or ch == "<":
             flush()
             out.append(ch)
             in_tag = ch != ">"
             continue
+        if rare_chars.is_rare(code) and not drawable(code):
+            replacement = rare_chars.fallback(ch, drawable)
+            if replacement:
+                pending = list(replacement) + pending
+                continue
         if code >= _GLYPH_FALLBACK_FROM and not drawable(code) and _is_symbol(ch):
             ch = placeholder
             if not ch:
