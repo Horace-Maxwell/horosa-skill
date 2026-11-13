@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from horosa_skill.cn_vocab import cn_field_validator
-from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _unadvertised
+from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _AscRaModeKnob, _unadvertised
 
 
 class LiuRengGodsInput(FlexibleModel):
@@ -307,7 +307,20 @@ class ZhengChuanInput(FlexibleModel):
     _vocab = cn_field_validator("zhengchuan", "school", "yuan")
 
 
-class SanShiUnitedInput(FlexibleModel):
+class SanShiUnitedInput(FlexibleModel, _AscRaModeKnob):
+    # 外圈「星盘 / 人事宫位」分宫坐标（上游 SANSHI_PAGE_SETTINGS.outerCoord，组件 state；快照 [十二宫详细] 的宫位行 / 星盘行随之）：
+    # ecliptic 黄道（缺省）| equatorial 赤道（按赤经落支、度数标「（赤经）」）。ascRaMode（_AscRaModeKnob）只在 equatorial 下生效。
+    # 两键都声明而不广告（tools/list 预算），说明在 guidance。
+    outerCoord: str | None = _unadvertised()
+
+    @field_validator("outerCoord", mode="before")
+    @classmethod
+    def _outer_coord_vocabulary(cls, value: Any) -> Any:
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import SANSHI_OUTER_COORD
+
+        return parse_with(SANSHI_OUTER_COORD, "outerCoord", value)
+
     date: str
     time: str
     zone: str
@@ -347,7 +360,8 @@ SUZHAN_DEAD_CLASSICAL_KEYS: tuple[str, ...] = (
 )
 
 
-class SuZhanInput(BirthInput):
+class SuZhanInput(BirthInput, _AscRaModeKnob):
+    # ascRaMode（_AscRaModeKnob，上游 v3.14.0）：只在 houseStartMode=1（ASC 起盘）时生效——八字公式起盘不读上升赤经。
     # F11（上游 SuZhanMain.js:396-428 + models/astro.js）：宫制缺省 1（页面共享 astro 模型 DefaultHouseSystem=1）；
     # 外盘/盘型只影响快照两行标签（上游缺省不带键 → 不出那两行，故缺省 None）；人事十二宫缺省 0=八字公式起盘
     # （:312-316，1=ASC）；宿度制 0–8 缺省 0（newChartSeeds.js:48）。bool 旧写法照收（True→1 斗柄）。

@@ -713,6 +713,7 @@ def _build_jieqi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     if missing:
         sections[-1][1].append(f"说明：{'、'.join(missing)}的星盘 / 宿盘尚未拉取（打开对应页签后再导出即纳入）。")
     rendered: list[tuple[str, str]] = [(title, _join_lines(lines)) for title, lines in sections]
+    inert: set[str] = set()
     for title in jieqis:
         one = charts.get(title)
         if not isinstance(one, dict):
@@ -727,9 +728,29 @@ def _build_jieqi_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
         # [X宿盘]（上游 JieQiChartsMain.js:928-930 `buildJieQiSuSection(one, flds, planetDisplay) || '无数据'`，:739-821 逐字移植）：
         # 页面星表缺省 DEFAULT_OBJECTS（models/app.js:201）；八字起宫要 chart.nongli.bazi（上游分至盘走 Java /chart 才有），
         # 本仓分至盘出自 Python /jieqi/year 无 nongli → 走上游同一回退分支（ASC 赤经起宫）。
-        rendered.append((f"{title}宿盘", _astro_snap.build_jieqi_su_section(one, fields) or "无数据"))
+        # v3.14.0：人事十二宫起法 / 上升取法两键是页面设置（上游 astro 模型的 houseStartMode 与宿占页的 ascRaMode），不在后端
+        # 回显的 params 里 → 从本次请求体叠上去（缺省 = 八字公式 / improved，与此前逐字同）。
+        su_fields = {**fields, **{k: payload[k] for k in ("houseStartMode", "ascRaMode") if payload.get(k) is not None}}
+        rendered.append((f"{title}宿盘", _astro_snap.build_jieqi_su_section(one, su_fields) or "无数据"))
+        if payload.get("ascRaMode") == _astro_snap.ASC_RA_MODE_CLASSIC:
+            inert.update(_jieqi_asc_ra_inert_reasons(one, su_fields))
         rendered.append((f"{title}3D盘", f"3D 盘为「{title}星盘」同一节气盘的三维视图(星位/宫位/相位同上 [{title}星盘] 段,无独立数据)。"))
+    for note in sorted(inert):
+        _degrade("jieqi_year ascRaMode=classic inert: %s", note, note=note)
     return _render_snapshot_text(rendered)
+
+
+def _jieqi_asc_ra_inert_reasons(one: dict[str, Any], su_fields: dict[str, Any]) -> set[str]:
+    """节气盘 ascRaMode=classic「给了但没起作用」的两种情形（同 runners/guolao._warn_asc_ra_mode_inert；各节气合并成一条）。"""
+    if _astro_snap.suzhan_asc_ra_mode_of(su_fields) != _astro_snap.ASC_RA_MODE_CLASSIC:
+        return {
+            "节气盘 ascRaMode=classic 本次不起作用：上升取法只在 houseStartMode=1（ASC 起盘）时生效"
+            "（八字公式起盘不读上升赤经定命宫，上游 suzhanAscRaModeOf 同），各 [X宿盘] 按 improved（真赤经）。"
+        }
+    chart = one.get("chart") if isinstance(one.get("chart"), dict) else {}
+    if not _astro_snap.chart_has_east_point(chart):
+        return {"节气盘 ascRaMode=classic：分至盘的上升点没有带东点黄经（eastPointLon，v3.14.0 起的 runtime 才下发），实际按真赤经。"}
+    return set()
 
 
 def _build_nongli_snapshot_text(payload: dict[str, Any], response: dict[str, Any]) -> str:

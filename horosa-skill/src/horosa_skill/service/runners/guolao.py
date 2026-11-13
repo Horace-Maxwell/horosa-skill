@@ -17,7 +17,7 @@ from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
 from horosa_skill.service import _clock
 from horosa_skill.service._common import _ad_of_date, _finite_number, _ganzhi_year
 from horosa_skill.service._context import _capture_figure_data, _degrade, figure_capture
-from horosa_skill.service.options_cn import _day_boundary_switches
+from horosa_skill.service.options_cn import _day_boundary_switches, _warn_asc_ra_mode_inert
 from horosa_skill.service.text.chinese import (
     _apply_guolao_node_mode,
     _build_guolao_snapshot_text,
@@ -25,6 +25,7 @@ from horosa_skill.service.text.chinese import (
     _guolao_warn_missing_life_master,
     _moira_transit_moment,
 )
+from horosa_skill.western_vocab import ASC_RA_MODE_DEFAULT
 
 
 def _guolao_year_from_date(date_text: Any) -> int:
@@ -253,7 +254,8 @@ class GuolaoRunners:
 
     def _guolao_remote_payload(self, payload: dict[str, Any], su28: int, settings: dict[str, str]) -> dict[str, Any]:
         """/chart 请求体：上游 GuoLaoChartMain.fieldsToParams（:2339-2400）七政专属键的条件透传逐条对齐。"""
-        remote = {k: v for k, v in payload.items() if k not in self._GUOLAO_CHART_SETTING_VALUES and k != "guolaoAyanamsa"}
+        # ascRaMode（v3.14.0 赤仪上升取法）是前端换法（vendored withAscRaMode），后端不认这个键 → 不下发。
+        remote = {k: v for k, v in payload.items() if k not in self._GUOLAO_CHART_SETTING_VALUES and k not in ("guolaoAyanamsa", "ascRaMode")}
         remote.update({
             "tradition": True,
             "predictive": False,
@@ -475,6 +477,12 @@ class GuolaoRunners:
         su28, guolao_settings = self._guolao_chart_settings(payload)
         remote_payload = self._guolao_remote_payload(payload, su28, guolao_settings)
         guolao_fields = self._guolao_fields(su28, guolao_settings)
+        # 赤仪上升取法（上游 v3.14.0 utils/ascRaMode.js；main/snapshot.js:1129-1133）：给了才进 fields.ascRaMode（上游
+        # guolaoAscRaModeOf 读 fields.ascRaMode.value，缺省 improved）。换法在 JS 各段 builder 入口（vendored withAscRaMode）；
+        # 回给调用方的 data.chart 是后端原盘（上升点 ra = 真赤经、eastPointLon = 东点黄经，两值都在）。
+        asc_ra_mode = payload.get("ascRaMode")
+        if asc_ra_mode:
+            guolao_fields["ascRaMode"] = {"value": asc_ra_mode}
         response = _apply_guolao_node_mode(self._call_remote("/chart", remote_payload), guolao_settings)
         # 本命四柱挂到 chart.nongli —— 上游的盘是 Java /chart（四柱本就在 chart.nongli），下游一切都吃它：政余格局的神煞行
         # （buildGodRowsFromChart 读 chart.nongli.bazi.guolaoGods）、Moira 规则层四柱（MoiraPropRuleEngine.readPoles 读
@@ -571,6 +579,11 @@ class GuolaoRunners:
                     ),
                 )
         info_sections = self._guolao_info_sections(payload, response, display, moira_rules_full, guolao_fields)
+        if info_sections:
+            _warn_asc_ra_mode_inert(
+                "七政四余", asc_ra_mode, effective=info_sections.get("ascRaMode"), east_point=info_sections.get("eastPointAvailable"),
+                applies="赤仪宿度制（doubingSu28 = 0/1/5/7/8）", why="黄仪各环取黄经、不读上升赤经（上游 guolaoAscRaModeOf 同）",
+            )
         snapshot_text = _build_guolao_snapshot_text(
             remote_payload, response, pattern_text=pattern_text, info_sections=info_sections
         )
@@ -596,6 +609,9 @@ class GuolaoRunners:
         response = dict(response)
         response["snapshot_text"] = snapshot_text
         response["guolaoPatterns"] = patterns
+        # 实际生效的上升取法（黄仪恒 improved）；JS 段 builder 整体失败时不知道 → 不带。
+        if info_sections.get("ascRaMode"):
+            response["ascRaMode"] = info_sections["ascRaMode"]
         if moira_rules_slim is not None:
             response["guolaoMoiraRules"] = moira_rules_slim
         response["export_snapshot"] = self._augment_export_payload(technique="guolao", snapshot_text=snapshot_text)
@@ -682,7 +698,9 @@ class GuolaoRunners:
         # 宿占挂载齿轮隐去、recordPayloadKeys（:1774）不带；宿占快照只读星曜宿度 / 宫位 / 农历时支（vendored v3.13.1 实例实测
         # 带非缺省死键与缺省快照逐字同，八字公式 / ASC 两档）→ 照收不下发（技法卡同不回显，reports/technique_card._FIELD_DEAD_FOR_TOOLS）。
         dead = frozenset(SUZHAN_DEAD_CLASSICAL_KEYS)
-        remote_payload = {**{k: v for k, v in payload.items() if k not in dead}, "predictive": False, "doubingSu28": su28}
+        # ascRaMode 是前端换法（vendored withAscRaModeRoot），后端不认这个键 → 不下发。
+        remote_payload = {**{k: v for k, v in payload.items() if k not in dead and k != "ascRaMode"}, "predictive": False, "doubingSu28": su28}
+        asc_ra_mode = payload.get("ascRaMode")
         nongli_alg = payload.get("nongliTimeAlg")
         if nongli_alg is not None:
             # ChartController.java:84-88 [Q-419/T-383]：农历四柱时间算法 0 真太阳时（缺省）/1 直接时间/3 平太阳时。
@@ -721,6 +739,8 @@ class GuolaoRunners:
                     "szshape": payload.get("szshape"),
                     "doubingSu28": su28,
                     "houseStartMode": house_start,
+                    # 上升取法（上游 v3.14.0）：给了才进 fields.ascRaMode（上游无头重算 suzhanFieldsForRecord 同形），缺省 = improved。
+                    **({"ascRaMode": asc_ra_mode} if asc_ra_mode else {}),
                 },
             },
         ) or {}
@@ -737,6 +757,10 @@ class GuolaoRunners:
                 "suzhan chart carries no nongli hour; house start fell back to ASC",
                 note="宿占人事十二宫缺省按八字公式起盘，但本盘没有农历时支（Java /chart 未附 nongli）→ 已按 ASC 起（上游同）。",
             )
+        _warn_asc_ra_mode_inert(
+            "宿占", asc_ra_mode, effective=data.get("ascRaMode"), east_point=data.get("eastPointAvailable"),
+            applies="houseStartMode=1（ASC 起盘）", why="八字公式起盘不读上升赤经定命宫（上游 suzhanAscRaModeOf 同）",
+        )
         # 报告盘图（app 原版 SZChart）的中宫要四柱：app 的盘恒来自 Java /chart（带 chart.nongli）。本盘走 chart 服务（ASC 档 / Java
         # 不可用）时没有，另取同一时刻的四柱留给盘图——不并进 chart（宿占正文照旧按本盘口径），取不到只是报告里不画这张。
         chart_part = response.get("chart") if isinstance(response.get("chart"), dict) else {}
@@ -745,6 +769,8 @@ class GuolaoRunners:
             **response,
             "board_context": {"nongli": board_nongli} if board_nongli else None,
             "compute_sources": {"chart": "java" if house_start == 0 and not java_failed else "chart_service"},
+            # 实际生效的上升取法（八字公式起盘恒 improved；经典档但本盘没带东点黄经 = 实际按真赤经，见 warnings）。
+            "ascRaMode": data.get("ascRaMode") or ASC_RA_MODE_DEFAULT,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="suzhan", snapshot_text=snapshot_text),
         }

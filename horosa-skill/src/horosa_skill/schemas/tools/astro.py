@@ -11,6 +11,7 @@ from horosa_skill.schemas.tools.base import (
     _LIFESPAN_METHOD_DESC,
     BirthInput,
     FlexibleModel,
+    _AscRaModeKnob,
     _ChartDayBoundaryKnobs,
 )
 
@@ -162,7 +163,8 @@ class RelativeInput(FlexibleModel):
     relative: int | None = 0
 
 
-class GuoLaoInput(BirthInput):
+class GuoLaoInput(BirthInput, _AscRaModeKnob):
+    # ascRaMode（_AscRaModeKnob，上游 v3.14.0）：只在赤仪宿度制（0/1/5/7/8，chart.displayCoord=equatorial）下生效——黄仪各环取黄经。
     hsys: int | None = 0  # 上游 GuoLaoChartMain.js:2345 genParams 恒 hsys 0（七政按地支宫域，不随 DefaultHouseSystem）
     # 七政起盘口径长尾键：照常声明（校验 + MCP 扁平面收顶层），不进 tools/list 广告层（词表见 agent_guidance）。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({

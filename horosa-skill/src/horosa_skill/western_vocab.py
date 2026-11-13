@@ -258,6 +258,22 @@ ACG_POINT_HSYS = Vocabulary(
 # 宿占人事十二宫起法（上游 SuZhanMain.js:312-316 0=八字公式 / 1=ASC）：runner 曾 `in (1, True, "1") else 0`——2 静默按 0。
 SUZHAN_HOUSE_START = Vocabulary("houseStartMode", {0: ("八字公式", "公式", "formula", "false"), 1: ("上升", "命宫", "asc", "true")},
                                 labels={0: "八字公式起宫（缺省）", 1: "上升（ASC）起宫"}, numeric=True)
+# 赤道类盘「上升起盘」的上升取法两档（上游 v3.14.0 utils/ascRaMode.js ASC_RA_MODE_OPTIONS，缺省 improved）：宿占 / 节气盘宿盘（ASC 起盘时）、
+# 七政赤仪、三式合一外圈赤道分宫共用。规范值与标签对 vendored ascRaMode.js 逐值互锚（tests/test_sync314_cn_a_ascra.py）。
+ASC_RA_MODE_DEFAULT = "improved"
+ASC_RA_MODE = Vocabulary(
+    "ascRaMode",
+    {"improved": ("改进", "真赤经", "改进（真赤经）", "改进(真赤经)", "true ra"),
+     "classic": ("经典", "东点黄经", "经典（东点黄经）", "经典(东点黄经)", "旧版", "east point")},
+    labels={"improved": "改进（真赤经，缺省）", "classic": "经典（东点黄经）"},
+)
+# 三式合一外圈分宫坐标（上游 SanShiUnitedMain.js SANSHI_PAGE_SETTINGS.outerCoord，缺省 ecliptic）。
+SANSHI_OUTER_COORD_DEFAULT = "ecliptic"
+SANSHI_OUTER_COORD = Vocabulary(
+    "outerCoord",
+    {"ecliptic": ("黄道", "黄道分宫", "黄经"), "equatorial": ("赤道", "赤道分宫", "赤经")},
+    labels={"ecliptic": "黄道分宫（缺省）", "equatorial": "赤道分宫（按赤经）"},
+)
 # 世运卜卦问类（vendored mundaneHorary.js：认不出 → war，静默）。
 MUNDANE_HORARY_KIND = Vocabulary("mhKind", {"war": ("战争", "战事"), "weather": ("天候", "天气"), "price": ("物价", "价格")},
                                  labels={"war": "战争（缺省）", "weather": "天候", "price": "物价"})
