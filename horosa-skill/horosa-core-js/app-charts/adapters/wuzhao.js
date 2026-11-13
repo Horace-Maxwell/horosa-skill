@@ -146,5 +146,5 @@ export function renderWuzhao(data) {
   }
   const H = Math.ceil(y + 2);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${out.join('')}</svg>`;
-  return { svg, width: W, height: H, themeScope: 'horosa-huangji-redesign' };
+  return { svg, width: W, height: H, themeScope: 'horosa-astro-redesign horosa-huangji-redesign' };
 }

@@ -3,7 +3,7 @@
 // only thing it reads) and lay its markup out as SVG with the stylesheet's numbers (layouts/app/12-india-tarot-geomancy.less
 // + GeomancyMain.less): title 14 px gold, four 族 rows (母 / 女 / 甥 / 证判) 8 px apart with an 18 px vertical group label and
 // a dashed rule, four cells per row 8 px apart (radius 12, padding 8 6 7, good / bad 3 px top bar and border tint), slot
-// 11 px muted with the 过去 / 现在 / 未来 tag, the 得地 mark 11 px top-right, the figure's four rows of 9 px dots (gap 9 ×
+// 11 px muted with the 过去 / 现在 / 未来 tag, the 得地 mark 16 px bold top-right, the figure's four rows of 9 px dots (gap 9 ×
 // 7), name 13 px + 10 px muted. Everything printed comes out of the app's markup.
 import { createElement, Fragment } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -61,7 +61,8 @@ export function renderGeomancy(data) {
       const ten = cell.querySelector('.horosa-geomancy-shield-tenancy');
       if (ten) {
         const grade = (cls(ten).match(/is-(full|assist|stall|weak)/) || [])[1];
-        out.push(t(x + cellW - 4, y + 3 + 5.5, ten.textContent, 11, TEN_COLOR[grade] || GOLD, 400, 'end'));
+        // v3.14.0 .horosa-geomancy-shield-tenancy: top 6 / right 7 inside the 1 px border, 16 px / 700, line-height 1 (was 11 px at 3 / 4)
+        out.push(t(x + cellW - 1 - 7, y + 1 + 6 + 8, ten.textContent, 16, TEN_COLOR[grade] || GOLD, 700, 'end'));
       }
       const rows = [...cell.querySelectorAll('.horosa-geomancy-fig-dotrow')];
       const dotsTop = y + 8 + 14 + 4 + 8;

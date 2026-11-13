@@ -32,6 +32,7 @@ import { renderAcg } from './adapters/acg.js';
 import { renderSanshi } from './adapters/sanshi.js';
 import { renderHeluo } from './adapters/heluo.js';
 import { renderTarot } from './adapters/tarot.js';
+import { RARE_CHARS } from '@horosa-app/utils/rareChars.js';
 import THEME from 'horosa-theme-tokens';
 import SCOPES from 'horosa-theme-scopes';
 
@@ -39,8 +40,11 @@ const VAR = /var\(\s*(--[\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*\))*))?\)/g;
 
 /** Resolve `var(--x, fallback)` the way the app's light theme does (tokens from its own stylesheets, see theme.mjs). */
 export function resolveThemeVars(svg, scope) {
-  // a page scope (theme.mjs: `.horosa-workspace-shell .<scope>`) overrides the global tokens for that page's boards
-  const tokens = scope && SCOPES[scope] ? { ...THEME, ...SCOPES[scope] } : THEME;
+  // a page scope (theme.mjs: `.horosa-workspace-shell .<scope>`) overrides the global tokens for that page's boards. A page root
+  // can wear several scope classes at once (the 卜 pages: `horosa-astro-redesign horosa-huangji-redesign` — the first re-points
+  // --horosa-text-secondary at the astro muted tone): pass them space-separated, later ones win.
+  const scopes = `${scope || ''}`.split(/\s+/).filter((name) => SCOPES[name]);
+  const tokens = scopes.length ? Object.assign({}, THEME, ...scopes.map((name) => SCOPES[name])) : THEME;
   let out = svg;
   for (let round = 0; round < 6; round += 1) {
     const next = out.replace(VAR, (_m, name, fallback) => (tokens[name] !== undefined ? tokens[name] : (fallback || '').trim()));
@@ -110,6 +114,12 @@ export function renderCharts(requests) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
+}
+
+/** The app's rare-character table (utils/rareChars.js RARE_CHARS: 通行写法 / 拆字 per CJK Ext-B+ character). The build writes
+ * it to src/horosa_skill/data/rare_chars.json so the report's text pipeline — which runs without Node — uses the same table. */
+export function rareCharTable() {
+  return RARE_CHARS;
 }
 
 export function listKinds() {
