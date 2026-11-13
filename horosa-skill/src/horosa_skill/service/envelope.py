@@ -261,9 +261,18 @@ def _generic_summary(tool_name: str, data: dict[str, Any]) -> list[str]:
             summary.append(f"骰面：{data['planet']} / {data['sign']}。")
         return summary
     headline = export_headline(data)
+    zero = _zero_hit_window_line(data)
     if headline:
-        return [headline]
-    return [f"工具 `{tool_name}` 已返回结果（没有导出正文）。"]
+        return [zero, headline] if zero else [headline]
+    return [zero] if zero else [f"工具 `{tool_name}` 已返回结果（没有导出正文）。"]
+
+
+def _zero_hit_window_line(data: dict[str, Any]) -> str | None:
+    """择日 / 择时零命中：摘要第一行直说（审计 S-01）。否则头一行是展示盘（窗口起点那一刻）的起盘信息，模型会把它当成选出来的日子。"""
+    for value in (data, *data.values()):
+        if isinstance(value, dict) and "hit_count" in value and isinstance(value.get("intervals"), list) and value.get("hit_count") == 0:
+            return "搜索窗内 0 个命中：没有满足全部条件的时刻；下面的盘是窗口起点那一刻，不是选出来的日子。"
+    return None
 
 
 _PLACEHOLDER_PREFIX = "本次本地计算结果未返回"

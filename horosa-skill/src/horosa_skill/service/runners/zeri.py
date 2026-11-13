@@ -497,7 +497,7 @@ class ZeriRunners:
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):
             error = scan_data.get("error") or {}
-            input_error = zeri_engine_input_error("qimenzeri", "奇门择日", error.get("code"), error.get("message"), window=cfg)
+            input_error = zeri_engine_input_error("qimenzeri", "奇门择日", error.get("code"), error.get("message"), window=cfg, details=error.get("details"))
             if input_error is not None:
                 raise input_error
             raise ToolValidationError(
@@ -506,6 +506,8 @@ class ZeriRunners:
                 details={"error": error},
             )
         intervals = scan_data.get("intervals") or []
+        for note in scan_data.get("condition_notes") or []:
+            _degrade("zeri condition value normalized: %s", note, note=f"条件取值：{note}。")
 
         # Cast the DISPLAYED pan through ken at the winning moment, so all 17 奇门 段 keep their normal
         # compute authority (`_require_ken_pan` inside `_run_qimen_tool`). Only the interval search is
@@ -801,7 +803,7 @@ class ZeriRunners:
         scan_data = scan.get("data") or {}
         if not scan_data.get("ok"):
             error = scan_data.get("error") or {}
-            input_error = zeri_engine_input_error(tool_name, label, error.get("code"), error.get("message"), window=cfg)
+            input_error = zeri_engine_input_error(tool_name, label, error.get("code"), error.get("message"), window=cfg, details=error.get("details"))
             if input_error is not None:
                 raise input_error
             raise ToolValidationError(
@@ -810,6 +812,8 @@ class ZeriRunners:
                 details={"error": error},
             )
         intervals = scan_data.get("intervals") or []
+        for note in scan_data.get("condition_notes") or []:
+            _degrade("zeri condition value normalized: %s", note, note=f"条件取值：{note}。")
 
         # 展示盘走**基底技法自己的 runner**，所有段保持它原本的算权（ken/后端/本地各按其旧）。
         # 只有区间搜索在本地跑。`pick` 是上游的边界安全时刻（两端各内缩），用 `start` 会把盘

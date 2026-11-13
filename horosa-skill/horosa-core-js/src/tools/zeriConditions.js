@@ -16,6 +16,7 @@ import { SANSHI_CONDITION_TYPES } from '../vendor/divination/zeri/sanshiZeriCond
 import { QIZHENG_CONDITION_TYPES } from '../vendor/divination/zeri/qizhengZeriConditionTypes.js';
 import { INDIA_CONDITION_TYPES } from '../vendor/divination/zeri/indiaZeriConditionTypes.js';
 import { QIMEN_CONDITION_TYPES } from '../vendor/divination/zeri/qimenConditionTypes.js';
+import { checkConditionValues } from './zeriParamCheck.js';
 
 export const ZERI_REGISTRIES = {
   tianxing: CONDITION_TYPES,
@@ -131,7 +132,9 @@ export function runZeriConditions(payload) {
     if (!ZERI_REGISTRIES[technique]) {
       return { tool: 'zeri_conditions', action, data: { ok: false, error: { code: 'unknown_technique', message: `不认识的择日技法：${technique}` } } };
     }
-    return { tool: 'zeri_conditions', action, data: { ok: true, ...echo(technique, input.tree) } };
+    // 回显引擎**实际读到**的值：标签写法（「阴遁」）先按同一份取值预检读成规范值，再写人话（否则回显成「阴遁遁」）。
+    const tree = input.tree && typeof input.tree === 'object' ? checkConditionValues(ZERI_REGISTRIES[technique], input.tree).tree : input.tree;
+    return { tool: 'zeri_conditions', action, data: { ok: true, ...echo(technique, tree) } };
   }
   return { tool: 'zeri_conditions', action, data: { ok: false, error: { code: 'unknown_action', message: `unknown action ${action}` } } };
 }

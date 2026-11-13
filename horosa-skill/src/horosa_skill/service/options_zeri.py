@@ -91,7 +91,9 @@ def window_field_error(
 _OUT_OF_DOMAIN = re.compile(r"本地速算不适用|year -?\d+ is out of range|BC era not supported")
 
 
-def zeri_engine_input_error(tool: str, label: str, engine_code: Any, message: Any, *, window: dict[str, Any]) -> ToolValidationError | None:
+def zeri_engine_input_error(
+    tool: str, label: str, engine_code: Any, message: Any, *, window: dict[str, Any], details: dict[str, Any] | None = None,
+) -> ToolValidationError | None:
     """择日引擎（本地 JS 扫描或后端 /…scan）回报的失败里，哪些其实是入参问题 → 对应的逐字段错误；真故障返回 None。
 
     以前一律 `tool.<技法>_scan_failed` / `tool.<技法>_engine_failed` / `tool.electionscan_failed`（恢复建议：重试、跑 doctor）：
@@ -125,7 +127,9 @@ def zeri_engine_input_error(tool: str, label: str, engine_code: Any, message: An
         return window_field_error(
             tool, tool_code(tool, "invalid_conditions"), f"{label}的条件树不合法：{text}", f"{label}: the condition tree is invalid: {text}",
             window=window, fields=("conditions",), expected=bilingual("条件类键与参数见本工具的 agent_guidance", "condition keys and params: see this tool's agent_guidance"),
-            example=None, extra={"engine_code": code, "engine_message": text},
+            example=None, extra={"engine_code": code, "engine_message": text,
+                                 # 取值预检（zeriParamCheck.js）：哪个条件的哪个字段、给了什么、可选值、「是不是指」——模型照着改，或拿去问用户
+                                 **({"invalid": details["invalid"]} if isinstance(details, dict) and details.get("invalid") else {})},
         )
     return None
 

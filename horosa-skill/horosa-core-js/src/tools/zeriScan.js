@@ -13,37 +13,37 @@
 import {
   scanHuangli, explainHuangliAt, HUANGLI_MAX_TOTAL_HITS, HUANGLI_MAX_SPAN_DAYS_TOTAL,
 } from '../vendor/divination/zeri/huangliZeriScanEngine.js';
-import { compileHuangliTree } from '../vendor/divination/zeri/huangliZeriConditionTypes.js';
+import { compileHuangliTree, HUANGLI_CONDITION_TYPES } from '../vendor/divination/zeri/huangliZeriConditionTypes.js';
 import { buildHuangliZeriSnapshotExtra } from '../vendor/divination/zeri/huangliZeriSnapshot.js';
 
 import {
   scanBazi, explainBaziAt, BAZI_MAX_TOTAL_HITS, BAZI_MAX_SPAN_DAYS_TOTAL,
 } from '../vendor/divination/zeri/baziZeriScanEngine.js';
-import { compileBaziTree } from '../vendor/divination/zeri/baziZeriConditionTypes.js';
+import { compileBaziTree, BAZI_CONDITION_TYPES } from '../vendor/divination/zeri/baziZeriConditionTypes.js';
 import { buildBaziZeriSnapshotExtra } from '../vendor/divination/zeri/baziZeriSnapshot.js';
 
 import {
   scanTaiyi, explainTaiyiAt, TAIYI_MAX_TOTAL_HITS, TAIYI_MAX_SPAN_DAYS_TOTAL,
 } from '../vendor/divination/zeri/taiyiZeriScanEngine.js';
-import { compileTaiyiTree } from '../vendor/divination/zeri/taiyiZeriConditionTypes.js';
+import { compileTaiyiTree, TAIYI_CONDITION_TYPES } from '../vendor/divination/zeri/taiyiZeriConditionTypes.js';
 import { buildTaiyiZeriSnapshotExtra } from '../vendor/divination/zeri/taiyiZeriSnapshot.js';
 
 import {
   scanZiwei, explainZiweiAt, ZIWEI_MAX_TOTAL_HITS, ZIWEI_MAX_SPAN_DAYS_TOTAL,
 } from '../vendor/divination/zeri/ziweiZeriScanEngine.js';
-import { compileZiweiTree } from '../vendor/divination/zeri/ziweiZeriConditionTypes.js';
+import { compileZiweiTree, ZIWEI_CONDITION_TYPES } from '../vendor/divination/zeri/ziweiZeriConditionTypes.js';
 import { buildZiweiZeriSnapshotExtra } from '../vendor/divination/zeri/ziweiZeriSnapshot.js';
 
 import {
   scanLiureng, explainLiurengAt, LIURENG_MAX_TOTAL_HITS, LIURENG_MAX_SPAN_DAYS_TOTAL,
 } from '../vendor/divination/zeri/liurengZeriScanEngine.js';
-import { compileLiurengTree } from '../vendor/divination/zeri/liurengZeriConditionTypes.js';
+import { compileLiurengTree, LIURENG_CONDITION_TYPES } from '../vendor/divination/zeri/liurengZeriConditionTypes.js';
 import { buildLiurengZeriSnapshotExtra } from '../vendor/divination/zeri/liurengZeriSnapshot.js';
 
 import {
   scanSanshi, explainSanshiAt, SANSHI_MAX_TOTAL_HITS, SANSHI_MAX_SPAN_DAYS_TOTAL,
 } from '../vendor/divination/zeri/sanshiZeriScanEngine.js';
-import { compileSanshiTree } from '../vendor/divination/zeri/sanshiZeriConditionTypes.js';
+import { compileSanshiTree, SANSHI_CONDITION_TYPES } from '../vendor/divination/zeri/sanshiZeriConditionTypes.js';
 import { buildSanshiZeriSnapshotExtra } from '../vendor/divination/zeri/sanshiZeriSnapshot.js';
 import { splitSanshiOptions } from '../vendor/divination/zeri/sanshiOptionSplit.js';
 import { BAZI_PAGE_SCAN_KEYS, BAZI_PAGE_FACTORY } from '../vendor/divination/zeri/zeriPageCalibre.js';
@@ -60,11 +60,12 @@ function baziPageOptions(options) {
 
 // 七政 / 印度择时：判定与区间搜索都在 astropy 后端（swisseph 直连分钟粒度），JS 侧只剩排版。
 // 所以它们只有 ConditionTypes（供 compile 校验，与后端求值器同源词表）+ Snapshot，没有 ScanEngine。
-import { compileQizhengTree } from '../vendor/divination/zeri/qizhengZeriConditionTypes.js';
+import { compileQizhengTree, QIZHENG_CONDITION_TYPES } from '../vendor/divination/zeri/qizhengZeriConditionTypes.js';
 import { buildQizhengZeriSnapshotExtra } from '../vendor/divination/zeri/qizhengZeriSnapshot.js';
-import { compileIndiaTree } from '../vendor/divination/zeri/indiaZeriConditionTypes.js';
+import { compileIndiaTree, INDIA_CONDITION_TYPES } from '../vendor/divination/zeri/indiaZeriConditionTypes.js';
 import { buildIndiaZeriSnapshotExtra } from '../vendor/divination/zeri/indiaZeriSnapshot.js';
 import { zeriRowOpts, withLeafKind, explainAtFromList } from './zeriSnapshotOpts.js';
+import { checkConditionValues, invalidValuesMessage } from './zeriParamCheck.js';
 
 // 每个技法把它自己的四件套（编译 / 扫描 / 单点判读 / 快照）报到这里。`hourly` 标记区分
 // 黄历（日粒度，`scanHuangli({cfg, tree, …})`，不吃 geo/options）与其余五个（时辰粒度，
@@ -73,7 +74,7 @@ export const ZERI_TECHNIQUES = {
   huanglizeri: {
     label: '黄历择吉',
     hourly: false,
-    compile: compileHuangliTree,
+    compile: compileHuangliTree, registry: HUANGLI_CONDITION_TYPES,
     scan: scanHuangli,
     explainAt: explainHuangliAt,
     snapshot: buildHuangliZeriSnapshotExtra,
@@ -82,7 +83,7 @@ export const ZERI_TECHNIQUES = {
   bazizeri: {
     label: '八字择时',
     hourly: true,
-    compile: compileBaziTree,
+    compile: compileBaziTree, registry: BAZI_CONDITION_TYPES,
     scan: scanBazi,
     explainAt: explainBaziAt,
     snapshot: buildBaziZeriSnapshotExtra,
@@ -91,7 +92,7 @@ export const ZERI_TECHNIQUES = {
   taiyizeri: {
     label: '太乙择时',
     hourly: true,
-    compile: compileTaiyiTree,
+    compile: compileTaiyiTree, registry: TAIYI_CONDITION_TYPES,
     scan: scanTaiyi,
     explainAt: explainTaiyiAt,
     snapshot: buildTaiyiZeriSnapshotExtra,
@@ -100,7 +101,7 @@ export const ZERI_TECHNIQUES = {
   ziweizeri: {
     label: '紫微择时',
     hourly: true,
-    compile: compileZiweiTree,
+    compile: compileZiweiTree, registry: ZIWEI_CONDITION_TYPES,
     scan: scanZiwei,
     explainAt: explainZiweiAt,
     snapshot: buildZiweiZeriSnapshotExtra,
@@ -109,7 +110,7 @@ export const ZERI_TECHNIQUES = {
   liurengzeri: {
     label: '六壬择时',
     hourly: true,
-    compile: compileLiurengTree,
+    compile: compileLiurengTree, registry: LIURENG_CONDITION_TYPES,
     scan: scanLiureng,
     explainAt: explainLiurengAt,
     snapshot: buildLiurengZeriSnapshotExtra,
@@ -118,7 +119,7 @@ export const ZERI_TECHNIQUES = {
   sanshizeri: {
     label: '三式合一择时',
     hourly: true,
-    compile: compileSanshiTree,
+    compile: compileSanshiTree, registry: SANSHI_CONDITION_TYPES,
     scan: scanSanshi,
     explainAt: explainSanshiAt,
     snapshot: buildSanshiZeriSnapshotExtra,
@@ -129,8 +130,8 @@ export const ZERI_TECHNIQUES = {
 // 后端扫描的两个成员：只暴露 compile（本地先校验，错在 skill 侧就报掉，不浪费一次远端往返）
 // 与 snapshot（排版）。scan 由 Python 直接打 /qizhengelectionscan|/indiaelectionscan。
 export const ZERI_REMOTE_TECHNIQUES = {
-  qizhengzeri: { label: '七政择时', compile: compileQizhengTree, snapshot: buildQizhengZeriSnapshotExtra },
-  indiazeri: { label: '印度择时（Muhurta）', compile: compileIndiaTree, snapshot: buildIndiaZeriSnapshotExtra },
+  qizhengzeri: { label: '七政择时', compile: compileQizhengTree, registry: QIZHENG_CONDITION_TYPES, snapshot: buildQizhengZeriSnapshotExtra },
+  indiazeri: { label: '印度择时（Muhurta）', compile: compileIndiaTree, registry: INDIA_CONDITION_TYPES, snapshot: buildIndiaZeriSnapshotExtra },
 };
 
 export async function runZeriScanRemote(payload) {
@@ -145,8 +146,16 @@ export async function runZeriScanRemote(payload) {
   const tree = input.tree && typeof input.tree === 'object' ? input.tree : null;
   if (action === 'compile') {
     if (!tree) { return fail(technique, action, 'missing_conditions', '未提供择时条件树（conditions）。'); }
+    // 后端求值器对界外值同样落缺省分支：取值预检在本地先做（审计 S-01）。
+    const checked = checkConditionValues(spec.registry, tree);
+    if (checked.invalid.length) {
+      return fail(technique, action, 'invalid_conditions', invalidValuesMessage(checked.invalid), { invalid: checked.invalid });
+    }
     try {
-      return { tool: 'zeri_scan_remote', technique, action, data: { ok: true, compiled: spec.compile(tree) }, snapshot_text: '' };
+      return {
+        tool: 'zeri_scan_remote', technique, action, snapshot_text: '',
+        data: { ok: true, compiled: spec.compile(checked.tree), ...(checked.notes.length ? { condition_notes: checked.notes } : {}) },
+      };
     } catch (error) {
       return fail(technique, action, 'invalid_conditions', `${(error && error.message) || error}`);
     }
@@ -164,12 +173,12 @@ export async function runZeriScanRemote(payload) {
   return { tool: 'zeri_scan_remote', technique, action, data: { ok: !!snapshot_text }, snapshot_text };
 }
 
-function fail(technique, action, code, message) {
+function fail(technique, action, code, message, details) {
   return {
     tool: 'zeri_scan',
     technique,
     action,
-    data: { ok: false, error: { code, message } },
+    data: { ok: false, error: { code, message, ...(details ? { details } : {}) } },
     snapshot_text: '',
   };
 }
@@ -187,7 +196,7 @@ export async function runZeriScan(payload) {
   const geo = input.geo && typeof input.geo === 'object' ? input.geo : {};
   const options = input.options && typeof input.options === 'object' ? input.options : {};
   const natal = input.natal && typeof input.natal === 'object' ? input.natal : null;
-  const tree = input.tree && typeof input.tree === 'object' ? input.tree : null;
+  let tree = input.tree && typeof input.tree === 'object' ? input.tree : null;
 
   if (action === 'snapshot') {
     // 逐字上游 builder —— 段头与 aiExport.js 四方同锁，skill 侧不重排版。
@@ -228,6 +237,12 @@ export async function runZeriScan(payload) {
   if (!tree) {
     return fail(technique, action, 'missing_conditions', '未提供择日条件树（conditions）。');
   }
+  // 取值预检（审计 S-01）：下拉 / 多选的值必须在注册表选项里；标签唯一对得上的读成规范值并回说明，其余按字段报错。
+  const checked = checkConditionValues(spec.registry, tree);
+  if (checked.invalid.length) {
+    return fail(technique, action, 'invalid_conditions', invalidValuesMessage(checked.invalid), { invalid: checked.invalid });
+  }
+  tree = checked.tree;
   let compiled = null;
   try {
     // 让 vendored 条件表跑它自己的 `validate`，抛出本地化的「<label>」条件：<msg>。
@@ -258,6 +273,7 @@ export async function runZeriScan(payload) {
         stats: (result && result.stats) || null,
         hit_count: intervals.length,
         compiled_tree: compiled,
+        ...(checked.notes.length ? { condition_notes: checked.notes } : {}),
         limits: spec.limits,
         // 三式择时：扫描实际吃的三家口径（vendored splitSanshiOptions 单源拆分，六壬 / 奇门 / 太乙各一份）。
         // Python 据此把展示盘写成扫描判定的那一盘（上游 SanshiZeriMain.applyWorkbenchCalibre「所见行=所判口径」），

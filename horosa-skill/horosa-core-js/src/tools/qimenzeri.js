@@ -8,7 +8,8 @@
 // on a 42,731-point 0-diff parity grid (qimenScanEngine.js header), and this repo's own qimen tool already
 // computes `calcDunJia` on every call before overlaying ken onto it.
 import { scanQimen, explainQimenAt, QIMEN_MAX_TOTAL_HITS, QIMEN_MAX_SPAN_DAYS_TOTAL } from '../vendor/divination/zeri/qimenScanEngine.js';
-import { compileQimenTree } from '../vendor/divination/zeri/qimenConditionTypes.js';
+import { compileQimenTree, QIMEN_CONDITION_TYPES } from '../vendor/divination/zeri/qimenConditionTypes.js';
+import { checkConditionValues, invalidValuesMessage } from './zeriParamCheck.js';
 import { buildQimenZeriSnapshotExtra } from '../vendor/divination/zeri/qimenZeriSnapshot.js';
 import { zeriRowOpts, withLeafKind } from './zeriSnapshotOpts.js';
 
@@ -18,7 +19,7 @@ export async function runQimenZeri(payload) {
   const cfg = input.cfg && typeof input.cfg === 'object' ? input.cfg : {};
   const geo = input.geo && typeof input.geo === 'object' ? input.geo : {};
   const options = input.options && typeof input.options === 'object' ? input.options : {};
-  const tree = input.tree && typeof input.tree === 'object' ? input.tree : null;
+  let tree = input.tree && typeof input.tree === 'object' ? input.tree : null;
 
   if (action === 'snapshot') {
     // Verbatim upstream builder — the three 段头 are 🔒 four-sync-locked against aiExport.js.
@@ -65,6 +66,17 @@ export async function runQimenZeri(payload) {
       snapshot_text: '',
     };
   }
+  // 取值预检（审计 S-01）：下拉 / 多选的值必须在注册表选项里，界外值不许落到判定函数的缺省分支。
+  const checked = checkConditionValues(QIMEN_CONDITION_TYPES, tree);
+  if (checked.invalid.length) {
+    return {
+      tool: 'qimenzeri',
+      action: 'scan',
+      data: { ok: false, error: { code: 'invalid_conditions', message: invalidValuesMessage(checked.invalid), details: { invalid: checked.invalid } } },
+      snapshot_text: '',
+    };
+  }
+  tree = checked.tree;
   let compiled = null;
   try {
     // Each leaf's own `validate` runs here and throws a localized 「<label>」条件：<msg>. Letting the
