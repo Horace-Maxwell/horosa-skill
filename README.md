@@ -275,9 +275,9 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | `draconic` | 龙盘 / Draconic | 各点黄经减北交点（交点归零的盘）+ 龙首基准专属段 |
 | `relocation` | 重置盘 / Relocation | 出生时刻不变，按新居住地重算宫位与角点 + 四角对比段 |
 | `hellen_chart` ⓟ | 希腊星盘 | 希腊占星取向盘面 |
-| `india_chart` ⓟ | 印度盘 | 分宫 4→24 制、岁差 6→47 制 |
+| `india_chart` ⓟ | 印度盘 | 分宫 4→24 制、岁差 6→47 制；Yoga 判定表（111 条）/ 补充表（Samaya · Dirah · Sphuta）/ 穿界时刻表 |
 | `guolao_chart` ⓟ | 七政四余盘 | 七政四余 / 果老法盘面 |
-| `relative` ⓟ | 合盘 / 关系盘 | 双人关系、合盘、关系量化评分 |
+| `relative` ⓟ | 合盘 / 关系盘 | 双人关系、合盘、关系量化评分、八重合（Ashtakoota 36 分） |
 | `germany` ⓟ | 量化盘 / 汉堡学派 | 90° 拨盘 + 8 颗 TNP + 中点树 / 相位 / 列表 |
 
 </details>
@@ -343,7 +343,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | `liurengzeri` ⓟ | 六壬择时 | 时间窗内扫六壬条件树（27 类：小局大格 / 遁干 / 旺衰…）/ 命中时段 + 完整六壬盘 |
 | `sanshizeri` ⓟ | 三式合一择时 | 条件跨六壬 / 奇门 / 太乙三盘自由组合（70 类，最多的一支）+ 三式合一盘 |
 | `qizhengzeri` | 七政择时 | 分钟级区间搜索（七态庙旺等 11 类，判定跑后端 swisseph）+ 果老盘 |
-| `indiazeri` | 印度择时 Muhurta | 分钟级区间搜索（Panchanga 五肢 / Lagna / 三十须臾 / Choghadia / 五祸等 18 类，判定跑后端） |
+| `indiazeri` | 印度择时 Muhurta | 分钟级区间搜索（Panchanga 五肢 / Lagna / 三十须臾 / Choghadia / 五祸等 18 类，判定跑后端）+ 命中首刻的印度盘全文 |
 
 </details>
 
