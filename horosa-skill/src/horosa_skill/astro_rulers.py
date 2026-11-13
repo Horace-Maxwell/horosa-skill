@@ -13,6 +13,7 @@
   派生盘（后端 houses[].hsysDerived='wholeFromAsc'）标注「整宫(变换后上升)」、极区回退（houses[].hsysFallback）标注
   「<请求宫制>→回退<回退宫制>」、回显文本撞名（hsys 24/8）用盘面自证消歧。
   v3.13.0：组合盘回落整宫（hsysDerived='compositeWholeFromAsc'）标注「整宫(组合上升)」且宫主表按整宫折叠；
+  v3.14.0：变换盘的 'equalFromTransform' / 'baseFromTransform' 标注「等宫(变换后)」/「基础宫制(变换后)」，不折叠；
   `polar_mc_of` / `POLAR_MC_NOTE` = 极区天顶标记（houses[].polarMc）与 [起盘信息] 说明行。
 - `build_dispositor_ruler_tail_lines(chart_obj, msg)`：[主宰星链] 链行之后的「判读口径行 + ◆ 整宫制宫主表」
   （astroAiSnapshot.js:1042-1047）。

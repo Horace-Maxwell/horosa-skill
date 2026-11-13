@@ -494,6 +494,7 @@ class ToolsAPI:
         response_data = self._attach_natal_extras(tool_name, response_data, input_normalized)
         response_data = self._attach_classical_derived(tool_name, response_data, input_normalized)
         response_data = self._attach_classical_analysis(tool_name, input_normalized, response_data)
+        response_data = self._attach_chart_details(tool_name, input_normalized, response_data)
         response_data = self._attach_jyotish_sections(tool_name, response_data, input_normalized)
         response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
         response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)

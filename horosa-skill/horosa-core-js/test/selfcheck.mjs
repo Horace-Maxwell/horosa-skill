@@ -56,6 +56,7 @@ import { runCalendarExtras } from '../src/tools/calendarExtras.js';
 import { runQimenZeri } from '../src/tools/qimenzeri.js';
 import { runTongshu } from '../src/tools/tongshu.js';
 import { runEgyptSection } from '../src/tools/egyptSection.js';
+import { runChartDetails } from '../src/tools/chartDetails.js';
 import { runClassicalDerived } from '../src/tools/classicalDerived.js';
 import { runJinkou } from '../src/tools/jinkou.js';
 import { runUranianExtra } from '../src/tools/uranianExtra.js';
@@ -1566,6 +1567,108 @@ check('egyptSection 各行星落旬 = 夹具盘黄经所在 10° 段（36 旬定
   }
   // 录（vendored 旬名表）：日在双子第 2 旬 Remen-kher-Saḥ，面主火。
   assert(text.includes('日：第8旬 双子2(70–80°)·埃及名 Remen-kher-Saḥ·面主火'), 'sun decan name');
+});
+
+// [盘面细节]（上游 v3.14.0）。期望值的来源 = 上游自己的 jest 用例 astrostudyui/src/utils/__tests__/chartDetails.test.js：
+// 同一份 sample 入参、同一批逐字断言（「段头和结论」「互容只列七类」「判据只列成立的」「寿主与格局」「续表进快照」「补的六张表」），
+// 这里经 tools/chartDetails.js 的 runChartDetails 走一遍——接线（tool → vendored buildChartDetailsText）与正文同时钉住。
+check('chartDetails 盘面细节正文 = 上游 jest 样本的逐字断言；口径 → 请求体键；点名的表原值回带', () => {
+  const sample = {
+    accidental: { geniture: 'Mars', rows: [{ planet: 'Sun', sum: -3 }, { planet: 'Mars', sum: 9 }] },
+    temperament: { name: '粘液', warm: -2, moist: 7 },
+    dispositors: { final: null, rows: [] },
+    persian: [{ planet: 'Sun', sum: 7 }],
+    sunPhases: [{ planet: 'Mercury', phaseName: '东方焦伤' }],
+    sect: [{ planet: 'Sun', hayz: true, ex: false }, { planet: 'Mars', hayz: false, ex: true }],
+    receptions: [{ type: 1, name: '守护互容', a: 'Sun', b: 'Mars' }, { type: 8, name: '同主', a: 'Moon', b: 'Venus' }],
+    topics: [{ topic: '灵魂', winners: ['Sun', 'Moon'] }],
+    hyleg: [{ label: '托勒密', hyleg: 'Pars Fortuna', alcocoden: 'Venus' }, { label: '奥马尔', hyleg: null, alcocoden: null }],
+    eminence: [{ test: '福点主入本座', hit: true }, { test: '灵点主入本座', hit: false }],
+    considerations: [{ test: '月亮空亡', hit: false }],
+    slavery: [{ test: '金、木在果宫', planets: ['Venus'] }, { test: '太阳在果宫', planets: [] }],
+    hellenistic: { predominator: 'Asc', triplicity: ['Sun', 'Jupiter', 'Saturn'], oversight: 'Mars' },
+    patterns: [{ name: '大三角', corners: [['Sun', 'Venus'], ['Moon'], ['Mars']] }],
+  };
+  const text = runChartDetails({ result: sample }).text;
+  const lines = text.split('\n');
+  assert(lines[0] === '[盘面细节]', `header ${lines[0]}`);
+  // 「段头和结论」
+  for (const want of ['命主星：火', '气质：粘液(热冷 -2,湿干 +7)', '最终定位星：无', '偶然尊贵总分：日 -3、火 +9']) {
+    assert(lines.includes(want), `缺行 ${want}`);
+  }
+  // 「互容只列七类互容,同主同光不列」「判据只列成立的」「寿主与格局」
+  assert(lines.includes('互容：守护互容 日、火') && !text.includes('同主'), 'receptions');
+  assert(lines.includes('名望判据成立：福点主入本座') && !text.includes('灵点主入本座'), 'eminence hits only');
+  assert(lines.includes('判前考量成立：无') && lines.includes('奴役判据成立：金、木在果宫(金)') && !text.includes('太阳在果宫'), 'considerations / slavery');
+  assert(lines.includes('寿主：托勒密 福点(寿主星 金);奥马尔 无(寿主星 无)'), `hyleg: ${lines.find((l) => l.startsWith('寿主'))}`);
+  assert(lines.includes('相位格局：大三角(日+金 / 月 / 火)'), 'patterns');
+  assert(lines.includes('喜乐之位：日') && lines.includes('失位：火'), 'sect hayz / ex');
+  assert(lines.includes('希腊化主星：上升,三分主 日、木、土,界主 火'), 'hellenistic');
+  // 「写明面和算法的口径」：结果不带 faces / variant 时不写口径行；带了就写。
+  assert(!text.includes('口径：'), 'no calibre line without faces/variant');
+  assert(runChartDetails({ result: { ...sample, faces: 'element', variant: 'classic' } }).text.split('\n')[1] === '口径：元素面 · 经典', 'calibre line');
+  // 「续表进快照」
+  const more = runChartDetails({ result: { persian: [],
+    lunarDays: { method: 'centered', rows: [{ day: 1, phase: '朔', start: 'a', end: 'b', current: true }] },
+    perfections: [{ a: 'Sun', b: 'Moon', aspect: 0, datetime: '1975-02-10 21:16:51', applying: true }, { a: 'Jupiter', b: 'Saturn', aspect: 120, datetime: '1987-05-23 04:25:38', applying: false }],
+    inMundo: { system: 'koch', aspects: [{ a: 'Sun', b: 'Mars', aspect: 90, orb: 1.234 }] },
+    starAspects: [{ planet: 'Moon', star: 'Regulus', aspect: 180, orb: 0.38 }],
+    astrodynes: { rows: [{ planet: 'Sun', power: 30, harmony: 4 }, { planet: 'Moon', power: 10, harmony: -2 }] },
+    fertility: { elongation: 12.5, rows: [{ datetime: '2026-01-18 11:50:14', male: true }] },
+    crisis: { moon: 10, rows: [{ arc: 45, datetime: '1975-02-14 16:06:45', critical: false }, { arc: 90, datetime: '1975-02-18 08:16:33', critical: true }] },
+  } }).text.split('\n');
+  for (const want of [
+    '月亮日(朔居中):出生在第 1 日(朔),a 至 b',
+    '成相表:日合月 1975-02-10、木拱土 1987-05-23(离相后下一轮)',
+    '世俗相位(Koch):日刑火(差 1.23°)',
+    '恒星相位:月冲狮心轩辕十四(0.38°)',
+    'AstroDynes 力量:日 30.0(75.0%)、月 10.0(25.0%)',
+    'AstroDynes 和谐:日 +4.0、月 -2.0',
+    '受孕期(日月角距 12.50°):2026-01-18 11:50:14 男',
+    '危机日(月亮每走 45°):45° 1975-02-14 16:06:45(判断)、90° 1975-02-18 08:16:33(危机)',
+  ]) {
+    assert(more.includes(want), `缺行 ${want}；实得 ${more.join(' | ')}`);
+  }
+  // 「补的六张表」：中点合星 = 火(50.5°) 距 日/金 中点 50° 0.50°；世俗缺点写明。
+  const six = runChartDetails({ result: {
+    persian: [], accidental: { rows: [] }, temperament: {}, dispositors: {},
+    relations: [{ id: 1, name: '喜乐之位', items: ['Mercury'] }, { id: 6, name: '推进本性', items: [['Mars', 'Venus']] }],
+    planetDetails: [{ planet: 'Sun', lon: 10, altitude: 12.34, speedMeanPct: 101, accelerating: true }, { planet: 'Mars', lon: 50.5, altitude: -3, speedMeanPct: 80, accelerating: false },
+      { planet: 'Venus', lon: 90, altitude: 5, speedMeanPct: 90, accelerating: false }],
+    degrees: { points: [{ point: 'Sun', lame: true, deep: false, wells: 0, fortune: 2 }] },
+    midpoints: { coord: 'ecliptic', rows: [{ a: 'Sun', b: 'Venus', midpoint: 50 }] },
+    stats: { element: { fire: ['Sun'], water: ['Mars', 'Venus'] } },
+    inMundo: { system: 'koch', aspects: [], missing: ['MC'] },
+  } }).text.split('\n');
+  for (const want of [
+    '行星关系:喜乐之位 水;推进本性 火→金',
+    '中点合星(黄经 1.5° 内):火=日/金(0.50°)',
+    '统计:元素 火 1、水 2',
+    '世俗相位缺点:天顶(所选宫制在本纬度对这些点不成立)',
+    '度数性质:日 残缺度、增运度(2 派)',
+  ]) {
+    assert(six.includes(want), `缺行 ${want}；实得 ${six.join(' | ')}`);
+  }
+  assert(six.find((l) => l.startsWith('行星细节:')).startsWith('行星细节:日 高度 12.3°、速度为均值 101%(在加速);火 高度 -3.0°、速度为均值 80%(在减速)'), 'planet details');
+  // 「空结果不出快照」→ 工具把原因说出来。
+  for (const empty of [{}, { persian: 'x' }]) {
+    const out = runChartDetails({ result: empty });
+    assert(out.text === '' && out.error === 'no_result', JSON.stringify(out));
+  }
+  // 口径 → 请求体键（上游「缺省不带任何参数」「改了选项才发」「续表选项」三条用例的期望值）。
+  const fieldsOf = (settings) => JSON.stringify(runChartDetails({ settings }).request_fields);
+  assert(fieldsOf({}) === '{}' && fieldsOf({ detailFaces: 'chaldean', detailVariant: 'improved', detailLunar: 'traditional', detailMundo: 'proportional', detailMidpoint: 'ecliptic' }) === '{}', 'defaults send nothing');
+  assert(fieldsOf({ detailFaces: 'element', detailVariant: 'classic' }) === JSON.stringify({ detailFaces: 'element', variant: 'classic' }), fieldsOf({ detailFaces: 'element', detailVariant: 'classic' }));
+  assert(fieldsOf({ detailLunar: 'centered', detailMundo: 'koch', detailMidpoint: 'ra' }) === JSON.stringify({ lunarMethod: 'centered', mundoSystem: 'koch', midpointCoord: 'ra' }), 'more fields');
+  // 值域锚定引擎表：认不出的口径值 / 表 id 不许静默按缺省算。
+  const bad = runChartDetails({ result: sample, settings: { detailMundo: 'whole' }, tables: ['nope'] });
+  assert(bad.error === 'invalid_setting' && bad.text === '' && bad.invalid.map((i) => i.key).join() === 'detailMundo,detailTable', JSON.stringify(bad));
+  // 点名的表（上游「当前表」）：后端原值原样回带，标签取 CHART_DETAIL_TABLES。
+  const picked = runChartDetails({ result: sample, tables: ['hellenistic', 'stats'] }).tables;
+  assert(picked.hellenistic.label === '希腊化细节' && picked.hellenistic.data === sample.hellenistic, 'picked table data');
+  assert(picked.stats.label === '统计' && picked.stats.data === null, 'absent table → null');
+  const catalog = runChartDetails({ action: 'catalog' });
+  assert(catalog.tables.length === 30 && catalog.defaults.table === 'topics' && catalog.options.mundo.length === 12, 'catalog');
 });
 
 check('classicalDerived 转宫首行 = 夹具盘上升星座；气候带按出生纬度落第 3 带（亚历山大）', () => {

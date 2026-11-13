@@ -22,6 +22,7 @@ const TOOL_RUNNERS = {
   tieban_framework: lazy('./tiebanFramework.js', 'runTiebanFramework'),
   yanqin_yanfa: lazy('./yanqinYanfa.js', 'runYanqinYanfa'),
   egypt_section: lazy('./egyptSection.js', 'runEgyptSection'),
+  chart_details: lazy('./chartDetails.js', 'runChartDetails'),   // [盘面细节]（上游 v3.14.0 utils/chartDetails.js）
   babylon: lazy('./babylon.js', 'runBabylon'),
   huangli: lazy('./huangli.js', 'runHuangli'),
   tongshu: lazy('./tongshu.js', 'runTongshu'),

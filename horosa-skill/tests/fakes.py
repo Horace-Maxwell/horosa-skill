@@ -666,6 +666,11 @@ class FakeClient(HorosaApiClient):
         if endpoint == "/astroextra/planetreturn":
             # 多重回归: per-body return dates. Synthesize a couple so [多重回归] emits + export stays clean.
             return {"returns": [{"which": 1, "date": "2019-05-10"}, {"which": 2, "date": "2048-11-02"}]}
+        if endpoint == "/astroextra/chartdetails":
+            # [盘面细节]（上游 v3.14.0）：上游全表金标 + 按请求回显口径（tests/sync314_western_fakes.py）。
+            from sync314_western_fakes import fake_chart_details_response
+
+            return fake_chart_details_response(payload)
         if endpoint == "/astroextra/analysis":
             # 古典格局派生分析 (星阙 v2.6.7 analyze_chart) 的离线替身：合成护卫/优势相位/度数围攻 + 传光/聚光/
             # 不合意/交点弯曲 + 逐题主星 + 偶然尊贵 + Almuten + 分布/气质，使 [古典格局] 段离线稳定 emit。
@@ -1693,6 +1698,10 @@ class FakeJsClient(HorosaJsEngineClient):
                     ]
                 )
             }
+        if tool_name == "chart_details":
+            from sync314_western_fakes import fake_chart_details_js
+
+            return fake_chart_details_js(payload)
         if tool_name == "egypt_section":
             # 假盘面不带真实黄经，vendored builder 会算出无意义结果 → 返回空文本，
             # 走与「/astroextra/analysis 失败」同一条优雅降级路径（该段不出）。

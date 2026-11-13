@@ -37,7 +37,12 @@ from horosa_skill.service.text.western import (
     _derived_conjunction_lines,
     _derived_position_lines,
     _reloc_display_degree,
+    _with_natal_planet_sign,
 )
+from horosa_skill.western_vocab import CHART_DETAIL_DEFAULTS
+
+# [盘面细节] 的五项口径 + 「当前表」只进 /astroextra/chartdetails（enrich._attach_chart_details 另拼请求体），不进起盘请求。
+_CHART_DETAIL_ONLY_KEYS = frozenset(CHART_DETAIL_DEFAULTS)
 
 
 class WesternRunners:
@@ -232,13 +237,19 @@ class WesternRunners:
         # 再把地图段拼在尾巴上。这里补拉一次 /chart 并复用通用盘面渲染器；失败只是盘段不出，地图段照常。
         # 本命盘的口径 = 页面同一套 fields（黄道/岁差/宫制/古典全局键），不是只有经纬时区（此前只传 7 键）。
         chart_body = ""
+        chart_details: Any = None
         try:
             chart_payload = {k: v for k, v in payload.items() if k not in self._ACG_ONLY_KEYS}
             chart_payload["predictive"] = 0
-            chart_response = self._call_remote("/chart", {k: v for k, v in chart_payload.items() if v is not None})
+            chart_response = self._call_remote(
+                "/chart", {k: v for k, v in chart_payload.items() if v is not None and k not in _CHART_DETAIL_ONLY_KEYS}
+            )
             if _is_astro_chart_payload(chart_response):
                 chart_response = self._attach_natal_extras("chart", chart_response, payload)
                 chart_response = self._attach_classical_analysis("chart", chart_payload, chart_response)
+                # [盘面细节]（上游 v3.14.0：locastro preset 同有此段，按本命盘参数算）。
+                chart_response = self._attach_chart_details("chart", chart_payload, chart_response)
+                chart_details = {k: chart_response[k] for k in ("chart_details", "settings_applied") if isinstance(chart_response.get(k), dict)}
                 chart_body = _build_astro_snapshot_text(chart_payload, chart_response)
         except Exception as exc:  # noqa: BLE001 — 盘面富化失败不许带崩地图段
             _degrade("acg natal chart fetch failed: %s", exc)
@@ -362,6 +373,8 @@ class WesternRunners:
             snapshot_text = f"{chart_body}\n{snapshot_text}"
         return {
             "acg": acg_data,
+            # [盘面细节] 的实际口径 + 点名的表 + 受孕期起算时刻回显（同本命盘工具的 data.chart_details / settings_applied；段没出时无此二键）。
+            **(chart_details if isinstance(chart_details, dict) else {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="acg", snapshot_text=snapshot_text),
         }
@@ -544,7 +557,11 @@ class WesternRunners:
     def _run_relocation_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 重置盘：出生 UT 不变，只按新经纬重算宫位与角点（行星黄经由 UT 决定故不变）。
         # 响应同 harmonic/draconic 的嵌套形状 → 同样摊平。relocLat/relocLon 缺省回退出生地。
-        response = self._call_remote("/astroextra/relocation", {**payload, "predictive": 0})
+        # [盘面细节] / [古典格局] 两段按重置后的地点另取（上游 v3.14.0 AstroRelocationLab.fetchRelocExtras），在富化层
+        # （enrich._attach_classical_analysis / _attach_chart_details 经 _derived_section_params 换经纬）；盘面细节的口径键不进本请求。
+        response = self._call_remote(
+            "/astroextra/relocation", {**{k: v for k, v in payload.items() if k not in _CHART_DETAIL_ONLY_KEYS}, "predictive": 0}
+        )
         chart_wrap = response.get("chart") if isinstance(response.get("chart"), dict) else {}
         # [重置盘] 专属段（v3.9.2）：地点 + 四角对比，镜像 AstroRelocationLab.js:138-149。
         # 本命四角需另铸一张本命盘（上游用页面上已有的 props.value；headless 补一次 /chart）——
@@ -554,8 +571,9 @@ class WesternRunners:
             f"经 {_reloc_display_degree(response.get('relocLon', payload.get('relocLon', payload.get('lon'))), lat=False)}"
         ]
         try:
-            natal_payload = {k: v for k, v in payload.items() if k not in {"relocLat", "relocLon"}}
+            natal_payload = {k: v for k, v in payload.items() if k not in {"relocLat", "relocLon", *_CHART_DETAIL_ONLY_KEYS}}
             natal = self._call_remote("/chart", {**natal_payload, "predictive": 0})
+            chart_wrap = _with_natal_planet_sign(chart_wrap, natal)
             natal_angles = _chart_angles(natal)
             reloc_angles = _chart_angles(chart_wrap)
             for angle_id in ("Asc", "MC", "Desc", "IC"):

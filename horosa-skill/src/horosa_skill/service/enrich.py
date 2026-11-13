@@ -16,11 +16,12 @@ from horosa_skill.decisions.layer import current_decision_records
 from horosa_skill.engine.astro_snapshot import classical_backend_overrides_from_fields
 from horosa_skill.engine.registry import (
     ASTRO_CHART_FAMILY_TOOLS,
+    CHART_DETAILS_TOOLS,
     CLASSICAL_ANALYSIS_TOOLS,
     EGYPT_AXIS_KEYS,
     TOOL_DEFINITIONS,
 )
-from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
+from horosa_skill.errors import HorosaSkillError, ToolTransportError, ToolValidationError, bilingual
 from horosa_skill.reports.technique_card import CARDLESS_DOMAINS, build_technique_card
 from horosa_skill.schemas.common import TOOL_ENVELOPE_SCHEMA_VERSION
 from horosa_skill.service._common import (
@@ -41,6 +42,7 @@ from horosa_skill.service.text.astro_core import (
 from horosa_skill.service.text.chart_family import (
     _INDIA_MOUNT_EXTRA_VARGA_MAX,
     _INDIA_MOUNT_VARGA_OPTIONS,
+    _chart_orb_overrides,
     _fixed_star_orb_params,
     _india_chart_remote_payload,
     _india_mount_varga_label,
@@ -502,6 +504,8 @@ class EnrichMixin:
             response_data = {**response_data, "_egyptSection": egypt}
         if tool_name not in self._CLASSICAL_ANALYSIS_TOOLS:
             return response_data
+        # 重置盘：[古典格局] 按重置后的地点算（上游 v3.14.0 AstroRelocationLab.relocClassicalBody = { _v, ...relocParams, 恒星轨 }）。
+        payload = self._derived_section_params(tool_name, payload, response_data)
         for key in ("date", "zone", "lat", "lon"):
             if not payload.get(key):
                 return response_data
@@ -541,6 +545,142 @@ class EnrichMixin:
         except Exception as exc:
             _degrade("classical /astroextra/analysis failed (tool=%s): %s", tool_name, exc)
         return response_data
+
+    @staticmethod
+    def _derived_section_params(tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """[古典格局] / [盘面细节] 的请求按哪个地点算。
+
+        重置盘 = 重置后的地点（上游 v3.14.0 AstroRelocationLab.js relocParams：`{ ...chartParams(本命盘), lat: 重置纬, lon: 重置经 }`——
+        出生时刻不变，只换经纬；宫位、地平高度、世俗位置、角宫 / 地平上下都随地点变）。重置经纬取后端 /astroextra/relocation 的
+        回显（`relocLat` / `relocLon`：它就是这张重置盘实际用的地点，缺省回退出生地），与重置盘本体同一地点。chartParams 不带
+        gpsLat / gpsLon（那是出生地的十进制坐标），一并剔掉。其余工具原样返回。"""
+        if tool_name != "relocation":
+            return payload
+        out = {k: v for k, v in payload.items() if k not in ("relocLat", "relocLon", "gpsLat", "gpsLon")}
+        for key, echo in (("lat", "relocLat"), ("lon", "relocLon")):
+            place = response_data.get(echo) if isinstance(response_data, dict) else None
+            if place in (None, ""):
+                place = payload.get(echo)
+            if place not in (None, ""):
+                out[key] = place
+        return out
+
+    # [盘面细节] 请求体不带的键：五项口径在请求体里另有键名（chartDetailRequestFields），「当前表」不进请求体；闸门 / 备注 / 知识库点名
+    # 是 skill 自己的键。其余照 /chart 的请求体原样带（上游导出 = `{ ...chartObj.params, …口径 }`、挂载 = `{ ...fieldParams(fields), …口径 }`）。
+    _CHART_DETAILS_DROP_KEYS = frozenset({
+        "detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", "detailTable",
+        "agent_confirmed_settings", "defaults_accepted", "clarification_notes", "knowledge", "profile",
+        "includePrimaryDirection",
+    })
+
+    def _attach_chart_details(self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
+        """[盘面细节]（上游 v3.14.0 / 导出 v61）：占星右栏「细节」页签 30 张表的结论摘要。
+
+        后端 `/astroextra/chartdetails` 一次算全 30 张（astrostudy/chart_details.py，按本命参数、回归黄道），vendored 上游
+        `utils/chartDetails.js::buildChartDetailsText` 排成一段正文（JS 工具 chart_details）。上游的两条无头路径同形：导出
+        pipeline.js fetchChartDetailsSectionForExport、挂载 sourceContext.js fetchChartDetailsSection——「失败不影响主体快照」，
+        本仓同（段不出 + warnings），但口径不许静默走样：
+          · 五项口径在 schema 层已读成规范值；请求体键由 `chart_detail_request_fields` 给，JS 用 vendored 原函数重算一份，
+            两边不一致 → tool.chart_details_request_mismatch（手抄的映射漂了，后端照样算出一张「合理」的表）；
+          · 后端对认不出的口径值静默回缺省、并在结果里回显实际用的那一档 → 回显与所求不符 → tool.chart_details_setting_mismatch。
+        `data.chart_details` = 实际口径 + 调用方点名的表的后端原值（`detailTable`，缺省上游「当前表」缺省 topics）。
+        """
+        if tool_name not in CHART_DETAILS_TOOLS:
+            return response_data
+        if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
+            return response_data
+        params = self._derived_section_params(tool_name, payload, response_data)
+        # 上游两条路径的同一道门（pipeline.js:483 / sourceContext.js:222）：缺 date / zone / lat / lon 不发请求。
+        if not params.get("date") or not params.get("zone") or params.get("lat") in (None, "") or params.get("lon") in (None, ""):
+            return response_data
+        from horosa_skill.western_vocab import (
+            CHART_DETAIL_DEFAULTS,
+            CHART_DETAIL_ECHO_PATHS,
+            chart_detail_request_fields,
+        )
+
+        settings = {name: payload.get(name) for name in CHART_DETAIL_ECHO_PATHS if payload.get(name) not in (None, "")}
+        tables = payload.get("detailTable") or [CHART_DETAIL_DEFAULTS["detailTable"]]
+        tables = [tables] if isinstance(tables, str) else list(tables)
+        request_fields = chart_detail_request_fields(settings)
+        body = {k: v for k, v in params.items() if v is not None and k not in self._CHART_DETAILS_DROP_KEYS}
+        body["predictive"] = 0   # 细节各表不读推运数据；后端 base_params 缺省同为 False
+        body.update(request_fields)
+        # 「受孕期」从**今天**起算一年（chart_details.fertility_dates(frame['jd'], frame['targetJd'])）：上游请求不带目标时刻，
+        # 后端自取 time.time()。本仓把同一个「此刻」显式下发（盘时区钟面；后端 `Datetime(targetDate, targetTime, zone)`，
+        # 上游自己的全表金标也是这样钉的：astropy/tests/test_chart_details.py `targetDate='2026/01/01'`）——语义不变，
+        # 好处是这张表按哪一刻起算可回显（data.chart_details.fertility_from + 技法卡），冻结时钟即可逐值复现。
+        if body.get("targetDate") in (None, ""):
+            now = _now_for_chart(body.get("zone"))
+            body["targetDate"], body["targetTime"] = now.strftime("%Y/%m/%d"), now.strftime("%H:%M:%S")
+        fertility_from = f"{body['targetDate']} {body.get('targetTime') or '12:00:00'}".replace("/", "-")
+        try:
+            result = self._call_remote("/astroextra/chartdetails", body)
+            js = self.js_client.run("chart_details", {"result": result, "settings": settings, "tables": tables})
+        except ToolValidationError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 上游同：盘面细节段失败不影响主体快照（段不出，说出来）
+            _degrade(
+                "chart details (/astroextra/chartdetails) failed (tool=%s): %s", tool_name, exc,
+                note=f"[盘面细节] 本次未产出（{type(exc).__name__}: {exc}）；盘面其余段不受影响。",
+            )
+            return response_data
+        js = js if isinstance(js, dict) else {}
+        if js.get("invalid"):
+            parts = [f"{i.get('key')}={i.get('value')!r}（可选：{'/'.join(str(a) for a in (i.get('allowed') or []))}）" for i in js["invalid"] if isinstance(i, dict)]
+            raise ToolValidationError(
+                bilingual(f"盘面细节口径取值无效：{'；'.join(parts)}。", f"chart-details setting(s) invalid: {'; '.join(parts)}."),
+                code="tool.chart_details_invalid_setting",
+                details={"invalid": js["invalid"]},
+            )
+        if js.get("request_fields") != request_fields:
+            raise ToolTransportError(
+                bilingual(
+                    "盘面细节：发给后端的口径键与上游 chartDetailRequestFields 算出的不一致（本仓的映射落后于上游）。",
+                    "chart details: the request fields sent differ from upstream chartDetailRequestFields (the skill's mapping is stale).",
+                ),
+                code="tool.chart_details_request_mismatch",
+                details={"sent": request_fields, "upstream": js.get("request_fields"), "settings": settings},
+            )
+        text = f"{js.get('text') or ''}".strip()
+        if not text:
+            _degrade(
+                "chart details returned no usable result (tool=%s): %s", tool_name, js.get("error"),
+                note="[盘面细节] 本次未产出（后端 /astroextra/chartdetails 没有回细节表）；盘面其余段不受影响。",
+            )
+            return response_data
+        effective = js.get("settings") if isinstance(js.get("settings"), dict) else {}
+        applied: dict[str, Any] = {}
+        not_applied: list[dict[str, Any]] = []
+        for name, path in CHART_DETAIL_ECHO_PATHS.items():
+            node: Any = result
+            for part in path:
+                node = node.get(part) if isinstance(node, dict) else None
+            applied[name] = node
+            wanted = effective.get(name)
+            if node is not None and wanted is not None and node != wanted:
+                not_applied.append({"key": name, "asked": wanted, "applied": node})
+        if not_applied:
+            parts = [f"{i['key']}：要的是 {i['asked']!r}，后端按 {i['applied']!r} 算" for i in not_applied]
+            raise ToolTransportError(
+                bilingual(f"盘面细节：后端没有按所给口径算（{'；'.join(parts)}）。", f"chart details: the backend did not apply the requested setting(s): {not_applied}."),
+                code="tool.chart_details_setting_mismatch",
+                details={"not_applied": not_applied, "endpoint": "/astroextra/chartdetails"},
+            )
+        enriched = dict(response_data)
+        enriched["_chartDetails"] = text
+        enriched["chart_details"] = {
+            "settings": applied,
+            "computed_at": {"lat": params.get("lat"), "lon": params.get("lon")},
+            "fertility_from": fertility_from,
+            "tables": js.get("tables") if isinstance(js.get("tables"), dict) else {},
+        }
+        # 随调用时刻变化的口径要回显（AGENTS §9：不回显就无从解释「同样输入过几天结果为何变」）。
+        enriched["settings_applied"] = {
+            **(response_data.get("settings_applied") if isinstance(response_data.get("settings_applied"), dict) else {}),
+            "detailFertilityFrom": {"label": "盘面细节·受孕期起算时刻（此刻：随调用时刻变化）", "value": fertility_from},
+        }
+        return enriched
 
     _EGYPT_AXIS_KEYS = EGYPT_AXIS_KEYS
 
@@ -596,6 +736,9 @@ class EnrichMixin:
                     "outer": outer,
                     "hsys": input_normalized.get("hsys", 1),  # 缺省随 RelativeInput（无头 aiAnalysisContext.js:1228 ?? 1）
                     "zodiacal": input_normalized.get("zodiacal", 0),
+                    # 上游 v3.14.0（pair.js fetchScore `...chartOrbOverridesFromPlain(cal.classical)`；后端 build_relative_score 把
+                    # orbs / orbScale 灌进两盘）：关系量化与比较盘用同一把尺——此前只有比较盘随倍率变，分数与连接表恒按 1°。
+                    **_chart_orb_overrides(input_normalized),
                 },
             )
         except Exception as exc:  # noqa: BLE001 - degrade to no-score, keep comparison chart

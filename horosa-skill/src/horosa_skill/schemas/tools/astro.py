@@ -14,6 +14,7 @@ from horosa_skill.schemas.tools.base import (
     FlexibleModel,
     _AscRaModeKnob,
     _ChartDayBoundaryKnobs,
+    _ChartDetailKnobs,
 )
 
 
@@ -21,6 +22,11 @@ class AstroChartInput(BirthInput, _ChartDayBoundaryKnobs):
     """本命/盘面族（chart/chart13/chart12/hellen_chart）：在 BirthInput 上加 [寿命格局] 取主法。"""
 
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
+
+
+class NatalChartInput(AstroChartInput, _ChartDetailKnobs):
+    """本命盘（chart）：盘面族输入 + [盘面细节] 五项口径与「当前表」（上游 v3.14.0）。十三分 / 十二分 / 希腊分盘仍用 AstroChartInput——
+    上游 pipeline.js 的 CLASSICAL_SKIP_KEYS 不给它们挂按本命参数算的派生段，旋钮挂上去就是死键。"""
 
 
 class IndiaChartInput(BirthInput):
@@ -162,6 +168,27 @@ class RelativeInput(FlexibleModel):
     zodiacal: int | None = 0
     siderealAyanamsa: Any | None = None
     relative: int | None = 0
+    # 容许度设置随合盘走（上游 v3.14.0：AstroRelative.relativeClassicalParamsFromFields 加 chartOrbOverridesFromFields；后端
+    # webmodernsrv 把 orbs / orbScale 灌进两盘、modern/chartcomp.cross_orb = 1° × 整体倍率决定跨盘相位 / 映点 / 中点接触的容许度；
+    # 「关系量化」另调 /astroextra/relative，同带这两键——service/enrich._attach_relative_score）。声明而不广告（tools/list 预算）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"orbs", "orbScale"})
+    orbs: dict[str, Any] | None = Field(default=None, description="逐星容许度覆盖（星体 id → 度；两盘同一套，只影响各盘盘内相位）。缺省用默认表。")
+    orbScale: float | None = Field(
+        default=None,
+        description="容许度整体倍率（缺省 1）：跨盘相位、映点 / 反映点、中点接触的容许度 = 1° × 倍率，「关系量化」的分数与连接表同认这个倍率。",
+    )
+
+    @field_validator("orbScale", mode="after")
+    @classmethod
+    def _orb_scale_positive(cls, value: Any) -> Any:
+        # 后端 cross_orb 对非法倍率（≤ 0 / NaN / inf）静默按 1° 算（chartcomp.py:14-24）——在入口就拒。
+        import math
+
+        if value is None:
+            return None
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(bilingual(f"orbScale 要是大于 0 的有限数（收到 {value!r}）", f"orbScale must be a finite number > 0 (got {value!r})"))
+        return value
 
 
 class GuoLaoInput(BirthInput, _AscRaModeKnob):
@@ -208,7 +235,7 @@ class GuoLaoInput(BirthInput, _AscRaModeKnob):
     guolaoEqTropicalAnchor: str | None = Field(default=None, description="赤道回归锚点（仅宿度制 7/8）：dongzhi 牛前冬至（缺省）| chunfen 春分。")
 
 
-class ACGInput(BirthInput):
+class ACGInput(BirthInput, _ChartDetailKnobs):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac
     # 黄道度；lsMode=great 大圆（默认）/rhumb 等角航线；geodetic 地理等价流派 sepharial（默认）
@@ -384,7 +411,7 @@ class DraconicInput(BirthInput, _ChartDayBoundaryKnobs):
         return text
 
 
-class RelocationInput(BirthInput, _ChartDayBoundaryKnobs):
+class RelocationInput(BirthInput, _ChartDayBoundaryKnobs, _ChartDetailKnobs):
     # 重置盘 (relocation)：保留出生 UT，仅用新经纬重算十二宫与上升/中天（POST /astroextra/relocation）。
     # 行星黄经由 UT 决定故不变，宫位/角点随地点变 —— 迁居占星的标准做法。
     # relocLat/relocLon 缺省回退到出生地，等于本命盘（结果敏感：不给新地点就不是「重置」）。

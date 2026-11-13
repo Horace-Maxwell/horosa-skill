@@ -968,6 +968,23 @@ def _angle_text(obj: dict[str, Any] | None) -> str:
     return f"{_js_template_str(obj.get('sign') or '')}{signlon}"
 
 
+def _with_natal_planet_sign(reloc_chart: dict[str, Any], natal: Any) -> dict[str, Any]:
+    """上游 v3.14.0 AstroRelocationLab.js:55-64 withNatalPlanetSign：重置盘的「可能性」借本命的星座断语。
+
+    重置只换地点、出生 UT 不变 → 各星所落星座与本命相同，断语就是本命那份；后端重置盘不跑推断（predictive=false），所以
+    [可能性] 此前恒空。只借 `predict.PlanetSign`（与宫位 / 地点有关的推断一概不借）；重置盘自己已有就不动。
+    `predict.PlanetSign` 是 Java 聚合层给 /chart 补的字段（PlanetSignPredictHelper）——本命盘走 Python chart 服务时没有它，
+    此时无可借、[可能性] 照旧不出（与本命盘工具同）。"""
+    if not isinstance(reloc_chart, dict):
+        return reloc_chart
+    own_predict = reloc_chart.get("predict") if isinstance(reloc_chart.get("predict"), dict) else {}
+    natal_predict = natal.get("predict") if isinstance(natal, dict) and isinstance(natal.get("predict"), dict) else {}
+    natal_signs = natal_predict.get("PlanetSign")
+    if own_predict.get("PlanetSign") or not natal_signs:
+        return reloc_chart
+    return {**reloc_chart, "predict": {**own_predict, "PlanetSign": natal_signs}}
+
+
 def _reloc_display_degree(value: Any, *, lat: bool) -> str:
     """AstroRelocationLab.js:51-55/139：页面 state 存十进制度 `Number(deg.toFixed(4))`，[重置盘] 地点行按它出
     （如 40n43 → 40.7167、74w00 → -74）。字符串走 AstroHelper.convertLat/LonStrToDegree（n/s·e/w 分隔，整数度分）。"""
