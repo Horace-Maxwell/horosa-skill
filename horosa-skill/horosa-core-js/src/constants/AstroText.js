@@ -11,7 +11,19 @@ export const CommBool = {
 	'1': '是'
 };
 
+// 盘面显示项的父条件(注明,不置灰):勾了却看不到时的原因,悬停可见(ChartDisplaySelector.renderOpt)。
+export const ChartOptionHint = {
+	'8': '只在「外环」=经典(星座环)时画;清简外环画宫头带,不出此项',
+	'32': '单盘只在「外环」=清简(宫头带)时画;双盘(合盘/行运)恒画',
+	'512': '只在「外环」=经典(星座环)时画',
+	'16384': '天王/海王/冥王须先在「行星显示」里勾选,否则无线可画',
+};
 export const ChartOptionText = {
+    // 盘面增强四位。
+    '4194304': '角宫三元组',
+    '8388608': '盘心行星时·日主星',
+    '16777216': '盘心赤经上升(RAMC)',
+    '33554432': '符号盘(隐度数)',
 	'1': '行星',
 	'2': '相位线',
 	'4': '二十七宿',
@@ -22,7 +34,7 @@ export const ChartOptionText = {
 	'128': '显示四角点连线',
 	'256': '行星文本正向',
 	'512': '星座入垣擢升星（仅经典）',
-	'1024': '埃及界',
+	'1024': '界限环',
 	'2048': '外刻度线',
 	'4096': '内刻度线',
 	'8192': '行星度数',
@@ -101,6 +113,9 @@ AstroMsgCN[AstroConst.NORTH_NODE] = '北交';
 AstroMsgCN[AstroConst.SOUTH_NODE] = '南交';
 AstroMsgCN[AstroConst.SYZYGY] = '月亮朔望点';
 AstroMsgCN[AstroConst.PARS_FORTUNA] = '福点';
+AstroMsgCN[AstroConst.VERTEX] = '宿命点';
+AstroMsgCN[AstroConst.ANTIVERTEX] = '反宿命点';
+AstroMsgCN[AstroConst.EAST_POINT] = '东点';
 AstroMsgCN[AstroConst.DARKMOON] = '莉莉丝(暗月)';
 AstroMsgCN[AstroConst.PURPLE_CLOUDS] = '紫气-木余';
 AstroMsgCN[AstroConst.PHOLUS] = '人龙星';
@@ -108,6 +123,7 @@ AstroMsgCN[AstroConst.CERES] = '谷神星';
 AstroMsgCN[AstroConst.PALLAS] = '智神星';
 AstroMsgCN[AstroConst.JUNO] = '婚神星';
 AstroMsgCN[AstroConst.VESTA] = '灶神星';
+AstroMsgCN[AstroConst.ERIS] = '阋神星';
 AstroMsgCN[AstroConst.INTP_APOG] = '月亮平均远地点';
 AstroMsgCN[AstroConst.INTP_PERG] = '月亮平均近地点';
 AstroMsgCN[AstroConst.ASC] = '上升';
@@ -164,6 +180,9 @@ AstroMsg[AstroConst.SOUTH_NODE] = 'L';
 AstroMsg[AstroConst.DARKMOON] = 'v';
 AstroMsg[AstroConst.PURPLE_CLOUDS] = 'w';
 AstroMsg[AstroConst.PARS_FORTUNA] = 'p';
+// 宿命点无专属字形,直接中文(字形字体缺 CJK 自动回退系统字体,先例 AstroMsg['ruler']='本垣')。
+AstroMsg[AstroConst.VERTEX] = '宿命点';
+AstroMsg[AstroConst.ANTIVERTEX] = '反宿命点';
 AstroMsg[AstroConst.SYZYGY] = 'z';
 AstroMsg[AstroConst.CHIRON] = 'y';
 
@@ -199,11 +218,19 @@ AstroMsg[AstroConst.PARS_NECESSITY] = '{';
 AstroMsg[AstroConst.PARS_COURAGE] = '{';
 AstroMsg[AstroConst.PARS_VICTORY] = '{';
 AstroMsg[AstroConst.PARS_NEMESIS] = '{';
+// 希腊化补全六点(星图字体无专属字形,同其余点用通用点符)
+AstroMsg[AstroConst.PARS_BASIS] = '{';
+AstroMsg[AstroConst.PARS_EXALTATION] = '{';
+AstroMsg[AstroConst.PARS_SONS_VALENS] = '{';
+AstroMsg[AstroConst.PARS_DAUGHTERS] = '{';
+AstroMsg[AstroConst.PARS_PRAXIS] = '{';
+AstroMsg[AstroConst.PARS_WEDDING_DOROTHEAN] = '{';
 AstroMsg[AstroConst.PHOLUS] = '8';
 AstroMsg[AstroConst.CERES] = '4';
 AstroMsg[AstroConst.PALLAS] = '5';
 AstroMsg[AstroConst.JUNO] = '6';
 AstroMsg[AstroConst.VESTA] = '7';
+AstroMsg[AstroConst.ERIS] = '9';   // ywastro 无标准阋神符号,best-effort 槽位(Eris 守卫式,补星历后启用)
 AstroMsg[AstroConst.INTP_APOG] = 'Y';
 AstroMsg[AstroConst.INTP_PERG] = '$';
 AstroMsg[AstroConst.MOONSUN] = 'Q';
@@ -367,6 +394,8 @@ AstroTxtMsg[AstroConst.SOUTH_NODE] = '南交';
 AstroTxtMsg[AstroConst.DARKMOON] = '暗月';
 AstroTxtMsg[AstroConst.PURPLE_CLOUDS] = '紫气';
 AstroTxtMsg[AstroConst.PARS_FORTUNA] = '福点';
+AstroTxtMsg[AstroConst.VERTEX] = '宿命点';
+AstroTxtMsg[AstroConst.ANTIVERTEX] = '反宿命点';
 AstroTxtMsg[AstroConst.CHIRON] = '凯龙';
 AstroTxtMsg[AstroConst.SYZYGY] = '月亮朔望点';
 AstroTxtMsg[AstroConst.INTP_APOG] = '月亮平均远地点';
@@ -376,6 +405,7 @@ AstroTxtMsg[AstroConst.CERES] = '谷神星';
 AstroTxtMsg[AstroConst.PALLAS] = '智神星';
 AstroTxtMsg[AstroConst.JUNO] = '婚神星';
 AstroTxtMsg[AstroConst.VESTA] = '灶神星';
+AstroTxtMsg[AstroConst.ERIS] = '阋神星';
 
 AstroTxtMsg[AstroConst.MOONSUN] = '日月中点';
 AstroTxtMsg[AstroConst.SATURNMARS] = '火土中点';
@@ -395,7 +425,9 @@ AstroTxtMsg[AstroConst.PARS_FAITH] = '信心点';
 AstroTxtMsg[AstroConst.PARS_SUBSTANCE] = '占有点';
 AstroTxtMsg[AstroConst.PARS_WEDDING_MALE] = '婚姻点（男性）';
 AstroTxtMsg[AstroConst.PARS_WEDDING_FEMALE] = '婚姻点（女性）';
-AstroTxtMsg[AstroConst.PARS_SONS] = '子嗣点';
+// 名实订正:此点公式为「土星↔木星」= 子女点(Children);性别化的「儿子点」另见 PARS_SONS_VALENS。
+// 只改标签不动公式 ⇒ 既有盘输出零变化。
+AstroTxtMsg[AstroConst.PARS_SONS] = '子女点';
 AstroTxtMsg[AstroConst.PARS_FATHER] = '父权点';
 AstroTxtMsg[AstroConst.PARS_MOTHER] = '母爱点';
 AstroTxtMsg[AstroConst.PARS_BROTHERS] = '友情点';
@@ -417,6 +449,13 @@ AstroTxtMsg[AstroConst.PARS_NECESSITY] = '必然点';
 AstroTxtMsg[AstroConst.PARS_COURAGE] = '勇气点';
 AstroTxtMsg[AstroConst.PARS_VICTORY] = '胜利点';
 AstroTxtMsg[AstroConst.PARS_NEMESIS] = '报应点';
+// 希腊化补全六点(「根基点」与择日点引擎/词汇表/显赫指标同名单源)
+AstroTxtMsg[AstroConst.PARS_BASIS] = '根基点';
+AstroTxtMsg[AstroConst.PARS_EXALTATION] = '擢升点';
+AstroTxtMsg[AstroConst.PARS_SONS_VALENS] = '儿子点';
+AstroTxtMsg[AstroConst.PARS_DAUGHTERS] = '女儿点';
+AstroTxtMsg[AstroConst.PARS_PRAXIS] = '事业点';
+AstroTxtMsg[AstroConst.PARS_WEDDING_DOROTHEAN] = '婚姻点（通式）';
 
 // 汉堡学派 8 颗虚星 TNP。自带星图字体无虚星字形 → 盘面/列表用 2 字母拉丁缩写 + 中文名 tooltip。
 AstroTxtMsg[AstroConst.CUPIDO] = '丘比特';
@@ -436,14 +475,5 @@ export const UranianAbbr = {
 };
 export function isUranian(id){ return UranianAbbr[id] !== undefined; }
 export function uranianGlyph(id){ return UranianAbbr[id] || AstroMsg[id] || id; }
-// 实义据 Witte《Rules for Planetary Pictures》本源典籍（汉堡学派源头文献）。
-export const URANIAN_MEANING = {
-	[AstroConst.CUPIDO]: '社群·家庭·婚姻·艺术·团体/法人',
-	[AstroConst.HADES]: '衰朽·匮乏·污秽·隐秘·过去·疾病',
-	[AstroConst.ZEUS]: '受控之火·创造·领导·导向能量·生育',
-	[AstroConst.KRONOS]: '权威·高位·政府·卓越·独立',
-	[AstroConst.APOLLON]: '扩展·成功·科学贸易·众多·广远',
-	[AstroConst.ADMETOS]: '凝滞·原料·收缩·专注·死亡·原始',
-	[AstroConst.VULCANUS]: '强力·能量·支配·巨大势能',
-	[AstroConst.POSEIDON]: '精神·理念·启迪·灵性·光',
-};
+// 虚星含义住在含义词典单一真值源 data/uranianMeanings(URANIAN_MEANING);此处不再转出(全仓已无读取处,
+// 且转出会让常量层反依赖含义词典,与 factorLabel 取本表中文名构成导入环)。

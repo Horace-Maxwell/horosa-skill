@@ -272,3 +272,92 @@ export const HOUSE_SYSTEM_OPTIONS = [
     { value: 23, label: 'Savard-A' },
     { value: 24, label: '福点整宫制' },
 ];
+
+// ── 上游 constants/AstroText.js 三张名表（AstroMsg / AstroTxtMsg / AstroMsgCN）用作键的其余 id（v0.50.x 上游 v3.14.0 同步补齐）。
+// 名表以 `AstroConst.X` 为键：这里缺一个常量，名表里那一行就落到 `undefined` 键上——查不到、不报错（AGENTS §5 闭包提取陷阱③）。
+// 此前缺 49 颗恒星 / 24 个宫制 / 月相四象限 / 八颗汉堡虚星 / 白羊点 / 宿命点等：v3.14.0 [盘面细节] 的恒星相位经
+// vendor/utils/starNamesCn.js 查 `AstroMsg[星名]`，查不到就回落次一级的表（「狮心轩辕十四」印成「轩辕十四」、「天狼星」印成「天狼」）。
+// 逐值取自上游 constants/AstroConst.js（tests/test_sync314_western_shims.py 对上游源逐值比对；上游原序）。
+export const CUPIDO = 'Cupido';
+export const HADES = 'Hades';
+export const ZEUS = 'Zeus';
+export const KRONOS = 'Kronos';
+export const APOLLON = 'Apollon';
+export const ADMETOS = 'Admetos';
+export const VULCANUS = 'Vulcanus';
+export const POSEIDON = 'Poseidon';
+export const ARIES_POINT = 'AriesPoint';
+export const VERTEX = 'Vertex';
+export const ANTIVERTEX = 'Antivertex';
+export const EAST_POINT = 'EastPoint';
+export const ERIS = 'Eris';
+export const MOON_FIRST_QUARTER = 'First Quarter';
+export const MOON_SECOND_QUARTER = 'Second Quarter';
+export const MOON_THIRD_QUARTER = 'Third Quarter';
+export const MOON_LAST_QUARTER = 'Last Quarter';
+export const PARS_BASIS = 'Pars Basis';
+export const PARS_EXALTATION = 'Pars Exaltation';
+export const PARS_SONS_VALENS = 'Pars Sons Valens';
+export const PARS_DAUGHTERS = 'Pars Daughters';
+export const PARS_PRAXIS = 'Pars Praxis';
+export const PARS_WEDDING_DOROTHEAN = 'Pars Wedding Dorothean';
+export const HSYS_Whole_Sign = 'Whole Sign';
+export const HSYS_Alcabitus = 'Alcabitus';
+export const HSYS_Regiomontanus = 'Regiomontanus';
+export const HSYS_Placidus = 'Placidus';
+export const HSYS_Koch = 'Koch';
+export const HSYS_Vehlow_Equal = 'Vehlow Equal';
+export const HSYS_PolichPage = 'Polich Page';
+export const HSYS_Sripati = 'Sripati';
+export const HSYS_Porphyry = 'Porphyrius';
+export const HSYS_Campanus = 'Campanus';
+export const HSYS_Equal = 'Equal';
+export const HSYS_Equal_MC = 'Equal MC';
+export const HSYS_Meridian = 'Meridian';
+export const HSYS_Horizontal = 'Azimuthal';
+export const HSYS_Morinus = 'Morinus';
+export const HSYS_Carter_Poli_Equatorial = 'Carter Poli-Equatorial';
+export const HSYS_Sunshine = 'Sunshine';
+export const HSYS_Sunshine_Alt = 'Sunshine Alternate';
+export const HSYS_Krusinski = 'Krusinski-Pisa-Goelzer';
+export const HSYS_Pullen_SD = 'Pullen SD';
+export const HSYS_Pullen_SR = 'Pullen SR';
+export const HSYS_APC = 'APC Houses';
+export const HSYS_Savard_A = 'Savard-A';
+export const HSYS_Fortuna_Whole = 'Fortuna_Whole';
+export const STAR_ALGENIB = 'Algenib';
+export const STAR_ALPHERATZ = 'Alpheratz';
+export const STAR_ZAUR = 'Zaur';
+export const STAR_ALGOL = 'Algol';
+export const STAR_ALCYONE = 'Alcyone';
+export const STAR_ALDEBARAN = 'Aldebaran';
+export const STAR_RIGEL = 'Rigel';
+export const STAR_CAPELLA = 'Capella';
+export const STAR_BETELGEUSE = 'Betelgeuse';
+export const STAR_SIRIUS = 'Sirius';
+export const STAR_CANOPUS = 'Canopus';
+export const STAR_CASTOR = 'Castor';
+export const STAR_POLLUX = 'Pollux';
+export const STAR_PROCYON = 'Procyon';
+export const STAR_ASELLUS_BOREALIS = 'Asellus Borealis';
+export const STAR_ASELLUS_AUSTRALIS = 'Asellus Australis';
+export const STAR_ALPHARD = 'Alphard';
+export const STAR_REGULUS = 'Regulus';
+export const STAR_DENEBOLA = 'Denebola';
+export const STAR_ALGORAB = 'Algorab';
+export const STAR_SPICA = 'Spica';
+export const STAR_ARCTURUS = 'Arcturus';
+export const STAR_ALPHECCA = 'Alphecca';
+export const STAR_ZUBEN_ELGENUBI = 'Zuben Elgenubi';
+export const STAR_ZUBEN_ELSCHEMALI = 'Zuben Eshamali';
+export const STAR_UNUKALHAI = 'Unukalhai';
+export const STAR_AGENA = 'Agena';
+export const STAR_RIGEL_CENTAURUS = 'Rigel Kentaurus';
+export const STAR_ANTARES = 'Antares';
+export const STAR_LESATH = 'Lesath';
+export const STAR_VEGA = 'Vega';
+export const STAR_ALTAIR = 'Altair';
+export const STAR_DENEB_ALGEDI = 'Deneb Algedi';
+export const STAR_FOMALHAUT = 'Fomalhaut';
+export const STAR_DENEB_ADIGE = 'Deneb';
+export const STAR_ACHERNAR = 'Achernar';
