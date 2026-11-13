@@ -2227,7 +2227,7 @@
       "mode": "bespoke",
       "why": "自上游 XiaoChengTuMain.js 逐字抽出 buildXiaoChengTuSnapshotText（函数体逐字同，剥 React 外壳 + LUOSHU_ROWS 常量）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/xiaochengtu/XiaoChengTuMain.js",
-      "derived_sha256": "2435ff4b490f9cfdd1b350966cbfa2599444ce8afa19f6153cb30d46026def47"
+      "derived_sha256": "94079f78121e3c781d008450c67858dcae9e753eeeeaf9a3a7d35f3088c3c511"
     },
     "xiaoliuren/xiaoliurenConst.js": {
       "upstream": "components/xiaoliuren/core/xiaoliurenConst.js",
@@ -2377,13 +2377,13 @@
       "mode": "bespoke",
       "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "c49758fe2b69d2c5028888ede82b66c6d0db3e9200359537ec19656bbe8e9043"
+      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
     },
     "ziwei/ziweiSnapshotLayers.js": {
       "mode": "bespoke",
       "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "c49758fe2b69d2c5028888ede82b66c6d0db3e9200359537ec19656bbe8e9043"
+      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
     },
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",
