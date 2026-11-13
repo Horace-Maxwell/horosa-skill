@@ -166,6 +166,27 @@ class RelativeInput(FlexibleModel):
     zodiacal: int | None = 0
     siderealAyanamsa: Any | None = None
     relative: int | None = 0
+    # 容许度设置随合盘走（上游 v3.14.0：AstroRelative.relativeClassicalParamsFromFields 加 chartOrbOverridesFromFields；后端
+    # webmodernsrv 把 orbs / orbScale 灌进两盘、modern/chartcomp.cross_orb = 1° × 整体倍率决定跨盘相位 / 映点 / 中点接触的容许度；
+    # 「关系量化」另调 /astroextra/relative，同带这两键——service/enrich._attach_relative_score）。声明而不广告（tools/list 预算）。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"orbs", "orbScale"})
+    orbs: dict[str, Any] | None = Field(default=None, description="逐星容许度覆盖（星体 id → 度；两盘同一套，只影响各盘盘内相位）。缺省用默认表。")
+    orbScale: float | None = Field(
+        default=None,
+        description="容许度整体倍率（缺省 1）：跨盘相位、映点 / 反映点、中点接触的容许度 = 1° × 倍率，「关系量化」的分数与连接表同认这个倍率。",
+    )
+
+    @field_validator("orbScale", mode="after")
+    @classmethod
+    def _orb_scale_positive(cls, value: Any) -> Any:
+        # 后端 cross_orb 对非法倍率（≤ 0 / NaN / inf）静默按 1° 算（chartcomp.py:14-24）——在入口就拒。
+        import math
+
+        if value is None:
+            return None
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(bilingual(f"orbScale 要是大于 0 的有限数（收到 {value!r}）", f"orbScale must be a finite number > 0 (got {value!r})"))
+        return value
 
 
 class GuoLaoInput(BirthInput):

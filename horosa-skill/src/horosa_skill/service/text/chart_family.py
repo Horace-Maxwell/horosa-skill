@@ -1,6 +1,7 @@
 """本命盘族快照：格局速览、印度盘、西洋盘族的整份快照与请求缺省、印度分盘预设。"""
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -360,6 +361,26 @@ def _pattern_overview(response: dict[str, Any], *, only_ruler_exalt: bool = Fals
 # classicalParamSpec.js:249-256 的全局仓缺省（headless 无本机仓 = 缺省档）：恒星平轨 1°、轨档 school。
 _FIXED_STAR_ORB_DEFAULT = 1
 _FIXED_STAR_ORB_MODE_DEFAULT = "school"
+
+
+def _chart_orb_overrides(params: dict[str, Any]) -> dict[str, Any]:
+    """上游 v3.14.0 classicalChartGlobals.js chartOrbOverrides：随盘容许度对（设置 → 容许度设置）进请求体的出口——仅非默认才下发。
+
+    orbs = { 星体 id: 度数 } 的非空对象才发（后端 perchart 只认 dict）；orbScale = 有限正数且 ≠ 1 才发（默认态请求体不变）。
+    """
+    out: dict[str, Any] = {}
+    orbs = params.get("orbs")
+    if isinstance(orbs, dict) and orbs:
+        out["orbs"] = orbs
+    raw = params.get("orbScale")
+    if raw is not None and raw != "" and not isinstance(raw, bool):
+        try:
+            scale = float(raw)
+        except (TypeError, ValueError):
+            scale = math.nan
+        if math.isfinite(scale) and scale > 0 and abs(scale - 1) > 1e-9:
+            out["orbScale"] = scale
+    return out
 
 
 def _fixed_star_orb_params(params: dict[str, Any]) -> dict[str, Any]:

@@ -63,6 +63,8 @@ _RESULT_SENSITIVE_FIELDS: tuple[tuple[str, str, frozenset[str] | None], ...] = (
     ("detailLunar", "盘面细节·月亮日算法", _ASTRO_DOMAINS),
     ("detailMundo", "盘面细节·世俗位置", _ASTRO_DOMAINS),
     ("detailMidpoint", "盘面细节·中点坐标", _ASTRO_DOMAINS),
+    # v3.14.0：容许度整体倍率对合盘（跨盘相位 / 映点 / 中点接触 = 1° × 倍率，关系量化同认）与各西占盘一并生效，给了就回显。
+    ("orbScale", "容许度整体倍率", _ASTRO_DOMAINS),
     ("gender", "性别", None),
     ("school", "流派", None),
     ("profile", "传本", None),

@@ -251,7 +251,7 @@ class BirthInput(FlexibleModel):
     planetaryHourMethod: str | None = Field(default=None, description="行星时制式：sunrise=日出起算等长时（缺省）| unequal=昼夜不等时（传统）| equal24=廿四时等分。")
     combustOwnChariotExempt: Any | None = Field(default=None, description="界内三分内免燃烧 own chariot（Porphyry；缺省关）。")
     westLilithType: str | None = Field(default=None, description="黑月莉莉丝：mean=平均远地点（缺省）| true=真实远地点(osculating)。")
-    topocentricMoon: Any | None = Field(default=None, description="月亮站心视差修正（影响月亮黄经 ≤1°，福点随动；缺省关）。")
+    topocentricMoon: Any | None = Field(default=None, description="月亮站心视差修正（影响月亮黄经 ≤1°，福点随动；印占各盘恒用地心月；缺省关）。")
     lotReversal: Any | None = Field(default=None, description="福点按昼夜反转（缺省开；关则恒昼式）。")
     lotsDocReverse: Any | None = Field(default=None, description="婚·子·友·疾四点用文档序公式（缺省关）。")
     hermeticLotsReversal: Any | None = Field(default=None, description="六星点按昼夜反转（福点另设；批判本校勘；缺省开，关则恒同式）。")

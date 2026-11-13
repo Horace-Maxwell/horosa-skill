@@ -42,6 +42,7 @@ from horosa_skill.service.text.astro_core import (
 from horosa_skill.service.text.chart_family import (
     _INDIA_MOUNT_EXTRA_VARGA_MAX,
     _INDIA_MOUNT_VARGA_OPTIONS,
+    _chart_orb_overrides,
     _fixed_star_orb_params,
     _india_chart_remote_payload,
     _india_mount_varga_label,
@@ -735,6 +736,9 @@ class EnrichMixin:
                     "outer": outer,
                     "hsys": input_normalized.get("hsys", 1),  # 缺省随 RelativeInput（无头 aiAnalysisContext.js:1228 ?? 1）
                     "zodiacal": input_normalized.get("zodiacal", 0),
+                    # 上游 v3.14.0（pair.js fetchScore `...chartOrbOverridesFromPlain(cal.classical)`；后端 build_relative_score 把
+                    # orbs / orbScale 灌进两盘）：关系量化与比较盘用同一把尺——此前只有比较盘随倍率变，分数与连接表恒按 1°。
+                    **_chart_orb_overrides(input_normalized),
                 },
             )
         except Exception as exc:  # noqa: BLE001 - degrade to no-score, keep comparison chart
