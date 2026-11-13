@@ -164,7 +164,7 @@ def test_technique_card_shows_the_orb_pair_and_who_set_it(tmp_path: Path) -> Non
     负向对照：删掉 horary 指引表里的 orbScale / orbs 两条 safe_defaults → 卡上没有这两行，KeyError（实跑过）。"""
     service = _service(tmp_path, _chart_client())
     default = service.run_tool("horary", MOMENT, save_result=False).data["technique_card"]["settings"]
-    assert (default["orbScale"]["label"], default["orbScale"]["value"], default["orbScale"]["source"]) == ("容许度倍数", 1, "default")
+    assert (default["orbScale"]["label"], default["orbScale"]["value"], default["orbScale"]["source"]) == ("容许度整体倍率", 1, "default")
     assert (default["orbs"]["label"], default["orbs"]["value"], default["orbs"]["source"]) == ("逐星容许度", None, "default")
     given = service.run_tool("election", {**MOMENT, "orbScale": 1.5, "orbs": {"Sun": 10}}, save_result=False).data["technique_card"]["settings"]
     assert (given["orbScale"]["value"], given["orbScale"]["source"]) == (1.5, "user")

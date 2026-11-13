@@ -1739,6 +1739,12 @@
           "specifier": "./MundaneCycleTables.js",
           "stub": "",
           "why": "上游 v3.14.0 的「周期表」页签 React 组件（默认导入），只服务已截断的类；周期表正文由 utils/mundaneCycles.js 的 buildMundaneCycleText 出。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const BARBAULT_SETS = [",
+          "to": "export const BARBAULT_SETS = [",
+          "why": "上游 v3.14.0 把 Barbault 慢星组合（bbSet）与谐波（bbHarm）收进页面设置 MUNDANE_PAGE_SETTINGS（在截断点之后）；组合键 → 行星名表是本文件私有常量。headless 的 /astroextra/barbault 请求由 Python 发，补具名导出供 tools/mundaneCards.js 校验 bbSet 值域并回组合的行星名表，不手抄。"
         }
       ]
     },
@@ -1803,9 +1809,9 @@
     },
     "mundane/mundaneAiSnapshot.js": {
       "mode": "bespoke",
-      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（:2849-2997）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。",
+      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（v3.14.0 :2871-3018；10fb75de→e55c3a66 方法体逐字未变）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。",
       "derived_from": "components/mundane/MundaneMain.js",
-      "derived_sha256": "09ef9690cdbdf9edd02cd8762568743115b4474431b81e50fae60b2d913f6dfa"
+      "derived_sha256": "d638e0ecd2c9f4281600dfc425a77985dd99fc375ad26d1262ba862c4b44cf02"
     },
     "mundane/ruleset.js": {
       "upstream": "divination/mundane/ruleset.js",
@@ -3448,6 +3454,19 @@
           "specifier": "../constants/AstroText.js",
           "to": "../../constants/AstroText.js",
           "why": "同 utils/starNamesCn.js：detailPointName 查的 AstroTxtMsg 在共享 AstroText shim。"
+        }
+      ]
+    },
+    "utils/mundaneCycles.js": {
+      "upstream": "utils/mundaneCycles.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 世俗盘「世运周期表」14 张的单一来源：表清单 MUNDANE_CYCLE_TABLES、选项 MUNDANE_CYCLE_OPTIONS、缺省 MUNDANE_CYCLE_DEFAULTS、请求体映射 mundaneCycleRequestFields 与「结果 → 快照正文」buildMundaneCycleText（段头 [世运周期表]）。计算全在后端 astrostudy/mundane_cycles.py（/astroextra/mundanecycles，Python 侧发请求）；消费方 tools/mundaneCards.js。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/starNamesCn.js：钉到共享 AstroText shim（mundanePointName 读 AstroTxtMsg）。"
         }
       ]
     }

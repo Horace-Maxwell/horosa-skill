@@ -13,9 +13,9 @@
 | Zodiac systems | `zodiacsystems`: `zodiacVersion` picks one of 19 zodiacs (default `z13a`, 13 signs version A; `z13*` 13-sign, `z14` 14-sign, `z12a`–`z12g` unequal 12-segment). Longitudes do not change, only the division: one [黄道制] section with each point's segment in that version, its true IAU constellation (points off the zodiac are marked), galactic zodiac, last / next constellation change and 13 houses. No chart body. House system and tropical / sidereal do not change the result. |
 | Relationship 合盘 | `relative` with `inner` and `outer` (each: date / time / place or zone+lat+lon); `relative` 0–4 picks the chart type (0 比较盘 default). Both people need a birth time. Every type also carries [八重合] (Ashtakoota, sidereal Moon match out of 36): the groom side is `ashtakootaMaleSide` (`inner` / `outer`) or, without it, the two `gender` values — unknown or same gender → chart A; the section's first lines say which side was used. |
 | Midpoints / Uranian | `germany` (`rectifyEvents` → [校时预览]; `mpCoord` ra / decl → [中点坐标]). |
-| Babylonian | `babylon` (no houses / aspects / Asc by design). |
-| Mundane | `mundane` (year + 入宫节气 + place; `mundaneType`, `mundaneRuleset`). |
-| Astrocartography | `acg` (`clickLat` / `clickLon` adds the spot analysis). |
+| Babylonian | `babylon` (no houses / aspects / Asc by design). [天象实算] is computed for the birth moment and place (three paths, ziqpu star clock, goal-year lookups, planetary phenomena and visibility); it has no settings of its own. |
+| Mundane | `mundane` (year + 入宫节气 + place; `mundaneType`, `mundaneRuleset`). `mundaneType: "cycles"` adds [世运周期表] (`cycleTable` picks one of 14 tables; each table reads only its own options) and [Barbault 聚散指数] (`bbSet`, `bbHarm` 1–12). An option that does not apply to the chosen table is reported in `warnings`. |
+| Astrocartography | `acg` (`clickLat` / `clickLon` adds the spot analysis). `eclipse` `prenatal` / `postnatal` (+ `eclipseFilter` `central`) adds the nearest solar eclipse's path; `climes` `klimata` / `parallels` (+ `climesObliquity`) adds the latitude bands. Both are off by default. |
 | Planet cycles | `planet_cycles` (no natal chart; the planet pair and year range are asked). |
 | Birth-time rectification | `india_rectify` (needs dated life events; returns ranked evidence — the user decides). |
 | Horary 卜卦 | `horary`: `category` (question type) and `school` are asked; an unknown `category` is refused with `tool.invalid_option` (no fallback to a general question). The chart is cast with the school's house system / terms / triplicity. |

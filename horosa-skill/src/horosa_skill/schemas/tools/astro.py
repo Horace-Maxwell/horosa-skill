@@ -306,7 +306,7 @@ class ACGInput(BirthInput, _ChartDetailKnobs):
         "geodeticZero", "cuspLines", "coord", "posType", "horizon", "nodeType", "lilithType", "draconic", "harmonic",
         "vibration", "midpointMode", "lotsCustom", "asteroids", "ayanamsa", "stars", "ccgDate", "ccgTime", "ccgMix",
         "relMode", "relDate", "relTime", "relZone", "relLat", "relLon", "paranMode", "showLS", "showGeodetic",
-        "showStarParans",
+        "showStarParans", "eclipse", "eclipseFilter", "climes", "climesObliquity",
     })
     geodeticZero: float | None = Field(default=None, description="地理等价 0°♈ 子午线（东经度；缺省流派默认）。")
     cuspLines: bool | None = Field(default=None, description="十二宫尖线（opt-in，按 pointHsys 宫制）。")
@@ -336,6 +336,27 @@ class ACGInput(BirthInput, _ChartDetailKnobs):
     showLS: bool | None = Field(default=None, description="快照含本地空间线子块。")
     showGeodetic: bool | None = Field(default=None, description="快照含地理等价线子块。")
     showStarParans: bool | None = Field(default=None, description="快照含固定星交映（须 stars）。")
+    # 上游 v3.14.0 两层（AstroAcg.js ACG_PAGE_SETTINGS :148-151；词表 western_vocab.ACG_LAYER_VOCABULARIES ← utils/acgLayers.js）。
+    # eclipse / eclipseFilter 是后端重算（ACGraph._eclipse → acg/eclipse_path.py），开了才下发；climes / climesObliquity 是快照
+    # 图层（纬度由 vendored acgLayers 按最长昼推，黄赤交角取后端 meta.obliquity 或托勒密值）。都进 [占星地图] 段的 ◆ 子块。
+    eclipse: str | None = Field(
+        default=None,
+        description="日食路径：off（缺省）| prenatal 出生前最近一次 | postnatal 出生后最近一次；开了才产 [占星地图] 的「◆ 日食路径」（食甚时刻 / 地点 / 食分 / 食带宽 / 中心线起止）。",
+    )
+    eclipseFilter: str | None = Field(default=None, description="日食路径食型：any 任何日食（缺省）| central 只找中心食（全 / 环 / 全环）；须配 eclipse。")
+    climes: str | None = Field(
+        default=None,
+        description="气候带 / 纬圈：off（缺省）| klimata 七气候带 | parallels 托勒密纬圈（按最长昼推纬度）；开了才产 [占星地图] 的「◆ 七气候带 / 托勒密纬圈」。",
+    )
+    climesObliquity: str | None = Field(default=None, description="气候带用的黄赤交角：date 改进·出生时刻的值（缺省）| ptolemy 经典·托勒密值 23°51′20″；须配 climes。")
+
+    @field_validator("eclipse", "eclipseFilter", "climes", "climesObliquity", mode="before")
+    @classmethod
+    def _acg_layer_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import ACG_LAYER_VOCABULARIES
+
+        return parse_with(ACG_LAYER_VOCABULARIES[info.field_name], info.field_name, value)
 
 class AstrodataInput(FlexibleModel):
     # 名人星盘数据库（离线只读检索）：query 走 FTS 全文（姓名/条目/出生地/维基摘要），
@@ -553,6 +574,10 @@ class MundaneInput(FlexibleModel):
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear",
         "vedicNatalAsc", "zodiacal", "siderealAyanamsa", "regionKey", "regionCandidate", *MUNDANE_SNAPSHOT_KEYS,
+        # v3.14.0 行星周期盘型（mundaneType=cycles）的页面设置：世运周期表 15 键 + 年份 + Barbault 两键。
+        "cycleTable", "conjKind", "meanTable", "flood", "cycleYear", "firdariaLevel", "firdariaYears", "profRate", "profBase",
+        "dawrStart", "eraKind", "ingressPoint", "cycleVariant", "mpdKey", "weatherMonths", "cycleStartYear", "cycleEndYear",
+        "bbSet", "bbHarm",
     })
     mundaneRuleset: str | None = Field(default=None, description="规则集：ptolemaic / medieval / modern（缺省）/ barbault；[定局·年主/盘主]（界/三分变体定年主）与 [地理分野]（数据集）随之。")
     mundaneOrbScheme: str | None = Field(default=None, description="受冲容许度覆盖：auto（缺省随规则集）/ moiety / by_aspect。")
@@ -570,6 +595,61 @@ class MundaneInput(FlexibleModel):
     regionCandidate: str | None = Field(
         default=None,
         description="地区盘候选建置时刻键（a/b/c；缺省首候选 = 最通行者。philadelphia_1776：a 17:10 / b 02:13 / c 12:00；paris_1792：a 12:00 / b 09:00 / c 15:00；london_1066：a 12:00 / b 13:30）。",
+    )
+    # 行星周期盘型（mundaneType=cycles）的页面设置，上游 v3.14.0。键名照上游 utils/mundaneCycles.js 的 MUNDANE_CYCLE_SETTINGS
+    # （页面设置库 horosa.mundane.cycles.v1）与 MundaneMain.js 的 MUNDANE_PAGE_SETTINGS（bbSet / bbHarm）；值域由 runner 交
+    # JS 按引擎自带表（MUNDANE_CYCLE_TABLES / MUNDANE_CYCLE_OPTIONS / BARBAULT_SETS）校验，认不出即 tool.mundane_invalid_setting
+    # ——后端对认不出的表 / 选项 / 谐波都是静默取缺省。只作用于 [世运周期表] / [Barbault 聚散指数] 两段。
+    cycleTable: str | None = Field(
+        default=None,
+        description=(
+            "世运周期表（[世运周期表] 段列哪一张，缺省 conjunctions）：conjunctions 大中小合 | meanConjunctions 平均大合 | turns 千年轮转 | "
+            "firdaria 世运法达 | profections 世俗小限 | thousands 千年表 | worldYears 世界年表 | dawr 周期年表 | era 纪元小限 | "
+            "parts 世俗希腊点 | revolution 年度回归 | weather 气象占 | lunations 默冬月相族 | directions 世俗主限。"
+            "各表只认自己的选项（下列键），给了不起作用的键会在 warnings 里说明。"
+        ),
+    )
+    conjKind: str | None = Field(default=None, description="大中小合·合：great 大合(木土，缺省) | middle 中合(火土) | lesser 小合(火木)。")
+    meanTable: str | None = Field(default=None, description="平均大合·古表：table1（缺省）… table8（八张等差表，周期与每合进度各不同）。")
+    flood: str | None = Field(default=None, description="千年轮转·洪水起点：a 公元前 3381 年起（缺省）| b 公元前 3102 年起。")
+    cycleYear: str | None = Field(default=None, description="千年轮转 / 世运法达·年长：sidereal 恒星年（缺省）| solar 回归年 | world 世界年(365.2583 日)。")
+    firdariaLevel: str | None = Field(default=None, description="世运法达·档：big 大(按座，缺省) | middle 中(75 年) | lesser 小(小期)。")
+    firdariaYears: Any | None = Field(default=None, description="世运法达·列多少年：100 | 200（缺省）| 500 | 1000。")
+    profRate: str | None = Field(
+        default=None,
+        description=(
+            "世俗小限·速率（每座年数）：big 100 年 | great 80 年（缺省）| qisma 30 年 | solar 30.44 年 | middle20 20 年 | middle 10 年 | "
+            "monarchy 5 年 | malefic 2.5 年 | lesser20 20 个月 | lesser 1 年 | degree 1 个月。"
+        ),
+    )
+    profBase: str | None = Field(
+        default=None,
+        description=(
+            "世俗小限·起点：greatSign 大合所在座（缺省）| greatAsc 大合年入白羊上升 | greatMc 大合年入白羊天顶 | changeSign 换组所在座 | "
+            "changeAsc 换组年入白羊上升 | changeMc 换组年入白羊天顶 | ingress 入白羊。"
+        ),
+    )
+    dawrStart: str | None = Field(default=None, description="周期年表·起点：a 1648 年起（缺省）| b 1660 年起。")
+    eraKind: str | None = Field(default=None, description="纪元小限·纪元：hijra 伊斯兰纪元（缺省）| change 1980 年换组合。")
+    ingressPoint: Any | None = Field(default=None, description="年度回归·入点（黄经度）：0 白羊（缺省）| 90 巨蟹 | 180 天秤 | 270 摩羯。")
+    cycleVariant: str | None = Field(
+        default=None,
+        description="周期表算法档：improved 改进（缺省）| classic 经典。只对大合、世运法达小档、世俗小限的非天顶起点、气象占有差别。",
+    )
+    mpdKey: str | None = Field(default=None, description="世俗主限·时间键：Ptolemy 1°=1 日（缺省）| Naibod | Cardano | Umar。")
+    weatherMonths: Any | None = Field(default=None, description="气象占·列几个月：3（缺省）| 6 | 12。")
+    cycleStartYear: Any | None = Field(
+        default=None,
+        description=(
+            "周期表起始年 / 年份（非 0 整数，公元前为负）：区间表（大中小合、平均大合）的起始年，年表（千年表、世界年表、周期年表、纪元小限、"
+            "年度回归）的首年；缺省以盘面年份为中心 / 为首年。"
+        ),
+    )
+    cycleEndYear: Any | None = Field(default=None, description="周期表结束年（非 0 整数；只有区间表大中小合 / 平均大合用，缺省盘面年份 + 后端默认跨度）。")
+    bbSet: str | None = Field(default=None, description="Barbault 指数·慢星组合：slow5 五慢星 ♃♄♅♆♇（缺省）| outer3 仅外三星 ♅♆♇ | slow4 土外四星 ♄♅♆♇。")
+    bbHarm: Any | None = Field(
+        default=None,
+        description="Barbault 指数·谐波 1–12（缺省 1 = 原指数；每对角距先乘 h 再折半圆：2 看合冲、3 看三分、4 看刑。上游页面下拉列 1–4，排盘引擎收 1–12）。",
     )
     # F17 快照口径键（与 BirthInput 同名同义、描述单源）：[信息] 互容接纳过滤 + [埃及历] 七轴。世俗盘正文是同一套本命段 builder，
     # 这些键此前未在本模型声明 → MCP 扁平面按广告签名静默丢弃（CLI / tool_run / request 整包不丢），见 test_mcp_flat_surface_keys。

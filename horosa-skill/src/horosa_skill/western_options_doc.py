@@ -181,6 +181,15 @@ def _static_doc(tool_name: str) -> dict[str, str]:
             "mundaneRuleset": "规则集 4 档（缺省 modern）：" + " ".join(f"{k}={label}" for k, label in MUNDANE_RULESETS)
             + "；进快照首段的「规则集」行，右栏卡片段（年盘概要等）、[定局·年主/盘主]（界/三分变体定年主累分）与 [地理分野]"
             + "（数据集：托勒密古典 / 古典+中世纪 / 现代综合）均随该规则集（上游 describeMundaneVictor / describeChorography）。",
+            "mundaneType=cycles": "行星周期盘型（上游 v3.14.0）：在入宫底盘之外加产 [木土纪元] / [大年时代] / [世运周期表] / [Barbault 聚散指数]。"
+            "[世运周期表] 一次列一张表：cycleTable 选表（14 张，缺省 conjunctions 大中小合），各表只认自己的选项——"
+            "conjunctions: conjKind + cycleVariant（仅大合）；meanConjunctions: meanTable；turns: flood + cycleYear；"
+            "firdaria: firdariaLevel + firdariaYears + cycleYear + cycleVariant（仅小档）；profections: profRate + profBase + cycleVariant（非天顶起点）；"
+            "dawr: dawrStart；era: eraKind；revolution: ingressPoint；weather: weatherMonths + cycleVariant；directions: mpdKey；"
+            "thousands / worldYears / parts / lunations 无选项。区间表（conjunctions / meanConjunctions）认 cycleStartYear + cycleEndYear，"
+            "年表（thousands / worldYears / dawr / era / revolution）只认 cycleStartYear；不给则以盘面年份为准。"
+            "给了对所选表不起作用的键 → 不下发并在 warnings 点名；值认不出 → tool.mundane_invalid_setting（列可选值）。"
+            "[Barbault 聚散指数]：bbSet 慢星组合 + bbHarm 谐波（1–12，缺省 1）。这些键在别的盘型下不起作用（warnings 说明）。",
             "mundaneType=region": "地区盘：底盘换成 regionKey 指定的预置建置盘（vendored regionCharts.js：london_1066 / philadelphia_1776 / "
             "paris_1792，多候选时刻用 regionCandidate），快照 = [地区盘] 头 → [世俗宫义] → [定局·年主/盘主] → [地理分野] → "
             "[地区盘推运]（盘龄 = year − 建置年：小限 + 法达）→ [地区盘·12世俗宫]/[时刻校正] 等卡 → 盘面正文；不出入宫盘诸段。",

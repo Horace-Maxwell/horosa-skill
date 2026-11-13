@@ -135,7 +135,7 @@ _UNSENT = "未下发，引擎按自己的缺省算"
 _EXTRA_LABELS = {
     "ad": "纪年", "lifespanMethod": "寿命格局取主法", "gender": "性别", "sex": "性别", "timeAlg": "时间算法",
     "zeriSnapshotMaxRows": "命中清单行数", "zeriSnapshotExplainRows": "判读树行数", "seed": "起卦种子",
-    "orbScale": "容许度倍数", "orbs": "逐星容许度",
+    "orbScale": "容许度整体倍率", "orbs": "逐星容许度",
     "transformKind": "变换种类", "transformPlanet": "基准星", "transformShift": "宫位同转", "transformHouse": "对应宫头",
     "transformVariant": "变换口径", "zodiacVersion": "黄道版本",
 }
