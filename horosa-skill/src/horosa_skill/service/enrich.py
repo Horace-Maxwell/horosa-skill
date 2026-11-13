@@ -647,7 +647,9 @@ class EnrichMixin:
 
     # 上游页面种子请求的参数面（JieQiChartsMain.genParams(false) → Java JieQiController.getYearParams 白名单）：
     # 不带 jieqis（= 全年 24 节气）、不带 seedOnly（= 走 setupBazi 逐节气补四柱）。
-    _JIEQI_SEED_DROP_KEYS = frozenset({"jieqis", "seedOnly"})
+    # v3.14.0：[X宿盘] 的人事十二宫起法 / 上升取法是前端设置（宿盘段 builder 读），上游两条 /jieqi/year 请求都不带 → 不下发。
+    _JIEQI_SNAPSHOT_ONLY_KEYS = frozenset({"houseStartMode", "ascRaMode"})
+    _JIEQI_SEED_DROP_KEYS = frozenset({"jieqis", "seedOnly"}) | _JIEQI_SNAPSHOT_ONLY_KEYS
 
     def _attach_jieqi_year_extras(self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         """jieqi_year 的两项富化（上游 v3.11 整年快照）：

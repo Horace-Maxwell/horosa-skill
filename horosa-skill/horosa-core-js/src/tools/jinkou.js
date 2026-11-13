@@ -1,9 +1,9 @@
-import { formatDateLikeDateTime } from '../shared/fields.js';
+import { formatDateLikeDateTime, formatTimeLikeDateTime } from '../shared/fields.js';
 import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
 import * as LRConst from '../vendor/liureng/LRConst.js';
 import { buildJinKouData, normalizeKinjinkouData } from '../vendor/jinkou/JinKouCalc.js';
 import { resolveJinKouDiFen } from '../vendor/jinkou/JinKouState.js';
-import { buildJinKouSnapshotText } from '../vendor/jinkou/JinKouSnapshot.js';
+import { buildJinKouSnapshotText } from '../vendor/jinkou/JinKouMain.js';
 
 function normalizeTimeBranch(timeValue) {
   const text = `${timeValue || ''}`;
@@ -16,8 +16,9 @@ function buildJinkouParams(payload) {
     // 上游 genGodsParams `flds.date.value.format('YYYY-MM-DD')`（JinKouMain.js:1333）：DateTime 的 ad × year 不补零
     // （公元前 '-500-03-21'）；此前原样回带 Python 归一后的补零串（[起盘信息]「日期」行公元前写成 '-0500-03-21'）。
     date: payload.date ? formatDateLikeDateTime(payload.date, payload.ad) : '',
-    // 上游 genGodsParams 取 format('HH:mm')（JinKouMain.js:1370），快照「日期」行是时:分。
-    time: `${payload.time || ''}`.slice(0, 5),
+    // 上游 genGodsParams 取 format('HH:mm:ss')（JinKouMain.js:1334，v3.14.0 起不再把时刻降到分钟；此前 'HH:mm'），
+    // 快照「日期」行是时:分:秒。
+    time: formatTimeLikeDateTime(payload.time),
     zone: payload.zone || '',
     lat: payload.lat || '',
     lon: payload.lon || '',

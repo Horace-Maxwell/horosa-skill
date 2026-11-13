@@ -12,6 +12,7 @@
 //   · buildGuolaoLimitSection —— [大限]（GFM 表 + 所选行运法结构；[Q-188/T-125] 年界 / 定童限）
 //   · buildGuolaoSetupLines —— [起盘信息] 口径六行（七政命度 / 罗计 / 报时星太阳时 / 罗计取法·月孛取法 /
 //     宿度制·身宫法 / 命主取法·行运法；_buildGuolaoSnapshotTextV2Core 的内联行收成函数，行文逐字）
+//     + v3.14.0 赤仪「上升取法」行；applyGuolaoAscRaMode —— 同函数开头的上升点换法（逐字）
 //     及其查名助手 guolaoLifeModeName / guolaoNodeModeName / guolaoSu28ModeFromFields / guolaoFieldValue（逐字）。
 // 上游该文件 4350 行，其余是 React 组件与取数编排；政余格局闭包另在 guolaoMoira.js（同源不同段）。
 // 只有下方 import 按 vendor 树改了路径（上游 import 名：moiraLifeDegree as lifeDegree 等，逐字保留别名）。
@@ -20,6 +21,18 @@ import { moiraBuildLimitTable as buildLimitTable, moiraLifeDegree as lifeDegree,
 import { computeDongwei as glDongwei, computeTongxian as glTongxian } from './guolaoTransit.js';
 import { normalizeGuolaoLifeMode, GUOLAO_LIFE_MODE_ASC, GUOLAO_LIFE_MODE_YUMAO, GUOLAO_LIFE_MODE_COTRANS } from './guolaoMoiraWheelLimits.js';
 import { SU28_MODE_LABEL } from './guolaoData.js';
+import { guolaoAscRaModeOf, withAscRaMode, withAscRaModeRoot, ascRaModeSnapshotLine } from '../utils/ascRaMode.js';
+
+// v3.14.0 赤仪上升取法：_buildGuolaoSnapshotTextV2Core 开头四行（main/snapshot.js:1129-1133）逐字收成函数——
+// 经典档只把上升点 ra 换成东点黄经（黄仪恒原样），下面各段一律读换过的盘。headless 的各段由 tools/ 分别调，
+// 每个入口先过这一步（与上游「一次换、各段同读」同一份盘数据）。返回 { result, ascRaMode }。
+export function applyGuolaoAscRaMode(rawResult, fields){
+	// 赤仪上升取法(经典档只把上升点 ra 换成东点黄经;黄仪恒原样):与盘面同一份盘数据,下面各段一律读换过的
+	const _rawChart = rawResult && rawResult.chart ? rawResult.chart : rawResult;
+	const _ascRaMode = guolaoAscRaModeOf(_rawChart, fields);
+	const result = rawResult && rawResult.chart ? withAscRaModeRoot(rawResult, _ascRaMode) : withAscRaMode(rawResult, _ascRaMode);
+	return { result, ascRaMode: _ascRaMode };
+}
 
 // ── GuoLaoChartStyle.js 的罗计口径（逐字）与 getStored* 的 headless 缺省（上游读不到 localStorage 键时的返回值）──
 export const GUOLAO_NODE_MODE_NORTH_KETU = 'northKetuSouthRahu';
@@ -255,10 +268,12 @@ export function guolaoSunriseMode(fields){
 
 // [起盘信息] 口径六行：_buildGuolaoSnapshotTextV2Core（main/snapshot.js:1144-1164）内联的 lines.push 逐字收成函数。
 // v3.13.1：罗计取法行后加「日出口径」行（main/snapshot.js:1153，仅 params.sunriseMode === 'apparent' 时）。
+// v3.14.0：宿度制行后加「上升取法」行（main/snapshot.js:1169，仅赤仪 _snapChart.displayCoord === 'equatorial' 时；
+// _snapChart = 换过上升点的盘、_ascRaMode = applyGuolaoAscRaMode 的档，调用方未给 = 不加行）。
 // _gDisp = 页面显示偏好（命主取法/行运法），headless 由调用方按挂载齿轮四键给（Python _guolao_display_settings）。
 // params = 起盘参数（上游 fieldsToParams 产物，读 params.planetaryHourMethod）；headless 调用方未给时按上游
 // fieldsToParams 同一判据 guolaoPlanetaryHourMethod(fields) 补（params.js:164 params.planetaryHourMethod = hourMethod）。
-export function buildGuolaoSetupLines(fields, _gDisp, params){
+export function buildGuolaoSetupLines(fields, _gDisp, params, _snapChart, _ascRaMode){
 	// fieldsToParams（main/params.js:169-177）同判据：日出口径仅 apparent 才带（缺省不发）；行星时制式只供本函数读档名。
 	if(!params || typeof params !== 'object'){
 		params = { planetaryHourMethod: guolaoPlanetaryHourMethod(fields) };
@@ -283,6 +298,7 @@ export function buildGuolaoSetupLines(fields, _gDisp, params){
 	const _mlName = { '': '古度限度法', dongwei: '洞微大限', minor: '小限', month: '月限', tong: '童限' }[_gDispSafe.minorLimitType || ''] || '古度限度法';
 	const _gBodyName = _gBody === 'youjin' ? '逢酉(琴堂)' : ('子丑寅卯辰巳午未申酉戌亥'.indexOf(_gBody) >= 0 ? `自定身宫·${_gBody}` : '太阴落宫(果老)');
 	lines.push(`宿度制：${_su28Name}；身宫法：${_gBodyName}`);
+	if(_snapChart && _snapChart.displayCoord === 'equatorial'){ lines.push(ascRaModeSnapshotLine(_ascRaMode, _snapChart)); }   // 赤仪才读上升赤经;黄仪不加行 = 零回归
 	lines.push(`命主取法：${_lmName}；行运法：${_mlName}`);
 	return lines;
 }

@@ -39,6 +39,13 @@ export function formatDateLikeDateTime(dateText, ad) {
   return ymd ? `${ymd.year}-${ymd.month}-${ymd.day}` : `${dateText ?? ''}`;
 }
 
+/** DateTime.format('HH:mm:ss') 同形：'HH:mm' 补 ':00'，'HH:mm:ss' 原样；认不出原样返回（不猜）。
+ *  上游 v3.14.0 起六壬 / 金口诀的起课参数取 format('HH:mm:ss')（此前 'HH:mm'，把时刻降到分钟）。 */
+export function formatTimeLikeDateTime(timeText) {
+  const text = `${timeText ?? ''}`.trim();
+  return /^\d{2}:\d{2}$/.test(text) ? `${text}:00` : text;
+}
+
 function buildFormatter(dateText, timeText, ad) {
   const { year, month, day } = dateTimeYmd(dateText, ad);
   const [hour, minute, second] = timeText.split(':');

@@ -38,6 +38,24 @@ def _resolved_day_switches(payload: dict[str, Any]) -> dict[str, int]:
     return {key: _day_boundary_switches(payload, (key,)).get(key, default) for key, default in DAY_SWITCH_DEFAULTS.items()}
 
 
+def _warn_asc_ra_mode_inert(label: str, requested: Any, *, effective: Any, east_point: Any, applies: str, why: str) -> None:
+    """上升取法 classic 的两种「给了但没起作用」都说出来（改这个参数结果必须变；不变就得有话）：
+    ① 本盘口径不读上升赤经（宿占八字公式 / 七政黄仪 / 三式外圈黄道）→ 实际按 improved；
+    ② 口径对、但后端没带东点黄经（老 runtime 的响应）→ vendored withAscRaMode 回落真赤经，快照行已照实写「实际按真赤经」。"""
+    if requested != "classic":
+        return
+    if effective != "classic":
+        _degrade(
+            "%s ascRaMode=classic has no effect under this setting", label,
+            note=f"{label} ascRaMode=classic 本次不起作用：上升取法只在 {applies} 时生效（{why}），本盘按 improved（真赤经）。",
+        )
+    elif east_point is False:
+        _degrade(
+            "%s ascRaMode=classic but the chart carries no eastPointLon", label,
+            note=f"{label} ascRaMode=classic：本盘的上升点没有带东点黄经（eastPointLon，v3.14.0 起的 runtime 才下发），实际按真赤经。",
+        )
+
+
 def _liureng_remote_payload(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     if tool_name == "liureng_runyear":
         return _only_payload_keys(

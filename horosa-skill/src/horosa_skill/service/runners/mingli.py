@@ -40,6 +40,13 @@ class MingliRunners:
             f"出生：{payload.get('date')} {payload.get('time')}（{payload.get('zone')}）",
             f"地点：{payload.get('pos') or ''}　经度 {payload.get('lon')} 纬度 {payload.get('lat')}".rstrip(),
         ]
+        # 卯时（后端 BirthJieQi.computeTimeZi：太阳出东方地平那一刻的钟面时刻 + 相对 05:00 的时差）。useLocalMao / byLon 两个开关
+        # 改的就是它 —— 此前 runner 只留节气表、把卯时丢了，两个开关给了等于没给。给了任一开关才在 [起盘信息] 写一行（缺省输出
+        # 逐字不变）；数值恒进 data.mao / data.maoBasis。上游 v3.14.0：「按赤经」改成太阳赤经比**东点赤经**（ARMC+90°，同一坐标系），
+        # 落在视太阳时约 06:00:44；此前拿东点黄经比，最多差约 10 分钟。
+        mao = self._jieqi_birth_mao(payload, response)
+        if mao.get("line"):
+            info_lines.append(mao["line"])
         # 括界按民用历墙钟毫秒比（_civil_wall_ms_of_moment，非严格）：旧做法是字符串比较，公元前出生（'-0500-03-21'）
         # 对后端回的 '-500-03-11 …' 恒「小于」→ 括界行整条缺席；年不足 4 位（'999-…' vs '0999-…'）同病。
         birth_ms = _civil_wall_ms_of_moment(f"{payload.get('date')} {payload.get('time')}".strip(), strict=False)
@@ -68,9 +75,37 @@ class MingliRunners:
         ])
         return {
             "jieqi": rows,
+            **{key: mao[key] for key in ("mao", "maoBasis", "maoFallback") if mao.get(key) is not None},
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="jieqi_birth", snapshot_text=snapshot_text),
         }
+
+    @staticmethod
+    def _jieqi_birth_mao(payload: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
+        """/jieqi/birth 回包里的卯时：钟面时刻 mao、回退标记 maoFallback（byRA = 高纬按黄经求上升不收敛、已退到按赤经；
+        none = 按赤经也不收敛、不做卯时校正）。回包的 timeOffset 不带出：它是后端把「05:00 − 卯时」的儒略日差再套一次
+        Datetime.fromJD 得到的数（−68928 一类），不是这段时差的秒数（见备忘「只报上游」）；要差值看 timeOffsetJDN。口径两键：
+        useLocalMao 1 = 取出生当日的卯时 / 0 = 取当年春分日的（BirthJieQi.computeLocal / computeSpring）；
+        byLon 1 = 太阳黄经对上升黄经 / 0 = 太阳赤经对东点赤经（computeTimeZiByLon / ByRA）。"""
+        text = f"{response.get('mao') or ''}".strip() if isinstance(response, dict) else ""
+        if not text:
+            return {}
+        truthy = (1, True, "1", "true")
+        local, by_lon = payload.get("useLocalMao") in truthy, payload.get("byLon") in truthy
+        fallback = f"{response.get('maoFallback') or ''}".strip() or None
+        basis = f"{'出生当日' if local else '当年春分日'} · {'按黄经' if by_lon else '按赤经'}"
+        out: dict[str, Any] = {"mao": text, "maoBasis": basis, "maoFallback": fallback}
+        if fallback == "byRA":
+            note = "按黄经求上升不收敛（高纬），已退到按赤经"
+        elif fallback == "none":
+            note = "卯时求解不收敛，未做卯时校正（按 05:00 基准）"
+        else:
+            note = ""
+        if fallback:
+            _degrade("jieqi_birth mao fallback: %s", fallback, note=f"出生节气窗的卯时：{note}。")
+        if payload.get("useLocalMao") is not None or payload.get("byLon") is not None or fallback:
+            out["line"] = f"卯时：{text}（{basis}{'；' + note if note else ''}）"
+        return out
 
     # ── 八字（F9）──────────────────────────────────────────────────────────────────────────────
     # 上游八字页主路径是**本地** lunar.js 引擎：BaZi.js:782-821 fetchBaziCached（bazi_direct 同形 :757-795）

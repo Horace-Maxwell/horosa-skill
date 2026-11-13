@@ -186,7 +186,12 @@ def test_jieqi_su_section_matches_upstream(case: str) -> None:
     起宫=ASC 时按 ASC 赤经）、按二十八宿分组、宿内度 = 星赤经 − 距星赤经、页面星表缺省 DEFAULT_OBJECTS。
     旧代码是自拟格式（「日期/外盘/盘型」头 + `宫位：House1` + 黄道座内度），与上游零行相同。"""
     fx = FIXTURE["jieqi_su"][case]
-    assert snap.build_jieqi_su_section(fx["chart"], fx["fields"]) == fx["expected"]
+    expected = fx["expected"]
+    if case == "house_start_asc":
+        # 上游 v3.14.0（JieQiChartsMain.js buildJieQiSuSection）：ASC 起盘时段首多一行上升取法（夹具录自 v3.11，其余行逐字未变；
+        # 夹具盘的上升点没有 eastPointLon，缺省档 = 改进）。两档与经典档的值级用例在 tests/test_sync314_cn_a_ascra.py。
+        expected = "上升取法：改进(上升点真赤经,与行星、宫头同一坐标)\n" + expected
+    assert snap.build_jieqi_su_section(fx["chart"], fx["fields"]) == expected
 
 
 @requires_node

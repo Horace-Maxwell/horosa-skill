@@ -1,108 +1,27 @@
-// 宿占快照 builder —— 自上游 components/suzhan/SuZhanMain.js **逐字**抽出（bespoke，derived_from 由
-// contracts/vendor_manifest.json 的 derived_sha256 看守：上游 SuZhanMain.js 一动即红，复核本文件后 --restamp）。
-// 上游这些纯函数与 React 组件同在一个文件里（整份 vendor 会把 antd/JSX 带进来），故只抽快照闭包：
-//   · chartTypeName / chartShapeName / houseStartModeName / signFromLon / resolveHouseStartMode / computeAscSignIndex /
-//     houseFullLabel（SuZhanMain.js:27-112）
-//   · buildHouseSuLines / foldHouseSuLinesToTable / buildSuzhanSnapshotText（SuZhanMain.js:195-352）
-//   · v3.13.0 起上游把 SIMPLE_TOKEN_MAP / splitDegree / isEncodedToken / msg 移进 components/astro/AstroHelper.js
-//     （signDegMin / astroMsgPlainText，函数体逐字同旧）。本仓未整份 vendor AstroHelper.js（现有 sanshi/sanshiAstroHelper.js 是另一份 curated 抽取）→
-//     这四件改自 AstroHelper.js 逐字共抽（行号见下方块注）。
-// 人事十二宫「八字公式起盘」（缺省档）读 chart.nongli.bazi 的时支 —— 只有 Java /chart（ChartController 附农历四柱）
-// 带它；headless 调用方须给 Java /chart 的整份响应（上游页面同源），缺 nongli 时 computeAscSignIndex 回落 ASC 起盘。
-// 函数体逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ../../constants/xxx 等），AstroHelper 两件改为本地共抽。
+
 import { SU28_MODE_LABEL } from '../guolao/guolaoData.js';
+
+
+
+
+
+
+
 import * as AstroText from '../../constants/AstroText.js';
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as SZConst from './SZConst.js';
 import * as Su28Helper from '../su28/Su28Helper.js';
+import { signDegMin, astroMsgPlainText as msg } from './suzhanAstroHelper.js';
 
-// ── components/astro/AstroHelper.js:185-198 逐字（v3.13.0：上游 SuZhanMain.js 私有 splitDegree 移入 AstroHelper 改名 signDegMin，函数体逐字同旧）──
-// 座内度分:黄经(可负,先补 360)→ [座内整度, 整分](均向下取整);非数 → [0, 0]。
-// 与上面的 splitDegree(把度数拆成度 / 分 / 秒)不是一回事。
-function signDegMin(degree){
-	let d = Number(degree);
-	if(Number.isNaN(d)){
-		return [0, 0];
-	}
-	if(d < 0){
-		d += 360;
-	}
-	const deg = Math.floor(d % 30);
-	const min = Math.floor(((d % 30) - deg) * 60);
-	return [deg, min];
-}
 
-// ── AstroHelper.js:214-281 逐字（v3.13.0：上游 SuZhanMain.js 私有 SIMPLE_TOKEN_MAP / isEncodedToken / msg 移入 AstroHelper，msg → astroMsgPlainText，函数体逐字同旧）──
-// 字形字体的单字符码 → 中文名(AstroMsg 取到的是字形码时用,免得字形码混进纯文本)。
-const SIMPLE_TOKEN_MAP = {
-	A: '日',
-	B: '月',
-	C: '水',
-	D: '金',
-	E: '火',
-	F: '木',
-	G: '土',
-	H: '天王',
-	I: '海王',
-	J: '冥王',
-	K: '北交',
-	L: '南交',
-	p: '福点',
-	v: '暗月',
-	w: '紫气',
-	y: '凯龙',
-	z: '月亮朔望点',
-	Y: '月亮平均远地点',
-	$: '月亮平均近地点',
-	a: '白羊',
-	b: '金牛',
-	c: '双子',
-	d: '巨蟹',
-	e: '狮子',
-	f: '处女',
-	g: '天秤',
-	h: '天蝎',
-	i: '射手',
-	j: '摩羯',
-	k: '水瓶',
-	l: '双鱼',
-	0: '上升',
-	1: '天顶',
-	2: '天底',
-	3: '下降',
-	4: '谷神星',
-	5: '智神星',
-	6: '婚神星',
-	7: '灶神星',
-	8: '人龙星',
-};
 
-function isEncodedToken(text){
-	return /^[A-Za-z0-9${}]$/.test((text || '').trim());
-}
 
-// 同 astroMsgText,但 AstroMsg 取到单字符字形码时改出中文名(字形码表里没有就原样输出 id)。
-function astroMsgPlainText(id){
-	if(id === undefined || id === null){
-		return '';
-	}
-	if(AstroText.AstroTxtMsg[id]){
-		return AstroText.AstroTxtMsg[id];
-	}
-	if(AstroText.AstroMsg[id]){
-		const val = AstroText.AstroMsg[id];
-		if(!isEncodedToken(val)){
-			return `${val}`;
-		}
-	}
-	const one = `${id}`.trim();
-	if(one.length === 1 && SIMPLE_TOKEN_MAP[one]){
-		return SIMPLE_TOKEN_MAP[one];
-	}
-	return `${id}`;
-}
-// 上游 SuZhanMain.js:15 `import { signDegMin, astroMsgPlainText as msg } from '../astro/AstroHelper'` 的别名。
-const msg = astroMsgPlainText;
+
+
+// 最小尺寸是屏幕可读意图(物理 px),壳缩放 z 下按 1/z 折算成布局 px;z=1 恒等。
+
+import { ASC_RA_MODE_IMPROVED, ASC_RA_MODE_CLASSIC, loadSuzhanAscRaMode, withAscRaModeRoot, ascRaModeSnapshotLine } from '../utils/ascRaMode.js';
+
 
 function chartTypeName(type){
 	const map = {};
@@ -143,6 +62,15 @@ function resolveHouseStartMode(fields){
 			? SZConst.SZHouseStart_ASC : SZConst.SZHouseStart_Bazi;
 	}
 	return SZConst.SZHouseStart_Bazi;
+}
+
+// 上升取法(改进 = 真赤经 / 经典 = 东点黄经)只在「ASC 起盘」时起作用;八字公式起盘不读上升赤经定命宫 → 恒按改进。
+// fields.ascRaMode(挂载齿轮写进记录、无头重算带进来)优先,否则取宿占页的保存值(节气页内嵌宿盘同此)。
+export function suzhanAscRaModeOf(fields){
+	if(resolveHouseStartMode(fields) !== SZConst.SZHouseStart_ASC){ return ASC_RA_MODE_IMPROVED; }
+	const f = fields && fields.ascRaMode ? fields.ascRaMode.value : undefined;
+	if(f === ASC_RA_MODE_IMPROVED || f === ASC_RA_MODE_CLASSIC){ return f; }
+	return loadSuzhanAscRaMode();
 }
 
 function computeAscSignIndex(rootObj, chart, fields){
@@ -189,6 +117,87 @@ function houseFullLabel(house, idx, ascSignIndex){
 		: '';
 	const signName = AstroText.AstroMsgCN[sign] || msg(sign);
 	return `${zi}—${area}—${signName}座—${houseName}`;
+}
+
+export function buildHouseObjectLines(chart){
+	const lines = [];
+	const houses = chart.houses || [];
+	const objects = chart.objects || [];
+	if(houses.length === 0){
+		return lines;
+	}
+	lines.push('| 宫位 | 星体 | 度 | 座 | 分 | 宿 |');
+	lines.push('| --- | --- | --- | --- | --- | --- |');
+	houses.forEach((house)=>{
+		const inHouse = objects.filter((obj)=>obj.house === house.id);
+		if(inHouse.length === 0){
+			lines.push(`| ${msg(house.id)} | 无 | — | — | — | — |`);
+			return;
+		}
+		inHouse.forEach((obj, k)=>{
+			const sd = signDegMin(obj.signlon);
+			lines.push(`| ${k === 0 ? msg(house.id) : '—'} | ${msg(obj.id)} | ${sd[0]} | ${msg(obj.sign)} | ${sd[1]} | ${obj.su28 || '—'} |`);
+		});
+	});
+	return lines;
+}
+
+function buildSu28ObjectLines(chart, planetDisplay){
+	const lines = [];
+	const suHouses = chart && chart.fixedStarSu28 ? chart.fixedStarSu28 : [];
+	const objects = chart && chart.objects ? chart.objects : [];
+	const suMap = new Map();
+	suHouses.forEach((su)=>{
+		suMap.set(su.name, su);
+	});
+
+	let visibleSet = null;
+	if(planetDisplay && planetDisplay.length){
+		visibleSet = new Set(planetDisplay);
+	}
+
+	suHouses.forEach((su)=>{
+		lines.push(`${su.name}`);
+		let inSu = objects.filter((obj)=>{
+			if(obj.su28 !== su.name){
+				return false;
+			}
+			if(visibleSet){
+				return visibleSet.has(obj.id);
+			}
+			return AstroConst.isTraditionPlanet(obj.id);
+		});
+		inSu = inSu.sort((a, b)=>{
+			// 环形序须对称全序(同文件 buildHouseSuLines 同款):跨 0°RA 两向都判,
+			// 旧版只判一侧 → 非对称比较器,Array.sort 行为未定义,宿内列序随实现漂移。
+			if(a.ra > 300 && b.ra < 30){
+				return -1;
+			}
+			if(b.ra > 300 && a.ra < 30){
+				return 1;
+			}
+			return a.ra - b.ra;
+		});
+		if(inSu.length === 0){
+			lines.push('星体：无');
+			lines.push('');
+			return;
+		}
+		inSu.forEach((obj)=>{
+			let radeg = Number(obj.ra) - Number(su.ra);
+			if(Number.isNaN(radeg)){
+				radeg = Number(obj.signlon);
+			}
+			if(radeg < 0){
+				radeg += 360;
+			}
+			const sd = signDegMin(radeg);
+			lines.push(`星体：${msg(obj.id)} ${sd[0]}˚${obj.su28}${sd[1]}分`);
+		});
+		lines.push('');
+	});
+
+	return lines;
 }
 
 function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
@@ -278,7 +287,7 @@ function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
 	return lines;
 }
 
-// [v2 排版] 宫宿三行组(宫位：/二十八宿：/星曜：×12 宫)折叠成 GFM 表行(经归一器直通、docx/PDF 渲染真表)。
+// 宫宿三行组(宫位：/二十八宿：/星曜：×12 宫)折叠成 GFM 表行(经归一器直通、docx/PDF 渲染真表)。
 // 单一真值仍是 buildHouseSuLines(UI「宫宿」tab 与本表同源共用,故不动原函数,只做排版折叠):
 // 单元格值=原行全角冒号后文本逐字搬运(一宫多宿/多曜以「、」并列;空宫沿用原「无」),数值零变更。
 function foldHouseSuLinesToTable(suLines){
@@ -312,8 +321,11 @@ function foldHouseSuLinesToTable(suLines){
 	return out;
 }
 
-export function buildSuzhanSnapshotText(chartObj, fields, planetDisplay){
+export function buildSuzhanSnapshotText(rawChartObj, fields, planetDisplay){
 	const lines = [];
+	// 上升取法换在盘数据这一层(只换上升点的 ra):宫位起宫、宫宿表与盘面同一份
+	const ascRaMode = suzhanAscRaModeOf(fields);
+	const chartObj = withAscRaModeRoot(rawChartObj, ascRaMode);
 	const chart = chartObj && chartObj.chart ? chartObj.chart : {};
 
 	lines.push('[起盘信息]');
@@ -338,6 +350,9 @@ export function buildSuzhanSnapshotText(chartObj, fields, planetDisplay){
 	if(fields && fields.houseStartMode){
 		lines.push(`人事十二宫起盘：${houseStartModeName(fields.houseStartMode.value)}`);
 	}
+	if(resolveHouseStartMode(fields) === SZConst.SZHouseStart_ASC){
+		lines.push(ascRaModeSnapshotLine(ascRaMode, chart));
+	}
 
 	lines.push('');
 	lines.push('[宿盘宫位与二十八宿星曜]');
@@ -346,4 +361,7 @@ export function buildSuzhanSnapshotText(chartObj, fields, planetDisplay){
 	return lines.join('\n');
 }
 
-export { msg, signDegMin, computeAscSignIndex, houseFullLabel, buildHouseSuLines, foldHouseSuLinesToTable };
+// [MU parity] 宿盘遁甲外盘曾把薄快照(仅 [起盘信息]+[九宫与宫内星体])写进共享奇门模块槽,
+// latest-wins 覆盖真奇门(DunJia)快照 → 奇门导出吐错内容+丢真奇门 17 段;且 [九宫与宫内星体] 是奇门
+// 旧段名(真奇门现产 [九宫方盘]/[旺相休囚死·月令能量]),不在奇门 preset。已删该跨模块写入与其专用 builder。
+// 遁甲外盘型已在 buildSuzhanSnapshotText 的 [起盘信息] 以「外盘：遁甲外盘」标注,足够 AI 识别。

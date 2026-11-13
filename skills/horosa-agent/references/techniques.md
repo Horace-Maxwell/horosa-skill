@@ -42,10 +42,10 @@ sections and say no period matched — that is not a missing section.
 | --- | --- |
 | 八字 | `bazi_birth` (chart), `bazi_direct` (大运流年). Both need gender. `tianyiSchool` `xieji` default / `ziping`; `southMonth` for southern births. `bazi_inverse {"pillars": ["甲子", "丙寅", "戊辰", "庚申"], "fromYear": …, "count": 1–10}` returns candidate birth times (they repeat every 60 years: the user picks). |
 | 紫微斗数 | `ziwei_birth` (22 传本 keys + `sihuaSchool`; `period`), `ziwei_rules` (rules library). |
-| 七政四余 | `guolao_chart` (`guolaoLifeMode`, `guolaoBodyMode`, `planetaryHourMethod`, `moiraTransitDate`; 宿度制 `doubingSu28`). [相位] here is 七政 aspects (會 / 衝 / 刑 / 合 / 半合), not Western ones. [虚实] / [本命化曜] / [流年流曜] come from the Java rules layer and are absent (with a warning) when it is down. |
+| 七政四余 | `guolao_chart` (`guolaoLifeMode`, `guolaoBodyMode`, `planetaryHourMethod`, `moiraTransitDate`; 宿度制 `doubingSu28`). [相位] here is 七政 aspects (會 / 衝 / 刑 / 合 / 半合), not Western ones. [虚实] / [本命化曜] / [流年流曜] come from the Java rules layer and are absent (with a warning) when it is down. `ascRaMode` (`improved` true RA, default / `classic` east-point longitude) moves the 上升 on equatorial 宿度制 only (`doubingSu28` 0/1/5/7/8). |
 | 河洛 / 邵子参评数 / 一掌经 | `heluo`, `canping`, `yizhangjing` (all need gender; AD 1–9999). |
-| 宿占 | `suzhan` (Western classical keys have no effect, as in 星阙). |
-| Calendar | `huangli` (one day), `tongshu` (needs `school`; the five schools can disagree on the same day; keys such as `sanyuanliexiu`, `sanyuan`), `calendar_month`, `nongli_time`, `jieqi_year`, `jieqi_birth`. |
+| 宿占 | `suzhan` (`houseStartMode` 0 八字公式 default / 1 ASC; with ASC, `ascRaMode` `improved` default / `classic` picks which ascendant RA sets the 命宫 — the snapshot states it. Western classical keys have no effect, as in 星阙). |
+| Calendar | `huangli` (one day), `tongshu` (needs `school`; the five schools can disagree on the same day; keys such as `sanyuanliexiu`, `sanyuan`), `calendar_month`, `nongli_time`, `jieqi_year` (its [X宿盘] sections take `houseStartMode` / `ascRaMode` like `suzhan`), `jieqi_birth` (`useLocalMao` 1 = 卯时 of the birth day instead of the spring-equinox day, `byLon` 1 = solve by ecliptic longitude instead of right ascension; give either and [起盘信息] states the 卯时). |
 | 卦义 | `gua_desc` (hexagram text by name), `gua_meiyi` (梅花 reading by trigrams). |
 | Casting | `qimen`, `liureng_gods`, `taiyi`, `jinkou` (`options.timeBasis` `direct` default / `trueSolar`), `sanshiunited`, `sixyao`, `xiaoliuren`, `feigong`, `xiaochengtu`, `guice`, `lingqi`, `tongshefa`, `geomancy`, `tarot` — see [`chinese-methods.md`](./chinese-methods.md). |
 | 神数 | `zhengchuan` + the 14 神数 tools — see [`chinese-methods.md`](./chinese-methods.md). |

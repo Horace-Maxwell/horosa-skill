@@ -24,6 +24,7 @@ import {
 } from '../vendor/sanshi/SanShiUnitedMain.js';
 import { buildLiuRengReferenceBundle, buildLiuRengSnapshotText } from '../vendor/liureng/LiuRengMain.js';
 import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
+import { ASC_RA_MODE_IMPROVED, normalizeAscRaMode, chartHasEastPoint } from '../vendor/utils/ascRaMode.js';
 import * as LRConst from '../vendor/liureng/LRConst.js';
 import { makeFields } from '../shared/fields.js';
 
@@ -64,8 +65,9 @@ function toInt01(value, fallback) {
 // 日界两键 = 全局出厂 23 点换日 / 晚子时用次日（dayBoundary.js defaultAfter23NewDay / defaultLateZiHourUseNextDay）。
 function upstreamDefaultOptions() {
   const defs = SANSHI_PAGE_SETTINGS.defaults();
-  delete defs.outerCoord;   // 外圈两项是组件 state，不在 options 里（构造器 :2014 摘出）
+  delete defs.outerCoord;   // 外圈三项是组件 state，不在 options 里（构造器 savedOnly 摘出 outerCoord / showWeakSolid / ascRaMode）
   delete defs.showWeakSolid;
+  delete defs.ascRaMode;    // v3.14.0 新增的页面设置键，同为组件 state（上游 `const { outerCoord: _oc, showWeakSolid: _sw, ascRaMode: _ar, ...factoryOptionKeys }`）
   return {
     mode: 'shi',
     sex: 1,
@@ -133,6 +135,23 @@ export function resolveSanshiOptions(input) {
   return { ok: true, options };
 }
 
+// 外圈两键（payload.outerCoord / payload.ascRaMode）：缺省 = 上游出厂（SANSHI_PAGE_SETTINGS.defaults()：ecliptic / improved）。
+export function resolveSanshiOuter(input) {
+  const src = input && typeof input === 'object' ? input : {};
+  const schema = SANSHI_PAGE_SETTINGS.schema;
+  const defs = SANSHI_PAGE_SETTINGS.defaults();
+  const pick = (key) => {
+    const raw = src[key];
+    if (raw === undefined || raw === null || raw === '') return { ok: true, value: defs[key] };
+    return validateSettingValue(schema[key], raw).ok ? { ok: true, value: raw } : invalid(key, raw, schema[key].oneOf);
+  };
+  const coord = pick('outerCoord');
+  if (!coord.ok) return coord;
+  const asc = pick('ascRaMode');
+  if (!asc.ok) return asc;
+  return { ok: true, outerCoord: coord.value, ascRaMode: normalizeAscRaMode(asc.value) };
+}
+
 function branchOf(value) {
   const match = `${value || ''}`.match(/[子丑寅卯辰巳午未申酉戌亥]/);
   return match ? match[0] : '';
@@ -145,6 +164,12 @@ export function runSanshiUnited(payload) {
     return { tool: 'sanshiunited', data: { ok: false, error: resolved.error }, snapshot_text: '' };
   }
   const options = resolved.options;
+  // 外圈分宫坐标 + 赤道分宫的上升取法（上游组件 state.outerCoord / state.ascRaMode，页面设置 SANSHI_PAGE_SETTINGS 同名两键）。
+  // 词表锚到 vendored schema；认不出 → 结构化报错（上游页面是下拉，不会出现表外值）。
+  const outer = resolveSanshiOuter(input);
+  if (!outer.ok) {
+    return { tool: 'sanshiunited', data: { ok: false, error: outer.error }, snapshot_text: '' };
+  }
   const nongli = input.nongli && typeof input.nongli === 'object' ? input.nongli : null;
   const dunjia = input.dunjia && typeof input.dunjia === 'object' ? input.dunjia : null;
   const taiyi = input.taiyi && typeof input.taiyi === 'object' ? input.taiyi : null;
@@ -236,8 +261,9 @@ export function runSanshiUnited(payload) {
   } catch (error) {
     warnings.push(`三式合一六壬断卦层构建失败（十二盘式…七政 等断卦段缺席）：${error && error.message ? error.message : error}`);
   }
-  // :3830-3837 外圈：出厂黄道分宫（SANSHI_PAGE_SETTINGS.outerCoord def 'ecliptic'）。
-  const outerData = buildOuterData(astroChart, 'ecliptic');
+  // 外圈（上游 :3849-3851 `buildOuterData(astroChart, this.state.outerCoord, this.state.ascRaMode)`）：出厂黄道分宫；
+  // 赤道分宫按赤经落支，上升点按 ascRaMode 取真赤经（改进）或东点黄经（经典），第 1 宫那一支写明上升取法。
+  const outerData = buildOuterData(astroChart, outer.outerCoord, outer.ascRaMode);
   const ziweiSihua = input.ziweiSihua && typeof input.ziweiSihua === 'object' && input.ziweiSihua.chart
     ? {
       chart: input.ziweiSihua.chart,
@@ -279,6 +305,12 @@ export function runSanshiUnited(payload) {
     data: {
       ok: true,
       options,
+      // 外圈实际口径：黄道分宫不读上升赤经 → ascRaMode 恒 improved；经典档但本盘没带东点黄经 = 回落真赤经（快照行照实写）。
+      outer: {
+        outerCoord: outer.outerCoord,
+        ascRaMode: outer.outerCoord === 'equatorial' ? outer.ascRaMode : ASC_RA_MODE_IMPROVED,
+        eastPointAvailable: chartHasEastPoint(astroChart),
+      },
       liureng: {
         ...liureng,
         layout: { ...lrLayout, guirengType },

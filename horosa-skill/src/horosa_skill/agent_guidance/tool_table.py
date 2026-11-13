@@ -108,6 +108,8 @@ _SANSHI_OPTIONS_KEYS: dict[str, str] = {
         "+ zhanCategory；castMethod 锁 zheng（同上游），timeAlg 用顶层共享值，其余键（wuxing 等上游三式没有的）报错。"
         "六壬层不另起盘：占日/占时取奇门盘干支（随顶层 timeAlg），月将/昼夜取星盘（顶层 hsys 缺省 1、zodiacal 缺省 0，"
         "同上游共享字段）；gender 0/1 同时作用于奇门/太乙/六壬层（缺省男）。快照正文 = 上游 buildSanShiUnitedSnapshotText（段头【】）。"
+        "顶层 outerCoord 外圈分宫坐标：ecliptic 黄道(缺省)/equatorial 赤道（【十二宫详细】的宫位行与星盘行按赤经落支、度数标「（赤经）」）；"
+        "顶层 ascRaMode improved(缺省)/classic 只在 outerCoord=equatorial 时生效（第 1 宫那一支写明上升取法）。"
     ),
 }
 
@@ -1427,7 +1429,8 @@ _MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
     },
     "suzhan": {
         "doubingSu28": "0 荀爽距星（缺省）| 1 斗柄定房法 | 2 回归今宿 | 3 回归古制开禧 | 4 恒星制 | 5 恒星制·现代天赤 | 6 授时历古法 | 7 赤道回归(元明) | 8 赤道回归(实时)",
-        "houseStartMode": "0 八字公式起盘（缺省，读 Java /chart 农历时支）| 1 ASC 起盘",
+        "houseStartMode": "0 八字公式起盘（缺省，读 Java /chart 农历时支）| 1 ASC 起盘（此档下 ascRaMode 生效：[起盘信息] 多一行「上升取法：…」，"
+        "命宫与「上升」所落宿度随档位；data.ascRaMode = 实际生效档）",
         "nongliTimeAlg": "0 真太阳时（缺省）| 1 直接时间 | 3 平太阳时（只作用于八字公式所读的农历时支）",
         "szchart/szshape": "外盘 0–7 / 盘型 0 圆 1 方：只进 [起盘信息] 标签行（缺省不出该行，同星阙）",
         "hsys": "缺省 1（星阙页面缺省宫制）",
@@ -1437,6 +1440,7 @@ _MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
         "doubingSu28": "0–8（缺省 0；同 suzhan）",
         "siderealAyanamsa": "zodiacal=1 时生效：逐节气 /chart 重排分至盘（Python /jieqi/year 不读此键）",
         "after23NewDay": "不适用：[二十四节气] 四柱由 Java 以 after23NewDay=false 硬编码起算（上游同）",
+        "houseStartMode": "[X宿盘] 人事十二宫起法：0 八字公式（缺省；分至盘无农历时支 → 按上升赤经起，上游同一回退）| 1 ASC 起盘（段首写明上升取法，ascRaMode 在此档生效）",
     },
     "nongli_time": {
         "timeAlg": "0 真太阳时（缺省）| 1 直接时间（/nongli/time 只认这两档，其余夹回 0）",

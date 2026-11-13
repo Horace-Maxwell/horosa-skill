@@ -35,6 +35,7 @@ from horosa_skill.service.options_cn import (
     _raise_js_option_error,
     _resolved_day_switches,
     _sanshi_liureng_options,
+    _warn_asc_ra_mode_inert,
 )
 
 
@@ -657,6 +658,10 @@ class SanshiRunners:
                 "ziweiSihua": ziwei_sihua,
                 "liurengYue": payload.get("liureng_yue"),
                 "liurengIsDiurnal": payload.get("liureng_isDiurnal"),
+                # 外圈分宫坐标 + 赤道分宫的上升取法（上游页面设置 SANSHI_PAGE_SETTINGS.outerCoord / ascRaMode，v3.14.0 加后者；
+                # 缺省 ecliptic / improved）。JS 按 vendored schema 校验并交给 buildOuterData(chart, coord, ascRaMode)。
+                "outerCoord": payload.get("outerCoord"),
+                "ascRaMode": payload.get("ascRaMode"),
             },
         )
         data = js_result.get("data") if isinstance(js_result.get("data"), dict) else {}
@@ -675,6 +680,12 @@ class SanshiRunners:
             )
         for note in data.get("warnings") or []:
             sub_warnings.append(str(note))
+        outer = data.get("outer") if isinstance(data.get("outer"), dict) else {}
+        # ascRaMode=classic「给了但没起作用」说出来（外圈黄道分宫不读上升赤经 / 本盘没带东点黄经）。
+        _warn_asc_ra_mode_inert(
+            "三式合一", payload.get("ascRaMode"), effective=outer.get("ascRaMode"), east_point=outer.get("eastPointAvailable"),
+            applies="outerCoord=equatorial（外圈赤道分宫）", why="黄道分宫不读上升赤经（上游 buildOuterData 同）",
+        )
         subresults = {
             "qimen": _build_compact_subresult_contract(qimen_result),
             "taiyi": _build_compact_subresult_contract(taiyi_result),
@@ -683,6 +694,8 @@ class SanshiRunners:
             "qimen": qimen_result.data.get("pan", {}),
             "taiyi": taiyi_pan or {},
             "liureng": data.get("liureng") or {},
+            # 外圈实际口径 {outerCoord, ascRaMode, eastPointAvailable}（缺省 ecliptic / improved）。
+            "outer": outer,
             "subresults": subresults,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="sanshiunited", snapshot_text=snapshot_text),

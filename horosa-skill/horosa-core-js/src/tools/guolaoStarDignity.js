@@ -5,6 +5,7 @@ import {
   starMotionState as glStarMotion,
   starCombust as glStarCombust,
 } from '../vendor/guolao/guolaoData.js';
+import { applyGuolaoAscRaMode } from '../vendor/guolao/guolaoSnapshotSections.js';
 
 /**
  * 七政四余 [星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）] 段。
@@ -68,8 +69,10 @@ function buildStarDignityMotionSection(result, fields){
 
 export function runGuolaoStarDignity(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
-  const result = source.chart && typeof source.chart === 'object' ? source.chart : source;
+  const raw = source.chart && typeof source.chart === 'object' ? source.chart : source;
   try {
+    // v3.14.0 赤仪上升取法：「升」行读上升赤经 → 与其余各段同读换过上升点的盘（上游 _buildGuolaoSnapshotTextV2Core 开头一次换）。
+    const { result } = applyGuolaoAscRaMode(raw, source.fields || {});
     const body = buildStarDignityMotionSection(result, source.fields || {}) || '';
     if (!body) {
       return { text: '', error: { code: 'empty_star_dignity', message: '星曜庙旺/动态段为空（盘里没有可判的星点）。' } };

@@ -485,6 +485,9 @@ class ToolsAPI:
             remote_input = (
                 _india_chart_remote_payload(call.input_normalized) if tool_name == "india_chart" else call.input_normalized
             )
+            if tool_name == "jieqi_year":
+                # 宿盘段的两个前端设置不进后端请求（enrich._JIEQI_SNAPSHOT_ONLY_KEYS；快照 builder 从 input_normalized 读）。
+                remote_input = {k: v for k, v in remote_input.items() if k not in self._JIEQI_SNAPSHOT_ONLY_KEYS}
             response_data = self._call_remote(definition.endpoint, remote_input)
             response_data = self._attach_predictive_chart_context(tool_name, call.input_normalized, response_data)
         input_normalized = call.input_normalized

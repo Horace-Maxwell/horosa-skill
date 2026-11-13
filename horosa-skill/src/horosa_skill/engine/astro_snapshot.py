@@ -1802,18 +1802,94 @@ def _jq_ra_cmp(a: dict[str, Any], b: dict[str, Any]) -> int:
     return -1 if diff < 0 else 1
 
 
+# ── 上升取法两档（上游 v3.14.0 utils/ascRaMode.js）的 Python 移植：节气盘 [X宿盘] 是 Python 端口（上面），换上升点也得在这一侧。
+# 逐函数对照 vendored horosa-core-js/src/vendor/utils/ascRaMode.js；tests/test_sync314_cn_a_ascra.py 拿同一批盘对 vendored JS 做差分。
+ASC_RA_MODE_IMPROVED = "improved"
+ASC_RA_MODE_CLASSIC = "classic"
+
+
+def normalize_asc_ra_mode(value: Any) -> str:
+    """ascRaMode.js normalizeAscRaMode：只有 'classic' 是经典，其余一律改进。"""
+    return ASC_RA_MODE_CLASSIC if value == ASC_RA_MODE_CLASSIC else ASC_RA_MODE_IMPROVED
+
+
+def _asc_finite_num(value: Any) -> float | None:
+    """ascRaMode.js finiteNum：undefined / null / '' → null；Number(v) 非有限 → null。"""
+    if value is None or value is _UNDEFINED or value == "":
+        return None
+    num = _js_number(value)
+    return num if math.isfinite(num) else None
+
+
+def chart_has_east_point(chart: Any) -> bool:
+    """ascRaMode.js chartHasEastPoint：本盘上升点带不带东点黄经（老响应没有 → 经典档实际回落真赤经）。"""
+    objects = _as_list(chart.get("objects")) if isinstance(chart, dict) else []
+    asc = next((o for o in objects if isinstance(o, dict) and o.get("id") == "Asc"), None)
+    return asc is not None and _asc_finite_num(asc.get("eastPointLon")) is not None
+
+
+def with_asc_ra_mode(chart: Any, mode: Any) -> Any:
+    """ascRaMode.js withAscRaMode：经典档返回只把上升点 ra 换成东点黄经的浅拷贝（objects 换新列表、上升点换新对象、
+    拿掉 objectMap 懒缓存）；改进档 / 没有 eastPointLon / 两值相同 → 原样返回同一个对象。不改入参。"""
+    if not isinstance(chart, dict) or normalize_asc_ra_mode(mode) != ASC_RA_MODE_CLASSIC:
+        return chart
+    objects = chart.get("objects") if isinstance(chart.get("objects"), list) else None
+    idx = next((i for i, o in enumerate(objects or []) if isinstance(o, dict) and o.get("id") == "Asc"), -1)
+    if idx < 0:
+        return chart
+    asc = objects[idx]
+    east = _asc_finite_num(asc.get("eastPointLon"))
+    if east is None or east == _asc_finite_num(asc.get("ra")):
+        return chart
+    next_objects = list(objects)
+    # JS `{ ...asc, ra: east }`：east 是 Number(eastPointLon)（数字串也成数）。
+    next_objects[idx] = {**asc, "ra": east}
+    return {**{k: v for k, v in chart.items() if k != "objectMap"}, "objects": next_objects}
+
+
+def with_asc_ra_mode_root(root: Any, mode: Any) -> Any:
+    """ascRaMode.js withAscRaModeRoot：盘根对象 `{..., chart}` 的同款换法。"""
+    if not isinstance(root, dict) or not root.get("chart") or normalize_asc_ra_mode(mode) != ASC_RA_MODE_CLASSIC:
+        return root
+    chart = with_asc_ra_mode(root["chart"], mode)
+    return root if chart is root["chart"] else {**root, "chart": chart}
+
+
+def asc_ra_mode_snapshot_line(mode: Any, chart: Any = None) -> str:
+    """ascRaMode.js ascRaModeSnapshotLine：快照里写明用的哪一档（经典档但本盘没有旧值时照实写「回落」）。行文逐字。"""
+    if normalize_asc_ra_mode(mode) == ASC_RA_MODE_CLASSIC:
+        fallback = bool(chart) and not chart_has_east_point(chart)
+        return f"上升取法：经典(东点黄经,旧版口径){';本盘未带东点黄经,实际按真赤经' if fallback else ''}"
+    return "上升取法：改进(上升点真赤经,与行星、宫头同一坐标)"
+
+
+def suzhan_asc_ra_mode_of(fields: Any) -> str:
+    """SuZhanMain.js suzhanAscRaModeOf：只在「ASC 起盘」时起作用（八字公式起盘恒改进）；fields.ascRaMode 优先，
+    否则宿占页保存值（headless 无持久化 = 出厂 improved）。节气页内嵌宿盘同此（JieQiChartsMain.js buildJieQiSuSection）。"""
+    if _jq_house_start_mode(fields) != SZ_HOUSE_START_ASC:
+        return ASC_RA_MODE_IMPROVED
+    value = field_value(fields, "ascRaMode")
+    if value in (ASC_RA_MODE_IMPROVED, ASC_RA_MODE_CLASSIC):
+        return value
+    return ASC_RA_MODE_IMPROVED
+
+
 def build_jieqi_su_section(chart_obj: Any, fields: Any, planet_display: Any = DEFAULT_OBJECTS) -> str:
-    """JieQiChartsMain.js:739-821 buildJieQiSuSection：逐宫「宫位：地支—星次—星座座—第N宫」+ 按二十八宿分组的星曜行
+    """JieQiChartsMain.js buildJieQiSuSection（v3.14.0 :746-828）：逐宫「宫位：地支—星次—星座座—第N宫」+ 按二十八宿分组的星曜行
     （宿内度 = 星赤经 − 该宿距星赤经，无距星表回落黄道座内度）。`planet_display` = 页面星表（上游 props.planetDisplay，
-    缺省 DEFAULT_OBJECTS）；传空 → 传统星（isTraditionPlanet）。"""
-    obj = chart_obj if isinstance(chart_obj, dict) else {}
+    缺省 DEFAULT_OBJECTS）；传空 → 传统星（isTraditionPlanet）。
+    v3.14.0：内嵌宿盘的上升取法跟随宿占页设置（只在 ASC 起盘时起作用）——先按档换上升点，ASC 起盘时段首写明档位。"""
+    asc_ra_mode = suzhan_asc_ra_mode_of(fields)
+    obj = with_asc_ra_mode_root(chart_obj if isinstance(chart_obj, dict) else {}, asc_ra_mode)
     chart = obj.get("chart") if isinstance(obj.get("chart"), dict) else {}
     houses = _as_list(chart.get("houses"))
     objects = [o for o in _as_list(chart.get("objects")) if isinstance(o, dict)]
+    lines: list[str] = []
+    if _jq_house_start_mode(fields) == SZ_HOUSE_START_ASC and houses:
+        lines.append(asc_ra_mode_snapshot_line(asc_ra_mode, chart))
     asc_sign_index = jieqi_asc_sign_index(obj, chart, fields)
     visible = set(planet_display) if planet_display else None
     fixed_su = _as_list(chart.get("fixedStarSu28"))
-    lines: list[str] = []
     for idx, house in enumerate(houses):
         lines.append(f"宫位：{_jq_house_full_label(house, idx, asc_sign_index)}")
         house_id = house.get("id") if isinstance(house, dict) else None
@@ -1859,13 +1935,20 @@ def build_jieqi_su_section(chart_obj: Any, fields: Any, planet_display: Any = DE
     return "\n".join(lines).strip()
 
 __all__ = [
+    "ASC_RA_MODE_CLASSIC",
+    "ASC_RA_MODE_IMPROVED",
     "DEFAULT_OBJECTS",
     "SU28_ORDER",
     "SZ_SIGN_AREA",
     "SZ_ZI_SIGN",
     "TRADITION_OBJECTS",
+    "asc_ra_mode_snapshot_line",
     "build_jieqi_su_section",
+    "chart_has_east_point",
     "jieqi_asc_sign_index",
+    "suzhan_asc_ra_mode_of",
+    "with_asc_ra_mode",
+    "with_asc_ra_mode_root",
     "LIST_POINTS",
     "NAK_LORD_CN",
     "PLANET_HOUSE_INFO_NOTE",

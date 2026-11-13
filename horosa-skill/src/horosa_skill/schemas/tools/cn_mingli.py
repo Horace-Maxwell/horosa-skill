@@ -6,15 +6,16 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from horosa_skill.cn_vocab import cn_field_validator
-from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _unadvertised
+from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _AscRaModeKnob, _unadvertised
 
 
 class JieQiBirthInput(BirthInput):
     """出生节气窗：定位出生时刻前后的节气精确时刻（八字起运窗的同源数据）。"""
     hsys: int | None = 0  # 上游 JieQiChartsMain.js:1032 页面初始 hsys 0（节气盘家族与 JieQiYearInput 同）
 
-    useLocalMao: int | None = Field(default=None, description="真太阳时卯时口径开关（0/1，缺省 0，上游同默认）")
-    byLon: int | None = Field(default=None, description="按经度修正开关（0/1，缺省 0，上游同默认）")
+    # 卯时两键（后端 BirthJieQi：computeLocal / computeSpring × computeTimeZiByLon / ByRA）。给了任一键，[起盘信息] 多一行「卯时：…」。
+    useLocalMao: int | None = Field(default=None, description="卯时取哪天：0 当年春分日（缺省）| 1 出生当日")
+    byLon: int | None = Field(default=None, description="卯时求法：0 太阳赤经对东点（缺省）| 1 黄经对上升")
 
 
 class ZiWeiBirthInput(FlexibleModel):
@@ -158,7 +159,20 @@ class BaZiDirectInput(BaZiBirthInput):
     period: dict[str, Any] | None = Field(default=None, description="多运限时段选择 {liunian:[公历年], liuyue:[月序1-12], liuri:[公历日], liushi:[时辰序0-11]}。")
 
 
-class JieQiYearInput(FlexibleModel):
+class JieQiYearInput(FlexibleModel, _AscRaModeKnob):
+    # [X宿盘] 的人事十二宫起法（上游节气页内嵌宿盘跟随 astro 模型的 houseStartMode 与宿占页的上升取法，JieQiChartsMain.js
+    # buildJieQiSuSection）：0 八字公式（缺省；本仓分至盘无农历时支 → 上游同一回退 = 按上升赤经起）| 1 ASC 起盘（段首写明上升取法，
+    # ascRaMode 在此档生效）。声明而不广告（tools/list 预算），说明在 guidance。
+    houseStartMode: int | None = _unadvertised()
+
+    @field_validator("houseStartMode", mode="before")
+    @classmethod
+    def _house_start_vocabulary(cls, value: Any) -> Any:
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import SUZHAN_HOUSE_START
+
+        return parse_with(SUZHAN_HOUSE_START, "houseStartMode", value)
+
     year: int | str
     zone: str
     lat: str

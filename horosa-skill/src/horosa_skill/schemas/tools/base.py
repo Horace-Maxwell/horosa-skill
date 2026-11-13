@@ -314,6 +314,29 @@ class BirthInput(FlexibleModel):
     stopLevelIdx: int | None = None
 
 
+class _AscRaModeKnob(BaseModel):
+    """赤道类盘「上升取法」两档（上游 v3.14.0 utils/ascRaMode.js）：improved 上升点真赤经（缺省）| classic 旧版取的东点黄经。
+    后端四轴赤经 v3.14.0 起是真值，旧值作为上升点的 eastPointLon 单独下发；经典档只把上升点一个对象的 ra 换成它（vendored
+    withAscRaMode）。各技法只在读上升赤经的口径下生效：宿占 / 节气盘宿盘 = ASC 起盘；七政 = 赤仪宿度制；三式合一 = 外圈赤道分宫。
+    声明而不广告（tools/list 预算），说明进 horosa_agent_guidance 的 options_keys。mixin 而不进 BirthInput：同 _ChartDayBoundaryKnobs。"""
+
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"ascRaMode"})
+    ascRaMode: str | None = Field(
+        default=None,
+        description="上升取法：improved 改进·上升点真赤经（缺省）| classic 经典·东点黄经（旧版口径，命宫 / 上升落宿可能换位）。"
+        "只在读上升赤经的口径下生效：宿占与节气盘 [X宿盘] = houseStartMode 1（ASC 起盘）；七政 = 赤仪宿度制（doubingSu28 0/1/5/7/8）；"
+        "三式合一 = outerCoord equatorial。其余口径下给 classic 不改结果并进 warnings；生效时快照写明「上升取法：…」。",
+    )
+
+    @field_validator("ascRaMode", mode="before")
+    @classmethod
+    def _asc_ra_mode_vocabulary(cls, value: Any) -> Any:
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import ASC_RA_MODE
+
+        return parse_with(ASC_RA_MODE, "ascRaMode", value)
+
+
 # [寿命格局] 取主法（上游 AstroLifespan.js:14-18；上游是全局设置 horosa.lifespan.method，skill 按调用传）。
 _LIFESPAN_METHOD_DESC = "[寿命格局]取主法：ptolemy 托勒密（缺省）| alcabitius | dorotheus"
 
