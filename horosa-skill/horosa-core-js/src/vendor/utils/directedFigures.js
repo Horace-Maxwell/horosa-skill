@@ -3,14 +3,16 @@
 // 计算全在后端 astrostudy/directed_figures.py(/astroextra/<接口>),本文件只做口径与排版,不做天文计算。
 import * as AstroConst from '../../constants/AstroConst.js';
 import * as AstroText from '../../constants/AstroText.js';
+import { buildTimeLordText, timeLordRequestFields } from './timeLordTables.js';
 
-export const DIRECTED_FIGURE_KEYS = ['neroman', 'bezzafigure', 'jayprofection', 'michon'];
+export const DIRECTED_FIGURE_KEYS = ['neroman', 'bezzafigure', 'jayprofection', 'michon', 'timelords'];
 
 export const DIRECTED_FIGURES = {
 	neroman: { label: '演进推运', author: 'Néroman', endpoint: '/astroextra/neroman' },
 	bezzafigure: { label: '推运图', author: 'Bezza', endpoint: '/astroextra/bezzafigure' },
 	jayprofection: { label: '周日小限', author: 'Jay', endpoint: '/astroextra/jayprofection' },
 	michon: { label: '双黄道', author: 'Michon', endpoint: '/astroextra/michon' },
+	timelords: { label: '时主轮转', author: '', endpoint: '/astroextra/timelords' },
 };
 
 // 各技法缺省设置(= 后端缺省;页面保存键见 directionPageSettings 的 nerK / nerT0 / nerKeepDec / bezzaOrb / jayFrom / michonOrb / michonSwap / michonEqual)
@@ -88,6 +90,9 @@ export function directedFigureRequestFields(key, opts){
 	if(key === 'michon'){
 		return { orb: num(o.orb, MICHON_DEFAULTS.orb), mzSwap: bool(o.swap) ? 1 : 0, mzEqual: bool(o.equal) ? 1 : 0 };
 	}
+	if(key === 'timelords'){
+		return timeLordRequestFields(o);
+	}
 	return {};
 }
 
@@ -104,6 +109,7 @@ function headLines(r){
 // 结果 → 快照正文(段头登记在 aiExport preset;第一段名 = 技法名)
 export function buildDirectedFigureText(key, r){
 	if(!r || typeof r !== 'object' || r.err){ return ''; }
+	if(key === 'timelords'){ return buildTimeLordText(r); }
 	const lines = [];
 	if(key === 'neroman'){
 		if(!Array.isArray(r.evolved) || !r.evolved.length){ return ''; }

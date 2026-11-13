@@ -7,8 +7,9 @@
 //     → 既有依赖 lunar-javascript（已被 baziLunarLocal/河洛/一掌经 import；非新增 GitHub 库）。
 //
 // 入参 (y,m,d,hour?) 皆公历；返回规范化 day 对象，供老黄历卡片 / 吉日榜 / 日子馆 / AI 快照复用。
-import { Solar } from 'lunar-javascript';
+import { Solar, NineStar } from 'lunar-javascript';
 import { dayCourse, yearGods } from '../fengshui/zeri.js';
+import { dayCenter } from '../fengshui/zibai.js';
 import { flagEnabled } from '../utils/perfFlags.js';
 
 // lunar 各 get*() 有的返回单值、有的返回数组、偶有空串 —— 统一成干净数组。
@@ -21,7 +22,7 @@ function safe(fn, fallback = null) {
 	try { const v = fn(); return v == null ? fallback : v; } catch (e) { return fallback; }
 }
 
-// 九星值日：lunar getDayNineStar() 返回对象（getNumber/getColor/getWuXing/getPosition）。
+// 九星值日：形状沿用 lunar NineStar 对象（getNumber/getColor/getWuXing/getPosition）。
 function normalizeNineStar(ns) {
 	if (!ns) { return null; }
 	const number = safe(()=> ns.getNumber(), '');
@@ -29,6 +30,16 @@ function normalizeNineStar(ns) {
 	const wuxing = safe(()=> ns.getWuXing(), '');
 	const position = safe(()=> ns.getPosition(), '');
 	return { number, color, wuxing, position, name: `${number}${color}${wuxing}`.trim() };
+}
+
+// 九星值日口径 = 本软件日紫白（风水紫白飞星 / 东亚诸术同一函数 zibai.dayCenter）：离冬至 / 夏至最近的甲子换遁，
+// 阳遁一白·七赤·四绿顺行、阴遁九紫·三碧·六白逆行，遇闰在甲午换遁。lunar 的 getDayNineStar 在闰期那 30 日
+// （如 2008-12-20 ~ 2009-01-18、2020-06-20 ~ 07-19、2031-12-20 ~ 2032-01-18）与此不同，曾令黄历与风水同日两说。
+// 只借 lunar 的 NineStar 取数 / 色 / 五行 / 方位的字（与旧版逐字同形，卡片、快照、择日条件的值域都不变）。
+export function dayNineStarOf(y, m, d) {
+	const dc = safe(()=> dayCenter(y, m, d), null);
+	if (!dc || !Number.isFinite(dc.center)) { return null; }
+	return normalizeNineStar(safe(()=> NineStar.fromIndex(dc.center - 1), null));
 }
 
 // 时辰宜忌：getTimes() 返回 13 段（早/晚子时分列），每段自带干支/黄黑道值神/宜忌/冲煞。
@@ -75,7 +86,7 @@ function computeHuangliDay(y, m, d, hour = 12) {
 	let nineStarVal = null; let nineStarDone = false;
 	let timesVal = null; let timesDone = false;
 	const readNineStar = () => {
-		if (!nineStarDone) { nineStarVal = normalizeNineStar(safe(()=> lunarForDetail().getDayNineStar(), null)); nineStarDone = true; }
+		if (!nineStarDone) { nineStarVal = dayNineStarOf(y, m, d); nineStarDone = true; }
 		return nineStarVal;
 	};
 	const readTimes = () => {

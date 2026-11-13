@@ -219,6 +219,47 @@ export function classicalBackendOverridesFromPlain(plain){
 	return classicalBackendOverrides((k) => (plain ? plain[k] : undefined));
 }
 
+// 随盘容许度对(设置 → 容许度设置;逐盘字段,存 astro 模型 fields / 存盘记录,不进全局仓,也不进
+// CLASSICAL_PARAM_SPEC)。主盘 fieldsToParams 一直在发,但各派生盘 / 合盘 / 量化盘 / 卜卦择日世俗壳
+// 各自拼请求时漏带 → 改了容许度只有本命盘的相位表变,别处照旧按默认容许度算。
+// 这里给一个与 classicalBackendOverrides 同纪律的出口(仅非默认才下发,默认态请求体不变):
+//   orbs     = { 星体 id: 度数 } 的非空对象才发(后端 perchart 只认 dict);
+//   orbScale = 有限正数且 ≠ 1 才发。
+// ⚠ 只接「拼请求体」的地方;classicalBackendOverrides 的输出还被当作 AI 口径短语 / 快照签名 /
+// 存档比对的全集用,把这两键塞进那里会让旧快照与存档全部判不一致,所以单开出口。
+export const CHART_ORB_KEYS = ['orbs', 'orbScale'];
+
+export function chartOrbOverrides(getVal){
+	const out = {};
+	let orbs;
+	try{ orbs = getVal('orbs'); }catch(e){ orbs = undefined; }
+	if(orbs && typeof orbs === 'object' && !Array.isArray(orbs) && Object.keys(orbs).length){ out.orbs = orbs; }
+	let raw;
+	try{ raw = getVal('orbScale'); }catch(e){ raw = undefined; }
+	const sc = (raw === undefined || raw === null || raw === '') ? NaN : Number(raw);
+	if(Number.isFinite(sc) && sc > 0 && Math.abs(sc - 1) > 1e-9){ out.orbScale = sc; }
+	return out;
+}
+
+export function chartOrbOverridesFromFields(fields){
+	return chartOrbOverrides((k) => (fields && fields[k] && fields[k].value !== undefined ? fields[k].value : undefined));
+}
+
+export function chartOrbOverridesFromPlain(plain){
+	return chartOrbOverrides((k) => (plain ? plain[k] : undefined));
+}
+
+// 容许度对的稳定签名(键序归一):缓存键 / 去重键 / 「宿主值变没变」比较共用。默认态恒 '{}'。
+export function chartOrbSignature(ov){
+	const o = ov || {};
+	const out = {};
+	if(o.orbs && typeof o.orbs === 'object'){
+		out.orbs = Object.keys(o.orbs).sort().reduce((acc, k) => { acc[k] = o.orbs[k]; return acc; }, {});
+	}
+	if(o.orbScale !== undefined){ out.orbScale = o.orbScale; }
+	return JSON.stringify(out);
+}
+
 // 推运组件 hook 增量 merge({...state.params, ...fresh})的粘滞剔除:
 // send:nonDefault 键改回默认后 fresh 不再携带,但旧 state 里的非默认值会被 merge 永久保留
 // → 请求持续发已废档(返照法拨回「精确回归」后仍按希腊式取盘,真机 fiber 三证)。
@@ -237,7 +278,8 @@ export function pruneStaleClassicalParams(merged, fresh){
 	});
 	// 伴生附表键不在 spec:termsVariant 拨离自定义(4)后 fresh 无此二键,
 	// 12 座死表会随每次推运请求(后端 tv≠4 门控不消费=不错盘,但请求膨胀+缓存键碎片)。
-	['customTermsDay', 'customTermsNight'].forEach((name) => {
+	// 容许度对同理:改回默认后 fresh 不带,旧 state 里的自定义容许度不能粘着继续发。
+	['customTermsDay', 'customTermsNight'].concat(CHART_ORB_KEYS).forEach((name) => {
 		if(f[name] === undefined && merged[name] !== undefined){ delete merged[name]; }
 	});
 	return merged;

@@ -67,7 +67,8 @@ const BANDS_BASE = [
 	{ n: 3, cityEn: 'Alexandria', cityCn: '亚历山大(下埃及)', latStr: '30°22′', lat: 30.37, longestDay: 14 },
 	{ n: 4, cityEn: 'Rhodes', cityCn: '罗德岛', latStr: '36°00′', lat: 36, longestDay: 14.5 },
 	{ n: 5, cityEn: 'Hellespont', cityCn: '赫勒斯滂', latStr: '40°56′', lat: 40.93, longestDay: 15 },
-	{ n: 6, cityEn: 'Borysthenes', cityCn: '博里斯提尼斯(中本都)', latStr: '45°01′', lat: 45.02, longestDay: 15.5 },
+	// 托勒密第 6 带过中本都(黑海中部);博里斯提尼斯河(第聂伯河)河口是第 7 带,不是这一带
+	{ n: 6, cityEn: 'Middle Pontus', cityCn: '中本都', latStr: '45°01′', lat: 45.02, longestDay: 15.5 },
 	{ n: 7, cityEn: 'Mouth of Borysthenes', cityCn: '博里斯提尼斯河口', latStr: '48°32′', lat: 48.53, longestDay: 16 },
 ];
 

@@ -72,7 +72,7 @@ export const ZHISHI_OPTIONS = [
 export const YUEJIA_QIJU_OPTIONS = [
 	{ value: 0, label: '年符头' },
 	{ value: 1, label: '年支' },
-	{ value: 2, label: '逐月换局（一月一局）' },
+	{ value: 2, label: '逐月换局（一月一局）', short: '逐月换局' },
 ];
 
 export const YEAR_GZ_OPTIONS = [
@@ -149,9 +149,10 @@ export function qijuMethodSelectValue(paiPanType, qijuMethod){
 //   上年大雪/芒种/本年大雪各自量距且比较符不一(>=/>/>),与 kinqimen fork 的「至点锚」在节气
 //   间距≠15天的年份差±1天,临界年整段错一节气块——现统一按至点锚判闰(见 buildYinyangdunMap)。
 export const ZHIRUN_LEAP_OPTIONS = [
-	{ value: 9, label: '置闰·超神满9天即闰（默认·主流）' },
-	{ value: 8, label: '置闰·超神满8天即闰（从宽）' },
-	{ value: 10, label: '置闰·超神满10天才闰（从严）' },   // 第三口径:超神须超过 9 天(即≥10)才置闰
+	// short = 下拉闭合时框里显示的短名(字段名已是「置闰天数」,窄栏里全文要折三行);展开的列表里仍是全文
+	{ value: 9, label: '置闰·超神满9天即闰（默认·主流）', short: '满9天即闰（默认）' },
+	{ value: 8, label: '置闰·超神满8天即闰（从宽）', short: '满8天即闰（从宽）' },
+	{ value: 10, label: '置闰·超神满10天才闰（从严）', short: '满10天才闰（从严）' },   // 第三口径:超神须超过 9 天(即≥10)才置闰
 ];
 
 // 暗干五法(通行诸法;默认关=零回归):
@@ -3032,10 +3033,12 @@ export function buildDunJiaSnapshotText(pan){
 	if(overview){
 		const catText = pan.options && pan.options.chartCategory === 'ming' ? '命局（日干＝内心 / 时干＝外在）' : '事局（日干＝实质 / 时干＝表象）';
 		const posShort = (it)=>(it && it.palace ? `${it.palaceName}${LUOSHU_NUM[it.palaceName]}宫·${it.dir}` : '未现');
-		const patShort = (arr)=>(arr && arr.length ? arr.slice(0, 3).map((x)=>`${x.name}(${x.palaceName}${x.palace})`).join('、') + (arr.length > 3 ? ` 等${arr.length}例` : '') : '无');
+		// x.palace 是内部九宫序号,宫号一律走洛书
+		const patTag = (x)=>`${x.name}(${x.palaceName}${LUOSHU_NUM[x.palaceName]}宫)`;
+		const patShort = (arr)=>(arr && arr.length ? arr.slice(0, 3).map(patTag).join('、') + (arr.length > 3 ? ` 等${arr.length}例` : '') : '无');
 		lines.push('[全局速览]');
 		lines.push(`盘类：${catText}`);
-		lines.push(`九遁：${overview.dun.length ? overview.dun.map((d)=>`${d.name}(${d.palaceName}${d.palace})`).join('、') : '无'}`);
+		lines.push(`九遁：${overview.dun.length ? overview.dun.map(patTag).join('、') : '无'}`);
 		lines.push(`三奇得使：${overview.sanQiDeshi ? posShort(overview.sanQiDeshi) : '无'}`);
 		lines.push(`吉格 ${overview.ji.length} 例：${patShort(overview.ji)}`);
 		lines.push(`凶格 ${overview.xiong.length} 例：${patShort(overview.xiong)}`);

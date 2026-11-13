@@ -10,11 +10,14 @@
 
 
 
+
 // headless stub：AstroExtraCommon 是页面公共件；纯逻辑段只在请求型包装 fetchDirectedFigure 里用 unwrapResult / chartParams。
 // skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这条路径不可达——调到即抛明确错误，不留空 stub。
 const headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };
 const unwrapResult = headlessUnreachable('unwrapResult');
 const chartParams = headlessUnreachable('chartParams');
+
+
 
 
 
@@ -45,6 +48,7 @@ import {
 } from '../utils/directedFigures.js';
 
 
+
 const safeHelperLines = (fn, ...args)=>(typeof fn === 'function' ? fn(...args) : []);
 
 // 页面保存值 → 各技法设置(挂载齿轮同名字段,见 techniqueMountSettings)
@@ -54,6 +58,11 @@ export function directedFigureOptsFromSettings(key, sv){
 	if(key === 'bezzafigure'){ return { orb: s.bezzaOrb }; }
 	if(key === 'jayprofection'){ return { from: s.jayFrom }; }
 	if(key === 'michon'){ return { orb: s.michonOrb, swap: s.michonSwap, equal: s.michonEqual }; }
+	if(key === 'timelords'){
+		return { method: s.tlMethod, yearType: s.tlYearType, movingYear: s.tlMovingYear, turnStart: s.tlTurnStart, turnOrder: s.tlTurnOrder, orbMode: s.tlOrbMode,
+			annualDays: s.tlAnnualDays, annualOrder: s.tlAnnualOrder, releaser: s.tlReleaser, variant: s.tlVariant, nineTime: s.tlNineTime, nineReverse: s.tlNineReverse,
+			rateKind: s.tlRateKind, movingStart: s.tlMovingStart, devBasis: s.tlDevBasis, diurnalMode: s.tlDiurnalMode };
+	}
 	return {};
 }
 

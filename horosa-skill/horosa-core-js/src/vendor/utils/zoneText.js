@@ -68,3 +68,34 @@ export function normalizeZone(zone, fallback = '+08:00'){
 	const fb = parseZoneHour(fallback);
 	return formatZoneHour((fb !== null && !Number.isNaN(fb)) ? fb : 8);
 }
+
+// 时区的「显示文本」单一来源:一律「UTC±HH:MM」(与黄历页的写法同形)。只管显示,不进计算。
+// 收小时数(8 / 0.8833333333333333 / '5.75')、±HH[:MM]、UTC±HH[:MM]、UTC±小数小时('UTC+0.9')、东西区写法。
+// 历史盘的地方平时(+00:53)与半点 / 三刻时区换成小时是无限小数,原样拼进界面就是一长串数字;
+// 认不出的原样返回(不替用户编一个时区),空值返回空串。
+export function formatZoneLabel(zone){
+	if(zone === undefined || zone === null){
+		return '';
+	}
+	const text = `${zone}`.trim();
+	if(!text){
+		return '';
+	}
+	let hour = parseZoneHour(text);
+	if(hour === null || Number.isNaN(hour)){
+		const bare = text.replace(/^(?:UTC|GMT)\s*/i, '');
+		const m = bare.match(/^([+-]?)(\d{1,2})(?::(\d{1,2}))(?::(\d{1,2}))?$/);
+		if(m){
+			const sign = m[1] === '-' ? -1 : 1;
+			hour = sign * (parseInt(m[2], 10) + parseInt(m[3], 10) / 60 + parseInt(m[4] || '0', 10) / 3600);
+		}else if(bare !== text || /^[+-]?\d/.test(bare)){
+			const n = Number(bare);
+			hour = Number.isFinite(n) ? n : null;
+		}
+	}
+	if(hour === null || !Number.isFinite(hour)){
+		return text;
+	}
+	const body = formatZoneHour(hour);
+	return `UTC${body === '-00:00' ? '+00:00' : body}`;
+}

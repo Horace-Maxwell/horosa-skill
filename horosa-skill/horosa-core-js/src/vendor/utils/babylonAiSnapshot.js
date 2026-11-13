@@ -13,7 +13,7 @@ import { lonToSignDeg, sexFormat } from '../babylon/units.js';
 import { jupiterSeriesA, saturnSeriesA, marsSeriesA, mercurySeriesA, venusSeriesA, jupiterSeriesB, lunarPhiSeq, lunarBSeq, dayLengthC, cPrime, lunarFSeqA } from '../babylon/mathAstro.js';
 import { GOAL_YEAR, LUNAR_SIX, NOTES, SAROS, HEMEROLOGY, EAE, PERIOD_RELATIONS, DATE_CONSTANTS, BABYLON_SIGNS } from '../divination/data/babylonianData.js';
 import { MONTHS } from '../babylon/calendar.js';
-import { classicalBackendOverridesFromFields } from './classicalChartGlobals.js';
+import { classicalBackendOverridesFromFields, chartOrbOverridesFromFields } from './classicalChartGlobals.js';
 
 
 // 出生 ±183 日窗口的实算历象(朔望/邻近食;/astroextra/ephemeris)。
@@ -69,6 +69,7 @@ export function babylonChartParams(fields){
 		pos: v('pos', ''),
 		// 古典设置单源接入(/chart 全吃;条件发送=默认态字节不变)。
 		...classicalBackendOverridesFromFields(fields),
+		...chartOrbOverridesFromFields(fields),
 	};
 }
 
@@ -278,10 +279,84 @@ export function buildBabylonSnapshotText(bab, opts){
 		});
 	}
 	// 三页签候选段(默认关,导出/挂载段表按需勾选):数理星历(需 o.lons 五星恒星黄经锚)/吉日历/年历预测。
-	[buildBabylonEphemerisSection(bab, o.lons, o), buildBabylonHemerologySection(bab), buildBabylonAlmanacSection(bab)].forEach((sec)=>{
+	[buildBabylonEphemerisSection(bab, o.lons, o), buildBabylonHemerologySection(bab), buildBabylonAlmanacSection(bab), buildBabylonSkySection(o.skyTables)].forEach((sec)=>{
 		if(sec && sec.length){ lines.push(''); lines.push(...sec); }
 	});
 	return lines.join('\n');
+}
+
+// ── 天象实算:七曜所行三道、ziqpu 星钟、目标年取数(后端 /astroextra/babylontables 实算;页面与挂载同一入口) ──
+const SKY_PLANET_CN = { Sun: '日', Moon: '月', Mercury: '水', Venus: '金', Mars: '火', Jupiter: '木', Saturn: '土' };
+const PATH_CN = { Anu: 'Anu 道(中)', Enlil: 'Enlil 道(北)', Ea: 'Ea 道(南)' };
+const fmtDeg = (v)=>{
+	const n = Number(v);
+	if(!Number.isFinite(n)){ return '—'; }
+	const a = Math.abs(n);
+	return `${n < 0 ? '−' : '+'}${Math.floor(a)}°${String(Math.round((a % 1) * 60)).padStart(2, '0')}′`;
+};
+export const beruText = (b)=>(b ? `${b.beru} bēru ${b.us} UŠ(${Math.floor(b.minutes / 60)}h${String(Math.round(b.minutes % 60)).padStart(2, '0')}m)` : '—');
+const PHENOMENON_CN = {
+	inferiorConjunction: '下合(不可见)', superiorConjunction: '上合(不可见)', conjunction: '合日(不可见)', opposition: '冲日',
+	morningStation: '晨留', eveningStation: '夕留', firstStation: '初留', secondStation: '次留',
+	morningFirst: '晨始见', morningLast: '晨末见', eveningFirst: '夕始见', eveningLast: '夕末见',
+};
+export const BABYLON_PHENOMENON_CN = PHENOMENON_CN;
+
+// 后端时刻串 'YYYY-MM-DD HH:MM:SS',公元前带负号('-0501-12-27 14:25:34')。按位置切片会把负号年切坏
+// ('-04-02 00:0' / '-0501-12-27 14:2'),这里按正则拆,年份照原样保留负号。认不出时原样返回。
+const STAMP_RE = /^\s*(-?\d{1,6})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})/;
+const pad2 = (v)=>String(v).padStart(2, '0');
+/** 'YYYY-MM-DD HH:MM'(到分钟;公元前保留负号)。 */
+export function babylonStampMinute(text){
+	const m = STAMP_RE.exec(`${text === undefined || text === null ? '' : text}`);
+	return m ? `${m[1]}-${pad2(m[2])}-${pad2(m[3])} ${pad2(m[4])}:${m[5]}` : `${text || '—'}`;
+}
+/** 'MM-DD HH:MM'(星钟下次过中天离出生不到一天,年份不写)。 */
+export function babylonMonthDayMinute(text){
+	const m = STAMP_RE.exec(`${text === undefined || text === null ? '' : text}`);
+	return m ? `${pad2(m[2])}-${pad2(m[3])} ${pad2(m[4])}:${m[5]}` : `${text || '—'}`;
+}
+
+// 周期现象一颗星的「出生时可见」说明(页面与快照同一句)。
+// 每个会合周期各只有一次始见、一次末见;高纬夏夜天不够黑时会推迟到离日 40° 以外才发生(delayed),仍是那一次。
+// visibleByTwilight:出生前最后一次始见 / 末见就是这样推迟的;twilight:本窗口内推迟的次数。
+export function babylonVisibilityNote(p){
+	if(!p){ return ''; }
+	if(p.polar){ return '纬度超过 65°,只列合、冲、留'; }
+	if(p.visible === null || p.visible === undefined){ return '出生时可见度未算出'; }
+	let text = `出生时${p.visible ? '可见' : '不可见'}(自 ${babylonStampMinute(p.since)}${p.visibleByTwilight ? ';这一次因高纬夏夜天光推迟到离日 40° 以外' : ''})`;
+	const n = Number(p.twilight);
+	if(Number.isFinite(n) && n > 0){ text += `;本窗口有 ${n} 次始见 / 末见因高纬夏夜天光推迟(离日 40° 以外)`; }
+	return text;
+}
+export const BABYLON_SKY_PATH_CN = PATH_CN;
+export const BABYLON_SKY_PLANET_CN = SKY_PLANET_CN;
+
+export function buildBabylonSkySection(sky){
+	if(!sky || !Array.isArray(sky.paths)){ return []; }
+	const out = ['[天象实算]'];
+	out.push(`七曜所行之道(赤纬 ±17° 内为 Anu 道):${sky.paths.map((r)=>`${SKY_PLANET_CN[r.id] || r.id} ${fmtDeg(r.decl)} ${PATH_CN[r.path] || r.path} 距道界 ${Math.abs(Number(r.margin)).toFixed(2)}°`).join(';')}`);
+	const zq = sky.ziqpu && sky.ziqpu.rows;
+	if(Array.isArray(zq) && zq.length){
+		const now = zq.find((r)=>r.state === 'now');
+		const next = zq.find((r)=>r.state === 'next');
+		out.push(`ziqpu 星钟:最近过中天 ${now ? `${now.name}(${now.star})已过 ${beruText(now.ago)}` : '—'};下一颗 ${next ? `${next.name}(${next.star})还有 ${beruText(next.in)},约 ${next.next}` : '—'}`);
+	}
+	const goal = sky.goalYear;
+	if(Array.isArray(goal) && goal.length){
+		out.push(`目标年取数:${goal.map((r)=>`${SKY_PLANET_CN[r.id] || r.id}${r.years ? ` −${r.years} 年` : ' −223 月'}(${`${r.date}`.split(' ')[0]})黄经差 ${Number(r.dl).toFixed(2)}° 距日差 ${Number(r.de).toFixed(2)}°`).join(';')}`);
+	}
+	const ph = sky.phenomena;
+	if(Array.isArray(ph) && ph.length){
+		out.push(`周期现象(出生前后各一个会合周期;高纬夏夜推迟到离日 40° 以外的始见末见照列,标「高纬推迟」):${ph.map((p)=>{
+			const last = (p.events || []).find((e)=>e.state === 'last');
+			const next = (p.events || []).find((e)=>e.state === 'next');
+			const vis = p.polar ? '高纬不算可见度' : babylonVisibilityNote(p);
+			const at = (e)=>(e ? `${PHENOMENON_CN[e.kind] || e.kind}${e.delayed ? '(高纬推迟)' : ''} ${`${e.date}`.split(' ')[0]}` : '—');
+			return `${SKY_PLANET_CN[p.id] || p.id} ${vis},前 ${at(last)},后 ${at(next)}`;
+		}).join(';')}`);
+	}
+	return out;
 }
 
 // 命盘挂载 headless 复算入口(record→fields 已由调用侧 buildFieldObject 完成)

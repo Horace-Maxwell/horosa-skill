@@ -221,7 +221,7 @@ export const LIFE_MASTER_MODE_OPTIONS = [
 	{ value: 'gong', label: '宫主(默认)' }, { value: 'du', label: '度主' }, { value: 'dudegrade', label: '贬宫主专度主' },
 ];
 export const TRUE_SOLAR_TIME_OPTIONS = [
-	{ value: 'true', label: '真太阳时(经度+均时差)' }, { value: 'mean', label: '平太阳时(仅经度)' }, { value: 'off', label: '钟表时' },
+	{ value: 'true', label: '真太阳时(经度+均时差)', short: '真太阳时' }, { value: 'mean', label: '平太阳时(仅经度)', short: '平太阳时' }, { value: 'off', label: '钟表时' },
 ];
 export const NODE_TYPE_OPTIONS = [{ value: 'mean', label: '平交点' }, { value: 'true', label: '真交点' }];
 export const LILITH_TYPE_OPTIONS = [{ value: 'mean', label: '平远地点' }, { value: 'true', label: '真远地点' }];

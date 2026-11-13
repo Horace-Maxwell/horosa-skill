@@ -182,11 +182,11 @@ export const QIZHENG_PLANET_COLOR = {
 
 // 五行语义色：与六壬盘面 RengChart.getBranchColor 同口径（CSS 变量 + hex fallback）。
 export const QIZHENG_WUXING_COLOR = {
-	'木': 'var(--horosa-liureng-stem-wood, #73b36b)',
-	'火': 'var(--horosa-liureng-stem-fire, #c9483e)',
-	'土': 'var(--horosa-liureng-stem-earth, #c19a57)',
-	'金': 'var(--horosa-liureng-stem-metal, #d8d2c7)',
-	'水': 'var(--horosa-liureng-stem-water, #8f9694)',
+	'木': 'var(--horosa-bazi-wood, #66c486)',
+	'火': 'var(--horosa-bazi-fire, #ff5f50)',
+	'土': 'var(--horosa-bazi-earth, #c08a4c)',
+	'金': 'var(--horosa-bazi-metal, #eda34a)',
+	'水': 'var(--horosa-bazi-water, #5f8fff)',
 };
 
 // 七政：复用现成 getPlanetObject + getSignZi；顺逆按 lonspeed<0（与主星盘一致，见 AstroHelper）。

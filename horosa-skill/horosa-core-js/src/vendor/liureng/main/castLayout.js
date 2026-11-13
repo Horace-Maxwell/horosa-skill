@@ -48,12 +48,12 @@ export const QI_METHODS = [
 	{ key: 'alys', name: '月时对齐·灵活事' },
 	{ key: 'xuanshi', name: '选时·事发之时' },
 	{ key: 'yanshu', name: '演数·随感之数(加时)' },
-	{ key: 'baoshu', name: '报数/端法·活时(÷12定支)' },
+	{ key: 'baoshu', name: '报数/端法·活时(÷12定支)', short: '报数 / 端法·活时' },
 ];
 export const YUE_JIANG_METHODS = [
 	{ key: 'zhongqi', name: '中气过宫（默认）' },
 	{ key: 'jieqi', name: '节气换将' },
-	{ key: 'richan', name: '太阳过宫·日躔（含岁差）' },
+	{ key: 'richan', name: '太阳过宫·日躔（含岁差）', short: '日躔（含岁差）' },
 ];
 export const FEN_ZHOU_YE_METHODS = [
 	{ key: 'chenhun', name: '晨昏分昼夜（默认）' },

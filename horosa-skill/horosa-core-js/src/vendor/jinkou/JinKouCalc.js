@@ -33,7 +33,7 @@ import { parseFieldsDateTime, parseDateTimeText } from '../utils/fieldsDateTime.
 // 金口诀主盘走 SVG presentation 属性(attr fill)，CSS 变量在此不解析，故落为对应 hex；
 // 主盘底色随暗黑模式翻深，浅色板的水/木/火会过暗不可读 → 按主题在 access 时取浅/深板(Proxy)，
 // 主盘重绘时即解析当前主题，明暗皆可读。
-const JINKOU_ELEMENT_COLOR_LIGHT = { '木': '#237a45', '火': '#c72d22', '土': '#805526', '金': '#866a00', '水': '#275fc7' };   // 金 = --horosa-bazi-metal 亮色值(旧 #e0892a 亮底 2.4:1)
+const JINKOU_ELEMENT_COLOR_LIGHT = { '木': '#237a45', '火': '#c72d22', '土': '#7a4f2a', '金': '#ab5500', '水': '#275fc7' };   // 金 = --horosa-bazi-metal 亮色值(旧 #e0892a 亮底 2.4:1)
 const JINKOU_ELEMENT_COLOR_DARK = { '木': '#66c486', '火': '#ff5f50', '土': '#c08a4c', '金': '#eda34a', '水': '#5f8fff' };
 function jinKouElementPalette(){
 	try {

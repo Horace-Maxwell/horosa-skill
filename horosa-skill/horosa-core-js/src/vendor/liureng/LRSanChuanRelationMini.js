@@ -5,7 +5,7 @@ import * as LRConst from './LRConst.js';
 // 关系（上→下）：比和 / 生(上生下) / 克(上克下) / 生入(下生上) / 克入(下克上)。
 
 // 五行 / 生克色走明暗成对的主题色(svg 属性里的 var() 随主题即时换值;旧写死色只为暗底挑,金 #b9b3a3 在亮底 2.0:1)
-const WX_COLOR = { '木': 'var(--horosa-liureng-stem-wood)', '火': 'var(--horosa-liureng-stem-fire)', '土': 'var(--horosa-liureng-stem-earth)', '金': 'var(--horosa-liureng-stem-metal)', '水': 'var(--horosa-liureng-stem-water)' };
+const WX_COLOR = { '木': 'var(--horosa-bazi-wood)', '火': 'var(--horosa-bazi-fire)', '土': 'var(--horosa-bazi-earth)', '金': 'var(--horosa-bazi-metal)', '水': 'var(--horosa-bazi-water)' };
 const SHENG = { '木': '火', '火': '土', '土': '金', '金': '水', '水': '木' };
 const KE = { '木': '土', '土': '水', '水': '火', '火': '金', '金': '木' };
 const POS = ['初传', '中传', '末传'];

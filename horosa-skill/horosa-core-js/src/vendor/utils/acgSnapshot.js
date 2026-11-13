@@ -3,6 +3,8 @@
 // aiExport 在导出键为 astrochart_like 且当前上下文为占星地图时,经 buildAcgSectionText 拼入
 //【占星地图】段(受导出段开关控制)。单一真值源:全部数字来自后端 ACGraph 响应,不在此重算。
 
+import { eclipseSummaryLines, climesSummaryLines } from './acgLayers.js';
+
 const PLANET_CN = {
 	Sun: '太阳', Moon: '月亮', Mercury: '水星', Venus: '金星', Mars: '火星',
 	Jupiter: '木星', Saturn: '土星', Uranus: '天王星', Neptune: '海王星', Pluto: '冥王星',
@@ -213,6 +215,17 @@ export function buildAcgSectionText(){
 			lines.push('| --- | --- | --- | --- | --- |');
 			lines.push(...rows);
 		}
+	}
+	// ◆ 日食路径(后端重算,开了才有)/ ◆ 气候带(纯渲染,开着才进;纬度按最长昼推,黄赤交角口径随设置)
+	const eclipse = eclipseSummaryLines(d.eclipse);
+	if(eclipse.length){
+		lines.push('◆ 日食路径:');
+		lines.push(...eclipse);
+	}
+	const climes = climesSummaryLines(ui.climes, ui.climesObliquity, d.meta && d.meta.obliquity);
+	if(climes.length){
+		lines.push(`◆ ${climes[0]}:`);
+		lines.push(climes[1]);
 	}
 	return lines.join('\n');
 }

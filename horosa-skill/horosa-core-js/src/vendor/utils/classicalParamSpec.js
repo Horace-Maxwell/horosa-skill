@@ -163,7 +163,7 @@ export const CLASSICAL_PARAM_SPEC = [
 			{ value: 'true', label: '真实远地点（osculating）' },
 		] },
 	{ key: 'topocentricMoon', group: '月亮与空亡', label: '月亮站心视差修正', type: 'switch', valueType: 'int',
-		default: 0, send: 'nonDefault', seed: 'conditional', hint: '影响月亮黄经 ≤1° · 福点随动' },
+		default: 0, send: 'nonDefault', seed: 'conditional', hint: '影响月亮黄经 ≤1° · 福点随动 · 印占各盘恒用地心月' },
 	{ key: 'viaCombustaVariant', group: '月亮与空亡', label: '燃烧之路边界（月亮凶区 · 全站随动）', type: 'select', valueType: 'str',
 		default: 'standard', send: 'nonDefault', seed: 'always',
 		options: [

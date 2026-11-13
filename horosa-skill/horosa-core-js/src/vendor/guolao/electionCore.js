@@ -105,11 +105,11 @@ export const SHAN_WUXING_COMBO = {
 	庚: '金', 酉: '金', 辛: '火', 戌: '火', 乾: '金', 亥: '木',
 };
 export const WUXING_COLOR = {
-	木: 'var(--moira-green, #008000)',
-	火: 'var(--moira-red, #ff0000)',
-	土: 'var(--moira-brown, #8a5a2b)',
-	金: 'var(--moira-gold, #b8860b)',
-	水: 'var(--moira-blue, #000080)',
+	木: 'var(--horosa-bazi-wood, #237a45)',
+	火: 'var(--horosa-bazi-fire, #c72d22)',
+	土: 'var(--horosa-bazi-earth, #7a4f2a)',
+	金: 'var(--horosa-bazi-metal, #ab5500)',
+	水: 'var(--horosa-bazi-water, #275fc7)',
 };
 
 export function shanColor(shan, wuxingMode = 'main'){

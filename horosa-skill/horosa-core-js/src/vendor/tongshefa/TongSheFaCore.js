@@ -13,6 +13,13 @@ import { Gua8, Gua64, getGua64 } from '../gua/GuaConst.js';
 
 
 
+// 右栏四象取卦:键 = model.selected 的键,文 = 位名
+const SIXIANG_PICKS = [
+	['taiyin', '太阴·本体'],
+	['taiyang', '太阳·方法'],
+	['shaoyang', '少阳·认识'],
+	['shaoyin', '少阴·宇宙'],
+];
 
 const BAGUA_SYMBOL = {
 	乾: '☰',

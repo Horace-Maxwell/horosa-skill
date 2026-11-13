@@ -1237,6 +1237,39 @@ function getBaziCore(params){
 // 八字页 / AI 无头重算 / 八字择日内嵌同一来源;旧记录带来的 1 不再下发(否则回退 Java 的域会真把节气平移)。
 export const BAZI_ADJUST_JIEQI_SENT = 0;
 
+// 东亚诸术(算命学 / 九星气学 / 蒙古 Zurkhai)要的历法事实:按直接时间(不做真太阳时)、0 点换日,
+// 年柱按立春、月柱按节,节气时刻已按出生时区换算(与八字页同一核心,不另起一套干支历)。
+// 东亚诸术的日界是技法定义(0 点换日),不随全局日界设置
+const EAST_ASIA_DAY_BOUNDARY = 0;
+export function eastAsiaPillarFacts(params){
+	const core = getBaziCore({ ...(params || {}), timeAlg: 1, after23NewDay: EAST_ASIA_DAY_BOUNDARY, southMonth: '' });
+	const { rawParts, solar, baziLunar, eightChar } = core;
+	let prevJieName = '';
+	let daysAfterJie = null;
+	try{
+		const prevJie = baziLunar.getPrevJie();
+		prevJieName = prevJie.getName();
+		daysAfterJie = solar.getJulianDay() - prevJie.getSolar().getJulianDay();
+	}catch(e){ /* 节气边缘容错:缺节入日数时只少藏干分段 */ }
+	const yearGz = eightChar.getYear();
+	const ganzhi = ['甲子','乙丑','丙寅','丁卯','戊辰','己巳','庚午','辛未','壬申','癸酉','甲戌','乙亥','丙子','丁丑','戊寅','己卯','庚辰','辛巳','壬午','癸未','甲申','乙酉','丙戌','丁亥','戊子','己丑','庚寅','辛卯','壬辰','癸巳','甲午','乙未','丙申','丁酉','戊戌','己亥','庚子','辛丑','壬寅','癸卯','甲辰','乙巳','丙午','丁未','戊申','己酉','庚戌','辛亥','壬子','癸丑','甲寅','乙卯','丙辰','丁巳','戊午','己未','庚申','辛酉','壬戌','癸亥'];
+	const yearIdx = ganzhi.indexOf(yearGz);
+	const civilYear = rawParts.year;
+	// 立春年:干支年序与民用年对不上(立春前出生)就是上一年
+	const lichunYear = yearIdx >= 0 && ((civilYear - 4) % 60 + 60) % 60 !== yearIdx ? civilYear - 1 : civilYear;
+	return {
+		year: { gan: eightChar.getYearGan(), zhi: eightChar.getYearZhi(), gz: yearGz },
+		month: { gan: eightChar.getMonthGan(), zhi: eightChar.getMonthZhi(), gz: eightChar.getMonth() },
+		day: { gan: eightChar.getDayGan(), zhi: eightChar.getDayZhi(), gz: eightChar.getDay() },
+		hour: { gan: eightChar.getTimeGan(), zhi: eightChar.getTimeZhi(), gz: eightChar.getTime() },
+		civil: { year: rawParts.year, month: rawParts.month, day: rawParts.day, hour: rawParts.hour, minute: rawParts.minute },
+		lichunYear,
+		prevJieName,
+		daysAfterJie,
+		julianDay: solar.getJulianDay(),
+	};
+}
+
 export function buildLocalBaziResult(params){
 	const core = getBaziCore(params);
 	const { rawParts, apparentParts, solar, lunar, baziLunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar } = core;

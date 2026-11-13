@@ -99,6 +99,8 @@ import { appendPlanetHouseInfo, } from '../utils/planetHouseInfo.js';
 
 
 
+
+
 import {
 	buildLiuRengReferenceBundle,
 	buildReferenceDocumentText,
@@ -132,6 +134,7 @@ import { clamp, safe, resolveCalcGeo, buildDisplaySolarParams, getNongliKey } fr
 
 
 
+import { ASC_RA_MODE_DEFAULT, ASC_RA_MODE_OPTIONS, normalizeAscRaMode, withAscRaMode, ascRaModeSnapshotLine } from '../utils/ascRaMode.js';
 export { clamp, safe };
 
 const BRANCH_ORDER = '子丑寅卯辰巳午未申酉戌亥'.split('');
@@ -341,7 +344,7 @@ const GUIRENG_OPTIONS = [
 const LR_YUEJIANG_OPTIONS = [
 	{ value: 'zhongqi', label: '中气过宫（默认）' },
 	{ value: 'jieqi', label: '节气换将' },
-	{ value: 'richan', label: '太阳过宫·日躔（含岁差）' },
+	{ value: 'richan', label: '太阳过宫·日躔（含岁差）', short: '日躔（含岁差）' },
 ];
 const LR_FENZHOUYE_OPTIONS = [
 	{ value: 'chenhun', label: '晨昏分昼夜（默认）' },
@@ -445,6 +448,8 @@ export const SANSHI_PAGE_SETTINGS = definePageSettings('horosa.sanshi.settings.v
 	// 外圈两项不在 options 里,是组件自己的 state(控件直接绑 this.state.X)
 	outerCoord: { label: '外圈', def: 'ecliptic', oneOf: ['ecliptic', 'equatorial'] },
 	showWeakSolid: { label: '虚实', def: true },
+	// 外圈赤道分宫时上升点取哪一个赤经(改进 = 真赤经 / 经典 = 旧版取的东点黄经);只在外圈 = 赤道时起作用、才显示
+	ascRaMode: { label: '上升取法', def: ASC_RA_MODE_DEFAULT, oneOf: ASC_RA_MODE_OPTIONS.map((o)=>o.value) },
 });
 
 // 🔴 改值即强制重算的「计算型」option key 全集(三式合一各子盘的盘面计算输入)。
@@ -1140,7 +1145,10 @@ export function computeSanshiXun(pan){
 	return { xunShou, xunYi, benXun, riKong, shiKong };
 }
 
-export function buildOuterData(chartObj, coord){
+// ascRaMode:外圈赤道分宫时上升点的取法(经典档只把上升点 ra 换成东点黄经;黄道分宫不读上升赤经,恒原样)
+export function buildOuterData(rawChartObj, coord, ascRaMode){
+	const equatorial = coord === 'equatorial';
+	const chartObj = equatorial ? withAscRaMode(rawChartObj, ascRaMode) : rawChartObj;
 	const housesByBranch = {};
 	const starsByBranch = {};
 	const starsByBranchFull = {};
@@ -1154,6 +1162,8 @@ export function buildOuterData(chartObj, coord){
 	if(!chartObj){
 		return { housesByBranch, starsByBranch, starsByBranchFull, starsByBranchMeta };
 	}
+	// 快照在第 1 宫那一支写明上升取法(只赤道分宫有这一行;黄道逐字现状)
+	const ascRaLine = equatorial ? ascRaModeSnapshotLine(ascRaMode, chartObj) : '';
 	const objs = chartObj.objects || [];
 	let ascBranch = '';
 	for(let i=0; i<objs.length; i++){
@@ -1224,7 +1234,7 @@ export function buildOuterData(chartObj, coord){
 			objId: item.objId,
 		}));
 	});
-	return { housesByBranch, starsByBranch, starsByBranchFull, starsByBranchMeta };
+	return { housesByBranch, starsByBranch, starsByBranchFull, starsByBranchMeta, ...(ascRaLine ? { ascRaLine } : {}) };
 }
 
 export function buildShenShaMap(dunjia){
@@ -1488,6 +1498,7 @@ export function buildSanShiUnitedSnapshotText(data){
 			//   AI 看不到盘上最显眼的两层标注。此处逐支补齐(无数据不产行,缺省字节零变化)。
 			const houseNos = outerData && outerData.housesByBranch && Array.isArray(outerData.housesByBranch[branch]) ? outerData.housesByBranch[branch] : [];
 			if(houseNos.length){ body.push(`人事宫位：第 ${houseNos.join('、')} 宫`); }
+			if(houseNos.indexOf('1') >= 0 && outerData && outerData.ascRaLine){ body.push(outerData.ascRaLine); }
 			const ws = weakSolidMap ? weakSolidMap[branch] : null;
 			if(ws && (ws.solid || ws.weak)){
 				const parts = [];

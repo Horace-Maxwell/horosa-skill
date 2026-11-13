@@ -39,11 +39,13 @@ import { mundaneDistribution, mundanePatternMeaning } from './patterns.js';
 // 故恒等键即正解：调用方（tools/mundaneCards.js）传 patKey 时用同一常量 HEADLESS_PAT_KEY。
 const astroSymbol = (id) => id; const chartRequestKey = () => 'headless';
 
+
 import { formatSignedDate, leadingYearOf, datePartOf } from '../bazi/dateStrSafe.js';
 
 
 
 import { segmentIndex } from '../utils/segmentIndex.js';
+
 
 const Option = XQSelect.Option;
 const TabPane = XQTabs.TabPane;
@@ -110,6 +112,8 @@ const BARBAULT_SETS = [
 	{ key: 'outer3', cn: '仅外三星 ♅♆♇（最平滑）', planets: ['Uranus', 'Neptune', 'Pluto'] },
 	{ key: 'slow4', cn: '土外四星 ♄♅♆♇', planets: ['Saturn', 'Uranus', 'Neptune', 'Pluto'] },
 ];
+// 谐波:每对角距先乘 h 再折半圆;1 = 原指数,2 看合冲,3 看三分,4 看刑
+const BARBAULT_HARMONICS = [{ v: 1, cn: '原指数' }, { v: 2, cn: '2 次谐波' }, { v: 3, cn: '3 次谐波' }, { v: 4, cn: '4 次谐波' }];
 
 // 一组（约60年/3次）合相的大三合相态：纯X(全本象) / 摄Y(2本1邻) / 摄大Y(1本2邻)。
 function triadPhase(triad, ageEl){
@@ -505,12 +509,15 @@ export function buildMundaneCardSections(chart, extra, state, facts){
 			}
 			const gy = computeCurrentAge(currentYear(), st.gyModel || 'fagan');
 			if(gy){ push(['[大年时代]', `${currentYear()} 年春分点 · 恒星${gy.signCn} ${gy.degInSign.toFixed(2)}° → 当前为${gy.currentAgeCn}（岁差口径 ${st.gyModel === 'lahiri' ? 'Lahiri' : 'Fagan/Bradley'}）`, `岁差周期(大年)≈ ${GREAT_YEAR_CONST.precessionYears} 年；柏拉图月(一个时代)≈ ${GREAT_YEAR_CONST.platonicMonthYears.join('–')} 年；春分点以约 ${GREAT_YEAR_CONST.rateArcsecPerYear}″/年西退。`]); }
+			if(st.cycleTableText && st.cycleTableKey === chartRequestKey(chart)){ push(st.cycleTableText.split('\n')); }
 			if(cfg.showBarbault && st.bbData && Array.isArray(st.bbData.points) && st.bbData.points.length){
 				const pts = st.bbData.points;
 				let gmin = pts[0]; let gmax = pts[0];
 				pts.forEach((pp) => { if(pp.index < gmin.index){ gmin = pp; } if(pp.index > gmax.index){ gmax = pp; } });
-				const set = BARBAULT_SETS.find((ss) => ss.key === st.bbSet) || BARBAULT_SETS[0];
-				push(['[Barbault 聚散指数]', `（慢星组合 ${set.cn} · ${yearLabel(clampYear(st.bbStart, 1900))}–${yearLabel(clampYear(st.bbEnd, 2050))} · ${pts.length} 点）`, `最深谷（聚集）${gmin.year}-${String(gmin.month).padStart(2, '0')}（${Math.round(gmin.index)}°）；最高峰（四散）${gmax.year}-${String(gmax.month).padStart(2, '0')}（${Math.round(gmax.index)}°）`]);
+				// 组合 / 谐波 / 年段一律取算图时记下的(bbData),不取下拉此刻的值 —— 改了下拉没点「绘制」时两者不同
+				const bb = st.bbData;
+				const set = BARBAULT_SETS.find((ss) => ss.key === (bb.setKey || st.bbSet)) || BARBAULT_SETS[0];
+				push(['[Barbault 聚散指数]', `（慢星组合 ${set.cn}${bb.harm > 1 ? ` · ${bb.harm} 次谐波` : ''} · ${yearLabel(bb.startYear !== undefined ? bb.startYear : clampYear(st.bbStart, 1900))}–${yearLabel(bb.endYear !== undefined ? bb.endYear : clampYear(st.bbEnd, 2050))} · ${pts.length} 点）`, `最深谷（聚集）${gmin.year}-${String(gmin.month).padStart(2, '0')}（${Math.round(gmin.index)}°）；最高峰（四散）${gmax.year}-${String(gmax.month).padStart(2, '0')}（${Math.round(gmax.index)}°）`]);
 			}
 		}catch(e){ /* noop */ }
 	}

@@ -28,7 +28,7 @@ const methodNoteLines = (k) => (typeof astroAiSnapshot.buildMethodNoteLines === 
 //  ② 主限序 = 七星按本命黄经升序、从起始星旋转铺开。
 //  ③ 子限:以父期主星为起点按同一次序,每颗子星 = 它上一层时长 ÷ 12(第二层 = 一级时长 ÷ 12,第三层 ÷ 144 …);
 //     一轮七颗合计不到父期 —— 「一轮」照此不填满,「循环」重复这一轮直到父期末,「填满」把一轮的末段拉长到父期末。
-//  ④ 年长随选项(回归年 / 恒星年 / 360 日 / Abu Ma'shar / Masha'allah / Bija 修正)。
+//  ④ 年长随选项(回归年 / 恒星年 / 360 日 / Abu Ma'shar / Masha'allah / Bija 两档)。
 //  距离口径 d 另有 forward(自擢升度顺黄道到本命星)一解,做成参数。
 //  独立引擎,不碰 decennials.js / yearSystem129.js。
 import { TIME_LORD_YEAR_TYPES } from '../utils/timeLordYears.js';

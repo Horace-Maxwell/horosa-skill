@@ -1661,6 +1661,12 @@
           "find": "function currentYear(){",
           "to": "export function currentYear(){",
           "why": "同上：buildAiSnapshot 的 [年之九主] 年份 / [地区盘推运] 目标年缺省（:2919/:2951）读本文件私有 currentYear()，抽出件逐字保留。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./MundaneCycleTables.js",
+          "stub": "",
+          "why": "上游 v3.14.0 的「周期表」页签 React 组件（默认导入），只服务已截断的类；周期表正文由 utils/mundaneCycles.js 的 buildMundaneCycleText 出。"
         }
       ]
     },
@@ -2019,7 +2025,7 @@
         },
         {
           "kind": "replace_text",
-          "find": "import {\n\tXQButton as Button,\n\tXQCard as Card,\n\tXQSelect as Select,\n\tXQTabs as Tabs,\n\tXQSideSection,\n} from '../xq-ui.js';\n",
+          "find": "import {\n\tXQButton as Button,\n\tXQCard as Card,\n\tXQSelect as Select,\n\tXQTabs as Tabs,\n\tXQSideSection,\n\tXQSwitch,\n} from '../xq-ui.js';\n",
           "to": "",
           "why": "UI 组件库（多行 import，stub_import 的单行形态匹配不到）；只服务 React 尾部。"
         },
@@ -3082,6 +3088,12 @@
         },
         {
           "kind": "stub_import",
+          "specifier": "./AstroChart.js",
+          "stub": "",
+          "why": "单盘绘图组件（上游 v3.14.0 起周日小限子页用它画月亮盘），只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
           "specifier": "./AstroDoubleChart.js",
           "stub": "",
           "why": "本命 + 推运双盘绘图组件，只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
@@ -3200,6 +3212,43 @@
       "upstream": "data/citiesFull.json",
       "mode": "verbatim",
       "deviations": []
+    },
+    "fengshui/zibai.js": {
+      "upstream": "components/fengshui/zibai.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0：九星值日统一到日紫白（黄历 huangliDay 与东亚诸术 eastAsiaArts 共用 zibai.dayCenter / monthCenter，离至日最近的甲子置闰的连续序列）。整份 vendored，依赖 liqiCore / fengshuiData 已在树里。",
+      "deviations": []
+    },
+    "utils/ascRaMode.js": {
+      "upstream": "utils/ascRaMode.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0「上升起盘两档」：二十八宿 / 宿占 / 节气盘 / 七政 / 三式外圈赤道分宫的上升点取真赤经（改进，缺省）或东点黄经（经典）。normalizeAscRaMode / withAscRaMode / ascRaModeSnapshotLine 的单一来源。",
+      "deviations": []
+    },
+    "utils/acgLayers.js": {
+      "upstream": "utils/acgLayers.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 占星地图两层：日食路径（eclipseSummaryLines）与气候带 / 纬圈（climesSummaryLines），acgSnapshot.js 的新依赖。",
+      "deviations": []
+    },
+    "utils/timeLordTables.js": {
+      "upstream": "utils/timeLordTables.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 星运「时主轮转」十二法的单一来源：方法表、缺省、选项、请求体映射 timeLordRequestFields 与「结果 → 快照正文」buildTimeLordText。计算全在后端 astrostudy/timelord_tables.py（/astroextra/timelords，Python 侧发请求）。directedFigures.js 也从这里取名字。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "同 utils/directedFigures.js：vendor 树里该相对路径落到 32 行 Uranian 子集，钉到共享 shim。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同上：AstroTxtMsg / AstroMsgCN 在共享 shim。"
+        }
+      ]
     }
   }
 }

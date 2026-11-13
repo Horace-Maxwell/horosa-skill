@@ -1,5 +1,5 @@
 // AI 快照附加段 builder。三段头🔒与 AI_EXPORT_PRESET_SECTIONS.indiazeri
-// 追加段逐字成对(preflight 对偶锁);挂载=三段自足(印度页 A 类星盘系无 module 槽;印度盘全文见主印度页),此处只拼择时态。
+// 追加段逐字成对(preflight 对偶锁);挂载 = 内嵌印占页的印占全文 + 这里拼的择时态三段。
 import { indiaLeafSummary } from './indiaZeriConditionTypes.js';
 import { JOINER_CN } from './conditionTypes.js';
 import { appendZeriHitRows } from './zeriExplainText.js';

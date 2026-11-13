@@ -191,7 +191,7 @@ export const HUANGLI_CONDITION_TYPES = {
 		label: '九星值日',
 		defaults: { values: ['一'], matchMode: 'any' },
 		fields: [
-			// 锚实抓:lunar getDayNineStar().getNumber() 返回**中文数字**(如「三」),value 必须同域。
+			// 当日九星取 buildHuangliDay 的 nineStar(本软件日紫白 dayCenter,与风水同口径),number 是**中文数字**(如「三」),value 必须同域。
 			{ key: 'values', kind: 'multiselect', label: '九星', options: [{ value: '一', label: '一白水' }, { value: '二', label: '二黑土' }, { value: '三', label: '三碧木' }, { value: '四', label: '四绿木' }, { value: '五', label: '五黄土' }, { value: '六', label: '六白金' }, { value: '七', label: '七赤金' }, { value: '八', label: '八白土' }, { value: '九', label: '九紫火' }] },
 		],
 		validate: needValues,
