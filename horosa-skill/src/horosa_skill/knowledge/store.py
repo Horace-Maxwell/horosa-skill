@@ -724,7 +724,8 @@ def _read_borrowed_chapter(bundle: dict[str, Any], *, domain: str, entry: dict[s
     via = {"domain": domain, "key": entry.get("key"), "label": entry.get("label") or entry.get("key")}
     if home is None:  # 生成器只在本家也收割了的时候才写 ref；包被手改 / 只装了一半才会到这里
         raise ToolValidationError(
-            f"Unknown knowledge key: {domain}/{entry.get('key')}",
+            bilingual(f"知识条目找不到：{domain}/{entry.get('key')}（借自的别册 {ref.get('domain')} 不在）。",
+                      f"Unknown knowledge key: {domain}/{entry.get('key')} (borrowed from missing domain {ref.get('domain')})."),
             code="knowledge.helpdoc.unknown_key",
             details={"domain": domain, "key": entry.get("key"), "missing_domain": ref.get("domain")},
         )
@@ -734,7 +735,8 @@ def _read_borrowed_chapter(bundle: dict[str, Any], *, domain: str, entry: dict[s
     chapters = [e for key in wanted for e in (home.get("categories") or [{}])[0].get("entries") or [] if e.get("key") == key]
     if not chapters or len(chapters) != len(wanted):
         raise ToolValidationError(
-            f"Unknown knowledge key: {domain}/{entry.get('key')}",
+            bilingual(f"知识条目找不到：{domain}/{entry.get('key')}（章节登记里的章不在包内）。",
+                      f"Unknown knowledge key: {domain}/{entry.get('key')} (chapters listed but missing from the pack)."),
             code="knowledge.helpdoc.unknown_key",
             details={"domain": domain, "key": entry.get("key"), "missing_keys": sorted(set(wanted) - {f"{e.get('key')}" for e in chapters})},
         )

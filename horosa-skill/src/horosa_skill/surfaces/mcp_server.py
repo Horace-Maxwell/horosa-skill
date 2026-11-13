@@ -176,7 +176,7 @@ def _server_instructions(
     *, decision_layer_on: bool, compact: bool = False, plan: dict[str, Any] | None = None, trace_export_on: bool = False,
 ) -> str:
     """initialize 说明书。`plan`（mcp_surface.surface_plan）给了就按**实际注册的**工具面写数目与通道（MCP-07）：
-    旧实现只分「全量 / 精简」两态，`HOROSA_TOOLSETS=astro` 时照样写「127 tools」，而 tools/list 只给几十个、
+    旧实现只分「全量 / 精简」两态，`HOROSA_TOOLSETS=astro` 时照样写全量工具数，而 tools/list 只给几十个、
     也没说剩下的技法经 horosa_tool_run 可达。"""
     text = _SERVER_INSTRUCTIONS
     if plan is not None and not plan["compact"] and plan["tool_run"]:

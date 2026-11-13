@@ -34,7 +34,7 @@ def _resolve_toolsets(raw: str) -> dict[str, Any]:
     - 没设 / 点名了全部域（`all`）→ effective=None：完整目录本身，不额外注册 horosa_tool_run；
     - 有合法域 → 只平铺这些域（其余经 horosa_tool_run 可达）；未知 token 丢弃并写进 problem；
     - 🔴 MCP-07：**一个合法 token 都没有** → effective=set()（零平铺技法 + horosa_tool_run），problem 说明原因。
-      旧实现在这里回落「全量平铺」：白名单拼错一个字 = 悄悄全开（127 个工具全进上下文），而这正是设白名单想避免的。
+      旧实现在这里回落「全量平铺」：白名单拼错一个字 = 悄悄全开（全量工具全进上下文），而这正是设白名单想避免的。
       失败往安全的一边倒（精简面），可达性不丢（tool_run 能到任何技法），问题在 stderr / doctor / horosa_agent_guidance 三处可见。
     """
     tokens = [part.strip().lower() for part in f"{raw or ''}".split(",") if part.strip()]
