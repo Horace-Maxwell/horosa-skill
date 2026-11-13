@@ -125,6 +125,22 @@ CN_VOCABULARIES: dict[str, dict[str, Vocabulary]] = {
         "starNaming": V("starNaming", {"A": ("主流",), "B": ("异名",), "C": ("改名",)}, labels={"A": "A·主流（缺省）", "B": "B·异名", "C": "C·改名"}),
         "timeAlg": TIME_ALG_WITH_MEAN,
     },
+    "dongya": {
+        # 上游页面设置 EAST_ASIA_PAGE_SETTINGS（vendor/dongya/eastAsiaSnapshot.js）；标签取 EastAsiaMain 左栏选项与挂载齿轮
+        "fenyeVersion": V("fenyeVersion", {"common": ("通行版", "通行"), "fajue": ("法诀版", "法诀")},
+                          labels={"common": "通行版（缺省）", "fajue": "法诀版"}),
+        "ichingMerge": V("ichingMerge", {"horizon": ("按地平上下", "地平上下", "地平"), "upper": ("恒合上卦", "上卦"), "lower": ("恒合下卦", "下卦")},
+                         labels={"horizon": "按地平上下（地平上合上卦、地平下合下卦，缺省）", "upper": "恒合上卦", "lower": "恒合下卦"}),
+    },
+    "zhufang": {
+        # 上游页面设置 ZHUFANG_PAGE_SETTINGS / MAYAN_CORRELATIONS（vendor/zhufang/zhufangArts.js）；标签取挂载齿轮
+        "mayanCorrelation": V("mayanCorrelation", {584283: ("GMT",), 584285: (), 584286: ()},
+                              labels={584283: "584283（GMT，缺省）", 584285: "584285", 584286: "584286"}),
+        "hdTrueNode": V("hdTrueNode", {1: ("true", "真交点", "true node"), 0: ("false", "mean", "平交点", "mean node")},
+                        labels={1: "真交点（缺省）", 0: "平交点"}),
+        "spiritQuadrant": V("spiritQuadrant", {1: (), 2: (), 3: ()},
+                            labels={1: "1 · 4 · 7 · 10 宫（缺省）", 2: "2 · 5 · 8 · 11 宫", 3: "3 · 6 · 9 · 12 宫"}),
+    },
     # 紫微页只有两档（_ziwei_params 旧写法 `1 if timeAlg in (1, "1") else 0`：2 被悄悄读成真太阳时）
     "ziwei_birth": {"timeAlg": _ZIWEI_TIME_ALG},
     "tongshefa": {axis: _trigram_vocab(axis) for axis in ("taiyin", "taiyang", "shaoyang", "shaoyin")},

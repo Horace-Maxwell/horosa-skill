@@ -87,8 +87,8 @@ How the server read each value is written in `summary` / `warnings` (e.g. "地�
 - **Lunar (农历) birthday.** Charts take Gregorian dates only (`tool.lunar_date_unsupported`). Look the day up
   with `horosa_cn_calendar_month` (one Gregorian month, each day with its 农历 date) or ask the user.
 - **Gender is required** (a confirmation flag does not replace it) by: `bazi_birth`, `bazi_direct`,
-  `ziwei_birth`, `ziweizeri`, `liureng_runyear`, `heluo`, `canping`, `yizhangjing`, `zhengchuan`, `tieban`,
-  `shaozi`, `beiji`, `nanji`, `chunzi`, `cetian`, `qizhengkin`, `xianqin`. Ask; never assume 男.
+  `ziwei_birth`, `ziweizeri`, `liureng_runyear`, `heluo`, `canping`, `yizhangjing`, `dongya`, `zhengchuan`,
+  `tieban`, `shaozi`, `beiji`, `nanji`, `chunzi`, `cetian`, `qizhengkin`, `xianqin`. Ask; never assume 男.
 - **Place not unique.** `London`, `Paris`, `Portland`, `St. Petersburg` … → `place.ambiguous` with
   candidates: read them to the user and let them choose; then send the chosen form (`"London, UK"`). Only a
   country or province → asked for a city. `horosa_place_search {"query": "…", "date": "…"}` checks a place first.
@@ -306,6 +306,10 @@ Keys below are `tool_name` values (MCP name = `horosa_<group>_<key>`; `horosa_ag
 - **Chinese natal**: `bazi_birth`, `bazi_direct` (大运流年), `bazi_inverse` (four pillars → candidate birth
   times; candidates repeat every 60 years, let the user pick), `ziwei_birth`, `ziwei_rules`, `heluo`, `canping`,
   `yizhangjing`, `suzhan`, `liureng_runyear`.
+- **Several arts in one tool** (natal; each art is one `[段名]` section, pick with `response_sections`):
+  `dongya` — 藏历 / 藏占 / 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年 / 易卦星盘 (Tibetan calendar, Sanmeigaku,
+  Nine Star Ki, I Ching astrology …; needs gender; `flowYear` picks the year, default this year);
+  `zhufang` — 玛雅历 / 十三月亮历 / 人类图 / 灵名字母 (Maya calendar, Dreamspell, Human Design, spirit-name letters).
 - **Chinese casting** (moment): `qimen`, `liureng_gods`, `taiyi`, `jinkou`, `sanshiunited`, `sixyao` (六爻),
   `xiaoliuren`, `feigong`, `xiaochengtu`, `guice`, `lingqi`, `tongshefa`, `geomancy`, `tarot` (`spread` uses
   engine keys such as `three`, `celtic`; a wrong key lists the allowed ones).

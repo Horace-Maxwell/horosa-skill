@@ -120,6 +120,27 @@ def build_sample_payloads() -> dict[str, dict]:
             "gender": 1,
             "timeAlg": 1,
         },
+        # 东亚诸术：上游 eastAsiaSnapshot.test.js 的夹具盘（西雅图 1975-02-10，藏历新年前一天）；流年钉 2026 → 结果不随「今天」变。
+        "dongya": {
+            **confirmed,
+            "date": "1975-02-10",
+            "time": "21:15:00",
+            "zone": "-08:00",
+            "lat": "47n36",
+            "lon": "122w20",
+            "gender": 0,
+            "flowYear": 2026,
+        },
+        # 诸方杂术：同一张盘（上游 astropy/tests/test_zhufang_arts.py BASE，Placidus）。
+        "zhufang": {
+            **confirmed,
+            "date": "1975-02-10",
+            "time": "21:15:00",
+            "zone": "-08:00",
+            "lat": "47n36",
+            "lon": "122w20",
+            "hsys": 3,
+        },
         "acg": {**chart_birth},
         "astrodata": {**confirmed, "query": "Einstein", "limit": 5},
         "bazi_inverse": {**confirmed, "pillars": ["甲子", "丙寅", "戊辰", "庚申"], "count": 3, "fromYear": 2030},

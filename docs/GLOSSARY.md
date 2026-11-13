@@ -34,6 +34,8 @@
 | 9 kinastro 神数 | shaozi / tieban / fendjing / beiji / nanji / chunzi / xianqin / cetian / qizhengkin | 邵子、铁板、分金、北极、南极、纯子、先秦、测天、七政等，共用 **kinastro** 引擎。 |
 | 邵子神数 | shaozi | 需从条文 CSV 生成 `shaozi_tiaowen_6144.json`（打包时生成 4608 条真条文，否则出占位条文）。 |
 | 一掌经 | yizhangjing | 十二支六道排盘 + 大限小限流年 + 神煞合参，JS 层实现（v0.17.0）。 |
+| 东亚诸术 | dongya | 上游 v3.14.0「命 · 其他 · 东亚」：一个工具七段——藏历（浦派时轮历）、藏占（八卦 Parkha / 九宫 Mewa / 魂命煞）、蒙古 Zurkhai、算命学、九星气学、洛书流年、易卦星盘（另读本命盘七政）。vendored 上游 JS 进程内算；流年缺省今年、可指定。 |
+| 诸方杂术 | zhufang | 上游 v3.14.0「命 · 其他 · 诸方」：一个工具四段——玛雅历（关联常数 584283 / 584285 / 584286）、十三月亮历（JS 进程内算）+ 人类图、灵名字母（后端 `/astroextra/zhufang`，JS 只排版）。 |
 
 ## 其他术数
 

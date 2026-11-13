@@ -111,6 +111,138 @@
       ]
     },
     {
+      "query": "帮我排一下藏历生日",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "Tibetan calendar date of my birthday",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "藏占看今年的流年八卦和九宫",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "Tibetan astrology parkha and mewa",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "蒙古 Zurkhai 看年月相位",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "Mongolian zurkhai aspect of my birth",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "算命学看我的天中杀",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "sanmeigaku reading",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "九星气学我的本命星是什么",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "what is my nine star ki number",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "洛书流年看明年",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "lo shu year transit for next year",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "易卦星盘排一个",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "i ching astrology of my planets",
+      "expect": [
+        "dongya"
+      ]
+    },
+    {
+      "query": "玛雅历我的生日是哪一天",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "mayan long count of my birthday",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "十三月亮历我是哪个 kin",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "dreamspell kin of my birthday",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "帮我看人类图",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "what is my human design type",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "灵名字母怎么取",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
+      "query": "spirit name letters from my chart",
+      "expect": [
+        "zhufang"
+      ]
+    },
+    {
       "query": "邵子参评数条文",
       "expect": [
         "canping"

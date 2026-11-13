@@ -368,6 +368,65 @@ class YizhangjingInput(FlexibleModel):
                                 "xiaoxianDir", "annualMethod", "flowShenSet", "chongfanKou", "starNaming", "daoTerm", "leapRule", "gradeSet", "timeAlg")
 
 
+class DongyaInput(FlexibleModel):
+    # 东亚诸术（上游 v3.14.0「命 · 其他 · 东亚」）：一个工具七段——藏历 / 藏占 / 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年 /
+    # 易卦星盘。全部进程内算（vendored eastAsiaArts / eastAsiaSnapshot）；干支历按直接时间、0 点换日、年按立春月按节
+    # （技法定义，不随 timeAlg / 日界设置——所以这里不声明 timeAlg）。藏历民用日从当地平太阳时 5 点起算 → 经度必填。
+    # 易卦星盘读本命盘七政的黄经与宫位（/chart）：只有宫制 / 黄道（+ 岁差）改它，声明这三项；不继承 BirthInput——
+    # 那一百多个西占口径旋钮对本技法没有作用，声明了就成了「给了却不生效」的入参。
+    date: str
+    time: str
+    zone: str
+    lat: str
+    lon: str
+    # 十进制坐标别名（入口归一化会补上；与 BaZiBirthInput 同：声明了才不被当成「不是本技法的参数」）。
+    gpsLat: float | None = None
+    gpsLon: float | None = None
+    ad: int | None = 1
+    # 流年八卦：男命一岁起离顺行、女命一岁起坎逆行（结果随性别变 → GENDER_FACT_TOOLS）。
+    gender: str | int | None = None
+    # 流年（上游页面流年框 / 挂载齿轮 dongyaFlowYear，1–9999）：藏占（流年八卦 / 当年九宫）按藏历年，洛书流年 / 天中杀近年按公历年。
+    flowYear: int | None = Field(default=None, description="流年（缺省今年）")
+    # 口径 = 上游页面设置 EAST_ASIA_PAGE_SETTINGS（挂载齿轮 dongyaFenyeVersion / dongyaIchingMerge 同词表）。不进广告层（预算），键表见 guidance。
+    fenyeVersion: str | None = _unadvertised()   # 算命学藏干表：common 通行版（缺省）| fajue 法诀版
+    ichingMerge: str | None = _unadvertised()    # 易卦星盘星卦合入：horizon 按地平上下（缺省）| upper 恒合上卦 | lower 恒合下卦
+    # 本命盘口径（只作用于 [易卦星盘]）：缺省 = 星阙 DefaultHouseSystem 1 / 回归黄道，同上游无头挂载 buildFieldObject。
+    hsys: int | None = Field(default=1, json_schema_extra={"x-horosa-hidden": True})
+    zodiacal: int | bool | None = Field(default=0, json_schema_extra={"x-horosa-hidden": True})
+    siderealAyanamsa: Any | None = _unadvertised()
+    _vocab = cn_field_validator("dongya", "fenyeVersion", "ichingMerge")
+
+    @field_validator("flowYear", mode="before")
+    @classmethod
+    def _flow_year_range(cls, value: Any) -> Any:
+        from horosa_skill.cn_vocab import parse_int_in_range
+        from horosa_skill.input_fields import field_validator_for
+
+        return None if value is None or value == "" else field_validator_for(parse_int_in_range("flowYear", 1, 9999), "flowYear")(value)
+
+
+class ZhufangInput(FlexibleModel):
+    # 诸方杂术（上游 v3.14.0「命 · 其他 · 诸方」）：一个工具四段——玛雅历 / 十三月亮历（进程内纯算，只读出生日期）+
+    # 人类图 / 灵名字母（后端 /astroextra/zhufang）。请求体 = 上游 zhufangParamsFromFields 的那几键（出生资料 + 宫制）+ 两个口径；
+    # 不继承 BirthInput——后端不读别的西占旋钮。灵名字母读上升与宫头 → 宫制 hsys 生效；人类图按定义用回归黄经、灵名字母后端
+    # 固定回归黄道 → zodiacal 不改结果（声明只为给了 1 时在 warnings 里说明）。
+    date: str
+    time: str
+    zone: str
+    lat: str
+    lon: str
+    gpsLat: float | None = None
+    gpsLon: float | None = None
+    ad: int | None = 1
+    hsys: int | None = Field(default=1, description="宫制（缺省 1 Alcabitus；3 = Placidus）：只作用于灵名字母")
+    # 口径 = 上游页面设置 ZHUFANG_PAGE_SETTINGS（挂载齿轮同名三键）。不进广告层（预算），键表见 guidance。
+    mayanCorrelation: int | None = _unadvertised()            # 玛雅历关联常数：584283（GMT，缺省）| 584285 | 584286
+    hdTrueNode: bool | int | str | None = _unadvertised()     # 人类图交点：true 真交点（缺省）| false 平交点
+    spiritQuadrant: int | None = _unadvertised()              # 灵名字母象限：1 = 1·4·7·10 宫（缺省）| 2 | 3
+    zodiacal: int | bool | None = Field(default=0, json_schema_extra={"x-horosa-hidden": True})
+    _vocab = cn_field_validator("zhufang", "mayanCorrelation", "hdTrueNode", "spiritQuadrant")
+
+
 class BaziInverseInput(FlexibleModel):
     # 八字反查（v0.36.0 C2）：四柱干支 → 候选公历出生时刻（Java /common/inversebazi，上游 BaZiHelper.getBirthes）。
     # 纯反查、不涉结果敏感设置 → 免确认门（与 astrodata 同类）。

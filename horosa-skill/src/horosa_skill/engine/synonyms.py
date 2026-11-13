@@ -21,6 +21,11 @@ TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     "canping": ("邵子参评数", "参评数", "金锁银匙", "can ping", "canping"),
     "heluo": ("河洛理数", "河洛", "he luo li shu", "heluo"),
     "yizhangjing": ("一掌经", "掌经", "yi zhang jing", "yizhangjing"),
+    # 命 · 其他两个多子术工具（上游 v3.14.0）：每个子术的叫法都列，口语 / 英文按子术名搜得到。
+    "dongya": ("东亚诸术", "藏历", "藏占", "算命学", "九星气学", "洛书流年", "易卦星盘", "蒙古 Zurkhai", "天中杀",
+               "tibetan calendar", "tibetan astrology", "zurkhai", "sanmeigaku", "nine star ki", "lo shu year", "i ching astrology", "dongya"),
+    "zhufang": ("诸方杂术", "玛雅历", "十三月亮历", "人类图", "灵名字母", "玛雅长计历", "卓尔金历",
+                "mayan calendar", "maya long count", "tzolkin", "dreamspell", "13 moon calendar", "human design", "spirit name letters", "zhufang"),
     "xiaoliuren": ("小六壬", "xiao liu ren", "xiaoliuren"),
     "feigong": ("飞宫小奇门", "飞宫", "小奇门", "fei gong", "feigong"),
     "xiaochengtu": ("小成图", "xiao cheng tu", "xiaochengtu"),

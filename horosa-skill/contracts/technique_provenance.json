@@ -51,6 +51,7 @@
         "babylon"
       ],
       "endpoints": [
+        "/astroextra/babylontables",
         "/astroextra/ephemeris",
         "/chart"
       ],
@@ -225,6 +226,17 @@
       ],
       "export_technique": "distributions",
       "notes": "chart 服务 /predict/dist 算界推运与伙伴星；vendored 星阙前端 buildDistributionsSnapshotFromResult（horosa-core-js progextra）按回包排版"
+    },
+    "dongya": {
+      "compute_class": "composite",
+      "engines": [
+        "dongya"
+      ],
+      "endpoints": [
+        "/chart"
+      ],
+      "export_technique": "dongya",
+      "notes": "藏历 / 藏占 / 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年六段由 vendored 星阙前端 eastAsiaArts（horosa-core-js dongya）进程内算；[易卦星盘] 读 chart 服务 /chart 本命盘七政的黄经与宫位后同样在 JS 内合卦（取不到本命盘时该段只出推运一行并进 warnings）；整份快照由 vendored eastAsiaSnapshotLines 排版"
     },
     "draconic": {
       "compute_class": "python_chart_backend",
@@ -443,8 +455,11 @@
     },
     "india_chart": {
       "compute_class": "python_chart_backend",
-      "engines": [],
+      "engines": [
+        "india_jyotish"
+      ],
       "endpoints": [
+        "/astroextra/transitevents",
         "/india/chart"
       ],
       "export_technique": "indiachart",
@@ -830,8 +845,12 @@
     },
     "relative": {
       "compute_class": "python_chart_backend",
-      "engines": [],
+      "engines": [
+        "india_tables"
+      ],
       "endpoints": [
+        "/astroextra/ashtakoota",
+        "/astroextra/relative",
         "/modern/relative"
       ],
       "export_technique": "relative",
@@ -1033,6 +1052,17 @@
       "export_technique": "tongshu",
       "notes": "纯 headless JS，无后端引擎"
     },
+    "transformchart": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "aux_labs"
+      ],
+      "endpoints": [
+        "/astroextra/transformchart"
+      ],
+      "export_technique": "transformchart",
+      "notes": "chart 服务 /astroextra/transformchart（astrostudy/transform_charts.py）把本命盘换算成新盘；整盘通用段走 Python snapshot builder，[变换盘] 专属段由 vendored 星阙前端 transformSnapshotLines（horosa-core-js aux_labs）按回包排版"
+    },
     "triplicityrulers": {
       "compute_class": "composite",
       "engines": [
@@ -1155,6 +1185,17 @@
       "export_technique": "zhengchuan",
       "notes": "纯 headless JS，无后端引擎"
     },
+    "zhufang": {
+      "compute_class": "composite",
+      "engines": [
+        "zhufang"
+      ],
+      "endpoints": [
+        "/astroextra/zhufang"
+      ],
+      "export_technique": "zhufang",
+      "notes": "[玛雅历] / [十三月亮历] 由 vendored 星阙前端 zhufangArts（horosa-core-js zhufang）进程内算；[人类图] / [灵名字母] 由 chart 服务 /astroextra/zhufang（astrostudy/zhufang_arts.py）算、vendored zhufangSnapshotLines 按回包排版（后端没算出的块写「未算出」并进 warnings）"
+    },
     "ziwei_birth": {
       "compute_class": "composite",
       "engines": [
@@ -1182,6 +1223,17 @@
       "endpoints": [],
       "export_technique": "ziweizeri",
       "notes": "多腿/多请求聚合；请求型 builder 归 Python，JS 层不发 HTTP"
+    },
+    "zodiacsystems": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "aux_labs"
+      ],
+      "endpoints": [
+        "/astroextra/zodiacsystems"
+      ],
+      "export_technique": "zodiacsystems",
+      "notes": "chart 服务 /astroextra/zodiacsystems（astrostudy/zodiac_systems.py）算各黄道版本的落段、星座与换星座时刻；[黄道制] 段由 vendored 星阙前端 zodiacSnapshotLines（horosa-core-js aux_labs）按回包排版"
     },
     "zr": {
       "compute_class": "python_chart_backend",

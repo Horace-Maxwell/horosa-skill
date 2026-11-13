@@ -14,6 +14,13 @@ def _contains_any(text: str, words: list[str]) -> bool:
     return any(word in text for word in words)
 
 
+def _without(text: str, phrases: list[str]) -> str:
+    """把已归属别的技法的整词从文本里摘掉（长词先摘），再判更短的通用词——「易卦星盘」里的「易卦」不该点亮六爻。"""
+    for phrase in sorted(phrases, key=len, reverse=True):
+        text = text.replace(phrase, " ")
+    return text
+
+
 # 择日搜索族（v0.36.0 B2 补 8 支）：词面都含基底技法名（「八字择日」含「八字」）→ 基底规则必须排除，
 # 否则一句话点亮两个工具；generic「择日」→ election 也要排除这些词面。
 _ZERI_PHRASES: dict[str, list[str]] = {
@@ -56,6 +63,28 @@ _ZODIAC_SYSTEM_WORDS = [
     "黄道制", "十三星座", "13星座", "十四星座", "14星座", "蛇夫座", "不等分黄道", "银河黄道",
     "zodiacsystems", "zodiac systems", "zodiac system", "13-sign zodiac", "13 sign zodiac", "thirteen-sign zodiac",
     "14-sign zodiac", "ophiuchus", "galactic zodiac", "constellational zodiac",
+]
+# 命 · 其他两个「一工具多子术」（上游 v3.14.0）：每个子术名都指向它所在的工具。互斥要点：
+#   「易卦星盘 / 易卦推运 / i ching astrology」含「易卦」「i ching」→ 六爻、卦义两条规则须排除；
+#   「十三月亮历」含「月历」→ 万年历规则须排除；九星只认「九星气学 / 九星气 / nine star ki」全词，不收裸「九星」
+#   （黄历的九星值日、奇门的八门九星、风水紫白都叫九星）；不收裸「kin」（是 qizhengkin / taking 的子串）。
+_DONGYA_ICHING_WORDS = ["易卦星盘", "易卦推运", "易卦占星", "i ching astrology", "iching astrology", "hexagram astrology"]
+_DONGYA_WORDS = [
+    "东亚诸术", "东亚术数", "dongya", "east asian arts",
+    "藏历", "藏占", "西藏占星", "藏族占星", "藏传占星", "tibetan calendar", "tibetan astrology", "tibetan divination", "parkha", "mewa",
+    "zurkhai", "蒙古占", "蒙古历算", "mongolian astrology",
+    "算命学", "天中杀", "sanmeigaku", "sanmei",
+    "九星气学", "九星気学", "九星气", "nine star ki", "9 star ki", "kyusei",
+    "洛书流年", "lo shu year", "loshu year", "lo shu transit",
+    *_DONGYA_ICHING_WORDS,
+]
+_ZHUFANG_MOON_WORDS = ["十三月亮历", "13月亮历", "13 月亮历", "十三月亮", "月亮历", "13 moon", "thirteen moon", "dreamspell", "星系印记", "银河印记"]
+_ZHUFANG_WORDS = [
+    "诸方杂术", "诸方", "zhufang",
+    "玛雅历", "玛雅", "马雅历", "mayan", "maya calendar", "maya long count", "long count", "长计历", "长纪历", "卓尔金", "tzolkin", "tzolk", "haab",
+    *_ZHUFANG_MOON_WORDS,
+    "人类图", "human design", "humandesign",
+    "灵名字母", "灵名", "spirit name", "spirit-name",
 ]
 
 
@@ -178,7 +207,8 @@ def route(request: DispatchInput) -> RouteResult:
         add("jinkou")
     if _contains_any(text, ["宿占", "宿盘", "suzhan"]):
         add("suzhan")
-    if _contains_any(text, ["六爻", "易卦", "sixyao", "guazhan", "liuyao", "liu yao", "i ching", "yi jing", "周易", "摇卦", "铜钱卦", "金钱卦"]):
+    # 「易卦星盘 / i ching astrology」是东亚诸术的子术（七政合卦），不是起六爻：把它从文本里摘掉再判六爻词。
+    if _contains_any(_without(text, _DONGYA_ICHING_WORDS), ["六爻", "易卦", "sixyao", "guazhan", "liuyao", "liu yao", "i ching", "yi jing", "周易", "摇卦", "铜钱卦", "金钱卦"]):
         add("sixyao")
     if _contains_any(text, ["统摄法", "tongshefa"]):
         add("tongshefa")
@@ -206,7 +236,7 @@ def route(request: DispatchInput) -> RouteResult:
     if _contains_any(text, ["梅花易数", "梅花易", "梅易", "梅花", "meiyi", "meihua", "mei hua"]):
         add("gua_meiyi")
     # 卦义查询：只在「问卦的意思」时；「起一卦 / 卜一卦」是起卦，不是查卦辞（v0.49 前会落到 gua_desc 或西洋卜卦）。
-    elif (_contains_any(text, ["卦"]) or re.search(r"\b(gua|hexagram)\b", text)) and _contains_any(
+    elif (_contains_any(_without(text, _DONGYA_ICHING_WORDS), ["卦"]) or re.search(r"\b(gua|hexagram)\b", _without(text, _DONGYA_ICHING_WORDS))) and _contains_any(
         text, ["卦义", "卦辞", "爻辞", "卦象", "什么意思", "含义", "意思", "解释", "meaning", "what does"]
     ) and not re.search(intents.CAST_GUA_PATTERN, text):
         add("gua_desc")
@@ -344,6 +374,11 @@ def route(request: DispatchInput) -> RouteResult:
     # ---- v0.36.0 B2：此前无路由规则的 25 个技法 ----
     if _contains_any(text, ["一掌经", "掌经", "yizhangjing"]):
         add("yizhangjing")
+    # 命 · 其他（上游 v3.14.0）：东亚诸术 / 诸方杂术——说任何一个子术的名字都到它所在的那个工具。
+    if _contains_any(text, _DONGYA_WORDS):
+        add("dongya")
+    if _contains_any(text, _ZHUFANG_WORDS):
+        add("zhufang")
     if _contains_any(text, ["占星地图", "astrocartography", "astro-cartography", "行星线", "acg"]):
         add("acg")
     if _contains_any(text, ["名人星盘", "名人库", "名人出生", "celebrity", "astrodata", "famous birth"]):
@@ -374,7 +409,8 @@ def route(request: DispatchInput) -> RouteResult:
         add("tarot")
     if _contains_any(text, ["通书", "通胜", "董公", "tongshu"]) and not _contains_any(text, ["通书择日", "黄历择"]):
         add("tongshu")
-    if _contains_any(text, ["万年历", "月历", "日历", "month calendar", "calendar_month", "本月黄历"]):
+    # 「十三月亮历」含「月历」二字：那是诸方杂术的子术，摘掉再判万年历词。
+    if _contains_any(_without(text, _ZHUFANG_MOON_WORDS), ["万年历", "月历", "日历", "month calendar", "calendar_month", "本月黄历"]):
         add("calendar_month")
     if (
         _contains_any(text, ["黄历", "宜忌", "huangli", "almanac"])
@@ -536,6 +572,8 @@ _CANDIDATE_POOL: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("acg", ("地图", "acg", "迁移", "行星线")),
     ("relative", ("合盘", "关系", "synastry", "配对")),
     ("yizhangjing", ("一掌经", "掌经")),
+    ("dongya", ("藏历", "藏占", "算命学", "九星气学", "洛书", "易卦星盘", "zurkhai")),
+    ("zhufang", ("玛雅", "月亮历", "人类图", "灵名", "human design")),
     ("taiyi", ("太乙", "taiyi")),
 )
 

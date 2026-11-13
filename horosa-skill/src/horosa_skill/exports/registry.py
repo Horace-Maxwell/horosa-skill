@@ -83,6 +83,8 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "neroman", "bezzafigure", "jayprofection", "michon",
     # 上游 v3.14.0 辅盘新技法：变换盘 / 黄道制（presets.js 迁移键表同批登记）
     "transformchart", "zodiacsystems",
+    # 上游 v3.14.0（aiExport v64）命 · 其他两个新技法键：presets.js 迁移键表同批登记
+    "dongya", "zhufang",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -258,6 +260,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "canping", "label": "邵子参评数"},
     {"key": "heluo", "label": "河洛理数"},
     {"key": "yizhangjing", "label": "一掌经"},
+    {"key": "dongya", "label": "东亚诸术"},
+    {"key": "zhufang", "label": "诸方杂术"},
     {"key": "xiaoliuren", "label": "小六壬"},
     {"key": "feigong", "label": "飞宫小奇门"},
     {"key": "xiaochengtu", "label": "小成图"},
@@ -498,6 +502,11 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 一掌经：十二支十二星（六道四柱四宫）+ 命宫/人事十二宫 + 格局 + 大限/小限流年十二神；
     # 重犯/交互格/职业适性/流年总论随盘面条件产出、神煞合参随开关（默认开）产出 → 见 optional。
     "yizhangjing": ["起盘信息", "四柱四宫断语", "命宫与人事十二宫", "四世与权重", "人事十二宫寓意", "格局判定", "九品定格", "年上运程", "位置速断", "各柱逢星速断", "六道分布", "主星象义与星性", "重犯", "交互格", "职业适性", "大限", "童限", "小限与流年十二神", "流月流日流时", "流年总论", "叠断", "神煞合参", "诗文", "逐日值星", "时辰细断", "四柱文献"],
+    # 东亚诸术 / 诸方杂术（上游 v3.14.0，aiExport v64）：段名与 vendored eastAsiaSnapshot.EAST_ASIA_SNAPSHOT_SECTIONS /
+    # zhufangArts.ZHUFANG_SNAPSHOT_SECTIONS 逐字一致（上游有合同测试；本仓 tests/test_sync314_mingother_contract.py 同锁）。
+    # 每段无条件恒出：缺本命盘 / 后端没算出 / 公元前不排历时，段内如实写明（「未出」「未算出」「不排」）→ 严格技法，空 optional。
+    "dongya": ["藏历", "藏占", "蒙古 Zurkhai", "算命学", "九星气学", "洛书流年", "易卦星盘"],
+    "zhufang": ["玛雅历", "十三月亮历", "人类图", "灵名字母"],
     # 小六壬（上游 v3.5.0）：三数起三传，6 段无条件恒出（主流六宫无五行生克，[生克] 段如实标注）→ 严格技法，空 optional。
     "xiaoliuren": ["问事", "起课", "三传", "生克", "九神", "化解"],
     # 飞宫小奇门（上游 v3.5.0）：时上起青龙飞九宫，7 段无条件恒出（缺项段内如实标注）→ 严格技法，空 optional。
