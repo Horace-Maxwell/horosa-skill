@@ -239,8 +239,9 @@ Details (citations `[E3]`, Markdown, paths, technique report): [`references/repo
 Technique, dispatch and 合参 calls are stored locally. `horosa_memory_query` filters (combine with AND): `entity` (a `name` you
 passed, or a profile name / alias), `tool` (key, MCP name or Chinese name: `"八字"`), `text` (words; all must
 match), `after` / `before` (`"2026-11-11"` = that whole day; ISO date-time also works; turn "yesterday" into a
-date yourself), `group_id`, `limit` ≤ 100, `offset`. Then `horosa_memory_show {"run_id": …}` re-reads a run
-without recomputing. Write a later answer back with `horosa_memory_record_answer {"run_id", "ai_answer_text"}`
+date yourself), `group_id`, `limit` ≤ 100, `offset`. Each row is a summary (run, time, technique, person, the
+question's first words, whether an answer or report exists); `has_more` + `next_offset` page on. Then
+`horosa_memory_show {"run_id": …}` re-reads a whole run without recomputing. Write a later answer back with `horosa_memory_record_answer {"run_id", "ai_answer_text"}`
 (older answers are kept in `answer_history`).
 
 ```call
