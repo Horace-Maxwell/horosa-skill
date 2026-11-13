@@ -159,6 +159,18 @@ def test_guidance_documents_the_orb_pair_on_the_three_tools_that_use_it() -> Non
         assert "orbs / orbScale" not in (get_tool_guidance(tool).get("options_keys") or {}), tool
 
 
+def test_technique_card_shows_the_orb_pair_and_who_set_it(tmp_path: Path) -> None:
+    """改了结论就变的设置必须逐条回显在技法依据卡上（设置全表只从指引表的 safe_defaults 推）。
+    负向对照：删掉 horary 指引表里的 orbScale / orbs 两条 safe_defaults → 卡上没有这两行，KeyError（实跑过）。"""
+    service = _service(tmp_path, _chart_client())
+    default = service.run_tool("horary", MOMENT, save_result=False).data["technique_card"]["settings"]
+    assert (default["orbScale"]["label"], default["orbScale"]["value"], default["orbScale"]["source"]) == ("容许度倍数", 1, "default")
+    assert (default["orbs"]["label"], default["orbs"]["value"], default["orbs"]["source"]) == ("逐星容许度", None, "default")
+    given = service.run_tool("election", {**MOMENT, "orbScale": 1.5, "orbs": {"Sun": 10}}, save_result=False).data["technique_card"]["settings"]
+    assert (given["orbScale"]["value"], given["orbScale"]["source"]) == (1.5, "user")
+    assert (given["orbs"]["value"], given["orbs"]["source"]) == ({"Sun": 10}, "user")
+
+
 # ── 上游源对拍：手抄件的锚 ───────────────────────────────────────────────────────────────────────
 
 

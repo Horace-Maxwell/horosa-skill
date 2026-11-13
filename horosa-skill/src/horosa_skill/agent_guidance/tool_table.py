@@ -472,6 +472,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
              "meaning": "希腊点口径与主排盘同式（上游缺省：福点昼夜反转、标准福点式、六星点反转）；顶层或 options 传入即进扫描与 [选中时刻星盘]"},
             {"field": "userAyanT0/userAyanDeg", "value": None,
              "meaning": "siderealAyanamsa='user' 档的历元 JD 与该历元岁差度（缺参按 Lahiri）；进扫描与 [选中时刻星盘]"},
+            {"field": "orbScale", "value": 1, "meaning": "容许度按星阙默认表、不缩放（orbs 可逐星改）；只改 [选中时刻星盘] 的相位，扫描判定不读"},
+            {"field": "orbs", "value": None, "meaning": "逐星容许度：不给 = 星阙默认表"},
             *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "征象条件", "location"],
@@ -899,6 +901,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "category", "value": "general", "meaning": "综合判断：事项守护星取月亮下一个入相的星 / 相关宫主"},
             {"field": "school", "value": "classical", "meaning": "经典主流：Regiomontanus（hsys 2）· 托勒密界经典传本 · 托勒密三分 · 七政"},
+            {"field": "orbScale", "value": 1, "meaning": "容许度按星阙默认表、不缩放（orbs 可逐星改，键表见 options_keys）；相位全览、成相、月亮的故事随它变"},
+            {"field": "orbs", "value": None, "meaning": "逐星容许度：不给 = 星阙默认表"},
         ],
         do_not_assume=["提问时刻（绝不可编造，必须是占者真实收到问题的时刻）", "问题类别"],
     ),
@@ -909,7 +913,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "date/time/place", "question": "请提供要评估的候选日期、时间、时区和举事地点。"},
             {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（37 类全表见 options_keys.topicId）"]},
         ],
-        safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
+        safe_defaults=[
+            {"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"},
+            {"field": "orbScale", "value": 1, "meaning": "容许度按星阙默认表、不缩放（orbs 可逐星改，键表见 options_keys）；只作用于择日盘本身"},
+            {"field": "orbs", "value": None, "meaning": "逐星容许度：不给 = 星阙默认表"},
+        ],
         # natal 可选：给了才加产 [本命合参] 与 [回归与主限]（择日前最近日/月返 + ±240 日主限命中）。
         do_not_assume=["候选时刻", "用事类型", "本命出生资料 natal（只在用户给出时传，不可编造）"],
     ),
