@@ -189,6 +189,37 @@ def _static_doc(tool_name: str) -> dict[str, str]:
         note = "不改结果：本法只按回归黄道算（后端强制 zodiacal=0"
         note += "；双黄道的恒星黄道用其自带岁差 J2000.0 时 26°37′18″）" if tool_name == "michon" else "）"
         return {"zodiacal": f"{note}；传 1 只改 [起盘信息] 的「黄道」行。", "siderealAyanamsa": f"{note}。"}
+    if tool_name == "transformchart":
+        # 上游 v3.14.0 变换盘：全表与「哪种变换用到哪些选项」= vendored transformCharts.js TRANSFORM_GROUPS（auxlab_vocab 锚定）。
+        from horosa_skill import auxlab_vocab as vocab
+
+        option_fields = {setting: field for field, setting in vocab.TRANSFORM_FIELD_TO_SETTING.items()}
+        groups = "；".join(
+            f"{group}：" + " ".join(
+                f"{value}={label}" + (f"[{'+'.join(option_fields[o] for o in opts)}]" if opts else "") for value, label, opts in kinds
+            )
+            for group, kinds in vocab.TRANSFORM_GROUPS
+        )
+        return {
+            "transformKind": f"变换种类 {len(vocab.TRANSFORM_KINDS)} 种（缺省 {vocab.TRANSFORM_DEFAULTS['kind']}；也认中文名，认不出报 tool.invalid_option）。"
+            f"方括号 = 这种变换用到的选项，没列的选项传了不生效、回执 data.params_ignored：{groups}。"
+            "人格盘 / 受孕盘另找一个时刻起盘（[变换盘] 段写起盘时刻；高纬的受孕盘可能无解 → tool.transformchart_empty）。",
+            "transformPlanet": "基准星（superimposed 叠置盘 / planetCentered 行星中心盘（选 Sun 即日心盘）/ persona 人格盘用）："
+            + " ".join(f"{value}={label}" for value, label in vocab.TRANSFORM_PLANET_LABELS.items())
+            + f"；缺省 {vocab.TRANSFORM_DEFAULTS['planet']}。",
+        }
+    if tool_name == "zodiacsystems":
+        from horosa_skill import auxlab_vocab as vocab
+
+        same = "不改结果：黄道制一律回到回归黄经上分段、四轴与宫制无关（后端 zodiac_systems._body_rows）"
+        return {
+            "zodiacVersion": f"黄道版本 {len(vocab.ZODIAC_VERSIONS)} 种（缺省 {vocab.ZODIAC_VERSION_DEFAULT}；也认中文名，认不出报 tool.invalid_option）："
+            + " ".join(f"{value}={label}" for value, label in vocab.ZODIAC_VERSIONS)
+            + "。版本只换各点的落段行；真实星座、银河黄道、换星座时刻与十三宫（固定按十三星座甲本的座长排）不随版本变。",
+            "hsys": f"{same}。",
+            "zodiacal": f"{same}；恒星黄道盘与回归黄道盘的落段相同（换算回回归黄经时至多差约 1″）。",
+            "siderealAyanamsa": f"{same}。",
+        }
     return {}
 
 

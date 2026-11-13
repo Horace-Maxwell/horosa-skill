@@ -121,6 +121,13 @@ _DERIVED_HOUSE_MODE = "wholeFromAsc"   # 后端 thirteenthchart.py DERIVED_HOUSE
 # hsysDerived='compositeWholeFromAsc'。
 COMPOSITE_WHOLE_SIGN_LABEL = "整宫(组合上升)"
 _COMPOSITE_HOUSE_MODE = "compositeWholeFromAsc"
+# v3.14.0 wholeSignRulers.js:171-174 —— 变换盘（后端 transform_charts.py EQUAL_HOUSE_MODE / BASE_HOUSE_MODE）：九分盘、北交宫盘是
+# 等宫但宫头不对齐星座（不能按整宫折叠宫主表）；福点整宫这类自定义宫制在地方盘上算不出，按它的基础宫制算。
+TRANSFORM_EQUAL_LABEL = "等宫(变换后)"
+_TRANSFORM_EQUAL_HOUSE_MODE = "equalFromTransform"
+TRANSFORM_BASE_LABEL = "基础宫制(变换后)"
+_TRANSFORM_BASE_HOUSE_MODE = "baseFromTransform"
+_TRANSFORM_HOUSE_MODES = (_TRANSFORM_EQUAL_HOUSE_MODE, _TRANSFORM_BASE_HOUSE_MODE)
 # v3.13.0 wholeSignRulers.js:232-241 —— 极区天顶标记 houses[].polarMc（flatlib swe.upperMeridianAscmc 打 'upperMeridian'）。
 POLAR_MC_NOTE = "极区天顶：本时刻子午线上中天交点在地平以下；各分宫制的 MC 一律按上中天交点取（不换作 IC），宫头仍按所选分宫制。"
 
@@ -277,20 +284,26 @@ def _field_value(fields: Any, key: str) -> Any:
 
 
 def _derived_mode_of(chart: Any) -> str:
-    """wholeSignRulers.js:171 derivedModeOf：首个带 hsysDerived ∈ {'wholeFromAsc','compositeWholeFromAsc'} 的宫的标记，否则 ''。"""
+    """wholeSignRulers.js:175 derivedModeOf：首个带 hsysDerived ∈ {'wholeFromAsc','compositeWholeFromAsc','equalFromTransform',
+    'baseFromTransform'} 的宫的标记，否则 ''。"""
     houses = chart.get("houses") if isinstance(chart, dict) else None
     for house in houses if isinstance(houses, list) else []:
         mode = house.get("hsysDerived") if isinstance(house, dict) else None
-        if mode in (_DERIVED_HOUSE_MODE, _COMPOSITE_HOUSE_MODE):
+        if mode in (_DERIVED_HOUSE_MODE, _COMPOSITE_HOUSE_MODE, *_TRANSFORM_HOUSE_MODES):
             return mode
     return ""
 
 
 def derived_whole_sign_label_of(chart: Any) -> str:
-    """wholeSignRulers.js:181：组合盘标记 → 「整宫(组合上升)」；派生盘标记 → 「整宫(变换后上升)」；否则 ''。"""
+    """wholeSignRulers.js:185：组合盘标记 → 「整宫(组合上升)」；变换盘的等宫 / 基础宫制标记 → 「等宫(变换后)」/「基础宫制(变换后)」；
+    派生盘标记 → 「整宫(变换后上升)」；否则 ''。"""
     mode = _derived_mode_of(chart)
     if mode == _COMPOSITE_HOUSE_MODE:
         return COMPOSITE_WHOLE_SIGN_LABEL
+    if mode == _TRANSFORM_EQUAL_HOUSE_MODE:
+        return TRANSFORM_EQUAL_LABEL
+    if mode == _TRANSFORM_BASE_HOUSE_MODE:
+        return TRANSFORM_BASE_LABEL
     return DERIVED_WHOLE_SIGN_LABEL if mode else ""
 
 
@@ -382,8 +395,12 @@ def resolve_house_system(chart_obj: Any, fields: Any) -> dict[str, Any]:
     derived_label = derived_whole_sign_label_of(chart)
     label = derived_label or (f"{base_label}→回退{fallback}" if fallback else base_label)
     # v3.13.0 wholeSignRulers.js:212：组合盘改按组合上升起了整宫 → 宫位就是上升整宫，宫主表按整宫折叠。
-    if _derived_mode_of(chart) == _COMPOSITE_HOUSE_MODE:
+    derived_mode = _derived_mode_of(chart)
+    if derived_mode == _COMPOSITE_HOUSE_MODE:
         is_asc_whole_sign = True
+    elif derived_mode in _TRANSFORM_HOUSE_MODES:
+        # v3.14.0 wholeSignRulers.js:219：变换盘的等宫 / 基础宫制都不是上升整宫 → 宫主表不折叠。
+        is_asc_whole_sign = False
     else:
         is_asc_whole_sign = num == "0" if num is not None else echo_text in (HSYS_WHOLE_SIGN, "整宫制")
     resolved: dict[str, Any] = {"num": num, "label": label, "isAscWholeSign": is_asc_whole_sign}

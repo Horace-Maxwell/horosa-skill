@@ -99,8 +99,10 @@ from horosa_skill.schemas.tools import (
     QizhengElectionInput,
     TarotInput,
     TongSheFaInput,
+    TransformChartInput,
     ZiWeiBirthInput,
     ZiWeiRulesInput,
+    ZodiacSystemsInput,
 )
 
 
@@ -149,6 +151,8 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "chart12": ToolDefinition("chart12", "astro", "chart12", "/chart12", AstroChartInput, "生成十二分盘 / Dwadasamsa（黄经×12 mod 360，与十三分盘同结构）。Generate the 十二分盘 / Dwadasamsa chart (lon×12 mod 360)."),
     "draconic": ToolDefinition("draconic", "astro", "draconic", None, DraconicInput, "生成龙盘 / Draconic chart（各点黄经减北交点，交点归零的盘）。Generate the 龙盘 / Draconic chart (all longitudes measured from the North Node).", execution="local"),
     "relocation": ToolDefinition("relocation", "astro", "relocation", None, RelocationInput, "生成重置盘 / Relocation chart（保留出生时刻，按新居住地重算宫位与角点）。Generate the 重置盘 / Relocation chart — same birth moment, houses and angles recomputed for a new location.", execution="local"),
+    "transformchart": ToolDefinition("transformchart", "astro", "transformchart", None, TransformChartInput, "生成变换盘（本命盘按 33 种变换之一换算成新盘：倒置 / 映点 / 旬盘 / 地理盘 / 日心 / 人格盘 / 受孕盘…）。Generate a 变换盘 / transformed chart (the natal chart recast by one of 33 transforms).", execution="local"),
+    "zodiacsystems": ToolDefinition("zodiacsystems", "astro", "zodiacsystems", None, ZodiacSystemsInput, "起黄道制（各点在十三 / 十四星座、不等分十二段黄道的落段，真实星座，银河黄道，换星座时刻）。黄道制 / zodiac systems: each point in 13-sign, 14-sign and unequal 12-segment zodiacs.", execution="local"),
     "hellen_chart": ToolDefinition("hellen_chart", "astro", "hellen_chart", None, AstroChartInput, "生成希腊占星取向盘。Generate the 希腊星盘 / Hellenistic chart output.", execution="local"),
     "guolao_chart": ToolDefinition("guolao_chart", "astro", "guolao_chart", None, GuoLaoInput, "生成七政四余 / 果老法盘。Generate the 七政四余 chart output.", execution="local"),
     "germany": ToolDefinition("germany", "astro", "germany", None, GermanyInput, "生成量化盘 / 汉堡学派中点分析盘。Generate the 量化盘 / midpoint analysis output.", execution="local"),
@@ -285,7 +289,7 @@ COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
 
 # 西占盘族（本命 + 五张派生盘 + 世运）：[埃及历] 与 [信息] 互容接纳过滤吃**本盘**（上游 buildAstroSnapshotContent 对任意盘
 # 按 fields 产出，astroAiSnapshot.js:1731；派生盘快照同一 builder，derivedAstroSnapshot.js），所以全族都挂。
-ASTRO_CHART_FAMILY_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart", "harmonic", "mundane", "draconic", "relocation"})
+ASTRO_CHART_FAMILY_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart", "harmonic", "mundane", "draconic", "relocation", "transformchart"})
 
 # 古典格局派生分析 (星阙 v2.6.7)：[古典格局] 段来自 /astroextra/analysis（护卫/优势相位/相位动态/逐题主星/偶然尊贵/恒星/
 # 行星时/格局/分布/气质/almutem…），按需 fetch、优雅降级（失败→该段不出）。[古典]（逐曜状态/围攻/围绕）直接读 /chart 响应。

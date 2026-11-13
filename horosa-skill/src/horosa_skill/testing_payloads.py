@@ -259,6 +259,9 @@ def build_sample_payloads() -> dict[str, dict]:
         "draconic": {**chart_birth, "predictive": 0, "orb": 2.0},
         # 重置盘必须给新地点，否则退化成本命盘（relocLat/relocLon 缺省回退出生地）。
         "relocation": {**chart_birth, "predictive": 0, "relocLat": "51n30", "relocLon": "0w07"},
+        # 上游 v3.14.0 辅盘两页：种类 / 版本显式给（各自的缺省是倒置盘 / 十三星座甲本）。
+        "transformchart": {**chart_birth, "predictive": 0, "transformKind": "superimposed", "transformPlanet": "Moon", "transformShift": True},
+        "zodiacsystems": {**chart_birth, "predictive": 0, "zodiacVersion": "z13a"},
         "hellen_chart": {**base_birth, "predictive": 0},
         "guolao_chart": {
             **confirmed,

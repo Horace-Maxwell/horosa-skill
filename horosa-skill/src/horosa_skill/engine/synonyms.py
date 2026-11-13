@@ -37,6 +37,8 @@ TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     "chart12": ("十二分盘", "dwadasamsa", "dwad", "chart12"),
     "draconic": ("龙盘", "龙头盘", "draconic chart", "draconic"),
     "relocation": ("重置盘", "迁居盘", "移居盘", "relocation chart", "relocated chart"),
+    "transformchart": ("变换盘", "倒置盘", "日心盘", "人格盘", "受孕盘", "transform chart", "antiscia chart", "heliocentric chart"),
+    "zodiacsystems": ("黄道制", "十三星座", "蛇夫座", "银河黄道", "zodiac systems", "13-sign zodiac", "ophiuchus"),
     "hellen_chart": ("希腊占星", "古典占星盘", "hellenistic", "hellenistic chart"),
     "guolao_chart": ("七政四余", "果老星宗", "果老法", "qizheng siyu", "guolao"),
     "germany": ("汉堡学派", "量化盘", "中点盘", "uranian", "midpoints", "hamburg school"),

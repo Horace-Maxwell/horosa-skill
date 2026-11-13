@@ -81,6 +81,8 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "ephemeris", "returntimeline", "prenatalsyzygy", "prog",
     # 上游 v3.13.0 之后（219d8a67）推运图族四法：presets.js 迁移键表同批登记
     "neroman", "bezzafigure", "jayprofection", "michon",
+    # 上游 v3.14.0 辅盘新技法：变换盘 / 黄道制（presets.js 迁移键表同批登记）
+    "transformchart", "zodiacsystems",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
@@ -98,6 +100,7 @@ AI_EXPORT_PLANET_INFO_TECHNIQUES = {
     "draconic",
     "relocation",
     "acg",
+    "transformchart",
     "relative",
     "primarydirect",
     "primarydirchart",
@@ -164,6 +167,8 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "tongshu", "label": "通书择日"},
     {"key": "dwadasamsa", "label": "十二分盘"},
     {"key": "draconic", "label": "龙盘"},
+    {"key": "transformchart", "label": "变换盘"},
+    {"key": "zodiacsystems", "label": "黄道制"},
     {"key": "relocation", "label": "重置盘"},
     {"key": "relative", "label": "关系盘"},
     {"key": "primarydirect", "label": "推运盘-主/界限法"},
@@ -301,6 +306,11 @@ AI_EXPORT_PRESET_SECTIONS = {
     "babylon": ["起盘信息", "七曜按宫", "分至天狼星", "位三法", "行星神性", "数理星历", "吉日历", "年历预测", "微黄道"],
     "dwadasamsa": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "埃及历", "寿命格局", "可能性"],
     "draconic": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "埃及历", "寿命格局", "可能性", "龙盘"],
+    # 上游 v3.14.0 辅盘两键（presets.js:699-702）。变换盘 = 变换后的整盘 + [变换盘] 专属段，不产「可能性」（星落星座断语随变换后的
+    # 位置而变，后端变换不跑推断）、不挂 [古典格局]（pipeline.js CLASSICAL_SKIP_KEYS：本命口径的分析不冒充变换盘结论）；「月宿」同族
+    # skill 既有 extra（恒星黄道盘才有，后端按变换后的黄经算）。黄道制没有盘体，只有 [黄道制] 一段。
+    "transformchart": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "埃及历", "寿命格局", "变换盘"],
+    "zodiacsystems": ["黄道制"],
     "relocation": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "古典格局", "埃及历", "寿命格局", "可能性", "重置盘"],
     "harmonic": ["起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表", "古典", "埃及历", "寿命格局", "可能性", "调波位置", "同频合相", "调波盘"],
     # 八个盘面段是**盘型互斥**的：relative=0 出 [比较盘-星盘A/B]（上游 v3.11 Q-441/T-404，比较盘页签
@@ -626,6 +636,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # calendar 个性化吉日榜：只在给了 rizi.persons 时出（段头带动态计数，经 map_legacy_section_title 折叠）。
     "dwadasamsa": ["月宿", "古典", "埃及历", "可能性"],
     "draconic": ["月宿", "古典", "埃及历", "可能性", "龙盘"],
+    # 变换盘：[变换盘] 由 runner 保证必出（空了直接报错），不列可选；其余同族条件段照旧。
+    "transformchart": ["月宿", "古典", "埃及历"],
     "relocation": ["月宿", "古典", "古典格局", "埃及历", "可能性", "重置盘"],
     "harmonic": ["月宿", "古典", "埃及历", "可能性", "调波盘"],
     # [附加分盘]（v3.11.0 #80）只在给了 indiaExtraVargas 时产；[Tripataki 三旗盘逐月净分]（[Q-127/T-35]）只在

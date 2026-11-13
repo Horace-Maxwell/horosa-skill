@@ -2325,6 +2325,29 @@
       "upstream": "utils/pageSettingsStore.js",
       "mode": "verbatim"
     },
+    "utils/transformCharts.js": {
+      "upstream": "utils/transformCharts.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 辅盘「变换盘」「黄道制」的单一来源：变换清单 TRANSFORM_GROUPS（每种变换用到哪些选项）、基准星 / 宫头候选、页面缺省 TRANSFORM_PAGE_SETTINGS / ZODIAC_PAGE_SETTINGS、黄道版本表 ZODIAC_VERSIONS，以及「结果 → 快照正文」transformSnapshotLines / transformSnapshotChart / zodiacSnapshotLines。计算全在后端 astrostudy/transform_charts.py、zodiac_systems.py（/astroextra/transformchart、/astroextra/zodiacsystems，Python 侧发请求）。"
+    },
+    "utils/aiAnalysisContext/derivedLabsHeadless.js": {
+      "upstream": "utils/aiAnalysisContext/derivedLabsHeadless.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 辅盘「变换盘」「黄道制」的无头复算：只取纯函数 transformRequestOptions（变换盘只发这种变换真正用到的选项，与页面 AstroTransformLab.requestOptions 同口径）与键表 DERIVED_LAB_HEADLESS_KEYS。取本命盘、发请求、缓存归 Python（JS 层不发 HTTP）。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^// 结果与别的技法重算共用一份内存小缓存",
+          "why": "其后是请求编排（取本命盘 → 请求后端 → 内存缓存 → 拼正文）：headless 侧由 Python runner 承担，正文仍由 vendored transformCharts.js 的同一组函数出。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "async function loaders(){\n\tconst [common, tc, das, req, consts, text] = await Promise.all([\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../../components/astro/AstroExtraCommon.js'),\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../transformCharts.js'),\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../derivedAstroSnapshot.js'),\n\t\timport('../request.js'),\n\t\timport('../constants.js'),\n\t\timport('../../constants/AstroText.js'),\n\t]);\n\treturn { common, tc, das, request: req.default || req, Constants: consts, AstroText: text };\n}\n\n",
+          "to": "",
+          "why": "loaders() 只给被截掉的请求编排用：它按需载入页面侧模块（AstroExtraCommon / derivedAstroSnapshot / request / constants），vendor 树没有这些路径，留着就是一组指向不存在文件的动态 import。"
+        }
+      ]
+    },
     "utils/timeBasisLine.js": {
       "upstream": "utils/timeBasisLine.js",
       "mode": "verbatim",

@@ -133,6 +133,8 @@ Local end-to-end signals:
 | `babylon` | Babylonian astrology | Aldebaran-anchored sidereal list, arithmetic calendar, bīt niṣirti, numina, microzodiac |
 | `draconic` | Draconic chart | all longitudes measured from the North Node + a node-baseline dedicated section |
 | `relocation` | Relocation chart | same birth moment, houses/angles recomputed for a new place + an angle-comparison section |
+| `transformchart` | Transformed chart | the natal chart recast by one of 33 transforms (inverted, sunrise, superimposed, antiscia, decanate, node houses, geodetic, heliocentric, persona, epoch, planetary nodes, coordinate analogs…) + a before/after positions section |
+| `zodiacsystems` | Zodiac systems | same longitudes, different divisions: 19 versions of 13-sign, 14-sign and unequal 12-segment zodiacs; true IAU constellation, galactic zodiac, last/next constellation change, 13 houses |
 | `hellen_chart` ⓟ | Hellenistic chart | Hellenistic-oriented chart |
 | `india_chart` ⓟ | Indian chart | Vedic chart |
 | `guolao_chart` ⓟ | Seven Governors (Guolao) | Seven Governors / Guo Lao chart |

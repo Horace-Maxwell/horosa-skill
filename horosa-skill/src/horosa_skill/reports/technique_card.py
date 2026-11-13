@@ -18,6 +18,7 @@ import json
 import re
 from datetime import datetime, timezone
 from functools import lru_cache
+from horosa_skill.auxlab_vocab import ZODIAC_UNUSED_CHART_KEYS, transform_field_applies
 from horosa_skill.contracts_locator import contract_path
 from horosa_skill.schemas.tools.astro import INDIA_RECTIFY_DEAD_KEYS
 from horosa_skill.schemas.tools.cn_divination import SUZHAN_DEAD_CLASSICAL_KEYS
@@ -77,6 +78,9 @@ _FIELD_DEAD_FOR_TOOLS: dict[str, frozenset[str]] = {
     key: frozenset(tool for tool, dead in (("suzhan", SUZHAN_DEAD_CLASSICAL_KEYS), ("india_rectify", INDIA_RECTIFY_DEAD_KEYS)) if key in dead)
     for key in (*SUZHAN_DEAD_CLASSICAL_KEYS, *INDIA_RECTIFY_DEAD_KEYS)
 }
+# 黄道制（上游 v3.14.0）：宫制 / 黄道 / 岁差不参与分段（auxlab_vocab.ZODIAC_UNUSED_CHART_KEYS，附实测）→ 卡片不回显。
+for _key in ZODIAC_UNUSED_CHART_KEYS:
+    _FIELD_DEAD_FOR_TOOLS[_key] = _FIELD_DEAD_FOR_TOOLS.get(_key, frozenset()) | {"zodiacsystems"}
 # 闸门状态：调用方声称「设置已与用户确认」还是「接受默认」，是报告里最该留痕的一项。
 _GATE_FIELDS: tuple[tuple[str, str], ...] = (
     ("agent_confirmed_settings", "已与用户确认设置"),
@@ -124,6 +128,8 @@ _EXTRA_LABELS = {
     "ad": "纪年", "lifespanMethod": "寿命格局取主法", "gender": "性别", "sex": "性别", "timeAlg": "时间算法",
     "zeriSnapshotMaxRows": "命中清单行数", "zeriSnapshotExplainRows": "判读树行数", "seed": "起卦种子",
     "orbScale": "容许度倍数", "orbs": "逐星容许度",
+    "transformKind": "变换种类", "transformPlanet": "基准星", "transformShift": "宫位同转", "transformHouse": "对应宫头",
+    "transformVariant": "变换口径", "zodiacVersion": "黄道版本",
 }
 
 
@@ -232,6 +238,8 @@ def _settings_used(
                 continue  # 这次调用不依赖性别（如神数正传·铁算心易）：不印
             if tool_name in _FIELD_DEAD_FOR_TOOLS.get(key, ()):
                 continue
+            if tool_name == "transformchart" and not transform_field_applies(input_normalized, key):
+                continue  # 这种变换用不上的选项（倒置盘的「对应宫头」…）：没参与计算，不印
             value = _lookup(input_normalized, key)
             sent = value is not None and not (isinstance(value, str) and not value.strip())
             if not sent and "default" in spec:

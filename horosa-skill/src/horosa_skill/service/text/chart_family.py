@@ -540,7 +540,7 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
 _CHART_FAMILY_DAY_BOUNDARY_DEFAULTS = {"after23NewDay": 1, "lateZiHourUseNextDay": 1}
 # 走 `_build_astro_snapshot_text`（上游 buildAstroSnapshotContent 逐字移植）整盘快照的西占 chart 家族（india_chart 走自家
 # 入口；relative / jieqi_year 以嵌入无头整盘的形式复用）。western_options_doc 据此给日界两键出说明。
-_CHART_FAMILY_SNAPSHOT_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart", "harmonic", "draconic", "relocation"})
+_CHART_FAMILY_SNAPSHOT_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart", "harmonic", "draconic", "relocation", "transformchart"})
 
 
 # 严格接纳开关的上游缺省（item：strongRecption）。后端 perchart.py:814 在请求**不带**该键时按 True（严格：只认本垣/擢升

@@ -289,7 +289,9 @@ Keys below are `tool_name` values (MCP name = `horosa_<group>_<key>`; `horosa_ag
 "Moment" = cast for the moment of the question (§4).
 
 - **Western natal / derived**: `chart`, `chart13`, `chart12`, `hellen_chart`, `harmonic`, `draconic`,
-  `relocation` (needs `relocLat` / `relocLon`), `relative` (合盘: `inner` + `outer`, both with a birth time),
+  `relocation` (needs `relocLat` / `relocLon`), `transformchart` (变换盘: `transformKind`, 33 transforms),
+  `zodiacsystems` (黄道制: `zodiacVersion`, 13-sign / 14-sign / unequal 12-segment zodiacs),
+  `relative` (合盘: `inner` + `outer`, both with a birth time),
   `germany` (midpoints / Uranian), `india_chart`, `guolao_chart` (七政四余), `babylon`, `acg`,
   `india_rectify` (birth-time rectification from dated events; the user decides), `astrodata` (celebrity data).
 - **Western predictive and timing** (most need a target, §4; which ones: `references/predictive.md`): `solarreturn`, `lunarreturn`, `givenyear`, `solararc`,

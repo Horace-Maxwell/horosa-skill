@@ -35,7 +35,8 @@ ROLES: tuple[str, ...] = (NATAL, MOMENT, NATAL_TARGET, NATAL_MOMENT, WINDOW, YEA
 _BY_ROLE: dict[str, tuple[str, ...]] = {
     NATAL: (
         # 西占本命 / 派生盘
-        "chart", "chart12", "chart13", "babylon", "draconic", "relocation", "hellen_chart", "guolao_chart",
+        "chart", "chart12", "chart13", "babylon", "draconic", "relocation", "transformchart", "zodiacsystems",
+        "hellen_chart", "guolao_chart",
         "germany", "harmonic", "acg", "india_chart", "india_rectify", "jieqi_birth", "suzhan",
         # 命理
         "ziwei_birth", "bazi_birth", "bazi_direct", "canping", "heluo", "yizhangjing", "zhengchuan",

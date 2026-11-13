@@ -57,6 +57,7 @@ from horosa_skill.service.options_zeri import (
 )
 from horosa_skill.service.remote import RemoteMixin
 from horosa_skill.service.runners.astrodata import AstrodataRunners
+from horosa_skill.service.runners.auxlabs import AuxLabRunners
 from horosa_skill.service.runners.cn_divination import CnDivinationRunners
 from horosa_skill.service.runners.guolao import GuolaoRunners
 from horosa_skill.service.runners.horary_election import HoraryElectionRunners
@@ -134,6 +135,7 @@ class HorosaSkillService(
     CnDivinationRunners,
     WesternRunners,
     AstrodataRunners,
+    AuxLabRunners,
     GuolaoRunners,
     PredictiveRunners,
     ShenshuRunners,

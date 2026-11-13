@@ -64,6 +64,11 @@ def test_every_setting_the_gate_can_ask_about_is_on_the_card(tool: str) -> None:
     }
     if not gender_required(tool, payload):
         expected -= {"gender"} if tool in __import__("horosa_skill.agent_guidance.questions", fromlist=["x"]).GENDER_FACT_TOOLS else set()
+    if tool == "transformchart":
+        # 变换盘的四个专属选项各只对几种变换有效：这次的变换用不上的不印（倒置盘不印「对应宫头=1」），见 auxlab_vocab.transform_field_applies。
+        from horosa_skill.auxlab_vocab import transform_field_applies
+
+        expected = {key for key in expected if transform_field_applies(payload, key)}
     missing = sorted(key for key in expected if key not in settings)
     assert not missing, f"{tool}: 闸门会问 / 有缺省的设置没上卡：{missing}"
     for key, item in settings.items():

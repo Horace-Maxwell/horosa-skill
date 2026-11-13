@@ -84,6 +84,8 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/ephemeris",
     "/astroextra/draconic",
     "/astroextra/relocation",
+    "/astroextra/transformchart",
+    "/astroextra/zodiacsystems",
     "/predict/agepoint",
     "/predict/dist",
     "/astroextra/jaynesprog",

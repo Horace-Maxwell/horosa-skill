@@ -48,6 +48,12 @@ from horosa_skill.agent_guidance.policies import (
     ZR_POLICY,
     _policy,
 )
+from horosa_skill.auxlab_vocab import (
+    TRANSFORM_DEFAULTS,
+    TRANSFORM_KIND_LABELS,
+    ZODIAC_VERSION_DEFAULT,
+    ZODIAC_VERSIONS,
+)
 
 # 大六壬起课法全 26 法（键序 = 上游 LiuRengMain.js:3860 QI_METHODS；tests/test_sync311_sanshi.py 对 vendored 表锚定）。
 LIURENG_CAST_METHODS: tuple[tuple[str, str], ...] = (
@@ -1165,6 +1171,47 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             },
         ],
         output_contract=["起盘信息", "宫位宫头", "星与虚点", "相位"],
+    ),
+    # 上游 v3.14.0 辅盘两页（词表单源 auxlab_vocab，对 vendored transformCharts.js 逐项锚定）。
+    "transformchart": _policy(
+        intent="变换盘：把本命盘按一种规则换算成一张新盘（旋转与翻转 / 分度重排 / 地方盘 / 换中心与换时刻 / 行星根数 / 坐标类比，共 33 种），"
+        "出变换后的整盘与各点变换前后的黄经。",
+        required_context=COMMON_BIRTH_FIELDS + ["transformKind (变换种类)"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {
+                "field": "transformKind",
+                "question": "做哪一种变换？（旋转与翻转 / 分度重排 / 地方盘 / 换中心与换时刻 / 行星根数 / 坐标类比 六组共 33 种，每种是一张不同的盘；星阙默认倒置盘）",
+                "options": [f"{label}（{value}）" + ("（星阙默认）" if value == TRANSFORM_DEFAULTS["kind"] else "") for value, label in TRANSFORM_KIND_LABELS.items()],
+                "values": list(TRANSFORM_KIND_LABELS),
+            },
+        ],
+        safe_defaults=[
+            {"field": "transformKind", "value": TRANSFORM_DEFAULTS["kind"], "meaning": "星阙变换盘页默认：倒置盘"},
+            {"field": "transformVariant", "value": TRANSFORM_DEFAULTS["variant"], "meaning": "口径默认改进档（倒置盘 / 日升盘 / 九分盘 / 北交宫盘用；classic=经典档，四轴留在本命）"},
+            {"field": "transformPlanet", "value": TRANSFORM_DEFAULTS["planet"], "meaning": "基准星默认月亮（叠置盘 / 行星中心盘 / 人格盘用）"},
+            {"field": "transformShift", "value": TRANSFORM_DEFAULTS["shift"], "meaning": "叠置盘默认宫位与四轴不动"},
+            {"field": "transformHouse", "value": TRANSFORM_DEFAULTS["house"], "meaning": "受孕盘默认对应本命第 1 宫头"},
+        ],
+        do_not_assume=["transformKind"],
+        output_contract=["起盘信息", "宫位宫头", "星与虚点", "相位", "变换盘"],
+    ),
+    "zodiacsystems": _policy(
+        intent="黄道制：黄经不变、只换分段——各点落在所选黄道版本（十三星座 / 十四星座 / 十二段不等分，共 19 种）的哪一段，"
+        "并列真实星座（官方边界）、银河黄道、上次与下次换星座、十三宫。",
+        required_context=COMMON_BIRTH_FIELDS + ["zodiacVersion (黄道版本)"],
+        ask_if_missing=[
+            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {
+                "field": "zodiacVersion",
+                "question": "用哪个黄道版本？（十三星座 / 十四星座 / 十二段不等分，共 19 种；各版本的座头与座长不同；星阙默认十三星座·甲本）",
+                "options": [f"{label}（{value}）" + ("（星阙默认）" if value == ZODIAC_VERSION_DEFAULT else "") for value, label in ZODIAC_VERSIONS],
+                "values": [value for value, _label in ZODIAC_VERSIONS],
+            },
+        ],
+        safe_defaults=[{"field": "zodiacVersion", "value": ZODIAC_VERSION_DEFAULT, "meaning": "星阙黄道制页默认：十三星座·甲本"}],
+        do_not_assume=["zodiacVersion"],
+        output_contract=["黄道制"],
     ),
     "india_chart": _policy(
         intent="印度占星(Vedic)恒星黄道盘：分宫制全 24 制(indiaHsys 0–24) + 黄道岁差全 47(indiaAyanamsa)。",

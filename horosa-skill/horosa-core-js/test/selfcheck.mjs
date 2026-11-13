@@ -1668,6 +1668,80 @@ try {
   console.error(`  FAIL specOptions: ${err.message}`);
 }
 
+// 辅盘变换盘 / 黄道制（上游 v3.14.0，tools/auxLabs.js → vendored utils/transformCharts.js + aiAnalysisContext/derivedLabsHeadless.js）。
+// 期望值出处 = 上游自己的 jest：utils/__tests__/transformCharts.test.js（「快照正文」「宫主和黄金分割进快照」「快照写明坐标口径」
+// 「北交宫盘给 AI 的宫头」）与 derivedLabsHeadless.test.js（「只发这种变换真正用到的选项」）——输入与期望串逐字照抄，只把上游
+// 测试里手写的 names 换成本工具用的 AstroMsgCN（太阳 / 月亮 同名）。
+try {
+  const { runAuxLabs } = await import('../src/tools/auxLabs.js');
+  const base = { planet: 'Moon', shift: true, house: 3, variant: 'improved' };
+  // 变换盘:段头、用到的选项、前后黄经、出黄道带;没用到的选项不写
+  const sup = runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'superimposed' }, result: {
+    kind: 'superimposed', chart: {}, positions: [{ id: 'Sun', natalLon: 54.07, lon: 10.5 }], vertical: [{ id: 'Moon', outside: true }],
+  } });
+  assert(sup.title === '变换盘', `title ${sup.title}`);
+  const supText = sup.lines.join('\n');
+  assert(supText.includes('基准星:月亮') && supText.includes('宫位:随之旋转'), supText);
+  assert(supText.includes('太阳:本命黄经 54.07° → 10.50°'), supText);
+  assert(supText.includes('出黄道带:月亮') && !supText.includes('宫头'), supText);
+  const inv = runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'inverted' }, result: { kind: 'inverted', chart: {}, positions: [] } });
+  assert(!inv.lines.join('\n').includes('基准星') && !inv.lines.join('\n').includes('宫位:'), inv.lines.join('\n'));
+  assert(inv.lines.includes('口径:改进'), inv.lines.join('\n'));
+  // 请求体:只发这种变换真正用到的选项（derivedLabsHeadless.test.js 的两组期望）
+  const settings4 = { kind: 'superimposed', planet: 'Moon', shift: true, house: 4, variant: 'classic' };
+  const reqSup = runAuxLabs({ technique: 'transformchart', settings: settings4, result: null }).request_fields;
+  assert(JSON.stringify(reqSup) === JSON.stringify({ transformKind: 'superimposed', transformPlanet: 'Moon', transformShift: 1 }), JSON.stringify(reqSup));
+  const reqInv = runAuxLabs({ technique: 'transformchart', settings: { ...settings4, kind: 'inverted' }, result: null }).request_fields;
+  assert(JSON.stringify(reqInv) === JSON.stringify({ transformKind: 'inverted', transformVariant: 'classic' }), JSON.stringify(reqInv));
+  const reqEpoch = runAuxLabs({ technique: 'transformchart', settings: { ...settings4, kind: 'epoch' }, result: null }).request_fields;
+  assert(JSON.stringify(reqEpoch) === JSON.stringify({ transformKind: 'epoch', transformHouse: 4 }), JSON.stringify(reqEpoch));
+  // 算不出盘时不留空段
+  const failed = runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'persona' }, result: { kind: 'persona', momentFailed: true } });
+  assert(failed.title === '' && failed.lines.length === 0, JSON.stringify(failed));
+  // 宫主和黄金分割进快照 / 逆行次主和宫头前 3°
+  const vert = runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'vertical' }, result: {
+    kind: 'vertical', chart: {}, positions: [], coordinatesMoved: false,
+    vertical: [{ id: 'Sun', outside: false, declination: 10, first: 25, second: 155 }],
+    rulers: [{ house: 1, ruler: 'Mars', coRuler: 'Mars', nextRuler: null, inside: ['Sun'] }, { house: 2, ruler: 'Mars', rulerRetro: 'Pluto', coRuler: 'Venus', nearCusp: ['Moon'] }],
+    golden: [{ lon: 137.51, ratio: 0.382, near: ['Moon'] }, { lon: 1, ratio: 0.618, near: [] }],
+  } }).lines.join('\n');
+  assert(vert.includes('太阳 赤纬 10.00°:两解 25.00° / 155.00°'), vert);
+  assert(vert.includes('本命第 1 宫现代宫主:主星 火星,共主 火星,宫内 太阳'), vert);
+  assert(vert.includes('本命第 2 宫现代宫主:主星 火星/冥王星逆,共主 金星,宫头前 3° 月亮'), vert);
+  assert(vert.includes('黄金分割点 137.51°(比例 0.382):月亮') && !vert.includes('1.00°'), vert);
+  assert(vert.includes('本来的位置'), vert);
+  // 北交宫盘给 AI 的宫头:真宫头 = 段头 + 30°,星座随之;别的变换不换宫头
+  const nodeChart = { chart: { houses: [{ id: 'House1', lon: 216.4, sign: 'Scorpio' }] }, params: {} };
+  const node = runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'nodeHouses' }, result: { kind: 'nodeHouses', chart: nodeChart, positions: [], coordinatesMoved: true, natalHorizon: true } });
+  assert(Math.abs(node.snapshot_houses[0].lon - 246.4) < 1e-9 && node.snapshot_houses[0].sign === 'Sagittarius', JSON.stringify(node.snapshot_houses));
+  assert(nodeChart.chart.houses[0].sign === 'Scorpio', 'input chart mutated');
+  assert(node.lines.join('\n').includes('得时失时取出生时的值') && !node.lines.join('\n').includes('本来的位置'), node.lines.join('\n'));
+  assert(runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'inverted' }, result: { kind: 'inverted', chart: nodeChart, positions: [] } }).snapshot_houses === null, 'inverted must keep houses');
+  // 设置值不在上游候选里:报出来,不落缺省（上游 transformKindDef('nope') 会静默落到第一项）
+  const bad = runAuxLabs({ technique: 'transformchart', settings: { ...base, kind: 'nope', house: 13 }, result: null });
+  assert(JSON.stringify(bad.invalid.map((item) => item.key)) === JSON.stringify(['kind', 'house']), JSON.stringify(bad));
+  // 黄道制:段头、版本、落段与上次 / 下次换星座;黄道外星座标明
+  const zod = runAuxLabs({ technique: 'zodiacsystems', settings: { version: 'z13a' }, result: {
+    version: 'z13a', galacticCenter: 266.7,
+    rows: [{ id: 'Sun', lon: 54.07, conName: '金牛', onZodiac: true, versions: { z13a: { sign: '金牛', deg: 0.79 } }, galactic: { sign: '狮子', deg: 27.37 } }, { id: 'Moon', lon: 200, conName: '乌鸦', onZodiac: false, versions: {} }],
+    around: [{ id: 'Sun', last: { date: '1990-05-14', fromName: '白羊' }, next: { date: '1990-06-21', toName: '双子' } }],
+  } });
+  assert(zod.title === '黄道制' && zod.version.label === '十三星座 · 甲本', JSON.stringify(zod.version));
+  const zodText = zod.lines.join('\n');
+  assert(zodText.includes('黄道版本:十三星座 · 甲本'), zodText);
+  assert(zodText.includes('太阳:回归黄经 54.07° · 金牛 0.79° · 星座 金牛 · 银河黄道 狮子 27.37°'), zodText);
+  assert(zodText.includes('星座 乌鸦(黄道外)'), zodText);
+  assert(zodText.includes('太阳 下次换星座:1990-06-21 入双子') && zodText.includes('太阳 上次换星座:1990-05-14 自白羊'), zodText);
+  assert(runAuxLabs({ technique: 'zodiacsystems', settings: { version: 'z99' }, result: null }).invalid[0].key === 'version', 'bad zodiac version must be reported');
+  let threw = false;
+  try { runAuxLabs({ technique: 'draconic', settings: {}, result: null }); } catch (err) { threw = true; }
+  assert(threw === true, 'unknown technique must throw');
+  console.log('  ok   auxLabs 变换盘 / 黄道制专属段、请求体选项、北交宫盘真宫头、坏设置不落缺省');
+} catch (err) {
+  failures += 1;
+  console.error(`  FAIL auxLabs: ${err.message}`);
+}
+
 // 🔴 收尾前再等一次：中途那句 `await Promise.all(pending)` 之后登记的 async check，其失败会在「all passed」打印之后才到，
 // 退出码照样 0（v0.50.0-dev 加 qimenzeri 金标时撞上：变异体打印了 FAIL，进程却以 0 退出）。
 await Promise.all(pending);
