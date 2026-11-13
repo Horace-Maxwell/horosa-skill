@@ -1,6 +1,6 @@
 // 世俗盘 AI 快照的「头行 / 判词 / 分析段 / 右栏卡」四件 —— 自上游 components/mundane/MundaneMain.js **逐字**抽出
 // （bespoke，derived_from + derived_sha256 看守：上游 MundaneMain.js 一动即红，复核本文件后 --restamp）：
-//   · buildMundaneAiSnapshotParts —— 上游类方法 `buildAiSnapshot(chart, fields, extra)`（MundaneMain.js:2853-3000）的正文，
+//   · buildMundaneAiSnapshotParts —— 上游类方法 `buildAiSnapshot(chart, fields, extra)`（MundaneMain.js:2871-3018，v3.14.0）的正文，
 //     headLines（盘型标题 / 规则集 / 盘型头行）+ judge（[世俗宫义]）+ extraSecs（[定局·年主/盘主] / [入境骨架] / [地理分野] /
 //     [年之九主] / [世运问判] / [角化] / [地区盘推运]）+ cardSecs（buildMundaneCardSections）。
 // 与上游的全部差异（声明式，重抽时必须保留）：
@@ -8,7 +8,7 @@
 //      secData / navanayaka…；headless 由 Python 按需给，缺键语义与上游「页面未算过」相同）；共 15 处；
 //   ② 尾部 `const head / const body = buildAstroSnapshotContent(chart, fields) / return [...].join` 三行换成
 //      `return { headLines, judge, extraSecs, cardSecs }`：盘面正文由 skill 侧 Python 的本命段 builder 出（与上游同一
-//      buildAstroSnapshotContent 的段），拼接序 head / judge / extraSecs / cardSecs / body 由调用方（service.py）照上游 :2999 复现；
+//      buildAstroSnapshotContent 的段），拼接序 head / judge / extraSecs / cardSecs / body 由调用方（service.py）照上游 :3017 复现；
 //   ③ 正文缩进保留上游类方法体的两级 tab（逐字节对照方便）。
 // import 按 vendor 树改路径；AstroExtraCommon 不 vendor：chartRequestKey 恒 'headless'（同 MundaneMain.js 的 stub，[盘型格局]/
 // 返照·次限的 `st.xxKey === chartRequestKey(chart)` 判定用），fmtDegree 只在 state.srData（页面按需拉取的返照）存在时才调到——
@@ -30,7 +30,7 @@ import {
 const chartRequestKey = () => 'headless';
 const fmtDegree = () => { throw new Error('fmtDegree（AstroExtraCommon）未 vendor：headless 不供给 state.srData，此路不可达 / fmtDegree is not vendored (headless never supplies state.srData)'); };
 
-// MundaneMain.js:2853 `buildAiSnapshot(chart, fields, extra){` —— 正文逐字（见头注 ①②③）。
+// MundaneMain.js:2871 `buildAiSnapshot(chart, fields, extra){` —— 正文逐字（见头注 ①②③）。
 export function buildMundaneAiSnapshotParts(chart, extra, state){
 		const ex = extra || {};
 		const type = ex.mundaneType || 'ingress';

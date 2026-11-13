@@ -132,11 +132,13 @@ class WesternRunners:
     _ACG_CCG_KEYS = ("ccgDate", "ccgTime", "ccgMix")
     _ACG_REL_KEYS = ("relMode", "relDate", "relTime", "relZone", "relLat", "relLon")
     # 快照图层开关（纯渲染；进 uiState 决定 [占星地图] 的 ◆ 子块，AstroAcg.js:277-287）。
-    _ACG_LAYER_KEYS = ("paranMode", "showLS", "showGeodetic", "showStarParans")
+    _ACG_LAYER_KEYS = ("paranMode", "showLS", "showGeodetic", "showStarParans", "climes", "climesObliquity")
+    # 日食路径（上游 v3.14.0 genParams :390-393）：`eclipse !== 'off'` 才下发 eclipse + eclipseFilter（关 = 零回归）。
+    _ACG_ECLIPSE_KEYS = ("eclipse", "eclipseFilter")
     # 后端回显 meta 的有效值：请求值与之不符 = 后端不认、按缺省算了（ACGraph 静默归一）→ 说出来。
     _ACG_META_ECHO = ("mode", "lsMode", "geodetic", "geodeticVar", "coord", "posType", "horizon", "nodeType", "lilithType", "midpointMode", "relMode")
     _ACG_ONLY_KEYS = frozenset({
-        *_ACG_ENGINE_KEYS, *_ACG_CCG_KEYS, *_ACG_REL_KEYS, *_ACG_LAYER_KEYS,
+        *_ACG_ENGINE_KEYS, *_ACG_CCG_KEYS, *_ACG_REL_KEYS, *_ACG_LAYER_KEYS, *_ACG_ECLIPSE_KEYS,
         "clickLat", "clickLon", "pointOrb", "pointHsys", "eventKind", "eventDirection", "eventFromDate",
     })
 
@@ -164,6 +166,12 @@ class WesternRunners:
             if value is None or value == "" or key in remote:
                 continue
             remote[key] = self._acg_flag(value) if key in self._ACG_FLAG_KEYS else (f"{value}" if key == "harmonic" else value)
+        eclipse = payload.get("eclipse")
+        if eclipse and eclipse != "off":
+            remote["eclipse"] = eclipse
+            remote["eclipseFilter"] = payload.get("eclipseFilter") or "any"
+        elif payload.get("eclipseFilter"):
+            _degrade("acg: eclipseFilter given without eclipse", note="占星地图 eclipseFilter 须配 eclipse（prenatal / postnatal）才起作用；本次未开日食路径，未下发。")
         if ccg:
             remote.update(ccg)
         if payload.get("relMode") and payload.get("relDate"):
@@ -273,7 +281,36 @@ class WesternRunners:
             "showLS": self._acg_flag(payload.get("showLS")) == "1",
             "showGeodetic": self._acg_flag(payload.get("showGeodetic")) == "1",
             "geodeticZero": f"{payload.get('geodeticZero') if payload.get('geodeticZero') is not None else ''}",
+            # v3.14.0 snapshotUiState（AstroAcg.js:296-297）：气候带图层与黄赤交角口径。
+            "climes": payload.get("climes") or "off",
+            "climesObliquity": payload.get("climesObliquity") or "date",
         }
+        if payload.get("climesObliquity") and ui_state["climes"] == "off":
+            _degrade("acg: climesObliquity given without climes", note="占星地图 climesObliquity 须配 climes（klimata / parallels）才起作用；本次未开气候带，未成块。")
+        # 日食路径（后端 ACGraph._eclipse）：开了却没回 = 引擎没找到 / 不认这个键（旧引擎）→ 「◆ 日食路径」不成块，说出来；
+        # 回的不是所请求的那一次（which / filter 不符）同样不许照写。
+        eclipse_asked = remote_payload.get("eclipse")
+        eclipse = response.get("eclipse") if isinstance(response.get("eclipse"), dict) else None
+        if eclipse_asked:
+            if eclipse is None or not isinstance(eclipse.get("greatest"), dict):
+                eclipse = None
+                _degrade(
+                    "acg: eclipse=%s asked but engine returned none", eclipse_asked,
+                    note=f"占星地图日食路径（eclipse={eclipse_asked}）排盘引擎没有回结果，[占星地图] 的「◆ 日食路径」本次未产出。",
+                )
+            elif eclipse.get("which") != eclipse_asked or eclipse.get("filter") != remote_payload.get("eclipseFilter"):
+                _degrade(
+                    "acg: eclipse echo mismatch (asked %s/%s, got %r/%r)", eclipse_asked, remote_payload.get("eclipseFilter"),
+                    eclipse.get("which"), eclipse.get("filter"),
+                    note=f"占星地图日食路径：请求 {eclipse_asked}/{remote_payload.get('eclipseFilter')}，引擎按 {eclipse.get('which')}/{eclipse.get('filter')} 算，以引擎回显为准。",
+                )
+        if eclipse is not None:
+            # 后端原样（which / filter / type / central / greatest / track / north / south / utc / local…）：正文的「◆ 日食路径」
+            # 与报告盘图（app AcgD3Map 的日食层）读同一份。
+            acg_data["eclipse"] = eclipse
+        if ui_state["climes"] != "off":
+            # 气候带是纯渲染层（纬度由 acgLayers.climesLines 现推）：把开着的口径留在结果里，盘图层与正文同一口径。
+            acg_data["layers"] = {"climes": ui_state["climes"], "climesObliquity": ui_state["climesObliquity"]}
         map_text = ""
         try:
             js = self.js_client.run("acg_section", {"acgData": response, "uiState": ui_state})
@@ -432,7 +469,7 @@ class WesternRunners:
         }
 
     def _run_babylon_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """巴比伦占星：恒星黄道 · 毕宿锚盘 → vendored 纯函数链铺六段。
+        """巴比伦占星：恒星黄道 · 毕宿锚盘 → vendored 纯函数链铺各段（v3.14.0 起含后端实算的 [天象实算]）。
 
         上游的编排函数自己发两个请求，headless 侧按 §5 由 Python 发、JS 只算与排版。
         `/astroextra/ephemeris`（朔望/邻近食）取不到时，[分至天狼星] 段内两行实算自动省略、
@@ -463,6 +500,35 @@ class WesternRunners:
             ephemeris = self._call_remote("/astroextra/ephemeris", {**chart_payload, "kinds": "lunations"})
         except Exception as exc:  # noqa: BLE001 — 实算历象缺失只丢两行，不影响成段
             _degrade("babylon ephemeris fetch failed: %s", exc)
+        # [天象实算]（上游 v3.14.0，aiExport v64）：七曜所行三道 / 26 颗 ziqpu 星钟 / 目标年取数 / 五星周期现象与出生时可见状态，
+        # 后端 /astroextra/babylontables 实算。请求体照上游 fetchBabylonSkyTables（babylonAiSnapshot.js:398-403）：盘面参数里的
+        # date / time / zone / lat / lon / ad 六键（无其他口径——「目标年」取本盘年份减各星周期，不是入参）。
+        # 上游取不到就静默少这一段；这里说出来（段缺席 + warnings）。
+        sky_tables = None
+        try:
+            sky = self._call_remote(
+                "/astroextra/babylontables",
+                {key: chart_payload.get(key) for key in ("date", "time", "zone", "lat", "lon", "ad")},
+            )
+            if isinstance(sky, dict) and isinstance(sky.get("paths"), list):
+                sky_tables = sky
+                # 后端四块各自 try/except，失败的那块回 None（babylon_tables.build_babylon_tables）：段里少那一行，说出来。
+                lost = [cn for key, cn in (("ziqpu", "ziqpu 星钟"), ("goalYear", "目标年取数"), ("phenomena", "周期现象")) if sky.get(key) is None]
+                if lost:
+                    _degrade(
+                        "babylon sky tables partial: %s", "/".join(lost),
+                        note=f"巴比伦 [天象实算] 段缺 {'、'.join(lost)}（排盘引擎这一块没有算出来），其余行照常。",
+                    )
+            else:
+                _degrade(
+                    "babylon sky tables: 响应无 paths",
+                    note="巴比伦 [天象实算] 段本次未产出：/astroextra/babylontables 没有回七曜三道（paths），其余段不受影响。",
+                )
+        except Exception as exc:  # noqa: BLE001 — 天象实算取不到只少这一段
+            _degrade(
+                "babylon sky tables fetch failed: %s", exc,
+                note=f"巴比伦 [天象实算] 段本次未产出（/astroextra/babylontables 取数失败：{exc}），其余段不受影响。",
+            )
         js = self.js_client.run(
             "babylon",
             {
@@ -471,6 +537,7 @@ class WesternRunners:
                 "month": month,
                 "day": day,
                 "ephemeris": ephemeris,
+                "skyTables": sky_tables,
                 # scheme 是**档 id**（JS 侧据它查 BABYLON_SCHEMES 解析出 judge 参数），
                 # solstice/dodecaVariant/cubitDeg/era/ephemerisSource 是显式覆写，缺省则跟档走（v3.11：era 进
                 # [起盘信息] 纪元行、ephemerisSource 选 [数理星历] 木星函数；值域锚定 BABYLON_PARAM_SPEC）。
@@ -501,6 +568,8 @@ class WesternRunners:
             "raw": chart,
             # 报告盘图（app 原版 BabylonHoroscope）用的起盘口径：JS 算正文时的同一 jdn / 派系 opts，不另算
             "board_context": board if isinstance(board, dict) else None,
+            # 天象实算原始数据（/astroextra/babylontables；[天象实算] 段的来源，取不到为 None）
+            "sky_tables": sky_tables,
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="babylon", snapshot_text=snapshot_text),
         }

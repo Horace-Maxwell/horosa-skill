@@ -107,7 +107,7 @@ const CYCLE_PAIRS = [
 ];
 const CYCLE_ASPECTS = [{ v: 0, cn: '合相 0°' }, { v: 180, cn: '对分 180°' }];
 // Barbault 行星周期指数(§9.3)可选慢星组合:对数 = C(n,2),满刻度 = 对数×180°。
-const BARBAULT_SETS = [
+export const BARBAULT_SETS = [
 	{ key: 'slow5', cn: '五慢星 ♃♄♅♆♇（默认）', planets: ['Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'] },
 	{ key: 'outer3', cn: '仅外三星 ♅♆♇（最平滑）', planets: ['Uranus', 'Neptune', 'Pluto'] },
 	{ key: 'slow4', cn: '土外四星 ♄♅♆♇', planets: ['Saturn', 'Uranus', 'Neptune', 'Pluto'] },

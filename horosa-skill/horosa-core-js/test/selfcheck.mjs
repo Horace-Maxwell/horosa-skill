@@ -42,6 +42,7 @@ import { runZeriScan, ZERI_TECHNIQUES } from '../src/tools/zeriScan.js';
 import { runMundaneCards } from '../src/tools/mundaneCards.js';
 import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
 import { runAcgSection } from '../src/tools/acgSection.js';
+import { runBabylon } from '../src/tools/babylon.js';
 import { runBaziLocal } from '../src/tools/baziLocal.js';
 import { alignJavaBaziAges } from '../src/vendor/bazi/baziSnapshot.js';
 import { isSouthLatitude } from '../src/vendor/bazi/baziLunarLocal.js';
@@ -1198,6 +1199,187 @@ check('acgSection 值级金标：角化线取点 + 交映去重 + 口径头行�
   assert(all.includes('共 2 条纬线') && all.includes('| 火星 | 升 | 木星 | 中天 | 12.25°S |'), `paran all: ${all}`);
   // 模块级「最近一次地图状态」每次调用前后清空：无 planets 的响应不许串出上一张图。
   assert(runAcgSection({ acgData: { meta: {} } }).text === '', 'stale acg snapshot leaked across calls');
+});
+
+// ── 上游 v3.14.0：占星地图两层 / 世运周期表 / 巴比伦天象实算 ─────────────────────────────────────────
+// [占星地图] 的「◆ 日食路径」「◆ 气候带」（上游 utils/acgLayers.js 逐字 vendored，acgSnapshot.js 拼段）。期望值独立算：
+//   · 食甚处食带宽 = 食甚点到北界、南界的最短地面距离之和。合成数据：北界 / 南界是食甚点正北 / 正南 0.5° 的两条东西向线段，
+//     所以两侧各 0.5° 纬度弧长 = 0.5 × π/180 × 6371.0088 km = 55.597 km，合 111.19 → 「约 111 km」；
+//     食甚时刻 / 地点取 2017-08-21 日全食的公布值（18:25 UT，36°58′N 87°40′W；上游 astropy/tests/test_eclipse_path.py 同值）。
+//   · 气候带：tan φ = −cos(7.5° × 最长昼) / tan ε（acgLayers.js 头注的公式）。改进档 ε = 后端 meta.obliquity，
+//     经典档 ε = 托勒密值 23°51′20″ = 23.8556°；最长昼 24 时的纬圈即极圈 φ = 90° − ε = 66.14°。
+check('acgSection 值级金标：日食路径摘要 + 气候带 / 纬圈（vendored acgLayers）', () => {
+  const eps = 23.435;
+  const acgData = {
+    meta: { mode: 'mundo', obliquity: eps },
+    planets: { Sun: { lines: { mc: { lon: 0 }, ic: { lon: 180 }, asc: [], desc: [] } } },
+    eclipse: {
+      which: 'prenatal', filter: 'any', type: 'total', central: true, magnitude: 1.0306, daysFromBirth: -0.2326, widthKm: 114.7,
+      utc: '2017/08/21 18:25', local: '2017/08/21 13:25', greatest: { lat: 36.97, lon: -87.67 },
+      track: [{ lat: 39.74, lon: -171.58 }, { lat: 36.97, lon: -87.67 }, { lat: 11.0, lon: -27.4 }],
+      north: [{ lat: 37.47, lon: -88.67 }, { lat: 37.47, lon: -86.67 }],
+      south: [{ lat: 36.47, lon: -88.67 }, { lat: 36.47, lon: -86.67 }],
+    },
+  };
+  const lines = runAcgSection({ acgData, uiState: { climes: 'klimata', climesObliquity: 'date' } }).text.split('\n');
+  const at = lines.indexOf('◆ 日食路径:');
+  assert(at > 0, `missing ◆ 日食路径: ${JSON.stringify(lines)}`);
+  assert(JSON.stringify(lines.slice(at, at + 4)) === JSON.stringify([
+    '◆ 日食路径:',
+    '出生前最近一次日食:全食,食甚 2017/08/21 13:25(出生地时区)/ 2017/08/21 18:25(UT),出生前 0.2 日',
+    '食甚地点 36.97°N 87.67°W,食分 1.0306,食甚处食带宽约 111 km(两侧边界之间的地面距离)',
+    '中心线:39.74°N 171.58°W → 11.00°N 27.40°W',
+  ]), `eclipse block: ${JSON.stringify(lines.slice(at, at + 4))}`);
+  const D = Math.PI / 180;
+  const latFor = (hours, e) => Math.atan(-Math.cos(7.5 * hours * D) / Math.tan(e * D)) / D;
+  assert(lines[at + 4] === `◆ 七气候带(黄赤交角 ${eps.toFixed(4)}°,改进:出生时刻的值):`, `climes head: ${lines[at + 4]}`);
+  // 七带中线的最长昼：13 / 13½ / 14 / 14½ / 15 / 15½ / 16 时（托勒密七气候带）。第 3 带（下埃及，14 时）≈ 30.84°N。
+  const bands = lines[at + 5].split(';');
+  assert(bands.length === 7, `seven klimata: ${lines[at + 5]}`);
+  [13, 13.5, 14, 14.5, 15, 15.5, 16].forEach((hours, i) => {
+    assert(bands[i].startsWith(`第 ${i + 1} 带 · `) && bands[i].endsWith(` ${latFor(hours, eps).toFixed(2)}°N`), `band ${i + 1}: ${bands[i]} vs ${latFor(hours, eps).toFixed(2)}`);
+  });
+  assert(bands[2].endsWith(' 30.84°N'), `Lower Egypt band: ${bands[2]}`);
+  // 经典档 + 纬圈：ε 取托勒密值；最长昼 24 时 = 极圈 90 − 23.8556 = 66.14°N；只列北半球（南半球对称不重复）。
+  const par = runAcgSection({ acgData: { ...acgData, eclipse: null }, uiState: { climes: 'parallels', climesObliquity: 'ptolemy' } }).text.split('\n');
+  assert(!par.includes('◆ 日食路径:'), 'no eclipse block without eclipse data');
+  const ph = par.indexOf('◆ 托勒密纬圈(黄赤交角 23.8556°,经典:托勒密值):');
+  assert(ph > 0, `parallels head: ${JSON.stringify(par.slice(-2))}`);
+  const rows = par[ph + 1].split(';');
+  assert(rows.length === 32 && rows[0] === `最长昼 12¼ 时 ${latFor(12.25, 23 + 51 / 60 + 20 / 3600).toFixed(2)}°N`, `parallels rows: ${rows.length} ${rows[0]}`);
+  assert(rows[rows.length - 1] === '最长昼 24 时 66.14°N', `polar circle: ${rows[rows.length - 1]}`);
+  // 图层关着（缺省）不成块；偏食没有中心线 → 「最大食分点轨迹」+ 说明句，带宽改报投影面上的本影直径（无则不报）。
+  const off = runAcgSection({ acgData: { ...acgData, eclipse: null }, uiState: {} }).text;
+  assert(!off.includes('◆ 七气候带') && !off.includes('◆ 托勒密纬圈') && !off.includes('◆ 日食路径'), `layers off: ${off}`);
+  const partial = runAcgSection({ acgData: { ...acgData, eclipse: { ...acgData.eclipse, type: 'partial', central: false, north: [], south: [], widthKm: null, filter: 'any' } }, uiState: {} }).text;
+  assert(partial.includes('最大食分点轨迹:39.74°N 171.58°W → 11.00°N 27.40°W') && partial.includes('偏食没有中心线') && !partial.includes('食带宽'), `partial: ${partial}`);
+});
+
+// 世运周期表（上游 utils/mundaneCycles.js 逐字 vendored；tools/mundaneCards.js 的 cycles_request + cycles job）。期望值独立来源：
+//   · 请求字段 = 上游 mundaneCycleRequestFields 的规则：只带这张表起作用的选项；cycleVariant → variant，且只有大合（木土）、
+//     世运法达小档、世俗小限的非天顶起点才带；年份只给区间表 / 年表。
+//   · 正文：黄经 → 星座 + 座内度两位小数（300.4861° = 水瓶 0.49°——2020-12-21 木土大合在水瓶 0°29′，天文事实）；
+//     千年表 1701 年 = 千年主火、转主土、季摄火（上游 astropy/tests/test_mundane_cycles.py::test_thousands_row_fixed_sample）。
+check('mundaneCards 值级金标：世运周期表请求字段 + [世运周期表] 正文（vendored mundaneCycles）', () => {
+  const req = (settings, years) => runMundaneCards({ action: 'cycles_request', settings, years }).data;
+  const def = req({}, {});
+  assert(JSON.stringify(def.cycleTable.fields) === JSON.stringify({ table: 'conjunctions', conjKind: 'great', variant: 'improved' }), `default fields: ${JSON.stringify(def.cycleTable.fields)}`);
+  assert(def.barbault.setKey === 'slow5' && def.barbault.planets.join() === 'Jupiter,Saturn,Uranus,Neptune,Pluto', `default barbault: ${JSON.stringify(def.barbault)}`);
+  const mid = req({ conjKind: 'middle', cycleVariant: 'classic', bbSet: 'outer3' }, { startYear: 1900, endYear: 2000 });
+  assert(JSON.stringify(mid.cycleTable.fields) === JSON.stringify({ table: 'conjunctions', conjKind: 'middle', startYear: 1900, endYear: 2000 }), `middle fields: ${JSON.stringify(mid.cycleTable.fields)}`);
+  assert(mid.cycleTable.ignored.join() === 'cycleVariant', `中合无算法档 → cycleVariant ignored: ${mid.cycleTable.ignored}`);
+  assert(mid.barbault.planets.join() === 'Uranus,Neptune,Pluto', `outer3 planets: ${mid.barbault.planets}`);
+  const yr = req({ cycleTable: 'thousands', flood: 'b' }, { startYear: 1701, endYear: 1800 });
+  assert(JSON.stringify(yr.cycleTable.fields) === JSON.stringify({ table: 'thousands', startYear: 1701 }), `thousands fields: ${JSON.stringify(yr.cycleTable.fields)}`);
+  assert(yr.cycleTable.ignored.join() === 'flood,cycleEndYear', `thousands ignored: ${yr.cycleTable.ignored}`);
+  const prof = req({ cycleTable: 'profections', profBase: 'greatMc', cycleVariant: 'classic' }, {});
+  assert(JSON.stringify(prof.cycleTable.fields) === JSON.stringify({ table: 'profections', profRate: 'great', profBase: 'greatMc' }), `profections fields: ${JSON.stringify(prof.cycleTable.fields)}`);
+  // 值域校验锚到引擎自带表：认不出的表 / 选项 / 组合回执 invalid（数值型选项按严格相等，'300' 不在 100/200/500/1000 里）。
+  const bad = runMundaneCards({ action: 'settings', settings: { cycleTable: 'bogus', firdariaYears: 300, bbSet: 'slow9', meanTable: 'table8', ingressPoint: 90 } }).data.invalid;
+  assert(bad.map((i) => i.key).join() === 'cycleTable,firdariaYears,bbSet', `invalid keys: ${bad.map((i) => i.key)}`);
+  const cards = (state) => {
+    const out = runMundaneCards({ jobs: [{ id: 'cycles', chart, extra: { mundaneType: 'cycles' }, state }] });
+    assert(out.data.ok === true, 'cycles job ok');
+    return out.data.jobs[0].cards;
+  };
+  const text = (state) => { const hit = cards(state).find((c) => c.title === '世运周期表'); return hit ? hit.text.split('\n') : null; };
+  const conj = text({
+    cycleTableResult: { table: 'conjunctions', variant: 'improved', targetYear: 2025, kind: 'great', rows: [
+      { date: '1981-03-04 19:06:12', lon: 188.10774536424074, repeat: true, shift: false },
+      { date: '2000-05-28 16:03:53', lon: 52.72136629565967, repeat: false, shift: true },
+      { date: '2020-12-21 18:20:37', lon: 300.4861066687552, repeat: false, shift: true },
+    ] },
+    cycleTableRequest: { table: 'conjunctions', conjKind: 'great', variant: 'improved' },
+  });
+  assert(JSON.stringify(conj) === JSON.stringify([
+    '[世运周期表]',
+    '表：大中小合(木土、火土、火木的真实地心合,标出换三分性的一合)',
+    '合：大合(木土)',
+    '1981-03-04 天秤 8.11° 三重合',
+    '2000-05-28 金牛 22.72° 换三分性',
+    '2020-12-21 水瓶 0.49° 换三分性',
+  ]), `conjunctions text: ${JSON.stringify(conj)}`);
+  const thousands = text({
+    cycleTableResult: { table: 'thousands', variant: 'improved', targetYear: 1701, rows: [
+      { year: 1701, floodYear: 5093, thousandLord: 'Mars', turnLord: 'Saturn', quarterLord: 'Mars', quarterYear: 53, division: 31.3, turn: 150.0 },
+    ] },
+    cycleTableRequest: { table: 'thousands' },
+  });
+  assert(thousands[2] === '1701 千年主 火 转主 土 季摄 火', `thousands row: ${JSON.stringify(thousands)}`);
+  // 接口没回带的口径（周期年表起点 dawrStart）取发出这次请求的字段：cycleTableRequest 必须真的到 builder。
+  const dawr = text({
+    cycleTableResult: { table: 'dawr', variant: 'improved', targetYear: 2025, rows: [{ year: 2025, sign: 0, lord: 'Sun', quarterLord: 'Mars', lon: 12.5 }] },
+    cycleTableRequest: { table: 'dawr', dawrStart: 'b' },
+  });
+  assert(dawr[2] === '起点：1660 年起' && dawr[3] === '2025 白羊 年主 日 四分主 火', `dawr text: ${JSON.stringify(dawr)}`);
+  // 没算 / 接口报错 / 空表 → 不成段（上游同）；其余卡不受影响。
+  assert(text({}) === null, '[世运周期表] must not appear without a result');
+  assert(text({ cycleTableResult: { err: 'param error' }, cycleTableRequest: {} }) === null, 'error envelope must not become a section');
+  assert(text({ cycleTableResult: { table: 'conjunctions', rows: [] }, cycleTableRequest: {} }) === null, 'empty rows must not become a section');
+  assert(cards({}).some((c) => c.title === '大年时代'), 'other cycles cards unaffected');
+  // [盘型格局] 的相位格局：后端 v3.14.0 新增「篮形」（detect_basket：四点依次相隔 90°、60°、90°、120°），世运义取 vendored
+  // patterns.js 的 PATTERN_MUNDANE.basket（上游同版加的一行）。
+  const basket = runMundaneCards({ jobs: [{ id: 'ingress', chart, extra: { mundaneType: 'ingress', ingressTerm: '春分', ingressYear: 2025 },
+    state: { patData: [{ type: 'basket', label: 'Basket', points: ['Sun', 'Moon', 'Mars', 'Jupiter'] }] } }] }).data.jobs[0].cards.find((c) => c.title === '盘型格局');
+  assert(basket && basket.text.split('\n').some((l) => l.startsWith('- 篮形：四星沿黄道依次相隔 90°、60°、90°、120°')), `basket pattern line: ${basket && basket.text}`);
+  // Barbault：快照写算图时的组合 / 谐波 / 年段（上游 mundaneBarbaultSettings.test.js 同一断言）。
+  const bb = cards({ bbSet: 'slow5', bbStart: 1800, bbEnd: 2100, bbData: { points: [{ year: 1990, month: 1, index: 300 }, { year: 2000, month: 1, index: 100 }], harm: 2, setKey: 'outer3', startYear: 1900, endYear: 2050 } })
+    .find((c) => c.title === 'Barbault 聚散指数').text.split('\n');
+  assert(bb[1] === '（慢星组合 仅外三星 ♅♆♇（最平滑） · 2 次谐波 · 1900–2050 · 2 点）', `barbault head: ${bb[1]}`);
+});
+
+// 巴比伦 [天象实算]（上游 utils/babylonAiSnapshot.js buildBabylonSkySection 逐字 vendored；数据 = 后端 /astroextra/babylontables）。
+// 期望值按上游规则手推：赤纬 −23.2635° → 「−23°16′」（0.2635 × 60 = 15.8 → 16），|δ| > 17° 且在南 → Ea 道，距道界 23.2635 − 17 = 6.26°；
+// +22.5065° → 「+22°30′」Enlil 道，距道界 5.51°；bēru 行 = `${beru} bēru ${us} UŠ(${时}h${分}m)`（68 分钟 = 1h08m）；
+// 目标年：月亮无年数 → 「−223 月」，其余「−N 年」；周期现象取 state=last / next 两条。样本数值取自 vendored 引擎对
+// 1975-02-10 21:15 −08:00 西雅图的实算（金星 1974-12-29 16:5x 夕始见后可见——上游 astropy/tests/test_babylon_tables.py 同值）。
+check('babylon 值级金标：[天象实算] 三道 / 星钟 / 目标年 / 周期现象（vendored buildBabylonSkySection）', () => {
+  const sky = {
+    paths: [
+      { id: 'Mars', decl: -23.26353036788721, path: 'Ea', margin: 6.26353036788721 },
+      { id: 'Saturn', decl: 22.506521634590857, path: 'Enlil', margin: 5.506521634590857 },
+      { id: 'Venus', decl: -7.23312132451583, path: 'Anu', margin: 9.76687867548417 },
+    ],
+    ziqpu: { rows: [
+      { name: '弯杖之手', star: 'ρ Aur', state: 'now', ago: { beru: 0, us: 17, minutes: 68.0 } },
+      { name: '蟹', star: 'M44', ago: { beru: 10, us: 2, minutes: 1208.0 } },
+      { name: '双子', star: 'α Gem', state: 'next', in: { beru: 0, us: 16, minutes: 65.2 }, next: '1975-02-10 22:19:36' },
+    ] },
+    goalYear: [
+      { id: 'Moon', years: null, date: '1957-01-30 13:34:10', dl: 11.04, de: -0.06 },
+      { id: 'Mercury', years: 46, date: '1929-02-10 21:15:00', dl: 2.36, de: 2.52 },
+    ],
+    phenomena: [
+      { id: 'Venus', visible: true, since: '1974-12-29 16:54:21', polar: false, twilight: 0, visibleByTwilight: false, events: [
+        { kind: 'eveningFirst', state: 'last', date: '1974-12-29 16:54:21' }, { kind: 'eveningLast', state: 'next', date: '1975-08-02 03:10:00' },
+      ] },
+      { id: 'Mars', visible: null, since: null, polar: true, twilight: 0, visibleByTwilight: false, events: [
+        { kind: 'conjunction', state: 'last', date: '1974-10-14 04:55:00' }, { kind: 'firstStation', state: 'next', date: '1975-11-06 10:00:00' },
+      ] },
+    ],
+  };
+  const base = { chart, year: 1975, month: 2, day: 10 };
+  const section = (payload) => {
+    const out = runBabylon(payload);
+    assert(out.text, `babylon text empty: ${JSON.stringify(out).slice(0, 200)}`);
+    const lines = out.text.split('\n');
+    const at = lines.indexOf('[天象实算]');
+    return at < 0 ? null : lines.slice(at, at + 5);
+  };
+  const got = section({ ...base, skyTables: sky });
+  assert(JSON.stringify(got) === JSON.stringify([
+    '[天象实算]',
+    '七曜所行之道(赤纬 ±17° 内为 Anu 道):火 −23°16′ Ea 道(南) 距道界 6.26°;土 +22°30′ Enlil 道(北) 距道界 5.51°;金 −7°14′ Anu 道(中) 距道界 9.77°',
+    'ziqpu 星钟:最近过中天 弯杖之手(ρ Aur)已过 0 bēru 17 UŠ(1h08m);下一颗 双子(α Gem)还有 0 bēru 16 UŠ(1h05m),约 1975-02-10 22:19:36',
+    '目标年取数:月 −223 月(1957-01-30)黄经差 11.04° 距日差 -0.06°;水 −46 年(1929-02-10)黄经差 2.36° 距日差 2.52°',
+    '周期现象(出生前后各一个会合周期;高纬夏夜推迟到离日 40° 以外的始见末见照列,标「高纬推迟」):金 出生时可见(自 1974-12-29 16:54),前 夕始见 1974-12-29,后 夕末见 1975-08-02;火 高纬不算可见度,前 合日(不可见) 1974-10-14,后 初留 1975-11-06',
+  ]), `sky section: ${JSON.stringify(got)}`);
+  // 没取到 / 失败信封（无 paths）→ 整段不出；其余段照常（上游 fetchBabylonSkyTables 的 `res && res.paths` 判据）。
+  assert(section(base) === null, '[天象实算] must not appear without skyTables');
+  assert(section({ ...base, skyTables: { err: 'param error' } }) === null, 'an error envelope must not become a section');
+  // 后端某一块失败回 null（ziqpu / goalYear / phenomena 各自 try）：只少那一行。
+  const partial = section({ ...base, skyTables: { paths: sky.paths, ziqpu: null, goalYear: null, phenomena: null } });
+  assert(partial.length >= 2 && partial[0] === '[天象实算]' && partial[1].startsWith('七曜所行之道') && !partial.slice(2).some((l) => /^(ziqpu|目标年|周期现象)/.test(l)), `partial sky: ${JSON.stringify(partial)}`);
 });
 
 // ── v0.40 mingli：八字 / 紫微 / 宿占 改由 vendored 上游 builder 出快照 ────────────────────────────

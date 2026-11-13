@@ -29,6 +29,37 @@ _SYNC311_ASTROEXTRA_STUBS["/predict/dist"] = _SYNC313_LIVE["dist"]["default"]
 _DIRECTED_LIVE = json.loads((Path(__file__).parent / "fixtures" / "sync313_directed_live.json").read_text(encoding="utf-8"))["scenarios"]
 for _tech, _scen in _DIRECTED_LIVE.items():
     _SYNC311_ASTROEXTRA_STUBS[f"/astroextra/{_tech}"] = _scen["default"]["response"]
+# 上游 v3.14.0 mundane 批（世运周期表 / 巴比伦天象实算 / 占星地图日食路径）：三个端点回**真实**响应（vendored v3.14.0 实例实抓，
+# fixtures/sync314_mundane_live.json，见其 _comment）；JS 桩里对应段的正文也取这份夹具里真 builder 的原文（不手编）。
+# 值级真相归 tests/test_sync314_mundane_*.py（独立来源：上游 astropy/tests 固定样本、天文事实）与 npm selfcheck 金标。
+_SYNC314_MUNDANE = json.loads((Path(__file__).parent / "fixtures" / "sync314_mundane_live.json").read_text(encoding="utf-8"))
+_SYNC314_CYCLE_DEFAULT_FIELDS = {table: scen["request"] for table, scen in _SYNC314_MUNDANE["mundanecycles"].items() if "_" not in table}
+_SYNC314_CYCLE_LABELS = {table: scen["section"][0].split("：", 1)[1].split("(", 1)[0] for table, scen in _SYNC314_MUNDANE["mundanecycles"].items() if "_" not in table}
+_SYNC314_CHART_PARAM_KEYS = frozenset(_SYNC314_MUNDANE["mundanecycles"]["thousands"]["request"]) - {"table", "startYear", "endYear"}
+
+
+def _fake_cycles_request(settings: dict, years: dict) -> dict:
+    """桩版 tools/mundaneCards.js cycles_request（真函数 = vendored mundaneCycleRequestFields / BARBAULT_SETS，由 selfcheck 金标与
+    test_sync314_mundane_cycles.py 的真 node 用例守）：各表缺省设置下的请求字段取夹具里 runner 实发的那一份。"""
+    table = str(settings.get("cycleTable") or "conjunctions")
+    request = _SYNC314_CYCLE_DEFAULT_FIELDS[table]
+    fields = {key: value for key, value in request.items() if key not in _SYNC314_CHART_PARAM_KEYS}
+    for key, value in settings.items():
+        target = "variant" if key == "cycleVariant" else key
+        if target in fields and key != "cycleTable":
+            fields[target] = value
+    for src, dst in (("startYear", "startYear"), ("endYear", "endYear")):
+        if isinstance(years.get(src), int) and table in {"conjunctions", "meanConjunctions"} | ({"thousands", "worldYears", "dawr", "era", "revolution"} if src == "startYear" else set()):
+            fields[dst] = years[src]
+    planets = {"slow5": ["Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"], "outer3": ["Uranus", "Neptune", "Pluto"], "slow4": ["Saturn", "Uranus", "Neptune", "Pluto"]}
+    set_key = settings.get("bbSet") if settings.get("bbSet") in planets else "slow5"
+    return {
+        "ok": True,
+        "barbault": {"setKey": set_key, "planets": planets[set_key]},
+        "cycleTable": {"table": table, "label": _SYNC314_CYCLE_LABELS[table], "fields": fields, "ignored": []},
+    }
+
+
 # 桩版 directedFigureRequestFields ∘ directedFigureOptsFromSettings（页面键 → 后端口径键；真函数由真 node 用例守）。
 _DIRECTED_MAIN_LIST = {"neroman": "evolved", "bezzafigure": "points", "jayprofection": "rows", "michon": "superpositions"}
 
@@ -129,6 +160,21 @@ class FakeClient(HorosaApiClient):
             }
         if endpoint == "/location/acgevent":
             return {"kind": payload.get("kind"), "jd": 2461443.17, "date": "2027/02/06", "time": "15:59:39"}
+        if endpoint == "/astroextra/mundanecycles":
+            # 真实响应（各表缺省设置，rows 裁到前 8 行）；后端对认不出的表静默回大中小合，桩不替它掩盖——认不出即断言失败。
+            scen = _SYNC314_MUNDANE["mundanecycles"][str(payload.get("table"))]
+            return json.loads(json.dumps(scen["response"]))
+        if endpoint == "/astroextra/babylontables":
+            return json.loads(json.dumps(_SYNC314_MUNDANE["babylontables"]["seattle_1975"]["response"]))
+        if endpoint == "/astroextra/barbault":
+            scen = _SYNC314_MUNDANE["barbault"]["outer3_h2" if payload.get("harm") else "default"]
+            return json.loads(json.dumps(scen["response"]))
+        if endpoint == "/astroextra/greatconj":
+            # 真实形状（astroextra_parts/cycles.py compute_great_conjunctions）：木土大合 2000 / 2020（天文事实）。
+            return {"conjunctions": [
+                {"year": 2000, "month": 5, "day": 28, "hour": 16.06, "lon": 52.72, "sign": 1},
+                {"year": 2020, "month": 12, "day": 21, "hour": 18.34, "lon": 300.49, "sign": 10},
+            ]}
         if endpoint == "/astroextra/planetcycles":
             return {
                 "events": [
@@ -488,11 +534,18 @@ class FakeClient(HorosaApiClient):
                     "oob": False,
                 }
 
+            acg_live = _SYNC314_MUNDANE["acg"]["tn_2017_prenatal"]
+            eclipse = None
+            if payload.get("eclipse") in ("prenatal", "postnatal"):
+                # v3.14.0 日食路径：真实响应（2017-08-21 日全食），which / filter 照请求回显（后端 eclipse_path 同）。
+                eclipse = {**json.loads(json.dumps(acg_live["eclipse"])), "which": payload["eclipse"], "filter": payload.get("eclipseFilter") or "any"}
             return {
-                "meta": {"mode": "mundo", "lsMode": "great", "geodetic": "sepharial", "geodeticVar": "longitude"},
+                "meta": {"mode": "mundo", "lsMode": "great", "geodetic": "sepharial", "geodeticVar": "longitude",
+                         "obliquity": acg_live["meta"]["obliquity"]},
                 "planets": {"Sun": _acg_planet(120.5, -59.5, 11.2, 120.5), "Moon": _acg_planet(30.0, -150.0, -5.1, 30.0)},
                 "parans": [{"lat": 42.5, "a": "Sun", "aEvent": "mc", "b": "Moon", "bEvent": "rise", "type": "RSCA"}],
                 "crossings": [{"pa": "Sun", "av": "mc", "pb": "Moon", "bv": "asc", "lat": 42.5, "lon": 120.5}],
+                "eclipse": eclipse,
             }
         if endpoint == "/predict/dice":
             return {
@@ -1349,10 +1402,19 @@ class FakeJsClient(HorosaJsEngineClient):
             planets = ((payload.get("acgData") or {}).get("planets") or {})
             if not planets:
                 return {"text": ""}
-            return {"text": (
+            text = (
                 "【占星地图】\n口径 本体(in-mundo·真黄纬) · 坐标系 地心\n主要行星角化线(中天/天底=经线;上升/下降取赤道附近代表点):\n"
                 "- 太阳:MC 120.50°E / IC 59.50°W / ASC — / DSC —\n- 月亮:MC 30.00°E / IC 150.00°W / ASC — / DSC —"
-            )}
+            )
+            # v3.14.0 两层：正文 = 真 builder（vendored acgLayers）在夹具同一份日食数据 / 同一黄赤交角上的原文。
+            blocks = _SYNC314_MUNDANE["acg"]["tn_2017_prenatal"]["layer_blocks"]
+            ui = payload.get("uiState") or {}
+            split = blocks.index(next(line for line in blocks if line.startswith("◆ 七气候带")))
+            if isinstance((payload.get("acgData") or {}).get("eclipse"), dict):
+                text += "\n" + "\n".join(blocks[:split])
+            if ui.get("climes") == "klimata" and (ui.get("climesObliquity") or "date") == "date":
+                text += "\n" + "\n".join(blocks[split:])
+            return {"text": text}
         if tool_name == "horary" and payload.get("action") == "backend_fields":
             # 形状同真工具 tools/horary.js action=backend_fields；值 = 上游 horarySchools.js classical 档经
             # horaryBackendFields（hsys 2 Regiomontanus / 托勒密界经典传本 / 七政 / 福点不反转 / Ptolemy 三分集）。
@@ -1577,18 +1639,19 @@ class FakeJsClient(HorosaJsEngineClient):
             return {"text": "\n\n".join(blocks)}
         if tool_name == "babylon":
             # 六段的离线替身：段头与顺序须与上游一致（微黄道居末，上游测试断言了这一点）。
-            return {
-                "text": "\n".join(
-                    [
-                        "[起盘信息]", "技法:巴比伦占星(美索不达米亚天象体系);坐标:恒星黄道 · 毕宿锚。",
-                        "", "[七曜按宫]", "月:巨蟹 6°25′(ALLA);可变",
-                        "", "[分至天狼星]", "图式:春分白羊 10°。",
-                        "", "[位三法]", "月位:三分之一 · 昼段。",
-                        "", "[行星神性]", "月 = Sîn(月神);中性偏吉。",
-                        "", "[微黄道]", "十二分变体:B;微段 = 2;30°,全周 144 段。",
-                    ]
-                )
-            }
+            lines = [
+                "[起盘信息]", "技法:巴比伦占星(美索不达米亚天象体系);坐标:恒星黄道 · 毕宿锚。",
+                "", "[七曜按宫]", "月:巨蟹 6°25′(ALLA);可变",
+                "", "[分至天狼星]", "图式:春分白羊 10°。",
+                "", "[位三法]", "月位:三分之一 · 昼段。",
+                "", "[行星神性]", "月 = Sîn(月神);中性偏吉。",
+                "", "[微黄道]", "十二分变体:B;微段 = 2;30°,全周 144 段。",
+            ]
+            sky = payload.get("skyTables")
+            if isinstance(sky, dict) and isinstance(sky.get("paths"), list):
+                # v3.14.0 [天象实算]：真 builder（vendored buildBabylonSkySection）在夹具同一份 /astroextra/babylontables 响应上的原文。
+                lines += ["", "[天象实算]", *_SYNC314_MUNDANE["babylontables"]["seattle_1975"]["section"]]
+            return {"text": "\n".join(lines)}
         if tool_name == "egypt_section":
             # 假盘面不带真实黄经，vendored builder 会算出无意义结果 → 返回空文本，
             # 走与「/astroextra/analysis 失败」同一条优雅降级路径（该段不出）。
@@ -1604,6 +1667,12 @@ class FakeJsClient(HorosaJsEngineClient):
             from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _PRE
             from horosa_skill.service import HorosaSkillService as _Svc
 
+            if payload.get("action") == "settings":
+                # 值域校验的桩：真校验锚在引擎自带表（tools/mundaneCards.js settingsCheck，真 node 用例守）；桩一律放行。
+                return {"tool": "mundane_cards", "data": {"ok": True, "invalid": [], "meta": {
+                    "ruleset": "modern", "rulesetLabel": "现代(Carter–Campion)", "orbSchemeLabel": None, "ingressRuleLabel": None}}}
+            if payload.get("action") == "cycles_request":
+                return {"tool": "mundane_cards", "data": _fake_cycles_request(payload.get("settings") or {}, payload.get("years") or {})}
             preset = _PRE["mundane"]
             cards = preset[preset.index("年盘概要"): preset.index("起盘信息")]
             optional = set(_OPT["mundane"])
@@ -1611,11 +1680,19 @@ class FakeJsClient(HorosaJsEngineClient):
             for job in payload.get("jobs") or []:
                 job_id = str(job.get("id"))
                 titles = [t for t in cards if t not in optional] if job_id == "ingress" else list(_Svc._MUNDANE_TYPE_CARDS.get(job_id, ()))
-                jobs_out.append({
-                    "id": job_id,
-                    "ok": True,
-                    "cards": [{"title": t, "text": f"[{t}]\n{t}：离线桩判读行（逐字真值由 selfcheck 金标守）"} for t in titles],
-                })
+                state = job.get("state") or {}
+                made = []
+                for t in titles:
+                    if t == "世运周期表":
+                        # v3.14.0：只在 runner 给了周期表响应时成段；正文 = 真 builder 对该表缺省响应出的原文（夹具）。
+                        result = state.get("cycleTableResult")
+                        if not (isinstance(result, dict) and result.get("rows")):
+                            continue
+                        body = _SYNC314_MUNDANE["mundanecycles"][str(result.get("table"))]["section"]
+                        made.append({"title": t, "text": "\n".join([f"[{t}]", *body])})
+                        continue
+                    made.append({"title": t, "text": f"[{t}]\n{t}：离线桩判读行（逐字真值由 selfcheck 金标守）"})
+                jobs_out.append({"id": job_id, "ok": True, "cards": made})
             # meta 与真工具同形（tools/mundaneCards.js settingsCheck：rulesetConfig 缺省 modern 的查名）。
             meta = {"ruleset": "modern", "rulesetLabel": "现代(Carter–Campion)", "orbSchemeLabel": None, "ingressRuleLabel": None}
             return {"tool": "mundane_cards", "data": {"ok": True, "jobs": jobs_out, "meta": meta}}

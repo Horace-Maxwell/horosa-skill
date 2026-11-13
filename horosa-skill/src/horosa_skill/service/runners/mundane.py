@@ -219,11 +219,101 @@ class MundaneRunners:
         "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear", "vedicNatalAsc",
     )
     # 世运专属输入：不进 /chart 请求体（其余键 = 页面 fields：黄道/岁差/宫制/古典全局键，与 astro 盘同一套）。
+    # 行星周期盘型（mundaneType='cycles'）的页面设置（上游 v3.14.0）：世运周期表 = utils/mundaneCycles.js 的 MUNDANE_CYCLE_SETTINGS
+    # （当前表 + 14 个选项键，键名照上游）；Barbault 两键 = MUNDANE_PAGE_SETTINGS 的 bbSet / bbHarm（MundaneMain.js:542-543）。
+    # 值域由 JS 按引擎自带表校验（mundane_cards action=settings）；数值型选项先在这里归一成整数（上游 oneOf 是严格相等）。
+    _MUNDANE_CYCLE_OPTION_KEYS = (
+        "cycleTable", "conjKind", "meanTable", "flood", "cycleYear", "firdariaLevel", "firdariaYears", "profRate", "profBase",
+        "dawrStart", "eraKind", "ingressPoint", "cycleVariant", "mpdKey", "weatherMonths",
+    )
+    _MUNDANE_CYCLE_INT_KEYS = ("firdariaYears", "ingressPoint", "weatherMonths")
+    # 周期表的年份输入（上游 MundaneCycleTables state.startYear / endYear，页面输入框；不是保存的设置）。
+    _MUNDANE_CYCLE_YEAR_KEYS = ("cycleStartYear", "cycleEndYear")
+    _MUNDANE_BB_KEYS = ("bbSet", "bbHarm")
+    # 后端 astroextra_parts/cycles.py compute_barbault：`if harm < 1 or harm > 12: harm = 1`（越界静默按原指数）。
+    _MUNDANE_BB_HARM_RANGE = (1, 12)
+    _MUNDANE_CYCLES_KEYS = (*_MUNDANE_CYCLE_OPTION_KEYS, *_MUNDANE_CYCLE_YEAR_KEYS, *_MUNDANE_BB_KEYS)
     _MUNDANE_ONLY_KEYS = frozenset({
         "year", "ingressTerm", "mundaneType", "mhKind", "solunarType", "solunarWeights", "solunarOrb", "vedicYear",
         "regionKey", "regionCandidate",
         *_MUNDANE_SETTING_KEYS,
+        *_MUNDANE_CYCLES_KEYS,
     })
+
+    @staticmethod
+    def _mundane_invalid_setting(invalid: list[dict[str, Any]]) -> ToolValidationError:
+        def allowed_text(item: dict[str, Any]) -> str:
+            allowed = item.get("allowed")
+            return "/".join(str(a) for a in allowed) if isinstance(allowed, (list, tuple)) else f"{allowed or ''}"
+
+        parts = [f"{i.get('key')}={i.get('value')!r}（可选：{allowed_text(i)}）" for i in invalid if isinstance(i, dict)]
+        return ToolValidationError(
+            bilingual(f"世运盘设置取值无效：{'；'.join(parts)}。", f"mundane setting(s) invalid: {'; '.join(parts)}."),
+            code="tool.mundane_invalid_setting",
+            details={"invalid": invalid},
+        )
+
+    def _mundane_cycle_settings(self, payload: dict[str, Any], mundane_type: str) -> dict[str, Any]:
+        """行星周期盘型的页面设置（世运周期表 15 键 + 年份 + Barbault 两键），有值才收。
+
+        认不出的值一律 `tool.mundane_invalid_setting`：后端 `mundane_cycles._choice` 与 `compute_barbault` 对认不出的表 / 选项 /
+        谐波都是静默取缺省，快照却只写结果——所以不许带病下发。给了键、盘型却不是 cycles → 不起作用，说出来。"""
+        given = {k: payload[k] for k in self._MUNDANE_CYCLES_KEYS if payload.get(k) not in (None, "")}
+        if not given:
+            return {}
+        invalid: list[dict[str, Any]] = []
+
+        def as_int(key: str) -> int | None:
+            raw = given[key]
+            if isinstance(raw, bool):
+                return None
+            try:
+                number = float(f"{raw}".strip())
+            except ValueError:
+                return None
+            return int(number) if number == int(number) else None
+
+        for key in self._MUNDANE_CYCLE_INT_KEYS:
+            if key in given:
+                number = as_int(key)
+                if number is not None:
+                    given[key] = number  # 认不出的原样留给 JS 报（带引擎词表的可选值）
+        for key in self._MUNDANE_CYCLE_YEAR_KEYS:
+            if key in given:
+                number = as_int(key)
+                # 上游 renderYear：`Number.isInteger(value) && value !== 0 ? value : null`（历史纪年无 0 年）。页面把 0 / 非整数当没填；
+                # 无头调用看不到输入框被清空，所以拒。
+                if number is None or number == 0:
+                    invalid.append({"key": key, "value": given[key], "allowed": "非 0 整数年（公元前为负）"})
+                else:
+                    given[key] = number
+        if "bbHarm" in given:
+            number = as_int("bbHarm")
+            low, high = self._MUNDANE_BB_HARM_RANGE
+            if number is None or not (low <= number <= high):
+                invalid.append({"key": "bbHarm", "value": given["bbHarm"], "allowed": list(range(low, high + 1))})
+            else:
+                given["bbHarm"] = number
+        js = self.js_client.run(
+            "mundane_cards",
+            {"action": "settings", "settings": {k: v for k, v in given.items() if k in self._MUNDANE_CYCLE_OPTION_KEYS or k == "bbSet"}},
+        )
+        data = js.get("data") if isinstance(js, dict) else None
+        js_invalid = data.get("invalid") if isinstance(data, dict) else None
+        if isinstance(js_invalid, list):
+            invalid.extend(i for i in js_invalid if isinstance(i, dict))
+        if invalid:
+            raise self._mundane_invalid_setting(invalid)
+        if mundane_type != "cycles":
+            from horosa_skill.input_fields import add_input_note
+
+            names = " / ".join(f"`{key}`" for key in given)
+            add_input_note(
+                f"{names} 只作用于行星周期盘型（mundaneType=cycles 的 [世运周期表] / [Barbault 聚散指数]），本次盘型不是 cycles，未起作用。",
+                f"{names} only apply to the planetary-cycles chart type (mundaneType=cycles); ignored for this chart type.",
+            )
+            return {}
+        return given
 
     def _mundane_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         """世运口径键（有值才收）；给了任一键就先让 JS 按引擎自带表校验值域（认不出的报错，不静默当缺省）。"""
@@ -253,12 +343,7 @@ class MundaneRunners:
         data = js.get("data") if isinstance(js, dict) else None
         invalid = data.get("invalid") if isinstance(data, dict) else None
         if invalid:
-            parts = [f"{i.get('key')}={i.get('value')!r}（可选：{'/'.join(str(a) for a in (i.get('allowed') or []))}）" for i in invalid if isinstance(i, dict)]
-            raise ToolValidationError(
-                bilingual(f"世运盘设置取值无效：{'；'.join(parts)}。", f"mundane setting(s) invalid: {'; '.join(parts)}."),
-                code="tool.mundane_invalid_setting",
-                details={"invalid": invalid},
-            )
+            raise self._mundane_invalid_setting(invalid)
         return settings
 
     def _run_mundane_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -271,6 +356,8 @@ class MundaneRunners:
         lon = payload.get("lon")
         lat = payload.get("lat")
         settings = self._mundane_settings(payload)
+        # 行星周期盘型的页面设置（世运周期表 / Barbault）：入口先校验，认不出的值不发任何请求。
+        cycle_settings = self._mundane_cycle_settings(payload, f"{payload.get('mundaneType') or ''}".strip())
         # 地区盘（上游 MUNDANE_TYPES 'region'）：底盘 = 预置建置盘（regionKey），不求入宫时刻——另走一条流程。
         if f"{payload.get('mundaneType') or ''}".strip() == "region":
             return self._run_mundane_region_chart(payload, settings)
@@ -449,6 +536,7 @@ class MundaneRunners:
             collected=collected,
             type_chart_ctx=type_chart_ctx,
             settings=settings,
+            cycle_settings=cycle_settings,
             meta_out=cards_meta,
         )
         # 快照头（上游 buildAiSnapshot MundaneMain.js:2852-2860）：盘名 / 规则集 / 入宫节气 / 年份 / 页面级覆盖行；
@@ -819,14 +907,17 @@ class MundaneRunners:
         "solunar": ("恒星派入境·概览",),  # :428
         "vedicmundane": ("吠陀世运·年度盘", "世运大运", "KP 副主链", "天气与农业"),  # :435-458
         "mundanehorary": ("世运问判·得力明细",),  # :460
-        "cycles": ("木土纪元", "大年时代", "Barbault 聚散指数"),  # :471-502
+        "cycles": ("木土纪元", "大年时代", "世运周期表", "Barbault 聚散指数"),  # v3.14.0 :488-520（周期表 :506）
     }
     # 行星周期卡的页面物料（type==='cycles'）：
     #   木土会合表 = 页面挂载即自动算的 computeGreatConj（:576 componentDidMount → :753），state 缺省
     #   gcStart 1300 / gcEnd 2200 / gcPair 'jupiter-saturn' / gcAspect 0（:554），木土合相走 /astroextra/greatconj、
     #   gcMode 置 'ages'（:769）。builder 自己的显示回落 clampYear(st.gcStart, 1300)（:476）与之同值。
-    #   Barbault 指数 = 「绘制」按钮 computeBarbault（:787）：缺省 bbStart 1900 / bbEnd 2050 / bbSet 'slow5'（:557），
-    #   行星取 BARBAULT_SETS[0]（:101，五慢星），stepMonths = 跨度>160 年 12、>80 年 6、否则 3（:793）。
+    #   Barbault 指数 = 「绘制」按钮 computeBarbault（v3.14.0 :807）：缺省 bbStart 1900 / bbEnd 2050（:575）；慢星组合 bbSet 与谐波
+    #   bbHarm 是页面设置（:542-543，缺省 slow5 / 1），行星名表取 vendored BARBAULT_SETS（JS mundane_cards action=cycles_request），
+    #   stepMonths = 跨度>160 年 12、>80 年 6、否则 3（:814）；`harm` 只在 >1 时下发（:819）。
+    #   世运周期表 = 「周期表」页签 MundaneCycleTables（v3.14.0）：请求体 = chartParams(盘) + targetDate / targetTime（盘面日期时刻）
+    #   + mundaneCycleRequestFields(设置, 年份)（MundaneCycleTables.body / MundaneMain.ensureCycleTableText :3022-3035）。
     _MUNDANE_GC_DEFAULT_STATE = {"gcStart": 1300, "gcEnd": 2200, "gcPair": "jupiter-saturn", "gcAspect": 0, "gcMode": "ages"}
     _MUNDANE_BB_DEFAULT_STATE = {"bbStart": 1900, "bbEnd": 2050, "bbSet": "slow5"}
     _MUNDANE_BB_DEFAULT_PLANETS = ("Jupiter", "Saturn", "Uranus", "Neptune", "Pluto")
@@ -863,6 +954,7 @@ class MundaneRunners:
         collected: dict[str, Any],
         type_chart_ctx: dict[str, tuple[str, dict[str, Any]]],
         settings: dict[str, Any] | None = None,
+        cycle_settings: dict[str, Any] | None = None,
         meta_out: dict[str, Any] | None = None,
     ) -> str:
         try:
@@ -897,6 +989,7 @@ class MundaneRunners:
             chart_response=chart_response,
             collected=collected,
             type_chart_ctx=type_chart_ctx,
+            cycle_settings=cycle_settings,
         )
         if type_job is not None:
             jobs.append(type_job)
@@ -978,6 +1071,7 @@ class MundaneRunners:
         chart_response: dict[str, Any],
         collected: dict[str, Any],
         type_chart_ctx: dict[str, tuple[str, dict[str, Any]]],
+        cycle_settings: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if mundane_type in ("newmoon", "fullmoon"):
             # 上游 useMoment（:688）：选中的朔/望行 → extra.selectedMoment = 该行 localTime，页面盘改排到该时刻。
@@ -1036,11 +1130,11 @@ class MundaneRunners:
                 "id": "cycles",
                 "chart": chart_response,  # cycles 分支不读盘面（isNatalLike=false），builder 只要求 chart 非空
                 "extra": {"mundaneType": "cycles"},
-                "state": self._mundane_cycles_state(),
+                "state": self._mundane_cycles_state(cycle_settings or {}, chart_payload),
             }
         return None
 
-    def _mundane_cycles_state(self) -> dict[str, Any]:
+    def _mundane_cycles_state(self, cycle_settings: dict[str, Any], chart_payload: dict[str, Any]) -> dict[str, Any]:
         state: dict[str, Any] = {}
         try:
             gc = self._call_remote(
@@ -1053,22 +1147,107 @@ class MundaneRunners:
             state["gcResults"] = conjs if isinstance(conjs, list) else []
         except Exception as exc:  # noqa: BLE001
             _degrade("mundane cycles greatconj failed: %s", exc)
+        # 两份请求的构参取自 vendored 上游表 / 函数（BARBAULT_SETS、mundaneCycleRequestFields）：Python 不手抄组合表与字段映射。
+        request: dict[str, Any] = {}
+        try:
+            js = self.js_client.run(
+                "mundane_cards",
+                {
+                    "action": "cycles_request",
+                    "settings": {k: v for k, v in cycle_settings.items() if k in self._MUNDANE_CYCLE_OPTION_KEYS or k == "bbSet"},
+                    "years": {"startYear": cycle_settings.get("cycleStartYear"), "endYear": cycle_settings.get("cycleEndYear")},
+                },
+            )
+            data = js.get("data") if isinstance(js, dict) else None
+            if isinstance(data, dict) and data.get("ok"):
+                request = data
+            else:
+                _degrade("mundane cycles request builder: JS 工具返回形状异常")
+        except Exception as exc:  # noqa: BLE001
+            _degrade("mundane cycles request builder failed: %s", exc)
+        barbault = request.get("barbault") if isinstance(request.get("barbault"), dict) else {}
+        planets = barbault.get("planets") if isinstance(barbault.get("planets"), list) and barbault.get("planets") else None
+        if planets is None and "bbSet" not in cycle_settings:
+            planets = list(self._MUNDANE_BB_DEFAULT_PLANETS)  # 构参取不到时只有缺省组合可以照算（表由测试锚到 vendored 源）
+        set_key = barbault.get("setKey") or self._MUNDANE_BB_DEFAULT_STATE["bbSet"]
+        harm = int(cycle_settings.get("bbHarm") or 1)
         start, end = self._MUNDANE_BB_DEFAULT_STATE["bbStart"], self._MUNDANE_BB_DEFAULT_STATE["bbEnd"]
         span = end - start
         step_months = 12 if span > 160 else (6 if span > 80 else 3)
-        try:
-            bb = self._call_remote(
-                "/astroextra/barbault",
-                {"startYear": start, "endYear": end, "stepMonths": step_months, "planets": list(self._MUNDANE_BB_DEFAULT_PLANETS)},
+        if planets is None:
+            _degrade("mundane cycles barbault: 慢星组合 bbSet=%s 的行星名表取不到，本段不出", cycle_settings.get("bbSet"))
+        else:
+            try:
+                bb = self._call_remote(
+                    "/astroextra/barbault",
+                    {"startYear": start, "endYear": end, "stepMonths": step_months, "planets": list(planets), **({"harm": harm} if harm > 1 else {})},
+                )
+                # 上游 :822-825：`drawn = (r && r.points) ? { ...r, setKey: set.key, harm: r.harm || bbHarm, startYear, endYear } : null`
+                # —— 快照写算图时的组合 / 谐波 / 年段。
+                if isinstance(bb, dict) and bb.get("points"):
+                    echoed = bb.get("harm")
+                    if harm > 1 and echoed != harm:
+                        # 后端没按请求的谐波算（旧引擎不认 harm / 越界被归 1）：照写会把原指数标成 N 次谐波。
+                        _degrade(
+                            "mundane cycles barbault: harm=%s 未被后端采用（回显 %r）", harm, echoed,
+                            note=f"Barbault 指数：请求的 {harm} 次谐波未被排盘引擎采用（回显 {echoed!r}），[Barbault 聚散指数] 本次不出。",
+                        )
+                    else:
+                        state.update(self._MUNDANE_BB_DEFAULT_STATE)
+                        state["bbSet"], state["bbHarm"] = set_key, harm
+                        state["bbData"] = {**bb, "setKey": set_key, "harm": echoed or harm, "startYear": start, "endYear": end}
+                else:
+                    _degrade("mundane cycles barbault: 响应无 points")
+            except Exception as exc:  # noqa: BLE001
+                _degrade("mundane cycles barbault failed: %s", exc)
+        table = request.get("cycleTable") if isinstance(request.get("cycleTable"), dict) else None
+        fields = table.get("fields") if table and isinstance(table.get("fields"), dict) else None
+        if fields is None:
+            _degrade("mundane cycle table: 请求字段取不到，[世运周期表] 本次不出")
+            return state
+        ignored = [f"{k}" for k in (table.get("ignored") or [])]
+        if ignored:
+            from horosa_skill.input_fields import add_input_note
+
+            names = " / ".join(f"`{key}`" for key in ignored)
+            label = table.get("label") or table.get("table")
+            add_input_note(
+                f"{names} 对所选周期表「{label}」不起作用（上游该表不显示这些选项），未下发。",
+                f"{names} do not apply to the selected cycle table ({table.get('table')}); not sent.",
             )
-            # 上游 :801：`bbData: (r && r.points) ? r : null`。
-            if isinstance(bb, dict) and bb.get("points"):
-                state.update(self._MUNDANE_BB_DEFAULT_STATE)
-                state["bbData"] = bb
-            else:
-                _degrade("mundane cycles barbault: 响应无 points")
-        except Exception as exc:  # noqa: BLE001
-            _degrade("mundane cycles barbault failed: %s", exc)
+        # 上游 MundaneCycleTables.body()：`{ ...chartParams(盘), targetDate: base.date, targetTime: base.time || '12:00:00', ...fields }`。
+        # chartParams = 盘自己的起盘参数 + tradition:false / predictive:false（同 PredictiveRunners._astroextra_chart_params）。
+        body = {
+            **{k: v for k, v in chart_payload.items() if v is not None},
+            "tradition": False,
+            "predictive": False,
+            "targetDate": chart_payload.get("date"),
+            "targetTime": chart_payload.get("time") or "12:00:00",
+            **fields,
+        }
+        try:
+            result = self._call_remote("/astroextra/mundanecycles", body)
+        except Exception as exc:  # noqa: BLE001 — 上游：接口算不出来（年份超出星历）→ 这一段不出，其余照常
+            _degrade(
+                "mundane cycle table failed: %s", exc,
+                note=f"[世运周期表]（{table.get('label') or fields.get('table')}）本次未产出：排盘引擎没有算出这张表（多为年份超出星历范围）：{exc}",
+            )
+            return state
+        if not isinstance(result, dict) or result.get("table") != fields.get("table") or not isinstance(result.get("rows"), list):
+            _degrade(
+                "mundane cycle table: 响应形状异常（要 table=%s + rows）", fields.get("table"),
+                note=f"[世运周期表]（{table.get('label') or fields.get('table')}）本次未产出：排盘引擎回的不是所请求的表。",
+            )
+            return state
+        if not result["rows"]:
+            # 上游页面写「这段年份里没有」，快照不成段（buildMundaneCycleText 对空 rows 回空串）。
+            _degrade(
+                "mundane cycle table: empty rows (table=%s)", fields.get("table"),
+                note=f"[世运周期表]（{table.get('label') or fields.get('table')}）这段年份 / 这张盘里没有内容，未成段。",
+            )
+            return state
+        state["cycleTableResult"] = result
+        state["cycleTableRequest"] = body
         return state
 
     def _mundane_eclipse_job(

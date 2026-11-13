@@ -789,6 +789,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "问「某城市对我如何」时传 clickLat/clickLon（十进制，西经为负）→ [落点分析] 段给该地"
             "命中线（临角的星+距离）/重置四角/敏感点（宿命点/东升点/共升点/极地上升/映点）。"
             "传 eventKind（日月食/朔望/四至入境）→ [事件时刻] 段给 UTC 时刻（CCG 事件线用）。"
+            "传 eclipse=prenatal/postnatal（可配 eclipseFilter=central）→ [占星地图] 加「◆ 日食路径」（出生前 / 后最近一次日食的"
+            "食甚时刻、地点、食分、食带宽、中心线起止）；传 climes=klimata/parallels（可配 climesObliquity）→ 加「◆ 七气候带 / 托勒密纬圈」。"
+            "两层缺省都关。"
         ),
     ),
     "xuanshi": _policy(
@@ -1130,7 +1133,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
                 "options": ["swissA10 + A10（春分白羊 10°，默认）", "systemA", "systemB", "B8（春分白羊 8°）"],
             },
         ],
-        output_contract=["起盘信息", "七曜按宫", "分至天狼星", "位三法", "行星神性", "微黄道"],
+        # [天象实算]（上游 v3.14.0）：七曜三道 / ziqpu 星钟 / 目标年取数 / 周期现象，随出生时刻与地点实算，没有自己的设置项。
+        output_contract=["起盘信息", "七曜按宫", "分至天狼星", "位三法", "行星神性", "微黄道", "天象实算"],
     ),
     # 十二分盘/龙盘：与本命盘同一套出生资料，无额外结果敏感设置 → 沿用同一策略。
     "chart12": ASTRO_CHART_POLICY,

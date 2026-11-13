@@ -103,6 +103,9 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/planetcycles",
     "/astroextra/returns",
     "/astroextra/barbault",
+    # 上游 v3.14.0：世俗盘「世运周期表」14 张（mundane_cycles.py）与巴比伦「天象实算」（babylon_tables.py）。
+    "/astroextra/mundanecycles",
+    "/astroextra/babylontables",
     "/geomancy/reading",
     # 占星地图（AstroCartoGraphy）：行星地理投影线精算端点。
     "/location/acg",

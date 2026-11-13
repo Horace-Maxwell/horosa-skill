@@ -253,6 +253,31 @@ ACG_POINT_HSYS = Vocabulary(
 )
 
 
+# ───────────────────────── 占星地图两层：日食路径 / 气候带（上游 v3.14.0 utils/acgLayers.js）─────────────────────────
+
+# 值域 = 上游 ECLIPSE_MODES / ECLIPSE_FILTERS / CLIMES_MODES / CLIMES_OBLIQUITY（vendored acgLayers.js，tests/test_sync314_mundane_acg.py
+# 逐键互锚）；中文名取页面分段控件的文字（AstroAcg.js「日食与气候带」一节）与 ECLIPSE_WHICH_CN。后端 ACGraph 对认不出的
+# eclipse / eclipseFilter 静默按 off / any（ACGraph.py:334-340），气候带是纯渲染层（认不出 = 不成块）——所以在入口拒。
+ACG_LAYER_VOCABULARIES: dict[str, Vocabulary] = {
+    "eclipse": Vocabulary(
+        "eclipse", {"off": ("关", "不画", "false"), "prenatal": ("生前", "出生前", "出生前最近一次"), "postnatal": ("生后", "出生后", "出生后最近一次")},
+        labels={"off": "关（缺省）", "prenatal": "出生前最近一次日食", "postnatal": "出生后最近一次日食"},
+    ),
+    "eclipseFilter": Vocabulary(
+        "eclipseFilter", {"any": ("任何日食", "任何"), "central": ("只找中心食", "中心食", "中心")},
+        labels={"any": "任何日食（缺省）", "central": "只找中心食（全 / 环 / 全环）"},
+    ),
+    "climes": Vocabulary(
+        "climes", {"off": ("关", "false"), "klimata": ("七带", "七气候带", "气候带"), "parallels": ("纬圈", "托勒密纬圈")},
+        labels={"off": "关（缺省）", "klimata": "七气候带", "parallels": "托勒密纬圈"},
+    ),
+    "climesObliquity": Vocabulary(
+        "climesObliquity", {"date": ("改进", "出生时刻"), "ptolemy": ("经典", "托勒密", "托勒密值")},
+        labels={"date": "改进：出生时刻的真黄赤交角（缺省）", "ptolemy": "经典：托勒密值 23°51′20″"},
+    ),
+}
+
+
 # ───────────────────────── 宿占 / 世运卜卦 ─────────────────────────
 
 # 宿占人事十二宫起法（上游 SuZhanMain.js:312-316 0=八字公式 / 1=ASC）：runner 曾 `in (1, True, "1") else 0`——2 静默按 0。

@@ -8,7 +8,7 @@ import { BABYLON_SCHEMES, BABYLON_PARAM_SPEC } from '../vendor/babylon/babylonSc
 import { julianDayIndex } from '../vendor/utils/julianDayIndex.js';
 
 /**
- * 巴比伦占星六段（起盘信息 / 七曜按宫 / 分至天狼星 / 位三法 / 行星神性 / 微黄道）。
+ * 巴比伦占星各段（起盘信息 / 七曜按宫 / 分至天狼星 / 位三法 / 行星神性 / 微黄道 + 三页签候选段 + v3.14.0 天象实算）。
  *
  * 上游的编排函数 `buildBabylonSnapshotForFields` 自己发两个请求（/chart 与
  * /astroextra/ephemeris），headless 侧按 AGENTS §5 由 Python 发请求、JS 只做纯计算与排版，
@@ -24,6 +24,7 @@ import { julianDayIndex } from '../vendor/utils/julianDayIndex.js';
  *   chart: <后端 /chart 响应（恒星黄道 · 毕宿锚）>,
  *   year, month, day,            // 公历；year 为负表示公元前（同上游 ad<0 的 signedYear）
  *   ephemeris?: <后端 /astroextra/ephemeris 响应>,   // 缺省则 [分至天狼星] 段内两行实算自动省略
+ *   skyTables?: <后端 /astroextra/babylontables 响应>, // v3.14.0 [天象实算]（七曜三道 / ziqpu 星钟 / 目标年取数 / 周期现象）；缺省则该段不出
  *   scheme?, solstice?, era?, ephemerisSource?, schemeCn?   // 派系口径，透传给上游 opts
  * }
  * return : { text, invalid }
@@ -88,7 +89,10 @@ export function runBabylon(payload) {
   const ephemDigest = source.ephemeris ? digestBabylonEphemeris(source.ephemeris, jdn) : null;
   // lons 供 [数理星历] 的五星恒星黄经锚与月亮多列的太阳黄经（上游 :373 / BabylonMain.js:140 同传）；
   // 缺它时该段五星行全缺、太阳锚恒 0°。
-  const text = buildBabylonSnapshotText(bab, { ...opts, ephemDigest, lons }) || '';
+  // skyTables（上游 v3.14.0 buildBabylonSnapshotForFields :463-464 `fetchBabylonSkyTables(params)` → opts.skyTables）：原样给。
+  // 「响应带 paths 才成段」的判据在上游 buildBabylonSkySection 自己手里（`!Array.isArray(sky.paths)` → 不成段），这里不重复判；
+  // Python 侧负责把「没取到」说出来。
+  const text = buildBabylonSnapshotText(bab, { ...opts, ephemDigest, lons, skyTables: source.skyTables || null }) || '';
   // board：报告盘图（app 原版 BabylonHoroscope 星盘）按同一 jdn / opts 再起一次 buildHoroscope，盘与正文同一口径。
   return { text, board: { jdn, opts } };
 }
