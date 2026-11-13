@@ -392,10 +392,15 @@ def build_knowledge_registry(domain: str | None = None) -> dict[str, Any]:
                             "name": cat.get("name"),
                             "count": len(cat.get("entries") or []),
                             "keys": [e.get("key") for e in (cat.get("entries") or [])][:24],
+                            # 手册的章节键是页面子页签的运行时键（primarydirect）；章名在这里，read 两种都认
+                            **({"labels": [e.get("label") or e.get("key") for e in (cat.get("entries") or [])][:24]}
+                               if any(e.get("label") for e in (cat.get("entries") or [])) else {}),
                             "supports": ["read"],
                         }
                         for cat in bundle.get("categories") or []
                     ],
+                    # 点名一个域时给全书目录（分组 → 章），取自别册的章标出本家；列全部域时不给，33 章的星运手册一册就 2 KB
+                    **({"groups": _helpdoc_contents(bundle)} if domain and bundle.get("groups") else {}),
                 }
             )
             continue
@@ -612,11 +617,58 @@ def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _helpdoc_contents(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """全书目录：上游左栏菜单的同一份分组。取自别册的章带 `from`（本家的域与键）。"""
+    heads = {f"{entry.get('key')}": entry for cat in bundle.get("categories") or [] for entry in cat.get("entries") or []}
+    heads.update({f"{entry.get('key')}": entry for entry in bundle.get("includes") or []})
+    return [
+        {
+            "label": group.get("label"),
+            **({"hint": group["hint"]} if group.get("hint") else {}),
+            "chapters": [
+                {"key": key, "label": heads[key].get("label") or key, **({"from": heads[key]["ref"]} if heads[key].get("ref") else {})}
+                for key in group.get("chapters") or [] if key in heads
+            ],
+        }
+        for group in bundle.get("groups") or []
+    ]
+
+
+def _helpdoc_find(items: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    """按「键 → 不分大小写的键 → 别名 → 章名 → 唯一包含」找一条；每一步只认唯一命中。
+
+    章节键是上游页面子页签的运行时键（`primarydirect`、`suzhan`），章名（「主限法」「宿盘」）在 label：AI 从检索结果里拿到的是键，
+    人说的是章名，旧包的键（`Suzhan`、`排盘设置`）也都落在这几步里。"""
+    folded = key.casefold()
+    steps = (
+        lambda e: f"{e.get('key')}" == key,
+        lambda e: f"{e.get('key')}".casefold() == folded,
+        lambda e: any(f"{alias}".casefold() == folded for alias in e.get("aliases") or ()),
+        lambda e: f"{e.get('label') or ''}" == key,
+        lambda e: key in f"{e.get('key')}" or key in f"{e.get('label') or ''}",  # 「排盘」命中「排盘设置」
+    )
+    for step in steps:
+        found = [entry for entry in items if step(entry)]
+        if len(found) == 1:
+            return found[0]
+        if found and step is not steps[-1]:
+            return None  # 同一步里有两条：有歧义，交给调用方列出可用的键
+    return None
+
+
+def _helpdoc_combined(entries: list[dict[str, Any]]) -> str:
+    """整册合排成一章（上游「命 · 其他」把演禽 / 一掌经整本排成一章）：首章正文，其后每章先章名再正文。"""
+    parts = [f"{entries[0].get('text') or ''}"]
+    parts += [f"# {entry.get('label') or entry.get('key')}\n\n{entry.get('text') or ''}" for entry in entries[1:]]
+    return "\n\n".join(parts)
+
+
 def _read_helpdoc_entry(bundle: dict[str, Any], *, domain: str, category: str, key: str) -> dict[str, Any]:
-    """手册域通用读取：category 缺省取首类（多数域只有「手册」一类）；key 精确或前缀匹配。
+    """手册域通用读取：category 缺省取首类（多数域只有「手册」一类）；key 认章节键 / 别名 / 章名（见 `_helpdoc_find`）。
 
     返回体与 hover 域同形（rendered_text + provenance + citation），citation 逐条落到
-    组件文件 + tab + 上游版本——「引教义必带出处」在这里闭环。
+    组件文件 + 章 + 上游版本——「引教义必带出处」在这里闭环。合订本里取自别册的章（`includes`）读本家那一条，
+    返回体的 domain / key 是本家的，`via` 记下是从哪本书的哪一章找过来的。
     """
     cats = bundle.get("categories") or []
     cat = next((c for c in cats if c.get("name") == category), None) if category else (cats[0] if cats else None)
@@ -627,39 +679,79 @@ def _read_helpdoc_entry(bundle: dict[str, Any], *, domain: str, category: str, k
             details={"domain": domain, "category": category, "available": [c.get("name") for c in cats]},
         )
     entries = cat.get("entries") or []
+    includes = (bundle.get("includes") or []) if cat is cats[0] else []
+    listing = [e.get("key") for e in [*entries, *includes]]
     if not key:
         raise ToolValidationError(
             f"knowledge_read({domain}) 需要 key（条目名）。",
             code="knowledge.helpdoc.key_required",
-            details={"domain": domain, "category": cat.get("name"), "keys": [e.get("key") for e in entries]},
+            details={"domain": domain, "category": cat.get("name"), "keys": listing,
+                     **({"labels": [e.get("label") or e.get("key") for e in [*entries, *includes]]}
+                        if any(e.get("label") for e in entries) else {})},
         )
-    entry = next((e for e in entries if e.get("key") == key), None)
-    if entry is None:  # 前缀/包含式兜底：手册 tab 名较长，允许「排盘」命中「排盘设置」
-        loose = [e for e in entries if key in f"{e.get('key')}"]
-        entry = loose[0] if len(loose) == 1 else None
+    entry = _helpdoc_find([*entries, *includes], key)
     if entry is None:
         raise ToolValidationError(
             f"Unknown knowledge key: {domain}/{cat.get('name')}/{key}",
             code="knowledge.helpdoc.unknown_key",
-            details={"domain": domain, "category": cat.get("name"), "key": key,
-                     "available": [e.get("key") for e in entries]},
+            details={"domain": domain, "category": cat.get("name"), "key": key, "available": listing},
         )
     src = bundle.get("source") or {}
+    if entry.get("ref"):
+        return _read_borrowed_chapter(bundle, domain=domain, entry=entry)
     entry_src = entry.get("source") or {}
+    name = entry.get("label") or entry.get("key")
     return {
         "domain": domain,
         "category": cat.get("name"),
         "key": entry.get("key"),
         "query_normalized": {"key": entry.get("key")},
-        "title": f"{bundle.get('label')} · {entry.get('label') or entry.get('key')}",
+        "title": f"{bundle.get('label')} · {name}",
         "rendered_text": entry.get("text", ""),
         "source": "xingque_help_docs",
         "bundle_version": src.get("upstream_app_version"),
         "provenance": {**src, **entry_src},
         "citation": (
-            f"星阙操作手册 · {bundle.get('label')} · {entry.get('key')}"
+            f"星阙操作手册 · {bundle.get('label')} · {name}"
             f"（{entry_src.get('file')} @ 星阙 {src.get('upstream_app_version')}）"
         ),
+    }
+
+
+def _read_borrowed_chapter(bundle: dict[str, Any], *, domain: str, entry: dict[str, Any]) -> dict[str, Any]:
+    ref = entry["ref"]
+    home = load_helpdoc_bundles().get(f"{ref.get('domain')}")
+    via = {"domain": domain, "key": entry.get("key"), "label": entry.get("label") or entry.get("key")}
+    if home is None:  # 生成器只在本家也收割了的时候才写 ref；包被手改 / 只装了一半才会到这里
+        raise ToolValidationError(
+            f"Unknown knowledge key: {domain}/{entry.get('key')}",
+            code="knowledge.helpdoc.unknown_key",
+            details={"domain": domain, "key": entry.get("key"), "missing_domain": ref.get("domain")},
+        )
+    if ref.get("key"):
+        return {**_read_helpdoc_entry(home, domain=f"{ref['domain']}", category="", key=f"{ref['key']}"), "via": via}
+    wanted = [f"{key}" for key in ref.get("keys") or []]
+    chapters = [e for key in wanted for e in (home.get("categories") or [{}])[0].get("entries") or [] if e.get("key") == key]
+    if not chapters or len(chapters) != len(wanted):
+        raise ToolValidationError(
+            f"Unknown knowledge key: {domain}/{entry.get('key')}",
+            code="knowledge.helpdoc.unknown_key",
+            details={"domain": domain, "key": entry.get("key"), "missing_keys": sorted(set(wanted) - {f"{e.get('key')}" for e in chapters})},
+        )
+    src = home.get("source") or {}
+    return {
+        "domain": f"{ref['domain']}",
+        "category": (home.get("categories") or [{}])[0].get("name"),
+        "key": chapters[0].get("key"),
+        "keys": wanted,
+        "query_normalized": {"key": chapters[0].get("key")},
+        "title": f"{home.get('label')}（全册 {len(chapters)} 章）",
+        "rendered_text": _helpdoc_combined(chapters),
+        "source": "xingque_help_docs",
+        "bundle_version": src.get("upstream_app_version"),
+        "provenance": {**src, "tab": wanted},
+        "citation": f"星阙操作手册 · {home.get('label')}（全册 {len(chapters)} 章；{src.get('file')} @ 星阙 {src.get('upstream_app_version')}）",
+        "via": via,
     }
 
 
@@ -675,9 +767,8 @@ _ASPECT_NAMES = {
     "0": ("合相", "合"), "60": ("六分相", "六合相"), "90": ("四分相", "刑相"), "120": ("三分相", "拱相", "三合相"),
     "180": ("对分相", "冲相", "对冲"),
 }
-_MANUAL_ALIASES = {"Suzhan": ("宿占",)}  # 上游页面叫「宿盘」，技法与工具都叫宿占
+_MANUAL_ALIASES = {"suzhan": ("宿占",)}  # 上游页面叫「宿盘」，技法与工具都叫宿占
 _CN_NUMERALS = ("一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二")
-_MANUAL_HOME_KEYS = frozenset({"总览", "Overview", "Page"})
 _SHEN_SUFFIX = re.compile(r"[子丑寅卯辰巳午未申酉戌亥]神$")
 _PARENTHETICAL = re.compile(r"[（(].*?[）)]$")
 _CJK_TEXT = re.compile(r"[㐀-鿿]")
@@ -697,6 +788,7 @@ _UI_KEY_WORDS = ("右栏", "页签", "标签", "设置", "显示", "快捷键", 
 _UI_DOMAINS = frozenset({"aianalysis", "astrodata_manual", "planetarium", "astro3d"})
 _ONE_LINER_CHARS = 40
 _HEADWORD_BONUS = 5.0  # 小于档内相关度的跨度（30），只在同档、相关度相近时起作用
+_NAMED_TERM_BONUS = 1.0  # 多词查询里，条目自己的名字含其中一个词
 _THIN_RESULT = 3  # 比这还少又没有点名命中：多半是整串碰巧在哪儿连着出现过一次，补上切开后的结果
 _TIER_SCORE = {3: 100.0, 2: 60.0, 1: 30.0, 0: 0.0}  # 全等 > 名字里含 > 标题里含 > 只在正文
 _RELEVANCE_SPAN = 30.0  # 相关度压进 [0, 30)：档内按相关度排，永远越不过上一档
@@ -705,18 +797,23 @@ _RELEVANCE_SPAN = 30.0  # 相关度压进 [0, 30)：档内按相关度排，永�
 # 英文术语 → 语料里的中文词（2026-11-11 深审 K-3）。只收语料自己中英对照过的：英文在语料里出现过，并且与这个中文词写在一起
 # （「主限法（Primary Direction）」这类），测试逐条核对，还要求中文词有命中。语料里没有英文写法的词（combust、retrograde…）
 # 不收：零命中时给近似标题建议，并说明语料是中文写的，而不是替语料编一个译名。中文一侧必须是语料里的标题 / 小节名 / 加粗词
-# （search_vocabulary）：hyleg→生命主、grand trine→大三角 这类只在正文里对照过的没有收。
+# （search_vocabulary）：grand trine→大三角 这类只在正文里对照过的没有收。
+# 上游 v3.14.0（一技法一章）之后「写在一起」有两种：正文里中英并写（「主限法（Primary Direction）」），或者英文就是上游给这一章
+# 起的章节键（prenatalsyzygy ↔ 章名「产前朔望」：新手册正文不再逐法列英文名，键还在）。那一版正文里删掉了英文的两个词
+# （half-sum、chorography）随之拿掉；次限推运的章名改成了「推运」。
 TERM_ALIASES: dict[str, str] = {
     "firdaria": "法达星限", "profection": "小限法", "solar return": "太阳返照",
-    "lunar return": "月亮返照", "solar arc": "太阳弧", "primary direction": "主限法", "secondary progression": "次限推运",
+    "lunar return": "月亮返照", "solar arc": "太阳弧", "primary direction": "主限法", "secondary progression": "推运",
     "zodiacal releasing": "黄道星释", "lot of fortune": "幸运点", "lot of spirit": "精神点", "lot of marriage": "婚姻点",
     "composite": "组合盘", "davison": "时空中点盘", "relocation": "异地重置盘", "draconic": "龙盘", "decans": "三十六旬",
     "orb": "容许度", "whole sign": "整宫", "house system": "分宫制", "transits": "流年法", "mundane": "世俗盘",
-    "tropical": "回归黄道", "ephemeris": "星历", "decennials": "十年大运", "distributions": "界推运",
-    "planetary ages": "行星年龄", "planetary arc": "行星弧", "persian directed": "波斯向运", "prenatal syzygy": "产前朔望",
-    "lunation phase": "月相推运", "extra returns": "多重回归", "triplicity rulers": "三分主星", "thema mundi": "世界范式盘",
-    "muhurta": "择时", "varga": "分盘", "half-sum": "中点", "eminence": "显赫程度", "melothesia": "身体部位",
-    "klimata": "七气候带", "chorography": "占星地理分野", "age point": "年龄推进点",
+    "tropical": "回归黄道", "sidereal": "恒星黄道", "ephemeris": "星历", "decennials": "十年大运", "distributions": "界推运",
+    "planetary ages": "行星年龄", "ages of man": "行星年龄", "planetary arc": "行星弧", "persian directed": "波斯向运",
+    "prenatal syzygy": "产前朔望", "lunation phase": "月相推运", "extra returns": "多重回归", "triplicity rulers": "三分主星",
+    "time lords": "时主轮转", "transform chart": "变换盘", "zodiac systems": "黄道制", "nine star": "九星气学",
+    "thema mundi": "世界范式盘", "muhurta": "择时", "varga": "分盘", "eminence": "显赫程度", "melothesia": "身体部位",
+    "klimata": "七气候带", "age point": "年龄推进点", "hyleg": "生命主", "alcocoden": "寿主星", "promittor": "迫星",
+    "significator": "应星",
 }
 
 
@@ -845,6 +942,7 @@ class SearchDoc:
     citation: str
     names: frozenset[str]  # 归一后的「这一条叫什么」：键、中文标签、别名
     fields: tuple[tuple[str, float], ...]  # (归一文本, 权重)
+    label: str = ""  # 手册条目的章名（键是上游的运行时键，如 primarydirect）；别的域是空串
 
     @property
     def haystack(self) -> str:
@@ -871,11 +969,18 @@ def _coordinates() -> Iterator[tuple[str, str, str]]:
                     yield from ((domain, category, f"{key}") for key in entries)
 
 
-def _helpdoc_label(bundle: dict[str, Any], category: str, key: str) -> str | None:
+def _helpdoc_entry(bundle: dict[str, Any], category: str, key: str) -> dict[str, Any]:
     for cat in bundle.get("categories") or []:
         if cat.get("name") == category:
-            return next((entry.get("label") for entry in cat.get("entries") or [] if entry.get("key") == key), None)
-    return None
+            return next((entry for entry in cat.get("entries") or [] if entry.get("key") == key), {})
+    return {}
+
+
+def _is_manual_home(bundle: dict[str, Any], category: str, key: str) -> bool:
+    """一本手册的首章：上游打开帮助时默认停在这一章（HelpBook.resolveChapterKey「都不中回首章」）。"""
+    cats = bundle.get("categories") or []
+    first = (cats[0].get("entries") or [{}])[0] if cats and cats[0].get("name") == category else {}
+    return bool(bundle.get("groups")) and first.get("key") == key
 
 
 def _entry_names(domain: str, category: str, key: str, title: str) -> set[str]:
@@ -884,9 +989,9 @@ def _entry_names(domain: str, category: str, key: str, title: str) -> set[str]:
     bundle = bundles[domain]
     names = {key, title}
     if bundle.get("schema") == "horosa.knowledge.helpdoc.v1":
-        label = _helpdoc_label(bundle, category, key)
-        names |= {label or "", *_MANUAL_ALIASES.get(key, ())}
-        if key in _MANUAL_HOME_KEYS:  # 「奇门遁甲」这种查询，到这本手册的总览
+        entry = _helpdoc_entry(bundle, category, key)
+        names |= {f"{entry.get('label') or ''}", *(f"{alias}" for alias in entry.get("aliases") or ()), *_MANUAL_ALIASES.get(key, ())}
+        if _is_manual_home(bundle, category, key):  # 「奇门遁甲」这种查询，到这本手册的首章（总览）
             names.add(f"{bundle.get('label') or ''}".split(" · ")[0])
     elif domain == "astro":
         labels = {*(value for value in (ASTRO_LABELS.get(key), (bundle.get("labels") or {}).get(key)) if value)}
@@ -920,7 +1025,9 @@ def _search_doc(domain: str, category: str, key: str) -> SearchDoc:
     fields = ((retrieval.normalize(title) + "\n" + "\n".join(sorted(names)), retrieval.FIELD_WEIGHTS["title"]),
               (retrieval.normalize(named_category), retrieval.FIELD_WEIGHTS["heading"]),
               (retrieval.normalize(body), retrieval.FIELD_WEIGHTS["body"]))
-    return SearchDoc(domain, category, key, title, body, f"{read.get('citation') or ''}", frozenset(names), fields)
+    bundle = load_knowledge_bundles()[domain]
+    label = f"{_helpdoc_entry(bundle, category, key).get('label') or ''}" if bundle.get("schema") == "horosa.knowledge.helpdoc.v1" else ""
+    return SearchDoc(domain, category, key, title, body, f"{read.get('citation') or ''}", frozenset(names), fields, label)
 
 
 @lru_cache(maxsize=1)
@@ -932,7 +1039,7 @@ def search_docs() -> tuple[SearchDoc, ...]:
 def _is_aside(doc: SearchDoc) -> bool:
     if doc.domain == "bazi_pithy":
         return len(doc.body) - len(doc.title) < _ONE_LINER_CHARS
-    return doc.category == "手册" and (doc.domain in _UI_DOMAINS or any(word in doc.key for word in _UI_KEY_WORDS))
+    return doc.category == "手册" and (doc.domain in _UI_DOMAINS or any(word in (doc.label or doc.key) for word in _UI_KEY_WORDS))
 
 
 def _term_group(term: tuple[str, ...]) -> str:
@@ -973,6 +1080,9 @@ def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int],
     groups = {_term_group(term) for term in topic_terms}
     bare = len(groups) == 1
     covers_all: dict[int, bool] = {}
+    # 条目自己的名字：手册条目是章名，别的域是键与别名，再加分类名（断语库的「流年」类）。不含「书名 · 章名」的整条标题：书名里的词每一章都有
+    own_name = ({id(doc): "\n".join([*sorted(name for name in doc.names if " · " not in name), doc.fields[1][0]]) for doc in corpus}
+                if len(groups) > 1 else {})
     for doc in corpus:
         by_term = {
             term: retrieval.bm25(sum(weight * retrieval.term_count(text, term) for text, weight in doc.fields),
@@ -996,6 +1106,11 @@ def _rank(corpus: list[SearchDoc], query: str, df: dict[tuple[str, ...], int],
         base = _TIER_SCORE[tier]
         if tier == 2 and any(name.startswith(exact) for name in doc.names):
             base += _HEADWORD_BONUS  # 名字以这个词开头（「四化与运限」之于「四化」）：比词只在名字中间出现的更像是在讲它
+        if len(groups) > 1 and own_name.get(id(doc)):
+            # 多词查询没有「名字里含」这一档（档位按整句判）。条目自己的名字里有其中一个词（「判断 用神」之于「用神动变」）：
+            # 比几个词只在正文里凑齐的条目更像是在讲它。每个词加一点，只够在相关度相近时分先后。
+            base += _NAMED_TERM_BONUS * len({_term_group(term) for term in topic_terms
+                                             if len("".join(term)) > 1 and retrieval.term_count(own_name[id(doc)], term)})
         ranked.append((round(base + _RELEVANCE_SPAN * relevance / (1 + relevance), 4), tier == 3, doc))
     ranked.sort(key=lambda row: (not covers_all.get(id(row[2])), -row[0], row[2].domain, row[2].category, row[2].key))
     if stats is not None and len(groups) > 1:

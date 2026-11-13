@@ -78,24 +78,30 @@ def test_registry_lists_helpdoc_domains_with_keys() -> None:
     bazi = domains["bazi"]
     assert bazi["source"] == "xingque_help_docs"
     assert bazi["categories"][0]["count"] >= 5
-    assert any("排盘" in f"{k}" for k in bazi["categories"][0]["keys"])
+    # 键是上游的章节键（setup），章名在并排的 labels 里
+    assert "setup" in bazi["categories"][0]["keys"]
+    assert any("排盘" in f"{label}" for label in bazi["categories"][0]["labels"])
+    assert len(bazi["categories"][0]["labels"]) == len(bazi["categories"][0]["keys"])
 
 
 def test_read_round_trip_returns_cited_text() -> None:
-    entry = read_knowledge_entry({"domain": "bazi", "key": "算法与口径"})
+    entry = read_knowledge_entry({"domain": "bazi", "key": "algo"})
     assert entry["rendered_text"].strip()
     assert "BaziHelpDoc.js" in entry["citation"], "citation 必须落到具体组件文件"
+    assert "算法与口径" in entry["citation"] and entry["title"].endswith("算法与口径"), "给人看的是章名，不是 algo"
     assert entry["provenance"]["upstream_git_sha"]
+    # 章名（v3.14.0 之前它就是键）照样读得到同一条
+    assert read_knowledge_entry({"domain": "bazi", "key": "算法与口径"})["key"] == "algo"
     # 前缀兜底：唯一命中才放行
     loose = read_knowledge_entry({"domain": "bazi", "key": "算法"})
-    assert loose["key"] == "算法与口径"
+    assert loose["key"] == "algo"
 
 
 def test_read_without_key_fails_with_the_key_list() -> None:
     with pytest.raises(ToolValidationError) as excinfo:
         read_knowledge_entry({"domain": "bazi"})
     assert excinfo.value.code == "knowledge.helpdoc.key_required"
-    assert "排盘设置" in f"{excinfo.value.details.get('keys')}"
+    assert "setup" in excinfo.value.details.get("keys") and "排盘设置" in excinfo.value.details.get("labels")
 
 
 def test_hover_domains_still_work_unchanged() -> None:

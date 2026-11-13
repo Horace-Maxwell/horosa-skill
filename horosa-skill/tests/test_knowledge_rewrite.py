@@ -34,7 +34,7 @@ def test_a_question_is_rewritten_to_the_terms_it_asks_about(case: dict) -> None:
 def test_the_reported_segmentation_is_fixed_and_leftover_single_characters_are_dropped() -> None:
     result = store.search_knowledge({"query": "八字里的用神怎么选", "limit": 3})
     assert result["expanded_query"] == "八字 用神"
-    assert (result["matches"][0]["domain"], result["matches"][0]["key"]) == ("bazi", "格局用神")
+    assert (result["matches"][0]["domain"], result["matches"][0]["key"]) == ("bazi", "geju")
     # 连着两个以上没落在词上的字仍作弱线索（已记录的取舍：「塔罗怎么读牌」→「塔罗 读 牌」）
     assert store.search_knowledge({"query": "塔罗怎么读牌"})["expanded_query"] == "塔罗 读 牌"
 
@@ -74,12 +74,12 @@ def test_interface_pages_and_one_line_pithy_rank_after_entries_that_explain_a_ba
 
 def test_an_interface_page_is_still_first_when_the_query_names_it() -> None:
     top = store.search_knowledge({"query": "八字排盘设置"})["matches"][0]
-    assert (top["domain"], top["key"]) == ("bazi", "排盘设置")
+    assert (top["domain"], top["key"]) == ("bazi", "setup")
 
 
 def test_several_terms_prefer_entries_with_all_of_them_and_say_when_none_has() -> None:
     both = store.search_knowledge({"query": "四化 流年"})
-    assert both["match_mode"] == "all" and (both["matches"][0]["domain"], both["matches"][0]["key"]) == ("ziwei", "四化与运限")
+    assert both["match_mode"] == "all" and (both["matches"][0]["domain"], both["matches"][0]["key"]) == ("ziwei", "luck")
     some = store.search_knowledge({"query": "互容 起课"})
     assert some["match_mode"] == "any" and some["matches"]
     chinese, english = some["warnings"][0].split(" / ", 1)
@@ -100,7 +100,7 @@ def test_entries_with_every_term_come_before_entries_with_only_some(query: str) 
 def test_a_domain_word_weights_but_does_not_score() -> None:
     """「八字 用神」此前前两条是一行口诀：「八字断语库」的标题里就有「八字」。"""
     top = store.search_knowledge({"query": "八字 用神"})["matches"][0]
-    assert (top["domain"], top["key"]) == ("bazi", "格局用神")
+    assert (top["domain"], top["key"]) == ("bazi", "geju")
 
 
 # ---- K-3：英文与零命中
@@ -110,7 +110,8 @@ def test_english_aliases_come_from_the_corpus_and_point_at_its_titles() -> None:
     vocabulary = store.search_vocabulary()
     bodies = [retrieval.normalize(f"{doc.title}\n{' '.join(doc.names)}\n{doc.body}") for doc in store.search_docs()]
     for english, chinese in store.TERM_ALIASES.items():
-        pattern = r"(?<![a-z])" + re.escape(english).replace(r"\ ", r"[\s\-]+") + r"(?![a-z])"
+        # 空格可有可无：上游的章节键把英文名连写（prenatalsyzygy ↔ 章名「产前朔望」），那也是语料自己的中英对照
+        pattern = r"(?<![a-z])" + re.escape(english).replace(r"\ ", r"[\s\-]*") + r"(?![a-z])"
         paired = any(re.search(rf"{pattern}.{{0,40}}{re.escape(chinese)}|{re.escape(chinese)}.{{0,40}}{pattern}", body, re.S)
                      for body in bodies)
         assert paired, f"语料里没有把 {english} 与 {chinese} 写在一起"
@@ -118,8 +119,8 @@ def test_english_aliases_come_from_the_corpus_and_point_at_its_titles() -> None:
         assert store.search_knowledge({"query": chinese})["total_matched"] > 0
 
 
-@pytest.mark.parametrize(("query", "domain", "key"), [("primary direction", "direction", "主限法"),
-                                                      ("What is a solar arc?", "germany", "太阳弧 · 校时")])
+@pytest.mark.parametrize(("query", "domain", "key"), [("primary direction", "direction", "primarydirect"),
+                                                      ("What is a solar arc?", "germany", "germany.solararc")])
 def test_english_terms_find_the_chinese_entry(query: str, domain: str, key: str) -> None:
     result = store.search_knowledge({"query": query, "limit": 3})
     assert (domain, key) in [(m["domain"], m["key"]) for m in result["matches"]]

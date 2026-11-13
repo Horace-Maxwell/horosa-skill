@@ -62,7 +62,9 @@ uv run python scripts/revendor_core_js.py "$SRC" --from-manifest            # �
 (cd horosa-core-js && npm test)
 uv run python scripts/verify_export_contract_mirror.py            # aiExport 版本变了：推进 MIRRORED_UPSTREAM_AIEXPORT_VERSION、回填新段
 uv run python scripts/verify_export_section_baseline.py --source upstream --require-upstream
-uv run python scripts/gen_knowledge_packs.py && uv run python scripts/gen_bazi_pithy_pack.py
+uv run python scripts/gen_knowledge_packs.py && uv run python scripts/gen_bazi_pithy_pack.py   # 手册包：要 Node + horosa-core-js 的
+#   devDependencies（npm ci）——它把上游手册模块打包运行（scripts/harvest_help_books.mjs），逐章与上游自己的纯文本对账；FAIL 就照报错
+#   处理（新手册 → HELPDOC_DOMAINS，新标签 → 教收割器怎么排），别手改包。跑完 `--check` 应为 up to date；知识库计数变了同步 README×2 / SKILL / AGENTS
 node scripts/build_hover_knowledge_bundle.mjs && uv run python scripts/build_knowledge_index.py
 uv run python scripts/gen_technique_provenance.py && uv run python scripts/gen_technique_provenance.py --check
 uv run python scripts/audit_upstream_ports.py --scan --from "$PIN" --to <新上游 sha>   # 手抄移植审计：每个 UNREVIEWED 逐条核对，
