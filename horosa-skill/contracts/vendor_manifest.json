@@ -3262,6 +3262,19 @@
           "why": "同 utils/timeLordTables.js：钉到共享 AstroText shim。"
         }
       ]
+    },
+    "utils/chartDetails.js": {
+      "upstream": "utils/chartDetails.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 占星「盘面细节」的单一来源：30 张表的目录 CHART_DETAIL_TABLES、五项口径的缺省与值域（CHART_DETAIL_DEFAULTS / CHART_DETAIL_OPTIONS）、请求体映射 chartDetailRequestFields 与「结果 → 快照正文」buildChartDetailsText。计算全在后端 astrostudy/chart_details.py（/astroextra/chartdetails，Python 侧发请求）；页面设置仓 CHART_DETAIL_SETTINGS 在 headless 下只读得到缺省（pageSettingsStore 的 safeStorage 是 no-op），口径一律由调用方入参给。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/starNamesCn.js：detailPointName 查的 AstroTxtMsg 在共享 AstroText shim。"
+        }
+      ]
     }
   }
 }
