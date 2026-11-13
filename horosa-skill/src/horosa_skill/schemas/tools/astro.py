@@ -12,6 +12,7 @@ from horosa_skill.schemas.tools.base import (
     BirthInput,
     FlexibleModel,
     _ChartDayBoundaryKnobs,
+    _ChartDetailKnobs,
 )
 
 
@@ -19,6 +20,11 @@ class AstroChartInput(BirthInput, _ChartDayBoundaryKnobs):
     """本命/盘面族（chart/chart13/chart12/hellen_chart）：在 BirthInput 上加 [寿命格局] 取主法。"""
 
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
+
+
+class NatalChartInput(AstroChartInput, _ChartDetailKnobs):
+    """本命盘（chart）：盘面族输入 + [盘面细节] 五项口径与「当前表」（上游 v3.14.0）。十三分 / 十二分 / 希腊分盘仍用 AstroChartInput——
+    上游 pipeline.js 的 CLASSICAL_SKIP_KEYS 不给它们挂按本命参数算的派生段，旋钮挂上去就是死键。"""
 
 
 class IndiaChartInput(BirthInput):
@@ -205,7 +211,7 @@ class GuoLaoInput(BirthInput):
     guolaoEqTropicalAnchor: str | None = Field(default=None, description="赤道回归锚点（仅宿度制 7/8）：dongzhi 牛前冬至（缺省）| chunfen 春分。")
 
 
-class ACGInput(BirthInput):
+class ACGInput(BirthInput, _ChartDetailKnobs):
     # 占星地图（AstroCartoGraphy）：本命时刻的行星地理投影线（MC/IC 恒定经度、ASC/DESC 曲线、
     # 天顶点、偕升纬度带、线交点）。口径开关：mode=mundo 真黄纬（Jim Lewis 原版，默认）/zodiac
     # 黄道度；lsMode=great 大圆（默认）/rhumb 等角航线；geodetic 地理等价流派 sepharial（默认）
@@ -381,7 +387,7 @@ class DraconicInput(BirthInput, _ChartDayBoundaryKnobs):
         return text
 
 
-class RelocationInput(BirthInput, _ChartDayBoundaryKnobs):
+class RelocationInput(BirthInput, _ChartDayBoundaryKnobs, _ChartDetailKnobs):
     # 重置盘 (relocation)：保留出生 UT，仅用新经纬重算十二宫与上升/中天（POST /astroextra/relocation）。
     # 行星黄经由 UT 决定故不变，宫位/角点随地点变 —— 迁居占星的标准做法。
     # relocLat/relocLon 缺省回退到出生地，等于本命盘（结果敏感：不给新地点就不是「重置」）。

@@ -57,6 +57,12 @@ _RESULT_SENSITIVE_FIELDS: tuple[tuple[str, str, frozenset[str] | None], ...] = (
     # 龙盘宫位口径（AstroDraconicLab.js:24；whole/shift 改各星落宫）。
     ("sunriseMode", "日出 / 日没口径", None),
     ("draconicHouses", "龙盘宫位口径", _ASTRO_DOMAINS),
+    # v3.14.0 [盘面细节] 五项口径（utils/chartDetails.js CHART_DETAIL_OPTIONS；只挂本命盘 / 重置盘 / 占星地图的输入模型，给了才回显）。
+    ("detailFaces", "盘面细节·面的算法", _ASTRO_DOMAINS),
+    ("detailVariant", "盘面细节·算法", _ASTRO_DOMAINS),
+    ("detailLunar", "盘面细节·月亮日算法", _ASTRO_DOMAINS),
+    ("detailMundo", "盘面细节·世俗位置", _ASTRO_DOMAINS),
+    ("detailMidpoint", "盘面细节·中点坐标", _ASTRO_DOMAINS),
     ("gender", "性别", None),
     ("school", "流派", None),
     ("profile", "传本", None),

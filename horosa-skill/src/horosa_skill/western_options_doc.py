@@ -17,11 +17,13 @@ from typing import Any
 from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 from horosa_skill.engine.registry import (
     ASTRO_CHART_FAMILY_TOOLS,
+    CHART_DETAILS_TOOLS,
     EGYPT_AXIS_KEYS,
     STRONG_RECEPTION_DEFAULT_TOOLS,
     TOOL_DEFINITIONS,
 )
 from horosa_skill.schemas.tools import BirthInput
+from horosa_skill.western_vocab import CHART_DETAIL_TABLES
 from horosa_skill.schemas.tools.base import advertise_hidden_fields
 
 # 上游 significators.js CATEGORY_DEF（20 类）：(键, quesitedLabel, 事项宫；None = 综合取月亮下一入相/相关宫主)。
@@ -103,6 +105,9 @@ JUDGE_GLOBAL_KEYS = (
     "starOrb(=fixedStarOrb)/starOrbMode(=fixedStarOrbMode)/combustMitigateSameSign/antiscia"
 )
 
+# 出 [盘面细节] 段的工具（engine.registry.CHART_DETAILS_TOOLS + 占星地图：acg 的本命盘段在 runner 里按 chart 挂）。
+CHART_DETAILS_DOC_TOOLS = frozenset({*CHART_DETAILS_TOOLS, "acg"})
+
 # BirthInput 上只作用于快照的口径键（send:'never'）按工具挂文档：[埃及历]/[信息] 随 engine.registry.ASTRO_CHART_FAMILY_TOOLS
 # （键表 engine.registry.EGYPT_AXIS_KEYS），[古典·显赫计分] 主宰光体四个全局判定键只 chart。
 _EMINENCE_KEYS = ("busyPlaces", "dynamicalDivisions", "domicileMasterMethod", "rayWeighting")
@@ -162,6 +167,15 @@ def _static_doc(tool_name: str) -> dict[str, str]:
     if tool_name == "relative":
         return {
             "relative": "关系盘 0–4（缺省 0）：" + " ".join(f"{k}={label}" for k, label in RELATIVE_MODES) + "。",
+        }
+    if tool_name in CHART_DETAILS_DOC_TOOLS:
+        # [盘面细节]（上游 v3.14.0）：五项口径的说明取各字段 description（ADVERTISE_HIDDEN 循环已带出），这里只补 30 张表的全表。
+        place = "重置后的地点" if tool_name == "relocation" else "本命盘参数"
+        return {
+            "detailTable": "[盘面细节] 要取原始明细的表（上游页面「当前表」，缺省 topics）：一张或一组 id / 中文名，30 张——"
+            + " ".join(f"{value}={label}" for value, label in CHART_DETAIL_TABLES)
+            + f"。不改正文（正文恒为 30 张表的结论摘要，按{place}、回归黄道算），只决定 data.chart_details.tables 带哪几张表的后端原值；"
+            "data.chart_details.settings 回显后端实际用的五项口径。",
         }
     if tool_name in {"neroman", "bezzafigure", "jayprofection", "michon"}:
         # 推运图族四法：后端 directed_figures._natal_from_request 强制 zodiacal=0（双黄道用自带 J2000 26°37′18″ 岁差）。

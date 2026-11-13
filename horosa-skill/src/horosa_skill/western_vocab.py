@@ -263,6 +263,95 @@ MUNDANE_HORARY_KIND = Vocabulary("mhKind", {"war": ("战争", "战事"), "weathe
                                  labels={"war": "战争（缺省）", "weather": "天候", "price": "物价"})
 
 
+# ───────────────────────── 盘面细节（上游 v3.14.0 utils/chartDetails.js；后端 astrostudy/chart_details.py）─────────────────────────
+
+# 五项口径 + 「当前表」。值域 = vendored `CHART_DETAIL_OPTIONS` / `CHART_DETAIL_TABLES`，缺省 = `CHART_DETAIL_DEFAULTS`
+# （tests/test_sync314_western_chart_details.py 对 vendored JS 与后端源逐值互锚：上游加档 / 删档 / 改缺省即红）。
+# 后端对认不出的值**静默回缺省**（`'element' if … else 'chaldean'`、`method if method in LUNAR_METHODS else 'traditional'`、
+# `system if … in MUNDO_SYSTEMS else 'proportional'`、`coord if coord in MIDPOINT_COORDS else 'ecliptic'`）——所以在入口就判。
+CHART_DETAIL_DEFAULTS: dict[str, str] = {
+    "detailTable": "topics", "detailFaces": "chaldean", "detailVariant": "improved",
+    "detailLunar": "traditional", "detailMundo": "proportional", "detailMidpoint": "ecliptic",
+}
+# 页面设置键 → 请求体键（上游 chartDetailRequestFields；缺省值不下发）。detailTable 不进请求体（后端一次算全 30 张）。
+CHART_DETAIL_REQUEST_KEYS: dict[str, str] = {
+    "detailFaces": "detailFaces", "detailVariant": "variant", "detailLunar": "lunarMethod",
+    "detailMundo": "mundoSystem", "detailMidpoint": "midpointCoord",
+}
+# 后端结果里回显「实际用的口径」的位置（静默回缺省的守卫读它）。
+CHART_DETAIL_ECHO_PATHS: dict[str, tuple[str, ...]] = {
+    "detailFaces": ("faces",), "detailVariant": ("variant",), "detailLunar": ("lunarDays", "method"),
+    "detailMundo": ("inMundo", "system"), "detailMidpoint": ("midpoints", "coord"),
+}
+# 30 张表（上游 CHART_DETAIL_TABLES 的 value / label，原序）。
+CHART_DETAIL_TABLES: tuple[tuple[str, str], ...] = (
+    ("topics", "专题主星"), ("accidental", "偶然尊贵"), ("persian", "波斯尊贵"), ("sunPhases", "与日相位"), ("sect", "昼夜派"),
+    ("dispositors", "定位星链"), ("receptions", "互容"), ("relations", "行星关系"), ("hyleg", "寿主"), ("temperament", "气质"),
+    ("eminence", "名望判据"), ("hellenistic", "希腊化细节"), ("considerations", "判前考量"), ("slavery", "奴役判据"),
+    ("patterns", "相位格局"), ("fertility", "受孕期"), ("crisis", "危机日"), ("lunarDays", "月亮日"), ("perfections", "成相表"),
+    ("inMundo", "世俗相位"), ("cuspAspects", "宫头相位"), ("starAspects", "恒星相位"), ("bindhu", "部分相位"),
+    ("astrodynes", "AstroDynes"), ("planetDetails", "行星细节"), ("degrees", "度数性质"), ("midpoints", "中点"),
+    ("anatomy", "人体对应"), ("stats", "统计"), ("hourAspects", "广义时位"),
+)
+_CHART_DETAIL_MUNDO: tuple[tuple[str, str], ...] = (
+    ("proportional", "比例"), ("placidus", "Placidus"), ("koch", "Koch"), ("porphyry", "Porphyry"), ("regiomontanus", "Regiomontanus"),
+    ("campanus", "Campanus"), ("alcabitius", "Alcabitius"), ("meridian", "子午"), ("horizontal", "地平"), ("topocentric", "站心"),
+    ("morinus", "Morinus"), ("krusinski", "Krusinski"),
+)
+
+
+def _detail_vocab(name: str, rows: tuple[tuple[str, str], ...], extra: Mapping[str, tuple[str, ...]] | None = None) -> Vocabulary:
+    default = CHART_DETAIL_DEFAULTS[name]
+    return Vocabulary(
+        name, {value: (label, *(extra or {}).get(value, ())) for value, label in rows},
+        labels={value: label + ("（缺省）" if value == default else "") for value, label in rows},
+    )
+
+
+CHART_DETAIL_VOCABULARIES: dict[str, Vocabulary] = {
+    "detailFaces": _detail_vocab("detailFaces", (("chaldean", "迦勒底面"), ("element", "元素面")),
+                                 {"chaldean": ("迦勒底",), "element": ("元素", "三分面")}),
+    "detailVariant": _detail_vocab("detailVariant", (("improved", "改进"), ("classic", "经典")),
+                                   {"improved": ("改进档",), "classic": ("经典档", "classical")}),
+    "detailLunar": _detail_vocab("detailLunar", (("traditional", "传统"), ("tithi", "Tithi"), ("equal", "均分"), ("angle", "明暗线"),
+                                                 ("centered", "朔居中"))),
+    "detailMundo": _detail_vocab("detailMundo", _CHART_DETAIL_MUNDO, {"proportional": ("比例法",), "meridian": ("子午宫",), "horizontal": ("地平宫",)}),
+    "detailMidpoint": _detail_vocab("detailMidpoint", (("ecliptic", "黄经"), ("mundane", "世俗位置"), ("ra", "赤经"), ("azimuth", "方位角"),
+                                                       ("declination", "赤纬"), ("latitude", "黄纬")), {"ra": ("right ascension",)}),
+    "detailTable": _detail_vocab("detailTable", CHART_DETAIL_TABLES),
+}
+
+
+def chart_detail_request_fields(settings: Mapping[str, Any]) -> dict[str, str]:
+    """上游 chartDetailRequestFields（utils/chartDetails.js:92-100）：五项口径 → /astroextra/chartdetails 的请求体键，缺省不下发。
+    这是手抄件：service 发请求后拿 JS 工具用 vendored 原函数算的 `request_fields` 逐键比对（不一致 → tool.chart_details_request_mismatch）。"""
+    out: dict[str, str] = {}
+    for name, request_key in CHART_DETAIL_REQUEST_KEYS.items():
+        value = settings.get(name)
+        if value not in (None, "") and value != CHART_DETAIL_DEFAULTS[name]:
+            out[request_key] = str(value)
+    return out
+
+
+def parse_chart_detail_tables(value: Any) -> Parsed:
+    """detailTable：一张表的 id / 中文名，或一组（列表、逗号 / 顿号 / 空白分隔的串）→ 去重后的规范 id 列表（原序）。"""
+    vocab = CHART_DETAIL_VOCABULARIES["detailTable"]
+    items = [part for part in re.split(r"[,，、;；\s]+", value) if part] if isinstance(value, str) else list(value) if isinstance(value, (list, tuple)) else [value]
+    if not items:
+        raise vocab.issue(value)
+    out: list[str] = []
+    notes_zh: list[str] = []
+    notes_en: list[str] = []
+    for item in items:
+        parsed = vocab.parse(item)
+        if parsed.value not in out:
+            out.append(parsed.value)
+        if parsed.note_zh:
+            notes_zh.append(parsed.note_zh)
+            notes_en.append(parsed.note_en or "")
+    return Parsed(out, "".join(notes_zh), " ".join(n for n in notes_en if n)) if notes_zh else Parsed(out)
+
+
 # ───────────────────────── 卜卦 / 择日（引擎词表，键集由 tests/test_sync311_western.py 对 vendored 引擎逐键核对）─────────────────────────
 
 def _split_cn(label: str) -> tuple[str, ...]:

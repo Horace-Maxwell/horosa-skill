@@ -333,3 +333,61 @@ class _ChartDayBoundaryKnobs(BaseModel):
         default=None,
         description="晚子时时柱开关（同上两行）：1=时干按次日日干起子时（缺省）0=按当日日干。",
     )
+
+
+class _ChartDetailKnobs(BaseModel):
+    """[盘面细节] 的五项口径 + 「当前表」（上游 v3.14.0 utils/chartDetails.js：CHART_DETAIL_OPTIONS / CHART_DETAIL_DEFAULTS /
+    CHART_DETAIL_TABLES；AI 挂载齿轮 techniqueMountSettings.js「盘面细节」组同五键）。只挂在真出这一段的工具上（本命盘 / 重置盘 /
+    占星地图——上游 pipeline.js 给改黄道读数框架的派生盘跳过）。声明而不广告（tools/list 预算；同 `_ChartDayBoundaryKnobs`，
+    不能放进 BirthInput）。词表 western_vocab.CHART_DETAIL_VOCABULARIES：认不出 → tool.invalid_option（后端对认不出的值静默回缺省）。
+    说明进 western_options_doc → horosa_agent_guidance 的 options_keys。"""
+
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
+        "detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", "detailTable",
+    })
+    detailFaces: str | None = Field(
+        default=None,
+        description="[盘面细节] 面的算法：chaldean 迦勒底面（缺省）| element 元素面。改专题主星 / 偶然尊贵 / 波斯尊贵 / 互容 / 行星关系 / 寿主 / 气质 / 奴役判据 / 度数性质。",
+    )
+    detailVariant: str | None = Field(
+        default=None,
+        description="[盘面细节] 算法档：improved 改进（缺省）| classic 经典（保留旧口径：偶然尊贵不补三项、托勒密寿主旧取法、成相表固定真交点、"
+        "广义时位线性极角、度数性质两派旧表）。",
+    )
+    detailLunar: str | None = Field(
+        default=None,
+        description="[盘面细节] 月亮日算法：traditional 传统（缺省，朔到月出为第 1 日）| tithi（日月每差 12° 一日）| equal 均分 | angle 明暗线 | centered 朔居中。",
+    )
+    detailMundo: str | None = Field(
+        default=None,
+        description="[盘面细节] 世俗相位的宫位空间：proportional 比例（缺省，用盘面宫制按黄经折算）| placidus | koch | porphyry | regiomontanus | "
+        "campanus | alcabitius | meridian 子午 | horizontal 地平 | topocentric 站心 | morinus | krusinski。高纬下所选宫制对某些点不成立时段内写明缺哪些点。",
+    )
+    detailMidpoint: str | None = Field(
+        default=None,
+        description="[盘面细节] 中点坐标：ecliptic 黄经（缺省，出「中点合星」行）| mundane 世俗位置 | ra 赤经 | azimuth 方位角 | declination 赤纬 | "
+        "latitude 黄纬（非黄经时出「中点(…,前 15 组)」行）。",
+    )
+    detailTable: list[str] | str | None = Field(
+        default=None,
+        description="[盘面细节] 要取原始明细的表（上游页面的「当前表」，缺省 topics 专题主星）：一张或一组表 id / 中文名（30 张，全表见 "
+        "horosa_agent_guidance）。不改 [盘面细节] 正文（正文恒为 30 张表的结论摘要），只决定 data.chart_details.tables 带哪几张表的后端原值。",
+    )
+
+    @field_validator("detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", mode="before")
+    @classmethod
+    def _chart_detail_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import CHART_DETAIL_VOCABULARIES
+
+        return parse_with(CHART_DETAIL_VOCABULARIES[info.field_name], info.field_name, value)
+
+    @field_validator("detailTable", mode="before")
+    @classmethod
+    def _chart_detail_tables(cls, value: Any) -> Any:
+        from horosa_skill.input_fields import field_validator_for, is_blank
+        from horosa_skill.western_vocab import parse_chart_detail_tables
+
+        if value is None or is_blank(value) or value == []:
+            return None
+        return field_validator_for(parse_chart_detail_tables, "detailTable")(value)

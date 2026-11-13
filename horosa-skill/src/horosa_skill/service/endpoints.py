@@ -95,6 +95,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",
+    "/astroextra/chartdetails",
     # 世俗盘子盘群（新月/满月图、日月食判词、木土大合相、行星聚散指数）依赖的 astroextra 精算端点。
     "/astroextra/prenatal_syzygy",
     "/astroextra/eclipsedetail",

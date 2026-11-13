@@ -479,8 +479,8 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
 
     段序同上游：起盘信息 / 宫位宫头 / 星与虚点 / 信息 / 相位 / 行星 / 希腊点 / 12分度 / 主宰星链 / 分宫制宫神星表 / 古典 /
     （古典衍化四段，opt-in）/ 埃及历 / 寿命格局 / 可能性；每段过 buildSectionText（逐行 trim、去空行、全空不产段）。
-    本仓在上游段之外保留的：[月宿]（skill-extra，恒星黄道盘才有，登记在 preset）、[古典格局]（上游由 AI 挂载 / 导出
-    另拉 /astroextra/analysis 后拼接，本仓富化后在 preset 位次出）、派生盘专属段（`_derivedSelf`）。
+    本仓在上游段之外保留的：[月宿]（skill-extra，恒星黄道盘才有，登记在 preset）、[古典格局] / [盘面细节]（上游由 AI 挂载 / 导出
+    另拉 /astroextra/analysis、/astroextra/chartdetails 后拼接，本仓富化后在 preset 位次出）、派生盘专属段（`_derivedSelf`）。
     `payload` 即上游 fields（扁平请求体；fieldValue 两形同口径）。12分度 / 主宰星链 / 分宫制宫神星表 仍以
     `_natalExtras` 为「西占 chart 家族」标记（india_chart 走 `_build_india_snapshot_text`，不挂标记）。
     """
@@ -513,12 +513,25 @@ def _build_astro_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     # 古典衍化四段（astroAiSnapshot.js:1711-1729，上游 opt-in = 仅本命 astro 快照路径）：vendored astroClassicalDerived 算，
     # 只在 `_classicalDerived` 已挂载（= chart 工具）时出段。
     derived = response.get("_classicalDerived") if isinstance(response.get("_classicalDerived"), dict) else None
+    # [盘面细节]（上游 v3.14.0 / 导出 v61）：vendored buildChartDetailsText（utils/chartDetails.js）已带 `[盘面细节]` 段头，这里只取正文。
+    # 上游由导出 / 挂载另拉 /astroextra/chartdetails 后拼在快照尾，本仓同 [古典格局] 在 preset 位次出：astrochart 排在
+    # 「古典·显赫计分」之后（世界范式盘之前），astrochart_like / relocation / locastro 排在「古典格局」之后（presets.js:673/692/703-704）。
+    details = response.get("_chartDetails")
+    details_lines = (
+        (details.split("\n", 1)[1] if details.startswith("[盘面细节]\n") else details).split("\n")
+        if isinstance(details, str) and details.strip() else []
+    )
     if derived:
         for title in ("古典·派生宫转宫", "古典·气候带", "古典·显赫计分", "古典·世界范式盘"):
             add(title, f"{derived.get(title) or ''}".split("\n"))
+            if title == "古典·显赫计分" and details_lines:
+                add("盘面细节", details_lines)
+                details_lines = []
     # [古典格局]：上游 buildClassicalAnalysisSection（:1529-1689）；本仓在 preset 位次（古典衍化四段之后、埃及历之前）出。
     if isinstance(response.get("_classicalAnalysis"), dict):
         add("古典格局", snap.build_classical_analysis_lines(response["_classicalAnalysis"]))
+    if details_lines:
+        add("盘面细节", details_lines)
     # [埃及历]：vendored buildEgyptSectionLines（AstroEgypt.js:66-116）已带 `[埃及历]` 段头，这里只取正文。
     egypt = response.get("_egyptSection")
     if isinstance(egypt, str) and egypt.strip():

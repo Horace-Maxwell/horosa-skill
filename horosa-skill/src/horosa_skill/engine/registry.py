@@ -53,6 +53,7 @@ from horosa_skill.schemas.tools import (
     LiuRengGodsInput,
     LiuRengRunYearInput,
     MundaneInput,
+    NatalChartInput,
     YizhangjingInput,
     XiaoLiuRenInput,
     FeiGongInput,
@@ -143,7 +144,7 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "xuanshi": ToolDefinition("xuanshi", "knowledge", "xuanshi", None, XuanshiInput, "检索玄史（中国玄学史知识库）：7900+ 玄学事件（原文/白话/解读/引证）、27000+ 史书天象记录、人物图谱、朝代/术数/天象名词与时间线。Query the Chinese esoteric-history knowledge base — 7900+ sourced events (original text / modern reading / citations), 27000+ celestial records from the official histories, figure co-occurrence graph, dynasty & technique views, and timelines.", execution="local"),
     "bazi_inverse": ToolDefinition("bazi_inverse", "cn", "bazi_inverse", "/common/inversebazi", BaziInverseInput, "八字反查：四柱干支反推候选公历出生时刻（逐年回推，最多 10 条）。Reverse-lookup candidate birth moments from four-pillar ganzhi.", execution="local"),
     "astrodata": ToolDefinition("astrodata", "astro", "astrodata", None, AstrodataInput, "离线名人星盘库检索（全文 / 分类 / Rodden 评级，单人可直接排盘）。Query the offline celebrity birth-data catalog (FTS search / category / Rodden filter, per-person chart-ready birth data).", execution="local"),
-    "chart": ToolDefinition("chart", "astro", "chart", "/chart", AstroChartInput, "生成基础西洋星盘（含完整 AI 导出正文）。Generate a core Horosa chart."),
+    "chart": ToolDefinition("chart", "astro", "chart", "/chart", NatalChartInput, "生成基础西洋星盘（含完整 AI 导出正文）。Generate a core Horosa chart."),
     "chart13": ToolDefinition("chart13", "astro", "chart13", "/chart13", AstroChartInput, "生成 13 宫扩展盘（chart13 形态）。Generate the chart13 variant."),
     "babylon": ToolDefinition("babylon", "astro", "babylon", None, BabylonInput, "起巴比伦占星盘（恒星黄道·毕宿锚 + 算术历日 + 七曜清单 + 「位」三法 + 行星神性 + 微黄道）。Generate the Babylonian astrology snapshot — sidereal (Aldebaran-anchored) planet list, arithmetic calendar, the bīt niṣirti triplicity scheme, planetary numina, and the 144-part microzodiac.", execution="local"),
     "chart12": ToolDefinition("chart12", "astro", "chart12", "/chart12", AstroChartInput, "生成十二分盘 / Dwadasamsa（黄经×12 mod 360，与十三分盘同结构）。Generate the 十二分盘 / Dwadasamsa chart (lon×12 mod 360)."),
@@ -292,11 +293,18 @@ ASTRO_CHART_FAMILY_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_cha
 # 🔴 只挂上游会挂的盘（钉版 pipeline.js:513-518 CLASSICAL_SKIP_KEYS / CLASSICAL_SKIP_DERIVED）：后端按常规黄道以**本命参数**
 # 重算，挂到改黄道读数框架的派生盘（十三分 chart13 / 十二分 chart12 / 希腊分 hellen_chart / 调波 harmonic / 龙盘 draconic）上
 # 就是「本命结论冒充派生盘结论」——v0.50.0 前这五张盘的 [古典格局] 与本命逐字节相同（审计 C-01）。
-# 重置盘保留（钉版注释「本命语义仍成立」：分析照本命出生地算，与上游钉版逐字同口径）。上游 HEAD（2026-11-11 dacdc905，
-# pipeline.js:543-560）改成重置盘的 [古典格局] 按重置后地点算、随重置盘快照进正文——re-vendor 时跟进（见 LESSONS v0.50.0-dev
-# 「派生盘的 [古典格局]」）。世运盘不挂（上游 mundane 不是 astrochart 族、preset 无此段；LESSONS v0.14.0）。
+# 重置盘保留，但**按重置后的地点**算（上游 v3.14.0：AstroRelocationLab.relocClassicalBody = { _v:'cls1', ...relocParams, 恒星轨 }，
+# 随重置盘快照进正文；pipeline.js:553-556 不再按本命出生地另补）——service/enrich._derived_section_params 换经纬。
+# 世运盘不挂（上游 mundane 不是 astrochart 族、preset 无此段；LESSONS v0.14.0）。
 # 占星地图（acg）的本命盘段在 runner 里按 "chart" 挂（上游 locastro 同保留）。
 CLASSICAL_ANALYSIS_TOOLS = frozenset({"chart", "relocation"})
+
+# [盘面细节]（上游 v3.14.0，导出 v61）：占星右栏「细节」页签 30 张表的结论摘要，后端 /astroextra/chartdetails 算、vendored
+# utils/chartDetails.js::buildChartDetailsText 排版。挂哪些盘 = 上游 pipeline.js:546-562 的同一张跳过表（与 [古典格局] 同进同退：
+# `Promise.all([fetchAstroClassicalAnalysisSectionForExport(), fetchChartDetailsSectionForExport()])`）；后端 _natal_from_request
+# 以**本命参数、回归黄道**重算，挂到改黄道读数框架的派生盘上就是本命结论冒充派生盘结论。重置盘按重置后的地点算
+# （AstroRelocationLab.js relocParams）。占星地图（acg）的本命盘段在 runner 里按 "chart" 挂（上游 locastro preset 同有此段）。
+CHART_DETAILS_TOOLS = CLASSICAL_ANALYSIS_TOOLS
 
 # 本命四盘缺省的严格接纳（service `_apply_chart_request_defaults` 补 0；说明与上游出处见 service/text/chart_family.py）。
 STRONG_RECEPTION_DEFAULT_TOOLS = frozenset({"chart", "chart13", "chart12", "hellen_chart"})

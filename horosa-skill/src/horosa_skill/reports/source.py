@@ -52,6 +52,13 @@ def setting_reader_text(key: str, value: Any, *, standalone: bool = False) -> st
     mapped = _SETTING_CODES.get(key, {}).get(str(value))
     if mapped:
         return mapped
+    if key.startswith("detail"):
+        # [盘面细节] 五项口径（v3.14.0）：码表 = 词表的中文名（western_vocab，与 vendored CHART_DETAIL_OPTIONS 互锚）。
+        from horosa_skill.western_vocab import CHART_DETAIL_VOCABULARIES
+
+        vocabulary = CHART_DETAIL_VOCABULARIES.get(key)
+        if vocabulary is not None and isinstance(value, str) and value in vocabulary.labels:
+            return vocabulary.labels[value].removesuffix("（缺省）")
     if standalone and key == "hsys":
         from horosa_skill.astro_rulers import HOUSE_SYSTEM_LABELS
 
