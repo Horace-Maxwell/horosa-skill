@@ -56,6 +56,8 @@ normalized `勾→虎 / 雀→玄`.
 
 - `sanshiunited` composes 奇门 + 太乙 with the 大六壬 leg — expect all three parts. Per-leg settings: `qimen_options` /
   `taiyi_options` (or top-level `taiyiTimeBasis`) / `liureng_options` (castMethod locked to `zheng`, as upstream).
+  Outer ring: `outerCoord` `ecliptic` (default) / `equatorial`; under `equatorial`, `ascRaMode` `improved` (default) /
+  `classic` picks the ascendant RA that seats 第 1 宫 (the snapshot states it; otherwise `classic` is ignored with a warning).
 - `tongshefa` export contract is exactly 本卦/六爻/潜藏/亲和 (najia/六合/升降 UI detail is
   intentionally out of scope).
 
