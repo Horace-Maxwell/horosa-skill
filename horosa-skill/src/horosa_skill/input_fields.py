@@ -495,8 +495,9 @@ _HEMI_WORDS = (("北纬", "N"), ("北緯", "N"), ("南纬", "S"), ("南緯", "S"
                ("north", "N"), ("south", "S"), ("east", "E"), ("west", "W"))
 _COORD_COMPACT_RE = re.compile(r"^(?P<deg>\d{1,3})(?P<hemi>[NSEW])(?P<min>\d{1,2})(?::(?P<sec>\d{1,2}))?$")
 _COORD_NUMBER = r"\d+(?:\.\d+)?"
+# 秒的单位只能跟在秒的数字后面，且不收裸字母 s：IGNORECASE 下它会把尾随的 S（南）吃成「秒」——「33°52′S」曾读成北纬（审计 F01）。
 _COORD_DMS_RE = re.compile(
-    rf"^(?P<pre>[NSEW])?(?P<sign>[+-])?(?P<deg>{_COORD_NUMBER})(?:[°度d:\s]\s*(?P<min>{_COORD_NUMBER})?(?:['′分m:\s]\s*(?P<sec>{_COORD_NUMBER})?(?:\"|″|''|′′|秒|s)?)?)?\s*(?P<post>[NSEW])?$",
+    rf"^(?P<pre>[NSEW])?(?P<sign>[+-])?(?P<deg>{_COORD_NUMBER})(?:[°度d:\s]\s*(?P<min>{_COORD_NUMBER})?(?:['′分m:\s]\s*(?:(?P<sec>{_COORD_NUMBER})(?:\"|″|''|′′|秒)?)?)?)?\s*(?P<post>[NSEW])?$",
     re.IGNORECASE,
 )
 _COORD_DOMAIN = 1e21
