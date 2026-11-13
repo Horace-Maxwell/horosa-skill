@@ -3,6 +3,7 @@
     uv run python scripts/eval_knowledge_search.py                 # dev 集 + 自检索（汇总）
     uv run python scripts/eval_knowledge_search.py --misses        # dev 集逐条失败
     uv run python scripts/eval_knowledge_search.py --set heldout   # 只报数，不许拿它调
+    uv run python scripts/eval_knowledge_search.py --set sync314_2026_11_13 --misses   # 上游 v3.14.0 新内容的用例（dev 型）
 
 为什么有两种：手写的 dev 集是看着失败写的，用来调之后分数必然偏高；heldout 在改检索之前写好，写的时候没看过结果；
 自检索不靠人挑，语料里每一条都用自己的名字和问句模板去搜。下限在 tests/test_knowledge_eval.py。
@@ -81,7 +82,8 @@ def self_names() -> list[tuple[str, str, str]]:
     for doc in store.search_docs():
         if doc.domain == "bazi_pithy":
             continue
-        name = doc.title.rsplit(" · ", 1)[-1] if " · " in doc.title else doc.title
+        # 手册条目的名字是章名（章名里自己可以有「 · 」：「太阳弧 · 差值表 · 校时」），别的域取标题最后一段
+        name = doc.label or (doc.title.rsplit(" · ", 1)[-1] if " · " in doc.title else doc.title)
         name = labels.get(doc.key, name) if doc.domain == "astro" else name
         if _CJK.search(name):
             names.append((doc.domain, doc.key, name))
@@ -111,7 +113,7 @@ def evaluate_self_unique() -> float:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--set", default="dev", choices=("dev", "seen_2026_11_06", "heldout"))
+    parser.add_argument("--set", default="dev", choices=("dev", "seen_2026_11_06", "sync314_2026_11_13", "heldout"))
     parser.add_argument("--misses", action="store_true", help="list the queries that missed the top 5 (not for heldout)")
     args = parser.parse_args()
     result = evaluate_set(args.set)

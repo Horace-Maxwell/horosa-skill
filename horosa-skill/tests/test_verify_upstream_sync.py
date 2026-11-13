@@ -403,6 +403,7 @@ def test_touches_inputs_classifies_roots_and_files() -> None:
 _UPSTREAM_READERS = (
     "scripts/sync_vendored_runtime_sources.sh", "scripts/verify_upstream_sync.py", "scripts/gen_knowledge_packs.py",
     "scripts/gen_bazi_pithy_pack.py", "scripts/verify_export_section_baseline.py", "scripts/build_hover_knowledge_bundle.mjs",
+    "scripts/harvest_help_books.mjs",
 )
 _UPSTREAM_PATH_PATTERNS = (
     re.compile(r"\$\{SOURCE_ROOT\}/([^\"\s}]+)"),

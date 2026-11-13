@@ -1,5 +1,5 @@
 {
- "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调。heldout 在改检索之前写好、写的时候没看过任何检索结果，只许用来报数，不许按它调；看过就挪走，换一批新的。seen_2026_11_06 是第一批 heldout（0.474 / 0.526 → 0.821 / 0.923），未命中清单看过之后改作 dev 用。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。 relevance_2026_11_11（深审 K-2）：每条带 top（1 = 必须排第一，3 = 前三），在改排序之前写好、按语料里哪一条专讲这个词选的；改排序时看过它的结果，所以它是调参用的 dev 型集合，heldout 仍不许看。",
+ "_comment": "知识检索评测集。dev 可以看逐条失败、可以用来调。heldout 在改检索之前写好、写的时候没看过任何检索结果，只许用来报数，不许按它调；看过就挪走，换一批新的。seen_2026_11_06 是第一批 heldout（0.474 / 0.526 → 0.821 / 0.923），未命中清单看过之后改作 dev 用。want：[domain, key] / [domain, null]（该域任意条）/ [domain, \"@分类\"]。 relevance_2026_11_11（深审 K-2）：每条带 top（1 = 必须排第一，3 = 前三），在改排序之前写好、按语料里哪一条专讲这个词选的；改排序时看过它的结果，所以它是调参用的 dev 型集合，heldout 仍不许看。 2026-11-13（上游 v3.14.0，手册改成一技法一章）：手册条目的键从页签名 / 方法名换成上游的章节键（「四化与运限」→ luck，Jinkou → jinkou），want 里的键按「旧键 = 新章名」「旧键不分大小写 = 新键」机械换写，没看任何检索结果；24 个指向已不存在的旧条目的（星运手册 6 条拆成 33 章、辅盘 / 量化盘 / 数算 / 黄历重排，策天飞星挪到 mingother）按那段内容现在所在的章改指，逐条对照写在那次提交的说明里。 sync314_2026_11_13：上游 v3.14.0 新内容的用例（时主轮转十二法、变换盘、黄道制、东亚 / 诸方各子术、盘面细节各表、世运周期表、印占新表，以及这次才收进来的七政四余手册），中文术语 + 语料里的拉丁写法 + 繁体；写的时候没跑过，第一遍的结果与之后看着失败做的修正都记在提交说明里，所以它是 dev 型集合。",
  "sets": {
   "dev": [
    {
@@ -78,7 +78,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ]
    },
@@ -88,7 +88,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ]
    },
@@ -118,7 +118,7 @@
     "want": [
      [
       "direction",
-      "主限法"
+      "primarydirect"
      ]
     ]
    },
@@ -128,7 +128,7 @@
     "want": [
      [
       "cnyibu",
-      "Feigong"
+      "feigong"
      ]
     ]
    },
@@ -138,7 +138,7 @@
     "want": [
      [
       "cnyibu",
-      "Jinkou"
+      "jinkou"
      ]
     ]
    },
@@ -148,7 +148,7 @@
     "want": [
      [
       "cnyibu",
-      "Shenyishu"
+      "shenyishu"
      ]
     ]
    },
@@ -158,7 +158,7 @@
     "want": [
      [
       "cnyibu",
-      "Xiaoliuren"
+      "xiaoliuren"
      ]
     ]
    },
@@ -168,7 +168,7 @@
     "want": [
      [
       "cnyibu",
-      "Suzhan"
+      "suzhan"
      ]
     ]
    },
@@ -178,7 +178,7 @@
     "want": [
      [
       "auxchart",
-      "Election"
+      "election"
      ]
     ]
    },
@@ -372,15 +372,15 @@
     "want": [
      [
       "guazhan",
-      "算法与口径"
+      "algo"
      ],
      [
       "bazi",
-      "排盘设置"
+      "setup"
      ],
      [
       "liureng_manual",
-      "神煞断法"
+      "shensha"
      ]
     ]
    },
@@ -454,7 +454,7 @@
      ],
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ]
    },
@@ -464,7 +464,7 @@
     "want": [
      [
       "cntradition",
-      "十二串宫"
+      "cuangong12"
      ]
     ]
    },
@@ -494,7 +494,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ]
    },
@@ -548,11 +548,11 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "右栏标签"
+      "tabs"
      ]
     ]
    },
@@ -586,7 +586,7 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ]
    },
@@ -606,11 +606,11 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ],
      [
       "india",
-      "大运体系"
+      "dasha"
      ]
     ]
    },
@@ -620,11 +620,11 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ],
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ]
    },
@@ -826,7 +826,7 @@
     "want": [
      [
       "jieqi",
-      "二十四节气"
+      "jieqi24"
      ]
     ]
    },
@@ -836,11 +836,11 @@
     "want": [
      [
       "india",
-      "岁差·分宫"
+      "ayan"
      ],
      [
       "astro_manual",
-      "黄道与分宫"
+      "zodiac"
      ]
     ]
    },
@@ -850,7 +850,7 @@
     "want": [
      [
       "astro_manual",
-      "界与尊贵"
+      "terms"
      ]
     ]
    },
@@ -860,11 +860,11 @@
     "want": [
      [
       "germany",
-      "行星中点 · 图形星历"
+      "germany.midpoint"
      ],
      [
       "germany",
-      "90°中点盘"
+      "germany.dial"
      ]
     ]
    },
@@ -874,7 +874,7 @@
     "want": [
      [
       "relative",
-      "马克斯盘 · 关系量化"
+      "marksscore"
      ]
     ]
    },
@@ -884,7 +884,7 @@
     "want": [
      [
       "relative",
-      "比较盘"
+      "comp"
      ]
     ]
    },
@@ -894,7 +894,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ]
    },
@@ -904,11 +904,11 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ],
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ]
    },
@@ -1000,7 +1000,7 @@
     "want": [
      [
       "taiyi",
-      "十六神 · 生成"
+      "shen"
      ]
     ]
    },
@@ -1010,7 +1010,7 @@
     "want": [
      [
       "india",
-      "KP 系统"
+      "kp"
      ]
     ]
    },
@@ -1020,7 +1020,7 @@
     "want": [
      [
       "india",
-      "分盘 Varga"
+      "varga"
      ]
     ]
    },
@@ -1030,7 +1030,7 @@
     "want": [
      [
       "tarot",
-      "流派与牌阵"
+      "decks"
      ]
     ]
    },
@@ -1040,7 +1040,7 @@
     "want": [
      [
       "xuanshi",
-      "星象大典"
+      "celestial"
      ]
     ]
    },
@@ -1050,7 +1050,7 @@
     "want": [
      [
       "calendar",
-      "老黄历"
+      "huangli"
      ]
     ]
    },
@@ -1060,7 +1060,7 @@
     "want": [
      [
       "jieqi",
-      "二十四节气"
+      "jieqi24"
      ]
     ]
    },
@@ -1204,7 +1204,7 @@
     "want": [
      [
       "liureng_manual",
-      "起课设置"
+      "setup"
      ]
     ]
    },
@@ -1214,7 +1214,7 @@
     "want": [
      [
       "dunjia",
-      "定局设置"
+      "setup"
      ]
     ]
    },
@@ -1224,7 +1224,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ]
    },
@@ -1234,7 +1234,7 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ],
      [
       "bazi_pithy",
@@ -1248,7 +1248,7 @@
     "want": [
      [
       "direction",
-      "主限法"
+      "primarydirect"
      ]
     ]
    },
@@ -1258,7 +1258,7 @@
     "want": [
      [
       "taiyi",
-      "胜负分野"
+      "victory"
      ]
     ]
    },
@@ -1268,7 +1268,7 @@
     "want": [
      [
       "guazhan",
-      "断诀与应期"
+      "duanjue"
      ]
     ]
    },
@@ -1278,11 +1278,11 @@
     "want": [
      [
       "relative",
-      "比较盘"
+      "comp"
      ],
      [
       "relative",
-      "组合盘"
+      "composite"
      ]
     ]
    },
@@ -1302,11 +1302,11 @@
     "want": [
      [
       "tarot",
-      "读法体系"
+      "reading"
      ],
      [
       "tarot",
-      "牌面与判读"
+      "settings"
      ]
     ]
    },
@@ -1316,7 +1316,7 @@
     "want": [
      [
       "auxchart",
-      "Mundane"
+      "mundane"
      ]
     ]
    },
@@ -1326,7 +1326,7 @@
     "want": [
      [
       "cnyibu",
-      "Geomancy"
+      "geomancy"
      ]
     ]
    },
@@ -1336,7 +1336,7 @@
     "want": [
      [
       "cnyibu",
-      "Wuzhao"
+      "wuzhao"
      ]
     ]
    },
@@ -1346,7 +1346,7 @@
     "want": [
      [
       "auxchart",
-      "Babylon"
+      "babylon"
      ]
     ]
    },
@@ -1356,7 +1356,7 @@
     "want": [
      [
       "cnyibu",
-      "Taixuan"
+      "taixuan"
      ]
     ]
    },
@@ -1366,7 +1366,7 @@
     "want": [
      [
       "yizhangjing",
-      "Tuiyun"
+      "tuiyun"
      ]
     ]
    },
@@ -1418,7 +1418,7 @@
     "want": [
      [
       "dunjia",
-      "格局断法"
+      "patterns"
      ]
     ]
    },
@@ -1428,11 +1428,11 @@
     "want": [
      [
       "ziwei",
-      "流派分歧"
+      "schools"
      ],
      [
       "ziwei",
-      "流派叠层"
+      "overlay"
      ]
     ]
    },
@@ -1442,7 +1442,7 @@
     "want": [
      [
       "liureng_manual",
-      "神煞断法"
+      "shensha"
      ]
     ]
    },
@@ -1452,7 +1452,7 @@
     "want": [
      [
       "bazi",
-      "排盘设置"
+      "setup"
      ]
     ]
    },
@@ -1462,7 +1462,7 @@
     "want": [
      [
       "india",
-      "大运体系"
+      "dasha"
      ]
     ]
    },
@@ -1492,11 +1492,11 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ],
      [
       "india",
-      "大运体系"
+      "dasha"
      ]
     ]
    },
@@ -1566,11 +1566,11 @@
     "want": [
      [
       "auxchart",
-      "Acg"
+      "locastro"
      ],
      [
       "astro_manual",
-      "占星地图"
+      "acgmap"
      ]
     ]
    },
@@ -1580,7 +1580,7 @@
     "want": [
      [
       "auxchart",
-      "Mundane"
+      "mundane"
      ]
     ]
    },
@@ -1738,7 +1738,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ]
    },
@@ -1748,7 +1748,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ]
    },
@@ -1768,7 +1768,7 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ]
     ]
    },
@@ -1778,7 +1778,7 @@
     "want": [
      [
       "bazi",
-      "神煞·显示"
+      "display"
      ]
     ]
    },
@@ -1788,7 +1788,7 @@
     "want": [
      [
       "taiyi",
-      "命法盘"
+      "life"
      ]
     ]
    },
@@ -1798,7 +1798,7 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ]
     ]
    },
@@ -1808,7 +1808,7 @@
     "want": [
      [
       "guazhan",
-      "起卦装卦"
+      "setup"
      ]
     ]
    },
@@ -1818,7 +1818,7 @@
     "want": [
      [
       "tarot",
-      "牌面与判读"
+      "settings"
      ]
     ]
    },
@@ -1828,7 +1828,7 @@
     "want": [
      [
       "india",
-      "分盘 Varga"
+      "varga"
      ]
     ]
    },
@@ -1838,7 +1838,7 @@
     "want": [
      [
       "india",
-      "六力·格局"
+      "strength"
      ]
     ]
    },
@@ -1848,7 +1848,7 @@
     "want": [
      [
       "zeri",
-      "黄历择日"
+      "huanglizeri"
      ]
     ]
    },
@@ -1858,7 +1858,7 @@
     "want": [
      [
       "relative",
-      "比较盘"
+      "comp"
      ]
     ]
    },
@@ -1888,11 +1888,11 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ],
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ]
    },
@@ -1902,11 +1902,11 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ],
      [
       "india",
-      "大运体系"
+      "dasha"
      ]
     ]
    },
@@ -1916,7 +1916,7 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ]
     ]
    },
@@ -1926,7 +1926,7 @@
     "want": [
      [
       "auxchart",
-      "Harmonicdiv"
+      "hellenastro"
      ]
     ]
    },
@@ -1936,7 +1936,7 @@
     "want": [
      [
       "auxchart",
-      "Reloc"
+      "relocation"
      ]
     ]
    },
@@ -1946,7 +1946,7 @@
     "want": [
      [
       "auxchart",
-      "Dice"
+      "otherbu"
      ]
     ]
    },
@@ -1956,7 +1956,7 @@
     "want": [
      [
       "auxchart",
-      "Harmonicdraconic"
+      "harmonic"
      ]
     ]
    },
@@ -1965,8 +1965,8 @@
     "class": "question",
     "want": [
      [
-      "auxchart",
-      "Germany"
+      "germany",
+      "germanytech"
      ]
     ]
    },
@@ -1976,7 +1976,7 @@
     "want": [
      [
       "cnyibu",
-      "Lingqi"
+      "lingqi"
      ]
     ]
    },
@@ -1986,7 +1986,7 @@
     "want": [
      [
       "cnyibu",
-      "Guice"
+      "guice"
      ]
     ]
    },
@@ -1996,7 +1996,7 @@
     "want": [
      [
       "cnyibu",
-      "Xiaochengtu"
+      "xiaochengtu"
      ]
     ]
    },
@@ -2006,7 +2006,7 @@
     "want": [
      [
       "cnyibu",
-      "Tongshefa"
+      "tongshefa"
      ]
     ]
    },
@@ -2017,10 +2017,6 @@
      [
       "yanqin",
       null
-     ],
-     [
-      "yizhangjing",
-      "Yanqin"
      ]
     ]
    },
@@ -2029,8 +2025,8 @@
     "class": "question",
     "want": [
      [
-      "yizhangjing",
-      "Cetian"
+      "mingother",
+      "cetian"
      ]
     ]
    },
@@ -2040,7 +2036,7 @@
     "want": [
      [
       "germany",
-      "太阳弧 · 校时"
+      "germany.solararc"
      ]
     ]
    },
@@ -2050,7 +2046,7 @@
     "want": [
      [
       "dunjia",
-      "格局断法"
+      "patterns"
      ]
     ]
    },
@@ -2060,27 +2056,27 @@
     "want": [
      [
       "bazi",
-      "流派分歧"
+      "school"
      ],
      [
       "ziwei",
-      "流派分歧"
+      "schools"
      ],
      [
       "dunjia",
-      "流派分歧"
+      "schools"
      ],
      [
       "guazhan",
-      "流派分歧"
+      "schools"
      ],
      [
       "liureng_manual",
-      "流派分歧"
+      "schools"
      ],
      [
       "india",
-      "流派分歧"
+      "schools"
      ]
     ]
    },
@@ -2090,7 +2086,7 @@
     "want": [
      [
       "aianalysis",
-      "技法挂载设置"
+      "mount"
      ]
     ]
    },
@@ -2100,7 +2096,7 @@
     "want": [
      [
       "relative",
-      "排盘设置"
+      "input"
      ]
     ]
    },
@@ -2110,7 +2106,7 @@
     "want": [
      [
       "relative",
-      "比较盘"
+      "comp"
      ]
     ]
    },
@@ -2212,11 +2208,11 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ],
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ]
     ],
     "top": 1
@@ -2227,11 +2223,11 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ],
      [
       "sanshi",
-      "Ziwei"
+      "ziwei"
      ]
     ],
     "top": 3
@@ -2242,7 +2238,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ],
     "top": 1
@@ -2253,7 +2249,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ],
     "top": 3
@@ -2275,15 +2271,15 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "定局设置"
+      "setup"
      ],
      [
       "sanshi",
-      "Qimen"
+      "qimen"
      ]
     ],
     "top": 3
@@ -2294,15 +2290,15 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "定局设置"
+      "setup"
      ],
      [
       "sanshi",
-      "Qimen"
+      "qimen"
      ]
     ],
     "top": 3
@@ -2313,15 +2309,15 @@
     "want": [
      [
       "dunjia",
-      "格局断法"
+      "patterns"
      ],
      [
       "dunjia",
-      "底层逻辑"
+      "foundation"
      ],
      [
       "dunjia",
-      "灭象·布阵"
+      "operate"
      ]
     ],
     "top": 3
@@ -2332,11 +2328,11 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "底层逻辑"
+      "foundation"
      ]
     ],
     "top": 3
@@ -2347,7 +2343,7 @@
     "want": [
      [
       "tarot",
-      "流派与牌阵"
+      "decks"
      ]
     ],
     "top": 1
@@ -2358,11 +2354,11 @@
     "want": [
      [
       "tarot",
-      "读法体系"
+      "reading"
      ],
      [
       "tarot",
-      "牌面与判读"
+      "settings"
      ]
     ],
     "top": 3
@@ -2373,7 +2369,7 @@
     "want": [
      [
       "jieqi",
-      "二十四节气"
+      "jieqi24"
      ]
     ],
     "top": 1
@@ -2384,15 +2380,15 @@
     "want": [
      [
       "jieqi",
-      "二十四节气"
+      "jieqi24"
      ],
      [
       "bazi",
-      "排盘设置"
+      "setup"
      ],
      [
       "shusuan",
-      "算法与口径"
+      "overview"
      ]
     ],
     "top": 3
@@ -2403,15 +2399,15 @@
     "want": [
      [
       "calendar",
-      "老黄历"
+      "huangli"
      ],
      [
       "zeri",
-      "黄历择日"
+      "huanglizeri"
      ],
      [
       "calendar",
-      "总览"
+      "overview"
      ]
     ],
     "top": 3
@@ -2422,11 +2418,11 @@
     "want": [
      [
       "calendar",
-      "老黄历"
+      "huangli"
      ],
      [
       "zeri",
-      "黄历择日"
+      "huanglizeri"
      ]
     ],
     "top": 3
@@ -2437,7 +2433,7 @@
     "want": [
      [
       "india",
-      "岁差·分宫"
+      "ayan"
      ]
     ],
     "top": 1
@@ -2448,7 +2444,7 @@
     "want": [
      [
       "direction",
-      "主限法"
+      "primarydirect"
      ]
     ],
     "top": 1
@@ -2459,11 +2455,11 @@
     "want": [
      [
       "germany",
-      "太阳弧 · 校时"
+      "germany.solararc"
      ],
      [
       "direction",
-      "返照·流年·通用"
+      "solararc"
      ]
     ],
     "top": 3
@@ -2474,7 +2470,19 @@
     "want": [
      [
       "direction",
-      "返照·流年·通用"
+      "solarreturn"
+     ],
+     [
+      "direction",
+      "lunarreturn"
+     ],
+     [
+      "direction",
+      "extrareturns"
+     ],
+     [
+      "direction",
+      "returntimeline"
      ]
     ],
     "top": 1
@@ -2485,7 +2493,7 @@
     "want": [
      [
       "relative",
-      "比较盘"
+      "comp"
      ]
     ],
     "top": 1
@@ -2496,7 +2504,7 @@
     "want": [
      [
       "relative",
-      "组合盘"
+      "composite"
      ]
     ],
     "top": 1
@@ -2507,11 +2515,11 @@
     "want": [
      [
       "germany",
-      "行星中点 · 图形星历"
+      "germany.midpoint"
      ],
      [
       "germany",
-      "90°中点盘"
+      "germany.dial"
      ]
     ],
     "top": 3
@@ -2522,11 +2530,11 @@
     "want": [
      [
       "guazhan",
-      "起卦装卦"
+      "setup"
      ],
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ]
     ],
     "top": 3
@@ -2537,11 +2545,11 @@
     "want": [
      [
       "guazhan",
-      "起卦装卦"
+      "setup"
      ],
      [
       "guazhan",
-      "总览"
+      "overview"
      ]
     ],
     "top": 3
@@ -2552,7 +2560,7 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ]
     ],
     "top": 3
@@ -2563,11 +2571,11 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ],
      [
       "india",
-      "大运体系"
+      "dasha"
      ]
     ],
     "top": 3
@@ -2578,15 +2586,15 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ],
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ],
      [
       "direction",
-      "返照·流年·通用"
+      "givenyear"
      ]
     ],
     "top": 3
@@ -2597,11 +2605,15 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ],
      [
       "direction",
-      "返照·流年·通用"
+      "profection"
+     ],
+     [
+      "direction",
+      "jayprofection"
      ]
     ],
     "top": 3
@@ -2612,7 +2624,7 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ],
     "top": 3
@@ -2623,11 +2635,11 @@
     "want": [
      [
       "astro_manual",
-      "界与尊贵"
+      "terms"
      ],
      [
       "auxchart",
-      "Horary"
+      "horary"
      ]
     ],
     "top": 3
@@ -2638,11 +2650,11 @@
     "want": [
      [
       "astro_manual",
-      "古典口径"
+      "classicalopts"
      ],
      [
       "auxchart",
-      "Horary"
+      "horary"
      ]
     ],
     "top": 3
@@ -2653,7 +2665,7 @@
     "want": [
      [
       "astro_manual",
-      "黄道与分宫"
+      "zodiac"
      ]
     ],
     "top": 3
@@ -2664,7 +2676,7 @@
     "want": [
      [
       "astro_manual",
-      "黄道与分宫"
+      "zodiac"
      ]
     ],
     "top": 3
@@ -2708,7 +2720,7 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ],
     "top": 1
@@ -2719,7 +2731,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ],
     "top": 1
@@ -2730,11 +2742,11 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "定局设置"
+      "setup"
      ]
     ],
     "top": 3
@@ -2745,7 +2757,7 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ]
     ],
     "top": 1
@@ -2756,7 +2768,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ],
     "top": 1
@@ -2767,11 +2779,11 @@
     "want": [
      [
       "tarot",
-      "读法体系"
+      "reading"
      ],
      [
       "tarot",
-      "牌面与判读"
+      "settings"
      ]
     ],
     "top": 3
@@ -2782,7 +2794,7 @@
     "want": [
      [
       "india",
-      "大运体系"
+      "dasha"
      ]
     ],
     "top": 1
@@ -2793,7 +2805,7 @@
     "want": [
      [
       "bazi",
-      "行运"
+      "luck"
      ]
     ],
     "top": 1
@@ -2804,7 +2816,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ],
     "top": 3
@@ -2815,7 +2827,7 @@
     "want": [
      [
       "relative",
-      "组合盘"
+      "composite"
      ]
     ],
     "top": 1
@@ -2826,7 +2838,7 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ],
     "top": 1
@@ -2837,7 +2849,7 @@
     "want": [
      [
       "bazi",
-      "格局用神"
+      "geju"
      ]
     ],
     "top": 1
@@ -2848,7 +2860,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ],
     "top": 3
@@ -2859,7 +2871,7 @@
     "want": [
      [
       "guazhan",
-      "用神动变"
+      "yong"
      ]
     ],
     "top": 1
@@ -2870,7 +2882,7 @@
     "want": [
      [
       "liureng_manual",
-      "三传八法"
+      "sanchuan"
      ]
     ],
     "top": 1
@@ -2881,11 +2893,11 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "定局设置"
+      "setup"
      ]
     ],
     "top": 3
@@ -2896,11 +2908,11 @@
     "want": [
      [
       "tarot",
-      "读法体系"
+      "reading"
      ],
      [
       "tarot",
-      "牌面与判读"
+      "settings"
      ]
     ],
     "top": 3
@@ -2911,7 +2923,7 @@
     "want": [
      [
       "india",
-      "岁差·分宫"
+      "ayan"
      ]
     ],
     "top": 1
@@ -2922,11 +2934,11 @@
     "want": [
      [
       "jieqi",
-      "二十四节气"
+      "jieqi24"
      ],
      [
       "jieqi",
-      "算法与口径"
+      "algorithm"
      ]
     ],
     "top": 3
@@ -2937,7 +2949,7 @@
     "want": [
      [
       "direction",
-      "主限法"
+      "primarydirect"
      ]
     ],
     "top": 1
@@ -2948,7 +2960,7 @@
     "want": [
      [
       "relative",
-      "比较盘"
+      "comp"
      ]
     ],
     "top": 1
@@ -2959,7 +2971,7 @@
     "want": [
      [
       "direction",
-      "主限法"
+      "primarydirect"
      ]
     ],
     "top": 1
@@ -2970,7 +2982,7 @@
     "want": [
      [
       "direction",
-      "返照·流年·通用"
+      "solarreturn"
      ]
     ],
     "top": 3
@@ -2981,7 +2993,7 @@
     "want": [
      [
       "relative",
-      "组合盘"
+      "composite"
      ]
     ],
     "top": 3
@@ -2992,15 +3004,7 @@
     "want": [
      [
       "direction",
-      "时主类·子设置"
-     ],
-     [
-      "direction",
-      "逐法一览"
-     ],
-     [
-      "direction",
-      "总览"
+      "firdaria"
      ]
     ],
     "top": 3
@@ -3011,11 +3015,11 @@
     "want": [
      [
       "astro_manual",
-      "黄道与分宫"
+      "zodiac"
      ],
      [
       "astro_manual",
-      "排盘设置"
+      "input"
      ]
     ],
     "top": 3
@@ -3037,11 +3041,11 @@
     "want": [
      [
       "germany",
-      "太阳弧 · 校时"
+      "germany.solararc"
      ],
      [
       "direction",
-      "返照·流年·通用"
+      "solararc"
      ]
     ],
     "top": 3
@@ -3052,7 +3056,7 @@
     "want": [
      [
       "ziwei",
-      "四化与运限"
+      "luck"
      ]
     ],
     "top": 1
@@ -3063,11 +3067,11 @@
     "want": [
      [
       "dunjia",
-      "盘面结构"
+      "structure"
      ],
      [
       "dunjia",
-      "定局设置"
+      "setup"
      ]
     ],
     "top": 3
@@ -3078,10 +3082,714 @@
     "want": [
      [
       "jieqi",
-      "二十四节气"
+      "jieqi24"
      ]
     ],
     "top": 1
+   }
+  ],
+  "sync314_2026_11_13": [
+   {
+    "q": "时主轮转",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "轮主",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "轨主",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "年度分配",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "月相四分",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "月亮单度主",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "月亮九年",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "九分主",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "匀速点",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "发展年龄",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "周日象限",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "对数时标",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "月亮日",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "月相四分怎么算",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "什么是九分主",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "周期律",
+    "class": "timelords",
+    "want": [
+     [
+      "direction",
+      "persiandirected"
+     ]
+    ]
+   },
+   {
+    "q": "变换盘",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "transformchart"
+     ]
+    ]
+   },
+   {
+    "q": "变换盘是什么",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "transformchart"
+     ]
+    ]
+   },
+   {
+    "q": "黄道制",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "zodiacsystems"
+     ]
+    ]
+   },
+   {
+    "q": "十三星座",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "zodiacsystems"
+     ]
+    ]
+   },
+   {
+    "q": "银河黄道",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "zodiacsystems"
+     ]
+    ]
+   },
+   {
+    "q": "世运周期表",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "mundane"
+     ]
+    ]
+   },
+   {
+    "q": "巴博周期",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "mundane"
+     ]
+    ]
+   },
+   {
+    "q": "天象实算",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "babylon"
+     ]
+    ]
+   },
+   {
+    "q": "日食路径",
+    "class": "auxchart",
+    "want": [
+     [
+      "auxchart",
+      "locastro"
+     ]
+    ]
+   },
+   {
+    "q": "东亚诸术",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "overview"
+     ]
+    ]
+   },
+   {
+    "q": "藏历",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "tibetan"
+     ]
+    ]
+   },
+   {
+    "q": "藏占",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "tibetan"
+     ],
+     [
+      "dongya",
+      "overview"
+     ]
+    ]
+   },
+   {
+    "q": "算命学",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "sanmei"
+     ]
+    ]
+   },
+   {
+    "q": "九星气学",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "ninestar"
+     ]
+    ]
+   },
+   {
+    "q": "洛书流年",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "loshu"
+     ]
+    ]
+   },
+   {
+    "q": "易卦星盘",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "iching"
+     ]
+    ]
+   },
+   {
+    "q": "九星气学怎么排",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "ninestar"
+     ]
+    ]
+   },
+   {
+    "q": "蒙古占星",
+    "class": "dongya",
+    "want": [
+     [
+      "dongya",
+      "zurkhai"
+     ],
+     [
+      "dongya",
+      "overview"
+     ]
+    ]
+   },
+   {
+    "q": "诸方杂术",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "overview"
+     ]
+    ]
+   },
+   {
+    "q": "玛雅历",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "mayan"
+     ]
+    ]
+   },
+   {
+    "q": "卓尔金",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "mayan"
+     ]
+    ]
+   },
+   {
+    "q": "十三月亮历",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "dreamspell"
+     ]
+    ]
+   },
+   {
+    "q": "人类图",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "hd"
+     ]
+    ]
+   },
+   {
+    "q": "灵名字母",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "spirit"
+     ]
+    ]
+   },
+   {
+    "q": "人类图的通道是什么",
+    "class": "zhufang",
+    "want": [
+     [
+      "zhufang",
+      "hd"
+     ]
+    ]
+   },
+   {
+    "q": "策天飞星",
+    "class": "mingother",
+    "want": [
+     [
+      "mingother",
+      "cetian"
+     ]
+    ]
+   },
+   {
+    "q": "专题主星",
+    "class": "details",
+    "want": [
+     [
+      "astro_manual",
+      "rightpanel"
+     ]
+    ]
+   },
+   {
+    "q": "受孕期",
+    "class": "details",
+    "want": [
+     [
+      "astro_manual",
+      "rightpanel"
+     ]
+    ]
+   },
+   {
+    "q": "危机日",
+    "class": "details",
+    "want": [
+     [
+      "astro_manual",
+      "rightpanel"
+     ]
+    ]
+   },
+   {
+    "q": "人体对应",
+    "class": "details",
+    "want": [
+     [
+      "astro_manual",
+      "rightpanel"
+     ]
+    ]
+   },
+   {
+    "q": "穿界时刻",
+    "class": "india",
+    "want": [
+     [
+      "india",
+      "tabs"
+     ],
+     [
+      "zeri",
+      "indiazeri"
+     ]
+    ]
+   },
+   {
+    "q": "KP 问时",
+    "class": "india",
+    "want": [
+     [
+      "india",
+      "prashna"
+     ]
+    ]
+   },
+   {
+    "q": "七政四余",
+    "class": "guolao",
+    "want": [
+     [
+      "guolao",
+      "overview"
+     ]
+    ]
+   },
+   {
+    "q": "宿度制",
+    "class": "guolao",
+    "want": [
+     [
+      "guolao",
+      "su28"
+     ]
+    ]
+   },
+   {
+    "q": "zurkhai",
+    "class": "english",
+    "want": [
+     [
+      "dongya",
+      "zurkhai"
+     ]
+    ]
+   },
+   {
+    "q": "barbault",
+    "class": "english",
+    "want": [
+     [
+      "auxchart",
+      "mundane"
+     ]
+    ]
+   },
+   {
+    "q": "sphuta",
+    "class": "english",
+    "want": [
+     [
+      "india",
+      "tabs"
+     ]
+    ]
+   },
+   {
+    "q": "ashtakoota",
+    "class": "english",
+    "want": [
+     [
+      "relative",
+      "marksscore"
+     ]
+    ]
+   },
+   {
+    "q": "mewa",
+    "class": "english",
+    "want": [
+     [
+      "dongya",
+      "tibetan"
+     ]
+    ]
+   },
+   {
+    "q": "saros",
+    "class": "english",
+    "want": [
+     [
+      "auxchart",
+      "mundane"
+     ]
+    ]
+   },
+   {
+    "q": "time lords",
+    "class": "english",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "timelords",
+    "class": "english",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "transform chart",
+    "class": "english",
+    "want": [
+     [
+      "auxchart",
+      "transformchart"
+     ]
+    ]
+   },
+   {
+    "q": "zodiac systems",
+    "class": "english",
+    "want": [
+     [
+      "auxchart",
+      "zodiacsystems"
+     ]
+    ]
+   },
+   {
+    "q": "nine star",
+    "class": "english",
+    "want": [
+     [
+      "dongya",
+      "ninestar"
+     ]
+    ]
+   },
+   {
+    "q": "dreamspell",
+    "class": "english",
+    "want": [
+     [
+      "zhufang",
+      "dreamspell"
+     ]
+    ]
+   },
+   {
+    "q": "mayan",
+    "class": "english",
+    "want": [
+     [
+      "zhufang",
+      "mayan"
+     ]
+    ]
+   },
+   {
+    "q": "what are time lords",
+    "class": "english",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "時主輪轉",
+    "class": "traditional",
+    "want": [
+     [
+      "direction",
+      "timelords"
+     ]
+    ]
+   },
+   {
+    "q": "變換盤",
+    "class": "traditional",
+    "want": [
+     [
+      "auxchart",
+      "transformchart"
+     ]
+    ]
+   },
+   {
+    "q": "人類圖",
+    "class": "traditional",
+    "want": [
+     [
+      "zhufang",
+      "hd"
+     ]
+    ]
+   },
+   {
+    "q": "瑪雅曆",
+    "class": "traditional",
+    "want": [
+     [
+      "zhufang",
+      "mayan"
+     ]
+    ]
+   },
+   {
+    "q": "九星氣學",
+    "class": "traditional",
+    "want": [
+     [
+      "dongya",
+      "ninestar"
+     ]
+    ]
    }
   ]
  }

@@ -96,16 +96,18 @@ def test_variant_names_are_exact_hits(query: str, key: str) -> None:
     assert _top(query)["key"] == key
 
 
-def test_manuals_keyed_by_component_name_answer_to_their_chinese_label() -> None:
-    assert _top("小六壬")["key"] == "Xiaoliuren"
-    assert _top("宿占")["key"] == "Suzhan"
-    assert _top("世俗盘")["key"] == "Mundane"
+def test_manuals_keyed_by_chapter_key_answer_to_their_chinese_label() -> None:
+    """手册条目的键是上游的章节键（页面子页签的运行时键），中文章名在 label：搜章名要到这一条。"""
+    assert _top("小六壬")["key"] == "xiaoliuren"
+    assert _top("宿占")["key"] == "suzhan"
+    assert _top("世俗盘")["key"] == "mundane"
+    # v3.14.0 之前的键是方法名（Xiaoliuren）：旧键照样读得到
     assert read_knowledge_entry({"domain": "cnyibu", "key": "Xiaoliuren"})["title"].endswith("小六壬")
 
 
 def test_the_technique_name_reaches_its_manual_overview() -> None:
     match = _top("奇門遁甲")
-    assert (match["domain"], match["key"]) == ("dunjia", "总览")
+    assert (match["domain"], match["key"]) == ("dunjia", "overview")
 
 
 def test_pithy_categories_are_searchable() -> None:
@@ -152,46 +154,6 @@ def test_manual_text_has_no_jsx_left_in_it() -> None:
     assert bad == []
 
 
-def test_the_generator_pairs_each_section_with_its_label() -> None:
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("gen_knowledge_packs", Path(__file__).parents[1] / "scripts" / "gen_knowledge_packs.py")
-    gen = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gen)
-    source = """
-class X {
-\trenderSuzhan(){
-\t\treturn (
-\t\t\t<div>正文内容足够长</div>
-\t\t);
-\t}
-\trenderHelper(){
-\t\treturn (<div>第二节</div>);
-\t}
-\trender(){
-\t\tconst groups = [ { key: 'x', label: '分组', items: [
-\t\t\t{ key: 'suzhan', label: '宿盘', render: ()=>this.renderSuzhan() },
-\t\t] } ];
-\t\treturn <div/>;
-\t}
-}
-export default X;
-"""
-    tabs = gen._split_tabs(source)
-    assert [(key, label) for key, _body, label in tabs] == [("Suzhan", "宿盘"), ("Helper", None)]
-    assert all("const groups" not in body and "return" not in body for _key, body, _label in tabs)
-
-
-def test_map_expressions_are_dropped_without_eating_the_next_paragraph() -> None:
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("gen_knowledge_packs", Path(__file__).parents[1] / "scripts" / "gen_knowledge_packs.py")
-    gen = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gen)
-    text = gen._jsx_to_markdown("<p>前文</p>{LIST.map((e) => (<b key={e}>{e}</b>))}<p>后文</p>")
-    assert "前文" in text and "后文" in text and "map" not in text
-
-
 # ---- 零命中改写
 
 
@@ -222,8 +184,8 @@ def test_a_question_wrapper_is_evidence_enough_for_half_coverage() -> None:
 def test_a_thin_result_is_topped_up_with_the_pieces() -> None:
     """整串碰巧在一本手册里连着出现过一次：原命中留在前面，再补上切开后的结果。"""
     result = search_knowledge({"query": "紫微流派"})
-    assert result["matches"][0]["key"] == "Ziwei" and "紫微 流派" == result["expanded_query"]
-    assert any((m["domain"], m["key"]) == ("ziwei", "流派分歧") for m in result["matches"])
+    assert (result["matches"][0]["domain"], result["matches"][0]["key"]) == ("sanshi", "ziwei") and "紫微 流派" == result["expanded_query"]
+    assert any((m["domain"], m["key"]) == ("ziwei", "schools") for m in result["matches"])
 
 
 def test_a_named_domain_outranks_passing_mentions_elsewhere() -> None:
@@ -283,7 +245,7 @@ def test_every_match_tells_how_to_read_it_in_full(tmp_path: Path) -> None:
 def test_an_exact_key_beats_a_note_that_merely_ties_on_rank(tmp_path: Path) -> None:
     _put(tmp_path, "a.md", "随手记：四化与运限这一节以后再看。")
     match = knowledge_search.search_all(_settings(tmp_path), {"query": "四化与运限"})["matches"][0]
-    assert (match["domain"], match["key"]) == ("ziwei", "四化与运限")
+    assert (match["domain"], match["key"]) == ("ziwei", "luck")
 
 
 def test_a_note_titled_exactly_the_query_beats_bundled_body_matches(tmp_path: Path) -> None:

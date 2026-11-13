@@ -186,7 +186,8 @@ debt ratchets `export_section_debt.json` / `error_recovery_debt.json` / `schema_
   green before a tag. Never run `verify_*.py` bare as "a quick check" — `verify_runtime_live.py` is a real lane.
 - **Re-vendor** — `sync_vendored_runtime_sources.sh` (runtime subset from the read-only Horosa-Public checkout),
   `revendor_core_js.py` (the only writer of `src/vendor`), `_upstream_preset.py` (upstream aiExport parser), and the generators
-  `gen_knowledge_packs.py` / `gen_bazi_pithy_pack.py` / `build_hover_knowledge_bundle.mjs` / `build_knowledge_index.py` /
+  `gen_knowledge_packs.py` (+ its harvester `harvest_help_books.mjs`, which bundles and runs the upstream help modules) /
+  `gen_bazi_pithy_pack.py` / `build_hover_knowledge_bundle.mjs` / `build_knowledge_index.py` /
   `gen_technique_provenance.py` / `gen_js_boundary_contracts.py` / `gen_jev_eval_sets.py` / `gen_shaozi_tiaowen.py` /
   `gen_runtime_python_lock.py` (fix the generator, never the generated file).
 - **Live** — `start_vendored_instance.sh` / `stop_vendored_instance.sh` (vendored instance on `:9977` / `:8877`),
