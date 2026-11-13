@@ -116,9 +116,29 @@ def house_system_doc() -> str:
     )
 
 
+# 随盘容许度对（上游 v3.14.0 utils/classicalChartGlobals.js chartOrbOverrides：卜卦 / 择日盘的 /chart 与天星择日的选中时刻盘随盘下发）。
+# 星体与默认度数 = 上游容许度面板 components/astro/AstroOrbSetting.js DEFAULT_ORBS（tests/test_sync314_zeri_orbs.py 逐值锚）。
+CHART_ORB_DEFAULTS: tuple[tuple[str, int], ...] = (
+    ("Sun", 15), ("Moon", 12), ("Mercury", 7), ("Venus", 8), ("Mars", 8), ("Jupiter", 9), ("Saturn", 9),
+    ("Uranus", 5), ("Neptune", 5), ("Pluto", 5), ("North Node", 12),
+)
+_CHART_ORB_DOC = (
+    "随盘容许度（顶层键）：orbs = {星体 id: 度数}，只写要改的星（星阙面板的星体与默认度数："
+    + " ".join(f"{body}={orb}" for body, orb in CHART_ORB_DEFAULTS)
+    + "；id 同盘面 objects[].id），orbScale = 整体倍数（大于 0，缺省 1；星阙面板量程 0.5–2.5）。"
+    "两者互不干扰：没单独给的星 = 默认 × 倍数。认不出的值报 tool.invalid_option；不是本盘星体的 id 进 warnings。"
+)
+
+
 def _static_doc(tool_name: str) -> dict[str, str]:
+    if tool_name == "tianxing":
+        return {
+            "orbs / orbScale": _CHART_ORB_DOC + "天星择日里只改 [选中时刻星盘] 的相位（同上游浮窗盘）；扫描判定不读它——"
+            "每条条件自带容许度（如 aspect 的 orb 参数），判读类条件用引擎固定的星体表。",
+        }
     if tool_name == "horary":
         return {
+            "orbs / orbScale": _CHART_ORB_DOC + "卜卦盘的 [相位全览]、成相 / 离相、[月亮的故事]、接纳都按这张盘的相位判，改它结论会变。",
             "category": "问卜类别（20 类，括号=事项宫；也认中文名，认不出报 tool.invalid_option）："
             + " ".join(f"{k}={label}({house if house else '月亮下一入相'})" for k, label, house in HORARY_CATEGORIES)
             + "；father/mother 的 4/10 宫随 options.parentHousesVariant（traditional 4父10母 | modern 反之）。",
@@ -132,6 +152,7 @@ def _static_doc(tool_name: str) -> dict[str, str]:
         }
     if tool_name == "election":
         return {
+            "orbs / orbScale": _CHART_ORB_DOC + "只作用于择日盘本身；natal 本命盘、病始盘与日 / 月返盘按默认容许度（同上游）。",
             "topicId": "用事（37 类；也认中文名，认不出报 tool.invalid_option）：" + " ".join(f"{k}={cn}" for k, cn in ELECTION_TOPICS),
             "school": "择日流派 5 档：" + " ".join(f"{k}={cn}" for k, cn in ELECTION_SCHOOLS)
             + "；未显式给 hsys 时宫制随流派（hellenistic/modern_revival=0、persian=1、renaissance=2、modern_main=0）。",
