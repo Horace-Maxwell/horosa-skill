@@ -21,7 +21,10 @@
 | Celebrity data | `astrodata` (read-only, no gate). |
 
 Predictive techniques: [`predictive.md`](./predictive.md). `sunriseMode` (`center` default / `apparent`) applies to
-the Western charts and 七政.
+the Western charts and 七政. Orbs travel with the chart: `orbs` (`{"Sun": 10}`, body id → degrees) and `orbScale` (a
+multiplier above 0, default 1) change the aspects of the `horary` and `election` charts — and so the judgment — and of
+`tianxing`'s selected-moment chart only (its window search ignores them: each condition carries its own orb). An
+unreadable value is refused with `tool.invalid_option`; an id that is not a body of the chart is reported in `warnings`.
 
 ## 择日 window search
 
