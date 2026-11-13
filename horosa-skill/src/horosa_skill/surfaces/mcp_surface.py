@@ -48,8 +48,10 @@ _SERVER_ICON = mcp_types.Icon(
 _ANN_QUERY = mcp_types.ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
+# idempotentHint 规范缺省即 false：不写 = 同义（线上 exclude_none 不发），每个计算类工具省 24 B。readOnly / destructive /
+# openWorld 三项照写——前两项缺省值与本仓口径相反或 ChatGPT 目录审核要求显式。
 _ANN_CALC = mcp_types.ToolAnnotations(
-    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False
+    readOnlyHint=False, destructiveHint=False, openWorldHint=False
 )
 _ANN_RENDER = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
@@ -62,7 +64,7 @@ _ANN_PROFILE = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
 )
 _ANN_REPORT_FROM_TOOL = mcp_types.ToolAnnotations(
-    readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False
+    readOnlyHint=False, destructiveHint=True, openWorldHint=False
 )
 
 _READONLY_TOOL_NAMES = {

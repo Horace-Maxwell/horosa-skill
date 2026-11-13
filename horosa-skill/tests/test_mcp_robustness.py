@@ -425,7 +425,8 @@ def test_technique_report_is_not_advertised_read_only(tmp_path) -> None:
         a = tools[name].annotations
         assert a is not None and a.destructive_hint is True and a.read_only_hint is False, name
     assert tools["horosa_report_render"].annotations.idempotent_hint is True
-    assert tools["horosa_report_from_tool"].annotations.idempotent_hint is False
+    # 非幂等：idempotentHint 规范缺省即 false，线上不发（None）= 同义；只要不是 True 就对。
+    assert tools["horosa_report_from_tool"].annotations.idempotent_hint is not True
     assert tools["horosa_memory_record_answer"].annotations.destructive_hint is False
 
 

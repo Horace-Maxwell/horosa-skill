@@ -1,7 +1,7 @@
 {
  "full": {
   "horosa_dispatch": {
-   "tool": "{\"_meta\":{\"anthropic/alwaysLoad\":true},\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"自然语言调度 / dispatch\"}",
+   "tool": "{\"_meta\":{\"anthropic/alwaysLoad\":true},\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"自然语言调度 / dispatch\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "query": "string",
@@ -132,7 +132,7 @@
    }
   },
   "horosa_hecan": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"合参 / cross-technique synthesis\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"合参 / cross-technique synthesis\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "query": "string",
@@ -164,7 +164,7 @@
    }
   },
   "horosa_report_from_tool": {
-   "tool": "{\"annotations\":{\"destructiveHint\":true,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起盘并出报告 / cast + report\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":true,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起盘并出报告 / cast + report\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "request": "object",
@@ -185,9 +185,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"返回完整的星阙 AI 导出设置注册表\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "technique": "string",
     "request": "object"
    }
@@ -196,9 +193,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"把星阙 AI 导出文本快照解析为结构化 JSON\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "technique": "string",
     "content": "string",
     "selected_sections": "array items={\"type\":\"string\"}",
@@ -211,9 +205,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"列出内置知识库的全部域 / 分类 / 键\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "domain": "string",
     "request": "object"
    }
@@ -222,9 +213,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"精读一条知识（带出处）：内置知识\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "domain": "string",
     "category": "string",
     "key": "string",
@@ -243,7 +231,7 @@
    }
   },
   "horosa_cn_qimen": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地起奇门遁甲盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地起奇门遁甲盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -265,7 +253,7 @@
    }
   },
   "horosa_cn_taiyi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地起太乙神数盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地起太乙神数盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -288,7 +276,7 @@
    }
   },
   "horosa_cn_jinkou": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地起金口诀盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地起金口诀盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -315,7 +303,7 @@
    }
   },
   "horosa_cn_tongshefa": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地统摄法起卦\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地统摄法起卦\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -325,7 +313,7 @@
    }
   },
   "horosa_cn_sanshiunited": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"三式合一：一页聚合奇门 / 太乙\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"三式合一：一页聚合奇门 / 太乙\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -349,7 +337,7 @@
    }
   },
   "horosa_cn_suzhan": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起宿占 / 宿盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起宿占 / 宿盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -368,7 +356,7 @@
    }
   },
   "horosa_cn_sixyao": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起六爻 / 易卦\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起六爻 / 易卦\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -393,7 +381,7 @@
    }
   },
   "horosa_cn_canping": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地邵子参评数 / 金锁银匙\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地邵子参评数 / 金锁银匙\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -413,7 +401,7 @@
    }
   },
   "horosa_cn_heluo": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地河洛理数\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地河洛理数\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -434,7 +422,7 @@
    }
   },
   "horosa_cn_yizhangjing": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地一掌经\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地一掌经\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -458,8 +446,49 @@
     "request": "object"
    }
   },
+  "horosa_cn_dongya": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"东亚诸术（七段）：藏历 / 藏占 / 蒙古\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "agent_confirmed_settings": "boolean",
+    "defaults_accepted": "boolean",
+    "clarification_notes": "string",
+    "date": "string",
+    "time": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "gpsLat": "number",
+    "gpsLon": "number",
+    "ad": "integer enum=[1,-1]",
+    "gender": "string",
+    "flowYear": "integer",
+    "place": "string",
+    "request": "object"
+   }
+  },
+  "horosa_other_zhufang": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"诸方杂术（四段）：玛雅历 / 十三月亮历\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "agent_confirmed_settings": "boolean",
+    "defaults_accepted": "boolean",
+    "clarification_notes": "string",
+    "date": "string",
+    "time": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "gpsLat": "number",
+    "gpsLon": "number",
+    "ad": "integer enum=[1,-1]",
+    "hsys": "integer enum=[0,1,2,3,4,5,6,7,8]",
+    "place": "string",
+    "request": "object"
+   }
+  },
   "horosa_cn_xiaoliuren": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地小六壬起课\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地小六壬起课\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -482,7 +511,7 @@
    }
   },
   "horosa_cn_feigong": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地飞宫小奇门定局\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地飞宫小奇门定局\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -505,7 +534,7 @@
    }
   },
   "horosa_cn_xiaochengtu": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地小成图排盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地小成图排盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -530,7 +559,7 @@
    }
   },
   "horosa_cn_guice": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地皇极轨策起卦\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地皇极轨策起卦\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -557,7 +586,7 @@
    }
   },
   "horosa_cn_zhengchuan": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地神数正传\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"本地神数正传\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -581,7 +610,7 @@
    }
   },
   "horosa_astro_acg": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起占星地图 / AstroCartoGraphy\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起占星地图 / AstroCartoGraphy\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -610,12 +639,9 @@
    }
   },
   "horosa_knowledge_xuanshi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"检索玄史（中国玄学史知识库）：7900+\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"检索玄史（中国玄学史知识库）：7900+\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "q": "string",
     "id": "string",
     "tradition": "string",
@@ -642,12 +668,9 @@
    }
   },
   "horosa_cn_bazi_inverse": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"八字反查：四柱干支反推候选公历出生时刻\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"八字反查：四柱干支反推候选公历出生时刻\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "pillars": "array items={\"type\":\"string\"}",
     "year": "string",
     "count": "integer",
@@ -660,9 +683,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"离线名人星盘库检索\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "query": "string",
     "category": "string",
     "limit": "integer",
@@ -671,7 +691,7 @@
    }
   },
   "horosa_astro_chart": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成基础西洋星盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成基础西洋星盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -693,7 +713,7 @@
    }
   },
   "horosa_astro_chart13": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成 13 宫扩展盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成 13 宫扩展盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -715,7 +735,7 @@
    }
   },
   "horosa_astro_babylon": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起巴比伦占星盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起巴比伦占星盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -740,7 +760,7 @@
    }
   },
   "horosa_astro_chart12": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成十二分盘 / Dwadasamsa\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成十二分盘 / Dwadasamsa\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -762,7 +782,7 @@
    }
   },
   "horosa_astro_draconic": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成龙盘 / Draconic chart\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成龙盘 / Draconic chart\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -785,7 +805,7 @@
    }
   },
   "horosa_astro_relocation": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成重置盘 / Relocation chart\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成重置盘 / Relocation chart\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -808,8 +828,49 @@
     "request": "object"
    }
   },
+  "horosa_astro_transformchart": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成变换盘\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "date": "string",
+    "time": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "ad": "integer enum=[1,-1]",
+    "hsys": "integer enum=[0,1,2,3,4,5,6,7,8]",
+    "zodiacal": "integer enum=[0,1]",
+    "siderealAyanamsa": "string",
+    "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
+    "transformKind": "string",
+    "agent_confirmed_settings": "boolean",
+    "defaults_accepted": "boolean",
+    "clarification_notes": "string",
+    "place": "string",
+    "request": "object"
+   }
+  },
+  "horosa_astro_zodiacsystems": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起黄道制\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "date": "string",
+    "time": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "ad": "integer enum=[1,-1]",
+    "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
+    "zodiacVersion": "string",
+    "agent_confirmed_settings": "boolean",
+    "defaults_accepted": "boolean",
+    "clarification_notes": "string",
+    "place": "string",
+    "request": "object"
+   }
+  },
   "horosa_astro_hellen_chart": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成希腊占星取向盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成希腊占星取向盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -831,7 +892,7 @@
    }
   },
   "horosa_astro_guolao_chart": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成七政四余 / 果老法盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成七政四余 / 果老法盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -861,7 +922,7 @@
    }
   },
   "horosa_astro_germany": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成量化盘 / 汉堡学派中点分析盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成量化盘 / 汉堡学派中点分析盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -883,7 +944,7 @@
    }
   },
   "horosa_astro_harmonic": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成调波盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成调波盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -907,7 +968,7 @@
    }
   },
   "horosa_predict_agepoint": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起年龄推进点 / Age Point\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起年龄推进点 / Age Point\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -932,7 +993,7 @@
    }
   },
   "horosa_predict_distributions": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起界推运 / 分配法时间轴——上升点行经埃及界\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起界推运 / 分配法时间轴——上升点行经埃及界\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -957,7 +1018,7 @@
    }
   },
   "horosa_astro_mundane": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起世俗入宫盘——按某年节气（春分/夏至/秋分\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起世俗入宫盘——按某年节气（春分/夏至/秋分\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -985,7 +1046,7 @@
    }
   },
   "horosa_predict_jaynesprog": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起赤纬推运 / Jayne\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起赤纬推运 / Jayne\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1010,7 +1071,7 @@
    }
   },
   "horosa_predict_neroman": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起演进推运\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起演进推运\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1030,7 +1091,7 @@
    }
   },
   "horosa_predict_bezzafigure": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起推运图\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起推运图\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1050,7 +1111,7 @@
    }
   },
   "horosa_predict_jayprofection": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起周日小限\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起周日小限\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1070,7 +1131,7 @@
    }
   },
   "horosa_predict_michon": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起双黄道\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起双黄道\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1088,8 +1149,29 @@
     "request": "object"
    }
   },
+  "horosa_predict_timelords": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起时主轮转\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "date": "string",
+    "time": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "ad": "integer enum=[1,-1]",
+    "hsys": "integer enum=[0,1,2,3,4,5,6,7,8]",
+    "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
+    "targetDate": "string",
+    "tlMethod": "string",
+    "agent_confirmed_settings": "boolean",
+    "defaults_accepted": "boolean",
+    "clarification_notes": "string",
+    "place": "string",
+    "request": "object"
+   }
+  },
   "horosa_predict_vedicprog": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起恒星推运 / Vedic sidereal\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起恒星推运 / Vedic sidereal\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1114,7 +1196,7 @@
    }
   },
   "horosa_predict_ephemeris": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起星历\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起星历\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1139,7 +1221,7 @@
    }
   },
   "horosa_predict_returntimeline": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起回归轴\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起回归轴\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1162,7 +1244,7 @@
    }
   },
   "horosa_predict_prenatalsyzygy": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起产前朔望\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起产前朔望\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1183,7 +1265,7 @@
    }
   },
   "horosa_predict_prog": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起二次推运\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起二次推运\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1207,7 +1289,7 @@
    }
   },
   "horosa_predict_planetaryarc": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起行星弧向运\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起行星弧向运\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1229,7 +1311,7 @@
    }
   },
   "horosa_predict_planetaryages": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起行星年龄 / 托勒密人生七阶\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起行星年龄 / 托勒密人生七阶\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1251,7 +1333,7 @@
    }
   },
   "horosa_predict_balbillus": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起 Balbillus 129 年系统\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起 Balbillus 129 年系统\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1276,7 +1358,7 @@
    }
   },
   "horosa_predict_yearsystem129": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起 129 年系统（七政接续，129\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起 129 年系统（七政接续，129\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1301,7 +1383,7 @@
    }
   },
   "horosa_predict_triplicityrulers": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起三分主星推运——区间光体的三分主星按昼夜划分人\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起三分主星推运——区间光体的三分主星按昼夜划分人\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1325,7 +1407,7 @@
    }
   },
   "horosa_predict_keypoints": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起数字相位推运——七星小年数 +\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起数字相位推运——七星小年数 +\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1347,7 +1429,7 @@
    }
   },
   "horosa_predict_lunationphase": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起月相推运——本命日月黄经差按次限速率推进的八相\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起月相推运——本命日月黄经差按次限速率推进的八相\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1368,7 +1450,7 @@
    }
   },
   "horosa_predict_extrareturns": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起多重回归（土星 / 木星 / 月交返照）应期表\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起多重回归（土星 / 木星 / 月交返照）应期表\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1391,7 +1473,7 @@
    }
   },
   "horosa_predict_persiandirected": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起波斯向运（黄经象征 1°/年）应期表\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起波斯向运（黄经象征 1°/年）应期表\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1407,6 +1489,7 @@
     "rateKey": "string",
     "direction": "string",
     "maxYears": "number",
+    "persianYear": "string",
     "agent_confirmed_settings": "boolean",
     "defaults_accepted": "boolean",
     "clarification_notes": "string",
@@ -1415,7 +1498,7 @@
    }
   },
   "horosa_chart_horary": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起卜卦 / horary 断盘（根本性\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起卜卦 / horary 断盘（根本性\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1441,7 +1524,7 @@
    }
   },
   "horosa_chart_election": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起择日 / electional 断盘（红线\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起择日 / electional 断盘（红线\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1466,7 +1549,7 @@
    }
   },
   "horosa_chart_tianxing": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"天星择日·征象搜索：在时间窗内扫出满足西占征象条\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"天星择日·征象搜索：在时间窗内扫出满足西占征象条\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1498,7 +1581,7 @@
    }
   },
   "horosa_chart_qizhengelection": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"七政择日动盘（果老择日双轮）\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"七政择日动盘（果老择日双轮）\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1535,7 +1618,7 @@
    }
   },
   "horosa_cn_qimenzeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"奇门择日「找局」：在时间窗内扫出满足奇门条件树的\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"奇门择日「找局」：在时间窗内扫出满足奇门条件树的\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1566,7 +1649,7 @@
    }
   },
   "horosa_cn_huanglizeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"黄历择吉：在日期范围内扫出满足通书条件树的日子\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"黄历择吉：在日期范围内扫出满足通书条件树的日子\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1595,7 +1678,7 @@
    }
   },
   "horosa_cn_bazizeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"八字择时：在时间窗内扫出满足八字条件树的时辰\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"八字择时：在时间窗内扫出满足八字条件树的时辰\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1628,7 +1711,7 @@
    }
   },
   "horosa_cn_taiyizeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"太乙择时：在时间窗内扫出满足太乙条件树的时辰\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"太乙择时：在时间窗内扫出满足太乙条件树的时辰\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1658,7 +1741,7 @@
    }
   },
   "horosa_cn_ziweizeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"紫微择时：在时间窗内扫出满足紫微条件树的时辰\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"紫微择时：在时间窗内扫出满足紫微条件树的时辰\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1691,7 +1774,7 @@
    }
   },
   "horosa_cn_liurengzeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"六壬择时：在时间窗内扫出满足六壬条件树的时辰\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"六壬择时：在时间窗内扫出满足六壬条件树的时辰\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1723,7 +1806,7 @@
    }
   },
   "horosa_cn_sanshizeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"三式合一择时：条件可跨六壬/奇门\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"三式合一择时：条件可跨六壬/奇门\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1756,7 +1839,7 @@
    }
   },
   "horosa_astro_qizhengzeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"七政择时：在时间窗内扫出满足七政条件树的分钟级区\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"七政择时：在时间窗内扫出满足七政条件树的分钟级区\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1793,7 +1876,7 @@
    }
   },
   "horosa_astro_indiazeri": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"印度择时（Muhurta）：Panchanga\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"印度择时（Muhurta）：Panchanga\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1828,7 +1911,7 @@
    }
   },
   "horosa_cn_geomancy": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以起卦时刻确定性起天文地占\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以起卦时刻确定性起天文地占\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1851,7 +1934,7 @@
    }
   },
   "horosa_cn_lingqi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以起卦时刻确定性掷灵棋经十二棋\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以起卦时刻确定性掷灵棋经十二棋\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1871,7 +1954,7 @@
    }
   },
   "horosa_cn_tarot": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以问卦时刻确定性抽塔罗牌阵\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以问卦时刻确定性抽塔罗牌阵\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1893,7 +1976,7 @@
    }
   },
   "horosa_shenshu_wangji": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起皇极经世·心易发微\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起皇极经世·心易发微\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -1923,7 +2006,7 @@
    }
   },
   "horosa_shenshu_wuzhao": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起五兆（wuzhao）神数盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起五兆（wuzhao）神数盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -1945,7 +2028,7 @@
    }
   },
   "horosa_shenshu_taixuan": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起太玄·揲蓍（taixuan）神数盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起太玄·揲蓍（taixuan）神数盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -1967,7 +2050,7 @@
    }
   },
   "horosa_shenshu_jingjue": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起荆诀（jingjue）十六卦课\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起荆诀（jingjue）十六卦课\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -1989,7 +2072,7 @@
    }
   },
   "horosa_shenshu_shenyishu": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起神易数（shenyishu）神数盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间起神易数（shenyishu）神数盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2011,7 +2094,7 @@
    }
   },
   "horosa_shenshu_shaozi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别）起邵子神数（shaozi）盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别）起邵子神数（shaozi）盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2033,7 +2116,7 @@
    }
   },
   "horosa_shenshu_tieban": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别）起铁板神数（tieban）盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别）起铁板神数（tieban）盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2055,7 +2138,7 @@
    }
   },
   "horosa_shenshu_fendjing": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 鬼谷分定经·两头钳\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 鬼谷分定经·两头钳\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2077,7 +2160,7 @@
    }
   },
   "horosa_shenshu_beiji": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 北极神数 (beiji)\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 北极神数 (beiji)\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2099,7 +2182,7 @@
    }
   },
   "horosa_shenshu_nanji": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 南极神数 (nanji)\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 南极神数 (nanji)\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2121,7 +2204,7 @@
    }
   },
   "horosa_shenshu_chunzi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 蠢子数 (chunzi)\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Cast a 蠢子数 (chunzi)\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2143,7 +2226,7 @@
    }
   },
   "horosa_shenshu_xianqin": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别/地点）起演禽\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别/地点）起演禽\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2165,7 +2248,7 @@
    }
   },
   "horosa_shenshu_cetian": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别/地点）起策天飞星·紫微\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别/地点）起策天飞星·紫微\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2189,7 +2272,7 @@
    }
   },
   "horosa_shenshu_qizhengkin": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别/地点）起七政四余·张果星宗\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按日期时间（+性别/地点）起七政四余·张果星宗\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2212,7 +2295,7 @@
    }
   },
   "horosa_predict_solarreturn": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算太阳返照盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算太阳返照盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2237,7 +2320,7 @@
    }
   },
   "horosa_predict_lunarreturn": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算太阴返照盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算太阴返照盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2262,7 +2345,7 @@
    }
   },
   "horosa_predict_solararc": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算太阳弧向运\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算太阳弧向运\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2285,7 +2368,7 @@
    }
   },
   "horosa_predict_givenyear": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算指定年推运盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算指定年推运盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2310,7 +2393,7 @@
    }
   },
   "horosa_predict_profection": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算小限 / 年运推限\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算小限 / 年运推限\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2335,7 +2418,7 @@
    }
   },
   "horosa_predict_pd": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算本初方向 / 主限\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算本初方向 / 主限\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2359,7 +2442,7 @@
    }
   },
   "horosa_predict_pdchart": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算主限法盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算主限法盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2385,7 +2468,7 @@
    }
   },
   "horosa_predict_zr": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算黄道释放\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算黄道释放\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2409,7 +2492,7 @@
    }
   },
   "horosa_predict_firdaria": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成法达星限\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成法达星限\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2430,7 +2513,7 @@
    }
   },
   "horosa_predict_decennials": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成十年大运\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成十年大运\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2451,7 +2534,7 @@
    }
   },
   "horosa_other_otherbu": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成西洋游戏 / 占星骰子\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成西洋游戏 / 占星骰子\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2473,7 +2556,7 @@
    }
   },
   "horosa_astro_relative": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算合盘 / 关系盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算合盘 / 关系盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2490,7 +2573,7 @@
    }
   },
   "horosa_astro_india_chart": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算印度（吠陀）恒星黄道盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"计算印度（吠陀）恒星黄道盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2520,7 +2603,7 @@
    }
   },
   "horosa_astro_india_rectify": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"印度 KP 法出生时间校正：锚点±半窗扫描候选\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"印度 KP 法出生时间校正：锚点±半窗扫描候选\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2548,7 +2631,7 @@
    }
   },
   "horosa_astro_planet_cycles": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"行星周期：任意两星（木土/土冥\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"行星周期：任意两星（木土/土冥\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2565,7 +2648,7 @@
    }
   },
   "horosa_cn_jieqi_birth": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"出生节气窗：定位出生时刻前后的节气精确时刻并标出\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"出生节气窗：定位出生时刻前后的节气精确时刻并标出\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -2585,7 +2668,7 @@
    }
   },
   "horosa_cn_ziwei_birth": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成紫微斗数命盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成紫微斗数命盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2614,14 +2697,11 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"获取紫微斗数规则库\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "request": "object"
    }
   },
   "horosa_cn_bazi_birth": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成八字命盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成八字命盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2649,7 +2729,7 @@
    }
   },
   "horosa_cn_bazi_direct": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成八字直断\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成八字直断\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2677,7 +2757,7 @@
    }
   },
   "horosa_cn_liureng_gods": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起大六壬正盘（四课三传，含当前时间起课）\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起大六壬正盘（四课三传，含当前时间起课）\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2702,7 +2782,7 @@
    }
   },
   "horosa_cn_liureng_runyear": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成大六壬行年 / runyear\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成大六壬行年 / runyear\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2728,7 +2808,7 @@
    }
   },
   "horosa_cn_jieqi_year": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成全年节气盘\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成全年节气盘\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2755,7 +2835,7 @@
    }
   },
   "horosa_cn_nongli_time": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成农历时间换算\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成农历时间换算\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2778,7 +2858,7 @@
    }
   },
   "horosa_cn_huangli": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起老黄历日课\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起老黄历日课\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2790,7 +2870,7 @@
    }
   },
   "horosa_cn_tongshu": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起通书择日\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起通书择日\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2805,7 +2885,7 @@
    }
   },
   "horosa_cn_calendar_month": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Generate 黄历/万年历 month\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Generate 黄历/万年历 month\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",
@@ -2827,9 +2907,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"获取卦义说明\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "name": "string",
     "request": "object"
    }
@@ -2838,9 +2915,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"获取梅花易数卦义\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "name": "string",
     "request": "object"
    }
@@ -2848,7 +2922,7 @@
  },
  "compact": {
   "horosa_dispatch": {
-   "tool": "{\"_meta\":{\"anthropic/alwaysLoad\":true},\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"自然语言调度 / dispatch\"}",
+   "tool": "{\"_meta\":{\"anthropic/alwaysLoad\":true},\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"自然语言调度 / dispatch\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "query": "string",
@@ -2979,7 +3053,7 @@
    }
   },
   "horosa_hecan": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"合参 / cross-technique synthesis\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"合参 / cross-technique synthesis\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "query": "string",
@@ -3011,7 +3085,7 @@
    }
   },
   "horosa_report_from_tool": {
-   "tool": "{\"annotations\":{\"destructiveHint\":true,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起盘并出报告 / cast + report\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":true,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起盘并出报告 / cast + report\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "request": "object",
@@ -3029,7 +3103,7 @@
    }
   },
   "horosa_tool_run": {
-   "tool": "{\"_meta\":{\"anthropic/alwaysLoad\":true},\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按名直调技法 / run any technique\"}",
+   "tool": "{\"_meta\":{\"anthropic/alwaysLoad\":true},\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"按名直调技法 / run any technique\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "tool_name": "string",

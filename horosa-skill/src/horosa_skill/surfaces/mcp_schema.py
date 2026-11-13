@@ -63,7 +63,7 @@ CORE_DOC: dict[str, str] = {
     "siderealAyanamsa": "恒星黄道岁差制（zodiacal=1 时）",
     "name": "当事人姓名（透传盘头）",
     "pos": "地点显示名",
-    "place": "地名",
+    "place": "地名（可代 zone/lat/lon，首选）",
     "gender": "1/男 0/女",
     "timeAlg": "0=真太阳时 1=钟表时",
     "response_view": "full=原始树",
@@ -206,9 +206,13 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
         keep.append("place")  # 地名是给位置的首选写法（SKILL.md），广告给每个收地点的技法
     docs = _field_docs()
     out: dict[str, Any] = {}
+    # 收地名的技法：zone / lat / lon 不标 [required]——`place` 一个键就补齐三者（且按出生当日取时区，夏令时也对），
+    # 标成必填会把模型引去自填「+08:00 + 凭记忆的坐标」，1986–1991 夏令时就此静默丢掉（审计 S-06 / F20）。校验层照旧：
+    # 三者与 place 都没给仍按字段报缺。
+    place_covers = "place" in keep
     for key in keep:
         if key in CORE_DOC:
-            out[key] = _core_property(key, tool_name, key in required)
+            out[key] = _core_property(key, tool_name, key in required and not (place_covers and key in _PLACE_COVERED))
             continue
         prop = _own_property(key, props[key], key in required)
         bare = str(prop.get("description") or "").removeprefix("[required]").strip()
@@ -233,6 +237,7 @@ def _field_docs() -> dict[str, str]:
 
 
 _FIELD_DOCS: dict[str, str] | None = None
+_PLACE_COVERED = frozenset({"zone", "lat", "lon"})
 
 # 嵌套的一方（合盘 inner / outer）：广告成带 properties 的对象，模型才知道里面放什么（MCP-11：旧广告是一个无形状的值）。
 _PARTY_KEYS = ("date", "time", "zone", "lat", "lon", "ad", "name")
