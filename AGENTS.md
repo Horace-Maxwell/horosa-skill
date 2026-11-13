@@ -1921,6 +1921,12 @@ A global stability pass hardened these; keep them true when you touch the releva
 
 ## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
 
+**有意偏离上游缺省：推运目标时刻的时区（v0.51.0-dev，审计 F03）**：上游缺省 `dirZone = 本命时区`；skill 在没给 `dirZone`、给了带钟点的目标时刻时，
+按目标地点（`dirLat` / `dirLon`，否则出生地）**在目标日期**的偏移取（`service/api/tools._default_target_zone`，与地名补时区同一个 `dstAwareZoneAt` +
+IANA 按钟点换算），偏移与出生时不同才进 warnings；dispatch 的目标取自 `context` 时 `dirZone` = context 的时区（`dispatch_plan._target_for`）。
+原因：夏令时出生（中国 1986–1991 夏季、欧美每年一半）的人在标准时间的目标钟点上差一小时，按目标时刻起的盘是另一张。显式 `dirZone` 逐字节不变；
+换算不了（无坐标 / 旧 runtime / 无 JS 引擎）就不补、照旧按本命时区。守卫 `tests/test_fix314_target_zone.py`。
+
 **奇门节气种子要补日柱（v0.47.0，上游 preciseCalcBridge.fillJieqiDayGanzhiFromLocal）**：chart 服务的 Python `/jieqi/year` 从不带日柱
 （Java 版不加 `seedOnly` 才带）。`tools/qimen.js` 当年只抄了 `fetchPreciseJieqiSeed` 没抄补日柱，种子 `dayGanzhi` 全空 → 本地路由
 （飞盘 / 混合 / 日家 / 金函 / 刻家，置闰 / 无闰 / 茅山）回落 甲子 / 旧锚，局数大面积错，测试喂的是自带日柱的假种子所以一直绿。

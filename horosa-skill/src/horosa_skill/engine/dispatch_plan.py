@@ -306,6 +306,11 @@ def _target_for(tool: str, inputs: PlanInputs) -> tuple[dict[str, Any], dict[str
             payload["guaTime"] = time_text
         if _present(inputs.context.get("zone")):
             payload["guaZone"] = inputs.context["zone"]
+    # 目标时刻取自 context（用户「此刻」的日期 + 钟点）：钟点是用户所在地的钟面，时区必须跟着 context 走（审计 F03）——以前只透 datetime，
+    # 时区落回本命（人在纽约 10:00 问，按上海 1990 年的 +09:00 起，差 14 小时）。地点不动（返照 / 流年按出生地还是现居地是流派选择）。
+    if source == "context" and time_text and style in ("datetime", "targetDate") and "dirZone" in _fields(tool) \
+            and _present(inputs.context.get("zone")):
+        payload["dirZone"] = inputs.context["zone"]
     basis = {"target": {k: v for k, v in payload.items()}, "target_source": source}
     if note:
         basis["target_rule"] = note

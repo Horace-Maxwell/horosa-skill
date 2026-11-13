@@ -7,9 +7,10 @@ the person is at that target.
 
 - **Target** `datetime`: `"2026"` or `"year": 2026` = that year's birthday moment (stated in `warnings`);
   `"2026-05-03 08:00"` (ISO `T` works too). 「今年」 = the current year from your own context — say which year you used.
-- **Where** `dirZone` / `dirLat` / `dirLon`: when omitted the engine uses the natal zone and place (as 星阙). If the person
-  lives elsewhere, or the birth zone was a daylight-saving offset that does not apply at the target (China 1986–1991
-  summers, any DST country), pass them explicitly (`dirZone: "+08:00"`).
+- **Where** `dirZone` / `dirLat` / `dirLon`: the place defaults to the birthplace (as 星阙). The target clock time is read in
+  the zone that place has **on the target date** (so a China 1986–1991 summer birth at +09:00 gets +08:00 for a winter
+  target; stated in `warnings`); with `dirLat` / `dirLon`, that place's zone. Pass `dirZone` to read it differently.
+  Through `horosa_dispatch`, a target taken from `context` uses the context's zone.
 
 ```call
 horosa_predict_solarreturn {"date": "1990-05-03", "time": "08:00", "place": "上海", "datetime": "2026", "dirZone": "+08:00", "defaults_accepted": true, "clarification_notes": "用户要 2026 年太阳返照，人在上海，其余按默认"}

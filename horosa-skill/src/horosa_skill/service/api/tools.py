@@ -1,6 +1,7 @@
 """工具 API（ToolsAPI）：list_tools、本地工具分派表、run_tool（闸门、富化、存档、信封）。"""
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -19,8 +20,10 @@ from horosa_skill.engine.registry import (
 )
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.exports import build_export_registry, parse_export_content
+from horosa_skill import input_fields as F
 from horosa_skill.input_fields import input_notes_scope, is_blank
 from horosa_skill.input_normalization import (
+    _normalize_iana_zone_value,
     field_issues_error,
     missing_fields_error,
     normalize_request_payload,
@@ -462,6 +465,7 @@ class ToolsAPI:
             raise error from exc
         input_normalized = validated.model_dump(exclude_none=True)
         _require_result_facts(tool_name, input_normalized, raw_payload)
+        self._default_target_zone(definition, input_normalized)
         return (
             _apply_chart_request_defaults(tool_name, input_normalized),
             knowledge_selection,
@@ -507,6 +511,48 @@ class ToolsAPI:
         # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
         # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
         return self._attach_technique_card(tool_name, input_normalized, response_data)
+
+    def _default_target_zone(self, definition: Any, payload: dict[str, Any]) -> None:
+        """推运目标时刻的时区缺省（审计 F03 / 待决项 6）：给了带钟点的目标时刻、没给 `dirZone` 时，按**目标地点在目标日期**的偏移取——
+        目标地点 = `dirLat` / `dirLon`（给了的话），否则出生地。以前缺省用出生时的偏移：1986–1991 中国夏季出生（+09:00）、欧美夏令时出生的人，
+        在标准时间的目标时刻上差一小时，按目标时刻起的盘（流年 / 返照 / 推运…）是另一张。显式 `dirZone` 照用；换算不了（无坐标、旧 runtime）
+        就不动（下游照旧按本命时区）。偏离上游缺省（AGENTS §10 登记），偏移与出生时不同才写一条说明。"""
+        fields = getattr(definition.input_model, "model_fields", {}) or {}
+        if "dirZone" not in fields or payload.get("dirZone") or not isinstance(payload.get("datetime"), str):
+            return
+        match = re.match(r"^\s*(-?\d{1,5}-\d{2}-\d{2})[ T](\d{1,2}:\d{2}(?::\d{2})?)", payload["datetime"])
+        if not match:
+            return  # 只有年份 / 日期的目标（生日时刻锚点等）不在这里补
+        target_date, target_time = match.group(1), match.group(2)
+        lat, lon, where = payload.get("gpsLat"), payload.get("gpsLon"), "出生地"
+        if payload.get("dirLat") and payload.get("dirLon"):
+            try:
+                lat = F.parse_coordinate(payload["dirLat"], axis="lat").value
+                lon = F.parse_coordinate(payload["dirLon"], axis="lon").value
+                where = "目标地点"
+            except F.FieldIssue:
+                return
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            return
+        cn_unified = payload.get("cnUnifiedZone") is not False
+        try:
+            point = self._zone_for_point(float(lat), float(lon), date=target_date, cn_unified=cn_unified)
+        except Exception:  # noqa: BLE001 — 换算不了（旧 runtime / 没有 JS 引擎）就不补，下游照旧按本命时区；不让一条说明拖垮起盘
+            return
+        if not point:
+            return
+        zone = str(point.get("zone"))
+        if point.get("iana"):
+            probe = {"date": target_date, "time": target_time, "cnUnifiedZone": cn_unified}
+            zone = _normalize_iana_zone_value(str(point["iana"]), payload=probe, key="zone") or zone
+        payload["dirZone"] = zone
+        if zone != payload.get("zone"):
+            F.add_input_note(
+                f"推运目标时刻 {target_date} {target_time} 按{where}当日时区 {zone} 读（{point.get('iana') or '按坐标'}；出生时是 {payload.get('zone')}）；"
+                "要按别的时区读，传 dirZone。",
+                f"Target time {target_date} {target_time} read in the {('target place' if where == '目标地点' else 'birthplace')}'s zone on that date, {zone} "
+                f"({point.get('iana') or 'by coordinates'}; the birth was {payload.get('zone')}). Pass dirZone to read it differently.",
+            )
 
     def _attach_condition_echo(self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:
         """择日十技法：把这次的条件树按引擎的读法写成人话（每叶 summary + 取反 + 连接词），挂 `data.condition_echo`（深审 F5）。
