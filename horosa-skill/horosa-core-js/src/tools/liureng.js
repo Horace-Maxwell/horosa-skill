@@ -24,6 +24,7 @@ import {
 import { liurengBenmingXingnian } from '../vendor/liureng/main/panData.js';
 import { getSolarYearFromField } from '../vendor/liureng/main/birthRunYear.js';
 import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
+import { formatTimeLikeDateTime } from '../shared/fields.js';
 
 // 贵人体系显示名：与上游 buildLiuRengSnapshotText 的 [起盘信息]「贵人体系」行同序同字
 // （LiuRengMain.js:4391，GuiRengs 下标 0–4）。只用于 data.layout 的回显字段，快照行由上游 builder 自产。
@@ -202,7 +203,8 @@ export function runLiureng(payload) {
   const chartObj = normalizeChart(payload);
   // 起课时刻（行年盘 = guaDate/guaTime；正盘 = date/time）：月将换将的岁差年与快照 [起盘信息] 的「日期」行都按它取。
   const keDate = payload.guaDate || payload.date || '';
-  const keTime = `${payload.guaTime || payload.time || ''}`.slice(0, 5);
+  // 上游 genGodsParams / genRunYearParams 取 format('HH:mm:ss')（LiuRengMain.js:643 / :629，v3.14.0 起不再把时刻降到分钟）。
+  const keTime = formatTimeLikeDateTime(payload.guaTime || payload.time || '');
   const keYear = parseYearAd(keDate, payload.guaAd ?? payload.ad);
   const solarYear = keYear ? getSolarYearFromField({ value: keYear }) : NaN;
   // 本命支 / 行年支（第九~十二客、本命 / 行年加时）：上游 liurengBenmingXingnian 按问测人出生公历年 + 行年干支取。

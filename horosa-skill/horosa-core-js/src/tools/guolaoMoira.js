@@ -18,7 +18,9 @@ import {
   buildGuolaoLimitCalcSection,
   buildGuolaoLimitSection,
   buildGuolaoSetupLines,
+  applyGuolaoAscRaMode,
 } from '../vendor/guolao/guolaoSnapshotSections.js';
+import { chartHasEastPoint } from '../vendor/utils/ascRaMode.js';
 import { buildLocalNongliLite } from '../vendor/bazi/baziLunarLocal.js';
 
 // 与上游 GuoLaoChartMain.js 逐字相同的三张参考表（十神序/天禄至天权年曜主项）。
@@ -182,14 +184,15 @@ function buildGuolaoInfoFactsForSnapshot(params, result, transitParams, display,
 // + [七政四余宫位与二十八宿星曜] / [神煞] / [相位] 三段（:2079 / :2086 / :2138，vendored 同一黄仪窗口桥接）。
 // payload: { chart: /chart 响应（chart.nongli 已挂本命四柱）, params: {date:'YYYY/MM/DD',time,…}, transitParams, display:
 //   {lifeMasterMode, minorLimitType, tongxianBase, limitChildBase, limitYearBoundary, [aspects, aspectOrbs, hiddenPlanets]（非缺省才带）},
-//   fields, moiraRules }
+//   fields（含 v3.14.0 ascRaMode: {value: 'improved'|'classic'}，给了才带）, moiraRules }
 export function buildGuolaoInfoSections(payload) {
   const errors = [];
   const src = payload || {};
-  const result = src.chart || {};
+  const fields = src.fields || {};
+  // v3.14.0 赤仪上升取法（上游 _buildGuolaoSnapshotTextV2Core 开头）：经典档只把上升点 ra 换成东点黄经，下面各段读换过的盘。
+  const { result, ascRaMode } = applyGuolaoAscRaMode(src.chart || {}, fields);
   const chart = result && result.chart ? result.chart : {};
   const params = src.params || {};
-  const fields = src.fields || {};
   const display = src.display || {};
   const info = buildGuolaoInfoFactsForSnapshot(params, result, src.transitParams || {}, display, fields, src.moiraRules || null, errors);
   const limitSection = buildGuolaoLimitSection(chart, fields, params, display.minorLimitType || '', display.tongxianBase || 'tong10',
@@ -204,7 +207,10 @@ export function buildGuolaoInfoSections(payload) {
   }
   return {
     // [起盘信息] 口径六行（七政命度/罗计/报时星太阳时/罗计取法/宿度制·身宫法/命主取法·行运法），上游在命度行之前。
-    setupLines: buildGuolaoSetupLines(fields, display),
+    setupLines: buildGuolaoSetupLines(fields, display, undefined, chart, ascRaMode),
+    // 实际生效的上升取法（黄仪恒 improved）与本盘上升点带不带东点黄经（经典档没有它 = 回落真赤经，快照行照实写）。
+    ascRaMode,
+    eastPointAvailable: chartHasEastPoint(chart),
     anchorLines: buildGuolaoAnchorLines(info),
     limitSection: limitSection || '',
     masters: buildGuolaoMastersSection(info),
@@ -225,9 +231,10 @@ export function runGuolaoMoira(payload) {
   if (payload && payload.action === 'info_sections') {
     return buildGuolaoInfoSections(payload);
   }
-  const result = payload && payload.chart ? payload.chart : payload;
   const fields = (payload && payload.fields) || {};
   const params = (payload && payload.params) || {};
+  // 政余格局与其余各段读同一份换过上升点的盘（上游 buildGuolaoPatternSection(result, …) 的 result 即 core 里换过的那张）。
+  const { result } = applyGuolaoAscRaMode(payload && payload.chart ? payload.chart : payload, fields);
   try {
     // 快照语义（同上游 buildGuolaoSnapshotTextV2）：黄仪盘（displayCoord==='ecliptic'）整段按黄经求值。
     const { patterns } = buildLocalMoiraPatternsForSnapshot(result, fields, params);
