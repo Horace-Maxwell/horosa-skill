@@ -1391,7 +1391,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **`service` 自 v0.41.1 是包，`HorosaSkillService` 由 16 个 mixin 组合（`remote` / `enrich` / `runners/*` / `api/*`），导入路径不变。**
   分层：`_context` · `_clock` · `_common` · `endpoints` → `options_*` → `text/*` → `export` · `envelope` → mixin 层；runner 之间、`api/*` 与
   runner 之间只经 `self.` 互调（测试在实例上替换 `run_tool` / `_run_qimen_tool`），下层不反向依赖 mixin，mixin 成员不重名
-  （`tests/test_service_structure.py` 三条锁 + 门面对外名单冻结）。读「现在」一律 `_clock.now(...)`（冻结时间的夹具 patch 那里）。
+  （`tests/test_service_structure.py` 三条锁 + 门面对外名单冻结）。读「现在」一律 `_clock.now(...)`（冻结时间的夹具 patch 那里；同一盘算两遍再比正文的测试必须冻结——`当前时点` 写到分钟）。
   **monkeypatch 打在用到名字的子模块上**（如 `service.runners.predictive.correct_station_directions`），包根门面上的同名 re-export 够不着
   ——`tests/test_monkeypatch_targets.py` 抓「只 re-export 不使用」的 patch 点。按路径读源码的扫描（端点登记、算源生成 / 校验）扫整个包。
 - **重试 / 回退只许改写法，不许改值（v0.41.1）。** `_java_chart_payload_candidates` 曾在 `param error` 后把 `gpsLon` 取 `abs()` 重试——

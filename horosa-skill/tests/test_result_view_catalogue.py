@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +20,21 @@ from fakes import FakeClient, FakeJsClient
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.memory.store import MemoryStore
-from horosa_skill.service import HorosaSkillService
+from horosa_skill.service import HorosaSkillService, _clock
 from horosa_skill.testing_payloads import build_sample_payloads
+
+
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):  # noqa: ANN001 - datetime.now 签名
+        return datetime(2026, 6, 1, 12, 0, 0) if tz is None else datetime(2026, 6, 1, 12, 0, 0, tzinfo=tz)
+
+
+@pytest.fixture(autouse=True)
+def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """同一盘算两遍再比正文：「当前时点」段写到分钟（导出时刻 HH:MM），两遍之间跨过整分钟就偶发红
+    （Windows 原生门禁实见：triplicityrulers[sections] bodies changed ['当前时点']）。冻结服务层唯一的时钟出口。"""
+    monkeypatch.setattr(_clock, "datetime", _FrozenDatetime)
 
 SERVICE_VIEWS = ("sections", "titles")
 ZERI_TOOLS = (

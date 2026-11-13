@@ -276,6 +276,12 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   runner 开了 LongPathsEnabled、以管理员跑；本机 `LongPathsEnabled = 0`、WinError 1314。产品行为都对（Windows runtime 归档是 zip，
   JS 引擎 tar 构建时拒收链接）。修测试：长名那条按 `output_paths.path_limit()` 算放得下多长，放不下先断言干净拒绝、再用最长能放的名字；
   链接那条先 `_symlink_or_skip`（`[host]` 跳过）。规则进 AGENTS §9.5.2。
+- **同轮第三处：偶发红**。本机门禁一遍红 `test_result_view_catalogue::test_service_views_never_change_what_was_computed`
+  （triplicityrulers[sections] 的 `当前时点` 正文变了）：同一盘不带视图 / 带视图各算一遍再比正文，`当前时点` 首行是「导出时刻 HH:MM」，
+  两遍之间跨过整分钟就不等。修：该模块 autouse 冻结 `service._clock.datetime`。对照：换成每次 +1 分钟的时钟 → agepoint / balbillus /
+  bezzafigure / decennials… 一片红，冻结 → 绿。
+- **撞车（又一次）**：同一晚我也写了 v0.50.1 lane 那两条用例的修复，fetch 确认对面没动之后开跑门禁，30 分钟里 mac 侧推了 be2a0c88
+  修同两条 → 我的那份作废，只留上面这条。规则加一句：对面正在发版时，修发版矩阵的红先在对话里说一声、或只诊断不修。
 
 ### v0.50.1 / 2026-11-12 — CI 形状 ≠ lane 形状：用例吃到 lane 的环境变量；时间线按维护机速度定
 
