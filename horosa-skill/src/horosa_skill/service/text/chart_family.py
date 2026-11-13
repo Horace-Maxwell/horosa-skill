@@ -388,9 +388,14 @@ def _india_lines(block: Any) -> list[str]:
 
 
 def _india_ensure_section(lines: list[str], title: str, body: Any) -> None:
-    """上游 IndiaChart.ensureSection（:287-296）：逐行 trimEnd、滤空行；空段写「无数据」；段尾空一行。"""
-    clean = [line.rstrip() for line in _india_lines(body)]
-    clean = [line for line in clean if line.strip()]
+    """上游 IndiaChart.ensureSection（v3.14.0 :307-321）：逐行 trimEnd；段内保留**单个**空行（两张表 / 表与正文之间的分隔），
+    首尾空行与连续空行收掉；空段写「无数据」；段尾空一行。（v3.13 及以前是滤掉全部空行。）"""
+    stripped = [line.rstrip() for line in _india_lines(body)]
+    clean = [line for index, line in enumerate(stripped) if line.strip() or (index > 0 and stripped[index - 1].strip())]
+    while clean and not clean[0].strip():
+        clean.pop(0)
+    while clean and not clean[-1].strip():
+        clean.pop()
     lines.append(f"[{title}]")
     lines.extend(clean or ["无数据"])
     lines.append("")
@@ -416,7 +421,8 @@ def _build_india_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
       其中首条黄道行换成印占实际口径行（indiaCalibreLine：恒星黄道·<岁差>，<印占分宫制>）；
     [星盘信息] = 本命 [宫位宫头] + [星与虚点] + [信息] 三段正文拼接（上游不单列宫位宫头/星与虚点）；
     [信息] / [相位] / [行星] / [希腊点] / [可能性] 各一段（ensureSection：空段写「无数据」）；
-    数据段（buildIndiaSnapshotDataSections）：[大运Dasha]（有行才出）→ Jyotish 派生段 → [未能计算]；附加分盘接在全文末尾（:1403-1425）。
+    数据段（buildIndiaSnapshotDataSections）：[大运Dasha]（有行才出）→ Jyotish 派生段（v3.14.0 起含 [Yoga 判定表] / [印占补充表]）
+    → [未能计算]；[穿界时刻]（v3.14.0）接在全文末尾，附加分盘再接其后（buildIndiaSnapshotForFields:1491-1510）。
     上游 buildIndiaSnapshotText 不挑 [月宿]/[古典]（aiExport.js:596 [MU] 注：印度盘 [古典] 是死复选框），skill 此前照本命盘
     整套出段并另起 [宫位宫头]/[星与虚点]，[星盘信息] 则由导出层拿通用起盘行兜底。各段行取自 engine/astro_snapshot.py
     （上游 buildAstroSnapshotContent 的逐字移植，与西占 chart 家族同一 builder）。
@@ -431,10 +437,12 @@ def _build_india_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     info = _india_lines(snap.build_info_section(response, payload, only_ruler_exalt=only_rul_exalt))
     lines: list[str] = []
     _india_ensure_section(lines, "起盘信息", [*_india_lines(response.get("_indiaSchoolLines")), *base_info])
-    _india_ensure_section(
-        lines, "星盘信息",
-        [*_india_lines(snap.build_house_cusp_lines(response)), *_india_lines(snap.build_star_and_lot_position_lines(response)), *info],
-    )
+    # v3.14.0（:1275-1277）：三块各自成表 / 成段，中间空一行——紧挨着时下游 markdown 会把第二张表的表头当成第一张表的数据行。
+    star_info: list[str] = []
+    for part in (_india_lines(snap.build_house_cusp_lines(response)), _india_lines(snap.build_star_and_lot_position_lines(response)), info):
+        if part:
+            star_info = [*star_info, "", *part] if star_info else [*part]
+    _india_ensure_section(lines, "星盘信息", star_info)
     _india_ensure_section(lines, "信息", info)
     _india_ensure_section(lines, "相位", snap.build_aspect_section(response))
     _india_ensure_section(lines, "行星", snap.build_planet_section(response))
@@ -456,6 +464,13 @@ def _build_india_snapshot_text(payload: dict[str, Any], response: dict[str, Any]
     for title, body in data_sections.items():
         _india_ensure_section(lines, str(title), body)
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    # [穿界时刻]（v3.14.0，上游 buildIndiaSnapshotForFields:1491-1492 appendTransitSectionWithParams）：接在全文末尾、[附加分盘] 之前；
+    # 行 = vendored buildTransitEventLines（enrich._india_transit_entry 取数）。取不到 = 不产段（已告警）。
+    transit_lines = response.get("_indiaTransitLines")
+    if isinstance(transit_lines, list) and transit_lines:
+        tail: list[str] = []
+        _india_ensure_section(tail, "穿界时刻", transit_lines)
+        text = re.sub(r"\n{3,}", "\n\n", f"{text}\n\n" + "\n".join(tail)).strip()
     # [附加分盘]（上游 buildIndiaSnapshotForFields:1325-1332）：`${text}\n\n${ensureSection 附加分盘}`；缺省不选 = 不产段。
     extra_vargas = response.get("_indiaExtraVargas")
     if isinstance(extra_vargas, str) and extra_vargas.strip():
@@ -687,7 +702,9 @@ def _india_chart_remote_payload(payload: dict[str, Any]) -> dict[str, Any]:
     dashaSystem 展示体系不下发；indiaSchool 只补预设岁差/宫制（本身不下发）；问事族只在起了卦（prashnaTime）时下发，
     且问时数缺/非法 → 1（[Q-126/T-34]：缺它后端 KP 问事整段空）；年盘异地须经纬齐备。"""
     payload = _india_apply_school_presets(payload)
-    remote = {k: v for k, v in payload.items() if k not in ("indiaExtraVargas", "indiaTripataki", "indiaSchool")}
+    # indiaTransit*（[穿界时刻] 所选三项，v3.14.0）只进 /astroextra/transitevents（enrich._india_transit_entry），不进本请求。
+    remote = {k: v for k, v in payload.items()
+              if k not in ("indiaExtraVargas", "indiaTripataki", "indiaSchool", "indiaTransitPlanet", "indiaTransitKind", "indiaTransitDays")}
     if payload.get("indiaTripataki") in (True, 1, "1"):
         remote["tripataki"] = 1
     for key in _INDIA_VERBATIM_KEYS:

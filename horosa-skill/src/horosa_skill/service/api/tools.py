@@ -495,6 +495,7 @@ class ToolsAPI:
         response_data = self._attach_india_extra_vargas(tool_name, input_normalized, response_data)
         response_data = self._attach_calendar_extras(tool_name, input_normalized, response_data)
         response_data = self._attach_relative_score(tool_name, input_normalized, response_data)
+        response_data = self._attach_relative_ashtakoota(tool_name, input_normalized, response_data)
         response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
         response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
         response_data = _attach_export_contract(tool_name, input_normalized, response_data)

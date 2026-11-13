@@ -162,6 +162,8 @@ def _static_doc(tool_name: str) -> dict[str, str]:
     if tool_name == "relative":
         return {
             "relative": "关系盘 0–4（缺省 0）：" + " ".join(f"{k}={label}" for k, label in RELATIVE_MODES) + "。",
+            "ashtakootaMaleSide": "[八重合]（两人恒星黄道月亮宿 / 月亮座配八项分，满分 36；任何盘型都附）的男方：inner=星盘 A | outer=星盘 B。"
+            "不给 = 按 inner.gender / outer.gender（1 男 0 女）定；两人性别都不明或同性 = 星盘 A。岁差随 siderealAyanamsa（缺省 Lahiri）。",
         }
     if tool_name in {"neroman", "bezzafigure", "jayprofection", "michon"}:
         # 推运图族四法：后端 directed_figures._natal_from_request 强制 zodiacal=0（双黄道用自带 J2000 26°37′18″ 岁差）。

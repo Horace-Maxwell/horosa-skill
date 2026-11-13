@@ -912,9 +912,9 @@ class ZeriRunners:
             "conditiontypes": "/qizhengelectionscan/conditiontypes",
         },
         "indiazeri": {
-            # 印度页是 A 类星盘系，上游 preset 里 indiazeri 只有择时三段、无基底快照槽
-            # （盘全文见 india_chart 本身）—— 故不铸展示盘，段自足。
-            "label": "印度择时（Muhurta）", "base_tool": None,
+            # 上游 v3.14.0：择日页内嵌的印占页以宿主槽写「印占全文 + 择时三段」（IndiaChart.persistSnapshot 的 snapshotScope 分支、
+            # IndiaZeriMain.composeAiSnapshot；preset = [...indiachart, 择时三段]）。此前（≤ v3.13）preset 只有择时三段、不铸展示盘。
+            "label": "印度择时（Muhurta）", "base_tool": "india_chart",
             "scan": "/indiaelectionscan/scan",
             "explain": "/indiaelectionscan/explain",
             "conditiontypes": "/indiaelectionscan/conditiontypes",
@@ -962,6 +962,15 @@ class ZeriRunners:
             base_payload["guolaoNodeType"] = scan_opts.get("nodeType", "mean")
             base_payload["guolaoLilithType"] = scan_opts.get("lilithType", "mean")
             base_payload["doubingSu28"] = int(scan_opts.get("su28Mode", 2))
+        if tool_name == "indiazeri":
+            # 展示盘跟随扫描口径（上游 IndiaZeriMain.buildFields :379-401）：工作台岁差制 → indiaAyanamsa，罗计交点 → indiaNodeType
+            # （fieldsToParams 只在 'true' 时下发 nodeType）。分宫制 / 黄道是内嵌印占页自己的口径（缺省整宫 · 恒星黄道）：
+            # 本工具继承来的西占 hsys / zodiacal / siderealAyanamsa 不带过去（印占后端在没有 indiaHsys 时会按印占表读 hsys）。
+            for key in ("hsys", "zodiacal", "siderealAyanamsa", "explainAt"):
+                base_payload.pop(key, None)
+            base_payload["indiaAyanamsa"] = scan_opts.get("ayanamsa", "lahiri")
+            if scan_opts.get("nodeType") == "true":
+                base_payload["nodeType"] = "true"
         return base_payload
 
     def _aux_qizhengzeri_moira(self, payload: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:

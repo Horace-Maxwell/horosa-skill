@@ -51,6 +51,7 @@ class IndiaChartInput(BirthInput):
         "dashaSystem", "indiaSchool", "dashaSeed", "sthiraStart", "transitDate", "tajakaYear", "annualChartType",
         "varshaLat", "varshaLon", "prashnaTime", "prashnaNumber", "prashnaMatter", "prashnaSchools",
         "prashnaCuspMode", "prashnaPrimaryHouse",
+        "indiaTransitPlanet", "indiaTransitKind", "indiaTransitDays",
     })
     dashaSystem: str | None = Field(default=None, description="大运体系（15 档，缺省 vimshottari）：决定 [大运Dasha] 段所列体系。")
     indiaSchool: str | None = Field(default=None, description="流派：parashari（缺省）/jaimini/tajika/kp/nadi/western_sidereal；未给岁差/宫制时按派补预设。")
@@ -69,6 +70,20 @@ class IndiaChartInput(BirthInput):
     prashnaSchools: Any | None = Field(default=None, description="问事流派，逗号分隔：kp / parashari / tajika（缺省 kp）；数组照收、并成逗号串下发。")
     prashnaCuspMode: str | None = Field(default=None, description="问事宫始定法（缺省 asc_driven_placidus）。")
     prashnaPrimaryHouse: int | None = Field(default=None, description="问事主宫 1–12（缺省按事项）。")
+    # 上游 v3.14.0 [穿界时刻]（行运页穿界表；挂载齿轮 techniqueMountSettings.js:1267-1276 的 indiaTransit* 三项，
+    # 缺省 = utils/indiaExtraTables.js TRANSIT_DEFAULT_SELECTION）。起始日 = transitDate（缺省本盘时区的今天）。
+    # 三键只进 /astroextra/transitevents，不进 /india/chart 请求体；词表 india_vocab.INDIA_TRANSIT_VOCABULARIES。
+    indiaTransitPlanet: str | None = Field(default=None, description="[穿界时刻] 看哪颗星：all 七星（缺省）| Sun | Moon | Mercury | Venus | Mars | Jupiter | Saturn。")
+    indiaTransitKind: str | None = Field(default=None, description="[穿界时刻] 事件：sign 入星座（缺省）| nakshatra 入星宿 | pada 入足 | kakshya 入 Kakshya。")
+    indiaTransitDays: int | None = Field(default=None, description="[穿界时刻] 范围（自 transitDate 起的天数）：30 | 90（缺省）| 180 | 366；段内最多列 200 行。")
+
+    @field_validator("indiaTransitPlanet", "indiaTransitKind", "indiaTransitDays", mode="before")
+    @classmethod
+    def _transit_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.india_vocab import INDIA_TRANSIT_VOCABULARIES
+        from horosa_skill.input_fields import parse_with
+
+        return parse_with(INDIA_TRANSIT_VOCABULARIES[info.field_name], info.field_name, value)
 
 
 class PlanetCyclesInput(FlexibleModel):
@@ -150,6 +165,8 @@ class RelativePartyInput(FlexibleModel):
     lon: str
     ad: int | None = 1
     name: str | None = None
+    # v3.14.0 [八重合]：上游按两张命盘记录的性别定男方（utils/indiaExtraTables.js maleSideOf）。不给 = 性别不明。
+    gender: Any | None = Field(default=None, description="性别（可选）：1/男/male | 0/女/female；只用来定 [八重合] 的男方。")
 
 
 class RelativeInput(FlexibleModel):
@@ -160,6 +177,21 @@ class RelativeInput(FlexibleModel):
     zodiacal: int | None = 0
     siderealAyanamsa: Any | None = None
     relative: int | None = 0
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"ashtakootaMaleSide"})  # 口径旋钮不进 tools/list（预算）；说明见 guidance
+    # v3.14.0 [八重合]（Ashtakoota，/astroextra/ashtakoota）：哪张盘是男方。上游合盘页可在页内亲手改（AstroAshtakoota 的「男方」下拉），
+    # 无头路径按记录性别（pair.js pairAshtakootaMaleSide → maleSideOf）；skill 里页内改 = 这个显式入参，不给 = 按 inner/outer.gender。
+    ashtakootaMaleSide: str | None = Field(
+        default=None,
+        description="[八重合] 男方：inner（星盘 A）| outer（星盘 B）。不给 = 按两人的 gender 定；两人性别都不明或同性 = 星盘 A（上游同）。",
+    )
+
+    @field_validator("ashtakootaMaleSide", mode="before")
+    @classmethod
+    def _male_side_vocabulary(cls, value: Any) -> Any:
+        from horosa_skill.india_vocab import ASHTAKOOTA_MALE_SIDE
+        from horosa_skill.input_fields import parse_with
+
+        return parse_with(ASHTAKOOTA_MALE_SIDE, "ashtakootaMaleSide", value)
 
 
 class GuoLaoInput(BirthInput):

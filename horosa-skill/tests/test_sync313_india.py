@@ -26,8 +26,9 @@ def test_partial_errors_become_the_last_data_section(tmp_path) -> None:
     assert env.ok, env.error
     text = env.data["snapshot_text"]
     titles = _titles(text)
-    assert titles[-1] == "未能计算"
-    body = text.split("[未能计算]\n", 1)[1].strip()
+    # 上游 v3.14.0：数据段之后另接 [穿界时刻]（buildIndiaSnapshotForFields:1491-1492，另取的一张表）——[未能计算] 仍是最后一个数据段。
+    assert titles[-2:] == ["未能计算", "穿界时刻"]
+    body = text.split("[未能计算]\n", 1)[1].split("\n\n[", 1)[0].strip()
     assert body == "以下各段本次未能计算(不是没有,而是没算出来):KP 深化(六级细分 / 宫头次主星 / 当令星 / 意义者)、Panchaka 五忌"
     exp = env.data["export_snapshot"]
     assert exp["unknown_detected_sections"] == [] and "未能计算" in exp["export_text"]
