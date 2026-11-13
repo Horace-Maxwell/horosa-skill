@@ -23,7 +23,6 @@
     "runtime.install_missing_url",
     "runtime.install_write_failed",
     "runtime.start_script_missing",
-    "runtime.starting",
     "runtime.stop_script_missing",
     "runtime.uninstall_failed",
     "runtime.windows_patch_invalid_archive",

@@ -721,6 +721,57 @@
    "verdict": "pass"
   }
  },
+ "dongya": {
+  "bare": {
+   "ask": [
+    "birth data",
+    "fenyeVersion/ichingMerge/hsys",
+    "flowYear",
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "fenyeVersion",
+    "flowYear",
+    "hsys",
+    "ichingMerge",
+    "zodiacal"
+   ],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "ask": [
+    "gender"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [],
+   "facts": [
+    "gender"
+   ],
+   "verdict": "block"
+  },
+  "sample": {
+   "ask": [
+    "fenyeVersion/ichingMerge/hsys"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "fenyeVersion",
+    "flowYear",
+    "hsys",
+    "ichingMerge",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
  "draconic": {
   "bare": {
    "ask": [
@@ -771,6 +822,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
+    "orbScale",
+    "orbs",
     "topicId"
    ],
    "facts": [],
@@ -1316,6 +1369,8 @@
    "code": "agent_guidance.required",
    "defaults": [
     "category",
+    "orbScale",
+    "orbs",
     "school"
    ],
    "facts": [],
@@ -1331,6 +1386,8 @@
    "code": "agent_guidance.required",
    "defaults": [
     "category",
+    "orbScale",
+    "orbs",
     "school"
    ],
    "facts": [],
@@ -1408,7 +1465,10 @@
    "defaults": [
     "ad",
     "indiaAyanamsa",
-    "indiaHsys"
+    "indiaHsys",
+    "indiaTransitDays",
+    "indiaTransitKind",
+    "indiaTransitPlanet"
    ],
    "facts": [],
    "verdict": "block"
@@ -1425,7 +1485,10 @@
    "defaults": [
     "ad",
     "indiaAyanamsa",
-    "indiaHsys"
+    "indiaHsys",
+    "indiaTransitDays",
+    "indiaTransitKind",
+    "indiaTransitPlanet"
    ],
    "facts": [],
    "verdict": "block"
@@ -2305,6 +2368,7 @@
     "direction",
     "hsys",
     "maxYears",
+    "persianYear",
     "rateKey",
     "zodiacal"
    ],
@@ -2325,6 +2389,7 @@
     "direction",
     "hsys",
     "maxYears",
+    "persianYear",
     "rateKey",
     "zodiacal"
    ],
@@ -3279,6 +3344,8 @@
    "code": "agent_guidance.required",
    "defaults": [
     "lotReversal/lotFortuneVariant/hermeticLotsReversal",
+    "orbScale",
+    "orbs",
     "precision",
     "userAyanT0/userAyanDeg",
     "zeriSnapshotExplainRows",
@@ -3297,6 +3364,8 @@
    "code": "agent_guidance.required",
    "defaults": [
     "lotReversal/lotFortuneVariant/hermeticLotsReversal",
+    "orbScale",
+    "orbs",
     "precision",
     "userAyanT0/userAyanDeg",
     "zeriSnapshotExplainRows",
@@ -3356,6 +3425,80 @@
    "verdict": "pass"
   }
  },
+ "timelords": {
+  "bare": {
+   "ask": [
+    "natal data",
+    "targetDate/targetTime",
+    "technique settings",
+    "tlMethod"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "targetDate",
+    "targetTime",
+    "tlAnnualDays",
+    "tlAnnualOrder",
+    "tlDevBasis",
+    "tlDiurnalMode",
+    "tlMethod",
+    "tlMovingStart",
+    "tlMovingYear",
+    "tlNineReverse",
+    "tlNineTime",
+    "tlOrbMode",
+    "tlRateKind",
+    "tlReleaser",
+    "tlTurnOrder",
+    "tlTurnStart",
+    "tlVariant",
+    "tlYearType",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "targetDate/targetTime",
+    "technique settings"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hsys",
+    "targetDate",
+    "targetTime",
+    "tlAnnualDays",
+    "tlAnnualOrder",
+    "tlDevBasis",
+    "tlDiurnalMode",
+    "tlMethod",
+    "tlMovingStart",
+    "tlMovingYear",
+    "tlNineReverse",
+    "tlNineTime",
+    "tlOrbMode",
+    "tlRateKind",
+    "tlReleaser",
+    "tlTurnOrder",
+    "tlTurnStart",
+    "tlVariant",
+    "tlYearType",
+    "zodiacal",
+    "zodiacal"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
  "tongshefa": {
   "bare": {
    "ask": [
@@ -3387,6 +3530,33 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "transformchart": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "transformKind"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "transformHouse",
+    "transformKind",
+    "transformPlanet",
+    "transformShift",
+    "transformVariant"
+   ],
    "facts": [],
    "verdict": "block"
   },
@@ -3772,6 +3942,43 @@
    "verdict": "pass"
   }
  },
+ "zhufang": {
+  "bare": {
+   "ask": [
+    "birth data",
+    "mayanCorrelation/hdTrueNode/spiritQuadrant/hsys"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hdTrueNode",
+    "hsys",
+    "mayanCorrelation",
+    "spiritQuadrant"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "ask": [
+    "mayanCorrelation/hdTrueNode/spiritQuadrant/hsys"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "hdTrueNode",
+    "hsys",
+    "mayanCorrelation",
+    "spiritQuadrant"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
  "ziwei_birth": {
   "bare": {
    "ask": [
@@ -3877,6 +4084,29 @@
    ],
    "facts": [],
    "verdict": "block"
+  },
+  "sample_confirmed": {
+   "verdict": "pass"
+  }
+ },
+ "zodiacsystems": {
+  "bare": {
+   "ask": [
+    "date/time/place",
+    "zodiacVersion"
+   ],
+   "code": "agent_guidance.required",
+   "defaults": [
+    "zodiacVersion"
+   ],
+   "facts": [],
+   "verdict": "block"
+  },
+  "no_gender_defaults_accepted": {
+   "verdict": "pass"
+  },
+  "sample": {
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"

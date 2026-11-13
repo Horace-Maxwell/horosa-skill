@@ -387,7 +387,9 @@ def test_relationship_chart_takes_one_profile_per_person_slot(tmp_path: Path) ->
     assert result.ok, result.error
     sent = next(payload for endpoint, payload in client.calls if endpoint == "/modern/relative")
     assert (sent["inner"]["date"], sent["outer"]["date"], sent["outer"]["time"]) == ("1962-03-05", "1960-11-20", "23:00:00")
-    assert "gender" not in sent["inner"] and "profile" not in sent["inner"], "合盘双方只拿 RelativePartyInput 声明的键"
+    assert "profile" not in sent["inner"], "合盘双方只拿 RelativePartyInput 声明的键"
+    # v3.14.0 起 gender 是 RelativePartyInput 的声明键（定 [八重合] 的男方，上游 pair.js maleSideOf）：档案里的性别随人带进来。
+    assert sent["inner"]["gender"] == 0
     slots = {use["slot"]: use for use in result.data["technique_card"]["profiles"]}
     assert slots["inner"]["name"] == "妈妈" and slots["outer"]["overridden"] == ["time"]
     misplaced = _code(lambda: service.run_tool("relative", {"profile": "妈妈", **CONFIRM}))

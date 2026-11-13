@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 from fakes import CaptureClient, FakeClient, FakeJsClient
+from node_esm import run_node_esm
 
 from horosa_skill.agent_guidance import TOOL_GUIDANCE
 from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS
@@ -115,9 +116,7 @@ def _clean(result: Any, sections: list[str]) -> None:
 
 
 def _node(script: str) -> Any:
-    out = subprocess.run(["node", "--input-type=module", "-e", script], cwd=CORE_JS, capture_output=True, text=True,
-                         encoding="utf-8", check=True)
-    return json.loads(out.stdout)
+    return json.loads(run_node_esm(script, cwd=CORE_JS))
 
 
 class _FailingClient(FakeClient):
@@ -358,9 +357,7 @@ for (const [jd, y, m, isLeap, d, isExtra, lnum, dnum] of fx.reference) {
 }
 console.log(JSON.stringify({ rows: fx.reference.length, bad, leap, extra }));
 """
-    out = subprocess.run(["node", "--input-type=module", "-e", script, str(FIXTURES / "sync314_mingother_tibetan_reference.json")],
-                         cwd=CORE_JS, capture_output=True, text=True, encoding="utf-8", check=True)
-    result = json.loads(out.stdout)
+    result = json.loads(run_node_esm(script, str(FIXTURES / "sync314_mingother_tibetan_reference.json"), cwd=CORE_JS))
     assert result["rows"] == 245
     assert result["leap"] > 0 and result["extra"] > 0  # 夹具里真有闰月与重日（否则那两列等于没测）
     assert result["bad"] == [], result["bad"][:5]

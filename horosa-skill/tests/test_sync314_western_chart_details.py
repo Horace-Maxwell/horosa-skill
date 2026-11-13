@@ -587,3 +587,18 @@ def test_fixture_keeps_the_backend_key_order() -> None:
     data = json.loads(gzip.decompress(raw).decode("utf-8"))
     assert json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8") == gzip.decompress(raw)
     assert list(data["goldens"]["seattle-night"]["stats"]["element"]) != sorted(data["goldens"]["seattle-night"]["stats"]["element"])
+
+
+def test_js_layer_rejecting_a_setting_is_reported_not_swallowed(tmp_path) -> None:
+    """第二道闸：schema 放行、而 vendored 上游口径词表（chart_details JS 工具）判无效 → tool.chart_details_invalid_setting，
+    不许带着缺省口径出 [盘面细节]。负向对照：enrich.py 里 `if js.get("invalid")` 分支删掉 → 本用例红（得到 ok=True）。"""
+
+    class RejectingJs(DerivedJs):
+        def run(self, tool_name: str, payload: dict) -> dict:
+            if tool_name == "chart_details":
+                return {"invalid": [{"key": "detailFaces", "value": "chaldean", "allowed": ["element"]}]}
+            return super().run(tool_name, payload)
+
+    result = _service(tmp_path, js_client=RejectingJs()).run_tool("chart", BIRTH, save_result=False)
+    assert result.ok is False and result.error.code == "tool.chart_details_invalid_setting", result.error
+    assert result.error.details["invalid"][0]["key"] == "detailFaces"

@@ -95,8 +95,10 @@ def test_chart_and_relocation_keep_the_analysis(tmp_path: Path, tool: str) -> No
     result = _service(tmp_path, client).run_tool(tool, payload, save_result=False)
     assert result.ok, result.error
     (sent,) = client.sent("/astroextra/analysis")
-    # 钉版口径：重置盘的分析照本命出生地（上游 chartObj.params = 本命盘；HEAD dacdc905 改按重置地点，re-vendor 时跟进）。
-    assert (sent["lat"], sent["lon"]) == ("31n13", "121e28")
+    # 上游 v3.14.0：重置盘的「古典格局」「盘面细节」按重置后地点算（pipeline.js：relocated → 不按本命出生地另补；
+    # AstroRelocationLab 用重置后的参数请求）；本命盘照本命出生地。
+    expected = ("40n43", "74w00") if tool == "relocation" else ("31n13", "121e28")
+    assert (sent["lat"], sent["lon"]) == expected
     assert _section(_text(result), "古典格局") and not _section(_text(result), "古典格局").startswith("本次本地计算结果未返回")
 
 

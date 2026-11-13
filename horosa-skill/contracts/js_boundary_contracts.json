@@ -42,7 +42,7 @@
       {
         "callee": "buildHoroscope",
         "module": "../vendor/babylon/horoscope.js",
-        "line": 77,
+        "line": 83,
         "arg": 2,
         "via_local": "opts",
         "keys": [
@@ -54,11 +54,12 @@
       {
         "callee": "buildBabylonSnapshotText",
         "module": "../vendor/utils/babylonAiSnapshot.js",
-        "line": 86,
+        "line": 95,
         "arg": 1,
         "keys": [
           "ephemDigest",
-          "lons"
+          "lons",
+          "skyTables"
         ]
       }
     ],
@@ -126,7 +127,7 @@
       {
         "callee": "buildTongshuSnapshotText",
         "module": "../vendor/calendar/tongshuSnapshot.js",
-        "line": 63,
+        "line": 65,
         "arg": 0,
         "via_local": "settings",
         "keys": [
@@ -136,18 +137,20 @@
       {
         "callee": "personBazi",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 87,
+        "line": 94,
         "arg": 0,
         "keys": [
+          "after23NewDay",
           "date",
           "gender",
+          "lateZiHourUseNextDay",
           "time"
         ]
       },
       {
         "callee": "buildPersonalizedDates",
         "module": "../vendor/calendar/riziEngine.js",
-        "line": 99,
+        "line": 109,
         "arg": 0,
         "keys": [
           "event",
@@ -159,7 +162,7 @@
       {
         "callee": "buildRiziSnapshotText",
         "module": "../vendor/calendar/riziSnapshot.js",
-        "line": 105,
+        "line": 115,
         "arg": 0,
         "keys": [
           "event",
@@ -173,7 +176,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 85,
+        "line": 86,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -190,7 +193,7 @@
       {
         "callee": "canpingCalculate",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 129,
+        "line": 132,
         "arg": 0,
         "via_local": "base",
         "keys": [
@@ -210,7 +213,7 @@
       {
         "callee": "liunianSeries",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 133,
+        "line": 136,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -221,10 +224,27 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/canping/canpingLocal.js",
-        "line": 149,
+        "line": 152,
         "arg": 1,
         "keys": [
           "liunianRows"
+        ]
+      }
+    ],
+    "dongya.js": [
+      {
+        "callee": "eastAsiaParamsFromFields",
+        "module": "../vendor/dongya/eastAsiaSnapshot.js",
+        "line": 121,
+        "arg": 0,
+        "via_local": "fields",
+        "keys": [
+          "date",
+          "gender",
+          "lat",
+          "lon",
+          "time",
+          "zone"
         ]
       }
     ],
@@ -232,7 +252,7 @@
       {
         "callee": "runElection",
         "module": "../vendor/divination/election/electionEngine.js",
-        "line": 167,
+        "line": 177,
         "arg": 4,
         "via_local": "opts",
         "keys": [
@@ -327,7 +347,7 @@
       {
         "callee": "buildGuolaoMoiraInfoFacts",
         "module": "../vendor/guolao/guolaoInfoFacts.js",
-        "line": 172,
+        "line": 174,
         "arg": 0,
         "keys": [
           "display",
@@ -342,7 +362,7 @@
       {
         "callee": "buildGuolaoLimitSection",
         "module": "../vendor/guolao/guolaoSnapshotSections.js",
-        "line": 194,
+        "line": 198,
         "arg": 5,
         "keys": [
           "limitChildBase",
@@ -352,18 +372,9 @@
     ],
     "heluo.js": [
       {
-        "callee": "solarTermHuagong",
-        "module": "../vendor/heluo/heluoLocal.js",
-        "line": 42,
-        "arg": 2,
-        "keys": [
-          "quHuaGong"
-        ]
-      },
-      {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 106,
+        "line": 78,
         "arg": 0,
         "via_local": "baziParams",
         "keys": [
@@ -380,7 +391,7 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 148,
+        "line": 122,
         "arg": 0,
         "keys": [
           "birthYear",
@@ -395,7 +406,7 @@
       {
         "callee": "calc",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 148,
+        "line": 122,
         "arg": 0,
         "nested_under": "opts",
         "via_local": "hlOpts",
@@ -411,7 +422,7 @@
       {
         "callee": "judge",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 158,
+        "line": 132,
         "arg": 1,
         "via_local": "fourPillars",
         "keys": [
@@ -422,9 +433,32 @@
         ]
       },
       {
+        "callee": "chartExtras",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 137,
+        "arg": 1,
+        "via_local": "fourPillars",
+        "keys": [
+          "day",
+          "hour",
+          "month",
+          "year"
+        ]
+      },
+      {
+        "callee": "chartExtras",
+        "module": "../vendor/heluo/heluoLocal.js",
+        "line": 137,
+        "arg": 4,
+        "keys": [
+          "nayin",
+          "sanhou"
+        ]
+      },
+      {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 186,
+        "line": 166,
         "arg": 3,
         "keys": [
           "birthYear",
@@ -435,7 +469,7 @@
       {
         "callee": "buildSnapshotText",
         "module": "../vendor/heluo/heluoLocal.js",
-        "line": 186,
+        "line": 166,
         "arg": 3,
         "nested_under": "opts",
         "via_local": "hlOpts",
@@ -453,7 +487,7 @@
       {
         "callee": "runHorary",
         "module": "../vendor/divination/horary/horaryEngine.js",
-        "line": 102,
+        "line": 109,
         "arg": 2,
         "via_local": "opts",
         "keys": [
@@ -465,7 +499,7 @@
       {
         "callee": "buildHorarySnapshot",
         "module": "../vendor/divination/horary/horarySnapshot.js",
-        "line": 106,
+        "line": 113,
         "arg": 2,
         "via_local": "opts3",
         "keys": [
@@ -493,8 +527,8 @@
     "liureng.js": [
       {
         "callee": "getSolarYearFromField",
-        "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 206,
+        "module": "../vendor/liureng/main/birthRunYear.js",
+        "line": 209,
         "arg": 0,
         "keys": [
           "value"
@@ -502,8 +536,8 @@
       },
       {
         "callee": "liurengBenmingXingnian",
-        "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 210,
+        "module": "../vendor/liureng/main/panData.js",
+        "line": 213,
         "arg": 0,
         "keys": [
           "date"
@@ -512,7 +546,7 @@
       {
         "callee": "buildLiuRengCastOverride",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 221,
+        "line": 224,
         "arg": 1,
         "via_local": "fullCastOpts",
         "keys": [
@@ -524,7 +558,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 239,
+        "line": 247,
         "arg": 0,
         "via_local": "params",
         "keys": [
@@ -532,13 +566,14 @@
           "lat",
           "lon",
           "time",
+          "timeAlg",
           "zone"
         ]
       },
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 239,
+        "line": 247,
         "arg": 7,
         "keys": [
           "castOverride"
@@ -547,9 +582,18 @@
     ],
     "liuyao.js": [
       {
+        "callee": "setOption",
+        "module": "../vendor/gua/liuyaoSchools.js",
+        "line": 77,
+        "arg": 2,
+        "keys": [
+          "on"
+        ]
+      },
+      {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 103,
+        "line": 110,
         "arg": 0,
         "keys": [
           "after23NewDay",
@@ -562,11 +606,45 @@
         ]
       }
     ],
+    "mundaneCards.js": [
+      {
+        "callee": "mundaneCycleRequestFields",
+        "module": "../vendor/utils/mundaneCycles.js",
+        "line": 145,
+        "arg": 1,
+        "keys": [
+          "endYear",
+          "startYear"
+        ]
+      }
+    ],
+    "placeSearch.js": [
+      {
+        "callee": "resolvePlaceOffline",
+        "module": "../vendor/place/place.js",
+        "line": 64,
+        "arg": 1,
+        "keys": [
+          "dateStr",
+          "limit"
+        ]
+      },
+      {
+        "callee": "resolvePlaceOffline",
+        "module": "../vendor/place/place.js",
+        "line": 67,
+        "arg": 1,
+        "keys": [
+          "dateStr",
+          "limit"
+        ]
+      }
+    ],
     "qimen.js": [
       {
         "callee": "calcDunJia",
         "module": "../vendor/dunjia/DunJiaCalc.js",
-        "line": 45,
+        "line": 137,
         "arg": 3,
         "via_local": "context",
         "keys": [
@@ -622,7 +700,7 @@
       {
         "callee": "buildSanshiLiuRengCastOverride",
         "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 171,
+        "line": 196,
         "arg": 0,
         "keys": [
           "nongli"
@@ -631,7 +709,7 @@
       {
         "callee": "buildLiuRengLayout",
         "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 190,
+        "line": 215,
         "arg": 0,
         "via_local": "chartForLr",
         "keys": [
@@ -641,7 +719,7 @@
       {
         "callee": "buildKeData",
         "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 191,
+        "line": 216,
         "arg": 1,
         "via_local": "chartForLr",
         "keys": [
@@ -651,7 +729,7 @@
       {
         "callee": "buildSanChuan",
         "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 192,
+        "line": 217,
         "arg": 2,
         "via_local": "chartForLr",
         "keys": [
@@ -661,7 +739,7 @@
       {
         "callee": "buildLiuRengReferenceBundle",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 225,
+        "line": 250,
         "arg": 0,
         "via_local": "liureng",
         "keys": [
@@ -676,7 +754,7 @@
       {
         "callee": "buildLiuRengReferenceBundle",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 225,
+        "line": 250,
         "arg": 1,
         "via_local": "chartForLr",
         "keys": [
@@ -686,7 +764,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 234,
+        "line": 259,
         "arg": 1,
         "via_local": "liureng",
         "keys": [
@@ -701,7 +779,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 234,
+        "line": 259,
         "arg": 3,
         "via_local": "chartForLr",
         "keys": [
@@ -711,7 +789,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 234,
+        "line": 259,
         "arg": 7,
         "keys": [
           "castOverride"
@@ -720,7 +798,7 @@
       {
         "callee": "buildSanShiUnitedSnapshotText",
         "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 249,
+        "line": 275,
         "arg": 0,
         "keys": [
           "displaySolarTime",
@@ -746,7 +824,7 @@
       {
         "callee": "buildSanShiUnitedSnapshotText",
         "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 249,
+        "line": 275,
         "arg": 0,
         "nested_under": "liurengChartForLr",
         "via_local": "chartForLr",
@@ -758,9 +836,25 @@
     "suzhan.js": [
       {
         "callee": "buildSuzhanSnapshotText",
-        "module": "../vendor/suzhan/suzhanSnapshot.js",
-        "line": 41,
+        "module": "../vendor/suzhan/SuZhanMain.js",
+        "line": 49,
         "arg": 1,
+        "via_local": "fields",
+        "keys": [
+          "date",
+          "doubingSu28",
+          "houseStartMode",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      },
+      {
+        "callee": "suzhanAscRaModeOf",
+        "module": "../vendor/suzhan/SuZhanMain.js",
+        "line": 56,
+        "arg": 0,
         "via_local": "fields",
         "keys": [
           "date",
@@ -777,7 +871,7 @@
       {
         "callee": "buildReading",
         "module": "../vendor/tarot/engine/reading.js",
-        "line": 106,
+        "line": 141,
         "arg": 3,
         "via_local": "settings",
         "keys": [
@@ -979,6 +1073,18 @@
         ]
       }
     ],
+    "zeriConditions.js": [
+      {
+        "callee": "conditionSummaryText",
+        "module": "../vendor/divination/zeri/conditionGlyph.js",
+        "line": 42,
+        "arg": 0,
+        "keys": [
+          "params",
+          "type"
+        ]
+      }
+    ],
     "zhengchuan.js": [
       {
         "callee": "calcXinyi",
@@ -1074,6 +1180,58 @@
           "pillars",
           "suijun",
           "xiaoyun"
+        ]
+      }
+    ],
+    "zhufang.js": [
+      {
+        "callee": "zhufangParamsFromFields",
+        "module": "../vendor/zhufang/zhufangArts.js",
+        "line": 128,
+        "arg": 0,
+        "via_local": "fields",
+        "keys": [
+          "date",
+          "gender",
+          "hsys",
+          "lat",
+          "lon",
+          "time",
+          "zone"
+        ]
+      },
+      {
+        "callee": "zhufangRequestBody",
+        "module": "../vendor/zhufang/zhufangRequest.js",
+        "line": 131,
+        "arg": 1,
+        "keys": [
+          "hdTrueNode",
+          "spiritQuadrant"
+        ]
+      },
+      {
+        "callee": "localZhufangModel",
+        "module": "../vendor/zhufang/zhufangArts.js",
+        "line": 149,
+        "arg": 1,
+        "via_local": "settings",
+        "keys": [
+          "hdTrueNode",
+          "mayanCorrelation",
+          "spiritQuadrant"
+        ]
+      },
+      {
+        "callee": "zhufangSnapshotLines",
+        "module": "../vendor/zhufang/zhufangArts.js",
+        "line": 150,
+        "arg": 2,
+        "via_local": "settings",
+        "keys": [
+          "hdTrueNode",
+          "mayanCorrelation",
+          "spiritQuadrant"
         ]
       }
     ],

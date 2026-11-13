@@ -126,7 +126,9 @@ export function runZhufang(payload) {
     gender: { value: input.gender },
   };
   const params = zhufangParamsFromFields(fields);
-  const request = zhufangRequestBody(params, settings);
+  // 上游 zhufangRequestBody 只读 hdTrueNode / spiritQuadrant（玛雅关联常数只给下面的 localZhufangModel）：只交它读的两键，
+  // 边界守卫（verify_js_boundary_contracts）才看得出哪个键真的到了后端。请求体与整包传入逐字相同。
+  const request = zhufangRequestBody(params, { hdTrueNode: settings.hdTrueNode, spiritQuadrant: settings.spiritQuadrant });
   if (input.request_only) {
     // Python 发请求前先取上游口径的请求体（同一份设置、同一个映射）；不排版。
     return { tool: 'zhufang', technique: 'zhufang', input_normalized: normalized, data: { ok: true, request_only: true, params, settings }, request, snapshot_text: '' };

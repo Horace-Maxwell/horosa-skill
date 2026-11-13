@@ -3,11 +3,15 @@
   "covered": [
     "acgSection",
     "astroextra",
+    "auxLabs",
+    "babylon",
     "baziGeju",
     "baziLocal",
     "calendarExtras",
     "canping",
+    "chartDetails",
     "classicalDerived",
+    "dongya",
     "egyptSection",
     "election",
     "feigong",
@@ -16,6 +20,7 @@
     "heluo",
     "horary",
     "huangli",
+    "indiaJyotish",
     "jinkou",
     "lingqi",
     "liureng",
@@ -38,9 +43,11 @@
     "xiaoliuren",
     "yanqinYanfa",
     "yizhangjing",
+    "zeriConditions",
     "zeriScan",
     "zeriSnapshotOpts",
     "zhengchuan",
+    "zhufang",
     "ziweiBirth"
   ],
   "covered_via": {
@@ -50,10 +57,8 @@
     }
   },
   "debt": [
-    "babylon",
     "baziPeriod",
     "guolaoStarDignity",
-    "indiaJyotish",
     "mundaneHorary",
     "mundaneNavanayaka",
     "mundaneSolunar",
