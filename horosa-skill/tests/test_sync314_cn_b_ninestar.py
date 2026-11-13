@@ -20,6 +20,7 @@ tests/test_sync314_cn_b_live.py。
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import shutil
 from pathlib import Path
 
@@ -60,7 +61,7 @@ def _hand_day_star(day: dt.date) -> int:
         starts.append((_nearest_jiazi(dt.date(year, *_WINTER[year])), True))
     starts.sort()
     duns: list[tuple[dt.date, bool, int]] = []   # (换遁日, 阳遁?, 换遁日的星)
-    for (prev, _), (cur, yang) in zip(starts, starts[1:]):
+    for (prev, _), (cur, yang) in itertools.pairwise(starts):
         gap = (cur - prev).days
         if gap > 240:   # 年表不连续处（只列了用例要用的年份）：这一遁的起点无从判断，不收
             continue
