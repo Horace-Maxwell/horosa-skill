@@ -3249,6 +3249,19 @@
           "why": "同上：AstroTxtMsg / AstroMsgCN 在共享 shim。"
         }
       ]
+    },
+    "utils/starNamesCn.js": {
+      "upstream": "utils/starNamesCn.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 恒星 / 星官中文名表（starNameCn）：盘面细节 chartDetails.js 与世运周期表 mundaneCycles.js 的共同依赖。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/timeLordTables.js：钉到共享 AstroText shim。"
+        }
+      ]
     }
   }
 }
