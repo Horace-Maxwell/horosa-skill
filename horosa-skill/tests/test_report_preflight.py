@@ -236,6 +236,15 @@ def test_an_overlong_name_is_refused_in_the_envelope_and_a_long_legal_name_still
 
     monkeypatch.setattr(renderers.tempfile, "mkstemp", spy)
     legal = "a" * (output_paths.MAX_NAME_BYTES - 5) + ".json"
+    limit, unit = output_paths.path_limit()
+    room = limit - output_paths._length(str(tmp_path / "runs"), unit) - 1 - output_paths.NAME_HEADROOM  # noqa: SLF001
+    if room < len(legal):
+        # 没开长路径的 Windows（上限 259，Windows 原生复验机就是）：240 字节的名字放进 pytest 临时目录，整条路径就超了——
+        # 那要在信封里干净地拒；再用这里放得下的最长名字验「照常写成」。CI 的 Windows runner 开了长路径，走不到这一支。
+        with pytest.raises(ToolValidationError) as caught:
+            service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": legal})
+        assert caught.value.details["reason"] == "path_refused_by_system"
+        legal = "a" * (room - 5) + ".json"
     rendered = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": legal})
     assert prefixes and all(len(prefix) < 32 for prefix in prefixes)
     assert Path(rendered["artifact_path"]).name == legal and Path(rendered["artifact_path"]).is_file()

@@ -11,6 +11,7 @@ from horosa_skill.client_config.merge import _write_json_file
 from horosa_skill.client_config.payload import _format_cli_command
 from horosa_skill.client_tools import extract_json_value, resolve_mcporter_command
 from horosa_skill.errors import RuntimeError, bilingual
+from horosa_skill.winproc import NO_WINDOW
 
 
 def _timed_call(callback):
@@ -263,6 +264,7 @@ def _warm_npx_mcporter(command: list[str], *, cwd: Path) -> float | None:
             errors="replace",
             check=False,
             timeout=NPX_MCPORTER_WARMUP_TIMEOUT_SECONDS,
+            creationflags=NO_WINDOW,
         )
     except FileNotFoundError as exc:
         raise RuntimeError(
@@ -300,6 +302,7 @@ def _run_subprocess_json(command: list[str], *, cwd: Path, timeout_seconds: floa
             errors="replace",
             check=False,
             timeout=timeout_seconds,
+            creationflags=NO_WINDOW,
         )
     except FileNotFoundError as exc:
         raise RuntimeError(str(exc), code="client.command_not_found", details={"command": command, "cwd": str(cwd)}) from exc

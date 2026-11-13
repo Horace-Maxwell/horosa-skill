@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.50.2-dev (2026-11-12) | server 没有控制台时（pythonw 起、或宿主以 DETACHED 方式起）每次技法调用都弹 node 的控制台窗口：15 处 `subprocess` 里只有启动器带 `CREATE_NO_WINDOW`；排查时一度把被测解释器自己的窗口算成 node 的 | `winproc.NO_WINDOW` 接到每个 spawn；AST 守卫扫全部 `subprocess.*`；探针按窗口属主进程计数，不凭推断归因。同轮：v0.50.1 候选在本机门禁红 2 条（CI 绿）——用例默认了 runner 开着长路径、有建链接特权 | 按本机能力分支，跳过原因带 `[host]` |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版第 1 步 `npm install --omit=dev` 改写了 horosa-core-js 的 package-lock.json（package.json 的 engines 说明改过、锁文件没跟），第 2 步 JS 引擎资产见树不干净拒绝出包——红在发版当场，CI 全绿看不出 | `test_lockfile_root_mirrors_package_json` 让 CI 先红；改 package.json 后跑 `npm install --package-lock-only` 一并提交 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交在 CI ubuntu 上红 8 条、维护机 macOS 全绿：doctor「新机器」用例只在有载荷的平台写过断言；报告用例只在有中文 TrueType 的机器写过断言——6 条里 3 条是真缺陷（CID 回退不补字 ✓☯🎉 进 PDF、空格子标签外 `() Tj`、DOCX 中文字体退成 Arial），另有无载荷平台 advice 叫人「装 730 MB」 | 按本机环境分支的用例在每台机器上把各支都跑：`conftest.font_host`（host / no_cjk_font / no_fonts）、doctor 用例的 `host` fixture 钉 `_platform_key`；CID 字体按 Adobe 字符集合（gbk / big5hkscs）量覆盖；推前在 Linux 容器里跑一遍受影响的用例 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交本机门禁全绿，main CI windows-smoke 红 13 条：相对路径键带反斜杠、`with sqlite3.connect()` 不关连接删不了库、粗单调钟下预算 0 读完全部、开了长路径的 Windows 照写超长路径（没开的到建目录才裸 OSError）、Segoe UI Symbol 真画得出 🎉、tar 盘符名、给 Windows 粘的命令按 cmd 规则写 JSON；顺带查出知识索引 `--rebuild` 在 Windows 上隔离不了坏库、清残留用 `os.kill(pid, 0)` | conftest 让每条用例都在 `tests/winsim.py`（Windows 文件共享规则）下跑；源码守卫禁 `str(relative_to)` / 裸 `with sqlite3.connect` / procs 以外的 os.kill；预算判 ≥；整条路径按本机上限事前判；tar 过 `_portable_data_filter`；命令写成 PowerShell 与 cmd 同读（`tests/winshell.py` 两种拆法）|
@@ -249,6 +250,31 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.50.2-dev / 2026-11-12 — server 没有控制台时，每次调用都弹 node 的控制台窗口
+
+- **现象**（Windows 原生复验，找没覆盖过的形状）：用 `pythonw.exe` 起 `horosa-skill tool run bazi_birth`（server 自身没有控制台），
+  调用期间桌面上弹出 node.exe 的控制台窗口（Windows 11 默认由 Windows Terminal 托管），外加一个一闪即逝的。
+- **根因**：控制台程序被一个没有控制台的进程拉起时，Windows 给它新开一个可见控制台。全仓 15 处 `subprocess.run / Popen` 里只有启动器
+  （manager `_spawn_command`）带 `CREATE_NO_WINDOW`；js_client 的引擎与画图调用、node 版本探针、procs 的 PowerShell CIM、ports 的
+  netstat、doctor / setup 的探针都没带。宿主给 server 一个隐藏控制台时（Electron / Node 以 windowsHide 拉起：Claude Desktop、Claude Code）
+  子进程继承它，不弹——所以平常看不到；pythonw、或宿主以 DETACHED 方式起 server 时才弹。
+- **修**：`horosa_skill/winproc.py` 的 `NO_WINDOW`（Windows 上 = `CREATE_NO_WINDOW`，别处 0），每个 spawn 都带。不用 DETACHED_PROCESS
+  （启动器那条教训：powershell -File 会静默 exit 0）。所有调用都捕获输出、自管超时，没有依赖共享控制台的。
+- **核对**：同一探针（窗口按属主进程计数）pythonw 下 bac26c96 → node.exe 等 3 个窗口；修后 0。最小复现：DETACHED 父 + 普通 `subprocess.run`
+  的子进程 `GetConsoleWindow()` 非 0 且可见，带 `CREATE_NO_WINDOW` → 0；隐藏控制台父两种都是 0。
+- **守卫**：`tests/test_winproc.py`——AST 扫 `src/horosa_skill` 全部 `subprocess.run/Popen/call/check_*`，没有 `creationflags`（或 `**kwargs`
+  透传）就红；Windows 上 DETACHED 父 + `NO_WINDOW` 子拿不到控制台窗口。负向对照：去掉 js_client 一处 → 红。不带标志的对照只在复验时
+  实跑（会在维护者屏幕上真弹窗口）。
+- **顺带踩的**：第一版探针用 venv 的 `python.exe` 加 DETACHED_PROCESS 起被测进程，修前修后都数到 2 个窗口——查属主才发现是被测解释器
+  自己的窗口（venv 启动器没控制台，真解释器就新开一个），不是 node 的。我先写了「2 个 = node 版本探针 + 引擎」，没有证据。
+- **规则**：窗口 / 进程类现象按属主进程计数再归因；GUI 宿主形状用 pythonw 模拟，不用「venv 启动器 + DETACHED」。
+- **同轮另一处：CI 的 Windows runner ≠ 普通 Windows 机器**。v0.50.1 候选（bac26c96）本机门禁 6558 passed / 2 failed，main CI 全绿：
+  `test_report_preflight` 的「240 字节合法长名照常写成」在没开长路径的机器上被（正确地）拒——pytest 临时目录约 97 字符，整条 353 > 259；
+  `test_tar_links_that_stay_inside_still_extract` 在没有建链接特权的账户上，tarfile 按 errorlevel 1 静默跳过链接，断言读不到文件。
+  runner 开了 LongPathsEnabled、以管理员跑；本机 `LongPathsEnabled = 0`、WinError 1314。产品行为都对（Windows runtime 归档是 zip，
+  JS 引擎 tar 构建时拒收链接）。修测试：长名那条按 `output_paths.path_limit()` 算放得下多长，放不下先断言干净拒绝、再用最长能放的名字；
+  链接那条先 `_symlink_or_skip`（`[host]` 跳过）。规则进 AGENTS §9.5.2。
 
 ### v0.50.0-dev / 2026-11-12 — 锁文件跟不上 package.json：发版第 2 步才红
 

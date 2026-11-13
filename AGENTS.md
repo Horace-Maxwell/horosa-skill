@@ -769,6 +769,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   启动器从未运行，manager 只看到「已退出且未就绪」报 `runtime.start_timeout`，且 `launcher.log` 空、
   无任何诊断（v0.37.0+ 台账，真机隔离实验）。「活过父进程」在 Windows 上本就免费。
   guard = `test_windows_launcher_spawn_never_uses_detached_process`。
+  其余 spawn 一律带 `winproc.NO_WINDOW`（v0.50.2-dev）：server 没有控制台时（pythonw / 宿主 DETACHED 起），node / powershell / netstat
+  子进程各弹一个可见窗口；guard = `test_every_subprocess_spawn_passes_the_no_window_flag`（AST 扫全部 `subprocess.*`）。
   **推论**：改进程创建方式 / 启动器调用方式，CI 的 windows-smoke 验不到（它没装离线 runtime，走不到
   spawn 这一步）—— 必须在装了 runtime 的 Windows 机器上真起一次。
 - **JDK 下载走 Adoptium API，禁 GitHub `releases/latest`**：temurin17-binaries 的 `releases/latest` 按
@@ -1855,6 +1857,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 ### 9.5.2 macOS 绿 ≠ Windows 绿：本机就能抓的那几类（v0.50.0-dev，windows-smoke 13 红）
 
 本机全绿、main CI 的 windows-smoke 红 13 条，七个原因里五个本机就能看见。写代码 / 写测试时按下面办，守卫在 `tests/test_windows_portability.py`。
+- **CI 的 Windows runner ≠ 普通 Windows 机器（v0.50.2-dev）**：runner 开着长路径、有建符号链接的特权，维护机 / 用户机常两样都没有
+  （`LongPathsEnabled = 0`、WinError 1314）。依赖它们的用例按本机能力分支（`output_paths.path_limit()`、`_symlink_or_skip`），跳过原因带 `[host]`。
 - **开着的文件动不了**：Windows 上 SQLite 与 `open()` 都不带 FILE_SHARE_DELETE，连接没关就改名 / 删库是 WinError 32（坏库永远隔离不了）。
   `with sqlite3.connect()` 只提交**不关**——一律 `with closing(sqlite3.connect(...)) as conn, conn:`（守卫禁裸写法）；打开后 PRAGMA 失败要先关再抛
   （`knowledge/index._connect`：异常的 traceback 会把连接挂到隔离那一步）。conftest 让每条用例都在 `tests/winsim.py` 下跑：本进程开着的路径

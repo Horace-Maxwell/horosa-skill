@@ -41,6 +41,7 @@ from horosa_skill.surfaces import runtime_helpers
 from horosa_skill.surfaces.doctor import _SETUP_NETWORK_TIMEOUT_SECONDS, _doctor_report
 from horosa_skill.surfaces.openclaw_smoke import _timed_call
 from horosa_skill.surfaces.runtime_helpers import _install_progress_printer
+from horosa_skill.winproc import NO_WINDOW
 
 # ---------------------------------------------------------------------------
 # `horosa-skill setup --client <target>`（v0.38.0 B4）：一条命令接入任意 MCP 客户端。
@@ -360,7 +361,7 @@ def _vectors_prepare(*, command: list[str], env: dict[str, str] | None, cwd: str
 
     try:
         completed = subprocess.run(command, env=env, cwd=cwd, capture_output=True, timeout=timeout, check=False,
-                                   text=True, encoding="utf-8", errors="replace")
+                                   text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
     except subprocess.TimeoutExpired:
         return failed("timeout", _VECTORS_FIX["timeout"])
     except OSError as exc:
@@ -390,7 +391,8 @@ def _knowledge_index_command(stdio_command: list[str]) -> list[str]:
 def _run_claude(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行一条 `claude mcp …`（add / remove / add-json；单独成函数：测试用替身，不真调 claude）。"""
     return subprocess.run(
-        command, capture_output=True, text=True, timeout=60, check=False, encoding="utf-8", errors="replace"
+        command, capture_output=True, text=True, timeout=60, check=False, encoding="utf-8", errors="replace",
+        creationflags=NO_WINDOW,
     )
 
 

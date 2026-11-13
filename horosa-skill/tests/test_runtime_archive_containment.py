@@ -114,7 +114,10 @@ def test_tar_device_files_are_refused(tmp_path: Path) -> None:
 
 
 def test_tar_links_that_stay_inside_still_extract(tmp_path: Path) -> None:
-    """对照组：目录内的相对链接是合法 runtime 形状（JDK / Python 的 lib 链接），不能被误拒。"""
+    """对照组：目录内的相对链接是合法 runtime 形状（JDK / Python 的 lib 链接），不能被误拒。
+    没有建链接特权的 Windows 上 tarfile 建不了链接，按 errorlevel 1 静默跳过（Windows 原生复验机就是这样；CI runner 有特权）——
+    那里这条对照没有意义。Windows 的 runtime 归档是 zip，JS 引擎 tar 构建时就拒收符号链接。"""
+    _symlink_or_skip(tmp_path / "symlink-probe", tmp_path)
     archive = _tar(tmp_path / "ok.tar.gz", [_file("runtime-payload/lib/real.txt"), _link("runtime-payload/current", "lib")])
     extract_dir = tmp_path / "extract"
     extract_dir.mkdir()

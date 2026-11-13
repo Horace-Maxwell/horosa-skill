@@ -25,6 +25,7 @@ import sys
 from typing import Literal
 
 from horosa_skill.runtime import budget
+from horosa_skill.winproc import NO_WINDOW
 
 Liveness = Literal["alive", "dead", "unknown"]
 
@@ -214,7 +215,7 @@ def _run_text(cmd: list[str], timeout: float, *, encoding: str = "utf-8") -> str
     try:
         out = subprocess.run(
             cmd, capture_output=True, text=True, timeout=clamped, check=False,
-            encoding=encoding, errors="replace",
+            encoding=encoding, errors="replace", creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError, LookupError):
         return ""

@@ -47,6 +47,7 @@ from horosa_skill.runtime.ports import port_holders, port_taken
 from horosa_skill.tracing import TraceRecorder
 from horosa_skill.runtime.windows_jar_patch import WindowsBootJarPatchMixin
 from horosa_skill.runtime.mac_launcher_patch import MacLauncherPatchMixin
+from horosa_skill.winproc import NO_WINDOW
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def _darwin_translated() -> bool:
     try:
         completed = subprocess.run(
             ["/usr/sbin/sysctl", "-n", "sysctl.proc_translated"],
-            capture_output=True, text=True, timeout=5, check=False, encoding="utf-8", errors="replace",
+            capture_output=True, text=True, timeout=5, check=False, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
         )
     except Exception:  # noqa: BLE001 - detection must never break platform lookup
         return False
@@ -1910,6 +1911,7 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                     encoding="utf-8",
                     errors="replace",
                     timeout=stop_budget,
+                    creationflags=NO_WINDOW,
                 )
             except subprocess.TimeoutExpired as exc:
                 # 🔴 此前没有 timeout：mac 的停脚本来自只读的上游树，它要是哪天多等一轮，`uninstall --yes`
@@ -2361,6 +2363,7 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 completed = subprocess.run(
                     ["/usr/bin/xattr", "-p", "com.apple.quarantine", str(path)],
                     capture_output=True, text=True, timeout=5, check=False, encoding="utf-8", errors="replace",
+                    creationflags=NO_WINDOW,
                 )
             except (OSError, subprocess.TimeoutExpired):
                 continue

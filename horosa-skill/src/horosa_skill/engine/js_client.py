@@ -14,6 +14,7 @@ from horosa_skill.engine import node_runtime
 from horosa_skill.errors import ToolTransportError, bilingual
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.runtime import engine_asset
+from horosa_skill.winproc import NO_WINDOW
 
 # 一次已知要算很久的调用（择时区间扫描，成本随窗口线性涨）把墙钟抬到「至少 N 秒」。走 ContextVar 而不是给 run() 加参数：
 # 测试里十几个替身按 run(tool_name, payload) 实现，签名一变全要跟着改。只抬不降——配置的 HOROSA_JS_ENGINE_TIMEOUT_SECONDS 更大时照用配置。
@@ -90,6 +91,7 @@ class HorosaJsEngineClient:
                 capture_output=True,
                 cwd=str(engine_root),
                 timeout=timeout_seconds,
+                creationflags=NO_WINDOW,
             )
         except subprocess.TimeoutExpired as exc:
             raise ToolTransportError(
@@ -197,6 +199,7 @@ class HorosaJsEngineClient:
                 capture_output=True,
                 cwd=str(roots[0]),
                 timeout=self.settings.js_engine_timeout_seconds,
+                creationflags=NO_WINDOW,
             )
             parsed = json.loads(completed.stdout or "{}")
         except (OSError, subprocess.TimeoutExpired, ValueError):

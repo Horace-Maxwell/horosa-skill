@@ -29,6 +29,7 @@ from horosa_skill.surfaces.openclaw_smoke import (
     _timed_call,
 )
 from horosa_skill.surfaces.refusals import _emit_refusal, _write_refusal
+from horosa_skill.winproc import NO_WINDOW
 
 
 @contextmanager
@@ -255,6 +256,7 @@ def _run_openclaw_check(
         try:
             result = subprocess.run(
                 command, capture_output=True, text=True, check=False, timeout=900, encoding="utf-8", errors="replace",
+                creationflags=NO_WINDOW,
             )
         except subprocess.TimeoutExpired:
             _emit_refusal("openclaw_check.timeout", "openclaw-check --full exceeded 900s and was aborted (a child MCP/runtime process is likely wedged).")

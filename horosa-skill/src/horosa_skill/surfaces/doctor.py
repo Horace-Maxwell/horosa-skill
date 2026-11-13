@@ -13,6 +13,7 @@ from horosa_skill.config import Settings
 from horosa_skill.runtime import HorosaRuntimeManager
 from horosa_skill.surfaces.openclaw_smoke import _openclaw_setup_command
 from horosa_skill.surfaces.toolsets import doctor_warnings as _toolsets_doctor_warnings  # MCP-07（surface 批）
+from horosa_skill.winproc import NO_WINDOW
 
 
 def _network_hints() -> dict[str, Any]:
@@ -616,7 +617,7 @@ def _probe_executable(path: Path, args: list[str]) -> dict[str, Any]:
     try:
         completed = subprocess.run(
             [str(path), *args], capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS,
-            encoding="utf-8", errors="replace",
+            encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
         )
         output = (completed.stdout or completed.stderr or "").strip().splitlines()
         return {

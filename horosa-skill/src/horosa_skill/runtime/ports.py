@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from horosa_skill.runtime import budget
+from horosa_skill.winproc import NO_WINDOW
 
 # macOS `netstat -anv -p tcp` 的 process:pid 列，例如 `python3.12:6123`、`java:88104`。
 # 本地地址列用点分端口（`*.8899` / `127.0.0.1.8899` / `::1.8899`），不会误命中这条正则。
@@ -50,7 +51,7 @@ def _run(cmd: list[str], timeout: float = 15.0) -> str:
     try:
         out = subprocess.run(
             cmd, capture_output=True, text=True, timeout=clamped, check=False,
-            encoding="utf-8", errors="replace",
+            encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return ""

@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from horosa_skill.winproc import NO_WINDOW
+
 # horosa-core-js/package.json 的 `engines.node`（tests/test_node_runtime.py 锁步：改了那边这里要跟）。
 NODE_FLOOR: tuple[int, int, int] = (20, 10, 0)
 NODE_FLOOR_TEXT = ">=20.10.0"
@@ -82,7 +84,7 @@ def probe_version(path: Path) -> str | None:
     try:
         with subprocess.Popen(
             [str(resolved), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", errors="replace",
+            text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
         ) as proc:
             try:
                 out, _err = proc.communicate(timeout=_VERSION_PROBE_TIMEOUT_SECONDS)
