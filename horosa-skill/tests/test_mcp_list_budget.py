@@ -33,8 +33,8 @@ def _server(tmp_path, *, compact: bool = False):
 
 
 def _listed(mcp) -> dict[str, dict]:
-    # 与 scripts/verify_mcp_list_budget.py 同口径：线上按 exclude_unset 写出（mcp/server/stdio.py），没设的 null 不算字节。
-    return {tool.name: tool.model_dump(mode="json", by_alias=True, exclude_unset=True) for tool in asyncio.run(mcp.list_tools())}
+    # 与 scripts/verify_mcp_list_budget.py::wire_shape 同口径：值为 None 的键不上线（SDK 的 _dump_result 用 exclude_none）。
+    return {tool.name: tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in asyncio.run(mcp.list_tools())}
 
 
 @pytest.fixture(scope="module")
