@@ -15,6 +15,7 @@ from horosa_skill.errors import (
     engine_tool_code,
     tool_code,
 )
+from horosa_skill.schemas.tools.election import CHART_ORB_KEYS
 from horosa_skill.service._context import _degrade, _progress_tick
 from horosa_skill.service.options_cn import _qimen_effective_options
 from horosa_skill.service.options_zeri import (
@@ -391,6 +392,10 @@ class ZeriRunners:
             # 与扫描同一次双读合并（顶层 → options 覆盖）。
             **_electionscan_options(payload),
             **_electionscan_options(payload.get("options")),
+            # 随盘容许度（上游 v3.14.0 previewChartParams `...chartOrbOverridesFromFields(this.props.fields)`）：选中时刻盘的相位表
+            # 与宿主盘同一把尺。只进这张盘——扫描判定不读它（每条扫描条件自带容许度，判读类条件用固定星体表；
+            # _ELECTIONSCAN_OPTION_KEYS 因此不收这两键）。值已由 TianxingInput 的校验归一（空表 / 1 = 不发）。
+            **{key: payload[key] for key in CHART_ORB_KEYS if payload.get(key) is not None},
             # 择时盘沿用调用方已确认的设置；这里是同一次请求的内部子盘，不再过闸。
             "agent_confirmed_settings": True,
             "clarification_notes": "tianxing selected-moment sub-chart (same confirmed settings)",

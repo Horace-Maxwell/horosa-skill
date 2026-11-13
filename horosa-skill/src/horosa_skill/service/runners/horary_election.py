@@ -47,6 +47,22 @@ class HoraryElectionRunners:
             details={"invalid": invalid},
         )
 
+    @staticmethod
+    def _note_unused_orb_ids(tool: str, payload: dict[str, Any], response: Any) -> None:
+        """随盘容许度 orbs（上游 v3.14.0 起卜卦 / 择日盘随盘下发）：后端按 `obj.id in orbs` 逐星取值，表里不是本盘星体 id 的键
+        不报错、只是没用上（如把 `Sun` 写成 `sun` / `太阳`）——说出来，不让调用方以为改了容许度。"""
+        orbs = payload.get("orbs")
+        objects = ((response or {}).get("chart") or {}).get("objects") if isinstance(response, dict) else None
+        if not isinstance(orbs, dict) or not orbs or not isinstance(objects, list):
+            return
+        ids = [f"{obj.get('id')}" for obj in objects if isinstance(obj, dict) and obj.get("id")]
+        unused = [key for key in orbs if key not in ids]
+        if unused and ids:
+            _degrade(
+                "%s: orbs keys not matching any chart object id: %s", tool, unused,
+                note=f"{tool}：orbs 里的 {'、'.join(unused)} 不是本盘的星体 id，这几项容许度没有作用；本盘星体 id：{'、'.join(ids)}。",
+            )
+
     def _horary_backend_fields(self, payload: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
         """流派档 → /chart 字段补丁（JS horary action=backend_fields，即上游 horaryBackendFields(school, overrides)）。
 
@@ -93,7 +109,10 @@ class HoraryElectionRunners:
         for stale in ("datetime", "dirZone", "dirLat", "dirLon", "category", "school", "options",
                       "sincerityConfirmed", "confirmYouthMatch", "isEventChart", "questionText", "castingCamp"):
             chart_payload.pop(stale, None)
+        # 随盘容许度 orbs / orbScale 随 **payload 进 /chart（上游 v3.14.0 buildChartParams `...chartOrbOverridesFromFields(fields)`；
+        # 值由 HoraryInput 的校验归一：空表 / 1 = 不发）——相位全览、成相、月亮的故事都读这张盘的相位。
         response = self._call_remote("/chart", chart_payload)
+        self._note_unused_orb_ids("horary", payload, response)
         snapshot_text, data, snapshot_error = "", {}, None
         try:
             js = self.js_client.run(
@@ -208,7 +227,10 @@ class HoraryElectionRunners:
         for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options", "natal",
                       "crisisBase", *self._ELECTION_TOPIC_INPUTS):
             chart_payload.pop(stale, None)
+        # 随盘容许度 orbs / orbScale 同卜卦：随 **payload 进择日盘的 /chart（上游 v3.14.0 buildChartParams）。本命盘 / 病始盘 /
+        # 返照盘不带（上游 selectNatal / fetchCrisisBase / fetchReturnSet 的请求体没有这一对）。
         response = self._call_remote("/chart", chart_payload)
+        self._note_unused_orb_ids("election", payload, response)
         js_payload: dict[str, Any] = {
             "chart": response,
             "topicId": topic_id,

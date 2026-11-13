@@ -123,6 +123,7 @@ _UNSENT = "未下发，引擎按自己的缺省算"
 _EXTRA_LABELS = {
     "ad": "纪年", "lifespanMethod": "寿命格局取主法", "gender": "性别", "sex": "性别", "timeAlg": "时间算法",
     "zeriSnapshotMaxRows": "命中清单行数", "zeriSnapshotExplainRows": "判读树行数", "seed": "起卦种子",
+    "orbScale": "容许度倍数", "orbs": "逐星容许度",
 }
 
 

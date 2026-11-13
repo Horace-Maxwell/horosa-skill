@@ -200,6 +200,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "**展示盘按 huangli 自己的算源铸**（与直接调该工具逐字同段）；"
             "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
             "\n日粒度：命中的是整**日**，不是时辰。通书五流派口径由 school 决定，结果敏感。"
+            "\n九星值日（nine_star 条件与展示盘的「九星值日」行）按日紫白：离冬至 / 夏至最近的甲子换遁，遇闰在甲午先换"
+            "（与风水紫白飞星同一口径，上游 v3.14.0）；闰期那 30 天（如 2020-06-20 … 07-19）与通行历算库的九星不同。"
             "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "yi_has（宜含事项） / ji_not（忌避事项） / jianchu（建除十二神） / tianshen_dao（黄黑道） / zhixiu（值宿(廿八宿)） / jishen_has（吉神宜趋） / xiongsha_not（凶煞回避） / nine_star（九星值日） / chong_shengxiao（冲煞生肖） / day_ganzhi（日干支） / nayin_wuxing（日纳音五行） / liuyao（六曜）；…共 26 类，完整表见 vendored huangliZeriConditionTypes。"
@@ -470,6 +472,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
              "meaning": "希腊点口径与主排盘同式（上游缺省：福点昼夜反转、标准福点式、六星点反转）；顶层或 options 传入即进扫描与 [选中时刻星盘]"},
             {"field": "userAyanT0/userAyanDeg", "value": None,
              "meaning": "siderealAyanamsa='user' 档的历元 JD 与该历元岁差度（缺参按 Lahiri）；进扫描与 [选中时刻星盘]"},
+            {"field": "orbScale", "value": 1, "meaning": "容许度按星阙默认表、不缩放（orbs 可逐星改）；只改 [选中时刻星盘] 的相位，扫描判定不读"},
+            {"field": "orbs", "value": None, "meaning": "逐星容许度：不给 = 星阙默认表"},
             *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "征象条件", "location"],
@@ -897,6 +901,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         safe_defaults=[
             {"field": "category", "value": "general", "meaning": "综合判断：事项守护星取月亮下一个入相的星 / 相关宫主"},
             {"field": "school", "value": "classical", "meaning": "经典主流：Regiomontanus（hsys 2）· 托勒密界经典传本 · 托勒密三分 · 七政"},
+            {"field": "orbScale", "value": 1, "meaning": "容许度按星阙默认表、不缩放（orbs 可逐星改，键表见 options_keys）；相位全览、成相、月亮的故事随它变"},
+            {"field": "orbs", "value": None, "meaning": "逐星容许度：不给 = 星阙默认表"},
         ],
         do_not_assume=["提问时刻（绝不可编造，必须是占者真实收到问题的时刻）", "问题类别"],
     ),
@@ -907,7 +913,11 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "date/time/place", "question": "请提供要评估的候选日期、时间、时区和举事地点。"},
             {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（37 类全表见 options_keys.topicId）"]},
         ],
-        safe_defaults=[{"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"}],
+        safe_defaults=[
+            {"field": "topicId", "value": "marriage", "meaning": "默认按结婚用事规则包评估"},
+            {"field": "orbScale", "value": 1, "meaning": "容许度按星阙默认表、不缩放（orbs 可逐星改，键表见 options_keys）；只作用于择日盘本身"},
+            {"field": "orbs", "value": None, "meaning": "逐星容许度：不给 = 星阙默认表"},
+        ],
         # natal 可选：给了才加产 [本命合参] 与 [回归与主限]（择日前最近日/月返 + ±240 日主限命中）。
         do_not_assume=["候选时刻", "用事类型", "本命出生资料 natal（只在用户给出时传，不可编造）"],
     ),

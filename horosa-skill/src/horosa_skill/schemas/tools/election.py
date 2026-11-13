@@ -8,6 +8,84 @@ from pydantic import Field, field_validator
 from horosa_skill.schemas.tools.base import BirthInput, _unadvertised
 from horosa_skill.schemas.tools.cn_divination import QimenInput
 
+# ── 随盘容许度对 orbs / orbScale（上游 v3.14.0）──────────────────────────────────────────────────
+# 上游 utils/classicalChartGlobals.js chartOrbOverrides：`orbs` 是非空对象才发，`orbScale` 是有限正数且 ≠ 1 才发；
+# v3.14.0 起卜卦 / 择日 / 世俗盘的 /chart 请求（divination/engine/chartRequest.js buildChartParams）与天星择日的
+# 选中时刻盘（TianxingElectionMain.previewChartParams）都带这一对——相位表与主盘同一把尺。
+# 页面靠容许度面板兜住值域；后端 perchart 对认不出的值不报错、只是不用（orbScale ≤ 0 / 非数 → 按 1；orbs 里有一个值
+# 转不成数 → 整张表作废），headless 入口在这里兜：读不成就拒，缺省态（空表 / 1）归一成不发。
+CHART_ORB_KEYS = ("orbs", "orbScale")
+
+
+def _orb_issue(field_name: str, value: Any, zh: str, en: str, *, expected_zh: str, expected_en: str, example: Any) -> Exception:
+    from pydantic_core import PydanticCustomError
+
+    from horosa_skill.input_fields import FieldIssue, issue_context
+
+    issue = FieldIssue("tool.invalid_option", f"{field_name} 读不成：{value!r}。{zh}", f"{field_name} is not usable: {value!r}. {en}",
+                       expected_zh=expected_zh, expected_en=expected_en, example=example)
+    return PydanticCustomError("horosa_field", "{message}", {"message": f"{issue.zh} / {issue.en}", **issue_context(issue)})
+
+
+def _orb_number(value: Any) -> float | None:
+    """数 / 数字串 → 有限 float；布尔、别的类型、非有限数 → None。"""
+    import math
+
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        try:
+            number = float(value.strip())
+        except ValueError:
+            return None
+    else:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def parse_chart_orb_scale(value: Any) -> float | None:
+    """orbScale：有限正数；1（= 不缩放）与空值归一成 None（上游同样不下发）。"""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    number = _orb_number(value)
+    if number is None or number <= 0:
+        raise _orb_issue(
+            "orbScale", value, "整体倍数要是大于 0 的数（1 = 不缩放）；后端对 ≤ 0 或非数不报错、照默认容许度算。",
+            "The global multiplier must be a number above 0 (1 = unscaled); the backend silently falls back to the default orbs otherwise.",
+            expected_zh="大于 0 的数，如 0.5 / 1.5 / 2（星阙面板量程 0.5–2.5）",
+            expected_en="a number above 0, e.g. 0.5 / 1.5 / 2 (the app's panel offers 0.5–2.5)", example=1.5,
+        )
+    return None if abs(number - 1.0) <= 1e-9 else number
+
+
+def parse_chart_orbs(value: Any) -> dict[str, float] | None:
+    """orbs：{星体 id: 度}；值为 None / 空串的项按没给（后端同），其余必须是 ≥ 0 的有限数；空表归一成 None。"""
+    if value is None:
+        return None
+    expected = {"expected_zh": "对象 {星体 id: 度数}，如 {\"Sun\": 10, \"Moon\": 8}（id 同盘面 objects[].id）",
+                "expected_en": "an object {body id: degrees}, e.g. {\"Sun\": 10, \"Moon\": 8} (ids as in chart objects[].id)",
+                "example": {"Sun": 10, "Moon": 8}}
+    if not isinstance(value, dict):
+        raise _orb_issue("orbs", value, "要给对象（星体 id → 度数），不是列表 / 字符串。",
+                         "Pass an object (body id → degrees), not a list / string.", **expected)
+    out: dict[str, float] = {}
+    for key, raw in value.items():
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            continue
+        number = _orb_number(raw)
+        if number is None or number < 0:
+            raise _orb_issue(
+                "orbs", value, f"{key!r} 的容许度 {raw!r} 不是 ≥ 0 的数；后端遇到一个转不成数的值会把整张表作废、照默认容许度算。",
+                f"The orb for {key!r} ({raw!r}) is not a number ≥ 0; the backend drops the whole table on one unreadable value.", **expected)
+        out[f"{key}"] = int(number) if number == int(number) else number
+    return out or None
+
+
+def _chart_orb_pair(value: Any, info: Any) -> Any:
+    return parse_chart_orbs(value) if info.field_name == "orbs" else parse_chart_orb_scale(value)
+
 
 class ZeriScanInput(BirthInput):
     """择日十技法的共享入参（上游 v3.10.0）。
@@ -206,6 +284,9 @@ class TianxingInput(BirthInput):
     zeriSnapshotMaxRows: int | None = Field(default=None, description="清单行数10-500(缺省60)")
     zeriSnapshotExplainRows: int | None = Field(default=None, description="判读树行数0-20(缺省3)")
 
+    # 随盘容许度只进 [选中时刻星盘]（上游 previewChartParams，v3.14.0）；扫描判定不读它（每条条件自带容许度）。
+    _orb_pair = field_validator(*CHART_ORB_KEYS, mode="before")(_chart_orb_pair)
+
 
 class QizhengElectionInput(BirthInput):
     """七政择日动盘（果老「择日双轮」headless 版）。
@@ -312,6 +393,9 @@ class HoraryInput(BirthInput):
 
         return parse_with(divination_vocabularies()["horary"][info.field_name], info.field_name, value)
 
+    # 随盘容许度（上游 v3.14.0 buildChartParams）：卜卦盘的相位表、成相 / 月亮的故事随它变。
+    _orb_pair = field_validator(*CHART_ORB_KEYS, mode="before")(_chart_orb_pair)
+
 
 class ElectionInput(BirthInput):
     hsys: int | None = 0  # 上游 ElectionMain.js:100 出厂种子 { tradition: 1, zodiacal: 0, hsys: 0 }（:121 回退亦 0）
@@ -368,3 +452,6 @@ class ElectionInput(BirthInput):
         from horosa_skill.western_vocab import divination_vocabularies
 
         return parse_with(divination_vocabularies()["election"][info.field_name], info.field_name, value)
+
+    # 随盘容许度（上游 v3.14.0 buildChartParams）：择日盘的相位随它变。
+    _orb_pair = field_validator(*CHART_ORB_KEYS, mode="before")(_chart_orb_pair)
