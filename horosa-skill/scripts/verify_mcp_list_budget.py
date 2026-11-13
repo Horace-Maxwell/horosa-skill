@@ -29,6 +29,7 @@ for _stream in (sys.stdout, sys.stderr):
         _reconfigure(encoding="utf-8", errors="replace")
 import tempfile
 from pathlib import Path
+from typing import Any
 
 SCRIPTS = Path(__file__).resolve().parent
 PKG_ROOT = SCRIPTS.parent
@@ -43,6 +44,19 @@ HARD_CAPS = {"full_bytes": 256 * 1024, "compact_bytes": 30 * 1024, "instructions
 # surfaces must stay under it (largest today: horosa_astro_indiazeri 3274 B, after the v0.48.0 slimming). This is a hard cap, not a ratchet.
 TOOL_INPUT_SCHEMA_CAP_BYTES = 5000
 TOLERANCE = 0.02
+
+
+def wire_shape(tool: Any) -> dict:
+    """一个工具在线上真发的样子（`mcp.types.Tool` → dict）。
+
+    SDK 把 handler 的返回值交给 `mcp/server/runner.py::_dump_result`：`model_dump(by_alias=True, mode="json",
+    exclude_none=True)`，再装进 JSON-RPC 帧——帧那一层的 `exclude_unset` 管不到已经是 dict 的 result。所以值为 None 的键
+    一个也不上线。🔴 这里曾按 `exclude_unset` 量：`MCPServer.list_tools` 构造 Tool 时把 `output_schema` / `icons` / `_meta`
+    **显式**传成 None，`exclude_unset` 不会剔它们，127 个工具每个多算 `"outputSchema": null, "icons": null, "_meta": null`
+    （共 6 559 B，线上一个字节都没有），硬顶与棘轮都按虚高的数判。守卫 `tests/test_sync314_budget_wire.py` 拿真 stdio
+    帧里的 tools 数组与这里逐项比。
+    """
+    return tool.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
 def input_schema_bytes(tool: dict) -> int:
@@ -82,10 +96,8 @@ def measure() -> dict[str, int]:
         for key, compact in (("full_bytes", False), ("compact_bytes", True)):
             settings = Settings(db_path=Path(tmp) / f"{key}.db", output_dir=Path(tmp) / "runs", mcp_compact=compact)
             mcp = create_mcp_server(HorosaSkillService(settings, store=MemoryStore(settings)), settings)
-            # 量线上真发的字节：SDK 写出 JSON-RPC 时用 `model_dump_json(by_alias=True, exclude_unset=True)`（mcp/server/stdio.py）。
-            # v0.50.0-dev 之前这里不带 exclude_unset，把每个工具没设的 `_meta` / `icons` / `outputSchema` / annotations.title
-            # 的 null 也算进去（127 个工具约 4.3 KB 的线上并不存在的字节），棘轮与硬顶都按虚高的数判。
-            tools = [tool.model_dump(mode="json", by_alias=True, exclude_unset=True) for tool in asyncio.run(mcp.list_tools())]
+            # 量线上真发的键与值（`wire_shape`）；字节按 json.dumps 缺省分隔符数（`, ` / `: `），与历史基线同一把尺。
+            tools = [wire_shape(tool) for tool in asyncio.run(mcp.list_tools())]
             sizes[key] = len(json.dumps(tools, ensure_ascii=False).encode("utf-8"))
             sizes[key.replace("_bytes", "_tools")] = len(tools)
             biggest = max(tools, key=input_schema_bytes)

@@ -100,56 +100,52 @@ from horosa_skill.surfaces.mcp_surface import (
 # Server instructions：客户端把它当「这台服务器是干什么的」说明书常驻上下文。自 Claude Code 起
 # MCP 工具默认 deferred（工具搜索按需加载），instructions 就成了模型决定「要不要来搜我」的唯一依据
 # ——它的作用更接近一份 skill 而非一句简介。上限约 2KB，超出截断，故关键信息前置。
-_SERVER_INSTRUCTIONS = f"""Horosa (星阙) — local-first 术数/占星 computation. All engines run on this
-machine (offline); nothing is sent to a remote service.
+# 版式（sync 3.14.0 budget 批：1 999 → 1 848 B，一条信息不丢）：编号条目不折行（续行缩进每处白付 3 B）；覆盖面四行不带「· 」；
+# 并列的中文技法名用 `/`（与择日行同一写法）；「WHEN TO REACH FOR THIS SERVER / Any request to」并成「USE FOR」；
+# 「local-first」「(offline)」与紧跟的「All engines run on this machine; nothing is sent to a remote service」是同一句话，只留后者。
+# 守卫 tests/test_sync314_budget_instructions.py：旧说明书里的每个事实词仍在；四种开关组合 × 每种工具面都 ≤ 2048。
+_SERVER_INSTRUCTIONS = f"""Horosa (星阙): 术数/占星 computation. All engines run on this
+machine; nothing is sent to a remote service.
 
-WHEN TO REACH FOR THIS SERVER
-Any request to 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦, or to explain, store, or report
-such a chart. Also 农历/节气/黄历 conversion and celebrity birth data.
+USE FOR 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦, or to explain/store/report
+such a chart. Also 农历/节气/黄历 conversion, celebrity birth data.
 
 WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)
-· Western: natal + derived charts, 20+ predictive systems, horary 卜卦, astrocartography, midpoints.
-· Chinese: 八字, 紫微斗数, 大六壬, 奇门遁甲, 太乙, 金口诀, 三式合一, 六爻, 河洛理数,
-  邵子参评数, 一掌经, 小六壬, 灵棋经 …
-· 择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).
-· 神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.
+Western: natal + derived charts, 20+ predictive systems, horary 卜卦, astrocartography, midpoints.
+Chinese: 八字/紫微斗数/大六壬/奇门遁甲/太乙/金口诀/三式合一/六爻/河洛理数/邵子参评数/一掌经/小六壬/灵棋经 …
+择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).
+神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.
 
-HOW TO USE IT
-1. Unsure? horosa_agent_guidance(intent=<user's words>) / horosa_dispatch. horosa_hecan runs 2+
-   techniques on one question → cross-validation (divergence disclosed, never averaged).
-2. Pass place:"上海" (→ coordinates + that date's zone). Cast techniques (奇门/六壬/六爻/塔罗)
-   need the question's moment: you give its date/time/place (dispatch/hecan: context).
-3. agent_guidance.required → ask via details.agent_recovery.prompt_to_user. Settings: retry with
-   agent_confirmed_settings=true (or defaults_accepted=true). Facts (gender, time, moment,
-   other person) go in the payload; no flag replaces them. Never self-confirm.
-4. Explain ONLY from data.export_snapshot.export_text — never hand-calculate. Text cut? warnings give
-   the horosa_memory_show call for the rest; read it first.
-5. Technique results carry data.technique_card — quote it after your answer. Runs are stored
-   (horosa_memory_query); horosa_report_render writes DOCX/PDF.
+HOW TO USE
+1. Unsure? horosa_agent_guidance(intent=<user's words>) / horosa_dispatch. horosa_hecan runs 2+ techniques on one question → cross-validation (divergence disclosed, never averaged).
+2. Pass place:"上海" (→ coordinates + that date's zone). Cast techniques (奇门/六壬/六爻/塔罗) need the question's moment: give its date/time/place (dispatch/hecan: context).
+3. agent_guidance.required → ask via details.agent_recovery.prompt_to_user. Settings: retry with agent_confirmed_settings=true (or defaults_accepted=true). Facts (gender, time, moment, other person) go in the payload; no flag replaces them. Never self-confirm.
+4. Explain ONLY from data.export_snapshot.export_text; never hand-calculate. Text cut? warnings give the horosa_memory_show call for the rest; read it first.
+5. Technique results carry data.technique_card; quote it after your answer. Runs are stored (horosa_memory_query); horosa_report_render writes DOCX/PDF.
 
-HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run reaches any technique
-by name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."""
+HOROSA_MCP_COMPACT=1: {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run runs any technique
+by name); HOROSA_TOOLSETS=astro,cn limits the groups."""
 
 # HOROSA_JEV 开启时的 instructions（v0.39.0）：「nothing is sent to a remote service」这句在决策层开着时
 # 是假话，必须改口；预算仍是 2048 字节，所以同一变体里裁掉两句次要说明来换空间（两态都由测试锁 ≤2048）。
-_OFFLINE_CLAIM = "machine (offline); nothing is sent to a remote service."
+_OFFLINE_CLAIM = "machine; nothing is sent to a remote service."
 _JEV_CLAIM = (
-    "machine (offline). HOROSA_JEV is ON: redacted request text is sent to TypeSafe Jev (cloud)\n"
+    "machine. HOROSA_JEV is ON: redacted request text is sent to TypeSafe Jev (cloud)\n"
     "for routing/clarification; results self-report it in technique_card.decisions."
 )
 # HOROSA_TRACE_OTLP_ENDPOINT 设了时同理（每条追踪事件都 POST 到那个地址）：第三种说法；两者都开就两句都说。
 _OTLP_CLAIM = (
-    "machine (offline). HOROSA_TRACE_OTLP_ENDPOINT is set: every trace event is POSTed to that\n"
+    "machine. HOROSA_TRACE_OTLP_ENDPOINT is set: every trace event is POSTed to that\n"
     "endpoint (payload fields redacted unless trace capture is on)."
 )
 _JEV_OTLP_CLAIM = (
-    "machine (offline). HOROSA_JEV is ON: redacted request text goes to TypeSafe Jev (cloud);\n"
+    "machine. HOROSA_JEV is ON: redacted request text goes to TypeSafe Jev (cloud);\n"
     "HOROSA_TRACE_OTLP_ENDPOINT is set: every trace event is POSTed there."
 )
 _JEV_TRIMS = (
-    ("\nsuch a chart. Also 农历/节气/黄历 conversion and celebrity birth data.", "\nsuch a chart, 农历/节气/黄历 conversion, celebrity birth data."),
-    ("· 择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).", "· 择日 ×10: condition-tree window search."),
-    ("· 神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.", "· 神数 ×14 + 神数正传, 天文地占, tarot."),
+    ("\nsuch a chart. Also 农历/节气/黄历 conversion, celebrity birth data.", "\nsuch a chart, 农历/节气/黄历 conversion, celebrity birth data."),
+    ("择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).", "择日 ×10: condition-tree window search."),
+    ("神数 ×14 + 神数正传 (5 schools), 天文地占, tarot.", "神数 ×14 + 神数正传, 天文地占, tarot."),
     ("one question → cross-validation (divergence disclosed, never averaged).", "one question → cross-validation (divergence disclosed)."),
 )
 
@@ -160,11 +156,11 @@ _JEV_TRIMS = (
 _FULL_COVERS = f"WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)"
 _COMPACT_COVERS = f"WHAT IT COVERS ({COMPACT_SURFACE_TOOL_COUNT} tools: {len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
 _FULL_TAIL = (
-    f"HOROSA_MCP_COMPACT=1 exposes {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} "
-    "(horosa_tool_run reaches any technique\nby name); HOROSA_TOOLSETS=astro,cn limits which groups are exposed."
+    f"HOROSA_MCP_COMPACT=1: {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} "
+    "(horosa_tool_run runs any technique\nby name); HOROSA_TOOLSETS=astro,cn limits the groups."
 )
 _COMPACT_TAIL = (
-    "horosa_tool_run(tool_name=…, request={…}) reaches every technique; names: horosa://catalog/\n"
+    "horosa_tool_run(tool_name=…, request={…}) runs any technique; names: horosa://catalog/\n"
     "techniques (chart = horosa_astro_chart)."
 )
 

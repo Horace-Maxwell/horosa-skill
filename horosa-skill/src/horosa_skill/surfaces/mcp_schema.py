@@ -14,6 +14,8 @@
   response_view、siderealAyanamsa（47 制）。
 - dispatch/hecan：5 路 union 内联两次（各 24 KB）→ 单一宽松对象。
 - 描述：去掉每工具重复的澄清闸段（server instructions 已讲），只留技法双语一句 + 指引一行。
+- 对这个工具什么也不做的键不广告（`_unadvertised_by_design`）：闸门豁免的技法不广告闸门三键。形状（去掉描述后剩下的东西）
+  由 `scripts/mcp_surface_shape.py` 的基线锁：瘦身只许动描述文字与结构冗余。
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ import inspect
 import re
 from typing import Any
 
-from horosa_skill.agent_guidance import PREDICTIVE_INPUT_CONTRACTS
+from horosa_skill.agent_guidance import PREDICTIVE_INPUT_CONTRACTS, PREFLIGHT_EXEMPT_TOOLS
 from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS, SIDEREAL_AYANAMSA_LABELS
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.engine.synonyms import synonyms_for
@@ -183,6 +185,7 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
     unadvertised = set(advertise_hidden_fields(model)) | {
         k for k, v in props.items() if isinstance(v, dict) and v.get("x-horosa-hidden")
     }
+    silent = _unadvertised_by_design(tool_name)  # 不广告、也不算进「另 N 个高级旋钮」（它们不是旋钮）
     if issubclass(model, BirthInput):
         core = DOMAIN_CORE.get(definition.domain, ASTRO_CORE)
         targets = list(PREDICTIVE_INPUT_CONTRACTS.get(tool_name, {}).get("required_fields") or [])
@@ -191,10 +194,10 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
         # 推运目标字段与闸门三键永远广告。
         core = tuple(key for key in core if key not in unadvertised)
         for key in (*core, *targets, *own, *GATE_KEYS):
-            if key in props and key not in keep:
+            if key in props and key not in keep and key not in silent:
                 keep.append(key)
     else:
-        keep = [f for f in model.model_fields if f in props and f not in unadvertised]
+        keep = [f for f in model.model_fields if f in props and f not in unadvertised and f not in silent]
     # `knowledge`（自备知识库）与 `profile`（命主档案名）是全技法通用的附加参数，不是本技法的旋钮：不计数，否则 44 个原本没有
     # 隐藏旋钮的技法平白多一句「另 1 个高级旋钮」（全量面 +2.9 KB）。它们在 SKILL.md、tool_run 的 schema 与 server_profile 里说明。
     # `place` / `name`（v0.50.0，mcp_requests.COMMON_TECHNIQUE_PARAMS）同理不计数；模型自己声明的 name 照旧计入。
@@ -215,7 +218,7 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
             elif key not in required and key not in _SHAPED_DOC:
                 continue  # MCP-11：说不清是什么的旋钮不广告（照样按名接受、计入隐藏旋钮数，全表见 guidance）
         out[key] = _shaped(key, prop)
-    hidden = sorted(set(props) - set(out) - {"request", "knowledge", PROFILE_KEY} - common_added)
+    hidden = sorted(set(props) - set(out) - {"request", "knowledge", PROFILE_KEY} - common_added - silent)
     out["request"] = _request_property(hidden, tool_name)
     return {"type": "object", "properties": out, "additionalProperties": True, "x-horosa-hidden-knobs": len(hidden)}
 
@@ -474,6 +477,29 @@ def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
         _enum_closed_sets(tool.name, params["properties"])
         tool.parameters = params
     return hidden
+
+
+def _unadvertised_by_design(tool_name: str) -> frozenset[str]:
+    """这个技法按设计不广告的键（照样按名接受；不是「高级旋钮」，不计数）。每一类都要有「不广告也不亏」的机检：
+
+    闸门三键 × 闸门豁免的技法（`sensitive_settings.json::exempt_tools`：查表 / 检索 / 反查，没有会改变结果的设置可确认）：
+    `validate_agent_preflight` 对它们恒放行，三键传不传结果一样。广告出去只会让照字面办事的模型以为这些工具也要先确认
+    （门面早就按这条规矩办：`UNGATED_FACADES`）。10 个技法 × 三键 ≈ 2.5 KB。
+    守卫 `tests/test_sync314_budget_surface_shape.py::test_only_tools_the_gate_never_stops_drop_the_gate_keys`（两个方向）。
+    """
+    return _GATE_KEY_SET if tool_name in PREFLIGHT_EXEMPT_TOOLS else frozenset()
+
+
+_GATE_KEY_SET = frozenset(GATE_KEYS)
+
+
+def unadvertised_by_design() -> dict[str, frozenset[str]]:
+    """{MCP 工具名: 按设计不广告的键}。`scripts/mcp_surface_shape.py` 比对形状基线时从基线里减掉它们，并要求当前广告层里真的没有。"""
+    return {
+        definition.mcp_name: keys
+        for name, definition in TOOL_DEFINITIONS.items()
+        if (keys := _unadvertised_by_design(name))
+    }
 
 
 # 不过澄清闸的门面（report_from_tool 的闸门看的是 payload 里那份技法入参，顶层三键同样不起作用）。
