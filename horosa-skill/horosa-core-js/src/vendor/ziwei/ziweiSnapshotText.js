@@ -8,6 +8,9 @@
 // v3.13.0 对齐：四化流派名改走 ZWConst.zwSihuaSchoolLabel 单源（表值逐字同旧字面量，输出不变）；
 // 「农历」行闰字改走 utils/lunarText.leapPrefix（本地历算 month 已带「闰」时不再写成「闰闰六月」——真值修复）；
 // 其余仅上游注释去标签。
+// v3.14.0 复核（e55c3a66）：ZiWeiMain.js 这一版只动了 buildZiWeiInfoData（右栏信息卡的「时区」改 formatZoneLabel 显示）与
+// requestZiWei（同内容回访沿用旧对象），都是页面层；本文件抽出的六个函数与上游逐字相同（快照「时区：」行仍是 params.zone 原值），
+// 并把一处注释标签对齐上游原文。逐函数逐字比对由 tests/test_sync314_cn_b_ports.py 在有上游 checkout 时守。
 // ⚠ 读可变单例 ZWEngineOptions（传本/流派开关）与 ZWConst.ZWSchool（四化流派）：调用方负责按调用覆盖/还原
 //   （上游 buildZiweiSnapshotForParams 同式，见 tools/ziweiBirth.js）。
 import * as ZiWeiHelper from './ZiWeiHelper.js';
@@ -329,7 +332,7 @@ function buildZiWeiSnapshotText(params, result){
 		lines.push('');
 	}
 
-	// [#80] 运限概览:无条件段(与八字 [大运]/[流年行运概略] 对称)。可在「纳入内容」里取消勾选。
+	// [Windows #80] 运限概览:无条件段(与八字 [大运]/[流年行运概略] 对称)。可在「纳入内容」里取消勾选。
 	const overviewLines = buildZiweiPeriodOverviewLines(chart);
 	if(overviewLines.length){ lines.push(...overviewLines); }
 

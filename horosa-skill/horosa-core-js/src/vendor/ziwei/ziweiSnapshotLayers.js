@@ -5,6 +5,8 @@
 //   · buildZiweiPeriodLines / formatLuckLayerLines / findDaxianForYear —— [运限]（挂载所选运限层）
 //   · buildZiweiOverlayLines —— [流派叠层]（流派开关 ground-truth）
 // 函数体与两张模块级常量逐字未改；只有下方 import 按 vendor 树改了路径（上游是 ./ZWLuckPanel 等）。
+// v3.14.0 复核（e55c3a66）：ZiWeiMain.js 这一版只动 buildZiWeiInfoData 与 requestZiWei（页面层），本文件五个函数、两张常量
+// 与上游逐字相同；逐函数逐字比对由 tests/test_sync314_cn_b_ports.py 在有上游 checkout 时守。
 // ⚠ ZWEngineOptions 是**可变单例**（ziweiOptions.js）：调用方负责按调用覆盖/还原（见 tools/ziweiExtras.js）。
 import { ZWEngineOptions } from './ziweiOptions.js';
 import { childLimits, zhongxianOf } from './ziweiCore.js';

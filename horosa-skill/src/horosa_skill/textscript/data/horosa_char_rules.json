@@ -3,9 +3,9 @@
  "_fields": "rules：字 → default（null = 随词典）/ quote / ctx（上下文判定：ke = 生克义取 default，否则随词典；zhi 与 ctxHit 合用 = 上下文成立取 ctxHit，否则取 default）/ words（白名单，长词优先，原文该位是简体写法或繁体写法都算）。word_guards：白名单词按左右邻字（跳过空白）再判，notLeft / notRight 否决、onlyLeft / onlyLeftStrict 限定左邻、alt = 否决时该位取的字；edge_guards：以该字开头的白名单词（或只限 words 里的词）的左邻否决；tail_guards：以该字收尾的白名单词的右邻否决。contexts.ke / contexts.zhi：克 / 只 的上下文判定用字。place_label：串首是「出生地:」的整串音译地名，keep 里的字取原字。键名照抄上游（notLeft…），便于逐项比对。",
  "upstream": {
   "file": "Horosa-Web/astrostudyui/src/utils/scriptConvert/hantRules.js",
-  "commit": "06f25f21",
-  "release": "v3.13.1",
-  "read_on": "2026-11-03",
+  "commit": "e55c3a66",
+  "release": "v3.14.0",
+  "read_on": "2026-11-13",
   "note": "v3.12.0（960134d0）起上游判据从「白名单 + 缺省」扩成白名单 + 左右邻否决（WORD_GUARDS / EDGE_GUARDS / TAIL_GUARDS）+「克」「只」上下文判定 + 名人库出生地整串 + 原文已是繁体则不改。改上游规则后 tests/test_textscript.py 的上游比对会红，按它重新合并。"
  },
  "deviations": {
@@ -231,6 +231,7 @@
     "历遍": "歷遍",
     "历任": "歷任",
     "农历年": "農曆年",
+    "藏历年": "藏曆年",
     "公历年": "公曆年",
     "阴历年": "陰曆年",
     "阳历年": "陽曆年",
@@ -470,6 +471,7 @@
     "后妃": "后妃",
     "后羿": "后羿",
     "后稷": "后稷",
+    "后发座": "后髮座",
     "先天后天": "先天後天"
    }
   },
@@ -665,7 +667,8 @@
     "长发祯": "長發禎",
     "未发色": "未發色",
     "发生": "發生",
-    "卷发": "捲髮"
+    "卷发": "捲髮",
+    "后发座": "后髮座"
    }
   },
   "卷": {
