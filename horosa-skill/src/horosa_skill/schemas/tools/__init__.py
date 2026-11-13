@@ -24,6 +24,8 @@ from horosa_skill.schemas.tools.astro import (
     RelativeInput,
     RelativePartyInput,
     RelocationInput,
+    TransformChartInput,
+    ZodiacSystemsInput,
 )
 from horosa_skill.schemas.tools.base import (
     BirthInput,
@@ -249,6 +251,7 @@ __all__ = [
     "TianxingInput",
     "TongSheFaInput",
     "TongshuInput",
+    "TransformChartInput",
     "TriplicityRulersInput",
     "VedicProgInput",
     "WangjiInput",
@@ -263,5 +266,6 @@ __all__ = [
     "ZiWeiBirthInput",
     "ZiWeiRulesInput",
     "ZiweiZeriInput",
+    "ZodiacSystemsInput",
     "ZodiacalReleaseInput",
 ]

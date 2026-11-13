@@ -20,7 +20,7 @@ NONE_OF_THESE = "none_of_these"
 FAMILIES: dict[str, tuple[str, tuple[str, ...]]] = {
     "western_natal": (
         "Western natal / derived charts：本命星盘、13 宫、十二分盘、龙盘、迁居盘、中点盘、希腊占星、七政四余、世俗、合盘、占星地图、行星周期、巴比伦",
-        ("acg", "babylon", "chart", "chart12", "chart13", "draconic", "germany", "guolao_chart", "harmonic", "hellen_chart", "mundane", "planet_cycles", "relative", "relocation"),
+        ("acg", "babylon", "chart", "chart12", "chart13", "draconic", "germany", "guolao_chart", "harmonic", "hellen_chart", "mundane", "planet_cycles", "relative", "relocation", "transformchart", "zodiacsystems"),
     ),
     "western_predictive": (
         "Western predictive techniques：返照、次限/太阳弧/主限法、黄道释放、法达、小限、年限、推运释放点、行星年龄等",

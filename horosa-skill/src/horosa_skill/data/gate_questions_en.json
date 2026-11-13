@@ -140,6 +140,8 @@
   "实位派系与分至规范取哪一套？（派系改「位」的落点、分至规范改春分度数）": "Which school of positions and which equinox convention? (the school moves the positions, the convention the equinox degree)",
   "请提供出生日期、时间、时区和出生地点。": "Give birth date, time, time zone and birthplace.",
   "重置到哪个地点？（迁居/旅居地的经纬度，如伦敦 51n30 / 0w07）": "Relocate to which place? (coordinates of the new home or stay, e.g. London 51n30 / 0w07)",
+  "做哪一种变换？（旋转与翻转 / 分度重排 / 地方盘 / 换中心与换时刻 / 行星根数 / 坐标类比 六组共 33 种，每种是一张不同的盘；星阙默认倒置盘）": "Which transform? (33 kinds in six groups — rotations and reflections, re-divisions, locality charts, change of centre or moment, planetary orbital elements, coordinate analogs; each is a different chart. Xingque default: inverted)",
+  "用哪个黄道版本？（十三星座 / 十四星座 / 十二段不等分，共 19 种；各版本的座头与座长不同；星阙默认十三星座·甲本）": "Which zodiac version? (19 versions: 13-sign, 14-sign and unequal 12-segment zodiacs, each with its own sign starts and lengths. Xingque default: 13 signs, version A)",
   "分宫制取哪一种？（共 24 制，缺省整宫/Rashi）": "Which house system? (24 available; default whole-sign / Rashi)",
   "黄道岁差(ayanāṃśa)取哪一制？（共 47 制，缺省 lahiri）": "Which ayanamsa? (47 available; default lahiri)",
   "请分别提供双方出生日期、时间、时区和地点。": "Give both people's birth date, time, time zone and place.",

@@ -256,7 +256,7 @@ class EnrichMixin:
         # chart if the enrichment errors.
         # 上游 v50 给整个 chart 家族（含 13 宫/希腊化/衍生盘）都出 12分度/主宰星链/寿命格局，
         # 不只本命与世俗盘——门控放开到 astrochart_like 家族，段随之进导出。
-        if tool_name not in {"chart", "mundane", "chart13", "chart12", "hellen_chart", "harmonic", "draconic", "relocation"}:
+        if tool_name not in {"chart", "mundane", "chart13", "chart12", "hellen_chart", "harmonic", "draconic", "relocation", "transformchart"}:
             return response_data
         if not isinstance(response_data, dict) or not _is_astro_chart_payload(response_data):
             return response_data

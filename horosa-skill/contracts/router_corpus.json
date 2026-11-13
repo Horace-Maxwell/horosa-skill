@@ -507,6 +507,30 @@
       ]
     },
     {
+      "query": "排一张变换盘，看倒置之后的格局",
+      "expect": [
+        "transformchart"
+      ]
+    },
+    {
+      "query": "heliocentric chart of my birth",
+      "expect": [
+        "transformchart"
+      ]
+    },
+    {
+      "query": "按十三星座的黄道制，我的太阳落在哪一座",
+      "expect": [
+        "zodiacsystems"
+      ]
+    },
+    {
+      "query": "13-sign zodiac placements with Ophiuchus",
+      "expect": [
+        "zodiacsystems"
+      ]
+    },
+    {
       "query": "harmonic chart h5",
       "expect": [
         "harmonic"

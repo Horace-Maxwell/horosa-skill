@@ -610,6 +610,59 @@ class FakeClient(HorosaApiClient):
                 "relocLat": payload.get("relocLat", "51n30"),
                 "relocLon": payload.get("relocLon", "0w07"),
             }
+        if endpoint == "/astroextra/transformchart":
+            # 变换盘（上游 v3.14.0 transform_charts.build_transform_chart）：种类原样回显（后端认不出时回 inverted——runner 靠这个
+            # 回显发现「回来的不是所要的那一种」），整张变换后的盘同样挂在 `chart` 键下；人格盘 / 受孕盘带 moment、不带两个坐标标记，
+            # 垂直黄道盘另带两解表。现代宫主表与黄金分割表恒在。值级真相由 tests/test_sync314_labs_* 的实抓金标守。
+            kind = payload.get("transformKind") or "inverted"
+            out: dict = {
+                "kind": kind,
+                "rulers": [{
+                    "house": 1, "ruler": "Venus", "rulerRetro": None, "coRuler": "Mars", "coRulerRetro": "Pluto",
+                    "nextRuler": None, "nextRulerRetro": None, "inside": ["Sun"], "nearCusp": [],
+                }],
+                "golden": [{"lon": 71.84, "ratio": 0.381966, "extra": 0.0, "near": ["Moon"]}, {"lon": 161.84, "ratio": 0.381966, "extra": 90.0, "near": []}],
+            }
+            if kind in ("persona", "epoch"):
+                out["moment"] = "1991-01-15 08:20:29"
+            else:
+                out["coordinatesMoved"] = kind in ("inverted", "sunRise", "superimposed", "antiscia", "contraAntiscia", "nodeHouses")
+                out["natalHorizon"] = not out["coordinatesMoved"] or kind == "nodeHouses"
+            if kind == "vertical":
+                out["vertical"] = [
+                    {"id": "Sun", "outside": False, "declination": 18.85, "first": 54.18, "second": 125.82},
+                    {"id": "Pluto", "outside": True, "declination": -24.1},
+                ]
+            out["positions"] = [{"id": "Sun", "natalLon": 54.175, "lon": 234.175}, {"id": "Moon", "natalLon": 294.337, "lon": 114.337}]
+            # 后端 _chart_payload 只回这七个键（变换不跑推断 → 没有 predictives，所以这张盘不产 [可能性]）。
+            out["chart"] = {key: chart_payload[key] for key in ("params", "chart", "aspects", "lots", "receptions", "mutuals", "declParallel") if key in chart_payload}
+            return out
+        if endpoint == "/astroextra/zodiacsystems":
+            # 黄道制（zodiac_systems.build_zodiac_systems）：版本原样回显（认不出时后端回 z13a）；每行带全部版本的落段，
+            # 这里只放所请求的那一个版本（正文只读 row.versions[result.version]）。
+            version = payload.get("zodiacVersion") or "z13a"
+            seg = {"version": version, "sign": "金牛", "signIndex": 1, "deg": 0.89, "equalDeg": 0.67}
+            return {
+                "version": version,
+                "versions": [{"key": version, "label": "十三星座 · 甲本", "group": "thirteen", "moves": True}],
+                "wheel": [{"sign": "白羊", "start": 28.9, "length": 24.4}, {"sign": "金牛", "start": 53.3, "length": 36.7}],
+                "galacticCenter": 266.705,
+                "houses13Cusps": [181.46, 205.86],
+                "rows": [
+                    {"id": "Sun", "lon": 54.175, "ra": 51.94, "dec": 18.85, "con": "Tau", "conName": "金牛", "onZodiac": True,
+                     "versions": {version: seg}, "galactic": {"lon": 147.47, "sign": "狮子", "deg": 27.47},
+                     "houses13": {"house": 9, "deg": 21.9, "fraction": 0.73}},
+                    {"id": "Pluto", "lon": 226.2, "ra": 227.3, "dec": -1.6, "con": "Ser", "conName": "巨蛇", "onZodiac": False,
+                     "versions": {version: {**seg, "sign": "天秤", "signIndex": 6, "deg": 5.1}},
+                     "galactic": {"lon": 319.5, "sign": "水瓶", "deg": 19.5}, "houses13": {"house": 2, "deg": 20.3, "fraction": 0.55}},
+                ],
+                "around": [{
+                    "id": "Sun", "con": "Tau", "conName": "金牛", "retro": False,
+                    "last": {"id": "Sun", "from": "Ari", "to": "Tau", "fromName": "白羊", "toName": "金牛", "date": "1990-05-14 16:14:04"}, "lastDays": 0.93,
+                    "next": {"id": "Sun", "from": "Tau", "to": "Gem", "fromName": "金牛", "toName": "双子", "date": "1990-06-21 23:39:51"}, "nextDays": 37.38,
+                }],
+                "year": [{"id": "Mars", "from": "Aqr", "to": "Psc", "fromName": "宝瓶", "toName": "双鱼", "date": "1990-05-25 21:11:38"}],
+            }
         if endpoint == "/astroextra/planetreturn":
             # 多重回归: per-body return dates. Synthesize a couple so [多重回归] emits + export stays clean.
             return {"returns": [{"which": 1, "date": "2019-05-10"}, {"which": 2, "date": "2048-11-02"}]}
@@ -1343,6 +1396,57 @@ class FakeJsClient(HorosaJsEngineClient):
             if technique in _PROGEXTRA_FAKE:
                 return {"tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": _PROGEXTRA_FAKE[technique]}
             return {"tool": "progextra", "technique": technique, "data": {"ok": False}, "snapshot_text": ""}
+        if tool_name == "aux_labs":
+            # 辅盘变换盘 / 黄道制的专属段：形状同真工具 tools/auxLabs.js（vendored transformCharts.js 的 transformSnapshotLines /
+            # zodiacSnapshotLines，段头拆成 title）。段头取自真 preset（不手抄）；request_fields 取 auxlab_vocab 的同一张表
+            # （该表由 tests/test_sync314_labs_vocab.py 对 vendored JS 逐项锚定）；值级真相与「请求体逐键比对」由真 JS 用例守。
+            from horosa_skill import auxlab_vocab as _aux
+            from horosa_skill.exports.registry import AI_EXPORT_PRESET_SECTIONS as _presets
+
+            technique = payload.get("technique")
+            settings = payload.get("settings") or {}
+            result = payload.get("result") or {}
+            title = _presets[technique][-1]
+            name = {"Sun": "太阳", "Moon": "月亮", "Pluto": "冥王星"}
+            if technique == "transformchart":
+                kind = settings.get("kind")
+                if kind not in _aux.TRANSFORM_KIND_OPTIONS:
+                    return {"invalid": [{"key": "kind", "value": kind, "allowed": list(_aux.TRANSFORM_KINDS)}]}
+                options = _aux.TRANSFORM_KIND_OPTIONS[kind]
+                if not result.get("chart"):
+                    return {"title": "", "lines": [], "snapshot_houses": None, "request_fields": _aux.transform_request_fields(settings),
+                            "kind": {"value": kind, "label": _aux.TRANSFORM_KIND_LABELS[kind], "desc": "", "options": list(options)}}
+                lines = [f"变换:{_aux.TRANSFORM_KIND_LABELS[kind]}。星和宫头转 180°。改进档四轴一起转;经典档四轴留在本命。"]
+                if "planet" in options:
+                    lines.append(f"基准星:{name.get(settings.get('planet'), settings.get('planet'))}")
+                if "shift" in options:
+                    lines.append(f"宫位:{'随之旋转' if settings.get('shift') else '不动'}")
+                if "house" in options:
+                    lines.append(f"对应本命第 {settings.get('house')} 宫头")
+                if "variant" in options:
+                    lines.append("口径:经典(四轴留在本命;现代宫主表白羊主冥王、天蝎主火星)" if settings.get("variant") == "classic" else "口径:改进")
+                if result.get("moment"):
+                    lines.append(f"起盘时刻:{result['moment']}")
+                lines += [f"{name.get(row['id'], row['id'])}:本命黄经 {row['natalLon']:.2f}° → {row['lon']:.2f}°" for row in result.get("positions") or []]
+                return {
+                    "title": title, "lines": lines, "snapshot_houses": None,
+                    "request_fields": _aux.transform_request_fields(settings),
+                    "kind": {"value": kind, "label": _aux.TRANSFORM_KIND_LABELS[kind], "desc": lines[0].split("。", 1)[1], "options": list(options)},
+                }
+            version = settings.get("version")
+            if version not in _aux.ZODIAC_VERSION_LABELS:
+                return {"invalid": [{"key": "version", "value": version, "allowed": list(_aux.ZODIAC_VERSION_LABELS)}]}
+            rows = result.get("rows") if isinstance(result.get("rows"), list) else None
+            if rows is None:
+                return {"title": "", "lines": [], "version": {"value": version, "label": _aux.ZODIAC_VERSION_LABELS[version]}}
+            lines = [f"黄道版本:{_aux.ZODIAC_VERSION_LABELS[version]}(黄经不变,只换分段)", f"银心回归黄经 {result.get('galacticCenter', 0):.2f}°"]
+            for row in rows:
+                seg = (row.get("versions") or {}).get(result.get("version")) or {}
+                lines.append(
+                    f"{name.get(row['id'], row['id'])}:回归黄经 {row['lon']:.2f}° · {seg.get('sign')} {seg.get('deg', 0):.2f}° · "
+                    f"星座 {row['conName']}{'' if row.get('onZodiac') else '(黄道外)'}"
+                )
+            return {"title": title, "lines": lines, "version": {"value": version, "label": _aux.ZODIAC_VERSION_LABELS[version]}}
         if tool_name == "acg_section":
             # 形状同真工具 tools/acgSection.js（vendored acgSnapshot.buildAcgSectionText）；正文 = 真 builder 在本桩
             # /location/acg 两星数据上的逐字输出（值级真相由 tests/test_sync311_western.py 的真 JS 用例守）。

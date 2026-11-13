@@ -90,7 +90,8 @@ CLASS = {
     # 本地数据检索：不算盘，只读本地库/注册表。
     "local_data": {"astrodata", "export_registry", "export_parse", "knowledge_registry", "knowledge_read"},
     # 后端算、JS 只排版：runner 同时有端点与 JS 调用时启发式会误判 headless_js，这里显式点名。
-    "python_chart_backend": {"acg", "agepoint", "distributions", "neroman", "bezzafigure", "jayprofection", "michon"},
+    "python_chart_backend": {"acg", "agepoint", "distributions", "neroman", "bezzafigure", "jayprofection", "michon",
+                             "transformchart", "zodiacsystems"},
 }
 NOTES = {
     "ken_backed": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan",
@@ -119,6 +120,11 @@ NOTE_OVERRIDES = {
     "distributions": "chart 服务 /predict/dist 算界推运与伙伴星；vendored 星阙前端 buildDistributionsSnapshotFromResult（horosa-core-js progextra）按回包排版",
     **{k: f"chart 服务 /astroextra/{k}（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
        for k in ("neroman", "bezzafigure", "jayprofection", "michon")},
+    # 上游 v3.14.0 辅盘两页：后端算，vendored 上游 transformCharts.js 只排专属段。
+    "transformchart": "chart 服务 /astroextra/transformchart（astrostudy/transform_charts.py）把本命盘换算成新盘；整盘通用段走 Python snapshot builder，"
+                      "[变换盘] 专属段由 vendored 星阙前端 transformSnapshotLines（horosa-core-js aux_labs）按回包排版",
+    "zodiacsystems": "chart 服务 /astroextra/zodiacsystems（astrostudy/zodiac_systems.py）算各黄道版本的落段、星座与换星座时刻；"
+                     "[黄道制] 段由 vendored 星阙前端 zodiacSnapshotLines（horosa-core-js aux_labs）按回包排版",
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "guolao_chart": (
         "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "

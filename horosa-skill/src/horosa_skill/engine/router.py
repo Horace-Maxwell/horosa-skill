@@ -44,6 +44,19 @@ _JAY_WORDS = ["周日小限", "jay profection", "jayprofection", "diurnal profec
 _NEROMAN_WORDS = ["演进推运", "neroman", "néroman", "evolved direction", "演进弧"]
 _MICHON_WORDS = ["双黄道", "michon", "double zodiac", "回归恒星叠合"]
 _BEZZA_WORDS = ["bezza", "bezzafigure", "directed figure", "推运图(bezza)"]
+# 上游 v3.14.0 辅盘两页。变换盘 33 种里只拿不会与别的技法 / 日常话撞名的名字选路：「九分盘」是印占 D9 的通称、
+# 「映点」单说是相位类别、「旬盘」「地理盘」后面接一个「点」字就成了「盘点」、「近日点」「升交点」是泛天文词——都不进表
+# （作为本工具的 transformKind 入参值照认）。黄道制不收单说的「星座」（那是「我是什么星座」，归本命盘）。
+_TRANSFORM_WORDS = [
+    "变换盘", "倒置盘", "日升盘", "叠置盘", "映点盘", "北交宫盘", "垂直黄道盘", "行星中心盘", "日心盘", "人格盘", "受孕盘",
+    "transformchart", "transform chart", "transformed chart", "antiscia chart", "heliocentric chart", "persona chart",
+    "epoch chart", "geodetic chart",
+]
+_ZODIAC_SYSTEM_WORDS = [
+    "黄道制", "十三星座", "13星座", "十四星座", "14星座", "蛇夫座", "不等分黄道", "银河黄道",
+    "zodiacsystems", "zodiac systems", "zodiac system", "13-sign zodiac", "13 sign zodiac", "thirteen-sign zodiac",
+    "14-sign zodiac", "ophiuchus", "galactic zodiac", "constellational zodiac",
+]
 
 
 @dataclass
@@ -343,6 +356,10 @@ def route(request: DispatchInput) -> RouteResult:
         add("draconic")
     if _contains_any(text, ["重置盘", "迁居盘", "移居盘", "relocation", "relocated chart"]):
         add("relocation")
+    if _contains_any(text, _TRANSFORM_WORDS):
+        add("transformchart")
+    if _contains_any(text, _ZODIAC_SYSTEM_WORDS):
+        add("zodiacsystems")
     if _contains_any(text, ["三分主", "triplicity"]):
         add("triplicityrulers")
     if _contains_any(text, ["数字相位推运", "释放点", "小年数", "keypoints", "key points"]):

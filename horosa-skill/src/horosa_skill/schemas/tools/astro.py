@@ -6,6 +6,7 @@ from typing import Any, ClassVar, Literal
 from pydantic import Field, field_validator
 
 from horosa_skill.astro_rulers import DRACONIC_HOUSE_MODES
+from horosa_skill.auxlab_vocab import ZODIAC_UNUSED_CHART_KEYS
 from horosa_skill.errors import bilingual
 from horosa_skill.schemas.tools.base import (
     _LIFESPAN_METHOD_DESC,
@@ -389,6 +390,56 @@ class RelocationInput(BirthInput, _ChartDayBoundaryKnobs):
     lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
     relocLat: Any | None = Field(default=None, description="重置地纬度（如 51n30）；缺省回退出生地。")
     relocLon: Any | None = Field(default=None, description="重置地经度（如 0w07）；缺省回退出生地。")
+
+
+class TransformChartInput(BirthInput, _ChartDayBoundaryKnobs):
+    # 变换盘（上游 v3.14.0 辅盘页 AstroTransformLab / 无头 derivedLabsHeadless.js，POST /astroextra/transformchart）：
+    # 把本命盘按一种规则换算成一张新盘。入参键 = 后端请求键（Java AstroExtraController 白名单同名）；值域单源
+    # auxlab_vocab（对 vendored 上游 transformCharts.js 逐项锚定）。后端对认不出的变换静默退回倒置盘，所以在这里拒。
+    # 广告层只留变换种类；四个专属选项声明而不广告（预算），全表在 guidance。
+    predictive: bool | None = False
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
+        {"transformPlanet", "transformShift", "transformHouse", "transformVariant", "lifespanMethod"}
+    )
+    lifespanMethod: str | None = Field(default=None, description=_LIFESPAN_METHOD_DESC)
+    transformKind: str | None = Field(default=None, description="变换种类，33 种（缺省 inverted 倒置盘）；全表与各自选项见 guidance")
+    transformPlanet: str | None = Field(
+        default=None, description="基准星（叠置盘 / 行星中心盘 / 人格盘用）：Sun…Pluto 十星，缺省 Moon。"
+    )
+    transformShift: bool | None = Field(default=None, description="宫位同转（叠置盘用）：false 宫位与四轴不动（缺省）| true 随之旋转。")
+    transformHouse: int | None = Field(default=None, description="对应本命宫头（受孕盘用）：1–12，缺省 1。")
+    transformVariant: str | None = Field(
+        default=None, description="口径（倒置盘 / 日升盘 / 九分盘 / 北交宫盘用）：improved 改进（缺省）| classic 经典（四轴留在本命）。"
+    )
+
+    @field_validator("transformKind", "transformPlanet", "transformHouse", "transformVariant", mode="before")
+    @classmethod
+    def _transform_option_known(cls, value: Any, info: Any) -> Any:
+        from horosa_skill import auxlab_vocab as vocab
+        from horosa_skill.input_fields import parse_with
+
+        table = {
+            "transformKind": vocab.TRANSFORM_KIND_VOCAB, "transformPlanet": vocab.TRANSFORM_PLANET_VOCAB,
+            "transformHouse": vocab.TRANSFORM_HOUSE_VOCAB, "transformVariant": vocab.TRANSFORM_VARIANT_VOCAB,
+        }[info.field_name]
+        return parse_with(table, info.field_name, value)
+
+
+class ZodiacSystemsInput(BirthInput):
+    # 黄道制（上游 v3.14.0 辅盘页 AstroZodiacLab，POST /astroextra/zodiacsystems）：黄经不变，只换分段——各点落在所选版本
+    # （十二段不等分 / 十三星座 / 十四星座）的哪一段、落哪个星座、银河黄道、上次与下次换星座、十三宫。
+    # 后端一律回到回归黄经上分段（zodiac_systems._body_rows），宫制不参与：这三个域核心键不改结果，声明而不广告。
+    predictive: bool | None = False
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(ZODIAC_UNUSED_CHART_KEYS)
+    zodiacVersion: str | None = Field(default=None, description="黄道版本，19 种（缺省 z13a 十三星座·甲本）；全表见 guidance")
+
+    @field_validator("zodiacVersion", mode="before")
+    @classmethod
+    def _zodiac_version_known(cls, value: Any) -> Any:
+        from horosa_skill.auxlab_vocab import ZODIAC_VERSION_VOCAB
+        from horosa_skill.input_fields import parse_with
+
+        return parse_with(ZODIAC_VERSION_VOCAB, "zodiacVersion", value)
 
 
 # 世俗盘也吃的 F17 快照口径键（BirthInput 上「send:'never'——不进 /chart，只改导出段」的那组里，世俗盘正文真消费的部分：
