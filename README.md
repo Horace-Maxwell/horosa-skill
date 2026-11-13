@@ -2,15 +2,15 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/hero-zh-dark.svg" />
-  <img src="./docs/assets/readme/hero-zh-light.svg" alt="Horosa Skill — 把星阙 114 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="100%" />
+  <img src="./docs/assets/readme/hero-zh-light.svg" alt="Horosa Skill — 把星阙 119 个术数 / 占星技法做成任何 AI 都能本地调用的 MCP server 与 CLI" width="100%" />
 </picture>
 
-<sub>A local-first MCP server &amp; CLI that exposes 114 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.</sub>
+<sub>A local-first MCP server &amp; CLI that exposes 119 real astrology / metaphysics techniques from Horosa (星阙) to any AI client.</sub>
 
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/技法-114-1c1917?style=flat-square" alt="114 tools" />
-  <img src="https://img.shields.io/badge/测试-6661_passed-3e7c6f?style=flat-square" alt="6661 passed" />
+  <img src="https://img.shields.io/badge/技法-119-1c1917?style=flat-square" alt="119 tools" />
+  <img src="https://img.shields.io/badge/测试-7518_passed-3e7c6f?style=flat-square" alt="7518 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -29,19 +29,19 @@
 
 <br/>
 
-**Horosa Skill 把星阙（Horosa）的 114 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。** 克隆仓库、装一次离线 runtime，Claude Code / Claude Desktop / Codex / Cursor / Open WebUI 等客户端就能通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占 / 灵棋经 / 小六壬 / 飞宫小奇门 / 小成图 / 皇极轨策 / 神数正传，以及全 14 路神数。
+**Horosa Skill 把星阙（Horosa）的 119 个真实术数 / 占星技法，做成任何 AI 都能本地调用的 MCP server 与 CLI。** 克隆仓库、装一次离线 runtime，Claude Code / Claude Desktop / Codex / Cursor / Open WebUI 等客户端就能通过 **MCP** 或 **JSON-first CLI** 直接调用真实的星阙方法：西洋本命 / 推运 / 卜卦 / 择日，八字 / 紫微 / 大六壬 / 奇门 / 太乙 / 金口诀 / 三式合一，六爻 / 塔罗 / 天文地占 / 灵棋经 / 小六壬 / 飞宫小奇门 / 小成图 / 皇极轨策 / 神数正传，以及全 14 路神数。
 
-算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构，并附一张确定性的**技法依据卡**；每次调用自动落成可检索的本地记录。与星阙桌面端共用同一套后端、逐值同源（导出契约 v16 镜像桌面端 aiExport v60）。
+算法在本机运行，断网可用；每个技法返回统一 envelope 与星阙式导出结构，并附一张确定性的**技法依据卡**；每次调用自动落成可检索的本地记录。与星阙桌面端共用同一套后端、逐值同源（导出契约 v17 镜像桌面端 aiExport v65）。
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>114 技法一次装齐</b><br/><sub>西洋全链路、中文术数主干、全 14 路神数、十路择日，一次安装全部到位。</sub></td>
+    <td width="33%" valign="top"><b>119 技法一次装齐</b><br/><sub>西洋全链路、中文术数主干、全 14 路神数、十路择日，一次安装全部到位。</sub></td>
     <td width="33%" valign="top"><b>算法本机跑 · 断网可用</b><br/><sub>Java / Python / Node 离线 runtime 在你的机器上计算，不联网、不上传。</sub></td>
     <td width="33%" valign="top"><b>AI 不许乱补参数</b><br/><sub>缺生辰、地点、时区、流派时，澄清闸先拦下并给出可直接转给用户的追问。</sub></td>
   </tr>
   <tr>
     <td valign="top"><b>结论可溯源</b><br/><sub>每次起盘附技法依据卡：用了什么技法、什么口径（每项设置从哪来）、谁算的、段落全不全、版本链。</sub></td>
-    <td valign="top"><b>31 域知识库 · 引必带出处</b><br/><sub>hover 知识 + 技法操作手册 + 八字断语库，逐条带上游文件与版本出处。</sub></td>
+    <td valign="top"><b>35 域知识库 · 引必带出处</b><br/><sub>hover 知识 + 技法操作手册 + 八字断语库，逐条带上游文件与版本出处。</sub></td>
     <td valign="top"><b>忠实性评测 · 幻觉判红</b><br/><sub>确定性校验器把解读逐句对盘面真值；喂错盘、诱导复述一律判红。</sub></td>
   </tr>
   <tr>
@@ -57,12 +57,12 @@
 <details>
 <summary><b>完整特性清单</b></summary>
 
-- **114 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
+- **119 个真实技法，一次安装，全程离线。** 覆盖西洋占星全链路、中文术数主干、数算与卜法、全 14 路神数；算法在本机运行，不联网、不上传。
 - **为 AI 消费而设计的稳定契约。** 每次调用返回统一 envelope，接入导出协议的技法附带 `export_snapshot`（段结构化正文）。同一技法连续调用得到同一套字段，落库后结构不丢。
 - **调用前的硬性澄清闸。** 只要技法受时间 / 地点 / 时区 / 性别 / 事项 / 宫制 / 历法 / 起局方式影响，agent 在用户回答前会被结构化拦截，并收到可直接转发给用户的追问文本；只问还没回答的，钟点、性别这类事实不能用「确认」代替；读不懂的入参按字段说清楚，不再算出另一张盘。
 - **每个结论可溯源。** 响应自带技法依据卡（技法 / 流派口径 / 谁算的 / 段落全不全 / 版本链），`horosa_technique_report` 一键出方法报告，会话级自动检出跨技法口径冲突。
-- **31 域方法论知识库，引必带出处。** 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库（21 类口诀）共 416 条，逐条带上游文件与版本出处；没有出处的解读必须明说是通则推理。
-- **盘面事实忠实性评测。** 确定性校验器把 AI 解读逐句对盘面机读真值，判 supported / invented / contradicted；喂错盘与诱导复述判红；120 条基准用例与工具注册表锁步。
+- **35 域方法论知识库，引必带出处。** 星阙 app 内 hover 知识三域 + 31 份技法操作手册 + 八字断语库（21 类口诀）共 469 条，逐条带上游文件与版本出处；没有出处的解读必须明说是通则推理。
+- **盘面事实忠实性评测。** 确定性校验器把 AI 解读逐句对盘面机读真值，判 supported / invented / contradicted；喂错盘与诱导复述判红；125 条基准用例与工具注册表锁步。
 - **一问多技法合参。** `horosa_hecan` 至少两种技法交叉印证（可复用此前的 `run_id`）+ 合参模板（带各技法正文节选）：每条结论必须绑定真实段落，收敛与分歧分开填，**分歧必须披露、不许平均**。
 - **精简的响应体量。** MCP 结果缺省是阅读视图：正文一遍 + 段索引 + 技法依据卡，不带引擎原始树；正文过长按段裁，`warnings` 写明续读调用。`response_view=sections|titles|full` 改取分段正文 / 只要段标题 / 带原始树，完整结果始终已归档。
 - **主限法可推至 3000 年。** 逐位核验的核5方位法 + 22 项时间钥匙 + In Zodiaco / In Mundo + 宿命点(Vertex)应星 + 映点 / 界作迫星，多圈复发行。
@@ -81,7 +81,7 @@
   <img src="./docs/assets/readme/architecture-zh-light.svg" alt="Horosa Skill 架构图：AI 客户端 → Horosa Skill 本地进程 → 离线 runtime → 本地存储" width="100%" />
 </picture>
 
-AI 客户端经 MCP（stdio / streamable-http）或 JSON-first CLI 接入 **Horosa Skill（本地进程 · 114 工具 · 澄清闸 · 统一 envelope）**；
+AI 客户端经 MCP（stdio / streamable-http）或 JSON-first CLI 接入 **Horosa Skill（本地进程 · 119 工具 · 澄清闸 · 统一 envelope）**；
 它在本机调起离线 runtime——Java 后端（农历 / 八字 / 紫微 / 六壬）、Python chart 服务（西洋星盘、ken 三式引擎、kentang 神数引擎）与
 headless JS 层 horosa-core-js（把结果重排成 `aiExport.js` 段结构）——再把每次调用写进本地 SQLite 与 JSON 归档。
 上游星阙只单向同步进本仓，runtime 随 GitHub Releases 分发。
@@ -198,11 +198,11 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 
 | 客户端 | 传输 | 一行接入 | 默认工具面 | 注意 |
 | :-- | :-- | :-- | :-- | :-- |
-| **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 127 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
-| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 127 | skill + MCP 一步到位；插件装在 `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill`，首次运行 `uv run --directory "<那个目录>" horosa-skill install` 装离线 runtime（工具报 `runtime.not_installed` 时会给出带真实路径的这条命令） |
+| **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 132 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
+| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 132 | skill + MCP 一步到位；插件装在 `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill`，首次运行 `uv run --directory "<那个目录>" horosa-skill install` 装离线 runtime（工具报 `runtime.not_installed` 时会给出带真实路径的这条命令） |
 | **Agent Plugins v1**（VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code） | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`；VS Code「Chat: Install Plugin From Source」填仓库地址；`qwen extensions install Horace-Maxwell/horosa-skill`；Kiro「Import power from GitHub」 | 精简 14 | 仓根 `plugin.json` + `mcp.json`（规范 1.0.0）：命令是 `uvx` + 钉当前版本的 wheel，**需先装 uv**；首次调用前 `uvx --from <wheel> horosa-skill install` 装离线 runtime。Codex 经 `codex plugin marketplace add Horace-Maxwell/horosa-skill` 读同一份清单（未实测）；OpenClaw / Claude Code 仍走 `.claude-plugin/` |
-| **MCP 官方注册中心** | stdio（`.mcpb`） | 在支持注册中心的客户端里搜 `horosa`（Goose、Junie、Copilot `/mcp search`、PulseMCP、Glama 都从这里取） | 全量 127 | 条目 `io.github.Horace-Maxwell/horosa-skill`，只登记每个 release 的 `.mcpb`（带 sha256，客户端装前校验）；v0.41.0 起每次发版翻公开后自动登记 |
-| **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 127 | `.mcpb` 在每个 release 的资产里 |
+| **MCP 官方注册中心** | stdio（`.mcpb`） | 在支持注册中心的客户端里搜 `horosa`（Goose、Junie、Copilot `/mcp search`、PulseMCP、Glama 都从这里取） | 全量 132 | 条目 `io.github.Horace-Maxwell/horosa-skill`，只登记每个 release 的 `.mcpb`（带 sha256，客户端装前校验）；v0.41.0 起每次发版翻公开后自动登记 |
+| **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 132 | `.mcpb` 在每个 release 的资产里 |
 | **Cursor** | stdio | `setup --client cursor`（或 `client config --format cursor` 拿官方 deep link 点击即装） | 精简 14 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode`（写用户级 `mcp.json`；或 `client config --format vscode` 拿 `vscode:mcp/install` 链接） | 精简 14 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
 | **Codex** | stdio | `setup --client codex`（原位合并 `~/.codex/config.toml`，含超时） | 精简 14 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s）；每工具 inputSchema ≤ 5000 B（0.158 缺省预算，本仓守卫） |
@@ -226,9 +226,9 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | **Augment Auggie CLI** | stdio | `setup --client augment`（写 `~/.augment/settings.json`（保留注释）） | 精简 14 | IDE 扩展用自己的设置面板，不读这个文件 |
 | **Deep Code** | stdio | `setup --client deepcode`（写 `~/.deepcode/settings.json`（严格 JSON；文件有注释则拒写——它会把整份连 API key 一起丢掉）） | 精简 14 | 单次工具调用固定 60 s 上限，长任务会超时；启动超时用 `DEEPCODE_MCP_TIMEOUT` |
 | **DeepSeek Harness（dsh）** | stdio | `setup --client dsh`（生成独立补丁 `~/.horosa/clients/dsh/horosa.cordis.yml`，`dsh web --patch <它>` 启用；不改你的 `cordis.patch.yml`） | 精简 14 | 开发者预览版，格式可能变 |
-| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 127 | — |
-| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 127 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
-| **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层**终结 OAuth 的 HTTPS 网关**（Cloudflare Access / oauth2-proxy）——两家连接器只接 OAuth，本 server 只提供静态 Bearer，网关负责把 OAuth 换成注入 `Authorization: Bearer <HOROSA_MCP_TOKEN>` | 全量 127 | **没有托管端点**；配方见 [说明](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
+| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 132 | — |
+| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 132 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
+| **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层**终结 OAuth 的 HTTPS 网关**（Cloudflare Access / oauth2-proxy）——两家连接器只接 OAuth，本 server 只提供静态 Bearer，网关负责把 OAuth 换成注入 `Authorization: Bearer <HOROSA_MCP_TOKEN>` | 全量 132 | **没有托管端点**；配方见 [说明](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
 
 </details>
 
@@ -246,7 +246,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | Intel Mac | ❌ 不支持载荷；JS 引擎可装（自 0.50.1） | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷。`install` 自动只装 JS 引擎（需 Node.js ≥ 20.10），其余技法走网关模式 |
 
 > [!TIP]
-> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 14 个门面工具（含按名直调的 `horosa_tool_run`，114 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；认不出的值会被忽略，问题写在 stderr、`horosa_agent_guidance` 的 `server_profile` 与 `doctor` 里；一个合法值都没有时只注册门面工具 + `horosa_tool_run`，不会悄悄变成全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 14 个门面工具（含按名直调的 `horosa_tool_run`，119 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；认不出的值会被忽略，问题写在 stderr、`horosa_agent_guidance` 的 `server_profile` 与 `doctor` 里；一个合法值都没有时只注册门面工具 + `horosa_tool_run`，不会悄悄变成全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
 
 > [!TIP]
 > **繁体输出**：在 Claude Desktop 扩展设置 / Claude Code 插件设置里勾「繁體中文輸出」，或设 `HOROSA_OUTPUT_SCRIPT=zh-Hant`（香港字形用 `zh-Hant-HK`；`setup --client <名> --output-script zh-Hant` 直接写进客户端配置）。排盘正文、段名、提示与报告转成繁体；回显的入参、设置值、选项、错误码保持原样（AI 原样送回也对得上），不设就是简体、与原来逐字相同。术数用字按 `沖 / 剋 / 曆` 而非 `衝 / 克 / 歷`。
@@ -264,7 +264,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 所有业务技法都返回统一 envelope 并附星阙式 `export_snapshot`。带 ⓟ 的工具受设置影响，调用前必须先确认参数。
 
 <details open>
-<summary><b>西洋占星 · 本命与派生盘（11）</b></summary>
+<summary><b>西洋占星 · 本命与派生盘（13）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
@@ -285,7 +285,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 </details>
 
 <details>
-<summary><b>西洋占星 · 推运 / 返照 / 时运 · 占星地图 / 名人库（37）</b></summary>
+<summary><b>西洋占星 · 推运 / 返照 / 时运 · 占星地图 / 名人库（38）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
@@ -427,15 +427,15 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | --- | --- | --- |
 | `gua_desc` / `gua_meiyi` | 卦义 / 梅易卦义 | 卦名卦辞 / 梅花易数卦义 |
 | `export_registry` / `export_parse` | 导出协议注册表 / 正文解析器 | 机器可读导出总表 / 把导出文本解析回 JSON |
-| `knowledge_registry` / `knowledge_read` | 知识目录 / 读取器 | 31 域（hover 知识 + 技法操作手册 + 八字断语库）列出 / 读取 / `query` 跨域全文检索，逐条带出处 |
+| `knowledge_registry` / `knowledge_read` | 知识目录 / 读取器 | 35 域（hover 知识 + 技法操作手册 + 八字断语库）列出 / 读取 / `query` 跨域全文检索，逐条带出处 |
 
-计算工具之外是门面工具：全量面 = 114 技法 + 13 个门面（共 127）；精简面（`HOROSA_MCP_COMPACT=1`）只给 14 个门面工具 = 这 13 个 + 按名直呼的 `horosa_tool_run`（精简面没有平铺的知识 / 导出工具，`knowledge_read` 等也经 `horosa_tool_run` 到达）：
+计算工具之外是门面工具：全量面 = 119 技法 + 13 个门面（共 127）；精简面（`HOROSA_MCP_COMPACT=1`）只给 14 个门面工具 = 这 13 个 + 按名直呼的 `horosa_tool_run`（精简面没有平铺的知识 / 导出工具，`knowledge_read` 等也经 `horosa_tool_run` 到达）：
 
 | 门面 | 作用 |
 | --- | --- |
 | `horosa_dispatch` | 总调度：按问句意图选技法（繁体、全角、英文、拼音说法同样路由）。起课类（奇门 / 六壬 / 六爻 / 塔罗 / 黄历…）按 `context` 里的「此刻」起盘，缺了就问（服务端不拿自己的时钟当你的此刻、也不拿出生时刻顶替），每个技法用了哪个时刻写在 `time_basis`；几种技法都合适时回 `dispatch.technique_choice_required` 请你挑，目录里没有的（手相、风水…）回 `dispatch.out_of_scope` |
 | `horosa_hecan` | 合参：一问多技法交叉印证。`tools` 点名技法或写此前的 `run_id`（原样复用、不重算）；不给时按问题领域缺省配一对（如命理 八字 + 紫微）并在 `warnings` 说明；少于两个技法算成会明说「这不是交叉印证」；返回带各技法正文节选与结论槽的合参模板 |
-| `horosa_tool_run` | 按名直呼（精简面 / `HOROSA_TOOLSETS` 裁剪面）：注册表键或 MCP 名 + 载荷，调 114 技法目录索引中的任意一个 |
+| `horosa_tool_run` | 按名直呼（精简面 / `HOROSA_TOOLSETS` 裁剪面）：注册表键或 MCP 名 + 载荷，调 119 技法目录索引中的任意一个 |
 | `horosa_agent_guidance` | 参数指引：`tool_name` 给出该技法要问的字段、可用的星阙默认值与可选值表；`intent`（用户原话）只回最相关的几种技法；`include_all` 是技法索引 |
 | `horosa_technique_report` | 技法依据报告：单次 / 整场问答「用了什么技法、什么口径、谁算的」的确定性报告 |
 | `horosa_report_template` / `horosa_report_render` / `horosa_report_from_tool` | 咨询报告：AI 终稿 → JSON / DOCX / PDF，自动写回记忆；`format: "png"` 直接出盘图（支持图片的客户端里内联显示），`format: "ics"` 把择日命中与推运各期导出成日历（只用结果里写着的日期）；`output_path` 点名一个不是星阙报告的已有文件会被拒（`report.output_path_unusable`），不覆盖 |
@@ -516,13 +516,13 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 uv run horosa-skill report technique --group-id <group_id> --format markdown
 ```
 
-### 2. 31 域方法论知识库 · 引必带出处
+### 2. 35 域方法论知识库 · 引必带出处
 
-`knowledge_registry` / `knowledge_read` 覆盖 31 域 = 星阙 app 内 hover 知识三域 + 27 份技法操作手册 + 八字断语库 21 类（共 416 条：各设置项取值与差别、流派分歧、算法与口径、八字口诀），逐条带「星阙操作手册 · 域 · 条目（源文件 @ 上游版本）」出处。配套策略写进 [SKILL.md](./skills/horosa-agent/SKILL.md)：**引教义必带出处；没有出处的解读必须明说是通则推理**——反 Barnum 效应的第一机制。
+`knowledge_registry` / `knowledge_read` 覆盖 35 域 = 星阙 app 内 hover 知识三域 + 31 份技法操作手册 + 八字断语库 21 类（共 469 条：各设置项取值与差别、流派分歧、算法与口径、八字口诀），逐条带「星阙操作手册 · 域 · 条目（源文件 @ 上游版本）」出处。配套策略写进 [SKILL.md](./skills/horosa-agent/SKILL.md)：**引教义必带出处；没有出处的解读必须明说是通则推理**——反 Barnum 效应的第一机制。
 
 ### 3. 盘面事实忠实性评测
 
-`horosa-skill benchmark faithfulness` 用**确定性校验器**（非 LLM 打分）把 AI 解读中的事实断言逐条对盘面机读真值：四柱干支 / 行星落座 / 紫微主星落宫与身宫 / 大六壬三传 / 六爻卦名与动爻 / 塔罗牌名正逆……三通道判 **supported / invented / contradicted**。喂错盘的答案、诱导复述（「我月亮在天蝎对吧」「我抽到的月亮是逆位吧」而实际不是）都会判红。HorosaBench 120 条基准用例（手写用例 + 每个导出技法一条由工具注册表生成的用例）与工具集锁步——新增技法没有用例直接红。
+`horosa-skill benchmark faithfulness` 用**确定性校验器**（非 LLM 打分）把 AI 解读中的事实断言逐条对盘面机读真值：四柱干支 / 行星落座 / 紫微主星落宫与身宫 / 大六壬三传 / 六爻卦名与动爻 / 塔罗牌名正逆……三通道判 **supported / invented / contradicted**。喂错盘的答案、诱导复述（「我月亮在天蝎对吧」「我抽到的月亮是逆位吧」而实际不是）都会判红。HorosaBench 125 条基准用例（手写用例 + 每个导出技法一条由工具注册表生成的用例）与工具集锁步——新增技法没有用例直接红。
 
 ### 4. 一问多技法合参
 
@@ -589,14 +589,14 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 
 | 检查项 | 结果 |
 | --- | --- |
-| 可调用工具 | 114 / 114 `ok=true` |
-| 工程测试 | **6661 / 6661 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 204 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
-| 未确认参数时强制追问 | 104 个技法工具触发 `must_ask_user=true` |
+| 可调用工具 | 119 / 119 `ok=true` |
+| 工程测试 | **7518 / 7518 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 493 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 未确认参数时强制追问 | 109 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
-| 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 111 个导出 technique；契约 v16 镜像桌面端 aiExport v60） |
+| 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 116 个导出 technique；契约 v17 镜像桌面端 aiExport v65） |
 | 技法依据卡 | 每个起盘技法的响应附 `data.technique_card`（知识 / 导出注册表类不附），逐项设置带人读值与来源；算源声明与运行实测不符时显式亮警 |
-| 知识库 | 31 域；技法操作手册 243 条逐条带出处（生成器幂等，随上游版本重收割） |
-| HorosaBench | 120 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
+| 知识库 | 35 域；技法操作手册 296 条逐条带出处（生成器幂等，随上游版本重收割） |
+| HorosaBench | 125 条基准用例与工具注册表锁步 + 盘面事实忠实性评测（喂错盘 / 诱导复述判红的对抗用例全过） |
 | 本地 memory / report | 每次技法调用写 1 条本地 run 记录 + 1 份 JSON artifact |
 | GitHub CI | Linux 单测 + JS golden 自检 + Windows OpenClaw smoke（**不覆盖跨树上游校验**——那两闸需要上游 checkout，只能在维护机跑 `preflight_release.py`） |
 | Release runtime | macOS (arm64) + Windows (x64) 随每个 release 打包并校验（本仓版本 `v0.50.1`；公开 latest 以 Releases 页为准）——Windows 半从 darwin 种子在托管流水线派生、清单只在两半齐了才上线、三台真机（macOS / Windows x64 / Windows ARM）装起跑过；Windows ARM 自动走 x64 仿真；Intel Mac / Linux 安装时只装平台无关的 JS 引擎资产（自 0.50.1，本地 JS 技法可用），其余技法指向网关模式 |
@@ -606,7 +606,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 6661 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 7518 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

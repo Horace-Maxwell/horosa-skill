@@ -90,7 +90,7 @@
 <text x="325" y="436" font-size="13.5" fill="#4F483F">时间 / 地点 / 时区 / 性别 / 流派缺一项就先问用户，绝不替用户脑补</text>
 <rect x="212" y="466" width="240" height="86" rx="14" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <rect x="226" y="482" width="3" height="54" rx="1.5" fill="#9A6A1E"/>
-<text x="242" y="504" font-size="18" fill="#9A6A1E" font-weight="700">114 个技法</text>
+<text x="242" y="504" font-size="18" fill="#9A6A1E" font-weight="700">119 个技法</text>
 <text x="242" y="528" font-size="13" fill="#4F483F">西洋 · 中式术数 · 神数 · 择日</text>
 <rect x="462" y="466" width="240" height="86" rx="14" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <rect x="476" y="482" width="3" height="54" rx="1.5" fill="#3E7C6F"/>
@@ -105,7 +105,7 @@
 <rect x="301" y="568" width="80" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <text x="341" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">命主档案</text>
 <rect x="390" y="568" width="101.8" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
-<text x="440.9" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">知识库 31 域</text>
+<text x="440.9" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">知识库 35 域</text>
 <rect x="500.8" y="568" width="206.9" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <text x="604.3" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">报告 DOCX / PDF / PNG / ICS</text>
 <rect x="716.7" y="568" width="93" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>

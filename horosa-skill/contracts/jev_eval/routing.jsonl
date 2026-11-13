@@ -16,6 +16,28 @@
 {"expect": "sixyao", "query": "周易占卜一下这件事", "source": "router_corpus"}
 {"expect": "heluo", "query": "河洛理数看命运篇", "source": "router_corpus"}
 {"expect": "yizhangjing", "query": "一掌经看十二宫", "source": "router_corpus"}
+{"expect": "dongya", "query": "帮我排一下藏历生日", "source": "router_corpus"}
+{"expect": "dongya", "query": "Tibetan calendar date of my birthday", "source": "router_corpus"}
+{"expect": "dongya", "query": "藏占看今年的流年八卦和九宫", "source": "router_corpus"}
+{"expect": "dongya", "query": "Tibetan astrology parkha and mewa", "source": "router_corpus"}
+{"expect": "dongya", "query": "蒙古 Zurkhai 看年月相位", "source": "router_corpus"}
+{"expect": "dongya", "query": "Mongolian zurkhai aspect of my birth", "source": "router_corpus"}
+{"expect": "dongya", "query": "算命学看我的天中杀", "source": "router_corpus"}
+{"expect": "dongya", "query": "sanmeigaku reading", "source": "router_corpus"}
+{"expect": "dongya", "query": "九星气学我的本命星是什么", "source": "router_corpus"}
+{"expect": "dongya", "query": "what is my nine star ki number", "source": "router_corpus"}
+{"expect": "dongya", "query": "洛书流年看明年", "source": "router_corpus"}
+{"expect": "dongya", "query": "lo shu year transit for next year", "source": "router_corpus"}
+{"expect": "dongya", "query": "易卦星盘排一个", "source": "router_corpus"}
+{"expect": "dongya", "query": "i ching astrology of my planets", "source": "router_corpus"}
+{"expect": "zhufang", "query": "玛雅历我的生日是哪一天", "source": "router_corpus"}
+{"expect": "zhufang", "query": "mayan long count of my birthday", "source": "router_corpus"}
+{"expect": "zhufang", "query": "十三月亮历我是哪个 kin", "source": "router_corpus"}
+{"expect": "zhufang", "query": "dreamspell kin of my birthday", "source": "router_corpus"}
+{"expect": "zhufang", "query": "帮我看人类图", "source": "router_corpus"}
+{"expect": "zhufang", "query": "what is my human design type", "source": "router_corpus"}
+{"expect": "zhufang", "query": "灵名字母怎么取", "source": "router_corpus"}
+{"expect": "zhufang", "query": "spirit name letters from my chart", "source": "router_corpus"}
 {"expect": "canping", "query": "邵子参评数条文", "source": "router_corpus"}
 {"expect": "zhengchuan", "query": "神数正传起数", "source": "router_corpus"}
 {"expect": "tieban", "query": "铁板神数条文", "source": "router_corpus"}
@@ -82,6 +104,10 @@
 {"expect": "acg", "query": "astrocartography lines for moving abroad", "source": "router_corpus"}
 {"expect": "draconic", "query": "draconic chart", "source": "router_corpus"}
 {"expect": "relocation", "query": "relocation chart for tokyo", "source": "router_corpus"}
+{"expect": "transformchart", "query": "排一张变换盘，看倒置之后的格局", "source": "router_corpus"}
+{"expect": "transformchart", "query": "heliocentric chart of my birth", "source": "router_corpus"}
+{"expect": "zodiacsystems", "query": "按十三星座的黄道制，我的太阳落在哪一座", "source": "router_corpus"}
+{"expect": "zodiacsystems", "query": "13-sign zodiac placements with Ophiuchus", "source": "router_corpus"}
 {"expect": "harmonic", "query": "harmonic chart h5", "source": "router_corpus"}
 {"expect": "hellen_chart", "query": "hellenistic chart", "source": "router_corpus"}
 {"expect": "germany", "query": "midpoint uranian chart", "source": "router_corpus"}
@@ -117,6 +143,12 @@
 {"expect": "jayprofection", "query": "Jay diurnal profection this year", "source": "router_corpus"}
 {"expect": "michon", "query": "双黄道看本命叠合", "source": "router_corpus"}
 {"expect": "michon", "query": "Michon double zodiac superpositions", "source": "router_corpus"}
+{"expect": "timelords", "query": "时主轮转看当前时段的主星", "source": "router_corpus"}
+{"expect": "timelords", "query": "time lord rotation table for my chart", "source": "router_corpus"}
+{"expect": "timelords", "query": "月亮九年现在走到哪一座", "source": "router_corpus"}
+{"expect": "timelords", "query": "年度分配法看今年的年主和子段", "source": "router_corpus"}
+{"expect": "timelords", "query": "我今年的轮主是哪颗星", "source": "router_corpus"}
+{"expect": "timelords", "query": "对数时标看人生节点", "source": "router_corpus"}
 {"accept": ["election", "tianxing"], "expect": "huanglizeri", "group": "move-day", "query": "帮我找找下个月适合搬家的日子", "source": "gen_jev_eval_sets"}
 {"accept": ["election", "tianxing"], "expect": "huanglizeri", "group": "move-day", "query": "下个月哪几天搬家比较吉利", "source": "gen_jev_eval_sets"}
 {"accept": ["election", "tianxing"], "expect": "huanglizeri", "group": "open-day", "query": "想挑个好日子开业，最近一个月里有吗", "source": "gen_jev_eval_sets"}

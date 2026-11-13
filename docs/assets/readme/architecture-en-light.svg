@@ -90,7 +90,7 @@
 <text x="414.4" y="436" font-size="13.5" fill="#4F483F">missing time / place / timezone / gender / school → ask the user, never guess</text>
 <rect x="212" y="466" width="240" height="86" rx="14" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <rect x="226" y="482" width="3" height="54" rx="1.5" fill="#9A6A1E"/>
-<text x="242" y="504" font-size="18" fill="#9A6A1E" font-weight="700">114 techniques</text>
+<text x="242" y="504" font-size="18" fill="#9A6A1E" font-weight="700">119 techniques</text>
 <text x="242" y="528" font-size="13" fill="#4F483F">Western · Chinese · Shen Shu</text>
 <rect x="462" y="466" width="240" height="86" rx="14" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <rect x="476" y="482" width="3" height="54" rx="1.5" fill="#3E7C6F"/>
@@ -105,7 +105,7 @@
 <rect x="291.1" y="568" width="81.6" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <text x="331.9" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">Profiles</text>
 <rect x="381.7" y="568" width="163.2" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
-<text x="463.3" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">31 knowledge domains</text>
+<text x="463.3" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">35 knowledge domains</text>
 <rect x="553.9" y="568" width="177.2" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>
 <text x="642.5" y="587.7" font-size="13" fill="#4F483F" font-weight="500" text-anchor="middle">DOCX / PDF / PNG / ICS</text>
 <rect x="740.1" y="568" width="110.7" height="30" rx="15" fill="url(#card)" stroke="#E4DCCD" stroke-width="1"/>

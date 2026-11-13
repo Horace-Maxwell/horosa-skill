@@ -95,7 +95,7 @@
 <rect x="212" y="466" width="240" height="86" rx="14" fill="url(#card)" stroke="#2D2A26" stroke-width="1"/>
 <path d="M226 466.8H438" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="1"/>
 <rect x="226" y="482" width="3" height="54" rx="1.5" fill="#E8C486"/>
-<text x="242" y="504" font-size="18" fill="#E8C486" font-weight="700">114 techniques</text>
+<text x="242" y="504" font-size="18" fill="#E8C486" font-weight="700">119 techniques</text>
 <text x="242" y="528" font-size="13" fill="#BEB6A9">Western · Chinese · Shen Shu</text>
 <rect x="462" y="466" width="240" height="86" rx="14" fill="url(#card)" stroke="#2D2A26" stroke-width="1"/>
 <path d="M476 466.8H688" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="1"/>
@@ -112,7 +112,7 @@
 <rect x="291.1" y="568" width="81.6" height="30" rx="15" fill="url(#card)" stroke="#2D2A26" stroke-width="1"/>
 <text x="331.9" y="587.7" font-size="13" fill="#BEB6A9" font-weight="500" text-anchor="middle">Profiles</text>
 <rect x="381.7" y="568" width="163.2" height="30" rx="15" fill="url(#card)" stroke="#2D2A26" stroke-width="1"/>
-<text x="463.3" y="587.7" font-size="13" fill="#BEB6A9" font-weight="500" text-anchor="middle">31 knowledge domains</text>
+<text x="463.3" y="587.7" font-size="13" fill="#BEB6A9" font-weight="500" text-anchor="middle">35 knowledge domains</text>
 <rect x="553.9" y="568" width="177.2" height="30" rx="15" fill="url(#card)" stroke="#2D2A26" stroke-width="1"/>
 <text x="642.5" y="587.7" font-size="13" fill="#BEB6A9" font-weight="500" text-anchor="middle">DOCX / PDF / PNG / ICS</text>
 <rect x="740.1" y="568" width="110.7" height="30" rx="15" fill="url(#card)" stroke="#2D2A26" stroke-width="1"/>

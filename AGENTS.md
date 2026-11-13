@@ -16,7 +16,7 @@ Claude Code 的薄入口是根 [`CLAUDE.md`](./CLAUDE.md)（与本文 §0 路由
 
 ## 0. 30 秒定向与路由
 
-Horosa Skill 把星阙（Horosa）的 **114 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
+Horosa Skill 把星阙（Horosa）的 **119 个**术数/占星技法打包成 local-first 的 **MCP server + CLI**：
 算法跑在本机离线 runtime（Java 聚合层 `:9999` + Python chart 服务 `:8899`（含 ken/kentang 引擎）+
 bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 envelope + 星阙式
 `export_snapshot`/`export_format`；仓库保持轻量，重 runtime 走 GitHub Releases 分发。
@@ -134,7 +134,7 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
   `agent_guidance.required` 在 stderr；两节里每条命令由 `tests/test_skill_shell_contract.py` 对到 Click 命令树。四家客户端
   先读的薄镜像（`GEMINI.md` / `.github/copilot-instructions.md` / `.windsurf/rules/` / `.clinerules/`，各 ≤ 30 行）只许
   指针 + 闸门 + 读盘 + `setup --client`，`verify_docs_sync.check_agent_mirrors` 锁；不加 Roo（不在 Works-with 矩阵）。
-- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（31 域，逐条 citation 落到
+- **引教义必带出处**（v0.28.0）：口径/流派/方法论先 `knowledge_read`（35 域，逐条 citation 落到
   上游组件文件），没有的按通则推理并明说无出处；多技法互证走 `horosa_hecan`——它产**模板**不产
   终稿，分歧必须披露不许平均（铁律在模板 instructions 里，不靠自觉）。**合参（v0.50.0）**：选技法只有 `engine/hecan_select.py` 一份
   （闸门与服务共用）——没点名按意图类缺省配一对（`IntentClass.hecan_pair`，披露），择日不配对；`tools` 可混写 run_id（复用存档、不重算）；
@@ -246,7 +246,7 @@ runner 不打 ken、`data.route.local=true`、`compute_sources` 标 `local_route
 ### 4.3 知识包与上游同步守卫
 
 **知识包（v0.28.0 起，v0.35.0 收紧）**：方法论手册域由 `scripts/gen_knowledge_packs.py` 从上游 HelpDoc 收割
-（27 域/243 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
+（31 域/296 条，逐条带出处；幂等 = generated_at 取上游 commit 时间；**正文读上游 HEAD blob、不读工作区**，
 出处与正文同源）；store 按 schema `horosa.knowledge.helpdoc.v1` 自动发现，**新增域零代码**。
 **上游每一册 `*HelpDoc.js` 要么进 `HELPDOC_DOMAINS`、要么进 `EXCLUDED_HELPDOCS`（仅 fengshui，政策性排除），
 第三种状态生成器直接 FAIL**——同步新技法时把它的手册一并收进来（v0.35.0 之前六册已上架技法的手册三个版本
@@ -526,7 +526,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
    `gua`）必须登记进去，否则繁体报告里格位对不上（v0.43.1-dev）。
    渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）一律包 `t()`（`renderers._labeler`）；**已转过的文字绝不再转**（不幂等：萬里 → 萬裡），
    所以技法依据报告交简体原文给 `render_report`，生成人读版 / markdown 后整体转一次（v0.43.0）。
-4. **新技法 / 新术语** → 用 114 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
+4. **新技法 / 新术语** → 用 119 技法真实输出跑一遍残差（看术数字是否被转成普通义）：术数字的普通义例外进
    `horosa_char_rules.json` 该字的白名单（偏离上游要写 `deviations`），其余字的词组错进 `horosa_s2t.txt`，并补金样（`GOLDEN`）；
    `test_every_character_rule_is_well_formed_and_takes_effect` / `test_every_term_table_entry_is_well_formed_and_takes_effect` 保证每行都生效。
    **上游改了 `hantRules.js`** → 上游比对测试会红：把新规则并进来，或写进 `deviations` 说明为什么不跟。
@@ -557,6 +557,18 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsystem129.py`）时，grep skill 里该字段的每个读者——照读旧字段
 只会 ok=true 地返回「无数据」；优先整份 vendor 上游前端模块而不是重抄。手工件逐字搬了**多份**上游文件的，在条目上加
 `also_derived_from {上游路径: sha256}`，每个源各自比戳（`--restamp` 一并重记）。
+
+**v0.51.0-dev 补三条**：① 上游发布说明里每条「结果会变」都要能指到一条会因此变红（或本轮新增）的值级用例——verbatim 文件重渲染后
+结果变了、基底零信号（九星值日改日紫白）是常态；② bespoke / curated 件 `--restamp` 前对每条声明的偏离问一句「上游这一版修了吗」，
+修了就退役偏离（注释里「重抽时必须保留」会变成误导）；③ 派生键（`<x>zeri` 之类）换了基底，用「命中时刻在未来」的盘跑一次 live，
+看基底有没有只在过去时刻才出的条件段（印度择日 [过运×大运联动]）。
+
+**并行同步的合并纪律（v0.51.0-dev）**：不要擅自大规模并行派 agent（额度是用户的，断了所有批同时停在半途；v3.14.0 同步十二批全数
+因 429 半途而废）；默认集成者串行做。确需多批时：`vendor_manifest.json` 冲突一律三方 JSON 合并（以 merge-base 判谁删了条目，
+文本合并会把被删的条目加回来）；「两边都留」解冲突后立即 `ast.parse` 每个改过的 Python 文件（冲突块边界跨语句时会吞掉 `]` / `}`）；
+每批合入后立即跑该批离线 + live 用例再合下一批；生成件（provenance、工具数、预算、镜像、语料基线）全部合完后统一重生成——
+`bump_version.py --tool-counts` 按 `mcp_list_budget.json` 的 `full_tools` 认「旧数」，**先改写工具数、后重记预算基线**，顺序反了旧数
+就留在文档里。同一处上游改动被两批各移植一遍时留一份、另一份的守卫改指留下的名字。
 
 **四分决策树**（新技法先归类，再动手）：
 
@@ -646,7 +658,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    必出段，离线全绿、live 才报缺段（v0.34.0+ 台账）。
 6. 离线 fakes：`FakeClient`（HTTP 桩，覆盖新端点）+ `FakeJsClient`（新 JS tool handler）返回**真内容**
    —— 禁裸 `无` 段、禁 `generated_template` 回退；段头从真 preset 取而**不手抄**（手抄段头是「桩比真实
-   响应更简单」的亚型，段头一改桩就悄悄对不上而测试照绿）。桩管形状，值级真相归 selfcheck 金标。
+   响应更简单」的亚型，段头一改桩就悄悄对不上而测试照绿）。桩管形状，值级真相归 selfcheck 金标。给桩加字段前先在真实例上确认这个键真的存在（v0.51.0-dev：地占桩多了 `questionTypeZh`，离线「事业」、真机「career」几个版本没人发现）。
 7. 测试三层：离线契约（全技法可调、export clean）+ live `@requires_chart`/`@requires_runtime` + golden/
    export-fixture。kinastro-9 无 live 测试 → 离线 + in-process srv（**中立 CWD** 跑，别 `cd $HW`——
    本地 `astropy/__init__.py` 会 shadow PyPI astropy）。
@@ -1046,7 +1058,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    （`missing_selected_sections == []` 且 `unknown_detected_sections == []`；election 等条件段技法按
    optional 白名单放宽）。`section_harness.py` 的 clean 另要求依据卡 `matches_declaration` 不为 false（算源声明在
    `gen_technique_provenance.py` 的 `ENGINE_OVERRIDES` / `EXTRA_EVIDENCE` 修，不手改契约）。**service 层绿 ≠ agent 走得通**（v0.40.2 表面审计）：
-   闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 114 技法 × MCP 全量 /
+   闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 119 技法 × MCP 全量 /
    精简 / CLI / HTTP + 门面·资源·提示，failed=0）；它在全新数据目录上并行起 CLI，顺带守住记忆库首建的并发迁移（`_ensure_column`）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
@@ -1272,7 +1284,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **工具结果有线上体积预算（v0.46.1）**：官方 MCP SDK 客户端 streamable HTTP 单条 SSE 事件上限 1 MiB，超出整条调用失败。
   `mcp_runner.MCP_RESULT_WIRE_BUDGET`（900 000 B）：转换后超预算时只略去 `data` 里最大的原始子树（说明占位 + `memory show` 指引），
   快照 / 导出段 / 依据卡不动（`tests/test_mcp_result_budget.py`）。加大结果的工具或字段时，用进程内 MCP 客户端量线上字节。
-- **工具面（v0.45.0；v0.50.0 计数）**：全量面 = 114 技法 + 13 门面 = 127，精简面 = 13 门面 + `horosa_tool_run` = 14（`FACADE_TOOL_COUNT` / `COMPACT_SURFACE_TOOL_COUNT`）。新加的非技法工具做成门面，
+- **工具面（v0.45.0；v0.50.0 计数）**：全量面 = 119 技法 + 13 门面 = 127，精简面 = 13 门面 + `horosa_tool_run` = 14（`FACADE_TOOL_COUNT` / `COMPACT_SURFACE_TOOL_COUNT`）。新加的非技法工具做成门面，
   **别塞进 `TOOL_DEFINITIONS`**（那里每一项都计入技法总数）。检索与精读分两个工具（`horosa_knowledge_search` / `horosa_knowledge_read`）。常驻（`anthropic/alwaysLoad`）：
   guidance / dispatch / tool_run / knowledge_search。报告结果带 `file` 文件卡；MCP 层只给协商到 2025-06-18 及以后的客户端追加
   `resource_link`（老客户端按旧联合类型校验，多一个块可能整条作废）。守卫 `tests/test_mcp_tool_design.py`。
@@ -1841,7 +1853,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   深审 C-18 十把守卫各自漏掉了自己声称防的缺陷（台账 2026-11-12「守卫红不了」）。
 - **证据只认代码**：「名字出现」不是「被调用」。旋钮接线认代码记号（`verify_schema_knob_wiring`：AST / JS 记号，注释与说明句不算，只描述旋钮的文件不算读者，
   基线每条写上游读者 `file:line`）；值金标认调用（`verify_value_goldens`）；错误码「有测试」认测试代码里的字符串字面量（docstring 不算）。
-- **期望不和被测物住一个文件**：闸门行为的整表期望在 `tests/fixtures/gate_matrix.json`（114 技法 × 四形状，`uv run python tests/test_gate_matrix.py --record`
+- **期望不和被测物住一个文件**：闸门行为的整表期望在 `tests/fixtures/gate_matrix.json`（119 技法 × 四形状，`uv run python tests/test_gate_matrix.py --record`
   重录，diff 里看清改了谁）；生成件（`contracts/jev_eval/*.jsonl` 等）由测试按生成器重算比对。
 - **跳过要说出标签**：原因以 `tests/skips.py` 的七个标签之一开头（`[upstream-checkout]` `[platform]` `[host]` `[opt-in]` `[version-skew]`
   `[not-applicable]` `[no-runtime]`）；没标签的 skip 在 conftest 变成失败，跑完打印「skipped by reason: …」计数，`test_skip_tags.py` 静态扫全部字面量
