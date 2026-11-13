@@ -17,6 +17,7 @@
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
 | v0.50.2-dev (2026-11-12) | server 没有控制台时（pythonw 起、或宿主以 DETACHED 方式起）每次技法调用都弹 node 的控制台窗口：15 处 `subprocess` 里只有启动器带 `CREATE_NO_WINDOW`；排查时一度把被测解释器自己的窗口算成 node 的 | `winproc.NO_WINDOW` 接到每个 spawn；AST 守卫扫全部 `subprocess.*`；探针按窗口属主进程计数，不凭推断归因。同轮：v0.50.1 候选在本机门禁红 2 条（CI 绿）——用例默认了 runner 开着长路径、有建链接特权 | 按本机能力分支，跳过原因带 `[host]` |
+| v0.50.1 (2026-11-12) | 发版矩阵三条 lane 同红一条：`test_client_config_launcher_uvx_emits_absolute_command_when_found` 断言 `warnings` 不在，而 lane 的 pytest 环境设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，产品按设计在 warnings 里点名；ARM 仿真上脱敏线性用例 2.06 s 撞 2 s 线 | 用例先清 `HOROSA_*`；时间上限按「要拦的回归」定（旧实现 43.7 s → 线 10 s），不按维护机速度定 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版第 1 步 `npm install --omit=dev` 改写了 horosa-core-js 的 package-lock.json（package.json 的 engines 说明改过、锁文件没跟），第 2 步 JS 引擎资产见树不干净拒绝出包——红在发版当场，CI 全绿看不出 | `test_lockfile_root_mirrors_package_json` 让 CI 先红；改 package.json 后跑 `npm install --package-lock-only` 一并提交 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交在 CI ubuntu 上红 8 条、维护机 macOS 全绿：doctor「新机器」用例只在有载荷的平台写过断言；报告用例只在有中文 TrueType 的机器写过断言——6 条里 3 条是真缺陷（CID 回退不补字 ✓☯🎉 进 PDF、空格子标签外 `() Tj`、DOCX 中文字体退成 Arial），另有无载荷平台 advice 叫人「装 730 MB」 | 按本机环境分支的用例在每台机器上把各支都跑：`conftest.font_host`（host / no_cjk_font / no_fonts）、doctor 用例的 `host` fixture 钉 `_platform_key`；CID 字体按 Adobe 字符集合（gbk / big5hkscs）量覆盖；推前在 Linux 容器里跑一遍受影响的用例 |
 | v0.50.0-dev (2026-11-12) | v0.50.0 发版提交本机门禁全绿，main CI windows-smoke 红 13 条：相对路径键带反斜杠、`with sqlite3.connect()` 不关连接删不了库、粗单调钟下预算 0 读完全部、开了长路径的 Windows 照写超长路径（没开的到建目录才裸 OSError）、Segoe UI Symbol 真画得出 🎉、tar 盘符名、给 Windows 粘的命令按 cmd 规则写 JSON；顺带查出知识索引 `--rebuild` 在 Windows 上隔离不了坏库、清残留用 `os.kill(pid, 0)` | conftest 让每条用例都在 `tests/winsim.py`（Windows 文件共享规则）下跑；源码守卫禁 `str(relative_to)` / 裸 `with sqlite3.connect` / procs 以外的 os.kill；预算判 ≥；整条路径按本机上限事前判；tar 过 `_portable_data_filter`；命令写成 PowerShell 与 cmd 同读（`tests/winshell.py` 两种拆法）|
@@ -275,6 +276,17 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   runner 开了 LongPathsEnabled、以管理员跑；本机 `LongPathsEnabled = 0`、WinError 1314。产品行为都对（Windows runtime 归档是 zip，
   JS 引擎 tar 构建时拒收链接）。修测试：长名那条按 `output_paths.path_limit()` 算放得下多长，放不下先断言干净拒绝、再用最长能放的名字；
   链接那条先 `_symlink_or_skip`（`[host]` 跳过）。规则进 AGENTS §9.5.2。
+
+### v0.50.1 / 2026-11-12 — CI 形状 ≠ lane 形状：用例吃到 lane 的环境变量；时间线按维护机速度定
+
+- **症状**：v0.50.1 draft 的发版矩阵三条 lane（macOS arm64 / Windows x64 / Windows ARM）都红在 `test_client_config.py::test_client_config_launcher_uvx_emits_absolute_command_when_found`；
+  ARM 仿真 lane 另红 `test_decisions_redact.py::test_scrubbing_is_linear_on_adversarial_input[北纬1]`（2.06 s，线 2 s）。CI 与本机门禁都绿。
+- **根因**：① lane 的 pytest 环境（`verify_runtime_live.py::pytest_env`）设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS`、`HOROSA_TRACE_ENABLED` 等；
+  深审客户端接入批让 `client config` 把终端里设着、却不写进配置的行为开关点名进 `warnings`（设计如此），用例却断言「没有 warnings」。
+  CI 与 `run_ci_gates.py` 的环境是干净的，看不出。② 时间上限 2 s 是照维护机（< 1 s）定的；要拦的平方级旧实现是 43.7 s。
+- **修复**：用例先 `monkeypatch.delenv` 全部 `HOROSA_*`（负向对照：lane 形状的环境下旧用例红）；脱敏线性用例上限 10 s（仍比 43.7 s 低 4 倍）。
+  只改用例；发布资产（draft 上 bac26c96 构建的字节）不变，lane 的用例取自 main HEAD（`actions/checkout` 不带 ref）。
+- **规则**：断言「没有 warnings / 没有某字段」的用例，先清掉会影响它的 `HOROSA_*`——lane 的环境不是 CI 的环境。时间上限按要拦的回归定，留出仿真 lane 的余量。
 
 ### v0.50.0-dev / 2026-11-12 — 锁文件跟不上 package.json：发版第 2 步才红
 

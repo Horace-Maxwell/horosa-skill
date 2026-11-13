@@ -1874,6 +1874,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   执行一律 argv 列表不经 shell；`tests/winshell.py` 按两种终端拆命令，Windows 那一支在本机端到端重放。
 - **存活探针**：`os.kill(pid, 0)` 在 Windows 上是控制台 Ctrl+C，不是「只问在不在」——一律 `runtime.procs.pid_alive`（守卫：只有 procs.py 能调 os.kill）。
 - **字体随平台变**：Windows 的 Segoe UI Symbol 真有黑白 emoji；断言「画得出」（按字形表核，`renderers._drawable_codes`），别断言某个字一定被换掉。
+- **lane 的环境 ≠ CI 的环境**（v0.50.1 发版矩阵三 lane 同红）：lane 的 pytest 设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，断言「没有 warnings」
+  的用例要先清 `HOROSA_*`；时间上限按要拦的回归定（脱敏旧实现 43.7 s → 线 10 s），给 ARM 仿真 lane 留余量。lane 的用例取自 main HEAD，修用例不必重打 tag。
+- **改 horosa-core-js/package.json 同一提交重生锁文件**（`npm install --package-lock-only`；v0.50.0 tag 因此作废，`test_lockfile_root_mirrors_package_json` 守）。
 
 ### 9.6 发布 · 分发（release / distribution）
 

@@ -182,7 +182,8 @@ def test_scrubbing_is_linear_on_adversarial_input(pattern: str) -> None:
     text = pattern * (80_000 // len(pattern))
     started = time.perf_counter()
     redact._scrub(text, redact.Lexicon(["妈妈"]), places, {})
-    assert time.perf_counter() - started < 2.0
+    # 上限 10 s：要拦的是旧实现的 43.7 s（平方级）；线性实现在维护机 < 1 s，但 Windows ARM 仿真 lane 上要 ~2.1 s（v0.50.1 发版矩阵在 2 s 线上红过）。
+    assert time.perf_counter() - started < 10.0
 
 
 def test_public_entry_point_has_bounded_work_for_any_input_size() -> None:

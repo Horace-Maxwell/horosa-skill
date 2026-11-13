@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import os
+
 import json
 import tomllib
 from pathlib import Path
@@ -110,6 +112,10 @@ def test_json_write_still_merges_mcp_servers(tmp_path: Path) -> None:
 def test_client_config_launcher_uvx_emits_absolute_command_when_found(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(client_payload, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
+    # 终端里设着的行为开关（发版 lane 设 HOROSA_RUNTIME_START_TIMEOUT_SECONDS 等）会被如实点名进 warnings——那是另一条用例的事；
+    # 这里只看 uvx 的解析，先清掉跑测试的环境里的 HOROSA_*（v0.50.1 发版矩阵三条 lane 在这里红过）。
+    for key in [name for name in os.environ if name.startswith("HOROSA_")]:
+        monkeypatch.delenv(key)
     payload = _payload("--format", "claude-desktop", "--launcher", "uvx")
     server = payload["mcpServers"]["horosa"]
     assert server["command"] == "/opt/uv/bin/uvx"
