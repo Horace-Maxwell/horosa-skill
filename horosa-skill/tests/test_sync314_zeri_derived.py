@@ -17,6 +17,8 @@ from typing import Any
 
 import pytest
 from test_local_js_tools import make_service, requires_runtime
+from test_sync311_divination import RecordingClient, _capture_base_calls, _zeri
+from test_sync311_divination import _service as _scan_service
 
 from horosa_skill.config import Settings
 from horosa_skill.exports.registry import (
@@ -86,6 +88,63 @@ def test_derived_preset_is_the_base_preset_plus_the_scan_sections(zeri_key: str,
     assert tail == (["择吉搜索配置", "择吉条件", "命中日段"] if zeri_key == "huanglizeri" else ["择时搜索配置", "择时条件", "命中时段"])
     assert set(AI_EXPORT_OPTIONAL_SECTIONS.get(base_key, [])) <= set(AI_EXPORT_OPTIONAL_SECTIONS.get(zeri_key, []))
     assert not set(tail) & set(AI_EXPORT_OPTIONAL_SECTIONS.get(zeri_key, [])), "择时三段是必出段"
+
+
+@pytest.mark.parametrize(
+    ("zeri_tool", "base_tool", "scan_endpoint"),
+    [("qizhengzeri", "guolao_chart", "/qizhengelectionscan/scan"), ("sanshizeri", "sanshiunited", None)],
+)
+def test_a_display_knob_declared_on_a_derived_tool_reaches_the_display_chart_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, zeri_tool: str, base_tool: str, scan_endpoint: str | None,
+) -> None:
+    """基底技法这一版的新显示键（上游 v3.14.0 `ascRaMode`：zeriEmbeddedInputsRegistry / zeriTechniqueParity 把它登记成七政、三式内嵌页的
+    显示键，「择日条件不读」）要进择日派生工具时，只需在派生输入模型上声明同名字段：展示盘载荷自动带上，扫描请求 / 扫描口径不带。
+    这里用一个临时子类模拟「声明之后」的形状，钉住这条机制（真正的声明由加基底键的那一批做）。
+    没声明的键照旧不流进展示盘（`_declared_only`），并在入口提示「不是本技法的参数」。
+    负向对照：把 `_run_zeri_backend_tool` 的 base_request 白名单 / `_run_zeri_scan_tool` 的 top_keys 加上 `ascRaMode` → 「扫描不带」断言红；
+    把 `_declared_only` 改成只认 NON_TECHNIQUE_KEYS → 「展示盘带上」断言红（都实跑过）。"""
+    import dataclasses
+
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+    from horosa_skill.schemas.tools.base import _unadvertised
+
+    definition = TOOL_DEFINITIONS[zeri_tool]
+    one_day = {"startDate": "2028-04-01", "endDate": "2028-04-01"}
+
+    def run() -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+        client = RecordingClient()
+        service = _scan_service(tmp_path, client)
+        seen = _capture_base_calls(service)
+        scan_requests: list[dict[str, Any]] = []
+        original_js = service.js_client.run
+
+        def spy_js(tool: str, payload: dict[str, Any], **kwargs: Any) -> Any:
+            if tool == "zeri_scan" and payload.get("action") == "scan":
+                scan_requests.append(payload)
+            return original_js(tool, payload, **kwargs)
+
+        monkeypatch.setattr(service.js_client, "run", spy_js)
+        env = service.run_tool(zeri_tool, {**_zeri(zeri_tool, ascRaMode="classic", **one_day), "agent_confirmed_settings": True}, save_result=False)
+        assert env.ok, env.error
+        scans = client.endpoints(scan_endpoint) if scan_endpoint else scan_requests
+        assert scans, "扫描应当真的跑过"
+        return [payload for name, payload in seen if name == base_tool][-1], scans, list(env.warnings)
+
+    # 现状（未声明）：不进展示盘，入口说出来。
+    display, scans, warnings = run()
+    assert "ascRaMode" not in display
+    assert any("ascRaMode" in w and "不是本技法的参数" in w for w in warnings)
+
+    # 声明之后：展示盘带上，扫描不带。
+    declared = type(f"{definition.input_model.__name__}WithAscRaMode", (definition.input_model,),
+                    {"__annotations__": {"ascRaMode": Any}, "ascRaMode": _unadvertised()})
+    monkeypatch.setitem(TOOL_DEFINITIONS, zeri_tool, dataclasses.replace(definition, input_model=declared))
+    display, scans, warnings = run()
+    assert display.get("ascRaMode") == "classic"
+    assert not any("ascRaMode" in w for w in warnings)
+    for request in scans:
+        assert "ascRaMode" not in request and "ascRaMode" not in (request.get("options") or {})
+        assert "ascRaMode" not in (request.get("geo") or {})
 
 
 @requires_runtime
