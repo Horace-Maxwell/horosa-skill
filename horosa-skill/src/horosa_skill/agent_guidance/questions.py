@@ -58,6 +58,8 @@ NON_BLOCKING: frozenset[tuple[str, str]] = frozenset({("jieqi_year", "jieqis"), 
 GENDER_FACT_TOOLS: frozenset[str] = frozenset({
     "bazi_birth", "bazi_direct", "ziwei_birth", "ziweizeri", "liureng_runyear", "canping", "heluo", "yizhangjing",
     "zhengchuan", "shaozi", "tieban", "beiji", "nanji", "chunzi", "xianqin", "cetian", "qizhengkin",
+    # 东亚诸术（上游 v3.14.0）：藏占流年八卦男命起离顺行、女命起坎逆行（tests/test_sync314_mingother_live.py 逐行 A/B）
+    "dongya",
 })
 
 

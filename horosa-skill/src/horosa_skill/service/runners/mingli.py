@@ -1,9 +1,11 @@
 """命理 runner（MingliRunners）：节气八字、八字、紫微、统摄法、参评数、河洛、反推八字、一掌经、黄历、通书。"""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
-from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual, tool_code
+from horosa_skill.errors import HorosaSkillError, ToolTransportError, ToolValidationError, bilingual, tool_code
+from horosa_skill.service import _clock
 from horosa_skill.service._common import (
     _civil_wall_ms_of_moment,
     _GANZHI_BRANCHES,
@@ -466,6 +468,191 @@ class MingliRunners:
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="yizhangjing", snapshot_text=snapshot_text),
         }
+
+    # ── 命 · 其他：东亚诸术 / 诸方杂术（上游 v3.14.0）────────────────────────────────────────────────
+    # 两个都是「一个工具多段子术」：算法、口径词表与快照排版全是 vendored 上游（horosa-core-js tools/dongya.js · zhufang.js），
+    # Python 只取后端数据并把「此刻」交给 JS。口径旋钮在 schema 已按词表判过（cn_vocab），JS 再按上游页面设置表校验一遍。
+    _DONGYA_KNOBS = ("flowYear", "fenyeVersion", "ichingMerge")
+    # 本命盘请求只带出生资料与改星位 / 落宫的三项（宫制、黄道、岁差）——易卦星盘只读七政的黄经与宫位。
+    _DONGYA_CHART_KEYS = ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "ad", "hsys", "zodiacal", "siderealAyanamsa")
+    _ZHUFANG_KNOBS = ("mayanCorrelation", "hdTrueNode", "spiritQuadrant")
+
+    @staticmethod
+    def _raise_mingother_js_failure(tool: str, js_result: Any) -> None:
+        """tools/dongya.js · zhufang.js 的 data.ok=false → 结构化错误（不回空快照）。"""
+        data = js_result.get("data") if isinstance(js_result, dict) else None
+        if not isinstance(data, dict):
+            raise ToolValidationError(
+                bilingual(f"`{tool}` 的本地 JS 引擎没有返回结果", f"the local JS engine returned no `{tool}` result"),
+                code=tool_code(tool, "empty_snapshot"), details={"tool": tool},
+            )
+        if data.get("ok") is not False:
+            return
+        reason = f"{data.get('reason') or ''}"
+        message = f"{data.get('message') or ''}".strip()
+        if reason == "invalid_option":
+            error = data.get("error") if isinstance(data.get("error"), dict) else {}
+            raise ToolValidationError(
+                bilingual(message or f"`{tool}` 的口径取值无效", f"`{tool}`: invalid setting value ({error.get('field')}={error.get('value')!r})"),
+                code=tool_code(tool, "invalid_option"),
+                details={"tool": tool, "field": error.get("field"), "value": error.get("value"), "allowed": error.get("allowed")},
+            )
+        if reason in ("bc_unsupported", "out_of_range"):
+            raise ToolValidationError(
+                bilingual(
+                    f"`{tool}` 排不出这份出生资料：{message}（干支历由本地历法引擎算，只覆盖公元 1–9999 年）",
+                    f"`{tool}` cannot cast this birth date: the ganzhi calendar runs on a local engine that only covers AD 1–9999.",
+                ),
+                code="tool.date_range_unsupported",
+                details={"tool": tool, "reason": reason, "engine_message": message,
+                         "accepted": {"min_year": 1, "max_year": 9999}, "engine": "lunar-javascript"},
+            )
+        raise ToolValidationError(
+            bilingual(f"`{tool}` 起盘所需的输入不足或读不了：{message or reason}",
+                      f"`{tool}` could not cast from the given input: {message or reason}"),
+            code=tool_code(tool, "missing_inputs"),
+            details={"tool": tool, "reason": reason, "engine_message": message},
+        )
+
+    @staticmethod
+    def _mingother_now_ms() -> int:
+        # 服务层的「此刻」（可冻结的 _clock）：流年缺省 = 今年、易卦推运的今日环位都按它算（与 progextra 的 now_ms 同一做法）。
+        return int(_clock.now().astimezone().timestamp() * 1000)
+
+    def _run_dongya_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 东亚诸术：藏历 / 藏占 / 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年 / 易卦星盘，七段全在 JS 进程内算
+        # （上游 buildEastAsiaModel + eastAsiaSnapshotLines）。只有易卦星盘读本命盘七政的黄经与宫位——上游页面读当前盘
+        # （props.value），无头挂载 fetchChartResultForRecord(record)：这里按同一份出生资料取 /chart（宫制 / 黄道随入参）。
+        chart_payload = {key: payload[key] for key in self._DONGYA_CHART_KEYS if payload.get(key) is not None}
+        chart_payload.update({"tradition": False, "predictive": 0})
+        chart_response: dict[str, Any] | None = None
+        chart_error: HorosaSkillError | None = None
+        try:
+            chart_response = self._call_remote("/chart", chart_payload)
+        except HorosaSkillError as exc:
+            # 取不到本命盘（runtime 没装 / 服务不可达 / 后端拒参）：照上游无头挂载「取不到就只少那一段」，六段本机照算，
+            # 原因进 warnings。唯独 runtime.starting 上抛：稍后重试同一调用即可拿到完整七段，这里降级会让「冷启动的第一次
+            # 调用少一段」成为常态。
+            if exc.code == "runtime.starting":
+                raise
+            chart_error = exc
+        js_payload = {
+            **{key: payload.get(key) for key in ("date", "time", "zone", "lat", "lon", "ad", "gender", *self._DONGYA_KNOBS)},
+            "chart": chart_response,
+            "now_ms": self._mingother_now_ms(),
+        }
+        js_result = self.js_client.run("dongya", js_payload)
+        self._raise_mingother_js_failure("dongya", js_result)
+        snapshot_text = js_result.get("snapshot_text")
+        data = js_result.get("data", {})
+        has_chart = isinstance(data, dict) and data.get("hasChart") is True
+        result: dict[str, Any] = {
+            "dongya": data,
+            "input_normalized": js_result.get("input_normalized", {}),
+            "chart": (chart_response or {}).get("chart") if isinstance(chart_response, dict) else None,
+            "now_ms": js_payload["now_ms"],
+            # 这一次实际由谁算（技法依据卡据此标注）：六段恒为本地 JS；易卦星盘的本命盘取到了才是 chart 服务。
+            "compute_sources": {"arts": "dongya", "natal_chart": "chart_service" if has_chart else "unavailable"},
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="dongya", snapshot_text=snapshot_text),
+        }
+        # skill 替调用方定下的「此刻」口径（技法依据卡回显）：不说出来就无从解释「同一张盘明年 / 明天再排，这几行为什么变了」。
+        settings = data.get("settings") if isinstance(data, dict) and isinstance(data.get("settings"), dict) else {}
+        applied: dict[str, dict[str, Any]] = {
+            "ichingProgressionAt": {
+                "label": "易卦推运的「今日」（随调用时刻变化）",
+                "value": datetime.fromtimestamp(js_payload["now_ms"] / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            },
+        }
+        if settings.get("flowYearGiven") is False:
+            applied["flowYear"] = {"label": "流年（未指定→取今年）", "value": settings.get("flowYear")}
+        result["settings_applied"] = applied
+        warnings: list[str] = []
+        if chart_error is not None:
+            warnings.append(bilingual(
+                f"东亚诸术：没取到本命盘（{chart_error.code}），[易卦星盘] 只出推运一行、七政合卦未出；其余六段是本机算的、不受影响。"
+                "装好并启动离线 runtime 后重跑即可补上。",
+                f"dongya: the natal chart could not be fetched ({chart_error.code}); [易卦星盘] has only the progression line "
+                "(no planet hexagrams). The other six sections are computed locally and are unaffected. Re-run once the offline runtime is up.",
+            ))
+        elif not has_chart:
+            warnings.append(bilingual(
+                "东亚诸术：本命盘回包里没有七政星位，[易卦星盘] 只出推运一行、七政合卦未出。",
+                "dongya: the natal chart response carried no planets; [易卦星盘] has only the progression line.",
+            ))
+        if warnings:
+            result["_warnings"] = warnings
+        return result
+
+    def _run_zhufang_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 诸方杂术：玛雅历 / 十三月亮历 JS 进程内算；人类图 / 灵名字母由后端 astrostudy/zhufang_arts.py 算
+        # （/astroextra/zhufang）。请求体取自上游映射（tools/zhufang.js request_only：zhufangParamsFromFields + zhufangRemote 的
+        # body 映射），回包原样交给上游 zhufangSnapshotLines 排版。
+        js_payload = {key: payload.get(key) for key in ("date", "time", "zone", "lat", "lon", "ad", "hsys", "gender", *self._ZHUFANG_KNOBS)}
+        probe = self.js_client.run("zhufang", {**js_payload, "request_only": True})
+        self._raise_mingother_js_failure("zhufang", probe)
+        request = probe.get("request") if isinstance(probe, dict) else None
+        if not isinstance(request, dict) or not request.get("date"):
+            raise ToolValidationError(
+                bilingual("`zhufang` 的本地 JS 引擎没有给出后端请求体", "the local JS engine returned no request body for `zhufang`"),
+                code=tool_code("zhufang", "empty_snapshot"), details={"tool": "zhufang"},
+            )
+        remote: dict[str, Any] | None = None
+        remote_error: HorosaSkillError | None = None
+        try:
+            remote = self._call_remote("/astroextra/zhufang", request)
+        except HorosaSkillError as exc:
+            # 后端取不到（runtime 没装 / 服务不可达 / 后端拒参）：照上游页面与无头挂载，本地两段照出、后两段写「未算出」，
+            # 原因进 warnings。runtime.starting 上抛（稍后重试同一调用即可拿到完整四段）。
+            if exc.code == "runtime.starting":
+                raise
+            remote_error = exc
+        js_result = self.js_client.run("zhufang", {**js_payload, "remote": remote})
+        self._raise_mingother_js_failure("zhufang", js_result)
+        snapshot_text = js_result.get("snapshot_text")
+        data = js_result.get("data", {})
+        status = data.get("remote_status") if isinstance(data, dict) and isinstance(data.get("remote_status"), dict) else {}
+        result: dict[str, Any] = {
+            "zhufang": data,
+            "input_normalized": js_result.get("input_normalized", {}),
+            "request": request,
+            "remote": remote,
+            # 这一次实际由谁算：两种历恒为本地 JS；人类图 / 灵名字母逐块看后端是否真算出。
+            "compute_sources": {
+                "calendars": "zhufang",
+                "humanDesign": "chart_service" if status.get("humanDesign") else "unavailable",
+                "spiritNames": "chart_service" if status.get("spiritNames") else "unavailable",
+            },
+            "snapshot_text": snapshot_text,
+            "export_snapshot": self._augment_export_payload(technique="zhufang", snapshot_text=snapshot_text),
+        }
+        # 后端失败 / 只算出一半：上游页面与无头挂载照出本地两段、缺的写「未算出」。这里同样照出，但逐块进 warnings（不静默少内容）。
+        warnings: list[str] = []
+        if remote_error is not None:
+            warnings.append(bilingual(
+                f"诸方杂术：后端 /astroextra/zhufang 没取到（{remote_error.code}），[人类图]、[灵名字母] 两段写的是「未算出」；"
+                "[玛雅历]、[十三月亮历] 是本机算的、不受影响。装好并启动离线 runtime 后重跑即可补上。",
+                f"zhufang: /astroextra/zhufang could not be reached ({remote_error.code}); [人类图] and [灵名字母] say 'not computed'. "
+                "[玛雅历] and [十三月亮历] are computed locally and are unaffected. Re-run once the offline runtime is up.",
+            ))
+        else:
+            missing = [title for key, title in (("humanDesign", "人类图"), ("spiritNames", "灵名字母")) if not status.get(key)]
+            if missing:
+                names = "、".join(f"[{title}]" for title in missing)
+                warnings.append(bilingual(
+                    f"诸方杂术：后端没有算出 {names}（/astroextra/zhufang 把这块回成 null——后端内部出错也回 HTTP 200），该段写的是「未算出」。"
+                    "多半是这份出生资料超出星历 / 起盘范围；其余段不受影响。",
+                    f"zhufang: the backend returned null for {names} (/astroextra/zhufang answers HTTP 200 even when a block fails internally); "
+                    "that section says 'not computed'. The birth data is probably outside the ephemeris / chart range; the other sections are unaffected.",
+                ))
+        if payload.get("zodiacal") in (1, "1", True):
+            warnings.append(bilingual(
+                "诸方杂术：zodiacal=1（恒星黄道）没有生效——人类图按定义用回归黄经，灵名字母后端固定按回归黄道起盘。",
+                "zhufang: zodiacal=1 (sidereal) has no effect: Human Design is tropical by definition and the spirit-name letters are always cast tropical.",
+            ))
+        if warnings:
+            result["_warnings"] = warnings
+        return result
 
     def _run_huangli_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 老黄历日课：上游这支是纯前端本地推演（lunar-javascript + 择日表），**零后端往返**，

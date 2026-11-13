@@ -165,6 +165,12 @@
   "用哪个时区？": "Which time zone?",
   "历算经度沿用东经120度标准，还是指定当地经度？": "Keep the standard 120°E longitude for the calendar, or use the local longitude?",
   "要查询哪些卦名？请给出一个或多个卦名。": "Which hexagram names? Give one or more names.",
-  "性别？（男命 / 女命取法不同）": "Gender? (male and female charts are read differently)"
+  "性别？（男命 / 女命取法不同）": "Gender? (male and female charts are read differently)",
+  "请提供出生日期、时间、时区和出生地（藏历日界按当地经度算，易卦星盘读本命盘）。": "Please give the birth date, time, time zone and birthplace (the Tibetan day boundary follows the local longitude; the I Ching chart reads the natal chart).",
+  "性别？（藏占流年八卦男命起离顺行、女命起坎逆行）": "Gender? (the yearly Parkha trigram runs forward from Li for men and backward from Kham for women)",
+  "流年看哪一年？（藏占流年八卦 / 当年九宫、洛书流年、天中杀近年都跟它走）": "Which year should the yearly readings use? (the yearly Parkha / Mewa, the Lo Shu year and the Tenchusatsu years all follow it)",
+  "算命学藏干表、易卦星盘合卦方式与宫制是否沿用星阙默认？": "Keep the Xingque defaults for the Sanmeigaku hidden-stem table, the I Ching merge rule and the house system?",
+  "请提供出生日期、时间、时区和出生地（人类图按出生时刻算，灵名字母读上升与宫头）。": "Please give the birth date, time, time zone and birthplace (Human Design uses the birth moment; the spirit-name letters read the Ascendant and house cusps).",
+  "玛雅历关联常数、人类图交点、灵名字母象限与宫制是否沿用星阙默认？": "Keep the Xingque defaults for the Maya correlation constant, the Human Design node, the spirit-name quadrant and the house system?"
  }
 }

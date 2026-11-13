@@ -1,0 +1,480 @@
+{
+ "_comment": "上游 v3.14.0 astropy/tests/data/golden_spirit_names.json 原样拷贝（上游 astropy/tests/test_zhufang_arts.py::test_spirit_names_golden 的金标：41 例灵名字母五要点 / 象限投字序号）。tests/test_sync314_mingother_live.py 经 skill 的 zhufang 工具对 vendored 引擎逐例重放；HOROSA_SOURCE_ROOT 可用时与上游文件逐例比对。",
+ "source": "Horosa-Web/astropy/tests/data/golden_spirit_names.json",
+ "lat": "47n36",
+ "zone": "+00:00",
+ "hsys": 3,
+ "cases": [
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    14,
+    4,
+    10,
+    20,
+    22
+   ]
+  },
+  {
+   "datetime": "2000-01-20 02:12:29",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    10,
+    20,
+    3,
+    20,
+    18
+   ]
+  },
+  {
+   "datetime": "2000-02-07 10:24:58",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    12,
+    12,
+    19,
+    8,
+    11
+   ]
+  },
+  {
+   "datetime": "2000-02-25 18:37:26",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    3,
+    8,
+    3,
+    13,
+    15
+   ]
+  },
+  {
+   "datetime": "2000-03-15 02:49:55",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    18,
+    22,
+    6,
+    4,
+    9
+   ]
+  },
+  {
+   "datetime": "2000-04-02 11:02:24",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    9,
+    2,
+    12,
+    6,
+    21
+   ]
+  },
+  {
+   "datetime": "2000-04-20 19:14:53",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    1,
+    22,
+    15,
+    6,
+    17
+   ]
+  },
+  {
+   "datetime": "2000-05-09 03:27:22",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    3,
+    5,
+    9,
+    6,
+    21
+   ]
+  },
+  {
+   "datetime": "2000-05-27 11:39:50",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    15,
+    10,
+    7,
+    12,
+    10
+   ]
+  },
+  {
+   "datetime": "2000-06-14 19:52:19",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    9,
+    3,
+    17,
+    3,
+    19
+   ]
+  },
+  {
+   "datetime": "2000-07-03 04:04:48",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    4,
+    1,
+    17,
+    11,
+    3
+   ]
+  },
+  {
+   "datetime": "2000-07-21 12:17:17",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    5,
+    19,
+    4,
+    15,
+    4
+   ]
+  },
+  {
+   "datetime": "2000-08-08 20:29:46",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    14,
+    7,
+    20,
+    1,
+    6
+   ]
+  },
+  {
+   "datetime": "2000-08-27 04:42:14",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    17,
+    8,
+    5,
+    9,
+    9
+   ]
+  },
+  {
+   "datetime": "2000-09-14 12:54:43",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    11,
+    1,
+    7,
+    18,
+    14
+   ]
+  },
+  {
+   "datetime": "2000-10-02 21:07:12",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    17,
+    13,
+    4,
+    17,
+    13
+   ]
+  },
+  {
+   "datetime": "2000-10-21 05:19:41",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    17,
+    4,
+    15,
+    13,
+    13
+   ]
+  },
+  {
+   "datetime": "2000-11-08 13:32:10",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    18,
+    2,
+    10,
+    2,
+    6
+   ]
+  },
+  {
+   "datetime": "2000-11-26 21:44:38",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    3,
+    14,
+    7,
+    11,
+    2
+   ]
+  },
+  {
+   "datetime": "2000-12-15 05:57:07",
+   "lon": "122w20",
+   "quadrant": 1,
+   "ibnEzra": [
+    2,
+    16,
+    19,
+    16,
+    2
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "179w00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    18,
+    11,
+    10,
+    2
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "127w00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    9,
+    17,
+    9,
+    8
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "74w00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    14,
+    21,
+    21,
+    13
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "20w00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    9,
+    1,
+    15,
+    9
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "33e00",
+   "quadrant": 1,
+   "quadrantLetters": [
+    5,
+    20,
+    4,
+    19
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "86e00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    12,
+    18,
+    4,
+    18
+   ]
+  },
+  {
+   "datetime": "1975-02-11 05:15:00",
+   "lon": "140e00",
+   "quadrant": 1,
+   "quadrantLetters": [
+    18,
+    19,
+    4,
+    11
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "167w00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    10,
+    19,
+    10,
+    19
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "114w00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    3,
+    11,
+    11,
+    3
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "60w00",
+   "quadrant": 1,
+   "quadrantLetters": [
+    9,
+    9,
+    14,
+    19
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "7w00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    20,
+    5,
+    2,
+    22
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "46e00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    20,
+    19,
+    20,
+    15
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "100e00",
+   "quadrant": 1,
+   "quadrantLetters": [
+    14,
+    2,
+    14,
+    19
+   ]
+  },
+  {
+   "datetime": "2000-01-01 18:00:00",
+   "lon": "153e00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    12,
+    12,
+    16,
+    2
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "154w00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    18,
+    7,
+    14,
+    2
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "101w00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    1,
+    11,
+    22,
+    16
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "47w00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    6,
+    11,
+    11,
+    1
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "6e00",
+   "quadrant": 2,
+   "quadrantLetters": [
+    2,
+    2,
+    2,
+    14
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "60e00",
+   "quadrant": 1,
+   "quadrantLetters": [
+    19,
+    4,
+    16,
+    4
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "114e00",
+   "quadrant": 1,
+   "quadrantLetters": [
+    13,
+    4,
+    16,
+    6
+   ]
+  },
+  {
+   "datetime": "1957-06-11 02:24:00",
+   "lon": "166e00",
+   "quadrant": 3,
+   "quadrantLetters": [
+    14,
+    9,
+    14,
+    3
+   ]
+  }
+ ]
+}

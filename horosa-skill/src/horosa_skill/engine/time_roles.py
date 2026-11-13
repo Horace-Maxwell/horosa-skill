@@ -39,6 +39,8 @@ _BY_ROLE: dict[str, tuple[str, ...]] = {
         "germany", "harmonic", "acg", "india_chart", "india_rectify", "jieqi_birth", "suzhan",
         # 命理
         "ziwei_birth", "bazi_birth", "bazi_direct", "canping", "heluo", "yizhangjing", "zhengchuan",
+        # 命 · 其他（上游 v3.14.0）：生辰起盘；东亚诸术的流年缺省今年（flowYear 可指定），不是必填的目标时刻
+        "dongya", "zhufang",
         # 神数（生辰起数）
         "wangji", "wuzhao", "taixuan", "jingjue", "shenyishu", "shaozi", "tieban", "fendjing", "beiji",
         "nanji", "chunzi", "xianqin", "cetian", "qizhengkin",

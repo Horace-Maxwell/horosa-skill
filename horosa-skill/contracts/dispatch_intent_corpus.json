@@ -892,6 +892,157 @@
    }
   },
   {
+   "query": "东亚诸术",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "藏曆",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "九星气学",
+   "birth": false,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "算命學看天中殺",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "易卦星盘",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "易卦星盤和六爻一起看",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "sixyao",
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "nine star ki",
+   "birth": false,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "tibetan astrology",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "dongya"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "诸方杂术",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "zhufang"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "人類圖",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "zhufang"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "瑪雅曆",
+   "birth": false,
+   "expect": {
+    "tools": [
+     "zhufang"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "十三月亮历",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "zhufang"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "human design",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "zhufang"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "mayan calendar",
+   "birth": false,
+   "expect": {
+    "tools": [
+     "zhufang"
+    ],
+    "warn": false
+   }
+  },
+  {
+   "query": "本月月历",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "calendar_month"
+    ],
+    "warn": false
+   }
+  },
+  {
    "query": "名人星盘库找爱因斯坦",
    "birth": true,
    "expect": {

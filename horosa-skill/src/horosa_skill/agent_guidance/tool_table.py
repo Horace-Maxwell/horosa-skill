@@ -773,6 +773,60 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         do_not_assume=["gender"],
     ),
+    # 命 · 其他两个「一工具多子术」（上游 v3.14.0）。每段一个子术；只要其中几段用通用的 response_sections（段名或序号）。
+    "dongya": _policy(
+        intent=(
+            "东亚诸术：一次出七段，每段一个子术——[藏历]（浦派时轮历：出生藏历日 / 年五行生肖 / 胜生周）、[藏占]（流年八卦 Parkha · "
+            "九宫 Mewa · 魂命煞）、[蒙古 Zurkhai]（年支月支相位）、[算命学]（三柱 / 藏干 / 天中杀）、[九星气学]（本命星 / 月命星 / 日命星）、"
+            "[洛书流年]、[易卦星盘]（七政度卦 / 座卦 / 宫卦与合卦，另出易卦推运）。前六段只读出生资料、本机算；易卦星盘另读本命盘七政的黄经与宫位。"
+            "\n只要其中几段：response_sections=[\"藏历\", \"九星气学\"]（段名或序号）。问藏历 / 九星气学 / 算命学 / 易卦星盘中的任何一个都用本工具。"
+            "\n干支历按直接时间、0 点换日、年按立春月按节（技法定义，不随 timeAlg / 日界设置）；藏历民用日从当地平太阳时 5 点起算（随经度变）。"
+            "流年缺省 = 今年（藏占按藏历年、洛书 / 天中杀按盘时区的公历年），易卦推运的环位按今天算——同一张盘隔天 / 隔年再排，这几行会变。"
+        ),
+        required_context=COMMON_BIRTH_FIELDS + ["gender"],
+        ask_if_missing=[
+            {"field": "birth data", "question": "请提供出生日期、时间、时区和出生地（藏历日界按当地经度算，易卦星盘读本命盘）。"},
+            {"field": "gender", "question": "性别？（藏占流年八卦男命起离顺行、女命起坎逆行）", "options": ["男", "女"], "values": [1, 0]},
+            {"field": "flowYear", "question": "流年看哪一年？（藏占流年八卦 / 当年九宫、洛书流年、天中杀近年都跟它走）", "options": ["今年（默认）", "指定年份（flowYear，1–9999）"]},
+            {
+                "field": "fenyeVersion/ichingMerge/hsys",
+                "question": "算命学藏干表、易卦星盘合卦方式与宫制是否沿用星阙默认？",
+                "options": ["沿用默认（藏干通行版 · 按地平上下合卦 · 宫制 1 Alcabitus）", "指定（键见 options_keys）"],
+            },
+        ],
+        safe_defaults=[
+            {"field": "flowYear", "value": None, "meaning": "未给 = 今年（上游页面流年框留空 / 挂载齿轮「留空 = 今年」）；实际用的年份在 data.dongya.settings.flowYear"},
+            {"field": "fenyeVersion", "value": "common", "meaning": "算命学藏干表通行版（上游 EAST_ASIA_PAGE_SETTINGS 出厂值；fajue = 法诀版，改 [算命学] 藏干行）"},
+            {"field": "ichingMerge", "value": "horizon", "meaning": "星卦按地平上下合入：7–12 宫合上卦、1–6 宫合下卦（upper 恒合上卦 / lower 恒合下卦；改 [易卦星盘] 各行「→」后的卦）"},
+            {"field": "hsys", "value": 1, "meaning": "宫制 1 Alcabitus（星阙 DefaultHouseSystem）：决定七政落宫 → [易卦星盘] 的宫卦与按地平合卦"},
+            {"field": "zodiacal", "value": 0, "meaning": "回归黄道；1 = 恒星黄道（[易卦星盘] 的度卦 / 座卦按恒星黄经取，同上游页面读当前盘）"},
+        ],
+        do_not_assume=["gender", "flow year when the user asks about a specific year"],
+    ),
+    "zhufang": _policy(
+        intent=(
+            "诸方杂术：一次出四段，每段一个子术——[玛雅历]（长计历 / 卓尔金 / 哈布 / 九夜神 / 十三日组）、[十三月亮历]（Dreamspell Kin / 调性 / 图腾 / 波符）、"
+            "[人类图]（类型 / 内在权威 / 人生角色 / 轮回交叉 / 中心 / 通道 / 个人与设计两组闸门）、[灵名字母]（五要点投字 / 十一宫与象限四宫度数主星）。"
+            "玛雅历与十三月亮历只读出生日期、本机算；人类图与灵名字母由本地后端按出生时刻与地点算。"
+            "\n只要其中几段：response_sections=[\"人类图\"]（段名或序号）。问玛雅历 / 十三月亮历 / 人类图 / 灵名字母中的任何一个都用本工具。"
+            "\n公元前日期不排两种历（段内写明）；后端没算出某块时该段写「未算出」并进 warnings。人类图按定义用回归黄经，zodiacal=1 不生效。"
+        ),
+        required_context=COMMON_BIRTH_FIELDS,
+        ask_if_missing=[
+            {"field": "birth data", "question": "请提供出生日期、时间、时区和出生地（人类图按出生时刻算，灵名字母读上升与宫头）。"},
+            {
+                "field": "mayanCorrelation/hdTrueNode/spiritQuadrant/hsys",
+                "question": "玛雅历关联常数、人类图交点、灵名字母象限与宫制是否沿用星阙默认？",
+                "options": ["沿用默认（584283 · 真交点 · 象限 1（1·4·7·10 宫）· 宫制 1 Alcabitus）", "指定（键见 options_keys）"],
+            },
+        ],
+        safe_defaults=[
+            {"field": "mayanCorrelation", "value": 584283, "meaning": "GMT 关联常数（2012-12-21 = 13.0.0.0.0）；584285 / 584286 让长历日数与卓尔金 / 哈布各退 2 / 3 日"},
+            {"field": "hdTrueNode", "value": True, "meaning": "人类图用真交点（false = 平交点；只改个人 / 设计两组的北交 / 南交闸门，可能连带改通道与类型）"},
+            {"field": "spiritQuadrant", "value": 1, "meaning": "灵名字母象限取 1·4·7·10 宫（2 = 2·5·8·11 宫，3 = 3·6·9·12 宫）"},
+            {"field": "hsys", "value": 1, "meaning": "宫制 1 Alcabitus（星阙 DefaultHouseSystem）：决定十一宫与象限四宫的宫头 → [灵名字母] 的度数主星行"},
+        ],
+    ),
     "acg": _policy(
         intent="占星地图（AstroCartoGraphy）：本命时刻行星地理投影线（MC/IC 经度、天顶点、偕升纬度带、线交点）。",
         required_context=COMMON_BIRTH_FIELDS,
@@ -1427,6 +1481,24 @@ _MINGLI_OPTIONS_KEYS: dict[str, dict[str, str]] = {
     },
 }
 _MINGLI_OPTIONS_KEYS["bazi_direct"] = _MINGLI_OPTIONS_KEYS["bazi_birth"]
+# 命 · 其他（上游 v3.14.0）：口径旋钮已在输入模型声明、不进广告层；词表唯一真值 = vendored 页面设置表
+# （EAST_ASIA_PAGE_SETTINGS / ZHUFANG_PAGE_SETTINGS，tests/test_sync314_mingother_contract.py 与 cn_vocab 互锚）。
+_MINGLI_OPTIONS_KEYS["dongya"] = {
+    "flowYear": "流年，1–9999 的整数；缺省 = 今年。藏占（流年八卦 / 当年九宫）按藏历年，洛书流年 / 天中杀近年按公历年；早于出生的年份段内写明「早于出生」",
+    "fenyeVersion": "算命学藏干表：common 通行版（缺省）| fajue 法诀版（与八字页「月律分野」同一张表）",
+    "ichingMerge": "易卦星盘星卦合入：horizon 地平上（7–12 宫）合上卦、地平下合下卦（缺省）| upper 恒合上卦 | lower 恒合下卦",
+    "hsys": "宫制（缺省 1 Alcabitus）：七政落宫 → 宫卦与按地平合卦；全表同西占 hsys",
+    "zodiacal / siderealAyanamsa": "缺省 0 回归黄道；1 = 恒星黄道（易卦星盘的度卦 / 座卦按恒星黄经取）",
+    "response_sections": "只取其中几段：[\"藏历\", \"藏占\", \"蒙古 Zurkhai\", \"算命学\", \"九星气学\", \"洛书流年\", \"易卦星盘\"] 的子集（段名或序号 1–7）",
+}
+_MINGLI_OPTIONS_KEYS["zhufang"] = {
+    "mayanCorrelation": "玛雅历关联常数：584283（GMT，缺省）| 584285 | 584286",
+    "hdTrueNode": "人类图交点：true 真交点（缺省）| false 平交点（也收 mean）",
+    "spiritQuadrant": "灵名字母象限：1 = 1·4·7·10 宫（缺省）| 2 = 2·5·8·11 宫 | 3 = 3·6·9·12 宫",
+    "hsys": "宫制（缺省 1 Alcabitus）：灵名字母读上升与宫头；全表同西占 hsys。人类图不读宫位",
+    "zodiacal": "不生效：人类图按定义用回归黄经，灵名字母后端固定回归黄道（给 1 进 warnings）",
+    "response_sections": "只取其中几段：[\"玛雅历\", \"十三月亮历\", \"人类图\", \"灵名字母\"] 的子集（段名或序号 1–4）",
+}
 for _tool, _keys in _MINGLI_OPTIONS_KEYS.items():
     TOOL_GUIDANCE[_tool] = {**TOOL_GUIDANCE[_tool], "options_keys": _keys}  # 写时复制，同上
 

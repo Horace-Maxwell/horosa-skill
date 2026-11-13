@@ -212,7 +212,7 @@ Local end-to-end signals:
 | `jinkou` ⓟ | Jin Kou Jue | cast by ken (`kinjinkou`), 20-section reading layer |
 | `sanshiunited` ⓟ | Three Styles unified | aggregates ken Qi Men + Tai Yi with Da Liu Ren (incl. all three engines' enriched sections) |
 
-### Local metaphysics · numerology · divination (16)
+### Local metaphysics · numerology · divination (18)
 
 | Tool ID | Name | Notes |
 | --- | --- | --- |
@@ -220,6 +220,8 @@ Local end-to-end signals:
 | `canping` ⓟ | Shao Zi Can Ping Shu | four-pillar numbers, verses (in-process, bundled `lunar-javascript`) |
 | `heluo` ⓟ | He Luo Li Shu | pre/post-heaven gua, fate chapter, decade + yearly fortunes with verdict (in-process) |
 | `yizhangjing` ⓟ | Yi Zhang Jing | palm-chart four palaces, life palace / twelve mansions, decade + annual cycles, shensha overlay (in-process) |
+| `dongya` ⓟ | East Asian arts | seven sections in one call: Tibetan calendar / Tibetan divination (Parkha, Mewa, life forces) / Mongolian Zurkhai / Sanmeigaku / Nine Star Ki / Lo Shu year transit / I Ching astrology with progression; the year can be chosen |
+| `zhufang` ⓟ | World traditions | four sections in one call: Maya calendar (selectable correlation constant) / 13 Moon Dreamspell / Human Design / spirit-name letters |
 | `zhengchuan` ⓟ | Shen Shu Zheng Chuan | five schools (铁板/邵子/大定/六亲/铁算心易): four-pillar casting, verse lookup, decade + death-month (in-process) |
 | `xiaoliuren` ⓟ | Xiao Liu Ren | three-number 三传 · mainstream six-palace / Daoist nine-palace + 生克 + nine spirits + remedies |
 | `feigong` ⓟ | Fei Gong Xiao Qi Men | 青龙 flies the nine palaces + host/guest & life palace + eight gates/nine stars + annual/monthly + timing |
@@ -298,7 +300,7 @@ If an agent is unsure of the user's settings before calling a technique, it shou
 Calculation tools, `horosa_dispatch` and `horosa_hecan` are gated: while a result-changing question is still open the call returns `agent_guidance.required`; the AI client must stop and forward `details.agent_recovery.prompt_to_user` to the user — it may not bypass or self-fill. How the gate decides (v0.50.1):
 
 - **Only open questions are asked.** What the payload already answers is not asked, unrelated questions are not asked (no southern-hemisphere month question for a Shanghai birth), and a call with nothing open runs without any flag (`huangli {"date": "2026-11-12"}`).
-- **Facts and settings are different.** The birth / casting clock time, the gender (asked separately by 17 gender-dependent techniques: BaZi, Zi Wei, Liu Ren annual, Can Ping, He Luo, Yi Zhang Jing, Shen Shu Zheng Chuan and the Shen Shu systems…), the second person of a synastry and the moment of a cast are facts only the user knows: `agent_confirmed_settings` / `defaults_accepted` cannot stand in for them — put the value in the payload. Settings (house system, school, casting method) take `agent_confirmed_settings: true` after the user answers, or `defaults_accepted: true` after the user explicitly accepts the Xingque defaults — JSON `true` only (`"true"` / `1` get a dedicated error), and never set by the agent on the user's behalf.
+- **Facts and settings are different.** The birth / casting clock time, the gender (asked separately by 18 gender-dependent techniques: BaZi, Zi Wei, Liu Ren annual, Can Ping, He Luo, Yi Zhang Jing, the East Asian arts set, Shen Shu Zheng Chuan and the Shen Shu systems…), the second person of a synastry and the moment of a cast are facts only the user knows: `agent_confirmed_settings` / `defaults_accepted` cannot stand in for them — put the value in the payload. Settings (house system, school, casting method) take `agent_confirmed_settings: true` after the user answers, or `defaults_accepted: true` after the user explicitly accepts the Xingque defaults — JSON `true` only (`"true"` / `1` get a dedicated error), and never set by the agent on the user's behalf.
 - **Unreadable values are refused field by field.** Dates, clock times, zones, coordinates and gender follow one rule for every technique: 东八区 / UTC+8 / 北京时间, 8点半 / 8:30 PM, 1990年5月3日 / 19900503, 北纬31.22 / 31°13′N, 坤造 / 女士 are read (and how they were read goes into `warnings`); `zone=480`, CST, 辰时, 不详, `03/05/1990`, lunar dates, `40n75`, swapped lat/lon or gender "other" are refused with one entry per field (what was received, what is expected, an example, the options), marking the ones only the user can answer. An unrecognised setting value (house-system name, school, calibre…) is refused with `tool.invalid_option` and the list in `details.accepted`, never silently replaced by the default.
 - **Places and zones.** Techniques and dispatch take `place`: coordinates and the zone of that date are derived from the place (DST included, e.g. China 1986–1991), and ambiguous names are put to the user. An explicit `zone` is used as given and is not checked against the place for DST; an IANA name (`America/New_York`) is converted for the date, and a clock time in a DST gap or overlap is put to the user as two offsets.
 - **There is no "time unknown" mode.** A missing clock time, "不详"/"unknown" or a double hour (时辰) alone is refused and must be asked; a lunar date is refused with a pointer to `horosa_cn_calendar_month` to find the Gregorian day.

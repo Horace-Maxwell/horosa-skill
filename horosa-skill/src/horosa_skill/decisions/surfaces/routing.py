@@ -40,8 +40,8 @@ FAMILIES: dict[str, tuple[str, tuple[str, ...]]] = {
         ("sixyao", "gua_desc", "gua_meiyi", "guice", "xiaoliuren", "xiaochengtu", "tongshefa", "lingqi", "suzhan", "geomancy", "tarot", "otherbu"),
     ),
     "numerology_shenshu": (
-        "神数与数算（以干支起数）：铁板、邵子、皇极、河洛理数、参评、一掌经、神数正传、五兆、太玄、京氏易等",
-        ("beiji", "cetian", "chunzi", "fendjing", "jingjue", "nanji", "qizhengkin", "shaozi", "shenyishu", "taixuan", "tieban", "wangji", "wuzhao", "xianqin", "zhengchuan", "heluo", "canping", "yizhangjing"),
+        "神数与数算（以干支起数）：铁板、邵子、皇极、河洛理数、参评、一掌经、神数正传、五兆、太玄、京氏易等；另含东亚诸术（藏历、算命学、九星气学、易卦星盘）与诸方杂术（玛雅历、十三月亮历、人类图）",
+        ("beiji", "cetian", "chunzi", "fendjing", "jingjue", "nanji", "qizhengkin", "shaozi", "shenyishu", "taixuan", "tieban", "wangji", "wuzhao", "xianqin", "zhengchuan", "heluo", "canping", "yizhangjing", "dongya", "zhufang"),
     ),
     "zeri": (
         "择日 / 择时：在一段日期范围里搜索合适时刻（黄历、八字、太乙、紫微、六壬、三式、奇门、七政、印度择时）",

@@ -64,7 +64,7 @@ IANA 时区会在进入 runtime 前转换为后端稳定接受的固定 offset�
 
 **没有「时间不详」模式**：钟点缺失、写「不详」或只给时辰时一律拒绝并请问用户，不会默认成 0 点或正午。设置值（流派 / 口径 / 传本 / 宫制…）认不出时回 `tool.invalid_option`，`details.accepted` 列出可选值，不再静默换成缺省。工具不认识的参数会在 `warnings` 里点名（并提示最接近的参数名）；`timezone` / `tz` / `latitude` / `longitude` / `lng` / `sex` / `house_system` 这类别名照收并说明。
 
-结果随性别而变、缺性别会单独追问的技法（17 种）：`bazi_birth`、`bazi_direct`、`ziwei_birth`、`ziweizeri`、`liureng_runyear`、`canping`、`heluo`、`yizhangjing`、`zhengchuan`（铁算心易除外）、`shaozi`、`tieban`、`beiji`、`nanji`、`chunzi`、`xianqin`、`cetian`、`qizhengkin`（`agent_guidance/questions.py::GENDER_FACT_TOOLS`）。
+结果随性别而变、缺性别会单独追问的技法（18 种）：`bazi_birth`、`bazi_direct`、`ziwei_birth`、`ziweizeri`、`liureng_runyear`、`canping`、`heluo`、`yizhangjing`、`dongya`（藏占流年八卦男顺女逆）、`zhengchuan`（铁算心易除外）、`shaozi`、`tieban`、`beiji`、`nanji`、`chunzi`、`xianqin`、`cetian`、`qizhengkin`（`agent_guidance/questions.py::GENDER_FACT_TOOLS`）。
 
 ## 推运、返照与时运输入
 

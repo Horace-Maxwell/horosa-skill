@@ -29,6 +29,40 @@ _SYNC311_ASTROEXTRA_STUBS["/predict/dist"] = _SYNC313_LIVE["dist"]["default"]
 _DIRECTED_LIVE = json.loads((Path(__file__).parent / "fixtures" / "sync313_directed_live.json").read_text(encoding="utf-8"))["scenarios"]
 for _tech, _scen in _DIRECTED_LIVE.items():
     _SYNC311_ASTROEXTRA_STUBS[f"/astroextra/{_tech}"] = _scen["default"]["response"]
+# 诸方杂术（上游 v3.14.0）：/astroextra/zhufang 回**真实**响应（horosa-core-js/test/fixtures/sync314_mingother_zhufang_live.json，
+# vendored v3.14.0 引擎实抓、未裁剪；selfcheck 的诸方金标读同一份）。按请求体的 hdTrueNode / spiritQuadrant / hsys 选场景；
+# 认不出的日期回「两块都 null」的失败形状（后端内部出错也回 HTTP 200）。
+_ZHUFANG_LIVE = json.loads(
+    (Path(__file__).resolve().parents[1] / "horosa-core-js" / "test" / "fixtures" / "sync314_mingother_zhufang_live.json").read_text(encoding="utf-8")
+)["scenarios"]
+
+
+def _fake_zhufang_response(payload: dict) -> dict:
+    import re as _re
+
+    if not _re.fullmatch(r"-?\d{1,6}/\d{2}/\d{2}", str(payload.get("date") or "")):
+        scenario = "bad_date"
+    elif str(payload.get("hdTrueNode")) == "0":
+        scenario = "mean_node"
+    elif str(payload.get("spiritQuadrant")) == "2":
+        scenario = "quadrant2"
+    elif str(payload.get("hsys")) == "1":
+        scenario = "hsys1"
+    else:
+        scenario = "default"
+    return json.loads(json.dumps(_ZHUFANG_LIVE[scenario]["response"]))
+
+
+def _run_real_js_tool(tool_name: str, payload: dict) -> dict:
+    """直接跑真 horosa-core-js 工具（node 必备；与 selfcheck 同一入口）：算法、词表校验与排版都在 JS 里的技法不手抄桩。"""
+    import subprocess
+
+    cli = Path(__file__).resolve().parents[1] / "horosa-core-js" / "bin" / "cli.mjs"
+    out = subprocess.run(["node", str(cli), "run", tool_name], input=json.dumps(payload, ensure_ascii=False),
+                         capture_output=True, text=True, encoding="utf-8", check=True)
+    return json.loads(out.stdout)
+
+
 # 桩版 directedFigureRequestFields ∘ directedFigureOptsFromSettings（页面键 → 后端口径键；真函数由真 node 用例守）。
 _DIRECTED_MAIN_LIST = {"neroman": "evolved", "bezzafigure": "points", "jayprofection": "rows", "michon": "superpositions"}
 
@@ -54,6 +88,8 @@ class FakeClient(HorosaApiClient):
     def call(self, endpoint: str, payload: dict) -> dict:
         if endpoint in _SYNC311_ASTROEXTRA_STUBS:
             return json.loads(json.dumps(_SYNC311_ASTROEXTRA_STUBS[endpoint]))
+        if endpoint == "/astroextra/zhufang":
+            return _fake_zhufang_response(payload)
         if endpoint == "/electionscan/scan":
             # 真实形状：每行必带 pick/pickEnd（ε 缓冲后的安全起盘时刻）与 startJd/endJd。缺 pick 时
             # runner 会退回按分钟截断的 start，恰落征象边界外侧 —— 桩里必须有。
@@ -1188,6 +1224,9 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[神煞合参]\n（通用命理合参层·非本术原生）\n命(未·天驛)：华盖—主孤高"
                 ),
             }
+        if tool_name in {"dongya", "zhufang"}:
+            # 命 · 其他两个多子术工具（上游 v3.14.0）：算法、口径词表校验与七段 / 四段排版全在 JS——直接跑真 JS，不手抄段头与正文。
+            return _run_real_js_tool(tool_name, payload)
         if tool_name == "zeri_conditions":
             # 择日条件回显 / 词表：只读上游注册表、不起盘——直接跑真 JS（node 必备；与 selfcheck 同一入口）。
             import json as _json

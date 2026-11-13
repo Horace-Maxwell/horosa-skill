@@ -32,6 +32,8 @@ import { buildLocalBaziResult } from '../src/vendor/bazi/baziLunarLocal.js';
 import { runCanping } from '../src/tools/canping.js';
 import { runHeluo } from '../src/tools/heluo.js';
 import { runYizhangjing } from '../src/tools/yizhangjing.js';
+import { runDongya } from '../src/tools/dongya.js';
+import { runZhufang } from '../src/tools/zhufang.js';
 import { runTongSheFa } from '../src/tools/tongshefa.js';
 import { runTarot } from '../src/tools/tarot.js';
 import { runYanqinYanfa } from '../src/tools/yanqinYanfa.js';
@@ -402,6 +404,199 @@ check('yizhangjing gradeSet/leapRule 走到引擎：天驛 中品→下品；闰
   // 那样 23:30 的农历日先进位成十六、按「十五后作下月」走的是另一条分支；本对照只考 00:xx 条件本身。
   const notLate = runYizhangjing({ ...leap, time: '23:30:00', leapRule: 'midnight', after23NewDay: 0 });
   assert(notLate.data.input.month === 2, `23:30 must stay month 2: ${JSON.stringify(notLate.data.input)}`);
+});
+
+// ── 命 · 其他（上游 v3.14.0）：东亚诸术 / 诸方杂术，每个子术一条值级金标（期望值的独立来源写在各断言上）────────────
+const DONGYA_BASE = { date: '1975-02-10', time: '21:15:00', zone: '-08:00', lat: '47n36', lon: '122w20', gender: 0 };
+const DONGYA_NOW = Date.UTC(2026, 10, 7, 12);   // 上游 eastAsiaSnapshot.test.js 的 NOW
+const dongyaLine = (r, head) => (r.snapshot_text || '').split('\n').find((l) => l.startsWith(head)) || '';
+
+check('dongya 藏历：藏历新年 2024-02-10 / 2025-02-28 / 2026-02-18 都是正月初一；年的五行生肖与胜生周', () => {
+  // 独立来源：公开历表的洛萨（藏历新年）日期，与上游 eastAsiaArts.test.js「藏历新年(2019~2026)」同一组；
+  // 2024 木阳龙、2025 木阴蛇、2026 火阳马；第十七胜生周始于 1987 火阴兔年 → 2024 是第 38 年。拉萨正午（当地 5 点已过）。
+  const lhasa = { time: '12:00:00', zone: '+08:00', lat: '29n39', lon: '91e06', gender: 1, now_ms: DONGYA_NOW };
+  const cases = [['2024-02-10', '木阳龙年', 38], ['2025-02-28', '木阴蛇年', 39], ['2026-02-18', '火阳马年', 40]];
+  for (const [date, yearText, rabjungYear] of cases) {
+    const r = runDongya({ ...lhasa, date });
+    assert(r.data.ok === true, `${date}: ${JSON.stringify(r.data)}`);
+    const y = Number(date.slice(0, 4));
+    assert(dongyaLine(r, '出生藏历') === `出生藏历:${y} 年 1 月 1 日,${dongyaLine(r, '出生藏历').split(',')[1]}`, `${date} 应是正月初一：${dongyaLine(r, '出生藏历')}`);
+    const t = r.data.model.tibetan;
+    assert(t.date.year === y && t.date.month === 1 && t.date.day === 1 && t.date.leap === false, `${date} → ${JSON.stringify(t.date)}`);
+    assert(dongyaLine(r, '年:').startsWith(`年:${yearText},第 17 胜生周第 ${rabjungYear} 年`), `${date} 年行：${dongyaLine(r, '年:')}`);
+  }
+  // 新年前一天还在旧年：上游 eastAsiaSnapshot.test.js 的夹具盘（1975-02-10 西雅图，藏历新年 2 月 11 日的前一天）= 1974 年 12 月、木阳虎年。
+  const eve = runDongya({ ...DONGYA_BASE, now_ms: DONGYA_NOW });
+  assert(dongyaLine(eve, '出生藏历') === '出生藏历:1974 年 12 月 30 日,月曜日', `除夕：${dongyaLine(eve, '出生藏历')}`);
+  assert(dongyaLine(eve, '年:').startsWith('年:木阳虎年,第 16 胜生周第 48 年'), dongyaLine(eve, '年:'));
+  // 经度进了藏历日界（当地平太阳时 5 点起算）：同一钟面时刻，西雅图已是除夕，换到 0° 经线则已过日界进了正月初一。
+  const greenwich = runDongya({ ...DONGYA_BASE, lon: '0e00', now_ms: DONGYA_NOW });
+  assert(greenwich.data.model.tibetan.date.month === 1 && greenwich.data.model.tibetan.date.day === 1, `lon 应改日界：${JSON.stringify(greenwich.data.model.tibetan.date)}`);
+});
+
+check('dongya 藏占：流年八卦男命起离顺行 / 女命起坎逆行（性别真的改结果）；1963 年本命九宫一白', () => {
+  // 独立来源：上游 eastAsiaArts.test.js「两条对照序列」——女命一岁起 坎乾兑坤离巽震艮，男命一岁起 离坤兑乾坎艮震巽。
+  // 夹具盘藏历生年 1974 → 流年 1974…1981 = 1…8 岁。
+  const seq = (gender) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+    const r = runDongya({ ...DONGYA_BASE, gender, flowYear: 1974 + i, now_ms: DONGYA_NOW });
+    assert(r.data.model.parkha.age === i + 1, `age ${r.data.model.parkha.age}`);
+    return r.data.model.parkha.year.gua;
+  }).join('');
+  assert(seq(0) === '坎乾兑坤离巽震艮', `女命：${seq(0)}`);
+  assert(seq(1) === '离坤兑乾坎艮震巽', `男命：${seq(1)}`);
+  const female = runDongya({ ...DONGYA_BASE, gender: 0, flowYear: 2026, now_ms: DONGYA_NOW });
+  const male = runDongya({ ...DONGYA_BASE, gender: 1, flowYear: 2026, now_ms: DONGYA_NOW });
+  // 2026 年 53 岁：53 ≡ 5 (mod 8) → 女命第 5 位「离」、男命第 5 位「坎」。
+  assert(dongyaLine(female, '2026 年') === '2026 年 53 岁(女命):流年八卦 离(Li,南,火);出生日八卦 乾(Khen,西北,天(铁))', dongyaLine(female, '2026 年'));
+  assert(dongyaLine(male, '2026 年').startsWith('2026 年 53 岁(男命):流年八卦 坎(Kham,北,水)'), dongyaLine(male, '2026 年'));
+  // 上游 eastAsiaArts.test.js：1963 年本命一白，生命力 −3 = 七、个人力 +3 = 四。
+  const mewa = runDongya({ date: '1963-06-15', time: '12:00:00', zone: '+08:00', lat: '29n39', lon: '91e06', gender: 1, flowYear: 2026, now_ms: DONGYA_NOW });
+  assert(mewa.data.model.tibetan.date.year === 1963, `藏历年 ${mewa.data.model.tibetan.date.year}`);
+  assert(dongyaLine(mewa, '九宫:').startsWith('九宫:本命 1白 · 当年 1白 · 生命力 7红 · 个人力 4绿'), dongyaLine(mewa, '九宫:'));
+  // 流年早于出生：不按一岁算（上游「流年早于出生」用例）。
+  const before = runDongya({ ...DONGYA_BASE, flowYear: 1900, now_ms: DONGYA_NOW });
+  assert(dongyaLine(before, '1900 年').startsWith('1900 年早于出生(藏历生年 1974 年):没有流年八卦'), dongyaLine(before, '1900 年'));
+});
+
+check('dongya 蒙古 Zurkhai / 算命学 / 九星气学：乙卯年戊寅月丁亥日、天中杀午未、藏干表两版、七赤八白、甲子日七赤', () => {
+  const r = runDongya({ ...DONGYA_BASE, flowYear: 2026, now_ms: DONGYA_NOW });
+  // 独立推算：1975 立春（2 月 4 日）后 = 乙卯年；乙庚之岁寅月起戊 = 戊寅月；2000-01-01 戊午日往回数 9091 日（≡ 31 mod 60）= 丁亥日。
+  assert(dongyaLine(r, '三柱:') === '三柱:日柱 丁亥 · 月柱 戊寅 · 年柱 乙卯;节入 立春 后 6.8 日', dongyaLine(r, '三柱:'));
+  // 年支卯、月支寅相距一位 → 相位 2（上游 Zurkhai 对照例「卯 辰 2」同距）。
+  assert(dongyaLine(r, '年支') === '年支 卯 · 月支 寅 · 相位 2(相邻)', dongyaLine(r, '年支'));
+  // 丁亥在甲申旬（甲申…癸巳），旬空午未；2026 丙午、2027 丁未起的天中杀年。
+  assert(dongyaLine(r, '天中杀:') === '天中杀:午未;近年 2026(午)、2027(未)、2038(午)、2039(未)', dongyaLine(r, '天中杀:'));
+  // 上游 eastAsiaSnapshot.test.js：寅月节后第 6 日，通行版余气戊、法诀版余气己。
+  assert(r.data.model.sanmei.hidden[1].ruler === '戊', `common: ${r.data.model.sanmei.hidden[1].ruler}`);
+  const fajue = runDongya({ ...DONGYA_BASE, flowYear: 2026, fenyeVersion: 'fajue', now_ms: DONGYA_NOW });
+  assert(fajue.data.model.sanmei.hidden[1].ruler === '己', `fajue: ${fajue.data.model.sanmei.hidden[1].ruler}`);
+  assert(dongyaLine(fajue, '藏干') !== dongyaLine(r, '藏干'), 'fenyeVersion 必须改 [算命学] 藏干行');
+  // 九星气学公开年月表：1975 立春年七赤金；一四七之年寅月八白。日命星随上游「2026-02-19 甲子 = 七赤(阳遁中元)」。
+  assert(dongyaLine(r, '本命星').startsWith('本命星 七赤 · 月命星 八白'), dongyaLine(r, '本命星'));
+  const jiazi = runDongya({ date: '2026-02-19', time: '12:00:00', zone: '+08:00', lat: '39n54', lon: '116e23', gender: 1, flowYear: 2026, now_ms: DONGYA_NOW });
+  assert(jiazi.data.model.ninestar.nichimei === 7 && jiazi.data.model.ninestar.nichimeiDun === '阳遁中元', JSON.stringify(jiazi.data.model.ninestar));
+});
+
+check('dongya 洛书流年 / 易卦星盘：流年可指定、今年按盘时区取；乾 89.9° 合上卦得泰、合下卦得否；推运环位', () => {
+  // 洛书：公历生年 1975，2026 年 51 岁 ≡ 3 (mod 8) → 中宫 7、当年数 9；九格 = 中宫 + 偏移、过 9 减 9（头 +7 → 5，左肩 +2 → 9 ★）。
+  const r = runDongya({ ...DONGYA_BASE, flowYear: 2026, now_ms: DONGYA_NOW });
+  assert(dongyaLine(r, '2026 年(51 岁)') === '2026 年(51 岁):中宫 7,当年数 9;头 5 左肩 9★ 右肩 6 胸 3 左手 4 右手 2 腹 7 左脚 1 右脚 8', dongyaLine(r, '2026 年(51 岁)'));
+  const y2030 = runDongya({ ...DONGYA_BASE, flowYear: 2030, now_ms: DONGYA_NOW });
+  assert(y2030.data.settings.flowYear === 2030 && y2030.data.settings.flowYearGiven === true && y2030.data.model.loshu[0].year === 2030, JSON.stringify(y2030.data.settings));
+  // 流年缺省 = 今年，按盘时区取（上游用例）：UTC 2025-12-31 17:00 = 东八区 2026-01-01 01:00，西八区仍是 2025。
+  const eve = Date.UTC(2025, 11, 31, 17, 0);
+  const cn = runDongya({ ...DONGYA_BASE, zone: '+08:00', lon: '116e23', lat: '39n54', now_ms: eve });
+  const us = runDongya({ ...DONGYA_BASE, now_ms: eve });
+  assert(cn.data.model.loshu[0].year === 2026 && us.data.model.loshu[0].year === 2025, `${cn.data.model.loshu[0].year}/${us.data.model.loshu[0].year}`);
+  assert(cn.data.settings.flowYearGiven === false, '没给 flowYear 要如实标');
+  // 易卦星盘（先天圆图：乾止于夏至 90°）：太阳 89.9° 的度卦是 1 乾；太阳的三爻是乾（111），逐爻异或——
+  // 10 宫在地平上合上卦：乾上变坤 → 坤上乾下 = 11 泰；恒合下卦：乾下变坤 → 乾上坤下 = 12 否。座卦：89.9° 在双子 → 37 家人。
+  const chart = { chart: { objects: [{ id: 'Sun', lon: 89.9, house: 'House10' }, { id: 'Uranus', lon: 211, house: 'House1' }] } };
+  const horizon = runDongya({ ...DONGYA_BASE, chart, now_ms: DONGYA_NOW });
+  assert(dongyaLine(horizon, '太阳(乾)').startsWith('太阳(乾):度卦 1 乾为天 → 11 地天泰;座卦 37 风火家人'), dongyaLine(horizon, '太阳(乾)'));
+  assert(!(horizon.snapshot_text || '').includes('天王星'), '易卦星盘只排七政');
+  const lower = runDongya({ ...DONGYA_BASE, chart, ichingMerge: 'lower', now_ms: DONGYA_NOW });
+  assert(dongyaLine(lower, '太阳(乾)').startsWith('太阳(乾):度卦 1 乾为天 → 12 天地否'), dongyaLine(lower, '太阳(乾)'));
+  assert(dongyaLine(lower, '合卦规则') === '合卦规则:恒合下卦', dongyaLine(lower, '合卦规则'));
+  // 没有本命盘：只少七政合卦，照出推运（上游「没有时说明未出」）。
+  const none = runDongya({ ...DONGYA_BASE, now_ms: DONGYA_NOW });
+  assert(none.data.hasChart === false && (none.snapshot_text || '').includes('没有本命盘星位,易卦星盘未出。'), 'no-chart line');
+  // 推运环位 = (出生起日数 + 62) mod 64：出生后整 3 日 → 环位 1（上游 ichingProgression(3).position === 1），环上第 1 格是 41 损。
+  const birthUtc = Date.UTC(1975, 1, 11, 5, 15);   // 1975-02-10 21:15 -08:00
+  const plus3 = runDongya({ ...DONGYA_BASE, now_ms: birthUtc + 3 * 86400000 + 60000 });
+  assert(dongyaLine(plus3, '易卦推运') === '易卦推运:今日环位 1,41 山泽损', dongyaLine(plus3, '易卦推运'));
+});
+
+check('dongya 口径只认上游词表：认不出的值与公元前出生都报结构化原因，不回落缺省', () => {
+  const bad = runDongya({ ...DONGYA_BASE, ichingMerge: 'bogus' });
+  assert(bad.data.ok === false && bad.data.reason === 'invalid_option' && bad.data.error.field === 'ichingMerge', JSON.stringify(bad.data));
+  assert(JSON.stringify(bad.data.error.allowed) === JSON.stringify(['horizon', 'upper', 'lower']), JSON.stringify(bad.data.error.allowed));
+  const badYear = runDongya({ ...DONGYA_BASE, flowYear: 10000 });
+  assert(badYear.data.ok === false && badYear.data.error.field === 'flowYear', JSON.stringify(badYear.data));
+  const bc = runDongya({ ...DONGYA_BASE, date: '-0500-03-01', ad: -1 });
+  assert(bc.data.ok === false && bc.data.reason === 'bc_unsupported' && bc.snapshot_text === '', JSON.stringify(bc.data));
+});
+
+const zhufangFix = JSON.parse(readFileSync(join(HERE, 'fixtures', 'sync314_mingother_zhufang_live.json'), 'utf8')).scenarios;
+const ZHUFANG_BASE = { date: '1975-02-10', time: '21:15:00', zone: '-08:00', lat: '47n36', lon: '122w20', hsys: 3 };
+const zhufangLines = (r, head) => {
+  const lines = (r.snapshot_text || '').split('\n');
+  const at = lines.indexOf(`[${head}]`);
+  const out = [];
+  for (let i = at + 1; at >= 0 && i < lines.length && !/^\[.+\]$/.test(lines[i]); i += 1) out.push(lines[i]);
+  return out;
+};
+
+check('zhufang 玛雅历 / 十三月亮历：2012-12-21 = 13.0.0.0.0 4 Ajaw 3 K\'ank\'in G9；关联常数真的改结果；Kin 34 / Kin 207', () => {
+  // 独立来源：公认的玛雅长计历锚点（GMT 关联常数 584283）——2012-12-21 = 13.0.0.0.0，4 Ajaw 3 K'ank'in，第九位夜神。
+  const gmt = runZhufang({ ...ZHUFANG_BASE, date: '2012-12-21' });
+  assert(zhufangLines(gmt, '玛雅历')[0] === "长历 13.0.0.0.0(关联常数 584283);卓尔金 4 Ajaw 王;哈布 3 K'ank'in;九夜神 G9;十三日组 Kab'an 地 第 4 日", zhufangLines(gmt, '玛雅历')[0]);
+  // 584285（Lounsbury）把同一天往前挪两日：13.0.0.0.0 落在 2012-12-23；12-21 那天是 12.19.19.17.18、卓尔金 2 Etz'nab'（4 Ajaw 的前两日）。
+  const l85 = runZhufang({ ...ZHUFANG_BASE, date: '2012-12-21', mayanCorrelation: 584285 });
+  assert(zhufangLines(l85, '玛雅历')[0].startsWith("长历 12.19.19.17.18(关联常数 584285);卓尔金 2 Etz'nab' 燧石;哈布 1 K'ank'in;九夜神 G7"), zhufangLines(l85, '玛雅历')[0]);
+  const l85b = runZhufang({ ...ZHUFANG_BASE, date: '2012-12-23', mayanCorrelation: 584285 });
+  assert(zhufangLines(l85b, '玛雅历')[0].startsWith('长历 13.0.0.0.0(关联常数 584285);卓尔金 4 Ajaw 王'), zhufangLines(l85b, '玛雅历')[0]);
+  assert(l85.data.local.mayan.days === gmt.data.local.mayan.days - 2, 'correlation +2 → 长历日数 −2');
+  // 十三月亮历公认锚点：1987-07-26 = Kin 34（白银河巫师，历法起算年的元旦）；2012-12-21 = Kin 207 蓝水晶手（上游 zhufangArts.test.js 同锚）。
+  // 波符 = 调性 1 的那一天所在的图腾：Kin 34 调性 8 → 波符起于 Kin 27（蓝磁性手）→ 蓝手波符（Kin 27–39）。
+  const k34 = runZhufang({ ...ZHUFANG_BASE, date: '1987-07-26' });
+  assert(zhufangLines(k34, '十三月亮历')[0] === 'Kin 34:银河调性 8 · 白巫师;波符 蓝手;1987 年第 1 月第 1 日', zhufangLines(k34, '十三月亮历')[0]);
+  assert(zhufangLines(gmt, '十三月亮历')[0] === 'Kin 207:水晶调性 12 · 蓝手;波符 黄战士;2012 年第 6 月第 9 日', zhufangLines(gmt, '十三月亮历')[0]);
+  // 2 月 29 日不计数：与 2 月 28 日同 Kin；7 月 25 日是无时间日（上游用例）。
+  const feb28 = runZhufang({ ...ZHUFANG_BASE, date: '2024-02-28' }).data.local.dreamspell.kin;
+  const feb29 = runZhufang({ ...ZHUFANG_BASE, date: '2024-02-29' });
+  assert(feb29.data.local.dreamspell.kin === feb28 && zhufangLines(feb29, '十三月亮历')[0].endsWith('闰日(不计数)'), zhufangLines(feb29, '十三月亮历')[0]);
+  assert(zhufangLines(runZhufang({ ...ZHUFANG_BASE, date: '2025-07-25' }), '十三月亮历')[0].endsWith('无时间日'), '7 月 25 日 = 无时间日');
+  // 公元前：两种历都不排，段内写明（上游「公元前不排两种历」）。
+  const bc = runZhufang({ ...ZHUFANG_BASE, date: '-0500-01-01', ad: -1 });
+  assert(bc.data.bc === true && zhufangLines(bc, '玛雅历')[0] === '公元前日期不排玛雅历。' && zhufangLines(bc, '十三月亮历')[0] === '公元前日期不排十三月亮历。', bc.snapshot_text);
+});
+
+check('zhufang 人类图 / 灵名字母：后端真响应排版——投射者 4/6、太阳 49.4、通道 4-63 23-43 28-38；投字 4 / 9 / 22；平交点改北交爻', () => {
+  // 夹具 = 共享 vendored v3.14.0 引擎 /astroextra/zhufang 的真响应（1975-02-10 21:15 -08:00 西雅图，Placidus）。期望值按公开定义手推：
+  //   太阳黄经 321.85° → (321.85 − 302) ÷ 5.625 = 3.53 → 轮上第 4 个闸门 49；余 2.975° ÷ 0.9375 = 3.17 → 第 4 爻 → 49.4。
+  //   通道 4-63（头–脑）、23-43（喉–脑）、28-38（脾–根）：荐骨无定义、唯一有定义的动力中心（根）不通喉 → 投射者；
+  //   情绪 / 荐骨无定义、脾有定义 → 直觉(脾)权威；{头 脑 喉} 与 {脾 根} 两块 → 二分人；个人太阳 4 爻 / 设计太阳 6 爻 → 4/6。
+  const r = runZhufang({ ...ZHUFANG_BASE, remote: zhufangFix.default.response });
+  const hd = zhufangLines(r, '人类图');
+  assert(hd[0] === '类型 投射者 · 内在权威 直觉(脾) · 人生角色 4/6(机会主义者 / 角色模范) · 二分人', hd[0]);
+  assert(hd[1] === '轮回交叉 49/4 | 43/23;交点 真交点', hd[1]);
+  assert(hd[2] === '有定义中心:头顶、脑、喉、直觉(脾)、根部' && hd[3] === '通道:4-63、23-43、28-38', `${hd[2]} / ${hd[3]}`);
+  assert(hd[4].startsWith('个人(出生):太阳 49.4 · 地球 4.4 · 北交 9.2 · 南交 16.2 · 月亮 49.4'), hd[4]);
+  //   灵名字母：上升 185.22° → 整度 185；太阳整度 321 → (321 − 185) mod 22 = 4（Daleth）；上升自身 185 mod 22 = 9（Teth）；
+  //   夜生盘福点 = 上升 + 日 − 月 = 185.24° → 与上升同度 → 0 记 22（Tav）。
+  const sn = zhufangLines(r, '灵名字母');
+  assert(sn[0].startsWith('五要点:太阳 ד Daleth(4);月亮 ד Daleth(4);上升 ט Teth(9);福点 ת Tav(22)'), sn[0]);
+  assert(sn[2].startsWith('象限 1:1 宫 土星(4 分)'), sn[2]);
+  assert(r.data.remote_status.humanDesign === true && r.data.remote_status.spiritNames === true, JSON.stringify(r.data.remote_status));
+  // 平交点：只动交点（真交点 247.17° → 9.2；平交点落在同一闸门的第 1 爻），文字行随之变。
+  const mean = runZhufang({ ...ZHUFANG_BASE, hdTrueNode: false, remote: zhufangFix.mean_node.response });
+  assert(zhufangLines(mean, '人类图')[1] === '轮回交叉 49/4 | 43/23;交点 平交点', zhufangLines(mean, '人类图')[1]);
+  assert(zhufangLines(mean, '人类图')[4].includes('北交 9.1 · 南交 16.1'), zhufangLines(mean, '人类图')[4]);
+  // 象限 2 = 2·5·8·11 宫。
+  const q2 = runZhufang({ ...ZHUFANG_BASE, spiritQuadrant: 2, remote: zhufangFix.quadrant2.response });
+  assert(zhufangLines(q2, '灵名字母')[2].startsWith('象限 2:2 宫 火星(4 分)'), zhufangLines(q2, '灵名字母')[2]);
+});
+
+check('zhufang 请求体取上游映射；后端缺席 / 回 null 时两段写「未算出」并如实标 remote_status；口径只认上游词表', () => {
+  // 请求体 = 上游 zhufangParamsFromFields + zhufangRemote 的 body 映射：日期 YYYY/MM/DD、hdTrueNode 0/1、性别缺省 '1'。
+  const probe = runZhufang({ ...ZHUFANG_BASE, hdTrueNode: 'mean', spiritQuadrant: '3', request_only: true });
+  assert(JSON.stringify(probe.request) === JSON.stringify({ date: '1975/02/10', time: '21:15:00', zone: '-08:00', ad: 1, lat: '47n36', lon: '122w20', hsys: 3, gender: '1', hdTrueNode: 0, spiritQuadrant: 3 }), JSON.stringify(probe.request));
+  assert(JSON.stringify(runZhufang({ ...ZHUFANG_BASE, request_only: true }).request) === JSON.stringify(zhufangFix.default.request), '缺省请求体 = 夹具录下的那一份');
+  // 没取到后端（null）与后端内部出错（两块都回 null、HTTP 200）同一处理：本地两段照出，后两段「未算出」。
+  for (const remote of [null, zhufangFix.bad_date.response]) {
+    const r = runZhufang({ ...ZHUFANG_BASE, date: '2012-12-21', remote });
+    assert(zhufangLines(r, '玛雅历')[0].startsWith('长历 13.0.0.0.0'), 'local sections still computed');
+    assert(zhufangLines(r, '人类图')[0] === '人类图未算出。' && zhufangLines(r, '灵名字母')[0] === '灵名字母未算出。', r.snapshot_text);
+    assert(r.data.remote_status.humanDesign === false && r.data.remote_status.spiritNames === false, JSON.stringify(r.data.remote_status));
+  }
+  // 只算出一块：缺的那块写未算出、标 false。
+  const half = runZhufang({ ...ZHUFANG_BASE, remote: { humanDesign: zhufangFix.default.response.humanDesign, spiritNames: null } });
+  assert(half.data.remote_status.humanDesign === true && half.data.remote_status.spiritNames === false && zhufangLines(half, '灵名字母')[0] === '灵名字母未算出。', JSON.stringify(half.data.remote_status));
+  const bad = runZhufang({ ...ZHUFANG_BASE, mayanCorrelation: 584284 });
+  assert(bad.data.ok === false && bad.data.reason === 'invalid_option' && JSON.stringify(bad.data.error.allowed) === JSON.stringify([584283, 584285, 584286]), JSON.stringify(bad.data));
+  assert(runZhufang({ ...ZHUFANG_BASE, spiritQuadrant: 4 }).data.error.field === 'spiritQuadrant', 'spiritQuadrant 4 refused');
+  assert(runZhufang({ ...ZHUFANG_BASE, hdTrueNode: 'maybe' }).data.error.field === 'hdTrueNode', 'hdTrueNode maybe refused');
 });
 
 check('tongshefa 纳甲逐爻/世应/左右爻变入 data：风雷益 子寅辰未巳卯、世三应六、益→晋 变在 1/4/5 爻', () => {

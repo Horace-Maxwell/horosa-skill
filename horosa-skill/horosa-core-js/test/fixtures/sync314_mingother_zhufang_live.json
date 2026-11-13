@@ -1,0 +1,1588 @@
+{
+ "_comment": "上游 v3.14.0 /astroextra/zhufang（astrostudy/zhufang_arts.py）的真实响应：2026-11-13 自 vendored v3.14.0 引擎（chart 服务 8877）实抓，未裁剪。盘 = 上游 astropy/tests/test_zhufang_arts.py 的 BASE（1975-02-10 21:15 -08:00 西雅图 47n36 122w20，Placidus hsys=3）。请求体 = 上游 zhufangParamsFromFields + zhufangRemote 的 body 映射（tools/zhufang.js request_only 产出）。bad_date 场景 = 后端内部出错：两块都回 null、HTTP 200。",
+ "scenarios": {
+  "default": {
+   "request": {
+    "date": "1975/02/10",
+    "time": "21:15:00",
+    "zone": "-08:00",
+    "ad": 1,
+    "lat": "47n36",
+    "lon": "122w20",
+    "hsys": 3,
+    "gender": "1",
+    "hdTrueNode": 1,
+    "spiritQuadrant": 1
+   },
+   "response": {
+    "humanDesign": {
+     "birthJd": 2442454.71875,
+     "designJd": 2442368.100563229,
+     "trueNode": true,
+     "personality": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Earth",
+       "lon": 141.85043997535894,
+       "gate": 4,
+       "line": 4,
+       "center": "ajna"
+      },
+      {
+       "id": "North Node",
+       "lon": 247.16755162318802,
+       "gate": 9,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 67.16755162318805,
+       "gate": 16,
+       "line": 2,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Mercury",
+       "lon": 315.60577870357105,
+       "gate": 13,
+       "line": 3,
+       "center": "g"
+      },
+      {
+       "id": "Venus",
+       "lon": 344.89676367614516,
+       "gate": 63,
+       "line": 4,
+       "center": "head"
+      },
+      {
+       "id": "Mars",
+       "lon": 285.04738081619655,
+       "gate": 38,
+       "line": 6,
+       "center": "root"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 351.60250264624,
+       "gate": 22,
+       "line": 5,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 102.81877742954877,
+       "gate": 39,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 212.46241879264375,
+       "gate": 28,
+       "line": 1,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 251.52307080365716,
+       "gate": 5,
+       "line": 1,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.9958020992089,
+       "gate": 18,
+       "line": 6,
+       "center": "spleen"
+      }
+     ],
+     "design": [
+      {
+       "id": "Sun",
+       "lon": 233.85043997550355,
+       "gate": 43,
+       "line": 6,
+       "center": "ajna"
+      },
+      {
+       "id": "Earth",
+       "lon": 53.85043997550355,
+       "gate": 23,
+       "line": 6,
+       "center": "throat"
+      },
+      {
+       "id": "North Node",
+       "lon": 250.25013428344158,
+       "gate": 9,
+       "line": 5,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 70.25013428344158,
+       "gate": 16,
+       "line": 5,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 264.6188069741513,
+       "gate": 11,
+       "line": 3,
+       "center": "ajna"
+      },
+      {
+       "id": "Mercury",
+       "lon": 216.2475339766544,
+       "gate": 28,
+       "line": 5,
+       "center": "spleen"
+      },
+      {
+       "id": "Venus",
+       "lon": 236.3612098453398,
+       "gate": 14,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "Mars",
+       "lon": 223.11838996127278,
+       "gate": 44,
+       "line": 6,
+       "center": "spleen"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 338.27773247775104,
+       "gate": 37,
+       "line": 3,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 108.67040606599863,
+       "gate": 53,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 209.7215709741843,
+       "gate": 50,
+       "line": 4,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 248.766079857602,
+       "gate": 9,
+       "line": 4,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.3767577667454,
+       "gate": 18,
+       "line": 5,
+       "center": "spleen"
+      }
+     ],
+     "gates": [
+      4,
+      5,
+      9,
+      11,
+      13,
+      14,
+      16,
+      18,
+      22,
+      23,
+      28,
+      37,
+      38,
+      39,
+      43,
+      44,
+      49,
+      50,
+      53,
+      63
+     ],
+     "channels": [
+      {
+       "gates": [
+        4,
+        63
+       ],
+       "centers": [
+        "ajna",
+        "head"
+       ]
+      },
+      {
+       "gates": [
+        23,
+        43
+       ],
+       "centers": [
+        "throat",
+        "ajna"
+       ]
+      },
+      {
+       "gates": [
+        28,
+        38
+       ],
+       "centers": [
+        "spleen",
+        "root"
+       ]
+      }
+     ],
+     "defined": [
+      "head",
+      "ajna",
+      "throat",
+      "spleen",
+      "root"
+     ],
+     "type": "projector",
+     "authority": "splenic",
+     "profile": [
+      4,
+      6
+     ],
+     "cross": [
+      49,
+      4,
+      43,
+      23
+     ],
+     "definition": 2
+    },
+    "spiritNames": {
+     "asc": 185.22418228329676,
+     "ibnEzra": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Asc",
+       "lon": 185.22418228329676,
+       "letter": {
+        "index": 9,
+        "name": "Teth",
+        "glyph": "ט"
+       }
+      },
+      {
+       "id": "Fortune",
+       "lon": 185.238155676418,
+       "letter": {
+        "index": 22,
+        "name": "Tav",
+        "glyph": "ת"
+       }
+      },
+      {
+       "id": "Syzygy",
+       "lon": 127.0564,
+       "letter": {
+        "index": 16,
+        "name": "Ayin",
+        "glyph": "ע"
+       }
+      }
+     ],
+     "eleventh": {
+      "cusp": 131.29845814744948,
+      "almuten": "Saturn",
+      "score": 3,
+      "lon": 102.81877742954877,
+      "letter": {
+       "index": 13,
+       "name": "Mem",
+       "glyph": "מ"
+      }
+     },
+     "quadrant": 1,
+     "quadrantRows": [
+      {
+       "house": 1,
+       "cusp": 185.22418228329676,
+       "almuten": "Saturn",
+       "score": 4,
+       "lon": 102.81877742954877,
+       "letter": {
+        "index": 13,
+        "name": "Mem",
+        "glyph": "מ"
+       }
+      },
+      {
+       "house": 7,
+       "cusp": 5.224182283296727,
+       "almuten": "Jupiter",
+       "score": 3,
+       "lon": 351.60250264624,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 10,
+       "cusp": 96.49171022868057,
+       "almuten": "Mars",
+       "score": 3,
+       "lon": 285.04738081619655,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 4,
+       "cusp": 276.4917102286806,
+       "almuten": "Mercury",
+       "score": 2,
+       "lon": 315.60577870357105,
+       "letter": {
+        "index": 20,
+        "name": "Resh",
+        "glyph": "ר"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "mean_node": {
+   "request": {
+    "date": "1975/02/10",
+    "time": "21:15:00",
+    "zone": "-08:00",
+    "ad": 1,
+    "lat": "47n36",
+    "lon": "122w20",
+    "hsys": 3,
+    "gender": "1",
+    "hdTrueNode": 0,
+    "spiritQuadrant": 1
+   },
+   "response": {
+    "humanDesign": {
+     "birthJd": 2442454.71875,
+     "designJd": 2442368.100563229,
+     "trueNode": false,
+     "personality": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Earth",
+       "lon": 141.85043997535894,
+       "gate": 4,
+       "line": 4,
+       "center": "ajna"
+      },
+      {
+       "id": "North Node",
+       "lon": 246.4141512853825,
+       "gate": 9,
+       "line": 1,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 66.4141512853825,
+       "gate": 16,
+       "line": 1,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Mercury",
+       "lon": 315.60577870357105,
+       "gate": 13,
+       "line": 3,
+       "center": "g"
+      },
+      {
+       "id": "Venus",
+       "lon": 344.89676367614516,
+       "gate": 63,
+       "line": 4,
+       "center": "head"
+      },
+      {
+       "id": "Mars",
+       "lon": 285.04738081619655,
+       "gate": 38,
+       "line": 6,
+       "center": "root"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 351.60250264624,
+       "gate": 22,
+       "line": 5,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 102.81877742954877,
+       "gate": 39,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 212.46241879264375,
+       "gate": 28,
+       "line": 1,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 251.52307080365716,
+       "gate": 5,
+       "line": 1,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.9958020992089,
+       "gate": 18,
+       "line": 6,
+       "center": "spleen"
+      }
+     ],
+     "design": [
+      {
+       "id": "Sun",
+       "lon": 233.85043997550355,
+       "gate": 43,
+       "line": 6,
+       "center": "ajna"
+      },
+      {
+       "id": "Earth",
+       "lon": 53.85043997550355,
+       "gate": 23,
+       "line": 6,
+       "center": "throat"
+      },
+      {
+       "id": "North Node",
+       "lon": 251.0002253934921,
+       "gate": 9,
+       "line": 6,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 71.00022539349209,
+       "gate": 16,
+       "line": 6,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 264.6188069741513,
+       "gate": 11,
+       "line": 3,
+       "center": "ajna"
+      },
+      {
+       "id": "Mercury",
+       "lon": 216.2475339766544,
+       "gate": 28,
+       "line": 5,
+       "center": "spleen"
+      },
+      {
+       "id": "Venus",
+       "lon": 236.3612098453398,
+       "gate": 14,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "Mars",
+       "lon": 223.11838996127278,
+       "gate": 44,
+       "line": 6,
+       "center": "spleen"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 338.27773247775104,
+       "gate": 37,
+       "line": 3,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 108.67040606599863,
+       "gate": 53,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 209.7215709741843,
+       "gate": 50,
+       "line": 4,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 248.766079857602,
+       "gate": 9,
+       "line": 4,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.3767577667454,
+       "gate": 18,
+       "line": 5,
+       "center": "spleen"
+      }
+     ],
+     "gates": [
+      4,
+      5,
+      9,
+      11,
+      13,
+      14,
+      16,
+      18,
+      22,
+      23,
+      28,
+      37,
+      38,
+      39,
+      43,
+      44,
+      49,
+      50,
+      53,
+      63
+     ],
+     "channels": [
+      {
+       "gates": [
+        4,
+        63
+       ],
+       "centers": [
+        "ajna",
+        "head"
+       ]
+      },
+      {
+       "gates": [
+        23,
+        43
+       ],
+       "centers": [
+        "throat",
+        "ajna"
+       ]
+      },
+      {
+       "gates": [
+        28,
+        38
+       ],
+       "centers": [
+        "spleen",
+        "root"
+       ]
+      }
+     ],
+     "defined": [
+      "head",
+      "ajna",
+      "throat",
+      "spleen",
+      "root"
+     ],
+     "type": "projector",
+     "authority": "splenic",
+     "profile": [
+      4,
+      6
+     ],
+     "cross": [
+      49,
+      4,
+      43,
+      23
+     ],
+     "definition": 2
+    },
+    "spiritNames": {
+     "asc": 185.22418228329676,
+     "ibnEzra": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Asc",
+       "lon": 185.22418228329676,
+       "letter": {
+        "index": 9,
+        "name": "Teth",
+        "glyph": "ט"
+       }
+      },
+      {
+       "id": "Fortune",
+       "lon": 185.238155676418,
+       "letter": {
+        "index": 22,
+        "name": "Tav",
+        "glyph": "ת"
+       }
+      },
+      {
+       "id": "Syzygy",
+       "lon": 127.0564,
+       "letter": {
+        "index": 16,
+        "name": "Ayin",
+        "glyph": "ע"
+       }
+      }
+     ],
+     "eleventh": {
+      "cusp": 131.29845814744948,
+      "almuten": "Saturn",
+      "score": 3,
+      "lon": 102.81877742954877,
+      "letter": {
+       "index": 13,
+       "name": "Mem",
+       "glyph": "מ"
+      }
+     },
+     "quadrant": 1,
+     "quadrantRows": [
+      {
+       "house": 1,
+       "cusp": 185.22418228329676,
+       "almuten": "Saturn",
+       "score": 4,
+       "lon": 102.81877742954877,
+       "letter": {
+        "index": 13,
+        "name": "Mem",
+        "glyph": "מ"
+       }
+      },
+      {
+       "house": 7,
+       "cusp": 5.224182283296727,
+       "almuten": "Jupiter",
+       "score": 3,
+       "lon": 351.60250264624,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 10,
+       "cusp": 96.49171022868057,
+       "almuten": "Mars",
+       "score": 3,
+       "lon": 285.04738081619655,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 4,
+       "cusp": 276.4917102286806,
+       "almuten": "Mercury",
+       "score": 2,
+       "lon": 315.60577870357105,
+       "letter": {
+        "index": 20,
+        "name": "Resh",
+        "glyph": "ר"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "quadrant2": {
+   "request": {
+    "date": "1975/02/10",
+    "time": "21:15:00",
+    "zone": "-08:00",
+    "ad": 1,
+    "lat": "47n36",
+    "lon": "122w20",
+    "hsys": 3,
+    "gender": "1",
+    "hdTrueNode": 1,
+    "spiritQuadrant": 2
+   },
+   "response": {
+    "humanDesign": {
+     "birthJd": 2442454.71875,
+     "designJd": 2442368.100563229,
+     "trueNode": true,
+     "personality": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Earth",
+       "lon": 141.85043997535894,
+       "gate": 4,
+       "line": 4,
+       "center": "ajna"
+      },
+      {
+       "id": "North Node",
+       "lon": 247.16755162318802,
+       "gate": 9,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 67.16755162318805,
+       "gate": 16,
+       "line": 2,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Mercury",
+       "lon": 315.60577870357105,
+       "gate": 13,
+       "line": 3,
+       "center": "g"
+      },
+      {
+       "id": "Venus",
+       "lon": 344.89676367614516,
+       "gate": 63,
+       "line": 4,
+       "center": "head"
+      },
+      {
+       "id": "Mars",
+       "lon": 285.04738081619655,
+       "gate": 38,
+       "line": 6,
+       "center": "root"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 351.60250264624,
+       "gate": 22,
+       "line": 5,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 102.81877742954877,
+       "gate": 39,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 212.46241879264375,
+       "gate": 28,
+       "line": 1,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 251.52307080365716,
+       "gate": 5,
+       "line": 1,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.9958020992089,
+       "gate": 18,
+       "line": 6,
+       "center": "spleen"
+      }
+     ],
+     "design": [
+      {
+       "id": "Sun",
+       "lon": 233.85043997550355,
+       "gate": 43,
+       "line": 6,
+       "center": "ajna"
+      },
+      {
+       "id": "Earth",
+       "lon": 53.85043997550355,
+       "gate": 23,
+       "line": 6,
+       "center": "throat"
+      },
+      {
+       "id": "North Node",
+       "lon": 250.25013428344158,
+       "gate": 9,
+       "line": 5,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 70.25013428344158,
+       "gate": 16,
+       "line": 5,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 264.6188069741513,
+       "gate": 11,
+       "line": 3,
+       "center": "ajna"
+      },
+      {
+       "id": "Mercury",
+       "lon": 216.2475339766544,
+       "gate": 28,
+       "line": 5,
+       "center": "spleen"
+      },
+      {
+       "id": "Venus",
+       "lon": 236.3612098453398,
+       "gate": 14,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "Mars",
+       "lon": 223.11838996127278,
+       "gate": 44,
+       "line": 6,
+       "center": "spleen"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 338.27773247775104,
+       "gate": 37,
+       "line": 3,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 108.67040606599863,
+       "gate": 53,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 209.7215709741843,
+       "gate": 50,
+       "line": 4,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 248.766079857602,
+       "gate": 9,
+       "line": 4,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.3767577667454,
+       "gate": 18,
+       "line": 5,
+       "center": "spleen"
+      }
+     ],
+     "gates": [
+      4,
+      5,
+      9,
+      11,
+      13,
+      14,
+      16,
+      18,
+      22,
+      23,
+      28,
+      37,
+      38,
+      39,
+      43,
+      44,
+      49,
+      50,
+      53,
+      63
+     ],
+     "channels": [
+      {
+       "gates": [
+        4,
+        63
+       ],
+       "centers": [
+        "ajna",
+        "head"
+       ]
+      },
+      {
+       "gates": [
+        23,
+        43
+       ],
+       "centers": [
+        "throat",
+        "ajna"
+       ]
+      },
+      {
+       "gates": [
+        28,
+        38
+       ],
+       "centers": [
+        "spleen",
+        "root"
+       ]
+      }
+     ],
+     "defined": [
+      "head",
+      "ajna",
+      "throat",
+      "spleen",
+      "root"
+     ],
+     "type": "projector",
+     "authority": "splenic",
+     "profile": [
+      4,
+      6
+     ],
+     "cross": [
+      49,
+      4,
+      43,
+      23
+     ],
+     "definition": 2
+    },
+    "spiritNames": {
+     "asc": 185.22418228329676,
+     "ibnEzra": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Asc",
+       "lon": 185.22418228329676,
+       "letter": {
+        "index": 9,
+        "name": "Teth",
+        "glyph": "ט"
+       }
+      },
+      {
+       "id": "Fortune",
+       "lon": 185.238155676418,
+       "letter": {
+        "index": 22,
+        "name": "Tav",
+        "glyph": "ת"
+       }
+      },
+      {
+       "id": "Syzygy",
+       "lon": 127.0564,
+       "letter": {
+        "index": 16,
+        "name": "Ayin",
+        "glyph": "ע"
+       }
+      }
+     ],
+     "eleventh": {
+      "cusp": 131.29845814744948,
+      "almuten": "Saturn",
+      "score": 3,
+      "lon": 102.81877742954877,
+      "letter": {
+       "index": 13,
+       "name": "Mem",
+       "glyph": "מ"
+      }
+     },
+     "quadrant": 2,
+     "quadrantRows": [
+      {
+       "house": 2,
+       "cusp": 210.4864986401649,
+       "almuten": "Mars",
+       "score": 4,
+       "lon": 285.04738081619655,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 8,
+       "cusp": 30.486498640164882,
+       "almuten": "Venus",
+       "score": 4,
+       "lon": 344.89676367614516,
+       "letter": {
+        "index": 5,
+        "name": "He",
+        "glyph": "ה"
+       }
+      },
+      {
+       "house": 11,
+       "cusp": 131.29845814744948,
+       "almuten": "Saturn",
+       "score": 3,
+       "lon": 102.81877742954877,
+       "letter": {
+        "index": 13,
+        "name": "Mem",
+        "glyph": "מ"
+       }
+      },
+      {
+       "house": 5,
+       "cusp": 311.2984581474495,
+       "almuten": "Venus",
+       "score": 2,
+       "lon": 344.89676367614516,
+       "letter": {
+        "index": 5,
+        "name": "He",
+        "glyph": "ה"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "hsys1": {
+   "request": {
+    "date": "1975/02/10",
+    "time": "21:15:00",
+    "zone": "-08:00",
+    "ad": 1,
+    "lat": "47n36",
+    "lon": "122w20",
+    "hsys": 1,
+    "gender": "1",
+    "hdTrueNode": 1,
+    "spiritQuadrant": 1
+   },
+   "response": {
+    "humanDesign": {
+     "birthJd": 2442454.71875,
+     "designJd": 2442368.100563229,
+     "trueNode": true,
+     "personality": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Earth",
+       "lon": 141.85043997535894,
+       "gate": 4,
+       "line": 4,
+       "center": "ajna"
+      },
+      {
+       "id": "North Node",
+       "lon": 247.16755162318802,
+       "gate": 9,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 67.16755162318805,
+       "gate": 16,
+       "line": 2,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "gate": 49,
+       "line": 4,
+       "center": "solar"
+      },
+      {
+       "id": "Mercury",
+       "lon": 315.60577870357105,
+       "gate": 13,
+       "line": 3,
+       "center": "g"
+      },
+      {
+       "id": "Venus",
+       "lon": 344.89676367614516,
+       "gate": 63,
+       "line": 4,
+       "center": "head"
+      },
+      {
+       "id": "Mars",
+       "lon": 285.04738081619655,
+       "gate": 38,
+       "line": 6,
+       "center": "root"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 351.60250264624,
+       "gate": 22,
+       "line": 5,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 102.81877742954877,
+       "gate": 39,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 212.46241879264375,
+       "gate": 28,
+       "line": 1,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 251.52307080365716,
+       "gate": 5,
+       "line": 1,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.9958020992089,
+       "gate": 18,
+       "line": 6,
+       "center": "spleen"
+      }
+     ],
+     "design": [
+      {
+       "id": "Sun",
+       "lon": 233.85043997550355,
+       "gate": 43,
+       "line": 6,
+       "center": "ajna"
+      },
+      {
+       "id": "Earth",
+       "lon": 53.85043997550355,
+       "gate": 23,
+       "line": 6,
+       "center": "throat"
+      },
+      {
+       "id": "North Node",
+       "lon": 250.25013428344158,
+       "gate": 9,
+       "line": 5,
+       "center": "sacral"
+      },
+      {
+       "id": "South Node",
+       "lon": 70.25013428344158,
+       "gate": 16,
+       "line": 5,
+       "center": "throat"
+      },
+      {
+       "id": "Moon",
+       "lon": 264.6188069741513,
+       "gate": 11,
+       "line": 3,
+       "center": "ajna"
+      },
+      {
+       "id": "Mercury",
+       "lon": 216.2475339766544,
+       "gate": 28,
+       "line": 5,
+       "center": "spleen"
+      },
+      {
+       "id": "Venus",
+       "lon": 236.3612098453398,
+       "gate": 14,
+       "line": 2,
+       "center": "sacral"
+      },
+      {
+       "id": "Mars",
+       "lon": 223.11838996127278,
+       "gate": 44,
+       "line": 6,
+       "center": "spleen"
+      },
+      {
+       "id": "Jupiter",
+       "lon": 338.27773247775104,
+       "gate": 37,
+       "line": 3,
+       "center": "solar"
+      },
+      {
+       "id": "Saturn",
+       "lon": 108.67040606599863,
+       "gate": 53,
+       "line": 4,
+       "center": "root"
+      },
+      {
+       "id": "Uranus",
+       "lon": 209.7215709741843,
+       "gate": 50,
+       "line": 4,
+       "center": "spleen"
+      },
+      {
+       "id": "Neptune",
+       "lon": 248.766079857602,
+       "gate": 9,
+       "line": 4,
+       "center": "sacral"
+      },
+      {
+       "id": "Pluto",
+       "lon": 188.3767577667454,
+       "gate": 18,
+       "line": 5,
+       "center": "spleen"
+      }
+     ],
+     "gates": [
+      4,
+      5,
+      9,
+      11,
+      13,
+      14,
+      16,
+      18,
+      22,
+      23,
+      28,
+      37,
+      38,
+      39,
+      43,
+      44,
+      49,
+      50,
+      53,
+      63
+     ],
+     "channels": [
+      {
+       "gates": [
+        4,
+        63
+       ],
+       "centers": [
+        "ajna",
+        "head"
+       ]
+      },
+      {
+       "gates": [
+        23,
+        43
+       ],
+       "centers": [
+        "throat",
+        "ajna"
+       ]
+      },
+      {
+       "gates": [
+        28,
+        38
+       ],
+       "centers": [
+        "spleen",
+        "root"
+       ]
+      }
+     ],
+     "defined": [
+      "head",
+      "ajna",
+      "throat",
+      "spleen",
+      "root"
+     ],
+     "type": "projector",
+     "authority": "splenic",
+     "profile": [
+      4,
+      6
+     ],
+     "cross": [
+      49,
+      4,
+      43,
+      23
+     ],
+     "definition": 2
+    },
+    "spiritNames": {
+     "asc": 185.22418228329676,
+     "ibnEzra": [
+      {
+       "id": "Sun",
+       "lon": 321.85043997535894,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Moon",
+       "lon": 321.83646658223773,
+       "letter": {
+        "index": 4,
+        "name": "Daleth",
+        "glyph": "ד"
+       }
+      },
+      {
+       "id": "Asc",
+       "lon": 185.22418228329676,
+       "letter": {
+        "index": 9,
+        "name": "Teth",
+        "glyph": "ט"
+       }
+      },
+      {
+       "id": "Fortune",
+       "lon": 185.238155676418,
+       "letter": {
+        "index": 22,
+        "name": "Tav",
+        "glyph": "ת"
+       }
+      },
+      {
+       "id": "Syzygy",
+       "lon": 127.0564,
+       "letter": {
+        "index": 16,
+        "name": "Ayin",
+        "glyph": "ע"
+       }
+      }
+     ],
+     "eleventh": {
+      "cusp": 123.98922698125531,
+      "almuten": "Jupiter",
+      "score": 3,
+      "lon": 351.60250264624,
+      "letter": {
+       "index": 12,
+       "name": "Lamed",
+       "glyph": "ל"
+      }
+     },
+     "quadrant": 1,
+     "quadrantRows": [
+      {
+       "house": 1,
+       "cusp": 185.22418228329676,
+       "almuten": "Saturn",
+       "score": 4,
+       "lon": 102.81877742954877,
+       "letter": {
+        "index": 13,
+        "name": "Mem",
+        "glyph": "מ"
+       }
+      },
+      {
+       "house": 7,
+       "cusp": 5.224182283296727,
+       "almuten": "Jupiter",
+       "score": 3,
+       "lon": 351.60250264624,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 10,
+       "cusp": 96.49171022868057,
+       "almuten": "Mars",
+       "score": 3,
+       "lon": 285.04738081619655,
+       "letter": {
+        "index": 12,
+        "name": "Lamed",
+        "glyph": "ל"
+       }
+      },
+      {
+       "house": 4,
+       "cusp": 276.4917102286806,
+       "almuten": "Mercury",
+       "score": 2,
+       "lon": 315.60577870357105,
+       "letter": {
+        "index": 20,
+        "name": "Resh",
+        "glyph": "ר"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "bad_date": {
+   "request": {
+    "date": "bogus",
+    "hdTrueNode": 1,
+    "spiritQuadrant": 1
+   },
+   "response": {
+    "humanDesign": null,
+    "spiritNames": null
+   }
+  }
+ }
+}

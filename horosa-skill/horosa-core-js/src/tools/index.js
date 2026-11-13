@@ -60,6 +60,8 @@ const TOOL_RUNNERS = {
   canping: lazy('./canping.js', 'runCanping'),
   heluo: lazy('./heluo.js', 'runHeluo'),
   yizhangjing: lazy('./yizhangjing.js', 'runYizhangjing'),
+  dongya: lazy('./dongya.js', 'runDongya'),
+  zhufang: lazy('./zhufang.js', 'runZhufang'),
   xiaoliuren: lazy('./xiaoliuren.js', 'runXiaoLiuRen'),
   feigong: lazy('./feigong.js', 'runFeiGong'),
   xiaochengtu: lazy('./xiaochengtu.js', 'runXiaoChengTu'),

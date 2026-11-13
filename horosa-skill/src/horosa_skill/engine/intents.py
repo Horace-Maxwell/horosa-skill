@@ -71,6 +71,8 @@ COVERAGE: tuple[tuple[str, str], ...] = (
     ("起课占卜：大六壬、奇门遁甲、太乙、金口诀、六爻、小六壬、灵棋经、天文地占、塔罗", "Divination: Da Liu Ren, Qi Men Dun Jia, Tai Yi, Liu Yao, Xiao Liu Ren, Lingqi, geomancy, tarot"),
     ("择日：十种条件搜索（天星 / 奇门 / 黄历 / 八字 / 太乙 / 紫微 / 六壬 / 三式 / 七政 / 印度）与候选时刻评估", "Date selection: ten condition searches plus single-moment election"),
     ("历法：黄历、通书、万年历、农历换算（公历→农历）、节气", "Calendar: almanac, month calendar, Gregorian→lunar conversion, solar terms"),
+    ("东亚与诸方：藏历藏占、蒙古 Zurkhai、算命学、九星气学、洛书流年、易卦星盘；玛雅历、十三月亮历、人类图、灵名字母",
+     "East Asian and world traditions: Tibetan calendar & divination, Sanmeigaku, Nine Star Ki, I Ching astrology; Maya calendar, Dreamspell, Human Design"),
 )
 
 RELATIONSHIP = IntentClass(

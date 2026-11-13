@@ -80,7 +80,10 @@ CLASS = {
                   # v0.40 mingli：八字 = 本地 lunar.js 引擎优先、域外/byLon 回退 Java（上游 BaZi.js:716-755）；
                   # 紫微 = Java 起盘 + 传本非缺省时本地 ZiweiCalc 重排（ZiWeiMain.js:786-804）；
                   # 宿占 = 八字公式起盘档走 Java /chart（带农历时支），ASC 档走 chart 服务。三者都是 vendored builder 出快照。
-                  "bazi_birth", "bazi_direct", "ziwei_birth", "suzhan"},
+                  "bazi_birth", "bazi_direct", "ziwei_birth", "suzhan",
+                  # 命 · 其他（上游 v3.14.0）：多子术工具，大半段 JS 进程内算，另一条腿读 chart 服务
+                  # （东亚诸术的易卦星盘读 /chart 本命盘；诸方杂术的人类图 / 灵名字母由 /astroextra/zhufang 算、JS 只排版）。
+                  "dongya", "zhufang"},
     # Python port：星阙前端算法的 Python 移植。
     "python_port": {"decennials"},
     # frontend 读数型 Python 移植：读已算好的 chart 对象再排版。
@@ -120,6 +123,15 @@ NOTE_OVERRIDES = {
     **{k: f"chart 服务 /astroextra/{k}（astrostudy/directed_figures.py）按定义算；vendored 星阙前端 buildDirectedFigureText（horosa-core-js progextra）按回包排版"
        for k in ("neroman", "bezzafigure", "jayprofection", "michon")},
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
+    "dongya": (
+        "藏历 / 藏占 / 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年六段由 vendored 星阙前端 eastAsiaArts（horosa-core-js dongya）进程内算；"
+        "[易卦星盘] 读 chart 服务 /chart 本命盘七政的黄经与宫位后同样在 JS 内合卦（取不到本命盘时该段只出推运一行并进 warnings）；"
+        "整份快照由 vendored eastAsiaSnapshotLines 排版"
+    ),
+    "zhufang": (
+        "[玛雅历] / [十三月亮历] 由 vendored 星阙前端 zhufangArts（horosa-core-js zhufang）进程内算；[人类图] / [灵名字母] 由 chart 服务 "
+        "/astroextra/zhufang（astrostudy/zhufang_arts.py）算、vendored zhufangSnapshotLines 按回包排版（后端没算出的块写「未算出」并进 warnings）"
+    ),
     "guolao_chart": (
         "盘面 /chart（Python chart 服务）+ 政余格局/庙旺 headless JS + [虚实]/[本命化曜]/[流年流曜] 走 Java "
         "/qizheng/moira 规则层（流年盘二次铸盘；Java 不可用时三段缺席进 warnings）"
