@@ -1776,6 +1776,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   （`tests/test_http_and_clients.py::test_streamable_http_handshake_end_to_end`）。合成 churn 两种模型都没复现——证据以自报为准，
   修法靠消灭窗口。**矩阵 Windows 超时先分「慢 / 挂」**：流式 pytest.log + `--pytest-args=--durations=40` 一跑就分清（本机真机
   1111 s / 1755 passed，慢在 110 技法渲染三条 + PowerShell CIM 的 `process_command` 0.45 s/次），预算只对「慢」有意义。 <!-- docs-sync:ignore-count -->
+  CI job 的 `timeout-minutes` 同理：推送后看一眼 job 时长，占比 > 90% 就提前加（windows-smoke 单元测试 30–42 分钟，45 → 60，v0.50.2-dev）。
 - **证据的形状不许由偶然决定。** ① CI 里 `shell: pwsh` 的多行 `run:` 块首行必须是 `$PSNativeCommandUseErrorActionPreference = $true`，
   否则只有最后一条命令算数（`tests/test_ci_workflow_shape.py`）；② 计数守卫的覆盖面是正则规则（`COUNT_PROSE_EN` 认 `real|local`），
   不是某句话恰好的措辞；③ 仓里有的文件文档不得否认（`verify_docs_sync.check_docker_claims`），Dockerfile 的 `COPY` 必须盖住

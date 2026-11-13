@@ -156,7 +156,9 @@ jobs:
 
   windows-smoke:
     runs-on: windows-latest
-    timeout-minutes: 45
+    # 单元测试一步在 windows-latest 上 30–42 分钟（2026-11 近 12 次），前后固定步骤（core-js 自检、OpenClaw smoke）约 6 分钟：
+    # 45 时已在 87–100% 之间，bb12577f 的 smoke 开跑 2 分钟就被整 job 超时取消（所有已跑步骤全绿）。
+    timeout-minutes: 60
     defaults:
       run:
         shell: pwsh
