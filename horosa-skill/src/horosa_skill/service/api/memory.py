@@ -181,6 +181,8 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
         )
         limit = QUERY_LIMIT_MAX
     applied["limit"] = limit
+    if request.offset:
+        applied["offset"] = max(0, request.offset)
     tools, tool_note = resolve_tools(service, request.tool)
     if tool_note:
         applied["tool"] = tool_note
@@ -217,17 +219,23 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
             artifact_kind=request.artifact_kind,
             after=window["after"],
             before=window["before"],
-            limit=limit,
+            limit=limit + 1,  # 多取一条：知道后面还有没有（has_more / next_offset）
             offset=max(0, request.offset or 0),
             include_payload=request.include_payload,
             scan_report=scan,
         )
+        has_more = len(results) > limit
+        results = results[:limit]
         health = store_health(service.store)
     except (sqlite3.Error, OSError) as exc:
         trace["error_code"] = "memory.store_unavailable"
         raise store_unavailable(service, exc) from exc
     for row in results:
         row["subject"] = compact_subject(row.get("subject"))
+    if not request.include_payload:
+        # 列表行是摘要（审计 O-01）：整条记录 2–8 KB，阅读视图按整块裁，limit ≥ 25 就一行都不剩。要整条：include_payload=true
+        # 或 horosa_memory_show(run_id)。
+        results = [compact_row(row) for row in results]
     trace["result_count"] = len(results)
     not_scanned = int(scan.get("not_scanned") or 0)
     summary = [f"已检索到 {len(results)} 条本地 run 记录。"]
@@ -245,6 +253,8 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
     result: dict[str, Any] = {
         "ok": True,
         "count": len(results),
+        "has_more": has_more,
+        **({"next_offset": max(0, request.offset or 0) + len(results)} if has_more else {}),
         "results": results,
         "not_scanned": not_scanned,
         "applied_filters": applied,
@@ -255,6 +265,46 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
     if warnings:
         result["warnings"] = warnings
     return result
+
+
+_QUESTION_CHARS = 80
+_ANSWER_PREVIEW_CHARS = 120
+
+
+def _clip(text: Any, limit: int) -> str | None:
+    value = str(text or "").strip()
+    if not value:
+        return None
+    return value if len(value) <= limit else value[:limit] + "…"
+
+
+def compact_row(row: dict[str, Any]) -> dict[str, Any]:
+    """检索结果的一行：认出是哪次、谁、问了什么、有没有解读 / 报告、文件在哪——几百字节。整条用 horosa_memory_show。"""
+    calls = row.get("tool_calls") or []
+    tools = list(dict.fromkeys(str(call.get("tool_name")) for call in calls if call.get("tool_name")))
+    artifacts = [{"kind": a.get("kind"), "tool_name": a.get("tool_name"), "path": a.get("path")}
+                 for a in row.get("artifacts") or [] if isinstance(a, dict) and a.get("kind") != "run_manifest"]
+    summary = row.get("artifact_summary") if isinstance(row.get("artifact_summary"), dict) else {}
+    reports = {kind: count for kind, count in (summary.get("counts_by_kind") or {}).items() if str(kind).startswith("report")}
+    answer = row.get("ai_answer_text")
+    out: dict[str, Any] = {
+        "run_id": row.get("run_id"),
+        "created_at": row.get("created_at"),
+        "entrypoint": row.get("entrypoint"),
+        "group_id": row.get("group_id"),
+        "tools": tools,
+        "ok": all(bool(call.get("ok")) for call in calls) if calls else None,
+        "subject": row.get("subject"),
+        "question": _clip(row.get("user_question") or row.get("query_text"), _QUESTION_CHARS),
+        "has_answer": bool(answer),
+        "artifacts": artifacts,
+        "tool_calls": [{"tool_name": call.get("tool_name"), "ok": bool(call.get("ok"))} for call in calls],
+    }
+    if answer:
+        out["answer_preview"] = _clip(answer, _ANSWER_PREVIEW_CHARS)
+    if reports:
+        out["reports"] = reports
+    return {key: value for key, value in out.items() if value not in (None, [], {})} | {"run_id": row.get("run_id"), "has_answer": bool(answer)}
 
 
 def _incomplete_record(record: dict[str, Any]) -> list[dict[str, Any]]:

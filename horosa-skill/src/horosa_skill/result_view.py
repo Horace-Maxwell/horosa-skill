@@ -679,11 +679,38 @@ def _shape_memory(value: dict[str, Any], request: ViewRequest, budget: Budget) -
 # 兜底：没有正文槽的大结果
 
 
+def _trim_paged_rows(result: dict[str, Any], budget: Budget) -> dict[str, Any]:
+    """可翻页的列表（记忆检索：`results` 是行、带 has_more / next_offset）超预算时按行截：放得下几行给几行，续读 offset 跟着改。
+    整块换成占位会让「查某人的历史」一个 run_id 都拿不到（审计 O-01）。"""
+    rows = result.get("results")
+    if not (isinstance(rows, list) and rows and "has_more" in result and all(isinstance(row, dict) for row in rows)):
+        return result
+    start = int(result.get("next_offset") or 0) - len(rows) if result.get("has_more") else None
+    keep = len(rows)
+    while keep > 1 and budget.value_fraction({**result, "results": rows[:keep]}) > 1.0 - _BUDGET_MARGIN:
+        keep = max(1, int(keep * 0.85))
+    if keep == len(rows):
+        return result
+    trimmed = {**result, "results": rows[:keep], "count": keep, "has_more": True}
+    offset = (start if start is not None else int((result.get("applied_filters") or {}).get("offset") or 0)) + keep
+    trimmed["next_offset"] = offset
+    trimmed["warnings"] = [
+        *(result.get("warnings") or []),
+        bilingual(
+            f"这一页放得下 {keep} 行（共取到 {len(rows)} 行），其余按同一检索加 offset={offset} 续读。",
+            f"{keep} of {len(rows)} rows fit in this result; continue with the same query and offset={offset}.",
+        ),
+    ]
+    return trimmed
+
+
 def fit_to_budget(value: Any, budget: Budget) -> Any:
     """仍超预算（没有正文槽的大结果、骨架本身就大）：从最大的子树起逐个换成占位，直到放得下。入参不改。"""
     if not isinstance(value, dict) or budget.value_fraction(value) <= 1.0:
         return value
-    result = dict(value)
+    result = _trim_paged_rows(dict(value), budget)
+    if budget.value_fraction(result) <= 1.0:
+        return result
     omitted: list[str] = []
     for _ in range(64):
         if budget.value_fraction(result) <= 1.0 - _BUDGET_MARGIN:
