@@ -769,6 +769,39 @@ check('liurengzeri 六壬择时真的起课：三传引擎 ChuangChart 接线 + 
     `流派 0 应只在一段临寅，实得 ${JSON.stringify(await rows(0))}`);
 });
 
+check('huanglizeri 九星值日条件按日紫白判（上游 v3.14.0）：2020 夏至闰期里的一白日', async () => {
+  // 上游 v3.14.0 把黄历「九星值日」统一到日紫白（calendar/huangliDay.js dayNineStarOf → fengshui/zibai.js dayCenter）：
+  // 离冬至 / 夏至最近的甲子换遁，阳遁顺行、阴遁逆行，遇闰在甲午换遁。lunar-javascript 的 getDayNineStar 在闰期那 30 日不同。
+  // 期望值是手算，不取自被测代码：2020 夏至 6-21（乙未日）；前后两个甲子日 5-21（早 31 天）与 7-20（晚 29 天），近的是 7-20，
+  // 它起阴遁上元九紫；闰期后半（甲午 6-20 起）已按阴遁逆行，所以 7-20 往前逐日加一：7-19 一白、7-10 一白、7-1 一白、6-22 一白。
+  // 旧口径（lunar）在 7-19 前仍顺行：7-1 六白、7-5 一白 —— 同一窗口旧代码命中 7-5，正是下面断言排除的那一天。
+  // 日干支核对：JDN(2020-07-20)=2459051，(JDN+49)%60=0 → 甲子。
+  const tree = (values) => ({ kind: 'group', joiner: 'all', children: [{ kind: 'leaf', type: 'nine_star', params: { values, matchMode: 'any' } }] });
+  const days = async (cfg, values) => {
+    const r = await runZeriScan({ technique: 'huanglizeri', action: 'scan', cfg: { startTime: '00:00', endTime: '23:59', ...cfg }, tree: tree(values) });
+    assert(r.data.ok === true, `扫描失败：${JSON.stringify(r.data.error)}`);
+    return r.data.intervals.map((row) => (row.start === row.end ? row.start : `${row.start}~${row.end}`));
+  };
+  const week = { startDate: '2020-06-28', endDate: '2020-07-05' };
+  assert(JSON.stringify(await days(week, ['一'])) === JSON.stringify(['2020-07-01']),
+    `闰期一周里一白日应只有 7-1（旧口径是 7-5），实得 ${JSON.stringify(await days(week, ['一']))}`);
+  // 换遁处：7-19 一白 → 7-20 九紫（甲子，阴遁上元起点）→ 7-21 八白。
+  const turn = { startDate: '2020-07-18', endDate: '2020-07-22' };
+  assert(JSON.stringify(await days(turn, ['一'])) === JSON.stringify(['2020-07-19']), `7-19 应为一白，实得 ${JSON.stringify(await days(turn, ['一']))}`);
+  assert(JSON.stringify(await days(turn, ['九'])) === JSON.stringify(['2020-07-20']), `7-20 应为九紫，实得 ${JSON.stringify(await days(turn, ['九']))}`);
+  assert(JSON.stringify(await days(turn, ['八'])) === JSON.stringify(['2020-07-21']), `7-21 应为八白，实得 ${JSON.stringify(await days(turn, ['八']))}`);
+  // 闰期以外不变（上游 huangliNineStarZibai.test.js 把 2000–2040 逐日对拍过，这里抽一段）：2026-03-01…09 九天里一白日只有一天，
+  // 与 lunar-javascript 的 getDayNineStar 同一天。
+  const { Solar } = await import('lunar-javascript').then((m) => m.default || m);
+  const lunarOne = [];
+  for (let d = 1; d <= 9; d += 1) {
+    if (Solar.fromYmd(2026, 3, d).getLunar().getDayNineStar().getNumber() === '一') { lunarOne.push(`2026-03-0${d}`); }
+  }
+  const scanOne = await days({ startDate: '2026-03-01', endDate: '2026-03-09' }, ['一']);
+  assert(lunarOne.length === 1 && JSON.stringify(scanOne) === JSON.stringify(lunarOne),
+    `闰期以外应与 lunar 的九星同日，扫描 ${JSON.stringify(scanOne)} / lunar ${JSON.stringify(lunarOne)}`);
+});
+
 check('zeriSnapshotOpts 命中清单两旋钮 + 前 N 行判读树（紫微择时木三局）', async () => {
   // 权威：vendored utils/zeriSnapshotPrefs.js（上游 [Q-452 裁决 A / Q-453]）：maxRows 夹到 10–500（缺省 60），
   // explainRows 0–20（缺省 3）；判读树 = 工作台「详情▼」同源 explainAt，设定文本按 UI 叶 DFS 配对（zeriExplainText）。
