@@ -13,8 +13,9 @@ class JieQiBirthInput(BirthInput):
     """出生节气窗：定位出生时刻前后的节气精确时刻（八字起运窗的同源数据）。"""
     hsys: int | None = 0  # 上游 JieQiChartsMain.js:1032 页面初始 hsys 0（节气盘家族与 JieQiYearInput 同）
 
-    useLocalMao: int | None = Field(default=None, description="真太阳时卯时口径开关（0/1，缺省 0，上游同默认）")
-    byLon: int | None = Field(default=None, description="按经度修正开关（0/1，缺省 0，上游同默认）")
+    # 卯时两键（后端 BirthJieQi：computeLocal / computeSpring × computeTimeZiByLon / ByRA）。给了任一键，[起盘信息] 多一行「卯时：…」。
+    useLocalMao: int | None = Field(default=None, description="卯时取哪天：0 当年春分日（缺省）| 1 出生当日")
+    byLon: int | None = Field(default=None, description="卯时求法：0 太阳赤经对东点（缺省）| 1 黄经对上升")
 
 
 class ZiWeiBirthInput(FlexibleModel):
