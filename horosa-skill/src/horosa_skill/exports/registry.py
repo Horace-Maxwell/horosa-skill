@@ -81,13 +81,17 @@ AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "ephemeris", "returntimeline", "prenatalsyzygy", "prog",
     # 上游 v3.13.0 之后（219d8a67）推运图族四法：presets.js 迁移键表同批登记
     "neroman", "bezzafigure", "jayprofection", "michon",
+    # 上游 v3.14.0 星运「时主轮转」：presets.js 迁移键表同批登记（新键老用户无存档，迁移对其为 no-op）
+    "timelords",
 ]
 MODULE_SNAPSHOT_PREFIX = "horosa.ai.snapshot.module.v1."
 AI_EXPORT_PLANET_INFO_DEFAULT = {"showHouse": 1, "showRuler": 1}
 AI_EXPORT_ASTRO_MEANING_DEFAULT = {"enabled": 0}
 
-# 逐键镜像上游 AI_EXPORT_PLANET_INFO_TECHNIQUES（v58）：[Q-307/T-303] 衍生盘拆键后六个独立导出键（skill 键 acg ==
-# 上游 locastro）与星运族全体都进集合。'prog' 随其工具入册。
+# 逐键镜像上游 AI_EXPORT_PLANET_INFO_TECHNIQUES（v3.14.0 / aiExport v65）：「星曜后天信息」（落宫 / 主宰宫括注）两项开关只列给
+# 正文里真带这种括注的技法。[Q-307/T-303] 衍生盘拆键后六个独立导出键（skill 键 acg == 上游 locastro）在内；'prog' 随其工具入册。
+# 上游 v3.14.0 把正文不带括注的十五个键（期表类时主、推运图类、七政…）挪去下面的「只进释义表」——此前它们列在这里，
+# 开关勾了正文没有任何变化。守卫：tests/test_sync314_predictive_exports.py 对上游 presets.js 逐键比。
 AI_EXPORT_PLANET_INFO_TECHNIQUES = {
     "astrochart",
     "indiachart",
@@ -101,19 +105,31 @@ AI_EXPORT_PLANET_INFO_TECHNIQUES = {
     "relative",
     "primarydirect",
     "primarydirchart",
-    "zodialrelease",
     "firdaria",
     "profection",
     "solararc",
     "solarreturn",
     "lunarreturn",
     "givenyear",
-    "decennials",
-    "planetaryages",
     "prog",
     "vedicprog",
     "jaynesprog",
     "planetaryarc",
+    "jieqi",
+    "jieqi_meta",
+    "jieqi_chunfen",
+    "jieqi_xiazhi",
+    "jieqi_qiufen",
+    "jieqi_dongzhi",
+    "sanshiunited",
+    "germany",
+}
+
+# 上游 AI_EXPORT_MEANING_ONLY_TECHNIQUES（v3.14.0 新表）：正文不带后天括注、但有星 / 座 / 宫名可加释义的技法（只进释义表）。
+AI_EXPORT_MEANING_ONLY_TECHNIQUES = [
+    "zodialrelease",
+    "decennials",
+    "planetaryages",
     "persiandirected",
     "yearsystem129",
     "balbillus",
@@ -125,19 +141,13 @@ AI_EXPORT_PLANET_INFO_TECHNIQUES = {
     "bezzafigure",
     "jayprofection",
     "michon",
-    "jieqi",
-    "jieqi_meta",
-    "jieqi_chunfen",
-    "jieqi_xiazhi",
-    "jieqi_qiufen",
-    "jieqi_dongzhi",
-    "sanshiunited",
+    "timelords",
     "guolao",
-    "germany",
-}
+]
 
 AI_EXPORT_ASTRO_MEANING_TECHNIQUES = {
     *AI_EXPORT_PLANET_INFO_TECHNIQUES,
+    *AI_EXPORT_MEANING_ONLY_TECHNIQUES,
     "otherbu",
     "qimen",
     "liureng",
@@ -209,6 +219,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "bezzafigure", "label": "星运-推运图"},
     {"key": "jayprofection", "label": "星运-周日小限"},
     {"key": "michon", "label": "星运-双黄道"},
+    {"key": "timelords", "label": "星运-时主轮转"},
     {"key": "horary", "label": "卜卦盘"},
     {"key": "election", "label": "择日盘"},
     {"key": "tianxing", "label": "天星择日"},
@@ -389,6 +400,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     "bezzafigure": ["起盘信息", "推运图", "推运图位置", "推运图接触", "当前时点", "方法说明"],
     "jayprofection": ["起盘信息", "周日小限", "当前小限", "逐年小限", "当前时点", "方法说明"],
     "michon": ["起盘信息", "双黄道", "叠合", "互动", "当前时点", "方法说明"],
+    # 时主轮转（上游 v3.14.0 presets.js）：正文由 vendored buildTimeLordText 出。月亮日一法只有 [时主轮转] 一段（三个时刻逐行列），
+    # 没有 [当前时段] / [后续]——这两段双登记 optional；其余十一法两段恒出（tests/test_sync314_predictive_timelords.py 逐法守）。
+    "timelords": ["起盘信息", "时主轮转", "当前时段", "后续", "当前时点", "方法说明"],
     # 上游 v50 的 19 段。此前 vendored 的 divination/ 闭包缺 27 个文件、另有 33 个内容陈旧，
     # 解读层的 9 段整体缺席（其中 2 段还需 renaissance 档口径才产）。
     # 上游 v3.9.5「卜卦盘全面改进」：19 → 28 段（+9），版本常量未 bump 仍是 56 —— 段序照抄上游，
@@ -718,6 +732,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "qizhengelection": ["择日动盘", "天象要素", "日月食搜索", "方位搜索"],
     # 波斯向运条件段：[指定日期向运盘] 仅给 datetime 时产（/predict/persianchart 整铸）。
     "persiandirected": ["指定日期向运盘"],
+    # 时主轮转条件段：月亮日一法的正文只有 [时主轮转]（buildTimeLordText 的 moonDays 分支不出这两段）。
+    "timelords": ["当前时段", "后续"],
     # 皇极经世条件段：[心易发微] 缺省（datetime）恒出，xinyiMethod=none 不出（上游挂载「不算心易」档）。
     "wangji": ["心易发微"],
     # 卜卦专题深化（诉讼/买房/怀孕）：仅在起卦命中 3 类专题之一时产出 [专题深化·<title>]（归一为专题深化·X）。

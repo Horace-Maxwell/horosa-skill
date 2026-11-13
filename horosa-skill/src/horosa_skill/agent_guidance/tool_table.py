@@ -41,6 +41,7 @@ from horosa_skill.agent_guidance.policies import (
     SHENSHU_ZONE_POLICY,
     SOLARARC_POLICY,
     SOLARRETURN_POLICY,
+    TIMELORDS_POLICY,
     TRIPLICITYRULERS_POLICY,
     VEDICPROG_POLICY,
     YEARSYSTEM129_POLICY,
@@ -866,6 +867,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     "bezzafigure": BEZZAFIGURE_POLICY,
     "jayprofection": JAYPROFECTION_POLICY,
     "michon": MICHON_POLICY,
+    "timelords": TIMELORDS_POLICY,
     "horary": _policy(
         intent="卜卦 / horary：盘的时刻是「提问的当下」（占者收到问题、心中疑问成形的那一刻），不是当事人的出生时间。按问题类别取事项宫。",
         required_context=["提问时刻 date/time/zone", "提问地点 lon/lat", "问题类别 category"],

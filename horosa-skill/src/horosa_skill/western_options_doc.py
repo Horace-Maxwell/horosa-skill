@@ -168,6 +168,29 @@ def _static_doc(tool_name: str) -> dict[str, str]:
         note = "不改结果：本法只按回归黄道算（后端强制 zodiacal=0"
         note += "；双黄道的恒星黄道用其自带岁差 J2000.0 时 26°37′18″）" if tool_name == "michon" else "）"
         return {"zodiacal": f"{note}；传 1 只改 [起盘信息] 的「黄道」行。", "siderealAyanamsa": f"{note}。"}
+    if tool_name == "timelords":
+        # 时主轮转：后端 timelord_tables.build_timelords 走同一个 _natal_from_request（强制 zodiacal=0）。
+        from horosa_skill.western_vocab import (
+            TIMELORD_EVENT_METHODS,
+            TIMELORD_METHOD_FIELDS,
+            TIMELORD_PERIOD_METHODS,
+            timelord_method_label,
+        )
+
+        def reads(method: str) -> str:
+            year_field, fields = TIMELORD_METHOD_FIELDS[method]
+            keys = [*([year_field] if year_field else []), *fields]
+            return f"{method} {timelord_method_label(method)}（{' '.join(keys) if keys else '无口径键'}）"
+
+        note = "不改结果：本法只按回归黄道算（后端强制 zodiacal=0）"
+        return {
+            "zodiacal": f"{note}；传 1 只改 [起盘信息] 的「黄道」行。",
+            "siderealAyanamsa": f"{note}。",
+            "tlMethod": "十二法各读哪些键（别的键给了也不下发，回执 data.settings_ignored + 一条告警；方法 / 选项的中文名也认）。"
+            "期表类（出 [当前时段] 当前段与子段 + [后续]）：" + "；".join(reads(m) for m in TIMELORD_PERIOD_METHODS)
+            + "。事件类（出最近一件与后续事件；月亮日只列生后三个时刻，不看 targetDate）：" + "；".join(reads(m) for m in TIMELORD_EVENT_METHODS)
+            + "。发展年龄按星座分段（tlDevBasis=sign）时两档算法同值，tlVariant 不下发。南北交随 westNodeType（平 / 真交点）。",
+        }
     return {}
 
 

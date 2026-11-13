@@ -44,6 +44,15 @@ _JAY_WORDS = ["周日小限", "jay profection", "jayprofection", "diurnal profec
 _NEROMAN_WORDS = ["演进推运", "neroman", "néroman", "evolved direction", "演进弧"]
 _MICHON_WORDS = ["双黄道", "michon", "double zodiac", "回归恒星叠合"]
 _BEZZA_WORDS = ["bezza", "bezzafigure", "directed figure", "推运图(bezza)"]
+# 时主轮转十二法（上游 v3.14.0）：总名 + 每一法的名字都能点名。互斥要点：「年度分配法」含「分配法」（界推运的别名）→ 界推运那条排除
+# 「年度分配」；「轮主」两个字会出现在「这一轮主要看…」里 → 用正则排除后跟「要 / 题 / 体」；「月亮日」在印度 / 藏历语境里是 tithi。
+# 「周日象限」与「周日小限」（Jay）、「发展年龄」与「年龄点」、「九分主」与「三分主」都不互含。
+_TIMELORD_WORDS = [
+    "时主轮转", "timelords", "time lord rotation", "time-lord rotation", "time lord table", "time-lord table",
+    "轨主", "年度分配", "月相四分", "单度主", "月亮九年", "九分主", "匀速点", "发展年龄", "周日象限", "对数时标",
+]
+_TIMELORD_TURN_RE = re.compile(r"轮主(?![要题体])")
+_TIMELORD_MOONDAY_EXCLUDE = ["印度", "tithi", "vedic", "jyotish", "藏历"]
 
 
 @dataclass
@@ -237,7 +246,7 @@ def route(request: DispatchInput) -> RouteResult:
         add("germany")
     if _contains_any(text, ["年龄推进点", "年龄点", "age point", "agepoint", "huber", "胡伯"]):
         add("agepoint")
-    if _contains_any(text, ["界推运", "分配法", "distributions", "distribution"]):
+    if _contains_any(text, ["界推运", "distributions", "distribution"]) or ("分配法" in text and "年度分配" not in text):
         add("distributions")
     if _contains_any(text, ["世俗盘", "世俗入宫", "入宫盘", "mundane", "ingress", "时代纪元"]):
         add("mundane")
@@ -271,6 +280,12 @@ def route(request: DispatchInput) -> RouteResult:
         add("jayprofection")
     if _contains_any(text, _MICHON_WORDS):
         add("michon")
+    if (
+        _contains_any(text, _TIMELORD_WORDS)
+        or _TIMELORD_TURN_RE.search(text)
+        or ("月亮日" in text and not _contains_any(text, _TIMELORD_MOONDAY_EXCLUDE))
+    ):
+        add("timelords")
     # 「推运图」是上游 Bezza 一法的中文名，但字面也像「某某推运的图」：只在没有更具体的推运技法命中时才归 Bezza
     # （与「流年」→ givenyear 同一条兜底纪律）。
     if _contains_any(text, _BEZZA_WORDS) or ("推运图" in text and not selected):

@@ -185,6 +185,7 @@ def _sections_not_requested(
     """这次调用本来就不产的预设段 → {段: 理由}：不选、不占位、不算缺（以前印「本次本地计算结果未返回…」，读起来像失败）。
 
     - 节气盘：二分二至的盘段只在这次要了那个节气时才出（`jieqis` 缺省 = 四个都要；`seedOnly` = 只要节气表）。
+    - 时主轮转：月亮日一法（`tlMethod=moondays`）没有 [当前时段] / [后续]。
     - 这个工具按设计永不产出的段（exports.registry.SECTIONS_NOT_PRODUCED_BY_DESIGN，逐段带理由）——只在确实缺席时归入。
     - 默认关段缺席时（上游 AI_EXPORT_DEFAULT_OFF_SECTIONS）。"""
     from horosa_skill.exports.registry import AI_EXPORT_DEFAULT_OFF_SECTIONS, SECTIONS_NOT_PRODUCED_BY_DESIGN
@@ -197,6 +198,10 @@ def _sections_not_requested(
             wanted = set()
         out.update({title: "这次没要这个节气的盘（jieqis / seedOnly）"
                     for title in preset_sections if title[:2] in _SOLSTICE_EQUINOX and title[:2] not in wanted})
+    if technique == "timelords" and input_normalized.get("tlMethod") == "moondays":
+        # 时主轮转·月亮日：上游 buildTimeLordText 的月亮日分支只在 [时主轮转] 里逐行列生后三个时刻，本就没有这两段。
+        out.update({title: "月亮日一法只列出生后三个时刻（第 3 / 7 / 40 日），不分当前段与后续"
+                    for title in ("当前时段", "后续") if title in preset_sections and title not in produced})
     for title, reason in SECTIONS_NOT_PRODUCED_BY_DESIGN.get(tool_name or "", {}).items():
         if title in preset_sections and title not in produced:
             out[title] = reason

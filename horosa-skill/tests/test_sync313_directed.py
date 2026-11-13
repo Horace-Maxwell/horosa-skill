@@ -209,13 +209,14 @@ def test_python_defaults_equal_the_vendored_tables(tmp_path: Path) -> None:
         " endpoints: Object.fromEntries(Object.entries(D.DIRECTED_FIGURES).map(([k, v]) => [k, v.endpoint]))}))",
         cwd=CORE_JS, timeout=60,
     ))
-    assert R._DIRECTED_FIGURE_DEFAULTS == {
+    # 上游 v3.14.0 起推运图族多一个键 timelords（时主轮转；它的表在 tests/test_sync314_predictive_timelords.py 对 vendored timeLordTables.js 锚）。
+    assert {tech: R._DIRECTED_FIGURE_DEFAULTS[tech] for tech in TECHS} == {
         "neroman": {"nerK": js["n"]["k"], "nerT0": js["n"]["t0"], "nerKeepDec": js["n"]["keepDec"], "nerOrb": js["n"]["orb"]},
         "bezzafigure": {"bezzaOrb": js["b"]["orb"]},
         "jayprofection": {"jayFrom": js["j"]["from"]},
         "michon": {"michonOrb": js["m"]["orb"], "michonSwap": js["m"]["swap"], "michonEqual": js["m"]["equal"]},
     }
-    assert tuple(js["keys"]) == TECHS and js["endpoints"] == R._DIRECTED_FIGURE_ENDPOINTS
+    assert tuple(js["keys"]) == (*TECHS, "timelords") == tuple(R._DIRECTED_FIGURE_DEFAULTS) and js["endpoints"] == R._DIRECTED_FIGURE_ENDPOINTS
 
 
 @requires_upstream
@@ -236,9 +237,10 @@ def test_option_domains_equal_the_upstream_page_settings() -> None:
         body = re.search(r"oneOf: \[([^\]]*)\]", entry(key)).group(1)
         return tuple(int(x) if float(x) == int(float(x)) else float(x) for x in (s.strip() for s in body.split(",")))
 
-    selects = {tech: {k: v for k, v in table.items() if v[0] is not False} for tech, table in R._DIRECTED_FIGURE_SELECTS.items()}
+    tables = {tech: R._DIRECTED_FIGURE_SELECTS[tech] for tech in TECHS}   # 时主轮转的值域另由 sync314 用例对 vendored 表锚
+    selects = {tech: {k: v for k, v in table.items() if v[0] is not False} for tech, table in tables.items()}
     assert {k: v for t in selects.values() for k, v in t.items()} == {k: one_of(k) for k in ("nerOrb", "bezzaOrb", "jayFrom", "michonOrb")}
-    bools = {k for t in R._DIRECTED_FIGURE_SELECTS.values() for k, v in t.items() if v[0] is False}
+    bools = {k for t in tables.values() for k, v in t.items() if v[0] is False}
     assert bools == {"nerKeepDec", "michonSwap", "michonEqual"} and all("oneOf" not in entry(k) for k in bools)
     for key, (low, high) in R._DIRECTED_FIGURE_RANGES["neroman"].items():
         body = entry(key)

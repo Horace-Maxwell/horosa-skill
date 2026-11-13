@@ -269,13 +269,13 @@ PROG_POLICY = _progression_target_policy(
 )
 
 PERSIANDIRECTED_POLICY = _progression_target_policy(
-    intent="波斯向运：黄经象征向运应期表（速率/方向/应期年数驱动主表与指定日期盘）。",
+    intent="波斯向运：黄经象征向运应期表（速率/方向/应期年数/年长驱动主表与指定日期盘；速率选周期律时十星各按自身周期推）。",
     targets=[
         {
             "field": "rateKey",
             "question": "向运速率？",
-            "options": ["波斯 1°/年（默认）", "Prophected 30°/年", "Naibod 59′08″/年"],
-            "values": ["persian", "prophected", "naibod"],
+            "options": ["波斯 1°/年（默认）", "Prophected 30°/年", "Naibod 59′08″/年", "周期律（十星各按自身周期，宫头不动）"],
+            "values": ["persian", "prophected", "naibod", "periodic"],
         },
         {"field": "direction", "question": "向运方向？", "options": ["顺向（默认）", "逆向 Converse"], "values": ["direct", "converse"]},
     ],
@@ -284,6 +284,7 @@ PERSIANDIRECTED_POLICY = _progression_target_policy(
         {"field": "rateKey", "value": "persian", "meaning": "波斯 1°/年（上游缺省）"},
         {"field": "direction", "value": "direct", "meaning": "顺向（上游缺省）"},
         {"field": "maxYears", "value": 90, "meaning": "应期年数（上游齿轮 50/90/120/150/200）"},
+        {"field": "persianYear", "value": "solar", "meaning": "年长：回归年（另 sidereal / hellenistic 360 日 / bija / bijaClassic）"},
     ],
 )
 BALBILLUS_POLICY = _progression_target_policy(
@@ -292,7 +293,7 @@ BALBILLUS_POLICY = _progression_target_policy(
     do_not_assume=[],
     extra_defaults=[
         {"field": "startPlanet", "value": "Sun", "meaning": "自太阳起（上游缺省）"},
-        {"field": "yearType", "value": "solar", "meaning": "回归年 365.2422 日（另 sidereal / hellenistic 360 / abumashar / mashaallah / bija）"},
+        {"field": "yearType", "value": "solar", "meaning": "回归年 365.2422 日（另 sidereal / hellenistic 360 / abumashar / mashaallah / bija 365.2588 日 / bijaClassic 366.2564 日）"},
         {"field": "mode", "value": "nearest", "meaning": "最近角距"},
         {"field": "subRule", "value": "once", "meaning": "子限一轮（cycle 循环到父期末 / fill 末段拉长填满）"},
     ],
@@ -305,7 +306,7 @@ YEARSYSTEM129_POLICY = _progression_target_policy(
     extra_defaults=[
         {"field": "ys129StartPlanet", "value": "Sun", "meaning": "自太阳起（sect = 随昼夜区分取日/月，或七星任一）"},
         {"field": "ys129Order", "value": "zodiacal", "meaning": "按本命黄经序（chaldean 迦勒底序）"},
-        {"field": "ys129YearType", "value": "solar", "meaning": "回归年（sidereal / hellenistic / abumashar / mashaallah / bija）"},
+        {"field": "ys129YearType", "value": "solar", "meaning": "回归年（sidereal / hellenistic / abumashar / mashaallah / bija 365.2588 日 / bijaClassic 366.2564 日）"},
         {"field": "ys129SubRule", "value": "days", "meaning": "子限按天数（proportional 按比例 / equal 等分）"},
     ],
 )
@@ -395,6 +396,46 @@ MICHON_POLICY = _progression_target_policy(
         {"field": "michonOrb", "value": 1, "meaning": "容许度（0.5 / 1 / 1.5 / 2 度）"},
         {"field": "michonSwap", "value": False, "meaning": "现代守护（true = 水金互换）"},
         {"field": "michonEqual", "value": False, "meaning": "本盘宫制（true = 等宫，上升居第一宫正中）"},
+        _DIRECTED_TROPICAL_NOTE,
+    ],
+)
+# 时主轮转十二法（上游 v3.14.0；缺省 = utils/timeLordTables.js TIMELORD_DEFAULTS = 后端缺省，设置名 = 挂载齿轮字段 = 星运页保存键）。
+# 方法是结果的第一决定项（十二张不同的表）：缺了先问，不默认成轮主。各法读哪些键见 options_keys.tlMethod。
+TIMELORDS_POLICY = _progression_target_policy(
+    intent="时主轮转十二法：把人生时间分给某颗星 / 某个座（期表类七法），或把盘上的点换成年龄（事件类五法）；本命 + 方法 tlMethod + 目标日期"
+           "（月亮日一法不看目标日期）。出当前时段与子段、后续各段，或最近一件与后续事件。",
+    targets=[
+        {
+            "field": "tlMethod",
+            "question": "时主轮转用哪一法？（轮主 / 轨主 / 年度分配 / 月相四分 / 月亮单度主 / 月亮九年 / 九分主 / 匀速点 / 发展年龄 / 周日象限 / 对数时标 / 月亮日）",
+            "options": [
+                "轮主（默认·一年一段沿所选次序循环）", "轨主（从出生行星时主起）", "年度分配（每个太阳返照一段）", "月相四分（小年 × 90 日）",
+                "月亮单度主（28 年一轮）", "月亮九年（每座 9 年）", "九分主（上升每 1°06′40″ 换段）", "匀速点（点匀速走到各相位点）",
+                "发展年龄（十二段 2–13 年）", "周日象限（自上升顺时针过宫）", "对数时标（一周 = 一生）", "月亮日（第 3 / 7 / 40 日）",
+            ],
+            "values": ["turn", "orb", "annual", "quarters", "monomoiria", "moonnine", "nineparts", "moving", "devages", "diurnal", "lifetime", "moondays"],
+        },
+        _TARGET_DATE_QUESTION,
+    ],
+    do_not_assume=["tlMethod", "target date"],
+    extra_defaults=[
+        *_DIRECTED_TARGET_DEFAULTS,
+        {"field": "tlMethod", "value": "turn", "meaning": "轮主（上游缺省）"},
+        {"field": "tlYearType", "value": "solar", "meaning": "年长：回归年（另 sidereal / hellenistic 360 日 / abumashar / mashaallah / bija / bijaClassic）"},
+        {"field": "tlMovingYear", "value": "sidereal", "meaning": "[匀速点]年长：恒星年"},
+        {"field": "tlTurnStart", "value": "asc", "meaning": "[轮主]起始星：上升主（hour = 行星时主）"},
+        {"field": "tlTurnOrder", "value": "zodiac", "meaning": "[轮主]次序：本命黄经序（astronomical / chaldean / house）"},
+        {"field": "tlOrbMode", "value": "single", "meaning": "[轨主]单轮十二年（cycle = 循环二十四年）"},
+        {"field": "tlAnnualDays", "value": "tableA", "meaning": "[年度分配]子段天数甲表（tableB = 乙表）"},
+        {"field": "tlAnnualOrder", "value": "natal", "meaning": "[年度分配]子段次序：本命黄经序（return = 当年返照盘黄经序）"},
+        {"field": "tlReleaser", "value": "Moon", "meaning": "[月相四分]释放星：月亮（七星 / Pars Fortuna / Pars Spirit / Syzygy）"},
+        {"field": "tlVariant", "value": "improved", "meaning": "[月亮九年 / 九分主 / 发展年龄按宫位 / 周日象限 / 月亮日]算法：改进（classic = 经典算表写法）"},
+        {"field": "tlNineTime", "value": "degree", "meaning": "[九分主]时间：度数 1° = 1 年（ascension = 上升时；极圈内改按度数并写明）"},
+        {"field": "tlNineReverse", "value": False, "meaning": "[九分主]首段子主不反转"},
+        {"field": "tlRateKind", "value": "condition", "meaning": "[匀速点]30°/年（quadrant28 = 28 年一周 / age72 = 72 年一周）"},
+        {"field": "tlMovingStart", "value": "Asc", "meaning": "[匀速点]起点：上升（MC / 七星 / Syzygy）"},
+        {"field": "tlDevBasis", "value": "sign", "meaning": "[发展年龄]按星座分段（house = 按宫位）"},
+        {"field": "tlDiurnalMode", "value": "five", "meaning": "[周日象限]每宫 5 年（seven = 7 年 / quadrant = 四象限 90 年）"},
         _DIRECTED_TROPICAL_NOTE,
     ],
 )

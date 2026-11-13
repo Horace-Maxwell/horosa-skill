@@ -92,6 +92,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/bezzafigure",
     "/astroextra/jayprofection",
     "/astroextra/michon",
+    "/astroextra/timelords",
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",

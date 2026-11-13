@@ -11,6 +11,7 @@ from horosa_skill.schemas.tools import (
     BezzaFigureInput,
     JayProfectionInput,
     MichonInput,
+    TimeLordsInput,
     BalbillusInput,
     TriplicityRulersInput,
     KeypointsInput,
@@ -162,6 +163,8 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "bezzafigure": ToolDefinition("bezzafigure", "predict", "bezzafigure", None, BezzaFigureInput, "起推运图（Bezza：真太阳弧下 Placidus 世俗推进与四类接触）。Bezza directed figure.", execution="local"),
     "jayprofection": ToolDefinition("jayprofection", "predict", "jayprofection", None, JayProfectionInput, "起周日小限（Jay：赤经中天每年 +30°，十二年逐年表）。Jay diurnal profection.", execution="local"),
     "michon": ToolDefinition("michon", "predict", "michon", None, MichonInput, "起双黄道（Michon：回归 / 恒星黄道叠合的谐波族）。Michon double zodiac.", execution="local"),
+    # 时主轮转十二法（上游 v3.14.0）：后端 /astroextra/timelords 算，vendored 上游 timeLordTables 排版；tlMethod 选法。
+    "timelords": ToolDefinition("timelords", "predict", "timelords", None, TimeLordsInput, "起时主轮转（十二法的期表 / 事件表，tlMethod 选法）。Time-lord tables (12 methods).", execution="local"),
     "vedicprog": ToolDefinition("vedicprog", "predict", "vedicprog", None, VedicProgInput, "起恒星推运 / Vedic sidereal 二次推运。Generate the 恒星推运 / Vedic sidereal progression.", execution="local"),
     # 上游 v3.11 星运四键（[Q-106/T-10] 星历/回归轴/产前朔望 + [#80] 回归黄道二次推运）。
     "ephemeris": ToolDefinition("ephemeris", "predict", "ephemeris", None, EphemerisInput, "起星历（入座 / 留逆 / 朔望弦 / 食相 + 行运触发本命）。Ephemeris events in a date window.", execution="local"),

@@ -3,6 +3,8 @@
 原先住在 test_service.py 里，十七个测试文件从那里导入；v0.41.1 挪到这里（pytest 不收集它）。新替身也放这里，别再从测试模块互相导入。"""
 from __future__ import annotations
 
+import functools
+import gzip
 import json
 from pathlib import Path
 
@@ -44,6 +46,29 @@ def _fake_directed_request(technique: str, o: dict) -> dict:
     return {"orb": o.get("michonOrb", 1), "mzSwap": flag(o.get("michonSwap")), "mzEqual": flag(o.get("michonEqual"))}
 
 
+# 时主轮转十二法（上游 v3.14.0）：/astroextra/timelords 按请求的 method 回该法的**真实**响应（fixtures/sync314_predictive_timelords_live.json.gz
+# 的 default 场景，vendored v3.14.0 实例实抓）；正文 = 上游源在同一回包上跑出的金标。值级真相归 tests/test_sync314_predictive_timelords.py。
+@functools.lru_cache(maxsize=1)
+def _timelord_live() -> dict:
+    raw = (Path(__file__).parent / "fixtures" / "sync314_predictive_timelords_live.json.gz").read_bytes()
+    return json.loads(gzip.decompress(raw))["scenarios"]
+
+
+def _fake_timelord_request(o: dict) -> dict:
+    """桩版 timeLordRequestFields（每法读哪些键取自 western_vocab.TIMELORD_METHOD_FIELDS；真函数由真 node 用例守）。"""
+    from horosa_skill.western_vocab import TIMELORD_DEFAULTS, TIMELORD_METHOD_FIELDS
+
+    s = {**TIMELORD_DEFAULTS, **{k: v for k, v in o.items() if v not in (None, "")}}
+    year_field, fields = TIMELORD_METHOD_FIELDS[s["tlMethod"]]
+    out = {"method": s["tlMethod"], **({"yearType": s[year_field]} if year_field else {})}
+    for key in fields:
+        if key == "tlVariant" and s["tlMethod"] == "devages" and s["tlDevBasis"] != "house":
+            continue
+        name = key[2].lower() + key[3:]
+        out[name] = (1 if s[key] in (True, 1, "1", "true") else 0) if key == "tlNineReverse" else s[key]
+    return out
+
+
 class FakeClient(HorosaApiClient):
     def __init__(self) -> None:
         super().__init__("http://fake")
@@ -54,6 +79,24 @@ class FakeClient(HorosaApiClient):
     def call(self, endpoint: str, payload: dict) -> dict:
         if endpoint in _SYNC311_ASTROEXTRA_STUBS:
             return json.loads(json.dumps(_SYNC311_ASTROEXTRA_STUBS[endpoint]))
+        if endpoint == "/astroextra/timelords":
+            # 请求口径与夹具里某个场景逐键相同 → 回那一份真实回包。
+            scenarios = _timelord_live()[payload.get("method") or "turn"]
+            hit = next((s for s in scenarios.values() if all(payload.get(k) == v for k, v in s["request_fields"].items())
+                        and payload.get("targetDate") == s["body"]["targetDate"]), None)
+            hit = hit or next((s for s in scenarios.values() if all(payload.get(k) == v for k, v in s["request_fields"].items())), None)
+            if hit is not None:
+                return json.loads(json.dumps(hit["response"]))
+            # 夹具里没有这组口径：回 default 的行，但把后端会回显的口径键换成请求值（真后端照请求回显；行的值级真相不归桩管）。
+            from horosa_skill.service.runners.predictive import PredictiveRunners
+
+            response = json.loads(json.dumps(scenarios["default"]["response"]))
+            if "yearType" in payload:
+                response["yearType"] = payload["yearType"]
+            for response_key, request_key in PredictiveRunners._TIMELORD_ECHO.get(response["method"], {}).items():
+                if request_key in payload:
+                    response[response_key] = bool(payload[request_key]) if request_key == "nineReverse" else payload[request_key]
+            return response
         if endpoint == "/electionscan/scan":
             # 真实形状：每行必带 pick/pickEnd（ε 缓冲后的安全起盘时刻）与 startJd/endJd。缺 pick 时
             # runner 会退回按分钟截断的 start，恰落征象边界外侧 —— 桩里必须有。
@@ -1305,6 +1348,13 @@ class FakeJsClient(HorosaJsEngineClient):
             # 后端结果，空则上游返回 ''）。正文 = 真 builder 在 chart_1998_predictive.json / sync313_predictive_live.json 上的
             # 逐字输出（截前几行；值级真相由 tests/test_sync313_predictive.py 的真 node 用例守）。
             result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+            if technique == "timelords":
+                method = result.get("method")
+                text = _timelord_live()[method]["default"]["upstream"]["text"] if result.get("rows") and method in _timelord_live() else ""
+                return {
+                    "tool": "progextra", "technique": technique, "data": {"ok": True}, "snapshot_text": text,
+                    "moment_lines": [], "request_fields": _fake_timelord_request(payload.get("options") or {}),
+                }
             if technique in _DIRECTED_MAIN_LIST:
                 text = _DIRECTED_LIVE[technique]["default"]["upstream"]["text"] if result.get(_DIRECTED_MAIN_LIST[technique]) else ""
                 return {

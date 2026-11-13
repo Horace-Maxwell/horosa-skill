@@ -127,6 +127,65 @@ class MichonInput(BirthInput):
     michonEqual: bool | int | str | None = Field(default=None, description="宫位：false 本盘宫制（缺省）| true 等宫（上升居第一宫正中）")
 
 
+# ── 时主轮转十二法（上游 v3.14.0：utils/timeLordTables.js + 后端 astrostudy/timelord_tables.py，/astroextra/timelords）──
+# 上游把它挂在推运图族（directedFigures.js 的 timelords 键），所以请求 / 排版 / 目标时刻都走同一条 runner。字段名 = 星运页保存键 =
+# 挂载齿轮字段（techniqueMountSettings.js TIMELORD_FIELDS）；值域与缺省 = western_vocab.TIMELORD_VOCABULARIES（逐值锚 vendored 表）。
+# 广告层只留方法 tlMethod 与目标日；其余十五个口径键只对各自的方法起作用（表在 horosa_agent_guidance 的 options_keys），一律隐藏。
+_TIMELORD_HIDDEN = frozenset({
+    "tlYearType", "tlMovingYear", "tlTurnStart", "tlTurnOrder", "tlOrbMode", "tlAnnualDays", "tlAnnualOrder", "tlReleaser", "tlVariant",
+    "tlNineTime", "tlNineReverse", "tlRateKind", "tlMovingStart", "tlDevBasis", "tlDiurnalMode",
+})
+
+
+class TimeLordsInput(BirthInput):
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = _DIRECTED_TROPICAL_ONLY | {"targetTime"} | _TIMELORD_HIDDEN
+    predictive: bool | None = False
+    targetDate: str | None = Field(default=None, description=_TARGET_DATE_DESC + "；月亮日一法不看目标时刻")
+    targetTime: str | None = Field(default=None, description=_DIRECTED_TARGET_TIME_DESC)
+    tlMethod: str | None = Field(
+        default=None,
+        description=(
+            "方法：turn 轮主（缺省）| orb 轨主 | annual 年度分配 | quarters 月相四分 | monomoiria 月亮单度主 | moonnine 月亮九年 | "
+            "nineparts 九分主 | moving 匀速点 | devages 发展年龄 | diurnal 周日象限 | lifetime 对数时标 | moondays 月亮日"
+        ),
+    )
+    tlYearType: str | None = Field(
+        default=None,
+        description="年长（匀速点 / 年度分配 / 对数时标 / 月亮日以外各法）：solar 回归年（缺省）| sidereal | hellenistic 360 日 | abumashar | mashaallah | bija | bijaClassic",
+    )
+    tlMovingYear: str | None = Field(default=None, description="[匀速点]年长：sidereal 恒星年（缺省）| 其余同 tlYearType")
+    tlTurnStart: str | None = Field(default=None, description="[轮主]起始星：asc 上升主（缺省）| hour 行星时主（昼夜不等时）")
+    tlTurnOrder: str | None = Field(default=None, description="[轮主]次序：zodiac 本命黄经序（缺省）| astronomical 天文序 | chaldean 迦勒底序 | house 宫主序")
+    tlOrbMode: str | None = Field(default=None, description="[轨主]走法：single 单轮十二年（缺省）| cycle 循环二十四年")
+    tlAnnualDays: str | None = Field(default=None, description="[年度分配]子段天数：tableA 甲表（缺省，金 22 火 42 木 34）| tableB 乙表（金 33 火 36 木 30）")
+    tlAnnualOrder: str | None = Field(default=None, description="[年度分配]子段次序：natal 本命黄经序（缺省）| return 当年返照盘黄经序")
+    tlReleaser: str | None = Field(
+        default=None, description="[月相四分]释放星：Moon（缺省）| Sun | Mercury | Venus | Mars | Jupiter | Saturn | Pars Fortuna | Pars Spirit | Syzygy 产前朔望",
+    )
+    tlVariant: str | None = Field(
+        default=None, description="[月亮九年 / 九分主 / 发展年龄按宫位 / 周日象限 / 月亮日]算法：improved 改进（缺省）| classic 经典（传统算表写法）",
+    )
+    tlNineTime: str | None = Field(default=None, description="[九分主]时间：degree 度数 1° = 1 年（缺省）| ascension 上升时（极圈内不成立，改按度数并写明）")
+    tlNineReverse: bool | int | str | None = Field(default=None, description="[九分主]子主：false 不反转（缺省）| true 首段子主反转")
+    tlRateKind: str | None = Field(default=None, description="[匀速点]速率：condition 30°/年（缺省）| quadrant28 28 年一周 | age72 72 年一周")
+    tlMovingStart: str | None = Field(default=None, description="[匀速点]起点：Asc（缺省）| MC | Sun…Saturn | Syzygy 产前朔望")
+    tlDevBasis: str | None = Field(default=None, description="[发展年龄]分段：sign 按星座（缺省）| house 按宫位")
+    tlDiurnalMode: str | None = Field(default=None, description="[周日象限]速率：five 每宫 5 年（缺省）| seven 每宫 7 年 | quadrant 四象限 90 年")
+
+    # 十五个枚举键各一张词表（方法 / 选项的中文名也认：tlMethod='月亮九年' → moonnine，解读进 warnings）；认不出 → tool.invalid_option。
+    # 上游 normalizeTimeLordOpts 与后端都会把认不出的值静默换成缺省（方法认不出 → 轮主），那是另一张表。
+    @field_validator(
+        "tlMethod", "tlYearType", "tlMovingYear", "tlTurnStart", "tlTurnOrder", "tlOrbMode", "tlAnnualDays", "tlAnnualOrder", "tlReleaser",
+        "tlVariant", "tlNineTime", "tlRateKind", "tlMovingStart", "tlDevBasis", "tlDiurnalMode", mode="before",
+    )
+    @classmethod
+    def _timelord_vocabulary(cls, value: Any, info: Any) -> Any:
+        from horosa_skill.input_fields import parse_with
+        from horosa_skill.western_vocab import TIMELORD_VOCABULARIES
+
+        return parse_with(TIMELORD_VOCABULARIES[info.field_name], info.field_name, value)
+
+
 # ── 上游 v3.11 星运四键（[Q-106/T-10] 星历/回归轴/产前朔望 + [#80] 回归黄道二次推运）──
 # date/time/zone/lat/lon 恒是**本命盘**；上游请求体（AstroExtraCommon.chartParams）tradition/predictive 恒 false。
 class EphemerisInput(BirthInput):
@@ -175,7 +234,7 @@ class BalbillusInput(BirthInput):
     startPlanet: str | None = Field(default=None, description="起始星：Sun（缺省）/Moon/Mercury/Venus/Mars/Jupiter/Saturn")
     yearType: str | None = Field(
         default=None,
-        description="年制：solar 回归年（缺省）| sidereal 恒星年 | hellenistic 360 日 | abumashar | mashaallah | bija",
+        description="年制：solar 回归年（缺省）| sidereal 恒星年 | hellenistic 360 日 | abumashar | mashaallah | bija 365.2588 日 | bijaClassic 366.2564 日",
     )
     mode: str | None = Field(default=None, description="距离口径：nearest 最近角距（缺省）| forward 顺黄道距")
     subRule: str | None = Field(default=None, description="子限铺法：once 一轮不填满（缺省）| cycle 循环到父期末 | fill 末段填满")
@@ -223,7 +282,7 @@ class YearSystem129Input(BirthInput):
     ys129Order: str | None = Field(default=None, description="次序：zodiacal 本命黄经递增（缺省）| chaldean 迦勒底序")
     ys129YearType: str | None = Field(
         default=None,
-        description="年制：solar 回归年（缺省）| sidereal | hellenistic 360 日 | abumashar | mashaallah | bija",
+        description="年制：solar 回归年（缺省）| sidereal | hellenistic 360 日 | abumashar | mashaallah | bija 365.2588 日 | bijaClassic 366.2564 日",
     )
     ys129SubRule: str | None = Field(
         default=None, description="子限：days 日数法（缺省，不填满主限）| proportional 比例法 | equal 七等分",
@@ -242,9 +301,15 @@ class PersianDirectedInput(BirthInput):
             "加产 [指定日期向运盘] 段。缺省只出 1°/年应期表。Cast the directed chart at this date."
         ),
     )
-    rateKey: str | None = Field(default=None, description="速率：persian 1°/年（缺省）| prophected 30°/年 | naibod 59′08″/年；驱动应期表与指定日期盘")
+    rateKey: str | None = Field(
+        default=None,
+        description="速率：persian 1°/年（缺省）| prophected 30°/年 | naibod 59′08″/年 | periodic 周期律（十星各按自身周期，交点与阿拉伯点不向运）；驱动应期表与指定日期盘",
+    )
     direction: str | None = Field(default=None, description="方向：direct（缺省）| converse 逆向；驱动应期表与指定日期盘")
     maxYears: float | None = Field(default=None, description="应期年数（缺省 90；上游五档 50/90/120/150/200）")
+    persianYear: str | None = Field(
+        default=None, description="年长：solar 回归年（缺省）| sidereal 恒星年 | hellenistic 360 日 | bija | bijaClassic；定应期日期与当前向运年龄",
+    )
     nodeRetrograde: bool | None = Field(default=None, description="交点按逆行处理（缺省 false，上游同默认）")
 
 

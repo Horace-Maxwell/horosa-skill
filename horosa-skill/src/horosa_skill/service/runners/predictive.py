@@ -51,6 +51,7 @@ from horosa_skill.service.text.predictive import (
     _ARC_SOURCES,
     _PERSIAN_MAX_YEARS_OPTIONS,
     _PERSIAN_RATE,
+    _PERSIAN_YEAR_TYPES,
     _PREDICTIVE_METHOD_NOTES,
     _TIME_LORD_YEAR_TYPES,
     _build_decennials_snapshot_text,
@@ -64,6 +65,7 @@ from horosa_skill.service.text.predictive import (
     _today_for_chart,
     _wall_clock_for_chart,
 )
+from horosa_skill.western_vocab import TIMELORD_DEFAULTS, TIMELORD_METHOD_FIELDS, TIMELORD_VOCABULARIES, timelord_method_label
 
 
 class PredictiveRunners:
@@ -197,12 +199,16 @@ class PredictiveRunners:
         "bezzafigure": "/astroextra/bezzafigure",
         "jayprofection": "/astroextra/jayprofection",
         "michon": "/astroextra/michon",
+        "timelords": "/astroextra/timelords",
     }
     _DIRECTED_FIGURE_SELECTS: dict[str, dict[str, tuple[Any, ...]]] = {
         "neroman": {"nerKeepDec": (False, True), "nerOrb": (0.5, 1, 2, 3)},
         "bezzafigure": {"bezzaOrb": (0.5, 1, 2, 3, 5)},
         "jayprofection": {"jayFrom": (-1, 0, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120)},
         "michon": {"michonOrb": (0.5, 1, 1.5, 2), "michonSwap": (False, True), "michonEqual": (False, True)},
+        # 时主轮转十二法（上游 v3.14.0 utils/timeLordTables.js）：值域 = western_vocab.TIMELORD_VOCABULARIES（schema 层先读成规范值，
+        # 这里是第二道闸）；与 vendored TIMELORD_METHODS / TIMELORD_OPTIONS 逐键互锚（tests/test_sync314_predictive_timelords.py）。
+        "timelords": {**{field: tuple(vocab.labels) for field, vocab in TIMELORD_VOCABULARIES.items()}, "tlNineReverse": (False, True)},
     }
     _DIRECTED_FIGURE_RANGES: dict[str, dict[str, tuple[float, float]]] = {
         "neroman": {"nerK": (1, 5000), "nerT0": (0.01, 10)},
@@ -213,9 +219,31 @@ class PredictiveRunners:
         "bezzafigure": {"bezzaOrb": 1},
         "jayprofection": {"jayFrom": -1},
         "michon": {"michonOrb": 1, "michonSwap": False, "michonEqual": False},
+        "timelords": dict(TIMELORD_DEFAULTS),   # = timeLordTables.js TIMELORD_DEFAULTS（页面键加 tl 前缀）
     }
+    # 时主轮转：每法读哪几项 = western_vocab.TIMELORD_METHOD_FIELDS（= timeLordTables.js TIMELORD_METHOD_FIELDS，测试互锚）。
+    _TIMELORD_METHOD_FIELDS = TIMELORD_METHOD_FIELDS
+    # 页面键 → 请求键（directedFigureOptsFromSettings 的 timelords 分支去掉 tl 前缀、首字母小写）。
+    _TIMELORD_REQUEST_KEYS: dict[str, str] = {
+        "tlTurnStart": "turnStart", "tlTurnOrder": "turnOrder", "tlOrbMode": "orbMode", "tlAnnualDays": "annualDays",
+        "tlAnnualOrder": "annualOrder", "tlReleaser": "releaser", "tlVariant": "variant", "tlNineTime": "nineTime",
+        "tlNineReverse": "nineReverse", "tlRateKind": "rateKind", "tlMovingStart": "movingStart", "tlDevBasis": "devBasis",
+        "tlDiurnalMode": "diurnalMode",
+    }
+    # 后端回显的键 → 请求键（= timeLordTables.js ECHO_FIELDS，上游用它在正文里写「这张表按什么口径算的」）。runner 拿它核对：
+    # 后端对算不出的选项会静默换档（释放星 / 匀速点起点选产前朔望而朔望求不出 → 月亮 / 上升），回显与请求不符即报错。
+    _TIMELORD_ECHO: dict[str, dict[str, str]] = {
+        "turn": {"order": "turnOrder"}, "orb": {"mode": "orbMode"}, "annual": {"dayTable": "annualDays", "order": "annualOrder"},
+        "quarters": {"releaser": "releaser"}, "moonnine": {"variant": "variant"},
+        "nineparts": {"time": "nineTime", "reverse": "nineReverse", "variant": "variant"},
+        "moving": {"rateKind": "rateKind", "startPoint": "movingStart"}, "devages": {"basis": "devBasis", "variant": "variant"},
+        "diurnal": {"mode": "diurnalMode", "variant": "variant"}, "moondays": {"variant": "variant"},
+    }
+    # 后端 build_timelords 还认一个 maxAge（列表年限），但星阙页面与挂载都不发、Java 白名单（AstroExtraController.OPTIONAL_KEYS）
+    # 也不放行——桌面端永远是后端缺省。skill 直连 chart 服务没有那层白名单，所以这里显式挡掉，连同裸的请求键。
+    _TIMELORD_RAW_KEYS = frozenset({"method", "yearType", "maxAge", *_TIMELORD_REQUEST_KEYS.values()})
     # 双黄道与目标时刻无关（techniqueMountSettings MICHON_FIELDS 不收目标日期；请求体照上游仍带「今日 12:00」）。
-    _DIRECTED_FIGURE_TARGETED = frozenset({"neroman", "bezzafigure", "jayprofection"})
+    _DIRECTED_FIGURE_TARGETED = frozenset({"neroman", "bezzafigure", "jayprofection", "timelords"})
     _BOOL_TEXT = {"true": True, "1": True, "false": False, "0": False}
 
     def _directed_figure_settings(self, payload: dict[str, Any], technique: str) -> dict[str, Any]:
@@ -260,7 +288,33 @@ class PredictiveRunners:
             return {"orb": settings["bezzaOrb"]}
         if technique == "jayprofection":
             return {"jayFrom": int(settings["jayFrom"])}
+        if technique == "timelords":
+            # = timeLordRequestFields(normalizeTimeLordOpts(opts))：method + 这一法读的年长 + 这一法的选项（九分主反转发 1 / 0）。
+            method = settings["tlMethod"]
+            fields: dict[str, Any] = {"method": method}
+            year_field = PredictiveRunners._TIMELORD_METHOD_FIELDS[method][0]
+            if year_field:
+                fields["yearType"] = settings[year_field]
+            for key in PredictiveRunners._timelord_fields(settings):
+                value = settings[key]
+                fields[PredictiveRunners._TIMELORD_REQUEST_KEYS[key]] = (1 if value else 0) if key == "tlNineReverse" else value
+            return fields
         return {"orb": settings["michonOrb"], "mzSwap": 1 if settings["michonSwap"] else 0, "mzEqual": 1 if settings["michonEqual"] else 0}
+
+    @staticmethod
+    def _timelord_fields(settings: dict[str, Any]) -> tuple[str, ...]:
+        """= timeLordFields(opts)：这一法当前真正起作用的选项键。发展年龄按星座分段时两档算法结果相同，算法档不算在内。"""
+        fields = PredictiveRunners._TIMELORD_METHOD_FIELDS[settings["tlMethod"]][1]
+        if settings["tlMethod"] == "devages" and settings["tlDevBasis"] != "house":
+            return tuple(key for key in fields if key != "tlVariant")
+        return fields
+
+    def _timelord_ignored(self, payload: dict[str, Any], settings: dict[str, Any]) -> list[str]:
+        """调用方给了、但所选方法不读的口径键（上游挂载齿轮用 showWhen 把它们藏起来；headless 入口没有那层界面）。
+        月亮日不看目标时刻，但 targetDate 不算在内：dispatch 对「本命 + 目标」类技法恒带目标日，为它告警只会把正常结果标成降级。"""
+        year_field, _fields = self._TIMELORD_METHOD_FIELDS[settings["tlMethod"]]
+        used = {"tlMethod", year_field, *self._timelord_fields(settings)}
+        return [key for key in self._DIRECTED_FIGURE_DEFAULTS["timelords"] if payload.get(key) not in (None, "") and key not in used]
 
     def _directed_figure_target(self, payload: dict[str, Any], technique: str) -> dict[str, str]:
         """上游 buildDirectedFigureSnapshotText：targetDate 空 = 本盘时区今日（today(chartZone)）、targetTime 空 = 12:00:00。"""
@@ -286,6 +340,8 @@ class PredictiveRunners:
     ) -> dict[str, Any]:
         """推运图族的请求体（工具调用与报告补算同一份）：本命盘参数（AstroExtraCommon.chartParams）+ 目标时刻 + 技法口径。"""
         knob_keys = set(self._DIRECTED_FIGURE_DEFAULTS[technique]) | {"orb", "mzSwap", "mzEqual", "withChart"}
+        if technique == "timelords":
+            knob_keys |= self._TIMELORD_RAW_KEYS
         natal_payload = {k: v for k, v in self._astroextra_natal_payload(payload).items() if k not in knob_keys}
         return {**self._astroextra_chart_params(natal_payload), **target, **request_fields, "withChart": 1 if with_chart else 0}
 
@@ -380,11 +436,62 @@ class PredictiveRunners:
             "raw": response,
             "snapshot_text": snapshot_text,
         }
+        if technique == "timelords":
+            self._timelord_result_extras(payload, settings, response, result)
         if natal_header:
             result["natalHeader"] = natal_header
         result["_moment_lines"] = moment_lines
         result["export_snapshot"] = self._augment_export_payload(technique=technique, snapshot_text=snapshot_text)
         return result
+
+    def _timelord_result_extras(
+        self, payload: dict[str, Any], settings: dict[str, Any], response: dict[str, Any], result: dict[str, Any]
+    ) -> None:
+        """时主轮转：回执只留这一法真正读的口径（别的键没进请求体，不能写成「已按它算」）；后端回显的方法 / 年长 / 各选项与请求
+        不符即报错（后端对认不出、算不出的值静默回落缺省——那会是另一张表配着这张表的标题）。"""
+        method = settings["tlMethod"]
+        year_field, _fields = self._TIMELORD_METHOD_FIELDS[method]
+        request_fields = result["request"]
+        echoed = {"method": response.get("method"), **({"yearType": response.get("yearType")} if year_field else {})}
+        expected = {key: request_fields[key] for key in echoed}
+        for response_key, request_key in self._TIMELORD_ECHO.get(method, {}).items():
+            if request_key not in request_fields:
+                continue   # 发展年龄按星座分段：算法档没发，后端回显的是它自己的缺省
+            if request_key == "nineTime" and response.get("polar"):
+                continue   # 极圈内上升时档不成立，后端改按度数——上游正文写明（TIMELORD_POLAR_NOTE），不算静默
+            wanted = bool(request_fields[request_key]) if request_key == "nineReverse" else request_fields[request_key]
+            echoed[request_key], expected[request_key] = response.get(response_key), wanted
+        if echoed != expected:
+            raise ToolValidationError(
+                f"/astroextra/timelords 回显的口径与请求不符（请求 {expected}，后端按 {echoed} 算）"
+                f" / the backend computed a different time-lord table than requested",
+                code="tool.timelords_echo_mismatch",
+                details={"tool": "timelords", "requested": expected, "echoed": echoed},
+            )
+        result["method"] = method
+        result["kind"] = response.get("kind")
+        used = ("tlMethod", *([year_field] if year_field else []), *self._timelord_fields(settings))
+        result["settings"] = {key: settings[key] for key in used}
+        # 这一法不读的键（技法依据卡据此不印它们；settings_ignored 是其中调用方明确给了的那几项）。
+        result["settings_not_applicable"] = [key for key in self._DIRECTED_FIGURE_DEFAULTS["timelords"] if key not in used]
+        if method == "moondays":
+            result["target"] = None
+            result["settings_not_applicable"] += ["targetDate", "targetTime"]
+        ignored = self._timelord_ignored(payload, settings)
+        if ignored:
+            label = timelord_method_label(method)
+            result["settings_ignored"] = ignored
+            result["_warnings"] = [bilingual(
+                f"时主轮转「{label}」不读这些设置，未下发、结果与它们无关：{'、'.join(ignored)}（各法读哪些键见 horosa_agent_guidance）。",
+                f"time-lord method {method} does not read these settings; they were not sent and did not affect the result: {', '.join(ignored)}.",
+            )]
+
+    def _run_timelords_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 时主轮转十二法（上游 v3.14.0）：后端 astrostudy/timelord_tables.py 算期表 / 事件表，vendored utils/timeLordTables.js
+        # buildTimeLordText 经推运图族同一条排版路径出正文（上游 directedFigures.js 的 timelords 键）。
+        return self._run_directed_figure_tool(
+            payload, "timelords", lambda body: self._call_remote("/astroextra/timelords", body)
+        )
 
     def _run_neroman_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 演进推运（Néroman）：对数时标弧 K·ln(1 + 年龄 ⁄ t0)，各点赤经逆行减弧。
@@ -844,7 +951,7 @@ class PredictiveRunners:
     _PROGEXTRA_OPTION_DOMAINS: dict[str, dict[str, tuple[str, ...]]] = {
         "balbillus": {
             "startPlanet": ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"),
-            # 上游 v3.13.0：年制扩成 utils/timeLordYears.js TIME_LORD_YEAR_TYPES 六档（与 129 年系统共用一张表）。
+            # 上游 v3.13.0：年制扩成 utils/timeLordYears.js TIME_LORD_YEAR_TYPES（与 129 年系统共用一张表；v3.14.0 起七档：Bija 拆成 bija / bijaClassic）。
             "yearType": _TIME_LORD_YEAR_TYPES,
             "mode": ("nearest", "forward"),
             # 上游 v3.13.0 新增子限铺法（balbillus.js BALBILLUS_SUB_RULES；缺省 once）。
@@ -1103,13 +1210,17 @@ class PredictiveRunners:
         # 波斯向运 (Persian Directed)：纯算术读本命盘 objects/houses/birth（上游 AstroPersianDirected.js）。
         # F6（上游 v3.11 [Q-168/T-102]）：主表此前写死 1°/年·顺向·90 年，声明的 rateKey/direction 只进了
         # 可选的指定日期盘；现在 rateKey/direction/maxYears 同时驱动主表（= 上游 builder opts）。
+        # 上游 v3.14.0：rateKey 多一档 periodic（周期律：十星各按自身周期）；persianYear 年长五档（缺省 solar，结果不变）。
         rate_key = payload.get("rateKey")
         direction = payload.get("direction")
         max_years = payload.get("maxYears")
+        persian_year = payload.get("persianYear")
         if rate_key is not None:
             _require_option(rate_key, tuple(_PERSIAN_RATE), field="rateKey", tool="persiandirected")
         if direction is not None:
             _require_option(direction, ("direct", "converse"), field="direction", tool="persiandirected")
+        if persian_year is not None:
+            _require_option(persian_year, tuple(_PERSIAN_YEAR_TYPES), field="persianYear", tool="persiandirected")
         if max_years is not None:
             number = _finite_number(max_years)
             if number is None or number <= 0:
@@ -1123,12 +1234,13 @@ class PredictiveRunners:
         chart_payload = {**payload, "predictive": 0}
         chart_payload.pop("datetime", None)
         chart_payload.pop("dirZone", None)
+        chart_payload.pop("persianYear", None)   # 向运口径，不是起盘参数
         response = self._call_remote("/chart", chart_payload)
         target = self._persian_target_datetime(payload) if payload.get("datetime") else ""
         moment_lines: list[str] = []
         snapshot_text = _build_persiandirected_snapshot_text(
             response,
-            {"rateKey": rate_key, "direction": direction, "maxYears": max_years, "datetime": target},
+            {"rateKey": rate_key, "direction": direction, "maxYears": max_years, "persianYear": persian_year, "datetime": target},
             moment_lines=moment_lines,
         )
         result: dict[str, Any] = {
@@ -1141,7 +1253,7 @@ class PredictiveRunners:
         if payload.get("datetime"):
             directed = self._persianchart_by_date(payload)
             result["directed_chart"] = directed
-            section = _build_persianchart_section_text(directed)
+            section = _build_persianchart_section_text(directed, persian_year)
             if snapshot_text and section:
                 snapshot_text = f"{snapshot_text}\n\n{section}"
         result["snapshot_text"] = snapshot_text
@@ -1156,7 +1268,8 @@ class PredictiveRunners:
         remote = {**payload, "datetime": target, "predictive": 0}
         # 上游 v3.11 [Q-173]：/predict/persianchart 按 dirZone 解释目标时刻（空则本命时区）——dirZone 必须透传，
         # 不能再剥（旧实现剥掉 = 撤销上游「按所选时区」修正）。
-        for key in ("rateKey", "direction", "nodeRetrograde", "dirZone"):
+        # persianYear（v3.14.0）：后端按它把「目标时刻 − 出生」折成向运年龄（webpredictsrv / Java PredictiveController 同名键）。
+        for key in ("rateKey", "direction", "nodeRetrograde", "dirZone", "persianYear"):
             if payload.get(key) is None:
                 remote.pop(key, None)
         return self._call_remote("/predict/persianchart", remote)
