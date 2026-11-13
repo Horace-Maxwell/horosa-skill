@@ -188,6 +188,8 @@ def _static_doc(tool_name: str) -> dict[str, str]:
     if tool_name == "relative":
         return {
             "relative": "关系盘 0–4（缺省 0）：" + " ".join(f"{k}={label}" for k, label in RELATIVE_MODES) + "。",
+            "ashtakootaMaleSide": "[八重合]（两人恒星黄道月亮宿 / 月亮座配八项分，满分 36；任何盘型都附）的男方：inner=星盘 A | outer=星盘 B。"
+            "不给 = 按 inner.gender / outer.gender（1 男 0 女）定；两人性别都不明或同性 = 星盘 A。岁差随 siderealAyanamsa（缺省 Lahiri）。",
         }
     if tool_name in CHART_DETAILS_DOC_TOOLS:
         # [盘面细节]（上游 v3.14.0）：五项口径的说明取各字段 description（ADVERTISE_HIDDEN 循环已带出），这里只补 30 张表的全表。

@@ -192,6 +192,75 @@ check('progextra unknown technique returns empty, not a crash', () => {
   assert(r.snapshot_text === '', 'unknown technique should have empty snapshot');
 });
 
+// 印占四张新表（上游 v3.14.0 utils/indiaExtraTables.js）经 tools/indiaJyotish.js 的接线金标。输入与期望值取自上游自己的 jest 用例
+// （utils/__tests__/indiaExtraTables.test.js 的 YOGA / EXTRA / KOOTA 夹具与 toContain 断言、
+//  indiaTablesSnapshotSettings.test.js 的穿界 ROW / entry 与两条段头 / 行断言），不是把本仓输出抄成期望。
+// 负向对照（实跑过）：把 jyotishSnapshot.js 里 `out['Yoga 判定表'] = …` / `out['印占补充表'] = …` 两行删掉 → 前两条 assert 红；
+// 把 runIndiaJyotish 的 transitLines 换成 [] → 穿界两条红；把 SIGN_CN_S / scS 挪回 Argala 块前（上游 v3.13 的写法）→ 三旗盘一条红。
+{
+  const { runIndiaJyotish, runIndiaTables } = await import('../src/tools/indiaJyotish.js');
+  const ROW = { id: 7, name: 'Ardha Chandra', zh: '半月', group: '形状', nature: 'good', hit: true, classicHit: false, cond: '甲', classicCond: '乙' };
+  const YOGA = { available: true, hits: 1, classicHits: 0, rows: [ROW, { ...ROW, id: 8, hit: false, classicHit: false }] };
+  const EXTRA = {
+    available: true,
+    samaya: [{ planet: 'Sun', value: 24 }],
+    dirah: [{ planet: 'Sun', scores: { 2: 45, 11: -15 }, sum: 30 }],
+    dirahTypes: { 2: '擢升', 8: '死敌', 11: '宫位' },
+    sphuta: [{ name: 'Trisphuta', lon: 248.12, sign: 8 }],
+  };
+  const TRANSIT_ROW = { jd: 1, date: '2026-11-08', time: '10:20:30', planet: 'Mars', kind: 'sign', sign: 3, relation: 'enemy' };
+  const transitEntry = (rows, total) => ({
+    start: '2026/11/08', transitPlanet: 'Mars', transitKind: 'sign', transitDays: 366, ayanamsa: 'lahiri', result: { rows, total: total === undefined ? rows.length : total },
+  });
+  check('indiaJyotish：Yoga 判定表 / 印占补充表 两段进 jyotish 段集，穿界时刻随 params.transit', () => {
+    const out = runIndiaJyotish({ chart: { jyotish: { yogaTable: YOGA, extraTables: EXTRA } }, params: { transit: transitEntry([TRANSIT_ROW]) } });
+    const yoga = (out.sections['Yoga 判定表'] || []).join('\n');
+    assert(yoga.includes('成立 1 条(经典写法 0 条)') && yoga.includes('半月(Ardha Chandra)') && yoga.includes('| 成立 | 不成立 |'), `yoga: ${yoga}`);
+    const extra = (out.sections['印占补充表'] || []).join('\n');
+    assert(extra.includes('| 擢升 | 宫位 | 合计 |') && extra.includes('三合点(Trisphuta)') && extra.includes('射手 8.12°'), `extra: ${extra}`);
+    // 段序 = 上游 buildJyotishSnapshotLines：两段紧跟在 [瑜伽格局 Yogas] 之后、[副星 Upagraha] 之前；dataSections 同序带出。
+    assert(JSON.stringify(Object.keys(out.dataSections)) === JSON.stringify(['Yoga 判定表', '印占补充表']), `dataSections: ${Object.keys(out.dataSections)}`);
+    const transit = (out.transitLines || []).join('\n');
+    // 岁差键 lahiri → 页面名 'Lahiri / Chitrapaksha'（INDIA_AYANAMSA_OPTIONS；上游用例传的是已写成 'Lahiri' 的字面量）。
+    assert(transit.includes('起始 2026/11/08,范围 一年,星 火星,事件 入星座;共 1 条,时刻按本盘时区,恒星黄道(岁差 Lahiri / Chitrapaksha)'), `transit head: ${transit}`);
+    assert(transit.includes('| 2026-11-08 10:20 | 火 | 巨蟹 | 敌 |'), `transit row: ${transit}`);
+  });
+  check('indiaJyotish：穿界表超过 200 行只列前 200 并写明；不给 params.transit 不出 transitLines；所选值不在上游选项表 → invalid_setting', () => {
+    const vocab = runIndiaTables({ action: 'transit_vocab' });
+    assert(vocab.maxRows === 200, `maxRows ${vocab.maxRows}`);
+    const many = Array.from({ length: 250 }, (_, i) => ({ ...TRANSIT_ROW, jd: i }));
+    const lines = runIndiaJyotish({ chart: { jyotish: {} }, params: { transit: transitEntry(many, 600) } }).transitLines;
+    assert(lines.filter((l) => l.startsWith('| 2026')).length === 200, `rows ${lines.length}`);
+    assert(lines[lines.length - 1].includes('只列前 200 条(共 600 条)'), lines[lines.length - 1]);
+    assert(runIndiaJyotish({ chart: { jyotish: {} }, params: {} }).transitLines === undefined, 'no transit → no key');
+    const bad = runIndiaJyotish({ chart: { jyotish: {} }, params: { transit: { ...transitEntry([TRANSIT_ROW]), transitPlanet: 'Pluto', transitDays: 45 } } });
+    assert(bad.error === 'invalid_setting' && bad.invalid.map((i) => i.key).join(',') === 'transitPlanet,transitDays', JSON.stringify(bad.invalid));
+    assert(JSON.stringify(vocab.defaults) === JSON.stringify({ transitPlanet: 'all', transitKind: 'sign', transitDays: 90 }), JSON.stringify(vocab.defaults));
+  });
+  check('indiaJyotish：开三旗盘照常出段（上游 indiaTripatakiSnapshot.test.js 夹具；月序键 index 与后端真键 month 都认）', () => {
+    const tri = (key) => ({ jyotish: { yogaTable: YOGA, tripataki: { available: true, byCenter: {
+      moon: { available: true, centerSign: 'Aries', months: [{ [key]: 1, score: { net: 2 } }, { [key]: 2, score: { net: -1 } }] },
+      saturn: { available: true, centerSign: 'Libra', months: [{ [key]: 1, score: null }] },
+    } } } });
+    for (const key of ['index', 'month']) {
+      const sections = runIndiaJyotish({ chart: tri(key), params: {} }).sections;
+      const text = (sections['Tripataki 三旗盘逐月净分'] || []).join('\n');
+      assert(text.includes('白羊') && text.includes('天秤') && text.includes('1:2 2:-1') && text.includes('1:-'), `${key}: ${text}`);
+      assert((sections['Yoga 判定表'] || []).length === 4, `${key}: 三旗盘之后的段也在（整份快照没被抛掉）：概述 1 行 + 表 3 行`);
+    }
+  });
+  check('indiaJyotish：八重合男方按性别（上游 maleSideOf 七例）与正文（上游 KOOTA 夹具）', () => {
+    const side = (a, b) => runIndiaTables({ action: 'ashtakoota_side', genderInner: a, genderOuter: b }).maleSide;
+    const got = [side(1, 0), side(0, 1), side('女', undefined), side(undefined, 1), side(undefined, undefined), side(1, 1), side(0, 0)];
+    assert(JSON.stringify(got) === JSON.stringify(['inner', 'outer', 'outer', 'outer', 'inner', 'inner', 'inner']), JSON.stringify(got));
+    const KOOTA = { rows: [{ name: 'Nadi', max: 8, score: 0, classic: 0 }], total: 28, classicTotal: 26, max: 36, maleSide: 'outer', groomSign: 0, brideSign: 11, groomNakshatra: 1, brideNakshatra: 27 };
+    const text = runIndiaTables({ action: 'ashtakoota', result: KOOTA }).lines.join('\n');
+    assert(text.includes('合计 28 / 36(另一套传统表 26)') && text.includes('男方:星盘 B') && text.includes('脉(Nadi)'), text);
+    assert(runIndiaTables({ action: 'ashtakoota', result: {} }).lines.length === 0, '回包没有 rows → 不出行');
+    assert(runIndiaTables({ action: 'nope' }).error === 'unknown_action', '未知动作要说出来');
+  });
+}
+
 // 六壬毕法 (星阙 v2.5.x Phase4)：buildLiuRengReferenceContext + matchBiFa verbatim 抽取，
 // 在固定盘上应组装出有效 ~75 字段 context 并机械命中若干毕法。
 check('liureng refContext builds + matchBiFa hits', () => {

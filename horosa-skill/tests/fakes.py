@@ -153,6 +153,33 @@ class FakeClient(HorosaApiClient):
                 {"ord": 5, "jieqi": "谷雨", "jie": False, "time": "2028-04-19 22:08:00", "ad": 1, "jdn": 2461880.42},
                 {"ord": 6, "jieqi": "立夏", "jie": True, "time": "2028-05-05 07:30:15", "ad": 1, "jdn": 2461895.81},
             ]}
+        if endpoint == "/astroextra/transitevents":
+            # 印占穿界表（上游 v3.14.0 astrostudy/india/transit_events.py）：真实形状 {rows, total, truncated, days}，行取自 vendored 实例
+            # 实抓（fixtures/sync314_india_live.json 的 default 一组的前三行）。值级真相归 tests/test_sync314_india_tables.py。
+            return {
+                "rows": [
+                    {"jd": 2461867.174906413, "planet": "Moon", "kind": "sign", "number": 5, "lon": 120.0002326729731, "sign": 4,
+                     "retrograde": False, "date": "2028-04-06", "time": "00:11:52", "lord": "Sun", "relation": "friend"},
+                    {"jd": 2461869.2009684267, "planet": "Moon", "kind": "sign", "number": 6, "lon": 150.0002442751236, "sign": 5,
+                     "retrograde": False, "date": "2028-04-08", "time": "00:49:24", "lord": "Mercury", "relation": "friend"},
+                ],
+                "total": 2, "truncated": False, "days": int(payload.get("transitDays") or 30),
+            }
+        if endpoint == "/astroextra/ashtakoota":
+            # 合盘八重合（上游 v3.14.0 extra_tables.build_ashtakoota）：真实形状，值 = 上游 golden_india_tables.json pairs.a
+            # （seattle-1975 × beijing-1990，男方 inner）；男方回显请求值。值级真相归 tests/test_sync314_india_tables.py。
+            return {
+                "rows": [
+                    {"name": "Varna", "max": 1, "score": 0.0, "classic": 1.0}, {"name": "Vashya", "max": 2, "score": 0.0, "classic": 0.0},
+                    {"name": "Tara", "max": 3, "score": 1.5, "classic": 1.5}, {"name": "Yoni", "max": 4, "score": 2.0, "classic": 2.0},
+                    {"name": "Graha Maitri", "max": 5, "score": 3.0, "classic": 3.0}, {"name": "Gana", "max": 6, "score": 0.0, "classic": 0.0},
+                    {"name": "Bhakoot", "max": 7, "score": 0.0, "classic": 0.0}, {"name": "Nadi", "max": 8, "score": 8.0, "classic": 8.0},
+                ],
+                "total": 14.5, "classicTotal": 15.5, "max": 36,
+                "doshas": [{"koota": "Nadi", "present": False, "cancel": []}, {"koota": "Bhakoot", "present": True, "cancel": []}],
+                "maleSide": "outer" if payload.get("maleSide") == "outer" else "inner", "ayanamsa": "Lahiri / Chitrapaksha",
+                "groomNakshatra": 23, "brideNakshatra": 21, "groomSign": 9, "brideSign": 8,
+            }
         if endpoint == "/india/rectify":
             # 真实形状（rectify_core，jsonpickle 直吐无信封；vara.note/disclaimer 上游原文）。
             return {
@@ -1246,6 +1273,19 @@ class FakeJsClient(HorosaJsEngineClient):
                     "[神煞合参]\n（通用命理合参层·非本术原生）\n命(未·天驛)：华盖—主孤高"
                 ),
             }
+        if tool_name == "india_tables":
+            # 印占穿界表词表 / 八重合男方与正文（上游 utils/indiaExtraTables.js 的纯排版函数，不起盘）：直接跑真 JS，
+            # 桩不手抄段内行文（与下面 zeri_conditions 同一做法）。
+            import json as _json
+            import subprocess as _subprocess
+            from pathlib import Path as _Path
+
+            cli = _Path(__file__).resolve().parents[1] / "horosa-core-js" / "bin" / "cli.mjs"
+            out = _subprocess.run(["node", str(cli), "run", "india_tables"], input=_json.dumps(payload, ensure_ascii=False),
+                                  capture_output=True, text=True, encoding="utf-8", check=True)
+            result = _json.loads(out.stdout)
+            result.pop("ok", None)  # 传输层标志，真 js_client 读完即 pop
+            return result
         if tool_name == "zeri_conditions":
             # 择日条件回显 / 词表：只读上游注册表、不起盘——直接跑真 JS（node 必备；与 selfcheck 同一入口）。
             import json as _json

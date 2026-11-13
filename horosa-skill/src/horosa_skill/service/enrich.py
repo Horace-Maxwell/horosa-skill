@@ -370,6 +370,10 @@ class EnrichMixin:
             "chartnum": src.get("chartnum"),
             "calibreOverrides": calibre_overrides,
         }
+        # [穿界时刻]（v3.14.0）：先取 /astroextra/transitevents，响应连同所选三项交给同一次 JS 调用排版；取不到 = 这段不出（已降级可见）。
+        transit = self._india_transit_entry(src, calibre_overrides["indiaAyanamsa"])
+        if transit is not None:
+            params["transit"] = transit
         try:
             # js_client 已解包 envelope 的 data，返回的就是 runner 的结果对象。
             js = self.js_client.run("india_jyotish", {"chart": response_data, "params": params})
@@ -393,6 +397,16 @@ class EnrichMixin:
                     enriched["_indiaDataSections"] = data_sections
                 if isinstance(js.get("schoolLines"), list):
                     enriched["_indiaSchoolLines"] = js.get("schoolLines")
+                if transit is not None:
+                    transit_lines = js.get("transitLines")
+                    if isinstance(transit_lines, list) and transit_lines:
+                        enriched["_indiaTransitLines"] = transit_lines
+                    else:
+                        # 请求成功、排版却没出行（上游 buildTransitEventLines 对没有 rows 的回包返回 []）：说出来，不让这段静默缺席。
+                        _degrade(
+                            "india transit events: builder returned no lines for %s", {k: v for k, v in transit.items() if k != "result"},
+                            note="印度律盘 [穿界时刻] 本次未产出（穿界表回包排不出行），其余段不受影响。",
+                        )
                 calibre_line = f"{js.get('calibreLine') or ''}".strip()
                 if calibre_line:
                     enriched["_indiaCalibreLine"] = calibre_line
@@ -415,6 +429,47 @@ class EnrichMixin:
                 note="印度律盘 Jyotish 派生段、[大运Dasha] 与 [起盘信息] 流派行 / 口径行本次未产出（JS 段 builder 失败），其余段不受影响。",
             )
         return response_data
+
+    def _india_transit_entry(self, payload: dict[str, Any], ayanamsa: Any) -> dict[str, Any] | None:
+        """[穿界时刻] 的取数（上游 v3.14.0 IndiaChart.js:1344-1396 indiaTransitEventParams + fetchIndiaTransitLinesHeadless）。
+
+        请求体 = 本盘的 date / time / ad / zone / lat / lon / hsys（穿界表只用时区与岁差，时刻由起始日定）+ zodiacal 1 +
+        siderealAyanamsa（本盘实际岁差）+ transitStart（过运日，缺省本盘时区的今天——与主盘请求的 transitDate 同一取法）+
+        所选三项（缺省 = 上游 TRANSIT_DEFAULT_SELECTION：七星 · 入星座 · 90 天）。返回上游 buildTransitEventLines 要的 entry
+        （{start, transitPlanet, transitKind, transitDays, ayanamsa, result}）；取不到 → None（降级可见，不静默）。
+        """
+        from horosa_skill.india_vocab import INDIA_TRANSIT_DEFAULTS, INDIA_TRANSIT_REQUEST_KEYS
+
+        remote = _india_chart_remote_payload(payload)
+        selection = {
+            request_key: payload.get(field) if payload.get(field) not in (None, "") else INDIA_TRANSIT_DEFAULTS[field]
+            for field, request_key in INDIA_TRANSIT_REQUEST_KEYS.items()
+        }
+        start = remote.get("transitDate")
+        body = {
+            **{k: remote.get(k) for k in ("date", "time", "ad", "zone", "lat", "lon") if remote.get(k) is not None},
+            "hsys": remote.get("indiaHsys") if remote.get("indiaHsys") not in (None, "") else remote.get("hsys", 0),
+            "zodiacal": 1,
+            "siderealAyanamsa": ayanamsa,
+            "transitStart": start,
+            **selection,
+        }
+        try:
+            result = self._call_remote("/astroextra/transitevents", body)
+        except Exception as exc:  # noqa: BLE001 — 富化失败不许影响主盘，但要说出来
+            _degrade(
+                "india transit events fetch failed: %s", exc,
+                note="印度律盘 [穿界时刻] 本次未产出（/astroextra/transitevents 取数失败），其余段不受影响。",
+            )
+            return None
+        if not isinstance(result, dict) or not isinstance(result.get("rows"), list):
+            # 上游页面同判（IndiaChart.js:1391 `!result || result.err || !Array.isArray(result.rows)` → 不出段）；这里多一句告警。
+            _degrade(
+                "india transit events returned an unexpected shape: %s", type(result).__name__,
+                note="印度律盘 [穿界时刻] 本次未产出（/astroextra/transitevents 回包没有 rows），其余段不受影响。",
+            )
+            return None
+        return {"start": start, **selection, "ayanamsa": ayanamsa, "result": result}
 
     def _attach_india_extra_vargas(
         self, tool_name: str, payload: dict[str, Any], response_data: dict[str, Any]
@@ -754,6 +809,55 @@ class EnrichMixin:
             }
             return enriched
         return response_data
+
+    def _attach_relative_ashtakoota(
+        self, tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """合盘 [八重合]（Ashtakoota，上游 v3.14.0 utils/aiAnalysisContext/pair.js:186-195 fetchAshtakoota 无头路径）。
+
+        两人的恒星黄道月亮宿 / 月亮座配八项分（满分 36）。请求 = {inner, outer, siderealAyanamsa, maleSide}；男方：显式
+        `ashtakootaMaleSide`（= 上游合盘页的「男方」下拉）优先，否则按两人的 gender 交上游 maleSideOf（都不明或同性 → 星盘 A）。
+        正文由上游 buildAshtakootaLines 排。取不到 / 排不出 = 这段不出（降级可见），既有比较盘段照出。
+        """
+        if tool_name != "relative" or not isinstance(response_data, dict):
+            return response_data
+        inner = input_normalized.get("inner")
+        outer = input_normalized.get("outer")
+        if not isinstance(inner, dict) or not isinstance(outer, dict):
+            return response_data
+        note = "合盘 [八重合] 本次未产出（{why}），其余段不受影响。"
+        try:
+            male_side = input_normalized.get("ashtakootaMaleSide")
+            if male_side not in ("inner", "outer"):
+                side = self.js_client.run(
+                    "india_tables",
+                    {"action": "ashtakoota_side", "genderInner": inner.get("gender"), "genderOuter": outer.get("gender")},
+                )
+                male_side = side.get("maleSide") if isinstance(side, dict) else None
+                if male_side not in ("inner", "outer"):
+                    _degrade("relative ashtakoota: maleSideOf returned %r", male_side, note=note.format(why="定不出男方"))
+                    return response_data
+            result = self._call_remote(
+                "/astroextra/ashtakoota",
+                {"inner": inner, "outer": outer, "siderealAyanamsa": input_normalized.get("siderealAyanamsa") or "", "maleSide": male_side},
+            )
+            if not isinstance(result, dict) or not isinstance(result.get("rows"), list):
+                _degrade("relative ashtakoota returned an unexpected shape: %s", type(result).__name__,
+                         note=note.format(why="/astroextra/ashtakoota 回包没有 rows"))
+                return response_data
+            js = self.js_client.run("india_tables", {"action": "ashtakoota", "result": result})
+            lines = js.get("lines") if isinstance(js, dict) else None
+            if not isinstance(lines, list) or not lines:
+                _degrade("relative ashtakoota: builder returned no lines", note=note.format(why="八重合回包排不出行"))
+                return response_data
+        except Exception as exc:  # noqa: BLE001 - degrade to no-ashtakoota, keep comparison chart
+            _degrade("relative ashtakoota failed: %s", exc, note=note.format(why="/astroextra/ashtakoota 取数或排版失败"))
+            return response_data
+        enriched = dict(response_data)
+        enriched["_relativeAshtakootaLines"] = [f"{line}" for line in lines]
+        # 结构化结果（八项分 / 合计 / Dosha / 男方）原样留给调用方；正文只用上面的行。
+        enriched["_relativeAshtakoota"] = result
+        return enriched
 
     def _enrich_embedded_astro_chart(self, chart_wrap: dict[str, Any]) -> dict[str, Any]:
         """嵌入整盘（relative 比较盘 A/B、jieqi 分至盘）的富化 = 上游 buildAstroSnapshotContent 对任意盘本地算的几段：

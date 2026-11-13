@@ -1317,7 +1317,7 @@
     "india/indiaConst.js": {
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
-      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）；wave3b 另抽印占岁差 47 制表 / 分宫制表及其归一、ayanamsaLabel / zodiacalDisplayText（[起盘信息] 口径行 indiaCalibreLine 的依赖）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与口径行、[大运Dasha] 体系切换。",
+      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）；wave3b 另抽印占岁差 47 制表 / 分宫制表及其归一、ayanamsaLabel / zodiacalDisplayText（[起盘信息] 口径行 indiaCalibreLine 的依赖）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与口径行、[大运Dasha] 体系切换。 v3.14.0：另抽宿数口径 / 中栏盘面两组显示常量（INDIA_NAKSHATRA_COUNT_* / INDIA_STAGE_MODE_*）——verbatim 的 utils/indiaExtraTables.js 的 INDIA_TABLE_SETTINGS 取它们作值域；INDIA_SCHOOL_DEFAULTS.parashari.tabs 随上游补 '17'（补充表页签）。",
       "extracts": [
         "SIDEREAL",
         "INDIA_AYANAMSA_DEFAULT",
@@ -1340,18 +1340,24 @@
         "INDIA_DASHA_SYSTEM_DEFAULT",
         "INDIA_DASHA_SYSTEM_OPTIONS",
         "INDIA_DASHA_DISPLAY_ONLY_SYSTEMS",
-        "normalizeIndiaDashaSystem"
+        "normalizeIndiaDashaSystem",
+        "INDIA_NAKSHATRA_COUNT_OPTIONS",
+        "INDIA_NAKSHATRA_COUNT_DEFAULT",
+        "normalizeIndiaNakshatraCount",
+        "INDIA_STAGE_MODE_OPTIONS",
+        "INDIA_STAGE_MODE_DEFAULT",
+        "normalizeIndiaStageMode"
       ],
-      "upstream_sha256": "b7aaf0de5ad5c6b4728edbc6c7bf8372d3d4c0defff3b198c73fdd935a03d580"
+      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
     },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
-      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 两处声明式偏离（均为上游 HEAD 9b74714b 的 bug，重抽时必须保留，直到上游修复）：① SIGN_CN_S/scS 上提到函数开头——上游三旗盘逐月净分块先于其 const 定义调用 scS（暂时性死区），jyotish.tripataki 一有数据整个 builder 抛出；② 三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。 v3.13.0：另逐字搬 components/astro/indiaMain/jyotishData.js（宿名/尊贵/年主取用/partialErrors 标签、Praśna 名表）与 indiaMain/dasha.js（charaAntarYears）——两模块顶层 import moment / 全量 AstroConst / derivedChartSource，整份 vendor 不可行；登记 also_derived_from 看守。",
+      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 一处声明式偏离（上游 v3.14.0 e55c3a66 仍在的 bug，重抽时必须保留，直到上游修复）：三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。（此前的偏离 ① SIGN_CN_S/scS 上提，上游 v3.14.0 已自己上提，现为上游原文。） v3.13.0：另逐字搬 components/astro/indiaMain/jyotishData.js（宿名/尊贵/年主取用/partialErrors 标签、Praśna 名表）与 indiaMain/dasha.js（charaAntarYears）——两模块顶层 import moment / 全量 AstroConst / derivedChartSource，整份 vendor 不可行；登记 also_derived_from 看守。 v3.14.0：[Yoga 判定表] / [印占补充表] 两段的行 builder 走 verbatim 的 utils/indiaExtraTables.js；[穿界时刻] 不在本文件（Python 取 /astroextra/transitevents，tools/indiaJyotish.js 调 buildTransitEventLines）。",
       "derived_from": "components/astro/IndiaChart.js",
-      "derived_sha256": "9ea437db088e5d7e06ae875371a8a58a75c8fda84fa993e0e4353390cd7170f4",
+      "derived_sha256": "65ced7d0a79ad412f04e33f3cb70ebf5a6ec942f4642632251dd4f95e955f800",
       "also_derived_from": {
-        "components/astro/indiaMain/jyotishData.js": "1244ae166424bd11b4139e974659546d752af93b82e93a9d871245526b26226d",
-        "components/astro/indiaMain/dasha.js": "fd65fd5d9c9e49a56db6d05e1ae8288bb4f33c883331d518d05fb1a5b758d645"
+        "components/astro/indiaMain/jyotishData.js": "5a6b8d716683b3115ac34acbd93b44e94187baebb4b91feed3b0bc24cfead637",
+        "components/astro/indiaMain/dasha.js": "aa60d66cd331852100f1be5aaf927e878caeb9292c6e5155fe3d1b68f921a765"
       }
     },
     "jinkou/JinKouCalc.js": {
@@ -3380,6 +3386,25 @@
       "mode": "verbatim",
       "why": "上游 v3.14.0 占星地图两层：日食路径（eclipseSummaryLines）与气候带 / 纬圈（climesSummaryLines），acgSnapshot.js 的新依赖。",
       "deviations": []
+    },
+    "utils/indiaExtraTables.js": {
+      "upstream": "utils/indiaExtraTables.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 印占四张新表的界面文字与快照正文单一来源：Yoga 判定表（buildYogaTableLines）、印占补充表（buildExtraTableLines）、穿界时刻（buildTransitEventLines + TRANSIT_* 选项 / 缺省）、合盘八重合（buildAshtakootaLines / maleSideOf / ashtakootaDoshas）。算法全在后端 astrostudy/india（/india/chart 的 jyotish.yogaTable / extraTables、/astroextra/transitevents、/astroextra/ashtakoota，Python 侧发请求）。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../india/indiaConst.js",
+          "why": "只取五个印度常量（INDIA_AYANAMSA_OPTIONS / INDIA_NAKSHATRA_COUNT_* / INDIA_STAGE_MODE_*）；vendor 树里该相对路径落到 32 行 Uranian 子集（没有这些名字 → 模块加载即 SyntaxError）。钉到 curated 的印度常量子集。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/timeLordTables.js：AstroTxtMsg 单字星名表在共享 shim（日月水金火木土天海冥与上游逐值相同）。"
+        }
+      ]
     },
     "utils/timeLordTables.js": {
       "upstream": "utils/timeLordTables.js",

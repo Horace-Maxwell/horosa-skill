@@ -20,11 +20,20 @@
  * moment / 全量 AstroConst / derivedChartSource，headless 不可整 vendor）→ 所用的纯函数/表逐字共抽于下方「indiaMain 共抽块」
  * （jyotishData.js:8-25、:31-61、:329-350；dasha.js:478-489）；
  * 民用历/日期件（dateTimeParse / dateStrSafe / civilCalendar）走已 verbatim vendor 的同名模块。
+ *
+ * v3.14.0（e55c3a66）逐 hunk 复核：buildJyotishSnapshotLines 自上游整段重抽——SIGN_CN_S / scS 上提已是上游原文（此前是
+ * skill 偏离 ①，上游这一版修了「开三旗盘整份快照为空」）；新增 [Yoga 判定表] / [印占补充表] 两段（行 builder 在 verbatim 的
+ * ../utils/indiaExtraTables.js）；INDIA_PARTIAL_LABELS 补 yogaTable / extraTables 两项。仍保留的唯一偏离 = 三旗盘月序读
+ * `m.index ?? m.month`（上游仍读 index，见函数内 🔴 注释）。上游同文件的另外三处改动不在本文件：ensureSection 段内留单个空行、
+ * [星盘信息] 三块之间空一行（Python service/text/chart_family.py 移植）、[穿界时刻]（Python 取数 + tools/indiaJyotish.js 排版）。
+ * indiaMain/dasha.js 这一版只改 dashaContainsNow（页面高亮当前大运用，本文件未抽）。
  */
 import * as AstroConst from './indiaConst.js';
 import { parseDateTimeMs } from '../utils/dateTimeParse.js';
 import { civilInstantMsOfStr, formatSignedDate } from '../bazi/dateStrSafe.js';
 import { civilYmdOfLocalDate } from '../utils/civilCalendar.js';
+// v3.14.0：Yoga 判定表 / 印占补充表两段的行 builder（上游 IndiaChart.js:18 同一 import；穿界时刻的取数在 Python、排版在 tools/indiaJyotish.js）
+import { buildExtraTableLines, buildYogaTableLines } from '../utils/indiaExtraTables.js';
 
 // ── indiaMain 共抽块：components/astro/indiaMain/jyotishData.js:8-25 逐字 ──
 // 庙旺态(引擎枚举 → 中文)单一来源:页面「Graha 状态 / 分盘吉位」与 AI 快照「星曜状态 / 分盘吉位」同读这一张表。
@@ -50,6 +59,8 @@ export function tajikaYearLordViaLabel(via){
 // 引擎子块失败的落账名(jyotish.partialErrors)→ 中文段名:页面提示与 AI 快照「未能计算」段共用这一张。
 // 子块内部落账名带点(kp.deep / muhurta.panchaka …);整块失败时是块键本身(kp / muhurta / dasha …)。没登记的名字原样写出(不吞)。
 export const INDIA_PARTIAL_LABELS = Object.freeze({
+	yogaTable: 'Yoga 判定表',
+	extraTables: '补充表',
 	'kp.deep': 'KP 深化(六级细分 / 宫头次主星 / 当令星 / 意义者)',
 	'muhurta.panchaka': 'Panchaka 五忌',
 	'muhurta.birthMuhurta': '出生须臾',
@@ -132,14 +143,10 @@ export function buildJyotishSnapshotLines(chartObj){
 	if(!j){ return {}; }
 	const fx = (x, d)=>(typeof x === 'number' && Number.isFinite(x)) ? x.toFixed(d) : (x !== undefined && x !== null ? `${x}` : '—');
 	const lordOf = (l)=>(l && (l.label || l.key)) || '—';
-	const out = {};
-	// 🔴 skill 偏离（v3.11.x 同步发现的**上游 bug**，上游 IndiaChart.js v3.13.0 965af0f4 仍在）：SIGN_CN_S / scS 两行在上游
-	// 定义于下方「印占 P0 接 UI 同步」块（IndiaChart.js:990-991），而三旗盘逐月净分块（:780）在它之前
-	// 就调用 scS → const 暂时性死区 ReferenceError：后端一带 jyotish.tripataki（opt-in indiaTripataki）整个
-	// buildJyotishSnapshotLines 抛出，上游 buildIndiaSnapshotText 无 try → 整份印度快照失败；skill 侧则全部 jyotish 段缺席。
-	// 两行原样上提（值逐字不变），其余逐字不动。重新从上游抽取本文件时必须保留此上提，直到上游修掉。
+	// 星座短名:放函数开头 —— 三旗盘段(前面)也用;此前声明在后面,开了三旗盘整份印占快照抛错(页面 / 导出 / 挂载全空)
 	const SIGN_CN_S = { Aries: '白羊', Taurus: '金牛', Gemini: '双子', Cancer: '巨蟹', Leo: '狮子', Virgo: '处女', Libra: '天秤', Scorpio: '天蝎', Sagittarius: '射手', Capricorn: '摩羯', Aquarius: '水瓶', Pisces: '双鱼' };
 	const scS = (s)=>SIGN_CN_S[s] || s || '—';
+	const out = {};
 
 	const p = j.panchanga;
 	if(p){
@@ -367,9 +374,9 @@ export function buildJyotishSnapshotLines(chartObj){
 		[['moon', '月心'], ['saturn', '土心']].forEach(([ck, cl])=>{
 			const c = triY.byCenter[ck];
 			if(c && c.available && Array.isArray(c.months) && c.months.length){
-				// 🔴 skill 偏离（上游 bug 之二）：后端 tripataki.month_rows 的月序键是 `month`（astrostudy/india/tripataki.py:51），
-				// 上游此处读 `m.index`（只在后端**入参** months 上存在）→ 每格都是「undefined:净分」。优先读 index（上游修键后零变化）、
-				// 缺则读 month。
+				// 🔴 skill 偏离（上游 bug，v3.14.0 e55c3a66 仍在）：后端 tripataki.month_rows 的月序键是 `month`（astrostudy/india/tripataki.py:51），
+				// 上游此处读 `m.index`（只在后端**入参** months 上存在；上游自己的 indiaTripatakiSnapshot.test.js 用的是手写的 index 夹具）
+				// → 真盘每格都是「undefined:净分」。优先读 index（上游修键后零变化）、缺则读 month。
 				triRows.push([cl, c.centerSign ? scS(c.centerSign) : '—', c.months.map((m)=>`${m.index !== undefined ? m.index : m.month}:${m.score ? m.score.net : '-'}`).join(' ')]);
 			}
 		});
@@ -580,7 +587,6 @@ export function buildJyotishSnapshotLines(chartObj){
 	}
 
 	// 印占 P0 接 UI 同步进 AI 挂载:Argala / 座运 Rasi Dashas / 年盘强度·年内大运 / Gochara 从命。
-	// （SIGN_CN_S / scS 两行已上提到函数开头 —— 见该处 🔴 skill 偏离注释。）
 	const arg = j.arudha && j.arudha.argala;
 	if(arg && typeof arg === 'object'){
 		const argRows = Object.keys(arg).sort((a, b)=>(Number(a) - Number(b))).map((h)=>{
@@ -685,6 +691,10 @@ export function buildJyotishSnapshotLines(chartObj){
 			...gfmTable(['瑜伽', '类别', '强弱', '分', '涉及星'], ygRows),
 		];
 	}
+	const yogaTableLines = buildYogaTableLines(j.yogaTable);
+	if(yogaTableLines.length){ out['Yoga 判定表'] = yogaTableLines; }
+	const extraTableLines = buildExtraTableLines(j.extraTables);
+	if(extraTableLines.length){ out['印占补充表'] = extraTableLines; }
 
 	// A 类硬缺：副星本体位置（renderUpagrahaPanel 的 时基 Gulika/Maandi 等 + 日基）与外行星天海冥
 	// （jyotish.outerPlanets，信息性虚星）已显示但此前不入快照；特殊上升已有独立段不重复。

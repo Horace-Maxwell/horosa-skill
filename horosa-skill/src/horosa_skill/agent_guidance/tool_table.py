@@ -419,12 +419,12 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
     ),
     "indiazeri": _policy(
         intent=(
-            "印度择时（Muhurta）：在一段时间窗内扫出满足条件树的分钟级区间，（不附基底盘）"
+            "印度择时（Muhurta）：在一段时间窗内扫出满足条件树的分钟级区间，并附命中首刻的完整印度律盘"
             "（[择时搜索配置]/[择时条件]/[命中时段]）。"
             "\n算权：**区间搜索由astropy 后端计算**；"
-            ""
+            "**展示盘按 india_chart 自己的算源铸**（与直接调该工具逐字同段，岁差制 / 罗计交点跟扫描口径）；"
             "结果里 compute_sources 逐项写明，切勿把搜索结果说成别的引擎算的。"
-            "\n段自足：印度盘全文见 india_chart 本身，本工具只出择时三段（上游同款）。条件覆盖 Panchanga 五肢（tithi/vara/nakshatra/yoga/karana）+ Lagna + 日凶段 + 三十须臾等。"
+            "\n正文 = 印占全文 + 择时三段（上游 v3.14.0 起；此前只有择时三段）。展示盘的分宫制是印占缺省整宫，过运日 / 年盘年份取今天。条件覆盖 Panchanga 五肢（tithi/vara/nakshatra/yoga/karana）+ Lagna + 日凶段 + 三十须臾等。"
             "\n条件树形状：组 {kind:'group', joiner:'all'|'any'|'xor', negate?, children:[…]}；"
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "tithi（Tithi(月相日)） / vara（Vara(曜日·日出界)） / nakshatra（Nakshatra(月宿)） / yoga（Yoga(日月合行)） / karana（Karana(半日)） / lagna（Lagna(上升星座)） / planet_sign（曜落星座） / retro（曜顺逆） / day_kalam（日凶段(Rahu Kalam 类)） / tara_bala（Tara Bala(宿力)） / chandra_bala（Chandra Bala(月力)） / muhurta_seg（三十须臾(Muhurta/Abhijit)）；…共 18 类，完整表见 vendored indiaZeriConditionTypes。"
@@ -438,8 +438,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ],
         safe_defaults=[
             {"field": "maxSpanDays", "value": 731, "meaning": "搜索窗上限；更长请分段"},
-            {"field": "indiaAyanamsa", "value": "lahiri", "meaning": "扫描岁差制（IndiaScanContext 读 ayanamsa，缺省 lahiri；indiaAyanamsa 为同词表别名，显式 ayanamsa 优先）"},
-            {"field": "nodeType", "value": "mean", "meaning": "罗睺计都平交点（印度择时页出厂，IndiaZeriMain.js:57）；true=真交点"},
+            {"field": "indiaAyanamsa", "value": "lahiri", "meaning": "扫描岁差制（IndiaScanContext 读 ayanamsa，缺省 lahiri；indiaAyanamsa 为同词表别名，显式 ayanamsa 优先）；展示盘同跟"},
+            {"field": "nodeType", "value": "mean", "meaning": "罗睺计都平交点（印度择时页出厂，IndiaZeriMain.js:57）；true=真交点，展示盘同跟"},
             *ZERI_SNAPSHOT_SAFE_DEFAULTS,
         ],
         do_not_assume=["搜索时间窗", "择日条件", "location"],
@@ -1245,8 +1245,16 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "indiaHsys", "value": 0, "meaning": "整宫制 / Rashi"},
             {"field": "indiaAyanamsa", "value": "lahiri", "meaning": "印占缺省 Lahiri"},
             {"field": "ad", "value": 1, "meaning": "公历纪年"},
+            # 上游 v3.14.0 [穿界时刻]（utils/indiaExtraTables.js TRANSIT_DEFAULT_SELECTION）；起始日 = transitDate（缺省今天）。
+            {"field": "indiaTransitPlanet", "value": "all", "meaning": "[穿界时刻] 看七星；也可只看 Sun/Moon/Mercury/Venus/Mars/Jupiter/Saturn 之一"},
+            {"field": "indiaTransitKind", "value": "sign", "meaning": "[穿界时刻] 入星座；nakshatra 入星宿 / pada 入足 / kakshya 入 Kakshya"},
+            {"field": "indiaTransitDays", "value": 90, "meaning": "[穿界时刻] 自过运日起 90 天；可选 30 / 90 / 180 / 366，段内最多列 200 行"},
         ],
         do_not_assume=["birth time", "birthplace", "timezone"],
+        output_contract=(
+            "[Yoga 判定表] 列 111 条规则里成立的（改进 / 经典两档各一列，两档都写，无需选档）；[印占补充表] = Graha Samaya / Dirah Bala"
+            "（另附经典口径合计与西占版）/ 七个 Sphuta；[穿界时刻] 是另取的一张表（取不到时该段缺席并在 warnings 说明）。"
+        ),
     ),
     "relative": _policy(
         intent="Relationship / relative chart.",
@@ -1262,7 +1270,8 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             },
         ],
         safe_defaults=[{"field": "relative", "value": 0, "meaning": "比较盘（星阙默认）"}],
-        do_not_assume=["either party's birth time/place"],
+        # [八重合] 的男方：两人的 gender 给了就按它；都没给或同性 = 星盘 A（上游同）。正文首行写明按谁算的——别替用户猜性别。
+        do_not_assume=["either party's birth time/place", "either party's gender (it only sets the 八重合 groom side; unknown → chart A)"],
     ),
     "solarreturn": SOLARRETURN_POLICY,
     "lunarreturn": SOLARRETURN_POLICY,

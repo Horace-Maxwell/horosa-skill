@@ -11,6 +11,16 @@ import {
   normalizeIndiaAyanamsa,
   normalizeIndiaHouseSystem,
 } from '../vendor/india/indiaConst.js';
+import {
+  TRANSIT_DAY_OPTIONS,
+  TRANSIT_DEFAULT_SELECTION,
+  TRANSIT_KIND_OPTIONS,
+  TRANSIT_PLANET_OPTIONS,
+  TRANSIT_SNAPSHOT_MAX_ROWS,
+  buildAshtakootaLines,
+  buildTransitEventLines,
+  maleSideOf,
+} from '../vendor/utils/indiaExtraTables.js';
 
 /**
  * 把后端 `/india/chart` 响应里的 `jyotish` 树格式化成星阙的具名段。
@@ -30,7 +40,13 @@ import {
  *   schoolLines:['行', …],                          // [起盘信息] 起首四行：流派 / 大运流派开关 / 当前分盘 / 分盘
  *   calibreLine:'恒星黄道·…，…',                     // [起盘信息] 口径行：indiaCalibreLine(fields, overrides)（IndiaChart.js:1113-1124）
  *   calibre:    { indiaHsys, indiaAyanamsa },       // 口径行实际用的（上游 normalize* 之后的）值，供 Python 对照后端口径
+ *   transitLines:['行', …],                         // [穿界时刻]（v3.14.0）：给了 params.transit 才有；= 上游 buildTransitEventLines(entry)
  * }
+ *
+ * params.transit（v3.14.0，上游 IndiaChart.fetchIndiaTransitLinesHeadless 的 entry 原形）:
+ *   { start: 'YYYY/MM/DD', transitPlanet, transitKind, transitDays, ayanamsa, result: </astroextra/transitevents 响应> }
+ *   三个所选值必须在上游选项表（TRANSIT_PLANET_OPTIONS / TRANSIT_KIND_OPTIONS / TRANSIT_DAY_OPTIONS）里，否则 invalid_setting ——
+ *   后端对认不出的星 / 事件静默换成七星 / 入星座，段头却照抄原值。
  */
 
 // 上游 builder 读的是页面 fields（{键: {value}}，日期时间是 moment）。headless 只需 snapshotBirthDate 用到的
@@ -67,6 +83,10 @@ export function runIndiaJyotish(payload) {
       invalid.push({ key, value: v, allowed: options.map((o) => o.value) });
     }
   });
+  const transit = params.transit && typeof params.transit === 'object' ? params.transit : null;
+  if (transit) {
+    invalid.push(...invalidTransitSelection(transit));
+  }
   if (invalid.length) {
     return { sections: {}, dashaLines: [], schoolLines: [], error: 'invalid_setting', invalid };
   }
@@ -90,5 +110,59 @@ export function runIndiaJyotish(payload) {
     indiaHsys: normalizeIndiaHouseSystem(overrides.indiaHsys),
     indiaAyanamsa: normalizeIndiaAyanamsa(overrides.indiaAyanamsa),
   };
-  return { sections, dashaLines, dataSections, schoolLines, calibreLine, calibre };
+  // [穿界时刻]（上游 IndiaChart.js:1376-1396 fetchIndiaTransitLinesHeadless）：请求由 Python 发，响应连同所选三项 / 起始日 / 岁差
+  // 原样交给上游 buildTransitEventLines（最多 TRANSIT_SNAPSHOT_MAX_ROWS 行，超出写「只列前 N 条」）。
+  const out = { sections, dashaLines, dataSections, schoolLines, calibreLine, calibre };
+  if (transit) {
+    out.transitLines = buildTransitEventLines(transit) || [];
+  }
+  return out;
+}
+
+// 穿界表所选三项的值域 = 上游选项表（不手抄）。范围是数字，`${}` 比较与上游 optionLabel 同口径（90 与 '90' 同一档）。
+const TRANSIT_SELECTION_OPTIONS = [
+  ['transitPlanet', TRANSIT_PLANET_OPTIONS],
+  ['transitKind', TRANSIT_KIND_OPTIONS],
+  ['transitDays', TRANSIT_DAY_OPTIONS],
+];
+
+function invalidTransitSelection(selection) {
+  const invalid = [];
+  TRANSIT_SELECTION_OPTIONS.forEach(([key, options]) => {
+    const v = selection[key];
+    if (v === undefined || v === null || v === '' || !options.some((o) => `${o.value}` === `${v}`)) {
+      invalid.push({ key, value: v === undefined ? null : v, allowed: options.map((o) => o.value) });
+    }
+  });
+  return invalid;
+}
+
+/**
+ * 印占四张新表里不随 `/india/chart` 回包走的两件事（v3.14.0，上游 utils/indiaExtraTables.js 逐字同源）：
+ *
+ *   { action: 'transit_vocab' }
+ *       → { planets, kinds, days, defaults, maxRows }          // 上游选项表 / 缺省 / 快照行数上限；Python 词表与它互锚
+ *   { action: 'ashtakoota_side', genderInner, genderOuter }
+ *       → { maleSide: 'inner' | 'outer' }                      // 上游 maleSideOf：按记录性别定男方；都不明或同性 → 星盘 A
+ *   { action: 'ashtakoota', result: </astroextra/ashtakoota 响应> }
+ *       → { lines: ['行', …] }                                 // 上游 buildAshtakootaLines；回包没有 rows → []
+ */
+export function runIndiaTables(payload) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  if (p.action === 'transit_vocab') {
+    return {
+      planets: TRANSIT_PLANET_OPTIONS,
+      kinds: TRANSIT_KIND_OPTIONS,
+      days: TRANSIT_DAY_OPTIONS,
+      defaults: TRANSIT_DEFAULT_SELECTION,
+      maxRows: TRANSIT_SNAPSHOT_MAX_ROWS,
+    };
+  }
+  if (p.action === 'ashtakoota_side') {
+    return { maleSide: maleSideOf(p.genderInner, p.genderOuter) };
+  }
+  if (p.action === 'ashtakoota') {
+    return { lines: buildAshtakootaLines(p.result) || [] };
+  }
+  return { error: 'unknown_action', action: p.action === undefined ? null : p.action, allowed: ['transit_vocab', 'ashtakoota_side', 'ashtakoota'] };
 }

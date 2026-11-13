@@ -281,7 +281,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     # v16：末尾 [未能计算] 是 skill 侧补登（上游 preset 无此段）：上游 buildIndiaSnapshotDataSections（IndiaChart.js:1315-1331）
     # 在回包 partialErrors 非空时产它，上游缺省导出不按 preset 过滤（无默认关集 → 只剥禁段）故它随快照出去；skill 缺省按
     # preset 过滤，不登记就会把「哪些段没算出来」这句关键说明静默剥掉。条件段双登记（optional）。
-    "indiachart": ["星盘信息", "起盘信息", "信息", "相位", "行星", "希腊点", "古典", "可能性", "大运Dasha", "附加分盘", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vaiśeṣikāṁśa", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "Tripataki 三旗盘逐月净分", "寿命判读", "行运 Gochara（从日）", "过运×大运联动", "Tajika 年主", "Tajika 年 Yoginī", "Tajika Patyāyinī 年运", "未能计算"],
+    # 上游 v3.14.0（导出 v62 / v65）：「副星 Upagraha」之后加 Yoga 判定表 / 印占补充表 / 穿界时刻（presets.js:680）。
+    "indiachart": ["星盘信息", "起盘信息", "信息", "相位", "行星", "希腊点", "古典", "可能性", "大运Dasha", "附加分盘", "Panchanga 五要素", "卡拉卡（8 Chara Karakas）", "节点主照（Rasi Drishti）", "星曜状态", "分盘吉位 Vaiśeṣikāṁśa", "八分点 SAV", "Sodhya Pinda 凝量", "Shadbala 六力", "Ishta/Kashta 吉凶果", "Vimśopaka 分盘 20 分力", "Hora 行星时", "Choghadia 民用择时", "择时 Panchaka/Abhijit", "Mūla 大运", "Sudarśana Chakra 大运", "Naisargika 自然大运", "补充上升（Supplementary Lagnas）", "Nāḍī · Bhrigu Bindu 福点", "Nāḍī · D150 纳地盘", "Āyurdāya 寿命基础", "特殊上升 Special Lagnas", "D60 六十分盘吉凶", "分盘变体对照", "功能吉凶（Functional Nature）", "宫位力（Bhava Bala）", "星曜战（Graha Yuddha）", "扩展大运（Conditional / Chara）", "Kartari 夹击格局", "Sudarshana 三盘（命/日/月起）", "KP 宫头次主星 CSL", "KP 意义者 Significators", "KP 六级细分 / 当令星", "敌友（复合五分）", "行运 Gochara（从月·八分点）", "化解（信息·非处方）", "Jaimini Argala 干涉", "Tajika Harsha Bala", "Tajika Pancha-Vargeeya", "Tajika Mudda 年运", "行运 Gochara（从命）", "座运·X", "瑜伽格局 Yogas", "副星 Upagraha", "Yoga 判定表", "印占补充表", "穿界时刻", "敏感点 Sphuta", "全吉盘 SBC", "问事 Praśna", "Nāḍī · 行星组合(同座合)", "Nāḍī · 星座交换", "Nāḍī · 木星推进时间轴", "Jaimini 三对法寿命", "Tripataki 宿距三旗", "Tripataki 三旗盘逐月净分", "寿命判读", "行运 Gochara（从日）", "过运×大运联动", "Tajika 年主", "Tajika 年 Yoginī", "Tajika Patyāyinī 年运", "未能计算"],
     # `占星地图` 是本仓第一次登记它：verify_export_section_baseline 的 SKILL_ONLY_KEYS 曾把整个
     # astrochart_like 跳过（而上游确有该 preset），于是这条缺失从未被任何一版欠账计入。
     # skill 侧该段由独立的 `acg` 工具产出、不进 chart 族快照，故 preset + optional 双登记。
@@ -316,7 +317,8 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 八个盘面段是**盘型互斥**的：relative=0 出 [比较盘-星盘A/B]（上游 v3.11 Q-441/T-404，比较盘页签
     # inner/outer 两盘无头整盘）、1 出 [合成图盘]、3 出 [时空中点·合成图盘]、2 出 [影响图盘-星盘A/B]、
     # 4 出 [马克斯·影响图盘-星盘A/B]。任一次调用只产其中一组 → 八段全列 preset、全列 optional，缺席不误报。
-    "relative": ["关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "比较盘-星盘A", "比较盘-星盘B", "合成图盘", "时空中点·合成图盘", "影响图盘-星盘A", "影响图盘-星盘B", "马克斯·影响图盘-星盘A", "马克斯·影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接"],
+    # 上游 v3.14.0（导出 v62）：「八重合」居首（presets.js:709）。
+    "relative": ["八重合", "关系起盘信息", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点", "比较盘-星盘A", "比较盘-星盘B", "合成图盘", "时空中点·合成图盘", "影响图盘-星盘A", "影响图盘-星盘B", "马克斯·影响图盘-星盘A", "马克斯·影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接"],
     # 上游 v48 段名对齐：主/界限法设置|表格 → 主限法设置|表格（旧名走 map_legacy_section_title）。UI-only
     # 新段「主限天球·当前动画所指」(3D 动画所指)headless 不产，故意不进 preset。
     "primarydirect": ["出生时间", "星盘信息", "本命盘星与虚点", "主限法设置", "主限法表格", "当前时点", "方法说明"],
@@ -551,13 +553,14 @@ ZERI_DERIVED_KEYS = (
     ("liurengzeri", "liureng"),
     ("sanshizeri", "sanshiunited"),
     ("qizhengzeri", "guolao"),
+    # 上游 v3.14.0（presets.js:993）：印度择日 = 印占快照段 + 择时三段（此前三段自足）。择日页内嵌的印占盘按宿主槽写
+    # 「印占全文 + 择时三段」；optional 集随下面的循环一起继承（[古典] / [问事 Praśna] / [穿界时刻] 这些条件段不会被升格成必出段）。
+    ("indiazeri", "indiachart"),
 )
 for _zeri_key, _base_key in ZERI_DERIVED_KEYS:
     AI_EXPORT_PRESET_SECTIONS[_zeri_key] = [
         *AI_EXPORT_PRESET_SECTIONS[_base_key], "择时搜索配置", "择时条件", "命中时段",
     ]
-# 印度择时段自足：印度页是 A 类星盘系，上游没有 module 快照槽（盘全文见 india_chart 本身）。
-AI_EXPORT_PRESET_SECTIONS["indiazeri"] = ["择时搜索配置", "择时条件", "命中时段"]
 
 AI_EXPORT_FORBIDDEN_SECTIONS = {
     "liureng": ["右侧栏目"],
@@ -647,7 +650,12 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # indiaTripataki=true（后端 opt-in 多建 12 盘）时产 —— 两段均缺省不产 → 条件段双登记。
     # [古典]：上游 buildIndiaSnapshotText 从不产该段（aiExport.js:596 [MU] 注「死复选框」），skill 同形 → 恒缺席、只登记。
     # [星盘信息]/[可能性] 经 ensureSection 恒产（空段写「无数据」），不再可选。
-    "indiachart": ["古典", "大运Dasha", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换", "附加分盘", "Tripataki 三旗盘逐月净分", "未能计算"],
+    # v3.14.0：[穿界时刻] 是另一条请求（/astroextra/transitevents）取来的，取不到就不出 → 条件段；[Yoga 判定表] / [印占补充表]
+    # 随 jyotish.yogaTable / extraTables 两个引擎子块，子块失败（落 partialErrors，[未能计算] 会点名）或极端年份缺星时不出 → 条件段。
+    "indiachart": ["古典", "大运Dasha", "星曜战（Graha Yuddha）", "Kartari 夹击格局", "Tajika Mudda 年运", "问事 Praśna", "Nāḍī · 星座交换", "附加分盘", "Tripataki 三旗盘逐月净分", "未能计算", "Yoga 判定表", "印占补充表", "穿界时刻",
+                   # [过运×大运联动]：过运日落在出生之前（没有在行的大运）时后端不出 dashaLink（builder 判 `dl && dl.mahaLord`）——
+                   # 印度择日的展示盘是「命中时刻」那一盘、过运日缺省今天，命中时刻在未来时恒如此。
+                   "过运×大运联动"],
     # 世俗盘为非推运入宫盘（predictive=0），[可能性] 依赖 predict.PlanetSign 故恒不产出 → 可选段。
     # 世运卜卦两段仅 mundaneType=mundanehorary 时产（盘型互斥）。
     # v3.11 右栏卡（buildMundaneCardSections）：入宫底盘恒产 年盘概要/四季入境盘/天气占星/四轴特殊点/盘型格局
@@ -695,8 +703,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 合盘关系量化（v3.3.1）：/astroextra/relative 打分成功才出；顺畅/张力连接随命中相位条件产出。
     # 上游 buildRelativeSnapshotText（AstroRelative.js:160-226）按页签出段、空列表不产段：互摄相位/中点/映点八段只属比较盘
     # 且各自空则缺（pushAspectArray 等 `if(!list || list.length === 0) return;`），盘体段各属其页签 → 全部条件段。
+    # v3.14.0 [八重合]：另一条请求（/astroextra/ashtakoota）取来的，取不到就不出 → 条件段。
     "relative": [
-        "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点",
+        "八重合", "A对B相位", "B对A相位", "A对B中点相位", "B对A中点相位", "A对B映点", "A对B反映点", "B对A映点", "B对A反映点",
         "比较盘-星盘A", "比较盘-星盘B", "合成图盘", "时空中点·合成图盘", "影响图盘-星盘A", "影响图盘-星盘B",
         "马克斯·影响图盘-星盘A", "马克斯·影响图盘-星盘B", "关系量化", "顺畅连接", "张力连接",
     ],
@@ -859,11 +868,12 @@ def map_legacy_section_title(key: str, title: str | None) -> str:
             return "三星·元辰"
     # v3.13.0 两处内容段改名（上游 sectionFilter.js:51 LEGACY_CONTENT_SECTION_TITLES / :91-93 / :244）：老用户存的、
     # 外部旧导出里的旧名迁到现名。
-    if key == "indiachart" and normalized == "分盘吉位 Vimśopaka":
+    # indiazeri（v3.14.0 起 = 印占段 + 择时三段）与 indiachart 同一套段头归一。
+    if key in ("indiachart", "indiazeri") and normalized == "分盘吉位 Vimśopaka":
         return "分盘吉位 Vaiśeṣikāṁśa"
     if key == "fengshui" and normalized == "成員卦象":
         return "成员卦象"
-    if key == "indiachart":
+    if key in ("indiachart", "indiazeri"):
         # 座运（Rāśi daśā）有 11 个变体（Narayana/Sudasa/Drig/Kalachakra…），上游 preset 以单个占位
         # 段名 `座运·X` 登记整族（同 horary 专题深化·X 的做法），实际段头是 [座运·<变体>]。
         if normalized.startswith("座运·"):

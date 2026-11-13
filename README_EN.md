@@ -136,9 +136,9 @@ Local end-to-end signals:
 | `transformchart` | Transformed chart | the natal chart recast by one of 33 transforms (inverted, sunrise, superimposed, antiscia, decanate, node houses, geodetic, heliocentric, persona, epoch, planetary nodes, coordinate analogs…) + a before/after positions section |
 | `zodiacsystems` | Zodiac systems | same longitudes, different divisions: 19 versions of 13-sign, 14-sign and unequal 12-segment zodiacs; true IAU constellation, galactic zodiac, last/next constellation change, 13 houses |
 | `hellen_chart` ⓟ | Hellenistic chart | Hellenistic-oriented chart |
-| `india_chart` ⓟ | Indian chart | Vedic chart |
+| `india_chart` ⓟ | Indian chart | Vedic chart; yoga rule table (111 rules), extra tables (Samaya · Dirah · Sphuta), ingress table |
 | `guolao_chart` ⓟ | Seven Governors (Guolao) | Seven Governors / Guo Lao chart |
-| `relative` ⓟ | Synastry / relationship | Two-person relationship, composite, relative output |
+| `relative` ⓟ | Synastry / relationship | Two-person relationship, composite, relative output, Ashtakoota (36-point match) |
 | `germany` ⓟ | Cosmobiology / midpoints | Hamburg 90° dial, 8 TNP, midpoint structures and quantitative analysis |
 
 ### Western astrology · returns / progressions / timelines (37)
@@ -199,7 +199,7 @@ Local end-to-end signals:
 | `liurengzeri` ⓟ | 六壬 election | scan a window for a 六壬 condition tree (27 types: minor/major patterns, hidden stems, vitality…) + the full chart |
 | `sanshizeri` ⓟ | Three-Styles election | conditions spanning 六壬 / 奇门 / 太乙 at once (70 types, the largest set) + the united chart |
 | `qizhengzeri` | 七政 election | minute-level interval search (7-state dignities etc., 11 types; adjudicated by the backend swisseph) + the 果老 chart |
-| `indiazeri` | Muhurta election | minute-level interval search (Panchanga limbs, Lagna, the 30 muhurtas, Choghadia, the five doshas — 18 types; backend-adjudicated) |
+| `indiazeri` | Muhurta election | minute-level interval search (Panchanga limbs, Lagna, the 30 muhurtas, Choghadia, the five doshas — 18 types; backend-adjudicated) plus the full Vedic chart of the first hit |
 
 ### Chinese metaphysics core · Three Styles (11)
 

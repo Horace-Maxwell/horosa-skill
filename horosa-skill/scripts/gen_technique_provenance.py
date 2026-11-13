@@ -139,6 +139,10 @@ EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
         "beiji", "nanji", "chunzi", "xianqin", "cetian", "qizhengkin",
     )},
     "indiazeri": {"endpoints": ["/indiaelectionscan/scan"]},
+    # 上游 v3.14.0：印占 [穿界时刻]（另取 /astroextra/transitevents）与 Jyotish 各段的排版（india_jyotish）、合盘 [八重合]
+    # （另取 /astroextra/ashtakoota，india_tables 定男方 + 排版）都在 service/enrich.py 的 _attach_*，不在 runner 本体。
+    "india_chart": {"engines": ["india_jyotish"], "endpoints": ["/astroextra/transitevents"]},
+    "relative": {"engines": ["india_tables"], "endpoints": ["/astroextra/ashtakoota", "/astroextra/relative"]},
     "qizhengzeri": {"endpoints": ["/qizhengelectionscan/scan"]},
     "mundane": {"engines": ["mundane_cards"]},
     # agepoint / distributions：runner 经 _run_predict_result_tool 把 /predict/* 回包交给 progextra 的 FROM_RESULT_BUILDERS。

@@ -922,6 +922,11 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
         add("关系量化", [f"契合分数：{_js_template_str(score.get('score'))}（0–100，50 为中性；越高越顺畅，越低张力越大）"])
         add("顺畅连接", _relative_score_lines(score.get("highlights")))
         add("张力连接", _relative_score_lines(score.get("challenges")))
+    # 八重合（v3.14.0，上游无头合盘 pair.js:186-205：`[八重合]` 接在全部段之后；行 = vendored buildAshtakootaLines，
+    # /astroextra/ashtakoota 由 `_attach_relative_ashtakoota` 另取）。
+    koota_lines = response.get("_relativeAshtakootaLines")
+    if isinstance(koota_lines, list) and koota_lines:
+        add("八重合", [f"{line}" for line in koota_lines])
     return _render_snapshot_text(rendered)
 
 

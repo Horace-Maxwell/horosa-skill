@@ -47,6 +47,7 @@ const TOOL_RUNNERS = {
   tianxing: lazy('./tianxing.js', 'runTianxing'),
   qizhengelection: lazy('./qizhengElection.js', 'runQizhengElection'),
   india_jyotish: lazy('./indiaJyotish.js', 'runIndiaJyotish'),
+  india_tables: lazy('./indiaJyotish.js', 'runIndiaTables'),  // 穿界表词表 / 八重合男方与正文（v3.14.0）
   acg_section: lazy('./acgSection.js', 'runAcgSection'),
   aux_labs: lazy('./auxLabs.js', 'runAuxLabs'),  // 辅盘变换盘 / 黄道制的专属段（上游 v3.14.0）
   qimen: lazy('./qimen.js', 'runQimen'),

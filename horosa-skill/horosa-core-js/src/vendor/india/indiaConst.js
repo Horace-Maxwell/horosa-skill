@@ -31,7 +31,7 @@ export const INDIA_SCHOOL_DEFAULTS = {
     // primaryTab:切派后落地主场 tab;positioning:一句定位(选择器 tooltip+摘要,五支手册定位表)。
     parashari: { ayanamsa: 'lahiri', hsys: 0, aspectParadigm: 'graha', dashaFocus: 'vimshottari', primaryTab: '3',
         positioning: '全局本命·性格·事业·财富·整体人生',
-        tabs: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'] },
+        tabs: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17'] },
     jaimini: { ayanamsa: 'lahiri', hsys: 0, aspectParadigm: 'rasi', dashaFocus: 'chara', primaryTab: '9',
         positioning: '寿命·出身·灵性·事件本质(星座逻辑)',
         tabs: ['1', '2', '3', '4', '7', '9', '13', '15'] },
@@ -324,4 +324,29 @@ export function zodiacalDisplayText(zodiacalRaw, ayanKey){
     if(!isSid){ return '回归黄道'; }
     const lab = ayanamsaLabel(ayanKey);
     return lab ? `恒星黄道·${lab}` : '恒星黄道';
+}
+
+// ── AstroConst.js:1378-1387 ──（v3.14.0：utils/indiaExtraTables.js 的 INDIA_TABLE_SETTINGS 取这四个常量作显示口径的值域）
+// ── 宿数口径(27 默认 / 28 含 Abhijit)。🔴 纯显示/择吉层:不进请求、不进缓存键;
+//    Vimshottari/月宿起运/D9/Pada/Tara 恒按 27 宿(权威 §4.3 铁律,引擎同口径)。──
+export const INDIA_NAKSHATRA_COUNT_OPTIONS = [
+    { value: 27, label: '27 宿(标准)' },
+    { value: 28, label: '28 宿(含牛宿 Abhijit)' },
+];
+export const INDIA_NAKSHATRA_COUNT_DEFAULT = 27;
+export function normalizeIndiaNakshatraCount(value){
+    return Number(value) === 28 ? 28 : 27;
+}
+
+// ── AstroConst.js:1505-1515 ──
+// ── 中栏盘面模式:single(既有三盘式,默认)/ sbc 全吉盘 / tripataki 三旗盘。
+//    纯前端渲染选择,不进请求参数(三旗数据 opt-in 由其面板按钮控制)。──
+export const INDIA_STAGE_MODE_OPTIONS = [
+    { value: 'single', label: '本命盘(北/南/东)' },
+    { value: 'sbc', label: '全吉盘 SBC(28 宿方阵)' },
+    { value: 'tripataki', label: '三旗盘 Tri-patākī' },
+];
+export const INDIA_STAGE_MODE_DEFAULT = 'single';
+export function normalizeIndiaStageMode(value){
+    return INDIA_STAGE_MODE_OPTIONS.some((o)=>o.value === value) ? value : INDIA_STAGE_MODE_DEFAULT;
 }

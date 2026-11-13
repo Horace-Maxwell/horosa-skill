@@ -7,11 +7,11 @@
 
 | Want | Tool and inputs |
 | --- | --- |
-| Natal chart | `chart` (13-house `chart13`, 12th-harmonic / Dwadasamsa `chart12`, Hellenistic `hellen_chart`). `chart` and `relocation` carry [古典] + [古典格局]; `india_chart` / `mundane` carry [古典] only. |
+| Natal chart | `chart` (13-house `chart13`, 12th-harmonic / Dwadasamsa `chart12`, Hellenistic `hellen_chart`). `chart` and `relocation` carry [古典] + [古典格局]; `india_chart` / `mundane` carry [古典] only. `india_chart` also carries [Yoga 判定表] (111 rules, improved + classic columns), [印占补充表] and [穿界时刻] (ingress table from `transitDate`; `indiaTransitPlanet` / `indiaTransitKind` / `indiaTransitDays` pick the planet, event and span). |
 | Derived charts | `draconic` (`draconicHouses`: `whole` default / `shift`), `relocation` (needs `relocLat` / `relocLon`), `harmonic` (whole number 1–360). |
 | Transformed chart | `transformchart`: `transformKind` picks one of 33 transforms (default `inverted`; Chinese names accepted). Only the options that transform uses take effect — `transformVariant` (`improved` default / `classic`) for `inverted` / `sunRise` / `novien` / `nodeHouses`; `transformPlanet` (default `Moon`) for `superimposed` / `planetCentered` (Sun = heliocentric) / `persona`; `transformShift` for `superimposed`; `transformHouse` (1–12) for `epoch`. An option the transform does not use is ignored and listed in `data.params_ignored` with a warning. Output = the whole transformed chart + [变换盘] (before / after longitudes, modern house rulers, golden-section points); no [可能性], no [古典格局]. `persona` / `epoch` cast another moment (written in [变换盘]); an epoch chart at high latitude may have no solution (`tool.transformchart_empty`). Full table: `horosa_agent_guidance(tool_name="transformchart")`. |
 | Zodiac systems | `zodiacsystems`: `zodiacVersion` picks one of 19 zodiacs (default `z13a`, 13 signs version A; `z13*` 13-sign, `z14` 14-sign, `z12a`–`z12g` unequal 12-segment). Longitudes do not change, only the division: one [黄道制] section with each point's segment in that version, its true IAU constellation (points off the zodiac are marked), galactic zodiac, last / next constellation change and 13 houses. No chart body. House system and tropical / sidereal do not change the result. |
-| Relationship 合盘 | `relative` with `inner` and `outer` (each: date / time / place or zone+lat+lon); `relative` 0–4 picks the chart type (0 比较盘 default). Both people need a birth time. |
+| Relationship 合盘 | `relative` with `inner` and `outer` (each: date / time / place or zone+lat+lon); `relative` 0–4 picks the chart type (0 比较盘 default). Both people need a birth time. Every type also carries [八重合] (Ashtakoota, sidereal Moon match out of 36): the groom side is `ashtakootaMaleSide` (`inner` / `outer`) or, without it, the two `gender` values — unknown or same gender → chart A; the section's first lines say which side was used. |
 | Midpoints / Uranian | `germany` (`rectifyEvents` → [校时预览]; `mpCoord` ra / decl → [中点坐标]). |
 | Babylonian | `babylon` (no houses / aspects / Asc by design). |
 | Mundane | `mundane` (year + 入宫节气 + place; `mundaneType`, `mundaneRuleset`). |
@@ -32,7 +32,7 @@ unreadable value is refused with `tool.invalid_option`; an id that is not a body
 
 `tianxing` (Western; `explainAt` judges one moment leaf by leaf), `qimenzeri`, `huanglizeri` (day grain), `bazizeri`,
 `taiyizeri`, `ziweizeri` (needs gender), `liurengzeri`, `sanshizeri` (conditions may span the three 式), `qizhengzeri`,
-`indiazeri` (Muhurta). All take `startDate` / `endDate` (`maxSpanDays` caps the window, 366 by default; split longer windows) + a `conditions` tree
+`indiazeri` (Muhurta; its text is the full `india_chart` of the first hit + the three search sections). All take `startDate` / `endDate` (`maxSpanDays` caps the window, 366 by default; split longer windows) + a `conditions` tree
 + a base `date` / `time` / place. Condition types and their meaning: `horosa_agent_guidance {"tool_name": …}` →
 `condition_types` (generated from the engine's own table). Polarity and `condition_echo`: SKILL.md §8. Hit intervals
 carry `pick` (a boundary-safe moment): cast a chart for a hit with `pick`, not `start`. Zero hits still return the

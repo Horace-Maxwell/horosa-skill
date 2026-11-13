@@ -390,7 +390,10 @@ def test_india_setup_section_carries_the_upstream_calibre_line(tmp_path) -> None
 def test_india_section_composition_mirrors_build_india_snapshot_text(tmp_path) -> None:
     """段组成 = 上游 buildIndiaSnapshotText（:1131-1194）：[星盘信息] = 本命 [宫位宫头]+[星与虚点]+[信息] 三段正文拼接、
     不单列 [宫位宫头]/[星与虚点]、不挑 [月宿]/[古典]；[信息]/[相位]/[行星]/[希腊点]/[可能性] 恒出（ensureSection 空段写
-    「无数据」）。旧版照本命盘出 [宫位宫头]/[星与虚点]/[月宿]/[古典]，[星盘信息] 缺席（由导出层拿通用起盘行兜底）。"""
+    「无数据」）。旧版照本命盘出 [宫位宫头]/[星与虚点]/[月宿]/[古典]，[星盘信息] 缺席（由导出层拿通用起盘行兜底）。
+
+    上游 v3.14.0（IndiaChart.js:1275-1277 + ensureSection :307-312）：三块之间各空一行（紧挨着时下游 markdown 会把第二张表的
+    表头当成第一张表的数据行）——此前期望值是三块直接相连（v3.13 的 `[...houseCusps, ...starsAndPoints, ...info]`），随上游改。"""
     from horosa_skill.engine import astro_snapshot as snap
 
     env, _ = _india_run(tmp_path)
@@ -401,12 +404,12 @@ def test_india_section_composition_mirrors_build_india_snapshot_text(tmp_path) -
     chart = INDIA_FIX["india_chart"]
     norm = env.input_normalized
     # 段行 = 上游 buildAstroSnapshotContent 的同一段（engine/astro_snapshot.py 逐字移植，GFM 表），不是旧行式 builder。
-    expected = [
-        line.rstrip()
+    blocks = [
+        [line.rstrip() for line in "\n".join(f"{x}" for x in block).split("\n") if line.strip()]
         for block in (snap.build_house_cusp_lines(chart), snap.build_star_and_lot_position_lines(chart), snap.build_info_section(chart, norm))
-        for line in "\n".join(f"{x}" for x in block).split("\n")
-        if line.strip()
     ]
+    assert all(blocks), [len(b) for b in blocks]
+    expected = [*blocks[0], "", *blocks[1], "", *blocks[2]]
     assert _section(text, "星盘信息").split("\n") == expected
     assert expected[0].startswith("|") and expected[1].startswith("| ---"), expected[:2]  # GFM 表头（旧行式版是「第1宫：…」）
     assert _section(text, "可能性") == "无数据"

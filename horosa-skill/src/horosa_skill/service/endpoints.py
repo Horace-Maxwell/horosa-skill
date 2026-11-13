@@ -47,6 +47,9 @@ _PYTHON_CHART_ENDPOINTS = {
     # 合盘关系量化打分（契合分数 + 顺畅/张力连接），与 /modern/relative 比较盘互补。
     "/astroextra/relative",
     "/india/chart",
+    # 上游 v3.14.0：印占行运页穿界表（[穿界时刻]）与合盘八重合（[八重合]），都挂在 chart 服务的 astroextra 下。
+    "/astroextra/transitevents",
+    "/astroextra/ashtakoota",
     # 印度出生时间校正（批 I-2；独立端点，照 shadbalarange 骨架不进命盘缓存键）
     "/india/rectify",
     # ACG 落点/事件（批 I-4）
