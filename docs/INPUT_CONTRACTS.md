@@ -56,7 +56,7 @@ IANA 时区会在进入 runtime 前转换为后端稳定接受的固定 offset�
 
 | 字段 | 读得懂（示例） | 会被拒（错误码） |
 | --- | --- | --- |
-| `date` | `1990-05-03`、`1990/5/3`、`1990.5.3`、`19900503`、`1990年5月3日`；公元前 `-0500-03-21` 或配 `ad: -1` | `03/05/1990`（`tool.ambiguous_date`，给两种读法）、农历日期（`tool.lunar_date_unsupported`，先用 `horosa_cn_calendar_month` 查公历日）、不存在的日期（`tool.invalid_date`） |
+| `date` | `1990-05-03`、`1990/5/3`、`1990.5.3`、`19900503`、`1990年5月3日`；公元前 `-0500-03-21` 或配 `ad: -1` | `03/05/1990`（`tool.ambiguous_date`，给两种读法）、不存在的日期（`tool.invalid_date`）。农历（1900–2100）直接换算：`农历1990年四月初九`、`1990年闰五月初三`、`1990年八月十五`（汉字月日 = 农历）、`1990年中秋`，或 `date` + `lunar: true`（`leap: true` 表闰月）；没写年份 `tool.lunar_date_needs_year`、该年有同号闰月 `tool.lunar_leap_month_ambiguous`（给两个公历日期，问用户）、表外年份 `tool.lunar_date_unsupported`、`calendar: "julian"` 等 `tool.calendar_unsupported` |
 | `time` | `08:30`、`0830`、`8点半`、`上午8点`、`8:30 PM` | 「辰时」（`tool.time_is_shichen`，给出该时辰的钟表时段、请用户定钟点）、「不详」/ `unknown`（`tool.time_unknown`）、`25:00`（`tool.invalid_time`）；缺了是 `tool.missing_field` |
 | `zone` | 见上表 | `480`（`tool.invalid_zone`，像分钟数）、`CST` / `EST` / `IST` 这类多义缩写（`tool.invalid_zone`，列出候选偏移） |
 | `lat` / `lon` | `31n13`、`31.22`、`北纬31.22`、`31°13′N`、`E121.47` | `40n75`、超出范围、经纬对调（`tool.invalid_coordinate`） |

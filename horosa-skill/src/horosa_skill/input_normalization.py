@@ -142,6 +142,7 @@ def _normalize_party(
     _apply_aliases(out, path=path, fields=fields)
     if fields is not None:
         _split_target_fields(out, path=path, issues=issues, fields=fields)
+    _apply_calendar_flags(out, path, issues, fields)
     for date_key, era_key in _ERA_PAIRS:
         era_explicit = out.get(era_key) is not None
         _strict(out, date_key, path, issues, lambda v, explicit=era_explicit: F.parse_date(v, era_explicit=explicit), extras=True)
@@ -163,6 +164,52 @@ def _normalize_party(
     if fields is not None:
         _report_unknown_keys(out, fields)
     return out
+
+
+# 「这个日期是农历」的结构化写法（审计 F02）：模型知道是农历却没有字段可写，就会加这些键。以前它们只换来一句「不是本技法的参数」，
+# 然后按公历同号日起盘、ok:true——另一张盘。现在：说是农历 → 按农历换算（与文字写法同一条路）；说是儒略历 → 按字段拒；说是公历 → 照常。
+_CALENDAR_KEYS = ("calendar", "calendarType", "calendar_type", "dateType", "date_type")
+_LUNAR_BOOL_KEYS = ("lunar", "isLunar", "is_lunar")
+_LEAP_KEYS = ("leap", "isLeap", "is_leap", "leap_month", "isLeapMonth")
+_LUNAR_WORDS = {"lunar", "chinese", "农历", "農曆", "阴历", "陰曆", "旧历", "舊曆", "夏历", "夏曆"}
+_SOLAR_WORDS = {"gregorian", "solar", "公历", "公曆", "阳历", "陽曆", "新历", "新曆", "西历", "西曆"}
+_JULIAN_WORDS = {"julian", "儒略", "儒略历", "儒略曆"}
+
+
+def _apply_calendar_flags(out: dict[str, Any], path: str, issues: _Issues, fields: frozenset[str] | None) -> None:
+    declared = fields or frozenset()
+    flags = {key: out.pop(key) for key in (*_CALENDAR_KEYS, *_LUNAR_BOOL_KEYS, *_LEAP_KEYS) if key in out and key not in declared}
+    if not flags:
+        return
+    words = {str(flags[key]).strip().lower() for key in _CALENDAR_KEYS if key in flags and flags[key] not in (None, "")}
+    lunar = bool(words & _LUNAR_WORDS) or any(F.is_truthy(flags[key]) for key in _LUNAR_BOOL_KEYS if key in flags)
+    unknown = words - _LUNAR_WORDS - _SOLAR_WORDS - _JULIAN_WORDS
+    if words & _JULIAN_WORDS or unknown:
+        which = next(iter(words & _JULIAN_WORDS or unknown))
+        issues.add(path + "calendar", which, F.FieldIssue(
+            "tool.calendar_unsupported",
+            f"历法「{which}」不能自动换算：日期请给公历（YYYY-MM-DD），或给农历（calendar: \"lunar\"，1900–2100 年）。",
+            f"Calendar {which!r} is not converted automatically: give a Gregorian date (YYYY-MM-DD), or a lunar one (calendar: \"lunar\", 1900–2100).",
+            expected_zh="calendar：lunar（农历）或不写（公历）", expected_en="calendar: lunar, or omit it for Gregorian", example="lunar",
+            ask_user=False,
+        ))
+        return
+    if not lunar or "date" not in out or F.is_blank(out.get("date")):
+        return
+    leap_values = [flags[key] for key in _LEAP_KEYS if key in flags]
+    leap = F.is_truthy(leap_values[0]) if leap_values else None
+    try:
+        parsed = F.parse_lunar_date(out["date"], forced=True, leap=leap)
+    except F.FieldIssue as issue:
+        issues.add(path + "date", out["date"], issue)
+        return
+    if parsed is None:
+        issues.add(path + "date", out["date"], F.FieldIssue(
+            "tool.invalid_date", f"说了是农历，但「{out['date']}」读不出农历的年月日。", f"Marked as lunar, but {out['date']!r} has no readable lunar year/month/day.",
+            expected_zh="农历 YYYY-MM-DD 或 农历1990年四月初九", expected_en="lunar YYYY-MM-DD or 农历1990年四月初九", example="1990-04-09",
+        ))
+        return
+    out["date"] = F.note_parsed(parsed, path + "date")
 
 
 def _strict(out: dict[str, Any], key: str, path: str, issues: _Issues, parse: Any, *, extras: bool = False, drop_blank: bool = True) -> None:

@@ -420,11 +420,120 @@ def _checked_date(value: Any, year: int, month: int, day: int) -> str:
     return f"{sign}{abs(year):04d}-{month:02d}-{day:02d}"
 
 
+# ── 农历日期（审计 F02 / F07 / 待决项 2：直接收农历，按 lunar-javascript 换算；表外年份照旧拒）──
+_CN_DIGITS = {"〇": 0, "零": 0, "○": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+_LUNAR_PREFIX_RE = re.compile(r"^(?:农历|農曆|阴历|陰曆|旧历|舊曆|lunar)\s*[:：]?\s*", re.IGNORECASE)
+_LUNAR_MONTH_WORDS = {"正": 1, "冬": 11, "腊": 12, "臘": 12, "元": 1}
+_FESTIVALS = {"春节": (1, 1), "春節": (1, 1), "元宵": (1, 15), "上元": (1, 15), "龙抬头": (2, 2), "龍抬頭": (2, 2), "端午": (5, 5),
+              "七夕": (7, 7), "中元": (7, 15), "中秋": (8, 15), "重阳": (9, 9), "重陽": (9, 9), "腊八": (12, 8), "臘八": (12, 8),
+              "除夕": (12, 0)}  # 0 = 腊月最后一天（29 或 30）
+_LUNAR_TEXT_RE = re.compile(
+    r"^(?:(?P<year>-?\d{1,4}|[〇零○一二三四五六七八九]{4})\s*年)?\s*"
+    r"(?:(?P<festival>春节|春節|元宵|上元|龙抬头|龍抬頭|端午|七夕|中元|中秋|重阳|重陽|腊八|臘八|除夕)(?:节|節)?"
+    r"|(?P<leap>闰|閏)?(?P<month>正|冬|腊|臘|元|十[一二]?|[一二三四五六七八九]|\d{1,2})\s*月\s*"
+    r"(?P<day>初[一二三四五六七八九十]|十[一二三四五六七八九]?|二十|廿[一二三四五六七八九]|三十|卅|[一二三四五六七八九]|\d{1,2})\s*[日号號]?)$"
+)
+_LUNAR_ISO_RE = re.compile(r"^(?P<year>-?\d{1,4})[-/.](?P<leap>闰|閏|L|l)?(?P<month>\d{1,2})[-/.](?P<day>\d{1,2})$")
+
+
+def _cn_number(text: str) -> int:
+    if text.isdigit():
+        return int(text)
+    if text in ("十",):
+        return 10
+    if text.startswith("初"):
+        return _cn_number(text[1:]) if text[1:] != "十" else 10
+    if text in ("二十",):
+        return 20
+    if text in ("三十", "卅"):
+        return 30
+    if text.startswith("廿"):
+        return 20 + _CN_DIGITS[text[1]]
+    if text.startswith("十"):
+        return 10 + (_CN_DIGITS[text[1]] if len(text) > 1 else 0)
+    return _CN_DIGITS[text]
+
+
+def _cn_year(text: str) -> int:
+    return int(text) if text.lstrip("-").isdigit() else int("".join(str(_CN_DIGITS[ch]) for ch in text))
+
+
+def _lunar_parts(raw: str, *, forced: bool) -> tuple[int | None, int, int, bool | None, str] | None:
+    """认得出农历写法 → (年, 月, 日, 闰?, 原文)；不是农历返回 None。forced = 结构化地说了「这是农历」（calendar: lunar 等）。"""
+    text = clean_text(raw)
+    marked = bool(_LUNAR_PREFIX_RE.match(text))
+    body = _LUNAR_PREFIX_RE.sub("", text).strip()
+    iso = _LUNAR_ISO_RE.match(body)
+    if iso and (marked or forced):
+        leap = True if iso.group("leap") else None
+        return int(iso.group("year")), int(iso.group("month")), int(iso.group("day")), leap, text
+    if (marked or forced) and _DATE_CN_RE.match(body):
+        cn = _DATE_CN_RE.match(body)
+        return int(cn.group("year")), int(cn.group("month")), int(cn.group("day")), None, text
+    match = _LUNAR_TEXT_RE.match(body)
+    if not match:
+        return None
+    year = _cn_year(match.group("year")) if match.group("year") else None
+    if match.group("festival"):
+        month, day = _FESTIVALS[match.group("festival")]
+        return year, month, day, False, text
+    month_text, day_text = match.group("month"), match.group("day")
+    month = _LUNAR_MONTH_WORDS.get(month_text) or _cn_number(month_text)
+    day = _cn_number(day_text)
+    chinese_numerals = not month_text.isdigit() or not day_text.isdigit()
+    if not (marked or forced or chinese_numerals or match.group("leap")):
+        return None  # 「1990年5月3日」——阿拉伯数字月日不带农历标记 = 公历，交给下面的公历规则
+    return year, month, day, (True if match.group("leap") else None), text
+
+
+def _lunar_issue(code: str, zh: str, en: str, *, options: list[Any] | None = None, ask_user: bool = True) -> FieldIssue:
+    return FieldIssue(code, zh, en, expected_zh="公历 YYYY-MM-DD，或带年份的农历（农历1990年四月初九 / 1990年闰五月初三）",
+                      expected_en="Gregorian YYYY-MM-DD, or a lunar date with its year (农历1990年四月初九 / 1990年闰五月初三)",
+                      example="农历1990年四月初九", options=options, ask_user=ask_user)
+
+
+def parse_lunar_date(raw: Any, *, forced: bool = False, leap: bool | None = None) -> Parsed | None:
+    """农历写法 → 公历 Parsed（note 写明换算）；不是农历写法返回 None。leap：结构化给的「是否闰月」（覆盖文字里没说的情形）。"""
+    from horosa_skill import lunar_calendar as L
+
+    parts = _lunar_parts(str(raw), forced=forced)
+    if parts is None:
+        return None
+    year, month, day, text_leap, text = parts
+    if year is None:
+        raise _lunar_issue("tool.lunar_date_needs_year", f"「{text}」是农历日期，但没有年份：请问用户是哪一年（农历年）。",
+                           f"'{text}' is a lunar date without a year; ask the user which (lunar) year.")
+    is_leap = text_leap if text_leap is not None else leap
+    lo, hi = L.year_range()
+    if not lo <= year <= hi:
+        raise _lunar_issue(
+            "tool.lunar_date_unsupported",
+            f"「{text}」是农历日期，自动换算只支持 {lo}–{hi} 年。先换成公历再传：用 horosa_cn_calendar_month 查到那一天，或向用户问公历生日；不要自己推算。",
+            f"'{text}' is a lunar date; automatic conversion covers {lo}–{hi} only. Convert it first with horosa_cn_calendar_month, or ask the user"
+            " for the Gregorian date. Do not convert by hand.",
+        )
+    if day == 0:  # 除夕 = 腊月最后一天
+        day = L.last_day(year, 12)
+    try:
+        solar = L.to_solar(year, month, day, is_leap)
+    except L.LunarDateError as exc:
+        code = {"leap_ambiguous": "tool.lunar_leap_month_ambiguous"}.get(exc.kind, "tool.invalid_date")
+        raise _lunar_issue(code, f"「{text}」：{exc.zh}", f"'{text}': {exc.en}", options=exc.options,
+                           ask_user=exc.kind == "leap_ambiguous") from exc
+    shown = L.label(year, month, day, bool(is_leap))
+    weekday = L.WEEKDAYS[solar.weekday()]
+    return Parsed(solar.isoformat(), f"「{text}」按农历换算：{shown} → 公历 {solar.isoformat()}（星期{weekday}）。",
+                  f"'{text}' read as a lunar date: {shown} → Gregorian {solar.isoformat()}.", {"lunar_input": text})
+
+
 def parse_date(value: Any, *, era_explicit: bool = False) -> Parsed:
     """→ Parsed('YYYY-MM-DD'，extra 里可能带从 ISO 日期时间拆出的 time / zone)。`era_explicit` = 载荷显式给了 ad。"""
     if isinstance(value, (bool, float)):
         raise _date_issue("tool.invalid_date", f"日期不能是 {value!r}：请传 YYYY-MM-DD 字符串。", f"Date cannot be {value!r}; pass a YYYY-MM-DD string.")
     raw = clean_text(value)
+    lunar = parse_lunar_date(raw)
+    if lunar is not None:
+        return lunar
     if any(mark in raw.lower() for mark in _LUNAR_MARKS):
         raise _date_issue(
             "tool.lunar_date_unsupported",
@@ -835,6 +944,15 @@ def add_input_note(zh: str, en: str) -> None:
     text = f"{zh} / {en}"
     if text not in notes:
         notes.append(text)
+
+
+def is_truthy(value: Any) -> bool:
+    """结构化开关的真值：True / 1 / "true" / "yes" / "是" / "闰" 等为真；其余（含 None、""、"false"、"0"、"否"）为假。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return clean_text(value).lower() in {"true", "1", "yes", "y", "on", "是", "对", "闰", "閏", "leap"}
 
 
 def note_parsed(parsed: Parsed, field_name: str = "") -> Any:

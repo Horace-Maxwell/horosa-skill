@@ -968,6 +968,19 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "给的是农历日期：先用 horosa_cn_calendar_month 查到对应的公历日（或向用户问公历生日），再按 YYYY-MM-DD 起盘。",
         "A lunar-calendar date was given: find the Gregorian day with horosa_cn_calendar_month (or ask the user for it), then retry with YYYY-MM-DD."),
         "next_action": "convert_lunar_date_then_retry"},
+    "tool.lunar_date_needs_year": {"kind": "input", "prompt_to_user": bilingual(
+        "给的是农历日期但没有年份：请问用户是哪一年（农历年），再带上年份重试（如「农历1990年八月十五」）。",
+        "A lunar date was given without its year: ask the user which (lunar) year, then retry with it (e.g. 农历1990年八月十五)."),
+        "next_action": "ask_user_for_date"},
+    "tool.lunar_leap_month_ambiguous": {"kind": "input", "prompt_to_user": bilingual(
+        "这一年这个农历月有平月与闰月两个：请用户选（details.options 给了两个对应的公历日期），然后用选定的公历日期，或在农历写法里加「闰」重试。",
+        "That lunar year has both a regular and a leap month with this number: ask the user which (details.options lists both Gregorian dates), "
+        "then retry with the chosen date or add 闰 to the lunar spelling."),
+        "next_action": "ask_user_for_date"},
+    "tool.calendar_unsupported": {"kind": "input", "prompt_to_user": bilingual(
+        "这个历法不能自动换算：日期请给公历（YYYY-MM-DD），或给农历（calendar: \"lunar\"，1900–2100 年）。",
+        "That calendar is not converted automatically: give a Gregorian date (YYYY-MM-DD) or a lunar one (calendar: \"lunar\", 1900–2100)."),
+        "next_action": "fix_field_and_retry"},
     "tool.date_range_unsupported": {"kind": "input", "prompt_to_user": bilingual(
         "这个技法的历法引擎算不了这个年份（details.accepted 是它的可靠域，多为公元 1–9999 年）：告诉用户本技法不支持该日期，换一个支持该年代的技法。",
         "This technique's calendar engine cannot compute that year (details.accepted is its reliable range, usually AD 1–9999): tell the user it is unsupported and use a technique that covers that era."),

@@ -149,7 +149,8 @@ DATE_ACCEPTED = [
 DATE_REFUSED = [
     ("1990-02-30", "tool.invalid_date"), ("1990-13-01", "tool.invalid_date"), ("1990-00-10", "tool.invalid_date"),
     ("1900-02-29", "tool.invalid_date"), ("90-05-03", "tool.invalid_date"), ("03/05/1990", "tool.ambiguous_date"),
-    ("农历正月初五", "tool.lunar_date_unsupported"), ("1990年腊月初八", "tool.lunar_date_unsupported"), ("農曆三月", "tool.lunar_date_unsupported"),
+    # 农历：没有年份的问用户要年份；带年份的直接换算（tests/test_fix314_lunar_input.py）；只有月没有日的照旧拒。
+    ("农历正月初五", "tool.lunar_date_needs_year"), ("農曆三月", "tool.lunar_date_unsupported"),
     ("yesterday", "tool.invalid_date"), (19900503.0, "tool.invalid_date"),
 ]
 
@@ -175,7 +176,9 @@ def test_iso_datetime_in_date_is_split_and_a_conflicting_time_is_an_error() -> N
 
 
 def test_lunar_refusal_names_the_conversion_tool() -> None:
-    assert "horosa_cn_calendar_month" in str(_refused(date="正月初五"))
+    # 1900–2100 年的农历直接换算（test_fix314_lunar_input.py）；表外年份才指向万年历工具，没写年份的先问年份。
+    assert "horosa_cn_calendar_month" in str(_refused(date="农历1850年正月初五"))
+    assert "哪一年" in str(_refused(date="正月初五"))
 
 
 def test_two_digit_year_with_explicit_era_is_kept() -> None:
@@ -338,7 +341,8 @@ def test_engine_structures_below_party_level_are_left_lenient() -> None:
 
 def test_every_new_code_has_an_exact_recovery_entry() -> None:
     for code in ("tool.invalid_zone", "tool.zone_ambiguous", "tool.invalid_time", "tool.time_unknown", "tool.time_is_shichen",
-                 "tool.invalid_date", "tool.ambiguous_date", "tool.lunar_date_unsupported", "tool.invalid_coordinate",
+                 "tool.invalid_date", "tool.ambiguous_date", "tool.lunar_date_unsupported", "tool.lunar_date_needs_year",
+                 "tool.lunar_leap_month_ambiguous", "tool.calendar_unsupported", "tool.invalid_coordinate",
                  "tool.invalid_gender", "tool.missing_gender", "tool.missing_field", "tool.invalid_datetime", "tool.field_conflict",
                  "tool.invalid_house_system", "tool.invalid_zodiacal", "tool.invalid_option", "tool.confirmation_flag_not_boolean",
                  "tool.sixyao_invalid_cast"):

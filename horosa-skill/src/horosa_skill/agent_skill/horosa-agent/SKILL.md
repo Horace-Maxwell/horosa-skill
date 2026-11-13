@@ -84,8 +84,10 @@ How the server read each value is written in `summary` / `warnings` (e.g. "地�
   given**, even if it contradicts the place and date. So: pass `place` and leave `zone` out. An IANA name
   (`"America/New_York"`) is also date-aware; a clock time that DST skipped or repeated is refused
   (`tool.zone_ambiguous`) and the user picks the offset. `CST` / `EST` / `IST` are refused: ask which one.
-- **Lunar (农历) birthday.** Charts take Gregorian dates only (`tool.lunar_date_unsupported`). Look the day up
-  with `horosa_cn_calendar_month` (one Gregorian month, each day with its 农历 date) or ask the user.
+- **Lunar (农历) birthday.** Pass it as said, with its year: `"农历1990年四月初九"`, `"1990年闰五月初三"`, `"1990年中秋"`,
+  or `date: "1990-04-09"` + `lunar: true` (`leap: true` for a 闰 month). It is converted (1900–2100) and the note
+  shows the Gregorian day. No year → `tool.lunar_date_needs_year`; a month that has a 闰 twin that year →
+  `tool.lunar_leap_month_ambiguous` with both Gregorian dates: ask the user. Never convert by hand.
 - **Gender is required** (a confirmation flag does not replace it) by: `bazi_birth`, `bazi_direct`,
   `ziwei_birth`, `ziweizeri`, `liureng_runyear`, `heluo`, `canping`, `yizhangjing`, `dongya`, `zhengchuan`,
   `tieban`, `shaozi`, `beiji`, `nanji`, `chunzi`, `cetian`, `qizhengkin`, `xianqin`. Ask; never assume 男.
