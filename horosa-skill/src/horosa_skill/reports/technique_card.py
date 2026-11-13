@@ -293,6 +293,10 @@ def _settings_used(
                 # runner 替调用方钉下的值（今年、时刻派生的起筮种子…）：来源是缺省（skill 按上游规则定的）。
                 used[str(field)] = {"label": str(item.get("label") or field), "value": item["value"],
                                     "text": setting_text(str(field), item["value"], _spec(tool_name, str(field))), "source": "default"}
+    # 一个工具装着多种方法、每种方法只读其中几项设置时（时主轮转十二法）：runner 报出这次**没读**的键，卡上不印——
+    # 指引表的 safe_defaults 是全表，照印会把「轨主走法：单轮」写在一张轮主期表的依据里。
+    for field in response_data.get("settings_not_applicable") or ():
+        used.pop(str(field), None)
     return used
 
 

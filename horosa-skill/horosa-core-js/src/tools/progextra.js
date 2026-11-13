@@ -39,8 +39,9 @@ const FROM_RESULT_BUILDERS = {
   distributions: buildDistributionsSnapshotFromResult,
 };
 
-// 推运图族四法（上游 v3.13.0 之后：neroman / bezzafigure / jayprofection / michon）：Python 拉 /astroextra/<接口> 后把回包作
-// payload.result、页面键口径（nerK / nerT0 / nerKeepDec / nerOrb / bezzaOrb / jayFrom / michonOrb / michonSwap / michonEqual）作
+// 推运图族（上游 v3.13.0 之后：neroman / bezzafigure / jayprofection / michon；v3.14.0 起加时主轮转 timelords，十二法共用一个键、
+// 页面键 tl*，正文由 utils/timeLordTables.buildTimeLordText 出）：Python 拉 /astroextra/<接口> 后把回包作
+// payload.result、页面键口径（nerK / nerT0 / nerKeepDec / nerOrb / bezzaOrb / jayFrom / michonOrb / michonSwap / michonEqual / tl*）作
 // payload.options 交来。正文 = 上游 AstroDirectedFigures.snapshotText(key, chartObj, result)（astroAiSnapshot stub 掉 → 只剩
 // buildDirectedFigureText 正文，[起盘信息]/[当前时点]/[方法说明] 由 Python 公共段出）；另按上游 buildDirectedFigureSnapshotText 的合并
 // 规则（页面保存值为底、非空齿轮值覆盖）重算 directedFigureRequestFields 回传 request_fields，runner 与自己发出的请求体逐键比对。

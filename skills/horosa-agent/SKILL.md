@@ -298,7 +298,8 @@ Keys below are `tool_name` values (MCP name = `horosa_<group>_<key>`; `horosa_ag
   `profection`, `pd`, `pdchart`, `zr`, `firdaria`, `decennials`, `agepoint`, `distributions`,
   `triplicityrulers`, `keypoints`, `lunationphase`, `extrareturns`, `jaynesprog`, `vedicprog`, `planetaryarc`,
   `planetaryages`, `balbillus`, `yearsystem129`, `persiandirected`, `neroman`, `bezzafigure`, `jayprofection`,
-  `michon`, `ephemeris`, `returntimeline`, `prenatalsyzygy`, `prog`, `mundane`, `planet_cycles`.
+  `michon`, `timelords` (时主轮转: twelve time-lord methods, pick one with `tlMethod`), `ephemeris`, `returntimeline`,
+  `prenatalsyzygy`, `prog`, `mundane`, `planet_cycles`.
 - **Horary / election** (moment): `horary` (卜卦; unknown `category` is refused with `tool.invalid_option`),
   `election` (judge one candidate moment; unknown `topicId` refused the same way), `qizhengelection`.
 - **择日 window search**: `tianxing`, `qimenzeri`, `huanglizeri`, `bazizeri`, `taiyizeri`, `ziweizeri`,

@@ -137,7 +137,8 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
     "persiandirected": [
         "波斯向运：中世纪波斯法,诸点按约 1 度/年向前推进与本命点会照。",
         "读法：向运点与本命点的相位事件按年龄排布;近期命中(距今最近)优先解读。",
-        "指定日期：传 datetime=YYYY-MM-DD 可整铸该日向运盘(「指定日期向运盘」段:directed 点位+向运→本命命中);rateKey/direction 可换速率与顺逆。",
+        "指定日期：传 datetime=YYYY-MM-DD 可整铸该日向运盘(「指定日期向运盘」段:directed 点位+向运→本命命中);rateKey/direction 可换速率与顺逆"
+        "(rateKey=periodic 为周期律:十星各按自身周期推、交点与阿拉伯点不向运),persianYear 换年长。",
     ],
     "yearsystem129": [
         # 上游 astroAiSnapshot.js:2096-2101（v3.13.0：引擎改前端 utils/yearSystem129，子限三种铺法）。
@@ -191,6 +192,12 @@ _PREDICTIVE_METHOD_NOTES: dict[str, list[str]] = {
         "双黄道(Michon)：回归黄道与恒星黄道叠在一起看,回归第 k 座叠恒星第 k − 1 座(回归白羊 ↔ 恒星双鱼 …);每个叠合的两颗守护星(现代守护)本命距角落在哪一谐波族即该叠合的「色」。",
         "五族:12 谐(30° 倍数)、18 谐(20° 倍数)、20 谐(18° 倍数)、14 谐(360°⁄14 倍数)、24 谐奇族(15° 奇数倍);容许度内多族同中取偏差最小者。互动 = 两个叠合之间回归守护对与恒星守护对各自的族,共 66 组。",
         "读法：有族的叠合 / 互动为盘中被点亮的主题;水金互换开时金牛 / 天秤与双子 / 处女的守护对调。",
+    ],
+    # 时主轮转：上游 astroAiSnapshot.js PREDICTIVE_METHOD_NOTES.timelords（v3.14.0）逐字。
+    "timelords": [
+        "时主轮转：把人生时间分给某颗星或某个座,或把盘上的点换成年龄。期表类(轮主、轨主、年度分配、月相四分、月亮单度主、月亮九年、九分主)看当前段的主星;事件类(匀速点、发展年龄、周日象限、对数时标、月亮日)看被走到的点。",
+        "段起点 = 出生 + 累计年数 × 年长;年度分配以真实太阳返照时刻为段起点。",
+        "读法：当前段主星的本命状态定这段时间的基调,子段主星定其中的小阶段;事件类以走到的点及相位论当年主题。",
     ],
 }
 
@@ -525,7 +532,8 @@ def _build_planetaryages_snapshot_text(
 # 值域与 vendored horosa-core-js/src/vendor/utils/timeLordYears.js 互锚：tests/test_sync313_predictive.py）。
 # 129 年系统的快照由 vendored yearSystem129.js 出（runner 走 progextra），本仓不再有 Python 移植——上游 v3.13.0 删了
 # 后端 yearsystem129.py，旧移植读的 predictives.yearsystem129 字段已不存在。
-_TIME_LORD_YEAR_TYPES = ("solar", "sidereal", "hellenistic", "abumashar", "mashaallah", "bija")
+# 上游 v3.14.0：Bija 年拆两档——bija 改取《苏利耶历数书》年长 365.258756 日（此前 366.256399），旧值留作 bijaClassic。
+_TIME_LORD_YEAR_TYPES = ("solar", "sidereal", "hellenistic", "abumashar", "mashaallah", "bija", "bijaClassic")
 
 
 _PERSIAN_MOVERS = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"]
@@ -555,12 +563,32 @@ def _persian_lon_of(obj: dict[str, Any] | None) -> float | None:
     return None
 
 
-# 上游 components/astro/AstroPersianDirected.js:26-29 速率表 + 缺省（波斯速率 + 顺向 + 90 年）。
-_PERSIAN_RATE = {"persian": 1.0, "prophected": 30.0, "naibod": 0.9856473}
-_PERSIAN_RATE_LABEL = {"persian": "波斯 1°/年", "prophected": "Prophected 30°/年", "naibod": "Naibod 59′08″/年"}
-# 上游挂载齿轮（techniqueMountSettings.js:1315-1328）的应期年数五档；builder 本身收任意正数。
+# 上游 components/astro/AstroPersianDirected.js 速率表 + 缺省（波斯速率 + 顺向 + 90 年 + 回归年）。
+# v3.14.0 新增「周期律」periodic：十星各按自身周期推（速率 = 360° ⁄ 周期年数），只推这十星，交点与阿拉伯点不向运；RATE 里它是 null。
+_PERSIAN_RATE: dict[str, float | None] = {"persian": 1.0, "prophected": 30.0, "naibod": 0.9856473, "periodic": None}
+_PERSIAN_RATE_LABEL = {"persian": "波斯 1°/年", "prophected": "Prophected 30°/年", "naibod": "Naibod 59′08″/年", "periodic": "周期律（每星一周期）"}
+# 周期律：每星走完一圈的年数（上游 PERIODIC_YEARS = 后端 symbolicdir.PERIODIC_YEARS：七曜取托勒密人生七龄，天海冥取恒星周期）。
+_PERSIAN_PERIODIC_YEARS = {
+    "Moon": 4, "Mercury": 10, "Venus": 8, "Sun": 19, "Mars": 15, "Jupiter": 12, "Saturn": 30, "Uranus": 84, "Neptune": 165, "Pluto": 248,
+}
+_PERSIAN_PERIODIC_MOVERS = [*_PERSIAN_MOVERS, "Uranus", "Neptune", "Pluto"]
+# 上游挂载齿轮（techniqueMountSettings.js）的应期年数五档；builder 本身收任意正数。
 _PERSIAN_MAX_YEARS_OPTIONS = (50, 90, 120, 150, 200)
+# 年长（日，上游 v3.14.0 persianYear 五档）：solar 沿用本技法一直用的回归年常数（缺省路径逐位不变），其余四档与时主类共用
+# utils/timeLordYears.js 那张表（= 后端 symbolicdir.YEAR_DAYS）。天数 / 标签与 vendored 表互锚：tests/test_sync314_predictive_persian.py。
 _PERSIAN_YEAR_DAYS = 365.2421904
+_PERSIAN_YEAR_TYPES: dict[str, tuple[float, str]] = {
+    "solar": (_PERSIAN_YEAR_DAYS, "回归年（365.2422 日）"),
+    "sidereal": (365.256363, "恒星年（365.2564 日）"),
+    "hellenistic": (360.0, "埃及 / 希腊化年（360 日）"),
+    "bija": (365.258756, "Bija 年（365.2588 日）"),
+    "bijaClassic": (366.256399, "Bija 年 · 经典（366.2564 日）"),
+}
+
+
+def _persian_year_days(key: Any) -> float:
+    """上游 persianYearDays(key)：solar / 认不出 → 回归年常数。"""
+    return _PERSIAN_YEAR_TYPES[key][0] if key in _PERSIAN_YEAR_TYPES else _PERSIAN_YEAR_DAYS
 
 
 def _moment_format_parse(text: Any) -> datetime | None:
@@ -599,8 +627,12 @@ def _wall_ms_of_naive(when: datetime) -> int:
     return _civil_wall_ms(when.year, when.month, when.day, when.hour, when.minute, when.second)
 
 
-def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float, direction: str) -> list[dict[str, Any]]:
-    """逐字镜像上游 AstroPersianDirected.js:56-98 `buildPersianHits`。
+def _build_persian_hits(
+    chart_obj: dict[str, Any], rate_key: str, max_age: float, direction: str, persian_year: str = "solar",
+) -> list[dict[str, Any]]:
+    """逐字镜像上游 AstroPersianDirected.js `buildPersianHits(chartObj, rateKey, maxAge, direction, persianYear)`。
+
+    v3.14.0：周期律（rateKey=periodic）逐星取速率 360 ⁄ 周期年数、向运星扩到十星；日期按所选年长换算。
 
     [Q-168/T-102] 速率 >1°/年（Prophected 30°/年）一生可绕黄道多周：按 arc+360k 逐周取应期至 cap。
     日期 = moment(birth).add(age·365.2421904, 'days')——moment 对小数天**四舍五入到整天**（2.12+ 语义，
@@ -609,7 +641,9 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
     chart = chart_obj.get("chart") if isinstance(chart_obj.get("chart"), dict) else {}
     params = chart_obj.get("params") if isinstance(chart_obj.get("params"), dict) else {}
     objects = chart.get("objects") if isinstance(chart.get("objects"), list) else []
-    rate = _PERSIAN_RATE.get(rate_key) or 1.0
+    periodic = rate_key == "periodic"
+    base_rate = _PERSIAN_RATE.get(rate_key) or 1.0
+    year_days = _persian_year_days(persian_year)
     cap = max_age or 90
     converse = direction == "converse"
     by_id: dict[str, float] = {}
@@ -626,10 +660,11 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
     birth_wall = _civil_birth_wall_ms(params.get("birth"))
     birth_jdn = (int(birth_wall) // _MS_PER_DAY + _UNIX_EPOCH_JDN) if birth_wall is not None else None
     hits: list[dict[str, Any]] = []
-    for mover in _PERSIAN_MOVERS:
+    for mover in (_PERSIAN_PERIODIC_MOVERS if periodic else _PERSIAN_MOVERS):
         mover_lon = by_id.get(mover)
         if mover_lon is None:
             continue
+        rate = 360 / _PERSIAN_PERIODIC_YEARS[mover] if periodic else base_rate
         for target_id, target_lon in targets:
             if target_id == mover:
                 continue
@@ -647,7 +682,7 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
                             date = ""
                             if birth_jdn is not None:
                                 # v3.12.0 civilDateAfterDays：出生日序 + Math.round(天) → 民用历日期标签
-                                date = _civil_date_str_of_jdn(birth_jdn + _ptext.js_round(age * _PERSIAN_YEAR_DAYS))
+                                date = _civil_date_str_of_jdn(birth_jdn + _ptext.js_round(age * year_days))
                             hits.append({
                                 "age": _ptext.js_round2(age), "promittor": mover, "aspect": aspect,
                                 "significator": target_id, "date": date,
@@ -658,16 +693,16 @@ def _build_persian_hits(chart_obj: dict[str, Any], rate_key: str, max_age: float
     return hits
 
 
-def _persian_directed_age_years(birth: Any, when: Any) -> float | None:
-    """上游 AstroPersianDirected.js directedAgeYears：两个时刻都经民用历单源（momentOfCivilDateTimeStr），
-    d.diff(b, 'days', true) / 365.2421904（墙钟差）。`when` 是 datetime 时 = 「此刻」的本机钟面。"""
+def _persian_directed_age_years(birth: Any, when: Any, year_days: float = _PERSIAN_YEAR_DAYS) -> float | None:
+    """上游 AstroPersianDirected.js directedAgeYears(birthStr, datetimeStr, yearDays)：两个时刻都经民用历单源
+    （momentOfCivilDateTimeStr），d.diff(b, 'days', true) / 年长（墙钟差；缺省回归年 365.2421904）。`when` 是 datetime 时 = 「此刻」的本机钟面。"""
     if not birth or not when:
         return None
     birth_ms = _civil_birth_wall_ms(birth)
     when_ms = _wall_ms_of_naive(when) if isinstance(when, datetime) else _civil_birth_wall_ms(when)
     if birth_ms is None or when_ms is None:
         return None
-    return (when_ms - birth_ms) / 86400000.0 / _PERSIAN_YEAR_DAYS
+    return (when_ms - birth_ms) / 86400000.0 / year_days
 
 
 def _select_nearby_persian_hits(hits: list[dict[str, Any]], current_age: float | None, limit: int = 12) -> list[dict[str, Any]]:
@@ -692,24 +727,34 @@ def _build_persiandirected_snapshot_text(
     now: datetime | None = None,
     moment_lines: list[str] | None = None,
 ) -> str:
-    """逐字镜像上游 AstroPersianDirected.js:103-157 buildPersianDirectedSnapshotText(chartObj, opts)。
+    """逐字镜像上游 AstroPersianDirected.js buildPersianDirectedSnapshotText(chartObj, opts)。
 
-    opts：rateKey（persian/prophected/naibod）/ direction（direct/converse）/ maxYears / datetime。
+    opts：rateKey（persian/prophected/naibod/periodic）/ direction（direct/converse）/ maxYears / persianYear / datetime。
+    v3.14.0：周期律换首行（十星各按自身周期），非回归年时加一行「年长：…」，应期日期与当前向运年龄都按所选年长。
     [Q-168/T-102] 首行按所选速率/方向写（此前写死 1°/年）；主表上限 max(200, maxYears×4)；
     段尾 ◆ 近期命中（距今最近，12 条）。当前向运年龄：给 datetime 按推运时间，否则按导出时刻；
     该定位行写进 moment_lines（由 [当前时点] 段追加，= 上游 extraLines）。
     """
-    o = {"rateKey": "persian", "direction": "direct", **(opts or {})}
+    o = {"rateKey": "persian", "direction": "direct", "persianYear": "solar", **(opts or {})}
     rate_key = o.get("rateKey") if o.get("rateKey") in _PERSIAN_RATE else "persian"
     direction = "converse" if o.get("direction") == "converse" else "direct"
     max_years = _finite_number(o.get("maxYears"))
     max_years = max_years if max_years is not None and max_years > 0 else 90
-    hits = _build_persian_hits(response, rate_key, max_years, direction)
+    persian_year = o.get("persianYear") if o.get("persianYear") in _PERSIAN_YEAR_TYPES else "solar"
+    year_days = _persian_year_days(persian_year)
+    hits = _build_persian_hits(response, rate_key, max_years, direction, persian_year)
     if not hits:
         return _render_snapshot_text([("波斯向运（Persian Directed）", "（本盘无波斯向运应期）")])
+    way = "逆向(Converse)" if direction == "converse" else "顺向"
+    if rate_key == "periodic":
+        head = (f"周期律：十星各按自身周期{way}推进(月 4、金 8、水 10、木 12、火 15、日 19、土 30、天 84、海 165、冥 248 年一周),"
+                "交点与阿拉伯点不向运,本命宫头不动；下表为向运星触及本命的应期。")
+    else:
+        head = (f"黄经象征向运({_PERSIAN_RATE_LABEL.get(rate_key) or rate_key})：所有行星/点按此速率"
+                f"{way}推进,本命宫头不动；下表为向运星触及本命的应期。")
     lines = [
-        f"黄经象征向运({_PERSIAN_RATE_LABEL.get(rate_key) or rate_key})：所有行星/点按此速率"
-        f"{'逆向(Converse)' if direction == 'converse' else '顺向'}推进,本命宫头不动；下表为向运星触及本命的应期。",
+        head,
+        *([f"年长：{_PERSIAN_YEAR_TYPES[persian_year][1]}"] if persian_year != "solar" else []),
         "",
         "| 年龄 | 日期 | 向运星 | 相位 | 本命对象 |",
         "| --- | --- | --- | --- | --- |",
@@ -718,11 +763,11 @@ def _build_persiandirected_snapshot_text(
     params = response.get("params") if isinstance(response.get("params"), dict) else {}
     birth = params.get("birth")
     dt_str = f"{o.get('datetime') or ''}".strip()
-    current_age = _persian_directed_age_years(birth, dt_str) if dt_str else None
+    current_age = _persian_directed_age_years(birth, dt_str, year_days) if dt_str else None
     age_basis = f"按推运时间 {dt_str}"
     if current_age is None:
         # 上游 moment().format('YYYY-MM-DD HH:mm:ss') 截到秒再解析 → 这里同样去掉微秒。
-        current_age = _persian_directed_age_years(birth, (now or _clock.now()).replace(microsecond=0))
+        current_age = _persian_directed_age_years(birth, (now or _clock.now()).replace(microsecond=0), year_days)
         age_basis = "按导出时刻"
     near = _select_nearby_persian_hits(hits, current_age, 12)
     if near:
@@ -807,18 +852,23 @@ def _build_india_rectify_snapshot_text(payload: dict[str, Any], res: dict[str, A
 _ZODIAC_SIGN_IDS = ("Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces")
 
 
-def _build_persianchart_section_text(directed: dict[str, Any]) -> str:
+def _build_persianchart_section_text(directed: dict[str, Any], persian_year: str | None = None) -> str:
     """[指定日期向运盘]（/predict/persianchart，getPersianDirectedByDate 的文本化）。
 
     directed 形状：{date, rateKey, direction, ageYears, chart:{objects, aspects}, natalChart, lots}。
     aspects 为向运点→本命点命中：[{directId, objects:[{natalId, aspect, delta}]}]。
+    上游 v3.14.0：周期律（rateKey=periodic）只推十星——后端回的 chart.objects 只有这十颗，lots 留在本命位置（symbolicdir.compute
+    不挪阿拉伯点）；行进年数按 persianYear 的年长折算（回包不回显年长，由 runner 传入）。
     """
     if not isinstance(directed, dict) or not isinstance(directed.get("chart"), dict):
         return ""
     chart = directed["chart"]
+    periodic = directed.get("rateKey") == "periodic"
+    rate_text = "periodic（周期律：十星各按自身周期，交点与阿拉伯点不向运）" if periodic else f"{directed.get('rateKey') or 'persian'}"
+    year_text = f"（年长：{_PERSIAN_YEAR_TYPES[persian_year][1]}）" if persian_year in _PERSIAN_YEAR_TYPES and persian_year != "solar" else ""
     lines = [
-        f"目标日期：{directed.get('date') or '—'}　速率：{directed.get('rateKey') or 'persian'}　"
-        f"方向：{'逆向' if directed.get('direction') == 'converse' else '顺向'}　行进 {_round3(directed.get('ageYears'))} 年",
+        f"目标日期：{directed.get('date') or '—'}　速率：{rate_text}　"
+        f"方向：{'逆向' if directed.get('direction') == 'converse' else '顺向'}　行进 {_round3(directed.get('ageYears'))} 年{year_text}",
         "",
         "向运点位：",
     ]
@@ -853,7 +903,10 @@ def _build_persianchart_section_text(directed: dict[str, Any]) -> str:
         lines.extend(aspect_rows)
     lots = directed.get("lots")
     if isinstance(lots, list) and lots:
-        lines.append(f"（另有 directed 阿拉伯点 {len(lots)} 枚，见 directed_chart.lots）")
+        if periodic:
+            lines.append(f"（周期律不推阿拉伯点：directed_chart.lots 的 {len(lots)} 枚仍在本命位置）")
+        else:
+            lines.append(f"（另有 directed 阿拉伯点 {len(lots)} 枚，见 directed_chart.lots）")
     return _render_snapshot_text([("指定日期向运盘", "\n".join(lines))])
 
 

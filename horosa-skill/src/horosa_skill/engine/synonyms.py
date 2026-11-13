@@ -91,6 +91,11 @@ TOOL_SYNONYMS: dict[str, tuple[str, ...]] = {
     "bezzafigure": ("推运图", "Bezza", "bezzafigure", "directed figure"),
     "jayprofection": ("周日小限", "Jay profection", "diurnal profection", "jayprofection"),
     "michon": ("双黄道", "Michon", "double zodiac", "michon"),
+    # 时主轮转十二法（上游 v3.14.0）。
+    "timelords": (
+        "时主轮转", "轮主", "轨主", "年度分配", "月相四分", "月亮单度主", "月亮九年", "九分主", "匀速点", "发展年龄", "周日象限",
+        "对数时标", "月亮日", "time-lord tables", "time lord rotation", "timelords",
+    ),
     # ---- 卜卦 / 择日 ----
     "horary": ("卜卦占星", "卜卦", "占问", "horary", "horary astrology"),
     "election": ("择日", "择吉", "选时", "electional", "election astrology", "electional astrology"),

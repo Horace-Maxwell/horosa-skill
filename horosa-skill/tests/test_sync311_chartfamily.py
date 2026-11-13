@@ -414,8 +414,8 @@ def test_presets_place_new_sections_at_upstream_positions() -> None:
         assert preset[preset.index("主宰星链") + 1] == "分宫制宫神星表", key
     assert AI_EXPORT_PRESET_SECTIONS["astrochart_like"] == [
         "起盘信息", "宫位宫头", "星与虚点", "信息", "相位", "行星", "月宿", "希腊点", "12分度", "主宰星链", "分宫制宫神星表",
-        "古典", "古典格局", "埃及历", "寿命格局", "可能性", "占星地图",
-    ]
+        "古典", "古典格局", "盘面细节", "埃及历", "寿命格局", "可能性", "占星地图",
+    ]  # v3.14.0 presets.js:692：[盘面细节]（导出 v61）插在古典格局与埃及历之间
     relative = AI_EXPORT_PRESET_SECTIONS["relative"]
     assert relative[relative.index("B对A反映点") + 1: relative.index("B对A反映点") + 3] == ["比较盘-星盘A", "比较盘-星盘B"]
     assert AI_EXPORT_PRESET_SECTIONS["otherbu"][-2:] == ["骰子盘相位", "天象盘相位"]

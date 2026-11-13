@@ -208,13 +208,16 @@ def _upstream_decennials() -> dict[str, Any]:
 
 
 def _upstream_persian() -> dict[str, Any]:
+    # 上游 v3.14.0 起 buildPersianHits 另读周期律表与年长表（PERIODIC_YEARS / persianYearDays …）；缺省档（下面这些用例）结果不变。
     decls = _upstream_decls(
         "components/astro/AstroPersianDirected.js",
-        ["RATE", "MOVERS", "ASPECTS", "norm360", "lonOf", "buildPersianHits", "directedAgeYears"],
+        ["RATE", "PERIODIC_YEARS", "SOLAR_YEAR_DAYS", "PERSIAN_YEAR_LABEL", "persianYearDays", "MOVERS", "PERIODIC_MOVERS", "ASPECTS",
+         "norm360", "lonOf", "buildPersianHits", "directedAgeYears"],
     )
     src = (
         f"import * as AstroConst from '{_vurl('src/constants/AstroConst.js')}';\n"
         f"import {{ momentOfCivilDateTimeStr, civilDateAfterDays }} from '{_vurl('src/vendor/utils/civilMoment.js')}';\n"
+        f"import {{ TIME_LORD_YEAR_TYPES }} from '{_vurl('src/vendor/utils/timeLordYears.js')}';\n"
         f"{decls}\nexport {{ buildPersianHits, directedAgeYears }};\n"
     )
     body = (

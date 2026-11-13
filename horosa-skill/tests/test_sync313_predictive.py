@@ -174,7 +174,8 @@ def test_yearsystem129_runner_uses_the_js_engine_and_forwards_ys129_options(tmp_
     assert sent["options"] == {"startPlanet": "sect", "order": "chaldean", "yearType": "bija", "subRule": "proportional"}
     assert sent["now_ms"] == NOW_MS
     text = result.data["snapshot_text"]
-    assert "年制=Bija 修正年（366.2564 日）、子限=比例法（主限 × 子星小年 ⁄ 129，填满主限）" in text
+    # 上游 v3.14.0：Bija 年拆两档——bija 改取《苏利耶历数书》年长（此前「Bija 修正年（366.2564 日）」留作 bijaClassic）。
+    assert "年制=Bija 年（365.2588 日）、子限=比例法（主限 × 子星小年 ⁄ 129，填满主限）" in text
     # builder 自算的定位行进 [当前时点]（上游 buildCurrentMomentLines(chartObj, extraLines)）。
     moment = _section(text, "当前时点").splitlines()
     assert any(line.startswith("当前主限：") for line in moment), moment

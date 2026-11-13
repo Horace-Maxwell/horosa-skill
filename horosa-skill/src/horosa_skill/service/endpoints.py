@@ -99,6 +99,7 @@ _PYTHON_CHART_ENDPOINTS = {
     "/astroextra/michon",
     # 诸方杂术（上游 v3.14.0：astrostudy/zhufang_arts.py）：人类图 + 灵名字母。
     "/astroextra/zhufang",
+    "/astroextra/timelords",
     "/astroextra/progressions",
     "/astroextra/planetreturn",
     "/astroextra/analysis",

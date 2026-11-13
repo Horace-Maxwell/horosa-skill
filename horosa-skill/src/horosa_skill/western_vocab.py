@@ -184,6 +184,82 @@ DECENNIAL_VOCABULARIES: dict[str, Vocabulary] = {
 }
 
 
+# ───────────────────────── 时主轮转（上游 v3.14.0 utils/timeLordTables.js；后端 astrostudy/timelord_tables.py）─────────────────────────
+
+# 字段名 = 星运页保存键 = 挂载齿轮字段（techniqueMountSettings.js TIMELORD_FIELDS）。规范值 / 中文名 / 缺省逐值取自 vendored
+# horosa-core-js/src/vendor/utils/timeLordTables.js 的 TIMELORD_METHODS / TIMELORD_OPTIONS / TIMELORD_DEFAULTS
+# （tests/test_sync314_predictive_timelords.py 逐键互锚：上游加档 / 改名即红）。上游 normalizeTimeLordOpts 与后端 build_timelords
+# 对认不出的值都**静默回落缺省**（method 认不出 → 轮主），所以入口就拒。别名只收方法 / 选项的中文名与唯一含义的简称。
+_TIMELORD_YEARS: dict[str, tuple[str, ...]] = {
+    "solar": ("回归年（365.2422 日）", "回归年", "tropical"),
+    "sidereal": ("恒星年（365.2564 日）", "恒星年"),
+    "hellenistic": ("埃及 / 希腊化年（360 日）", "埃及年", "希腊化年", "360日", "egyptian"),
+    "abumashar": ("Abu Ma'shar 年（365.2583 日）", "abu mashar"),
+    "mashaallah": ("Masha'allah 年（365.2590 日）", "masha allah"),
+    "bija": ("Bija 年（365.2588 日）", "bija年"),
+    "bijaClassic": ("Bija 年 · 经典（366.2564 日）", "bija经典", "bija classic"),
+}
+_TIMELORD_SEVEN: dict[str, tuple[str, ...]] = {
+    "Sun": ("日", "太阳"), "Moon": ("月", "月亮", "太阴"), "Mercury": ("水", "水星"), "Venus": ("金", "金星"),
+    "Mars": ("火", "火星"), "Jupiter": ("木", "木星"), "Saturn": ("土", "土星"),
+}
+_TIMELORD_SYZYGY: dict[str, tuple[str, ...]] = {"Syzygy": ("产前朔望", "朔望", "prenatal syzygy")}
+# 字段 → (缺省值, {规范值: (上游中文名, 别名…)})
+_TIMELORD_CHOICES: dict[str, tuple[Any, dict[str, tuple[str, ...]]]] = {
+    "tlMethod": ("turn", {
+        "turn": ("轮主",), "orb": ("轨主",), "annual": ("年度分配",), "quarters": ("月相四分",), "monomoiria": ("月亮单度主", "单度主"),
+        "moonnine": ("月亮九年",), "nineparts": ("九分主",), "moving": ("匀速点",), "devages": ("发展年龄",), "diurnal": ("周日象限",),
+        "lifetime": ("对数时标",), "moondays": ("月亮日",),
+    }),
+    "tlYearType": ("solar", _TIMELORD_YEARS),
+    "tlMovingYear": ("sidereal", _TIMELORD_YEARS),
+    "tlTurnStart": ("asc", {"asc": ("上升主", "上升座主", "ascendant ruler"), "hour": ("行星时主", "时主", "hour lord")}),
+    "tlTurnOrder": ("zodiac", {"zodiac": ("本命黄经序", "黄经序", "zodiacal"), "astronomical": ("天文序",), "chaldean": ("迦勒底序", "迦勒底"),
+                               "house": ("宫主序",)}),
+    "tlOrbMode": ("single", {"single": ("单轮(十二年)", "单轮", "十二年"), "cycle": ("循环(二十四年)", "循环", "二十四年")}),
+    "tlAnnualDays": ("tableA", {"tableA": ("甲表(金 22、火 42、木 34)", "甲表", "a"), "tableB": ("乙表(金 33、火 36、木 30)", "乙表", "b")}),
+    "tlAnnualOrder": ("natal", {"natal": ("本命黄经序", "本命"), "return": ("当年返照盘黄经序", "返照盘黄经序", "返照", "solar return")}),
+    "tlReleaser": ("Moon", {**_TIMELORD_SEVEN, "Pars Fortuna": ("福点", "fortune", "lot of fortune"),
+                            "Pars Spirit": ("灵点", "精神点", "spirit", "lot of spirit"), **_TIMELORD_SYZYGY}),
+    "tlVariant": ("improved", {"improved": ("改进", "改进档"), "classic": ("经典", "经典档", "classical")}),
+    "tlNineTime": ("degree", {"degree": ("度数(1° = 1 年)", "度数"), "ascension": ("上升时", "上升时间", "斜升")}),
+    "tlRateKind": ("condition", {"condition": ("30°/年", "30度每年"), "quadrant28": ("28 年一周", "28年"), "age72": ("72 年一周", "72年")}),
+    "tlMovingStart": ("Asc", {"Asc": ("上升", "上升点", "ascendant"), "MC": ("天顶", "中天", "midheaven"), **_TIMELORD_SEVEN, **_TIMELORD_SYZYGY}),
+    "tlDevBasis": ("sign", {"sign": ("按星座", "星座"), "house": ("按宫位", "宫位")}),
+    "tlDiurnalMode": ("five", {"five": ("每宫 5 年", "5年", "五年"), "seven": ("每宫 7 年", "7年", "七年"),
+                               "quadrant": ("四象限 90 年", "四象限", "90年")}),
+}
+TIMELORD_VOCABULARIES: dict[str, Vocabulary] = {
+    field: Vocabulary(field, choices, labels={value: names[0] + ("（缺省）" if value == default else "") for value, names in choices.items()})
+    for field, (default, choices) in _TIMELORD_CHOICES.items()
+}
+# 开关键（九分主「首段子主反转」）不走词表：true / false / 1 / 0 由 runner 的布尔闸读（与 nerKeepDec / michonSwap 同一处）。
+TIMELORD_DEFAULTS: dict[str, Any] = {**{field: default for field, (default, _choices) in _TIMELORD_CHOICES.items()}, "tlNineReverse": False}
+# 每法读哪几项（= timeLordTables.js TIMELORD_METHOD_FIELDS）：(这一法读的年长键 | None = 不用年长, 这一法的选项键)。
+# 请求体只带这一法用到的键（上游 timeLordRequestFields）；runner、guidance 的「各法读哪些键」表、离线桩共用这一张。
+TIMELORD_METHOD_FIELDS: dict[str, tuple[str | None, tuple[str, ...]]] = {
+    "turn": ("tlYearType", ("tlTurnStart", "tlTurnOrder")),
+    "orb": ("tlYearType", ("tlOrbMode",)),
+    "annual": (None, ("tlAnnualDays", "tlAnnualOrder")),
+    "quarters": ("tlYearType", ("tlReleaser",)),
+    "monomoiria": ("tlYearType", ()),
+    "moonnine": ("tlYearType", ("tlVariant",)),
+    "nineparts": ("tlYearType", ("tlNineTime", "tlNineReverse", "tlVariant")),
+    "moving": ("tlMovingYear", ("tlRateKind", "tlMovingStart")),
+    "devages": ("tlYearType", ("tlDevBasis", "tlVariant")),
+    "diurnal": ("tlYearType", ("tlDiurnalMode", "tlVariant")),
+    "lifetime": (None, ()),
+    "moondays": (None, ("tlVariant",)),
+}
+# 期表类（一段时间归一颗星或一个座）/ 事件类（某点在某个年龄被走到）= 后端回包的 kind（timelord_tables.py 模块说明）。
+TIMELORD_PERIOD_METHODS: tuple[str, ...] = ("turn", "orb", "annual", "quarters", "monomoiria", "moonnine", "nineparts")
+TIMELORD_EVENT_METHODS: tuple[str, ...] = ("moving", "devages", "diurnal", "lifetime", "moondays")
+
+
+def timelord_method_label(method: str) -> str:
+    return TIMELORD_VOCABULARIES["tlMethod"].labels[method].replace("（缺省）", "")
+
+
 # ───────────────────────── 七政择日动盘（vendored qizhengElection.js / electionCore.js）─────────────────────────
 
 QIZHENG_ELECTION_VOCABULARIES: dict[str, Vocabulary] = {

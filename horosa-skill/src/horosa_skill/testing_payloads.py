@@ -168,6 +168,8 @@ def build_sample_payloads() -> dict[str, dict]:
         "bezzafigure": {**chart_birth, "predictive": 0, "targetDate": "2028-04-06"},
         "jayprofection": {**chart_birth, "predictive": 0, "targetDate": "2028-04-06"},
         "michon": {**chart_birth, "predictive": 0},
+        # 时主轮转（上游 v3.14.0）：方法点名（闸门会问），目标日写死。
+        "timelords": {**chart_birth, "predictive": 0, "tlMethod": "turn", "targetDate": "2028-04-06"},
         "horary": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "category": "marriage"},
         "election": {**chart_birth, "hsys": 0, "tradition": True, "predictive": 0, "topicId": "marriage"},
         # 择日搜索族：窗口 + 条件树。tianxing 的 signs 用**星座序号**（后端 int()，传 "Aries" 直接 invalid_conditions）。

@@ -1957,6 +1957,71 @@ check('progextra(neroman / bezzafigure / jayprofection / michon) — directed fi
   assert(JSON.stringify(bez.request_fields) === JSON.stringify({ orb: 1 }), 'bezza default orb');
 });
 
+// 时主轮转十二法（上游 v3.14.0）：后端 /astroextra/timelords 结果作 payload.result，经推运图族同一条路（directedFigures.buildDirectedFigureText
+// 的 timelords 键 → utils/timeLordTables.buildTimeLordText）排版；request_fields = timeLordRequestFields（只带这一法读的键）。
+// 权威：上游 utils/__tests__/timeLordTables.test.js 的夹具与期望串（期表 / 事件表 / 月亮日 / 极圈说明 / 请求键），逐条照搬——不是录本仓输出。
+// 十二法在实抓回包上逐字等于上游的金标在 tests/test_sync314_predictive_timelords.py。
+check('progextra(timelords) — 时主轮转：期表 / 事件表 / 月亮日 / 极圈说明 + request_fields', () => {
+  const chart0 = { params: {}, chart: {} };
+  const run = (options, result) => runProgExtra({ technique: 'timelords', chart: chart0, options, result });
+  const periods = {
+    kind: 'periods', method: 'quarters', target: '2030-01-01', startLord: 'Moon', hourLord: 'Mars', currentIndex: 1,
+    rows: [
+      { lord: 'Asc', startAge: 0, endAge: 1, start: '2000-01-01 12:00:00', end: '2001-01-01' },
+      { lord: 'MC', startAge: 1, endAge: 2, start: '2001-01-01', end: '2002-01-01', children: [{ lord: 'Asc', start: '2001-01-01 00:00:00' }] },
+      { lord: 'Asc', startAge: 2, endAge: 3, start: '2002-01-01', end: '2003-01-01' },
+    ],
+  };
+  const p = run({ tlMethod: 'quarters' }, { ...periods, yearType: 'sidereal', releaser: 'Moon' });
+  for (const want of ['[时主轮转]', '[当前时段]', '[后续]', '起始星：月', '天顶,1.00 至 2.00 岁,2001-01-01 至 2002-01-01', '子段：上升 2001-01-01 起',
+    '上升:2002-01-01 起,2.00 岁', '年长：恒星年（365.2564 日）', '释放星：月']) {
+    assert(p.snapshot_text.includes(want), `期表应含「${want}」：${p.snapshot_text}`);
+  }
+  // 目标在表尾之后：不列后续；在出生之前：从头列。
+  const after = run({ tlMethod: 'quarters' }, { ...periods, currentIndex: -1, pastEnd: true }).snapshot_text;
+  assert(after.includes('目标时刻不在列表范围内') && after.split('[后续]')[1].trim() === '', after);
+  assert(run({ tlMethod: 'quarters' }, { ...periods, currentIndex: -1, pastEnd: false }).snapshot_text.split('[后续]')[1].includes('上升:2000-01-01 起'), 'before birth lists from the top');
+  // 九分主：口径回显三行；极圈内写明改按度数（TIMELORD_POLAR_NOTE），不在极圈不写。
+  const nine = run({ tlMethod: 'nineparts' }, { ...periods, method: 'nineparts', yearType: 'solar', time: 'ascension', reverse: true, variant: 'classic' }).snapshot_text;
+  assert(nine.includes('时间：上升时') && nine.includes('子主：首段子主反转') && nine.includes('算法：经典'), nine);
+  const polar = run({ tlMethod: 'nineparts' }, { ...periods, method: 'nineparts', polar: true }).snapshot_text;
+  assert(polar.includes('极圈内斜升不单调,上升时档不成立,已改按度数'), polar);
+  assert(!run({ tlMethod: 'nineparts' }, { ...periods, method: 'nineparts', polar: false }).snapshot_text.includes('极圈内'), 'no polar note outside the polar circle');
+  // 事件表：最近一件在目标时刻之前，后续从下一件起；目标在全部事件之前 / 之后各一种写法。
+  const events = { kind: 'events', method: 'moving', target: '2030-01-01', currentIndex: 1,
+    rows: [{ point: 'Asc', aspect: 0, age: 0, date: '2000-01-01' }, { point: 'MC', aspect: 60, side: 'D', age: 3, date: '2003-01-01' }] };
+  const e = run({ tlMethod: 'moving' }, events).snapshot_text;
+  assert(e.includes('最近一件：上升 合 0.00 岁,2000-01-01') && e.includes('天顶 六合(右):3.00 岁,2003-01-01'), e);
+  const last = run({ tlMethod: 'moving' }, { ...events, currentIndex: -1 }).snapshot_text;
+  assert(last.includes('最近一件：天顶 六合(右)') && last.split('[后续]')[1].trim() === '', last);
+  assert(run({ tlMethod: 'moving' }, { ...events, currentIndex: 0 }).snapshot_text.includes('目标时刻之前没有事件'), 'target before every event');
+  assert(!run({ tlMethod: 'lifetime' }, { ...events, method: 'lifetime', yearType: 'solar' }).snapshot_text.includes('年长'), '对数时标不用年长，不写年长行');
+  // 发展年龄按星座分段不写算法档，按宫位才写。
+  const dev = { ...events, method: 'devages', yearType: 'solar', variant: 'improved' };
+  assert(!run({ tlMethod: 'devages' }, { ...dev, basis: 'sign' }).snapshot_text.includes('算法：'), 'devages by sign: no variant line');
+  assert(run({ tlMethod: 'devages', tlDevBasis: 'house' }, { ...dev, basis: 'house' }).snapshot_text.includes('算法：改进'), 'devages by house: variant line');
+  // 月亮日：逐行列三个时刻、不写目标时刻、没有 [当前时段] / [后续]。
+  const days = { kind: 'events', method: 'moondays', currentIndex: 1, rows: [
+    { day: 3, arc: 30, age: 0.01, date: '2000-01-03 00:00:00' }, { day: 7, arc: 90, age: 0.02, date: '2000-01-08 00:00:00' }] };
+  const md = run({ tlMethod: 'moondays' }, days).snapshot_text;
+  assert(md.includes('第 3 日:月亮到本命月加 30°') && md.includes('2000-01-03') && md.includes('第 7 日:月亮到本命月加 90°'), md);
+  assert(!md.includes('目标时刻') && !md.includes('[当前时段]') && !md.includes('[后续]'), md);
+  // 空结果 / 报错 → ''（上游挂载显示「缺失」；Python 侧据此报 tool.timelords_empty）。
+  for (const empty of [{}, { err: 'x', rows: [{}] }, { rows: [] }]) {
+    assert(run({ tlMethod: 'turn' }, empty).snapshot_text === '', `empty result must give "" : ${JSON.stringify(empty)}`);
+  }
+  // 请求键（上游「请求只带这一法用到的参数」「匀速点读自己的年长」「发展年龄按星座分段时不发算法档」「九分主反转发成数字」）。
+  const req = (options) => JSON.stringify(run(options, periods).request_fields);
+  assert(req({ tlMethod: 'orb', tlOrbMode: 'cycle', tlTurnOrder: 'chaldean' }) === JSON.stringify({ method: 'orb', yearType: 'solar', orbMode: 'cycle' }), req({ tlMethod: 'orb', tlOrbMode: 'cycle', tlTurnOrder: 'chaldean' }));
+  assert(req({ tlMethod: 'lifetime', tlYearType: 'sidereal' }) === JSON.stringify({ method: 'lifetime' }), 'lifetime sends no year length');
+  assert(req({ tlMethod: 'annual' }) === JSON.stringify({ method: 'annual', annualDays: 'tableA', annualOrder: 'natal' }), 'annual defaults');
+  assert(JSON.parse(req({ tlMethod: 'moving' })).yearType === 'sidereal', '匀速点缺省恒星年');
+  assert(JSON.parse(req({ tlMethod: 'moving', tlYearType: 'solar', tlMovingYear: 'hellenistic' })).yearType === 'hellenistic', '匀速点读 tlMovingYear');
+  assert(JSON.parse(req({ tlMethod: 'devages', tlVariant: 'classic' })).variant === undefined, 'devages by sign: variant not sent');
+  assert(JSON.parse(req({ tlMethod: 'devages', tlDevBasis: 'house', tlVariant: 'classic' })).variant === 'classic', 'devages by house: variant sent');
+  assert(JSON.parse(req({ tlMethod: 'nineparts', tlNineReverse: true })).nineReverse === 1 && JSON.parse(req({ tlMethod: 'nineparts' })).nineReverse === 0, 'nineReverse as 1 / 0');
+});
+
 // ---- v0.50.0-dev（C-18 第 8 项）：值金标守卫改认「调用 tools/<名>.js 的导出」之后补的金标 ----
 // 守卫此前只看 check 标题 / 注释里有没有技法名：calendarExtras 与 qimenzeri 的旧金标测的是它们用到的 vendored 函数
 // （personBazi / computeQimenScanPan），从没走过 tools/ 里的那层接线——而那两条 bug 正是接线 bug。下面各条都经 run* 入口。

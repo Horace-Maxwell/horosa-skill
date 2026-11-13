@@ -167,7 +167,7 @@ Local end-to-end signals:
 | `planetaryarc` ⓟ | Planetary Arc | whole chart directed by arcSource's secondary arc |
 | `planetaryages` ⓟ | Ages of Man | Ptolemy seven ages + current band |
 | `yearsystem129` ⓟ | 129-year system | seven-planet succession, 129-year cycle |
-| `persiandirected` ⓟ | Persian Directed | symbolic 1°/year direction hit-list + directed chart cast at any date |
+| `persiandirected` ⓟ | Persian Directed | symbolic direction hit-list (1°/year · 30°/year · Naibod · periodic rule: each of the ten planets by its own period) + directed chart cast at any date |
 | `balbillus` ⓟ | Balbillus 129-year | exaltation-distance reduction + recursive sub-periods (vendored JS, identical to Xingque) |
 | `triplicityrulers` ⓟ | Triplicity rulers | sect light's triplicity rulers split life into stages |
 | `keypoints` ⓟ | Numeric keypoints | period-numbers + release-point sign distances activate planets by year |
@@ -177,6 +177,7 @@ Local end-to-end signals:
 | `bezzafigure` ⓟ | Bezza directed figure | mundane Placidus motion by true solar arc: hour positions + four contact kinds |
 | `jayprofection` ⓟ | Jay diurnal profection | RAMC +30° per year: current profection + 12-year table |
 | `michon` ⓟ | Michon double zodiac | tropical/sidereal superpositions + harmonic families of their interactions |
+| `timelords` ⓟ | Time-lord tables (12 methods) | period tables (turn / orb lords, annual divisions, lunar quarters, monomoiria, Moon's nine years, ninth-parts) give the current period, sub-periods and what follows; event tables (uniform moving point, developmental ages, diurnal quadrants, logarithmic life scale, Moon days) give the latest and next events |
 | `acg` ⓟ | AstroCartoGraphy | planetary geographic lines (MC/IC longitudes, zenith points, parans, crossings) + click-point analysis / mundane event moments |
 | `india_rectify` ⓟ | KP birth-time rectification | scan ±window around the anchor: RP / Pranapada / gandanta-boundary scored candidates |
 | `planet_cycles` | Planet cycles | exact conjunction/opposition timeline for any planet pair (geo/helio/topo) |

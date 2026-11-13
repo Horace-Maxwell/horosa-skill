@@ -57,7 +57,7 @@ _BY_ROLE: dict[str, tuple[str, ...]] = {
     ),
     NATAL_TARGET: (
         "solarreturn", "lunarreturn", "solararc", "givenyear", "profection", "planetaryarc",
-        "jaynesprog", "neroman", "bezzafigure", "jayprofection", "vedicprog", "prog",
+        "jaynesprog", "neroman", "bezzafigure", "jayprofection", "timelords", "vedicprog", "prog",
         "planetaryages", "ephemeris", "returntimeline", "extrareturns",
     ),
     NATAL_MOMENT: ("liureng_runyear",),
@@ -91,7 +91,7 @@ TARGET_STYLE: dict[str, str] = {
     "solarreturn": "datetime", "lunarreturn": "datetime", "solararc": "datetime", "givenyear": "datetime",
     "profection": "datetime", "planetaryarc": "datetime",
     "jaynesprog": "targetDate", "neroman": "targetDate", "bezzafigure": "targetDate",
-    "jayprofection": "targetDate", "vedicprog": "targetDate", "prog": "targetDate",
+    "jayprofection": "targetDate", "timelords": "targetDate", "vedicprog": "targetDate", "prog": "targetDate",
     "planetaryages": "asOf",
     "ephemeris": "startDate",
     "returntimeline": "startYear",

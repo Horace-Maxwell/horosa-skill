@@ -871,6 +871,42 @@
       "expect": [
         "michon"
       ]
+    },
+    {
+      "query": "时主轮转看当前时段的主星",
+      "expect": [
+        "timelords"
+      ]
+    },
+    {
+      "query": "time lord rotation table for my chart",
+      "expect": [
+        "timelords"
+      ]
+    },
+    {
+      "query": "月亮九年现在走到哪一座",
+      "expect": [
+        "timelords"
+      ]
+    },
+    {
+      "query": "年度分配法看今年的年主和子段",
+      "expect": [
+        "timelords"
+      ]
+    },
+    {
+      "query": "我今年的轮主是哪颗星",
+      "expect": [
+        "timelords"
+      ]
+    },
+    {
+      "query": "对数时标看人生节点",
+      "expect": [
+        "timelords"
+      ]
     }
   ]
 }

@@ -1034,6 +1034,17 @@
       "export_technique": "tieban",
       "notes": "kentang 神数引擎挂在 Python chart 服务上，后端直出 snapshot（真身在 Result.snapshot）"
     },
+    "timelords": {
+      "compute_class": "python_chart_backend",
+      "engines": [
+        "progextra"
+      ],
+      "endpoints": [
+        "/astroextra/timelords"
+      ],
+      "export_technique": "timelords",
+      "notes": "chart 服务 /astroextra/timelords（astrostudy/timelord_tables.py）按所选方法算期表 / 事件表；vendored 星阙前端 buildTimeLordText（horosa-core-js progextra）按回包排版"
+    },
     "tongshefa": {
       "compute_class": "headless_js",
       "engines": [

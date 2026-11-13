@@ -94,7 +94,7 @@ CLASS = {
     "local_data": {"astrodata", "export_registry", "export_parse", "knowledge_registry", "knowledge_read"},
     # 后端算、JS 只排版：runner 同时有端点与 JS 调用时启发式会误判 headless_js，这里显式点名。
     "python_chart_backend": {"acg", "agepoint", "distributions", "neroman", "bezzafigure", "jayprofection", "michon",
-                             "transformchart", "zodiacsystems"},
+                             "transformchart", "zodiacsystems", "timelords"},
 }
 NOTES = {
     "ken_backed": "ken 后端算、JS 只格式化；健康结果带 pan.source/jinkou.source == 引擎名，runner 必须调 _require_ken_pan",
@@ -128,6 +128,8 @@ NOTE_OVERRIDES = {
                       "[变换盘] 专属段由 vendored 星阙前端 transformSnapshotLines（horosa-core-js aux_labs）按回包排版",
     "zodiacsystems": "chart 服务 /astroextra/zodiacsystems（astrostudy/zodiac_systems.py）算各黄道版本的落段、星座与换星座时刻；"
                      "[黄道制] 段由 vendored 星阙前端 zodiacSnapshotLines（horosa-core-js aux_labs）按回包排版",
+    # 时主轮转十二法（上游 v3.14.0）：同一条 runner，后端另一份引擎、vendored 另一个排版函数。
+    "timelords": "chart 服务 /astroextra/timelords（astrostudy/timelord_tables.py）按所选方法算期表 / 事件表；vendored 星阙前端 buildTimeLordText（horosa-core-js progextra）按回包排版",
     "bazi_inverse": "Java BaZiHelper.getBirthes 逐年回推；Python 只校验四柱干支、转发与排版",
     "dongya": (
         "藏历 / 藏占 / 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年六段由 vendored 星阙前端 eastAsiaArts（horosa-core-js dongya）进程内算；"
@@ -160,7 +162,7 @@ EXTRA_EVIDENCE: dict[str, dict[str, list[str]]] = {
     # agepoint / distributions：runner 经 _run_predict_result_tool 把 /predict/* 回包交给 progextra 的 FROM_RESULT_BUILDERS。
     **{k: {"engines": ["progextra"]} for k in ("agepoint", "distributions")},  # 世俗盘右栏卡（tools/mundaneCards.js）
     # 推运图族四法：各自 runner 把 /astroextra/<接口> 回包经 _run_directed_figure_tool 交给 progextra（同 agepoint）。
-    **{k: {"engines": ["progextra"]} for k in ("neroman", "bezzafigure", "jayprofection", "michon")},
+    **{k: {"engines": ["progextra"]} for k in ("neroman", "bezzafigure", "jayprofection", "michon", "timelords")},
     # ken 族里「上游同判据路由到本地引擎」的合法算源（v3.11 sanshi chunk）：qimen 按 isQimenLocalRoute（本地家/飞盘/
     # 混合/报数/七组本地口径）走 calcDunJia、jinkou 按 schoolsAllDefault（五项流派任一非缺省）走 buildJinKouData ——
     # 两者都不打 ken，runner 回 compute_sources = 下列名字。不声明的话依据卡会把合法路由误标「与声明不一致」；
