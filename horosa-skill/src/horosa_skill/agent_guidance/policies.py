@@ -36,17 +36,16 @@ def _policy(
 
 SHENSHU_POLICY = _policy(
     intent="神数 (皇极经世/五兆/荆诀/神易数/鬼谷分定经)：以干支起数，只需日期(可含时间)即可起盘，不需经纬度。技法旋钮走 options（键表见 options_keys）。",
-    required_context=["date (公历日期)", "time (可选，影响时柱)"],
+    required_context=["date (公历日期)", "time (出生时刻：缺了不起盘，不按 00:00 代替)"],
     ask_if_missing=[
         {"field": "date", "question": "请提供起盘的公历日期（年月日）。"},
-        {"field": "time", "question": "几点起盘？（可选；影响时柱，留空按 00:00 起）"},
+        {"field": "time", "question": "几点出生？（时柱由它定；不知道就说不知道，不会按 00:00 代替）"},
     ],
     safe_defaults=[
-        {"field": "time", "value": "00:00:00", "meaning": "未给时间时按子初起时柱"},
         {"field": "after23NewDay", "value": 1, "meaning": "23 点后归次日（星阙默认）"},
         {"field": "lateZiHourUseNextDay", "value": 1, "meaning": "晚子时时干按次日日干起（星阙默认）"},
     ],
-    do_not_assume=["date"],
+    do_not_assume=["date", "time"],
 )
 
 # v0.36.0 B3：神数五支此前共用 SHENSHU_POLICY，从不问性别/地点——而 `_run_shenshu_tool` 一直在转发它们，
@@ -58,8 +57,8 @@ _PLACE_QUESTION = {
     "options": ["当前位置/客户端位置", "指定城市或经纬度"],
 }
 SHENSHU_GENDER_POLICY = _policy(
-    intent="神数 (演禽/北极/南极)：以干支起数并按性别取条文/定大运顺逆；需日期(含时间更准)与性别。",
-    required_context=["date (公历日期)", "time (可选，影响时柱)", "gender (性别)"],
+    intent="神数 (演禽/北极/南极)：以干支起数并按性别取条文/定大运顺逆；需日期、出生时刻与性别。",
+    required_context=["date (公历日期)", "time (出生时刻)", "gender (性别)"],
     ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _GENDER_QUESTION],
     safe_defaults=SHENSHU_POLICY["safe_defaults"],
     do_not_assume=["date", "gender"],

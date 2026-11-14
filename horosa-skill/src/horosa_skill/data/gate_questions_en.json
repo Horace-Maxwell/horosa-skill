@@ -124,7 +124,7 @@
   "请提供出生的日期、时间、时区（+经度）与性别（铁算心易查询层除外）。": "Give birth date, time, time zone (+ longitude) and gender (except the 铁算心易 lookup layer).",
   "流派专属：邵子的父母年龄/元(上中下)、大定的所推流年、六亲的演算时辰/环境。": "School-specific: parents' ages / era for Shao Zi, the annual year for Da Ding, the hour / setting for Liu Qin.",
   "请提供起盘的公历日期（年月日）。": "Give the Gregorian date of the chart (year, month, day).",
-  "几点起盘？（可选；影响时柱，留空按 00:00 起）": "At what time? (optional; changes the hour pillar; empty = 00:00)",
+  "几点出生？（时柱由它定；不知道就说不知道，不会按 00:00 代替）": "What time was the birth? (It sets the hour pillar; if unknown, say so: it is never replaced by 00:00.)",
   "出生/起盘地的时区？（年柱月柱按时区定立春与节气）": "Time zone of the birth / chart place? (year and month pillars depend on the zone for Li Chun and the solar terms)",
   "性别？（条文按男女分列）": "Gender? (the texts are split by male / female)",
   "起盘地点（经纬度或城市）与时区？": "Place of the chart (coordinates or city) and time zone?",

@@ -21,7 +21,9 @@ class ShenShuInput(FlexibleModel):
     lon: str | None = None
     gpsLat: float | None = None
     gpsLon: float | None = None
-    time: str | None = "00:00:00"
+    # 出生时刻是事实，不是设置（审计 F08）：以前缺省 00:00:00，带 defaults_accepted 就按子初起时柱——铁板这类以时柱为命脉的，那是另一个人的盘。
+    # 缺了由 run_tool 按 place_fields_required 报 tool.missing_field（要问用户）。
+    time: str | None = None
     after23NewDay: int | None = 1
     lateZiHourUseNextDay: int | None = 1
     options: dict | None = None

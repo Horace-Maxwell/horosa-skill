@@ -84,6 +84,12 @@ ZONE_FACT_TOOLS: frozenset[str] = frozenset({
     # webbeijisrv / webnanjisrv / webchunzisrv：timezone_to_float(zone, 8.0)）
     "xianqin", "cetian", "qizhengkin", "taixuan", "fendjing", "beiji", "nanji", "chunzi",
 })
+# 神数十四支：出生时刻是事实（审计 F08）。模型里 time 可选只因沿用基类；以前缺省 00:00:00、闸门把它问成「可选设置」，
+# 带 defaults_accepted 就按子初起时柱。现在缺了报 tool.missing_field（ask_user），与 zhengchuan 一致。
+SHENSHU_TIME_TOOLS: frozenset[str] = frozenset({
+    "wangji", "wuzhao", "taixuan", "jingjue", "shenyishu", "shaozi", "tieban", "fendjing", "beiji", "nanji", "chunzi",
+    "xianqin", "cetian", "qizhengkin",
+})
 CAST_PLACE_FIELDS = ("date", "time", "zone", "lat", "lon")
 # zone 可选、且结果与时区无关的技法（守卫 tests/test_zone_requirement.py 要求每个技法都有归属；live 用例逐个证明换时区结果不变）。
 ZONE_FREE_TOOLS: dict[str, str] = {
@@ -109,8 +115,9 @@ def place_fields_required(tool: str, payload: dict[str, Any]) -> tuple[str, ...]
     """这次调用起盘要的时地字段（只管入参模型里不必填的那几个；空 = 不要）。技法入口按它逐字段报缺（tool.missing_field）。
 
     占时起课的五个技法只在「按时刻起课」那条路上要 date / time / zone / lat / lon：显式 nums / 干支 / 股价 / 卦等免起课输入不要。"""
-    if tool in ZONE_FACT_TOOLS:
-        return ("zone",)
+    needed = (("time",) if tool in SHENSHU_TIME_TOOLS else ()) + (("zone",) if tool in ZONE_FACT_TOOLS else ())
+    if needed:
+        return needed
     def text(key: str) -> str:
         return str(payload.get(key) or "").strip()
 

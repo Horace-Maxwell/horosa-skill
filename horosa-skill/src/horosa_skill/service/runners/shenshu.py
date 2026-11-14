@@ -326,7 +326,7 @@ class ShenshuRunners:
                 "/nongli/time",
                 {
                     "date": payload.get("date"),
-                    "time": payload.get("time") or "00:00:00",
+                    "time": payload.get("time"),  # 缺时刻在入口就拒（审计 F08），这里不再按 00:00 兜
                     # 上游域外农历远程桥缺时地时的兜底（divinationTimeDraft.deriveNongliRemote :306-307）。
                     "zone": payload.get("zone") or "+08:00",
                     "lat": payload.get("lat") or "0n00",

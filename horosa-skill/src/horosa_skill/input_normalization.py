@@ -820,10 +820,19 @@ def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any
         en = "the time zone: place was given, but this technique has no date, so the place cannot be turned into that day's UTC offset; pass zone (e.g. +08:00)"
     if leaf in ("inner", "outer"):
         others = [key for key, value in payload.items() if isinstance(value, dict) and key not in ("inner", "outer")]
-        zh = "合盘两人：inner = 第一人（本人）、outer = 第二人，各带 {date, time, zone, lat, lon}" + (f"；收到的 {others} 不是这两个键" if others else "")
-        en = "the two people: inner = the first person, outer = the second, each {date, time, zone, lat, lon}" + (f"; {others} are not these keys" if others else "")
-        example = {"date": "1990-05-03", "time": "08:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
-        ask = False
+        if others:
+            # 给了别的 dict 键（person1 / person2 …）：是键名问题，模型自己改。
+            zh = f"合盘两人：inner = 第一人（本人）、outer = 第二人，各带 {{date, time, zone, lat, lon}}；收到的 {others} 不是这两个键"
+            en = f"the two people: inner = the first person, outer = the second, each {{date, time, zone, lat, lon}}; {others} are not these keys"
+            example = {"date": "1990-05-03", "time": "08:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28"}
+            ask = False
+        else:
+            # 整个人没给：那是只有用户知道的事实（审计 F11：以前标 ask_user=false 并给一组现成出生数据当示例，等于教模型自己编一个人）。
+            who = "第一个人（本人）" if leaf == "inner" else "第二个人"
+            zh = f"合盘需要{who}的出生日期、时间与地点：请向用户问（填 `{leaf}`：{{date, time, place}}）"
+            en = f"synastry needs the {'first' if leaf == 'inner' else 'second'} person's birth date, time and place: ask the user (as `{leaf}`: {{date, time, place}})"
+            example = {"date": "YYYY-MM-DD", "time": "HH:MM", "place": "城市 / city"}
+            ask = True
     code = "tool.missing_field"
     if leaf == "time" and "time" in payload and F.is_blank(payload.get("time")):
         code = "tool.time_unknown"
