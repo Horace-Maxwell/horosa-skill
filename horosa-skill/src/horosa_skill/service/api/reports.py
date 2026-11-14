@@ -581,6 +581,7 @@ class ReportsAPI:
                 trace["tool_name"] = request.tool_name
                 trace["success"] = True
                 return self._report_ai_required_response(
+                    cast_now=True,
                     run_id=result.memory_ref.run_id,
                     tool_name=request.tool_name,
                     format_name=normalized_format,
@@ -639,6 +640,7 @@ class ReportsAPI:
         tool_result: dict[str, Any] | None,
         trace_id: str,
         group_id: str,
+        cast_now: bool = False,
     ) -> dict[str, Any]:
         ai_fillable = template.get("ai_fillable") if isinstance(template.get("ai_fillable"), dict) else {}
         conversation_brief = template.get("conversation_brief") if isinstance(template.get("conversation_brief"), dict) else {}
@@ -686,9 +688,14 @@ class ReportsAPI:
                     },
                 },
             },
+            # 第一句给两条出路（审计 S-20）：以前只给 run_id + format 时说「已完成起盘」（report_render 并没有起盘），也不提只要盘面加 style:"chart"。
             "summary": [
-                "已完成起盘和本地保存；尚未生成最终报告，因为缺少 AI 对真实盘结果和用户问题的解读。",
-                "请让接入的 AI 按 report_template 填写 ai_report 后，再调用 horosa_report_render 生成 PDF/DOCX/JSON 与 memory。",
+                bilingual(
+                    f"还没有生成文件：只要盘面（不要 AI 解读）就加 style:\"chart\" 再调一次，立刻出 {format_name.upper()}；要解读报告就按 report_template 填 ai_report 后再调。",
+                    f"No file yet: for a chart-only report add style:\"chart\" and call again ({format_name.upper()} right away); for an analysis "
+                    "report fill ai_report from report_template and call again.",
+                ),
+                "已完成起盘并存档。" if cast_now else "盘面取自已存档的 run，没有重新起盘。",
             ],
             "trace_id": trace_id,
             "group_id": group_id,

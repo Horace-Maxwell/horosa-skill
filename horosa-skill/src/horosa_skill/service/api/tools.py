@@ -301,6 +301,26 @@ def _anchor_window_search(definition: ToolDefinition, payload: Any) -> Any:
     return {**payload, "date": start, "time": start_time}
 
 
+
+def _export_technique_key(value: Any) -> Any:
+    """export_parse 的 technique：导出键之外也收中文标签（八字）与技法名 / MCP 名（审计 O-21：以前 technique:"八字" →
+    「Unknown AI export technique: 八字」，无中文、无可选值）。认不出的原样交下去，由 parse_export_content 拒、这里给候选。"""
+    from horosa_skill.agent_guidance import resolve_technique
+    from horosa_skill.exports.contract import TOOL_EXPORT_TECHNIQUE_MAP
+    from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES
+
+    text = str(value or "").strip()
+    keys = {item["key"] for item in AI_EXPORT_TECHNIQUES}
+    if text in keys:
+        return text
+    by_label = [item["key"] for item in AI_EXPORT_TECHNIQUES if item["label"] == text]
+    if len(by_label) == 1:
+        return by_label[0]
+    tool = resolve_technique(text)[0]
+    if tool and TOOL_EXPORT_TECHNIQUE_MAP.get(tool) in keys:
+        return TOOL_EXPORT_TECHNIQUE_MAP[tool]
+    return value
+
 class ToolsAPI:
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -364,19 +384,29 @@ class ToolsAPI:
         return build_export_registry(technique=payload.get("technique"))
 
     def _local_export_parse(self, payload: dict[str, Any]) -> dict[str, Any]:
+        technique = _export_technique_key(payload.get("technique"))
         try:
             return parse_export_content(
-                technique=payload["technique"],
+                technique=technique,
                 content=payload["content"],
                 selected_sections=payload.get("selected_sections"),
                 planet_info=payload.get("planet_info"),
                 astro_meaning=payload.get("astro_meaning"),
             )
         except ValueError as exc:
+            from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES
+
+            wanted = str(payload.get("technique") or "")
+            close = [item for item in AI_EXPORT_TECHNIQUES if wanted and (wanted in item["label"] or wanted in item["key"])][:5]
+            hint = "、".join(f"{item['key']}（{item['label']}）" for item in close)
             raise ToolValidationError(
-                str(exc),
+                bilingual(f"认不出导出技法「{wanted}」：传导出键（如 bazi）、中文名（八字）或技法名都行"
+                          + (f"；是不是：{hint}" if hint else "") + "；全表见 horosa_export_registry。",
+                          f"Unknown export technique {wanted!r}: pass an export key (bazi), its Chinese label (八字) or a tool name; "
+                          "the full list is in horosa_export_registry."),
                 code="tool.invalid_export_technique",
-                details={"tool_name": "export_parse", "technique": payload.get("technique")},
+                details={"tool_name": "export_parse", "technique": payload.get("technique"),
+                         "candidates": [{"key": i["key"], "label": i["label"]} for i in close]},
             ) from exc
 
     def _local_knowledge_registry(self, payload: dict[str, Any]) -> dict[str, Any]:

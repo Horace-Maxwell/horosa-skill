@@ -199,7 +199,20 @@ def build_agent_guidance(
         "usage_help": SOFTWARE_USAGE_HELP,
     }
     if intent and not include_all and not tool_name:
-        result["suggested_tools"] = suggest_tools_for_intent(intent)
+        # 「先问我」那一调只回随问题变的部分（审计 S-19：以前 6.9 KB 里随问题变的只有 suggested_tools 约 1.6 KB，其余每次照发
+        # 9 条 global_rules、安装说明、default_workflow）。全套规则与软件用法在不带参数 / include_all 时给。
+        return {
+            "ok": True,
+            "schema": GUIDANCE_SCHEMA,
+            "intent": intent,
+            "suggested_tools": suggest_tools_for_intent(intent),
+            "next_step": ("挑一个技法后调 horosa_agent_guidance(tool_name=…) 看它要的字段与要问用户的设置，或直接调该技法（闸门会把要问的问出来）；"
+                          "拿不准用 horosa_dispatch。全套规则：不带参数调本工具。 / Pick a technique, then call horosa_agent_guidance(tool_name=…) "
+                          "for its fields and the settings to ask about, or call it directly (the gate asks what is needed); unsure → horosa_dispatch."),
+        }
+    if tool_name and not include_all:
+        result.pop("usage_help", None)   # 装机 / 用法帮助与单个技法的契约无关（审计 S-19）
+        result.pop("default_workflow", None)
     return result
 
 

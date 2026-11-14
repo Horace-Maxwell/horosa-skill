@@ -392,7 +392,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 if include_all and not payload.get("tool_name"):
                     # 全量指引 1.26 M 字符（每个技法的完整输入契约），一次塞不进任何客户端；MCP 面给索引，全文按 tool_name 取。
                     guidance = guidance_index(guidance)
-                guidance["server_profile"] = _server_profile(settings)
+                if not (payload.get("intent") and not include_all and not payload.get("tool_name")):
+                    guidance["server_profile"] = _server_profile(settings)   # intent 形态只回建议（审计 S-19）
             return guidance
 
         return _ensure_error_contract(await _guarded_facade(mcp, "horosa_agent_guidance", _run))

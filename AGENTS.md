@@ -1939,6 +1939,12 @@ IANA 按钟点换算），偏移与出生时不同才进 warnings；dispatch 的
 原因：夏令时出生（中国 1986–1991 夏季、欧美每年一半）的人在标准时间的目标钟点上差一小时，按目标时刻起的盘是另一张。显式 `dirZone` 逐字节不变；
 换算不了（无坐标 / 旧 runtime / 无 JS 引擎）就不补、照旧按本命时区。守卫 `tests/test_fix314_target_zone.py`。
 
+**有意偏离上游缺省：黄道星释的停层（v0.51.0-dev，审计待决项 4）**：上游缺省四层全算；skill 在没给 `stopLevelIdx` 时取 `aiMode` 要的层
+（l1_all→1 / l2_in_l1→1 / l3_in_l2→2 / l4_in_l3→3，`service/enrich._ZR_STOP_LEVEL`；l1_all 也到 L2 是因为 [当前时点]「当前所处：L1 … / L2 …」
+读 L2，停在 0 那半句就没了），显式值比要的层浅 → `tool.predictive_invalid_option`。原因：缺省信封 1 MB、正文只读到 L2，L3 / L4 的
+八十多万字节没有读者只进存档；钻取本来就是一次新调用。live 各 aiMode（含带当前目标时刻的盘）的正文与 stopLevelIdx=3 逐字相同。
+守卫 `tests/test_fix314_zr_stop_level.py`。
+
 **奇门节气种子要补日柱（v0.47.0，上游 preciseCalcBridge.fillJieqiDayGanzhiFromLocal）**：chart 服务的 Python `/jieqi/year` 从不带日柱
 （Java 版不加 `seedOnly` 才带）。`tools/qimen.js` 当年只抄了 `fetchPreciseJieqiSeed` 没抄补日柱，种子 `dayGanzhi` 全空 → 本地路由
 （飞盘 / 混合 / 日家 / 金函 / 刻家，置闰 / 无闰 / 茅山）回落 甲子 / 旧锚，局数大面积错，测试喂的是自带日柱的假种子所以一直绿。

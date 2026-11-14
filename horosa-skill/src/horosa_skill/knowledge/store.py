@@ -471,6 +471,9 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
     except ToolValidationError as exc:
         if not str(exc.code or "").startswith("knowledge."):
             raise
+        found = _read_across_categories(payload, exc)
+        if found is not None:
+            return found
         folded = {
             **payload,
             **{field: fold_to_simplified(str(payload[field])) for field in ("domain", "category", "key")
@@ -482,6 +485,36 @@ def read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:
             return _read_knowledge_entry(folded)
         except ToolValidationError:
             raise exc from None
+
+
+def _read_across_categories(payload: dict[str, Any], exc: ToolValidationError) -> dict[str, Any] | None:
+    """没给 category 时跨类找键（审计 O-20：{"domain":"qimen","key":"休门"} 以前报「Unknown 奇门 knowledge key」，该键就在 door 类下）。
+    唯一命中直接读、结果写明取的是哪一类；多个类都有 → 列候选（不替调用方挑）；都没有 → 返回 None，照原错误报。"""
+    if f"{payload.get('category') or ''}".strip() or not f"{payload.get('key') or ''}".strip():
+        return None
+    try:
+        domain = canonical_domain(payload.get("domain"), with_user=True)
+    except ToolValidationError:
+        return None
+    categories = load_knowledge_bundles().get(domain, {}).get("categories")
+    if not isinstance(categories, dict):
+        return None
+    hits: list[tuple[str, dict[str, Any]]] = []
+    for name in categories:
+        try:
+            hits.append((name, _read_knowledge_entry({**payload, "category": name})))
+        except ToolValidationError:
+            continue
+    if len(hits) == 1:
+        name, entry = hits[0]
+        return {**entry, "resolved_category": name}
+    if len(hits) > 1:
+        raise ToolValidationError(
+            bilingual(f"「{payload.get('key')}」在 {domain} 的几个类里都有：{'、'.join(name for name, _ in hits)}；请带上 category。",
+                      f"'{payload.get('key')}' exists in several {domain} categories ({', '.join(name for name, _ in hits)}); pass category."),
+            code=exc.code, details={**(exc.details or {}), "candidates": [{"category": name, "key": payload.get("key")} for name, _ in hits]},
+        ) from exc
+    return None
 
 
 def _read_knowledge_entry(payload: dict[str, Any]) -> dict[str, Any]:

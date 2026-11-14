@@ -91,6 +91,15 @@ def _apply_yearly_target(tool_name: str, effective: dict[str, Any]) -> None:
                        f"Target '{target}' has no time; the birth time was used: {effective['datetime']}.")
 
 
+
+# l1_all 也要算到 L2：缺省正文的 [当前时点]「当前所处：L1 … / L2 …」读 L2（stopLevelIdx 0 时那半句没了，live 实测）。
+_ZR_STOP_LEVEL = {"l1_all": 1, "l2_in_l1": 1, "l3_in_l2": 2, "l4_in_l3": 3}
+_ZR_BASE_ALIASES = {
+    "spirit": "Pars Spirit", "pars spirit": "Pars Spirit", "lot of spirit": "Pars Spirit", "精神点": "Pars Spirit", "灵点": "Pars Spirit",
+    "fortune": "Pars Fortuna", "pars fortuna": "Pars Fortuna", "lot of fortune": "Pars Fortuna", "pars fortune": "Pars Fortuna", "福点": "Pars Fortuna",
+    "asc": "Asc", "ascendant": "Asc", "上升": "Asc", "mc": "MC", "天顶": "MC",
+}
+
 class EnrichMixin:
     def _apply_upstream_predictive_defaults(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         """F19：远端星运工具缺目标时刻/返照地时按上游缺省补齐（写回 input_normalized，回显即实算口径）。
@@ -156,9 +165,28 @@ class EnrichMixin:
         base_point = payload.get("basePoint")
         ai_mode = payload.get("aiMode")
         if base_point is not None:
+            # 常见写法（审计 S-21：basePoint:"Spirit" 以前先撞一次错）→ 规范值；认不出的照旧按词表报错。
+            alias = _ZR_BASE_ALIASES.get(str(base_point).strip().lower())
+            if alias and alias != base_point:
+                base_point = alias
+                payload = {**payload, "basePoint": alias}
             _require_option(base_point, _ZR_BASE_POINTS, field="basePoint", tool="zr")
         if ai_mode is not None:
             _require_option(ai_mode, tuple(_ZR_AI_MODES), field="aiMode", tool="zr")
+        # 停层跟着输出层级走（审计待决项 4，偏离上游缺省、AGENTS §10 登记）：缺省四层全算，1 MB 的信封里正文只读到 aiMode 要的那层
+        # 与「当前所处」的 L2（l1_all 算到 L2 与缺省正文逐字相同，产物约 136 KB 对 1,063 KB）。显式停层比要的层浅 → 拒（S-24：
+        # 以前 aiMode l2_in_l1 + stopLevelIdx 0 → 正文「无L2数据」、ok:true 无告警）。
+        needed = _ZR_STOP_LEVEL[str(ai_mode or "l1_all")]
+        stop = payload.get("stopLevelIdx")
+        if stop is None:
+            payload = {**payload, "stopLevelIdx": needed}
+        elif _finite_number(stop) is None or int(_finite_number(stop)) < needed:
+            raise ToolValidationError(
+                bilingual(f"zr 的 stopLevelIdx={stop!r} 比 aiMode={ai_mode or 'l1_all'} 要的层浅（至少 {needed}）：那一层没算，正文会是「无数据」。",
+                          f"zr stopLevelIdx={stop!r} is shallower than aiMode={ai_mode or 'l1_all'} needs (at least {needed})."),
+                code="tool.predictive_invalid_option",
+                details={"tool": "zr", "field": "stopLevelIdx", "value": stop, "options": list(range(needed, 4))},
+            )
         for field in ("aiL1Idx", "aiL2Idx", "aiL3Idx"):
             value = payload.get(field)
             if value is not None and (_finite_number(value) is None or _finite_number(value) < 0):

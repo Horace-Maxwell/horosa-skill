@@ -54,6 +54,23 @@ def _nongli_day_stem(nongli: Any) -> str:
     return f"{cell}".strip() if isinstance(cell, str) else ""
 
 
+
+def _tarot_spread_key(value: Any) -> Any:
+    """牌阵的常见写法 → 引擎键（审计 S-21：「三张牌」「Celtic cross」以前先撞一次 66 个键、没有中文名的错）。
+    词表与 dispatch 从问句取牌阵的同一张（engine.dispatch_plan.QUERY_SETTINGS），外加「三张」；认不出的原样交给引擎词表裁决。"""
+    from horosa_skill import input_fields as F
+    from horosa_skill.engine.dispatch_plan import QUERY_SETTINGS
+
+    text = str(value).strip()
+    table = {word.lower(): key for words, key, _label in QUERY_SETTINGS["tarot"]["spread"] for word in words}
+    table.update({"三张": "three", "三张牌": "three", "三牌阵": "three", "three card": "three", "three cards": "three",
+                  "过去现在未来": "three", "single": "single", "celtic cross": "celtic"})
+    key = table.get(text.lower())
+    if key and key != text:
+        F.add_input_note(f"牌阵「{text}」按 {key} 读。", f"Spread '{text}' was read as {key}.")
+        return key
+    return value
+
 class CnDivinationRunners:
     def _run_xiaoliuren_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 小六壬：三数起三传（主流六宫/道门九宫）。起课为冻结值——显式 nums 优先；缺 nums 则按占时正统起
@@ -471,7 +488,7 @@ class CnDivinationRunners:
         }
         # 牌阵缺省交给 JS 按牌组允许表定（rws 等 = three）；给了就原样送，由引擎词表裁决。
         if payload.get("spread"):
-            js_payload["spread"] = payload.get("spread")
+            js_payload["spread"] = _tarot_spread_key(payload.get("spread"))
         # 逆位：缺省随牌组；显式 true/false 都下发（此前只发 false，马赛系等默认无逆位的牌组开不了逆位）。
         if payload.get("usesReversals") is not None:
             js_payload["usesReversals"] = bool(payload.get("usesReversals"))

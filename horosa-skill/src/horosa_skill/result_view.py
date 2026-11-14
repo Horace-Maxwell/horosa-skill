@@ -174,6 +174,11 @@ def take_view_request(arguments: Any, *, default_view: str) -> tuple[Any, ViewRe
                 "response_offset must be a non-negative integer (character position inside a section); ignored.",
             ))
     tool = str(found["response_tool"]).strip() if found.get("response_tool") not in (None, "") else None
+    if tool:
+        # MCP 名（horosa_astro_chart）与中文名也收（审计 O-12：别处两种写法都收，这里以前直接比字符串）。
+        from horosa_skill.agent_guidance import resolve_technique
+
+        tool = resolve_technique(tool)[0] or tool
     return cleaned, ViewRequest(
         view=view, sections=_selection(found.get("response_sections")), offset=offset, tool=tool, notes=tuple(notes),
     )
