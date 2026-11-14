@@ -171,7 +171,7 @@
     "tool_name": "string",
     "payload": "object",
     "format": "string enum=[\"json\",\"docx\",\"pdf\",\"png\",\"ics\"]",
-    "style": "string",
+    "style": "string enum=[\"analysis\",\"chart\"]",
     "language": "string",
     "title": "string",
     "question": "string",
@@ -2728,34 +2728,6 @@
     "request": "object"
    }
   },
-  "horosa_cn_bazi_direct": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"八字命盘，与 bazi_birth 同一引擎\"}",
-   "schema": "{\"type\":\"object\"}",
-   "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
-    "date": "string",
-    "gpsLat": "number",
-    "gpsLon": "number",
-    "time": "string",
-    "zone": "string",
-    "lat": "string",
-    "lon": "string",
-    "godKeyPos": "string",
-    "southMonth": "string",
-    "timeAlg": "integer",
-    "after23NewDay": "boolean",
-    "lateZiHourUseNextDay": "string",
-    "ad": "integer enum=[1,-1]",
-    "gender": "string",
-    "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
-    "period": "object",
-    "zodiacBoundary": "string",
-    "place": "string",
-    "request": "object"
-   }
-  },
   "horosa_cn_liureng_gods": {
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起大六壬正盘（四课三传，含当前时间起课）\"}",
    "schema": "{\"type\":\"object\"}",
@@ -2907,7 +2879,7 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"获取卦义说明\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "name": "string",
+    "name": "array items={\"type\":\"string\"}",
     "request": "object"
    }
   },
@@ -2915,7 +2887,7 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"获取梅花易数卦义\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "name": "string",
+    "name": "array items={\"type\":\"string\"}",
     "request": "object"
    }
   }
@@ -3092,7 +3064,7 @@
     "tool_name": "string",
     "payload": "object",
     "format": "string enum=[\"json\",\"docx\",\"pdf\",\"png\",\"ics\"]",
-    "style": "string",
+    "style": "string enum=[\"analysis\",\"chart\"]",
     "language": "string",
     "title": "string",
     "question": "string",

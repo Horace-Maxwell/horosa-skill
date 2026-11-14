@@ -67,6 +67,8 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_TRACE_ENABLED": "`0` = do not write local traces.",
     "HOROSA_TRACE_DIR": "Where traces go (default <data dir>/traces).",
     "HOROSA_TRACE_CAPTURE_PAYLOADS": "`1` = include request payloads in traces.",
+    "HOROSA_MCP_ISERROR": "`0` = never set `isError` on MCP results (old behaviour); default marks real failures, not ask-the-user refusals.",
+    "HOROSA_DATA_PRIVATE": "`0` = create the data dir / runs / memory DB with the umask instead of 0700 / 0600 (shared container volumes).",
     "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "`1` = include recorded AI answers in traces.",
     "HOROSA_TRACE_OTLP_ENDPOINT": "OTLP endpoint to export traces to (off by default; nothing leaves the machine unless set).",
     # ── 可选云端决策层（缺省关）──

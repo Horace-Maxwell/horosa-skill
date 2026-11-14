@@ -46,6 +46,7 @@ from horosa_skill.exports.registry import AI_EXPORT_TECHNIQUES  # noqa: E402
 from horosa_skill.surfaces.mcp_server import (  # noqa: E402
     COMPACT_SURFACE_TOOL_COUNT,
     FACADE_TOOL_COUNT,
+    FULL_SURFACE_TOOL_COUNT,
 )
 
 ERRORS: list[str] = []
@@ -492,13 +493,13 @@ def check_server_instructions() -> None:
 
     # 🔴 客户端在 tools/list 里看到的是**门面 + 技法**，不是技法数。这条以前拿 len(TOOL_DEFINITIONS)
     # 比，于是 instructions 写 106 时是绿的 —— 而模型据此以为只有 106 个工具，实际收到 116 个。
-    expected = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+    expected = FULL_SURFACE_TOOL_COUNT
     for count in re.findall(r"\((\d+)\s*tools?\)|instead of (\d+)", _SERVER_INSTRUCTIONS):
         got = count[0] or count[1]
         if int(got) != expected:
             err(
                 f"mcp_server._SERVER_INSTRUCTIONS: claims {got} tools, default surface is {expected}"
-                f" ({FACADE_TOOL_COUNT} facades + {len(TOOL_DEFINITIONS)} techniques)"
+                f" ({FACADE_TOOL_COUNT} facades + {FULL_SURFACE_TOOL_COUNT - FACADE_TOOL_COUNT} advertised techniques)"
             )
 
 

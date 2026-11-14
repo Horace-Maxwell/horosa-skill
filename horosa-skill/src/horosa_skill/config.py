@@ -67,6 +67,8 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_TRACE_ENABLED": "stable",
     "HOROSA_TRACE_DIR": "stable",
     "HOROSA_TRACE_CAPTURE_PAYLOADS": "stable",
+    "HOROSA_DATA_PRIVATE": "stable",
+    "HOROSA_MCP_ISERROR": "stable",
     "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "stable",
     "HOROSA_TRACE_OTLP_ENDPOINT": "stable",
     "HOROSA_TECHNIQUE_CARD": "stable",
@@ -490,6 +492,7 @@ FIELD_ENV_MAP = {
     "trace_enabled": "HOROSA_TRACE_ENABLED",
     "trace_dir": "HOROSA_TRACE_DIR",
     "trace_capture_payloads": "HOROSA_TRACE_CAPTURE_PAYLOADS",
+    "data_private": "HOROSA_DATA_PRIVATE",
     "trace_capture_ai_answers": "HOROSA_TRACE_CAPTURE_AI_ANSWERS",
     "trace_otlp_endpoint": "HOROSA_TRACE_OTLP_ENDPOINT",
     "output_script": "HOROSA_OUTPUT_SCRIPT",
@@ -544,6 +547,8 @@ class Settings(BaseModel):
     trace_enabled: bool = True
     trace_dir: Path | None = None
     trace_capture_payloads: bool = False
+    # 新建的数据目录 / 存档 / 库按私有权限建（0700 / 0600）；行为由 fileperm 读同名环境变量，这里登记给 env 表与 doctor。
+    data_private: bool = True
     trace_capture_ai_answers: bool = False
     trace_otlp_endpoint: str | None = None
     # 输出文字（textscript.SCRIPTS 之一）。只在结果离开进程时转换；存档、门禁、引擎永远是简体。
@@ -604,6 +609,7 @@ class Settings(BaseModel):
             trace_enabled=_env_bool("HOROSA_TRACE_ENABLED", True),
             trace_dir=Path(trace_dir_env).expanduser() if trace_dir_env else data_dir / "traces",
             trace_capture_payloads=_env_bool("HOROSA_TRACE_CAPTURE_PAYLOADS", False),
+            data_private=_env_bool("HOROSA_DATA_PRIVATE", True),
             trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
             trace_otlp_endpoint=_env_url("HOROSA_TRACE_OTLP_ENDPOINT"),
             output_script=_env_script("HOROSA_OUTPUT_SCRIPT"),
@@ -642,7 +648,9 @@ class Settings(BaseModel):
                     details={"field": label, "value": str(path),
                              "next_action": "在客户端的扩展设置里填上真实路径，或删掉该环境变量用默认路径。"},
                 )
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        from horosa_skill.fileperm import make_private_dir
+
+        make_private_dir(self.data_dir)  # 新建的数据目录 0700（HOROSA_DATA_PRIVATE=0 关；已有目录不动）
         self.runtime_root.mkdir(parents=True, exist_ok=True)
         assert self.db_path is not None
         assert self.output_dir is not None

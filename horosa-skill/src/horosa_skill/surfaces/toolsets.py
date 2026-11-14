@@ -8,7 +8,7 @@ import os
 from typing import Any
 
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import FACADE_TOOL_COUNT, TOOL_DEFINITIONS
+from horosa_skill.engine.registry import FACADE_TOOL_COUNT, TOOL_DEFINITIONS, UNADVERTISED_TECHNIQUES
 from horosa_skill.errors import bilingual
 
 # HOROSA_TOOLSETS 合法域 + 别名（v0.36.0 B2：此前拼错一个 token = 零技法且无 tool_run 直呼，客户端只剩门面）。
@@ -84,7 +84,7 @@ def surface_plan(settings: Settings) -> dict[str, Any]:
     compact = bool(settings.mcp_compact)
     listed = [
         name for name, definition in TOOL_DEFINITIONS.items()
-        if not compact and (effective is None or definition.domain.lower() in effective)
+        if not compact and name not in UNADVERTISED_TECHNIQUES and (effective is None or definition.domain.lower() in effective)
     ]
     tool_run = compact or effective is not None
     domains = sorted({TOOL_DEFINITIONS[name].domain.lower() for name in listed})

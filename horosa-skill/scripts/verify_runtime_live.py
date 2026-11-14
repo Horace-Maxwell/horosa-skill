@@ -602,10 +602,9 @@ class Lane:
                 proc.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        from horosa_skill.engine.registry import TOOL_DEFINITIONS
-        from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
+        from horosa_skill.surfaces.mcp_server import FULL_SURFACE_TOOL_COUNT
 
-        expected = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+        expected = FULL_SURFACE_TOOL_COUNT
         problems = evaluate_http_probe(no_auth_status=result.get("no_auth_status"), bad_host_status=result.get("bad_host_status"),
                                        tools=result.get("tools"), expected_tools=expected)
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-1500:] if problems else None

@@ -19,7 +19,7 @@ ROUTER_SRC = (PKG_ROOT / "src/horosa_skill/engine/router.py").read_text(encoding
 CORPUS = json.loads((PKG_ROOT / "contracts/router_corpus.json").read_text(encoding="utf-8"))
 NON_TECHNIQUE_DOMAINS = {"export", "knowledge", "memory", "report"}
 # 查询层/派生层工具，靠 dispatch 关键词到达没有意义（agent 直呼或经 guidance 发现）。
-ROUTING_EXEMPT = {"xuanshi"}
+ROUTING_EXEMPT = {"xuanshi", "bazi_direct"}  # bazi_direct：与 bazi_birth 同一输出、只作注册键别名（审计 S-16）
 
 
 def test_synonym_table_covers_exactly_the_registry() -> None:

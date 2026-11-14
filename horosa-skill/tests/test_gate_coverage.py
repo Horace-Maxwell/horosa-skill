@@ -18,7 +18,7 @@ from typer.testing import CliRunner
 from horosa_skill.agent_guidance import PREFLIGHT_EXEMPT_TOOLS, validate_agent_preflight
 from horosa_skill.agent_guidance.questions import GENDER_FACT_TOOLS
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, UNADVERTISED_TECHNIQUES
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.schemas.common import ToolEnvelope
 from horosa_skill.service import HorosaSkillService
@@ -116,7 +116,7 @@ def test_the_coverage_probe_really_reaches_run_tool_once_confirmed(tmp_path: Pat
     if compact:
         expected.add("horosa_tool_run")
     else:
-        expected |= {definition.mcp_name for definition in TOOL_DEFINITIONS.values()}
+        expected |= {definition.mcp_name for name, definition in TOOL_DEFINITIONS.items() if name not in UNADVERTISED_TECHNIQUES}
     assert expected <= set(got), f"探针没到 run_tool：{sorted(expected - set(got))}"
 
 

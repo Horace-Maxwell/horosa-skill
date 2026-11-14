@@ -150,7 +150,7 @@ def run_tool_counts() -> int:
     judge = _load_script("verify_docs_sync")
     mirrors = _load_script("gen_agent_mirrors")
     techniques = len(judge.TOOL_DEFINITIONS)
-    totals, gated = count_changes(ROOT, techniques=techniques, full=techniques + judge.FACADE_TOOL_COUNT, gated=judge.expected_gated(),
+    totals, gated = count_changes(ROOT, techniques=techniques, full=judge.FULL_SURFACE_TOOL_COUNT, gated=judge.expected_gated(),
                                   exempt=techniques - judge.expected_gated())
     touched = judge.sync_tool_counts(ROOT, totals=totals, gated=gated)
     for rel, n in touched:

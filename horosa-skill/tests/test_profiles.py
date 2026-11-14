@@ -526,14 +526,14 @@ def test_dispatch_decision_layer_never_receives_profile_data(tmp_path: Path) -> 
 
 
 def test_profile_tool_is_on_both_surfaces_and_technique_schemas_gain_no_bytes(tmp_path: Path, _no_elicit) -> None:
-    from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT, TOOL_DEFINITIONS
+    from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT, FULL_SURFACE_TOOL_COUNT, TOOL_DEFINITIONS
     from horosa_skill.surfaces.mcp_runner import UNLOCALIZED_TOOLS
 
     full_mcp, _ = _mcp(tmp_path / "f")
     compact_mcp, _ = _mcp(tmp_path / "c", compact=True)
     _, full = asyncio.run(_calls(full_mcp))
     _, compact = asyncio.run(_calls(compact_mcp))
-    assert len(full) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS) and len(compact) == COMPACT_SURFACE_TOOL_COUNT
+    assert len(full) == FULL_SURFACE_TOOL_COUNT and len(compact) == COMPACT_SURFACE_TOOL_COUNT
     for tools in (full, compact):
         tool = tools["horosa_profile"]
         assert set(tool.input_schema["properties"]) == {"request", "action", "name", "data", "detail"}

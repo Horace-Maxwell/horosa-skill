@@ -52,7 +52,7 @@ sys.path.insert(0, str(PKG_ROOT / "src"))
 
 from horosa_skill.agent_guidance import build_tool_input_contract  # noqa: E402
 from horosa_skill.engine.registry import TOOL_DEFINITIONS  # noqa: E402
-from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT  # noqa: E402
+from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FULL_SURFACE_TOOL_COUNT  # noqa: E402
 
 DESKTOP_PORTS = (":8899", ":9999")
 BIRTH = {"date": "1995-06-03", "time": "05:30:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 1}
@@ -142,7 +142,7 @@ async def mcp_surface(report: Report, tools: list[str], *, compact: bool) -> Non
         async with ClientSession(read, write) as session:
             await session.initialize()
             listed = (await session.list_tools()).tools
-            expected = COMPACT_SURFACE_TOOL_COUNT if compact else FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+            expected = COMPACT_SURFACE_TOOL_COUNT if compact else FULL_SURFACE_TOOL_COUNT
             report.check(area, "tools/list count", len(listed) == expected, f"{len(listed)} != {expected}")
             semaphore = asyncio.Semaphore(4)
 
@@ -272,7 +272,7 @@ async def http_surface(report: Report) -> None:
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 listed = (await session.list_tools()).tools
-                report.check("http", "tools/list with token", len(listed) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS), len(listed))
+                report.check("http", "tools/list with token", len(listed) == FULL_SURFACE_TOOL_COUNT, len(listed))
                 ok, detail = judge(envelope_of(await session.call_tool("horosa_cn_bazi_birth", {**BIRTH, **CONFIRM})))
                 report.check("http", "tools/call", ok, detail)
                 gated = envelope_of(await session.call_tool("horosa_astro_chart", {k: v for k, v in BIRTH.items() if k != "gender"}))

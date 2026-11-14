@@ -296,11 +296,18 @@ LOOKUP_TOOLS = frozenset({
 
 # 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
 # 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
-# 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
+# 互不相同且都「有人守」。默认平铺面 = FULL_SURFACE_TOOL_COUNT（门面 + 广告出来的技法），任何文案都从这里算。
 FACADE_TOOL_COUNT = 13
 
 # 精简面工具数 = 13 门面 + horosa_tool_run。README×2 的「13 个门面/13 facades」由 verify_docs_sync 锁步到此常量。
 COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
+
+# 注册了、但不单独广告成平铺 MCP 工具的技法键（审计 S-16，维护者 2026-11-14 按推荐定）：bazi_direct 与 bazi_birth 同一引擎、同一输出
+# （Java 回退也已统一走 /bazi/direct），两个并列工具只会让模型二选一、白占全量面 ≈2.3 KB。键名照收：horosa_tool_run / CLI / dispatch /
+# 记忆检索都还认 bazi_direct（旧存档照查）；直呼平铺名 horosa_cn_bazi_direct 的客户端要改用 horosa_cn_bazi_birth。
+UNADVERTISED_TECHNIQUES = frozenset({"bazi_direct"})
+# 全量平铺面工具数 = 门面 + 广告出来的技法。任何文案都从这里算（不再写 FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)）。
+FULL_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS) - len(UNADVERTISED_TECHNIQUES)
 
 
 # 西占盘族（本命 + 五张派生盘 + 世运）：[埃及历] 与 [信息] 互容接纳过滤吃**本盘**（上游 buildAstroSnapshotContent 对任意盘

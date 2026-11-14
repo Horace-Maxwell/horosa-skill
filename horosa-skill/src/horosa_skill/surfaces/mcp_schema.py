@@ -211,7 +211,7 @@ def advertised_technique_schema(tool_name: str, full_schema: dict[str, Any]) -> 
     # 三者与 place 都没给仍按字段报缺。
     place_covers = "place" in keep
     for key in keep:
-        if key in CORE_DOC:
+        if key in CORE_DOC and not (key == "name" and tool_name in _HEXAGRAM_NAME_TOOLS):
             out[key] = _core_property(key, tool_name, key in required and not (place_covers and key in _PLACE_COVERED))
             continue
         prop = _own_property(key, props[key], key in required)
@@ -238,6 +238,8 @@ def _field_docs() -> dict[str, str]:
 
 _FIELD_DOCS: dict[str, str] | None = None
 _PLACE_COVERED = frozenset({"zone", "lat", "lon"})
+# 这两个工具的 name 是卦名列表，不是当事人姓名：走它自己的字段 schema（审计 S-22：以前广告成 string「当事人姓名（透传盘头）」）。
+_HEXAGRAM_NAME_TOOLS = frozenset({"gua_desc", "gua_meiyi"})
 
 # 嵌套的一方（合盘 inner / outer）：广告成带 properties 的对象，模型才知道里面放什么（MCP-11：旧广告是一个无形状的值）。
 _PARTY_KEYS = ("date", "time", "zone", "lat", "lon", "ad", "name")

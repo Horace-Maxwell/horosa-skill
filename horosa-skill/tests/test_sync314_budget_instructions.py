@@ -16,12 +16,12 @@ import re
 import pytest
 
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT, TOOL_DEFINITIONS
+from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT, FULL_SURFACE_TOOL_COUNT
 from horosa_skill.surfaces.mcp_server import _SERVER_INSTRUCTIONS, _server_instructions
 from horosa_skill.surfaces.toolsets import surface_plan
 
 CLIENT_BUDGET_BYTES = 2048
-FULL_TOOLS = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+FULL_TOOLS = FULL_SURFACE_TOOL_COUNT
 
 # v0.50.1 说明书（瘦身前）里的事实，按原文顺序。多词短语按「空白压成一个空格」之后的文本找（折行不算改动）。
 FACTS: tuple[str, ...] = (

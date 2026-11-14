@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import os
 import json
 from contextvars import ContextVar
 from typing import Any
@@ -13,7 +14,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from pydantic import ValidationError
 
 from horosa_skill.config import _env_int
-from horosa_skill.errors import ToolValidationError
+from horosa_skill.errors import ToolValidationError, bilingual, recovery_for
 from horosa_skill.result_view import READING, Budget, cap_free_text, shape_result, take_view_request
 from horosa_skill.service import progress_sink
 from horosa_skill.textscript import SIMPLIFIED
@@ -144,7 +145,7 @@ class HorosaMCPServer(MCPServer):
             context = Context(mcp_server=self, subscriptions=self._subscriptions)
         tool = self._tool_manager.get_tool(name)
         if tool is None:
-            return await super().call_tool(name, arguments, context)
+            return _unknown_tool_result(name)
         # 视图参数只管返回体的形状：进工具之前取走，服务层、闸门、存档都见不到；过长的自由文本先截断（会被回显进结果与存档）。
         arguments, view = take_view_request(arguments, default_view=self.result_view)
         arguments, capped = cap_free_text(arguments)
@@ -172,7 +173,60 @@ class HorosaMCPServer(MCPServer):
         if _wire_bytes(converted) > MCP_RESULT_WIRE_BUDGET:
             raw = await anyio.to_thread.run_sync(_fit_result_budget, raw, convert)
             converted = convert(raw)
-        return _with_file_link(raw, converted, str(protocol or ""), images)
+        return _mark_error(raw, _with_file_link(raw, converted, str(protocol or ""), images))
+
+
+def _unknown_tool_result(name: str) -> Any:
+    """客户端调了一个不存在的工具名：以前是 SDK 的裸「Unknown tool: …」（审计 S-29）。现在回结构化 tool.unknown（isError），
+    带最像的技法候选；只作注册键别名的旧平铺名（horosa_cn_bazi_direct）点名替代写法。"""
+    from horosa_skill.agent_guidance import unknown_tool_details
+    from horosa_skill.engine.registry import UNADVERTISED_TECHNIQUES, resolve_tool_name
+
+    key = resolve_tool_name(name)
+    details = unknown_tool_details(name)
+    if key in UNADVERTISED_TECHNIQUES:
+        message = bilingual(
+            f"工具 {name} 不再单独提供：用 horosa_cn_bazi_birth（同一输出），或 horosa_tool_run(tool_name=\"{key}\")。",
+            f"Tool {name} is no longer listed separately: use horosa_cn_bazi_birth (same output) or horosa_tool_run(tool_name=\"{key}\").",
+        ) if key == "bazi_direct" else bilingual(
+            f"工具 {name} 不单独提供：用 horosa_tool_run(tool_name=\"{key}\")。", f"Tool {name} is not listed separately: use horosa_tool_run(tool_name=\"{key}\").")
+        details["replacement"] = "horosa_cn_bazi_birth" if key == "bazi_direct" else "horosa_tool_run"
+    elif key is not None:
+        message = bilingual(f"这个面没有注册 {name}（工具集裁剪或精简面）：用 horosa_tool_run(tool_name=\"{key}\")。",
+                            f"{name} is not registered on this surface (toolsets / compact): use horosa_tool_run(tool_name=\"{key}\").")
+        details["replacement"] = "horosa_tool_run"
+    else:
+        message = bilingual(f"未知工具：{name}", f"Unknown tool: {name}")
+    details = recovery_for("tool.unknown", details)
+    body = {"ok": False, "tool": name, "code": "tool.unknown", "message": message, "details": details,
+            "error": {"code": "tool.unknown", "message": message, "details": details}}
+    return mcp_types.CallToolResult(content=[mcp_types.TextContent(type="text", text=json.dumps(body, ensure_ascii=False))], isError=True)
+
+
+# 「在问用户」的回包不是失败（审计待决项 1(c)）：闸门、地名有歧义、要用户挑技法、缺只有用户知道的事实。它们是工具在提问，
+# 新修订把这类建模成 input_required；标成 isError 会让每个第一次调用都显示成红色失败。
+_ASKING_CODES = frozenset({"agent_guidance.required", "place.ambiguous", "place.zone_ambiguous", "dispatch.technique_choice_required"})
+
+
+def _error_code_and_asking(raw: Any) -> tuple[str | None, bool]:
+    if not isinstance(raw, dict) or raw.get("ok") is not False:
+        return None, False
+    error = raw.get("error") if isinstance(raw.get("error"), dict) else {}
+    code = str(raw.get("code") or error.get("code") or "") or None
+    details = raw.get("details") if isinstance(raw.get("details"), dict) else error.get("details") if isinstance(error.get("details"), dict) else {}
+    recovery = details.get("agent_recovery") if isinstance(details.get("agent_recovery"), dict) else {}
+    return code, bool(code in _ASKING_CODES or recovery.get("must_ask_user") is True)
+
+
+def _mark_error(raw: Any, converted: Any) -> Any:
+    """真失败（模型自己能改的入参错、runtime / js_engine / transport / 内部错误 / 报告错）以 isError:true 返回（MCP 规范：工具执行期
+    错误走 isError）；在问用户的不标（见 _ASKING_CODES）。正文不变。HOROSA_MCP_ISERROR=0 关回旧行为（留一个版本）。"""
+    code, asking = _error_code_and_asking(raw)
+    if code is None or asking or str(os.environ.get("HOROSA_MCP_ISERROR", "1")).strip().lower() in {"0", "false", "no", "off"}:
+        return converted
+    if isinstance(converted, mcp_types.CallToolResult):
+        return converted.model_copy(update={"is_error": True})
+    return mcp_types.CallToolResult(content=list(converted), isError=True)
 
 
 def _compact_convert(metadata: Any, raw: Any) -> Any:

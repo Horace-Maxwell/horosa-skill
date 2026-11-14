@@ -18,7 +18,7 @@ import pytest
 
 from fakes import FakeClient, FakeJsClient
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, UNADVERTISED_TECHNIQUES
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService, _clock
 from horosa_skill.testing_payloads import build_sample_payloads
@@ -186,7 +186,8 @@ def call_all(mcp, calls: list[tuple[str, dict[str, Any]]]) -> list[tuple[str, in
 
 def catalogue_calls(birth: dict[str, Any]) -> list[tuple[str, tuple[str, dict[str, Any]]]]:
     payloads = build_sample_payloads()
-    calls = [(name, (definition.mcp_name, {**payloads[name], **CONFIRM})) for name, definition in TOOL_DEFINITIONS.items()]
+    calls = [(name, (definition.mcp_name, {**payloads[name], **CONFIRM})) for name, definition in TOOL_DEFINITIONS.items()
+             if name not in UNADVERTISED_TECHNIQUES]   # 只作注册键别名的不是平铺工具
     calls.append(("dispatch", ("horosa_dispatch", {"query": "用八字和紫微看看我今年的事业", "birth": birth, **CONFIRM})))
     calls.append(("hecan", ("horosa_hecan", {"query": "今年事业如何", "tools": ["bazi_birth", "ziwei_birth", "qimen"],
                                              "birth": birth, "context": {**birth, "date": "2026-11-12", "time": "10:00:00"},

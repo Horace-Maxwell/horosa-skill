@@ -162,10 +162,8 @@ def route(request: DispatchInput) -> RouteResult:
     if _contains_any(text, ["八字反查", "反推八字", "四柱反推", "干支反查", "反推出生", "inverse bazi", "reverse bazi", "bazi_inverse"]):
         add("bazi_inverse")
     elif _contains_any(text, ["八字", "bazi", "ba zi", "四柱", "four pillars"]) and not is_zeri:
-        if _contains_any(text, ["直断", "direct", "大运", "流年"]):
-            add("bazi_direct")
-        else:
-            add("bazi_birth")
+        # bazi_direct 与 bazi_birth 同一输出、不再单独广告（审计 S-16）：大运 / 流年也走 bazi_birth。
+        add("bazi_birth")
     # 小六壬 含「六壬」二字 → 大六壬分支须排除，否则「小六壬测走失」误路由 liureng（同「卜卦含卦字」先例）。
     if (
         _contains_any(text, ["六壬", "liureng", "liu ren"])

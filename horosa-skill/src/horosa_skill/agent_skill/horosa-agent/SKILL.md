@@ -165,6 +165,8 @@ field). Never conclude from `titles` alone.
 ## 6. When a call is refused (`ok: false`)
 
 Read `code`, then `details.agent_recovery` (`prompt_to_user`, `must_ask_user`, `fix_fields`, `example_payload`).
+`isError: true` marks a real failure (fix the call or the runtime, then retry); a refusal that asks the user (gate, missing
+fact, ambiguous place) is not `isError` — relay its question.
 
 | What you see | Meaning | Do |
 | --- | --- | --- |
@@ -277,7 +279,7 @@ horosa_knowledge_search {"query": "空亡是什么意思？"}
 ## 12. Compact surface (13 facades + `horosa_tool_run`)
 
 Every client except Claude Code and Claude Desktop gets the compact surface by default (`HOROSA_MCP_COMPACT=1`;
-those two get the full surface, 全量 132; `setup --surface full|compact` overrides). It has the 13 facades —
+those two get the full surface, 全量 131; `setup --surface full|compact` overrides). It has the 13 facades —
 `horosa_dispatch`, `horosa_agent_guidance`, `horosa_hecan`, `horosa_place_search`, `horosa_profile`,
 `horosa_knowledge_search`, `horosa_memory_query`, `horosa_memory_show`, `horosa_memory_record_answer`,
 `horosa_report_template`, `horosa_report_render`, `horosa_report_from_tool`, `horosa_technique_report` — plus
@@ -312,7 +314,7 @@ Keys below are `tool_name` values (MCP name = `horosa_<group>_<key>`; `horosa_ag
   `election` (judge one candidate moment; unknown `topicId` refused the same way), `qizhengelection`.
 - **择日 window search**: `tianxing`, `qimenzeri`, `huanglizeri`, `bazizeri`, `taiyizeri`, `ziweizeri`,
   `liurengzeri`, `sanshizeri`, `qizhengzeri`, `indiazeri`.
-- **Chinese natal**: `bazi_birth`, `bazi_direct` (大运流年), `bazi_inverse` (four pillars → candidate birth
+- **Chinese natal**: `bazi_birth` (four pillars + 大运流年; `bazi_direct` is the same output, kept as a name only), `bazi_inverse` (four pillars → candidate birth
   times; candidates repeat every 60 years, let the user pick), `ziwei_birth`, `ziwei_rules`, `heluo`, `canping`,
   `yizhangjing`, `suzhan`, `liureng_runyear`.
 - **Several arts in one tool** (natal; each art is one `[段名]` section, pick with `response_sections`):

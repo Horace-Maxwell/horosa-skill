@@ -60,8 +60,7 @@ async def _with_session(params, body):
 
 def test_stdio_handshake_lists_every_tool(tmp_path) -> None:
     from horosa_skill import __version__
-    from horosa_skill.engine.registry import TOOL_DEFINITIONS
-    from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
+    from horosa_skill.surfaces.mcp_server import FULL_SURFACE_TOOL_COUNT
 
     async def body(session, init):
         tools = await session.list_tools()
@@ -74,7 +73,7 @@ def test_stdio_handshake_lists_every_tool(tmp_path) -> None:
     assert init.server_info.version == __version__, "serverInfo 报的必须是我们的版本，不是 MCP SDK 的"
     assert init.instructions and len(init.instructions.encode("utf-8")) <= INSTRUCTIONS_BUDGET_BYTES
     assert init.capabilities.tools is not None
-    assert len(tools) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+    assert len(tools) == FULL_SURFACE_TOOL_COUNT
 
 
 def test_stdio_tools_all_pass_the_cross_client_audit(tmp_path) -> None:
@@ -120,7 +119,9 @@ def test_stdio_bad_request_is_recoverable_not_iserror(tmp_path) -> None:
         return await session.call_tool("horosa_knowledge_registry", {"request": "{bad json"})
 
     result = anyio.run(_with_session, _server_params(tmp_path), body)
-    assert result.is_error is not True, "坏 payload 必须是信封，不能变 isError 裸文本"
+    # 坏 payload 必须是结构化信封，不能是 SDK 的裸文本；它是模型自己能改的入参错，所以 isError:true（审计待决项 1(c)，
+    # 「在问用户」的回包才不标）。以前这里断言 is_error 不为真——那时所有失败都不标。
+    assert result.is_error is True
     payload = json.loads(result.content[0].text)
     assert payload["ok"] is False
     assert payload["code"] == "tool.invalid_payload"

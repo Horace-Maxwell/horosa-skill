@@ -116,13 +116,13 @@ LIFE_TIMING = IntentClass(
     words=LIFE_TIMING_STRONG + ("今年", "明年", "后年", "这个月", "下个月", "本月", "this year", "next year", "this month",
                                 "next month"),
     patterns=(),
-    candidates=("bazi_direct", "ziwei_birth", "solarreturn", "profection", "firdaria", "ephemeris", "liureng_runyear"),
-    ask_zh="看运势用哪一派？八字直断（大运流年）/ 紫微斗数 / 太阳返照 / 小限 / 法达 / 星历（行运）/ 六壬行年…；"
+    candidates=("bazi_birth", "ziwei_birth", "solarreturn", "profection", "firdaria", "ephemeris", "liureng_runyear"),
+    ask_zh="看运势用哪一派？八字（大运流年）/ 紫微斗数 / 太阳返照 / 小限 / 法达 / 星历（行运）/ 六壬行年…；"
            "若是就一件具体的事问应期，也可以改用起课占卜（六爻 / 奇门遁甲 / 大六壬）。",
     ask_en="Which system should read the timing? BaZi (decade and annual luck), Zi Wei Dou Shu, solar return, profection, "
            "firdaria, ephemeris (transits), Liu Ren annual…; for the timing of one concrete matter a divination "
            "technique (Liu Yao, Qi Men, Da Liu Ren) also fits.",
-    hecan_pair=("bazi_direct", "ziwei_birth"), label_zh="运势", label_en="life timing",
+    hecan_pair=("bazi_birth", "ziwei_birth"), label_zh="运势", label_en="life timing",
 )
 
 DIVINATION = IntentClass(
@@ -216,7 +216,7 @@ CANDIDATE_NOTES: dict[str, tuple[str, str]] = {
     "horary": ("卜卦占星（提问时刻盘）", "horary chart of the question moment"),
     "lingqi": ("灵棋经", "Lingqi oracle"),
     "geomancy": ("天文地占", "astrological geomancy"),
-    "bazi_birth": ("八字排盘", "BaZi four pillars"),
+    "bazi_birth": ("八字（四柱 / 大运 / 流年）", "BaZi four pillars with decade and annual luck"),
     "chart": ("西洋本命盘", "Western natal chart"),
     "guolao_chart": ("七政四余", "Qi Zheng Si Yu chart"),
     "india_chart": ("印度占星本命盘", "Vedic natal chart"),

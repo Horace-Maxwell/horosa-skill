@@ -14,7 +14,6 @@ from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.astro_sidereal import INDIA_HOUSE_SYSTEM_LABELS
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.schemas.tools import BirthInput
 from horosa_skill.service import ASTRO_HOUSE_SYSTEM_TEXT, HorosaSkillService
@@ -45,9 +44,9 @@ def full_tools(tmp_path_factory) -> dict[str, dict]:
 def test_full_surface_fits_the_budget(full_tools) -> None:
     size = len(json.dumps(list(full_tools.values()), ensure_ascii=False).encode("utf-8"))
     assert size <= FULL_CAP, f"full tools/list is {size} B (> {FULL_CAP} B)"
-    from horosa_skill.engine.registry import FACADE_TOOL_COUNT
+    from horosa_skill.engine.registry import FULL_SURFACE_TOOL_COUNT
 
-    assert len(full_tools) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+    assert len(full_tools) == FULL_SURFACE_TOOL_COUNT
 
 
 def test_compact_surface_fits_the_budget(tmp_path) -> None:

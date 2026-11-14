@@ -497,7 +497,7 @@ def test_every_sub_art_routes_to_its_tool_and_only_to_it(query: str, tool: str) 
     ("六爻起一卦看工作", ["sixyao"]), ("易卦占卜一下", ["sixyao"]), ("i ching reading", ["sixyao"]),
     ("这个月的月历", ["calendar_month"]), ("万年历", ["calendar_month"]),
     ("今天黄历宜忌，九星值日是什么", ["huangli"]), ("奇门遁甲看八门九星", ["qimen"]),
-    ("易卦星盘和六爻一起看", ["sixyao", "dongya"]), ("河洛理数", ["heluo"]), ("八字流年", ["bazi_direct"]),
+    ("易卦星盘和六爻一起看", ["sixyao", "dongya"]), ("河洛理数", ["heluo"]), ("八字流年", ["bazi_birth"]),
 ])
 def test_neighbouring_words_keep_their_own_tools(query: str, tools: list[str]) -> None:
     """互斥：「易卦」「月历」「九星」「洛书 / 流年」这些词原来归谁还归谁。"""

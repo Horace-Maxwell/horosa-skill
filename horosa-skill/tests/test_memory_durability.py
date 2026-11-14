@@ -134,12 +134,18 @@ def test_a_refresh_leaves_rendered_reports_alone(tmp_path: Path) -> None:
     assert all(a["sha256"] == _sha256(Path(a["path"])) for a in reports)
 
 
-def test_new_artifacts_keep_the_umask_mode(tmp_path: Path) -> None:
-    """换写法不改权限：产物还是按 umask 建（mkstemp 的 0600 会让容器卷上的别的进程读不到）。"""
-    _, _, artifact = _stored_run(tmp_path)
+def test_new_artifacts_are_private_unless_opted_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """新产物缺省 0600（审计 O-05，维护者 2026-11-14 按推荐定：存档里是姓名与出生数据）；容器卷要共享时
+    HOROSA_DATA_PRIVATE=0 回到按 umask 建（以前的缺省，mkstemp 的 0600 会让容器卷上别的进程读不到）。"""
+    if os.name == "nt":
+        pytest.skip("[platform] Windows 没有 POSIX 权限位")
+    _, _, artifact = _stored_run(tmp_path / "private")
+    assert artifact.stat().st_mode & 0o777 == 0o600
+    monkeypatch.setenv("HOROSA_DATA_PRIVATE", "0")
+    _, _, shared = _stored_run(tmp_path / "shared")
     probe = tmp_path / "probe"
     probe.write_text("x", encoding="utf-8")
-    assert artifact.stat().st_mode == probe.stat().st_mode
+    assert shared.stat().st_mode == probe.stat().st_mode
 
 
 def test_a_rewrite_keeps_the_mode_of_the_existing_file(tmp_path: Path) -> None:

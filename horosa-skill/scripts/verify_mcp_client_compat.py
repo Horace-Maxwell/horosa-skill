@@ -131,12 +131,11 @@ def _surface(compact: bool) -> list[dict[str, Any]]:
 
 
 def measure() -> dict[str, Any]:
-    from horosa_skill.engine.registry import TOOL_DEFINITIONS
-    from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT
+    from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FULL_SURFACE_TOOL_COUNT
 
     out: dict[str, Any] = {"surfaces": {}, "debt": {}}
     for label, compact, expected in (
-        ("full", False, FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)),
+        ("full", False, FULL_SURFACE_TOOL_COUNT),
         ("compact", True, COMPACT_SURFACE_TOOL_COUNT),
     ):
         tools = _surface(compact)

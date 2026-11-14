@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import os
 
 import pytest
 from typer.testing import CliRunner
@@ -331,8 +330,7 @@ def test_streamable_http_handshake_end_to_end(tmp_path) -> None:
     def _client(url: str, headers: dict[str, str]):
         return _open_stream(url, http_client=create_mcp_http_client(headers=headers))
 
-    from horosa_skill.engine.registry import TOOL_DEFINITIONS
-    from horosa_skill.surfaces.mcp_server import FACADE_TOOL_COUNT
+    from horosa_skill.surfaces.mcp_server import FULL_SURFACE_TOOL_COUNT
 
     token = "lane-token-0123456789"
     env = {**os.environ, "HOROSA_RUNTIME_ROOT": str(tmp_path / "rt"), "HOROSA_SKILL_DATA_DIR": str(tmp_path / "data"), "PYTHONIOENCODING": "utf-8"}
@@ -388,7 +386,7 @@ def test_streamable_http_handshake_end_to_end(tmp_path) -> None:
                         await session.initialize()
                         return len((await session.list_tools()).tools)
 
-        assert anyio.run(handshake) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+        assert anyio.run(handshake) == FULL_SURFACE_TOOL_COUNT
     finally:
         proc.terminate()
         try:

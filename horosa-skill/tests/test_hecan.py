@@ -62,10 +62,10 @@ def test_two_techniques_are_a_cross_validation(tmp_path: Path) -> None:
     [
         ("看看我的命", ["bazi_birth", "ziwei_birth"]),            # 命理：八字紫微互证
         ("这个项目能不能成", ["liureng_gods", "qimen"]),          # 起课：三式互参
-        ("今年运势怎么样", ["bazi_direct", "ziwei_birth"]),       # 运势
+        ("今年运势怎么样", ["bazi_birth", "ziwei_birth"]),       # 运势
         ("帮我卜一卦", ["sixyao", "horary"]),                      # 卜卦两义：两种都起
         ("用奇门看看这件事", ["qimen", "liureng_gods"]),           # 点名一种：补同领域的另一个
-        ("紫微看今年事业运", ["ziwei_birth", "bazi_direct"]),     # 一个技法在两个领域：问句命中的那个领域优先
+        ("紫微看今年事业运", ["ziwei_birth", "bazi_birth"]),     # 一个技法在两个领域：问句命中的那个领域优先
         ("八字和紫微对照看", ["ziwei_birth", "bazi_birth"]),      # 点名两种：照用（顺序随路由）
     ],
 )

@@ -53,9 +53,9 @@ def sweep(tmp_path_factory: pytest.TempPathFactory) -> dict[tuple[str, str], dic
 
 
 def test_the_sweep_covers_the_whole_catalogue(sweep: dict) -> None:
-    from horosa_skill.engine.registry import FACADE_TOOL_COUNT, TOOL_DEFINITIONS
+    from horosa_skill.engine.registry import FULL_SURFACE_TOOL_COUNT
 
-    assert len({name for name, _label in sweep}) == FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)
+    assert len({name for name, _label in sweep}) == FULL_SURFACE_TOOL_COUNT
 
 
 def test_every_failure_carries_code_message_and_recovery_kind(sweep: dict) -> None:

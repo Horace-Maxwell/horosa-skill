@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from horosa_skill.errors import bilingual
+from horosa_skill.fileperm import new_file_mode
 
 
 def append_line(path: Path | str, line: bytes) -> None:
@@ -23,7 +24,7 @@ def append_line(path: Path | str, line: bytes) -> None:
     if os.name == "nt":
         _append_windows(str(path), line)
         return
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, new_file_mode(0o644))
     try:
         # `os.write` 可以短写：不看返回值，那一行就没有结尾的 \n，下一条记录接在它后面、两条并成一行。
         written = 0

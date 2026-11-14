@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from horosa_skill import fsretry
+from horosa_skill.fileperm import make_private_file, new_file_mode
 from horosa_skill.config import Settings
 from horosa_skill.memory import search as _search
 from horosa_skill.schemas.common import MemoryRef
@@ -37,12 +38,12 @@ def _write_json_atomic(path: Path, payload: Any) -> tuple[int, str]:
 
     `runs/` 下的产物是一次起盘唯一的完整副本。`write_text` 先截断再写：磁盘写满 / 进程被杀时留下 0 字节，已有内容再也救不回来，
     并发读者还会读到半个文件。这里写同目录临时文件（`os.replace` 同卷才原子）、落盘后再替换。
-    用 `os.open` 而不是 mkstemp：后者固定 0600，会改掉产物一直以来按 umask 建的权限；改写时沿用原文件的权限。
+    新文件的权限由 fileperm 定（缺省 0600，HOROSA_DATA_PRIVATE=0 回到按 umask）；改写时沿用原文件的权限。
     """
     # 不带缩进：没人读这些文件的排版。实测一份星盘产物省 20%（62.9 → 50.4 KB），结构多的引擎 JSON 省得更多（录制件最多 2.48 倍）。
     data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
-    fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
+    fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), new_file_mode(0o666))
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
@@ -213,7 +214,10 @@ class MemoryStore:
     def _open(self) -> Iterator[sqlite3.Connection]:
         # WAL + busy_timeout：多进程（MCP server / CLI / dispatch 并发）读写不再 `database is locked`；
         # WAL 允许读写并行，NORMAL 同步在 WAL 下掉电最多丢最近事务、不损坏库。
+        created = not self.db_path.exists()
         connection = sqlite3.connect(self.db_path, timeout=30.0)
+        if created:
+            make_private_file(self.db_path)  # sqlite 按 umask 建库（WAL / SHM 随库文件的权限）
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("PRAGMA journal_mode=WAL")

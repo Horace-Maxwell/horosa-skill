@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+import os  # noqa: F401 — 测试按 `cli.os` 打桩（monkeypatch cli.os.environ 等）
 import re
-import os
 import sys
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
@@ -16,8 +16,7 @@ from horosa_skill.config import Settings
 from horosa_skill.benchmark import run_benchmark
 from horosa_skill.engine.registry import (
     COMPACT_SURFACE_TOOL_COUNT,
-    FACADE_TOOL_COUNT,
-    TOOL_DEFINITIONS,
+    FULL_SURFACE_TOOL_COUNT,
 )
 from horosa_skill.errors import RuntimeError, ToolValidationError, bilingual
 from horosa_skill.service import HorosaSkillService
@@ -1209,7 +1208,7 @@ def client_config(
         "--surface",
         help=(
             "Advertised tool surface: `auto`（按客户端上限自动选，见 _CLIENT_COMPACT_DEFAULT）/ "
-            f"`full`（{FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} 个工具）/ `compact`（{COMPACT_SURFACE_TOOL_COUNT} 个门面工具，全部技法仍可经 horosa_tool_run 到达）。"
+            f"`full`（{FULL_SURFACE_TOOL_COUNT} 个工具）/ `compact`（{COMPACT_SURFACE_TOOL_COUNT} 个门面工具，全部技法仍可经 horosa_tool_run 到达）。"
         ),
     ),
     output_script: str = typer.Option(

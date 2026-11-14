@@ -83,7 +83,7 @@
     {
       "query": "八字直断大运流年",
       "expect": [
-        "bazi_direct"
+        "bazi_birth"
       ]
     },
     {

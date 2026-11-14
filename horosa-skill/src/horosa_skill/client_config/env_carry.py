@@ -107,6 +107,8 @@ NOT_CARRIED: dict[str, str] = {
     "HOROSA_TRACE_ENABLED": "diagnostics",
     "HOROSA_TRACE_DIR": "diagnostics",
     "HOROSA_TRACE_CAPTURE_PAYLOADS": "diagnostics",
+    "HOROSA_DATA_PRIVATE": "behaviour",
+    "HOROSA_MCP_ISERROR": "behaviour",
     "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "diagnostics",
     "HOROSA_TRACE_OTLP_ENDPOINT": "diagnostics",
     # 宿主 / 启动器 / 构建脚本之间传的，或星阙桌面版自己的

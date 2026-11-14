@@ -287,7 +287,7 @@ class MemoryAnswerInput(FlexibleModel):
 
 
 class MemoryQueryInput(FlexibleModel):
-    run_id: str | None = None
+    run_id: str | None = Field(default=None, description="One known run (to check it exists / see its row); to read it in full use horosa_memory_show.")
     group_id: str | None = Field(default=None, description="Only runs of one session.")
     tool: str | None = None
     entity: str | None = None
@@ -328,6 +328,7 @@ class ReportRenderInput(FlexibleModel):
     style: str = Field(
         default="analysis",
         description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
+        json_schema_extra={"enum": ["analysis", "chart"]},   # 审计 S-29：以前没有 enum；校验仍由 report.invalid_style 给可读错误
     )
     language: str | None = None
     title: str | None = None
@@ -344,6 +345,7 @@ class ReportFromToolInput(FlexibleModel):
     style: str = Field(
         default="analysis",
         description="analysis=AI 解盘报告（缺省）；chart=完整排盘报告，无需 AI 解读",
+        json_schema_extra={"enum": ["analysis", "chart"]},   # 审计 S-29：以前没有 enum；校验仍由 report.invalid_style 给可读错误
     )
     language: str | None = None
     title: str | None = None

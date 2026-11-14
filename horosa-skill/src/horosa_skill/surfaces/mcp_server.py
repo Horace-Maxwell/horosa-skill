@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from collections.abc import Awaitable, Callable
@@ -20,7 +21,9 @@ from horosa_skill.agent_guidance import (
 from horosa_skill.config import Settings
 from horosa_skill.engine.registry import (
     COMPACT_SURFACE_TOOL_COUNT,
-    FACADE_TOOL_COUNT,
+    FACADE_TOOL_COUNT,  # noqa: F401 — 对外再导出（脚本 / 测试从 mcp_server 取它）
+    FULL_SURFACE_TOOL_COUNT,
+    UNADVERTISED_TECHNIQUES,
     TOOL_DEFINITIONS,
 )
 from horosa_skill.errors import ToolValidationError, bilingual
@@ -110,7 +113,7 @@ machine; nothing is sent to a remote service.
 USE FOR 起盘/排盘/起课/起卦/算命/看运势/合盘/择日/卜卦, or to explain/store/report
 such a chart. Also 农历/节气/黄历 conversion, celebrity birth data.
 
-WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)
+WHAT IT COVERS ({FULL_SURFACE_TOOL_COUNT} tools)
 Western: natal + derived charts, 20+ predictive systems, horary 卜卦, astrocartography, midpoints.
 Chinese: 八字/紫微斗数/大六壬/奇门遁甲/太乙/金口诀/三式合一/六爻/河洛理数/邵子参评数/一掌经/小六壬/灵棋经 …
 择日 ×10: condition-tree window search (天星/奇门/黄历/八字/太乙/紫微/六壬/三式/七政/印度).
@@ -123,7 +126,7 @@ HOW TO USE
 4. Explain ONLY from data.export_snapshot.export_text; never hand-calculate. Text cut? warnings give the horosa_memory_show call for the rest; read it first.
 5. Technique results carry data.technique_card; quote it after your answer. Runs are stored (horosa_memory_query); horosa_report_render writes DOCX/PDF.
 
-HOROSA_MCP_COMPACT=1: {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} (horosa_tool_run runs any technique
+HOROSA_MCP_COMPACT=1: {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FULL_SURFACE_TOOL_COUNT} (horosa_tool_run runs any technique
 by name); HOROSA_TOOLSETS=astro,cn limits the groups."""
 
 # HOROSA_JEV 开启时的 instructions（v0.39.0）：「nothing is sent to a remote service」这句在决策层开着时
@@ -153,10 +156,10 @@ _JEV_TRIMS = (
 # 精简面（HOROSA_MCP_COMPACT=1）的 instructions：Cursor / VS Code / Codex / Gemini / Windsurf / Cline / Zed 默认就是
 # 精简面——多数客户端读到的说明书若写全量的工具数，而 tools/list 只给精简面那几个，模型就不知道技法该怎么到达。
 # 这里把「覆盖面」一行与末段换成精简面的真实用法（同样受 2048 字节预算约束，测试两态都锁）。
-_FULL_COVERS = f"WHAT IT COVERS ({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)"
+_FULL_COVERS = f"WHAT IT COVERS ({FULL_SURFACE_TOOL_COUNT} tools)"
 _COMPACT_COVERS = f"WHAT IT COVERS ({COMPACT_SURFACE_TOOL_COUNT} tools: {len(TOOL_DEFINITIONS)} techniques via horosa_tool_run)"
 _FULL_TAIL = (
-    f"HOROSA_MCP_COMPACT=1: {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} "
+    f"HOROSA_MCP_COMPACT=1: {COMPACT_SURFACE_TOOL_COUNT} facade tools instead of {FULL_SURFACE_TOOL_COUNT} "
     "(horosa_tool_run runs any technique\nby name); HOROSA_TOOLSETS=astro,cn limits the groups."
 )
 _COMPACT_TAIL = (
@@ -279,6 +282,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         sys.stderr.flush()
     mcp = HorosaMCPServer(
         name="Horosa Skill",
+        # serverInfo.title / description 以前为空（审计 S-29）：客户端的服务器列表只显示 name。
+        title="Horosa 星阙",
+        description="Local-first 术数 / astrology engine: Western & Chinese charts, predictive systems, divination, election.",
         version=__version__,
         instructions=_server_instructions(
             decision_layer_on=getattr(service, "decision_layer", None) is not None, plan=plan,
@@ -292,6 +298,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     )
     mcp.output_script = settings.output_script
     mcp.result_view = settings.mcp_result_view
+    if str(settings.log_level).upper() != "DEBUG":
+        # httpx 每次后端请求一行 INFO（审计 S-31）：不污染协议流，但把 stderr / 客户端 MCP 日志刷满。DEBUG 时照旧。
+        logging.getLogger("httpx").setLevel(logging.WARNING)
     mcp.result_budget = Budget(max_tokens=settings.mcp_result_max_tokens, max_chars=settings.mcp_result_max_chars)
     mcp.profile_settings = settings  # 闸门按命主档案过滤追问（_gated_run）
     # [dispatch 批 v0.50 F9] 闸门在地名解析之后判定（_gate_view_with_places）。
@@ -691,6 +700,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
     for definition in TOOL_DEFINITIONS.values():
         if toolsets is not None and definition.domain.lower() not in toolsets:
             continue
+        if definition.name in UNADVERTISED_TECHNIQUES:
+            continue  # 注册键照收（tool_run / CLI / dispatch），不单独广告成平铺工具（审计 S-16）
         input_model = definition.input_model
 
         def _factory(tool_name: str, model: Any) -> Any:

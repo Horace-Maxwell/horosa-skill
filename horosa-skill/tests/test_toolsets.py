@@ -12,7 +12,7 @@ import re
 import pytest
 
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, UNADVERTISED_TECHNIQUES
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces.mcp_server import create_mcp_server
@@ -72,7 +72,8 @@ def test_server_profile_reports_what_is_exposed(monkeypatch) -> None:
     profile = _server_profile(Settings(db_path=None, output_dir=None))
     assert profile["toolsets_effective"] == ["cn"] and profile["toolsets_unknown"] == ["typo"]
     assert profile["tool_run_registered"] is True and profile["compact"] is False
-    assert profile["technique_tools_registered"] == sum(1 for d in TOOL_DEFINITIONS.values() if d.domain == "cn")
+    assert profile["technique_tools_registered"] == sum(
+        1 for name, d in TOOL_DEFINITIONS.items() if d.domain == "cn" and name not in UNADVERTISED_TECHNIQUES)
 
 
 def test_guidance_tool_carries_server_profile(tmp_path, monkeypatch) -> None:

@@ -40,7 +40,7 @@ from horosa_skill.service import HorosaSkillService
 from horosa_skill.surfaces import cli
 from horosa_skill.surfaces.mcp_server import (
     COMPACT_SURFACE_TOOL_COUNT,
-    FACADE_TOOL_COUNT,
+    FULL_SURFACE_TOOL_COUNT,
     _server_instructions,
     create_mcp_server,
 )
@@ -197,8 +197,8 @@ def test_compact_instructions_describe_the_compact_surface_within_budget(tmp_pat
         full = _server_instructions(decision_layer_on=jev)
         compact = _server_instructions(decision_layer_on=jev, compact=True)
         assert len(full.encode("utf-8")) <= 2048 and len(compact.encode("utf-8")) <= 2048
-        assert f"({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)" in full
-        assert f"({FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} tools)" not in compact
+        assert f"({FULL_SURFACE_TOOL_COUNT} tools)" in full
+        assert f"({FULL_SURFACE_TOOL_COUNT} tools)" not in compact
         assert f"{len(TOOL_DEFINITIONS)} techniques via horosa_tool_run" in compact
         assert "horosa_astro_chart" in compact
     settings, service = _service(tmp_path)
@@ -235,7 +235,7 @@ def test_every_cli_command_and_parameter_has_help() -> None:
 def test_cli_help_counts_come_from_the_registry() -> None:
     commands = dict(_commands())
     surface = next(p for p in commands["client config"].params if p.name == "surface")
-    assert f"{FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} 个工具" in surface.help
+    assert f"{FULL_SURFACE_TOOL_COUNT} 个工具" in surface.help
     assert f"{COMPACT_SURFACE_TOOL_COUNT} 个门面工具" in surface.help
     query = next(p for p in commands["knowledge search"].params if p.name == "query")
     assert not any(ch.isdigit() for ch in query.help)

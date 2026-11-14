@@ -27,7 +27,7 @@ from horosa_skill.client_tools import (
 )
 from horosa_skill.engine.registry import (
     COMPACT_SURFACE_TOOL_COUNT,
-    FACADE_TOOL_COUNT,
+    FULL_SURFACE_TOOL_COUNT,
     TOOL_DEFINITIONS,
 )
 
@@ -287,11 +287,11 @@ def _build_client_config_payload(
     }
     tool_surface = {
         "mode": "compact" if use_compact else "full",
-        "tools": COMPACT_SURFACE_TOOL_COUNT if use_compact else FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS),
+        "tools": COMPACT_SURFACE_TOOL_COUNT if use_compact else FULL_SURFACE_TOOL_COUNT,
         "reason": (
             _CLIENT_COMPACT_REASON.get(key, "该客户端对工具总数敏感")
             if use_compact
-            else f"该客户端能吃下全量平铺面（{FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)} 个工具）"
+            else f"该客户端能吃下全量平铺面（{FULL_SURFACE_TOOL_COUNT} 个工具）"
         ),
         "override": "--surface full / --surface compact",
     }

@@ -16,7 +16,7 @@ import pytest
 from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, UNADVERTISED_TECHNIQUES
 from horosa_skill.engine.synonyms import aka_line
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.service import HorosaSkillService
@@ -60,7 +60,7 @@ def full_tools(tmp_path_factory) -> dict[str, dict]:
 def _technique_tools(full_tools: dict[str, dict]) -> dict[str, dict]:
     by_mcp = {definition.mcp_name: name for name, definition in TOOL_DEFINITIONS.items()}
     out = {by_mcp[name]: tool for name, tool in full_tools.items() if name in by_mcp}
-    assert len(out) == len(TOOL_DEFINITIONS)
+    assert len(out) == len(TOOL_DEFINITIONS) - len(UNADVERTISED_TECHNIQUES)   # bazi_direct 只作注册键别名
     return out
 
 
