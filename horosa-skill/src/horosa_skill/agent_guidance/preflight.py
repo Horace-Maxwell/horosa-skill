@@ -130,6 +130,11 @@ def open_questions(tool_name: str, payload: dict[str, Any], *, confirmed: bool) 
     return items
 
 
+def _unanswered_defaults(defaults: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """缺省句只列还没给的键（审计 S-04(d)：太阳返照已传 datetime:"2027"，提示仍说「我会使用 datetime=今年生日时刻」）。"""
+    return [item for item in defaults if not isinstance(item, dict) or payload.get(str(item.get("field") or "")) in (None, "")]
+
+
 def _filter_provided_questions(ask_if_missing: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
     """兼容旧调用点：按载荷过滤（不分技法覆盖）。新代码用 open_questions。"""
     return [
@@ -210,7 +215,8 @@ def validate_agent_preflight(tool_name: str, payload: dict[str, Any]) -> dict[st
     guidance = build_agent_guidance(tool_name=tool_name)
     policy = guidance["tools"][tool_name]
     return _block(
-        tool_name, open_items, [] if flagged else policy.get("safe_defaults", []), policy.get("do_not_assume", []),
+        tool_name, open_items, [] if flagged else _unanswered_defaults(policy.get("safe_defaults", []), payload),
+        policy.get("do_not_assume", []),
         reason="missing_required_facts" if flagged else "missing_agent_confirmation",
     )
 

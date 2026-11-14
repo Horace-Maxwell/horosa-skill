@@ -169,30 +169,32 @@ def query_target(query: str, context: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def _fact(fact: str, fields: list[str], zh: str, en: str) -> dict[str, Any]:
-    return {"fact": fact, "fields": fields, "question": bilingual(zh, en)}
+def _fact(fact: str, fields: list[str], zh: str, en: str, *, agent_note: str = "") -> dict[str, Any]:
+    """`question` 是问用户的话（审计 S-04(e)：不夹「放进 context」这类给 AI 的话）；给 AI 的放 `agent_note`。
+    地点问城市名即可：place 一个键补齐坐标与当日时区（审计 S-06），不让用户报时区。"""
+    return {"fact": fact, "fields": fields, "question": bilingual(zh, en), **({"agent_note": agent_note} if agent_note else {})}
 
 
 def _moment_fact(tool: str, missing: list[str], *, candidate: bool = False) -> dict[str, Any]:
     name = display_name(tool)
     if candidate:
-        zh = f"{name}评估的是一个候选时刻：请提供要评估的日期、时间、时区和地点（放进 context）。"
-        en = f"{name} evaluates one candidate moment: give its date, time, time zone and place (in `context`)."
+        zh = f"{name}评估的是一个候选时刻：要评估的是哪一天、几点，在哪个城市？"
+        en = f"{name} evaluates one candidate moment: which date and time, and in which city?"
+        note = "Put the moment in `context` (date, time, place)."
     else:
-        zh = (f"{name}按起课 / 提问的那个时刻起盘：请提供这一刻的日期、时间、时区和地点（放进 context）。"
-              "服务端不拿自己的时钟当作用户的「此刻」——AI 客户端知道当前时间和用户所在地，请如实填写；出生时间不能代替。")
-        en = (f"{name} is cast for the moment of the question: give that moment's date, time, time zone and place "
-              "(in `context`). The server does not assume its own clock is the user's 'now'; the AI client knows the "
-              "current time and the user's location, so fill them in. Birth data cannot stand in for it.")
-    return _fact("question_moment", [f"context.{key}" for key in missing], zh, en)
+        zh = f"{name}按提问的那一刻起盘：现在（或你想问的那一刻）是几月几日几点，你在哪个城市？"
+        en = f"{name} is cast for the moment of the question: what are the date and time of that moment, and which city are you in?"
+        note = ("Put the moment in `context` (date, time, place). The server never takes its own clock as the user's 'now'; "
+                "you know the current time and the user's location, so fill them in. Birth data cannot stand in for it.")
+    return _fact("question_moment", [f"context.{key}" for key in missing], zh, en, agent_note=note)
 
 
 def _birth_fact(tool: str, missing: list[str]) -> dict[str, Any]:
     name = display_name(tool)
     return _fact(
         "birth_data", [f"birth.{key}" for key in missing],
-        f"{name}需要出生数据：请提供出生日期、时间、时区和出生地（缺：{', '.join(missing)}）。",
-        f"{name} needs birth data: birth date, time, time zone and place (missing: {', '.join(missing)}).",
+        f"{name}需要出生数据：请告诉我出生日期、时间和出生城市（缺：{', '.join(missing)}）。",
+        f"{name} needs birth data: the birth date, time and city (missing: {', '.join(missing)}).",
     )
 
 
@@ -459,9 +461,9 @@ def plan_tool(tool: str, inputs: PlanInputs) -> ToolPlan:
         if not outer:
             plan.missing.append(_fact(
                 "second_person", ["subject.outer"],
-                "合盘需要两个人的出生数据：请提供对方的出生日期、时间、时区和出生地（subject.inner = 本人，subject.outer = 对方）。",
-                "A relationship chart needs both people's birth data: give the other person's birth date, time, time zone "
-                "and place (subject.inner = the user, subject.outer = the other person).",
+                "合盘需要两个人的出生数据：请告诉我对方的出生日期、时间和出生城市。",
+                "A relationship chart needs both people's birth data: the other person's birth date, time and city.",
+                agent_note="subject.inner = the user, subject.outer = the other person.",
             ))
         if not inner:
             plan.missing.append(_birth_fact(tool, ["date", "time", "zone", "lat", "lon"]))
@@ -546,7 +548,8 @@ def missing_facts_recovery(plans: list[ToolPlan], *, operation: str = "horosa_di
         "kind": "input",
         "reason": "missing_required_facts",
         "prompt_to_user": "\n".join(lines_zh + lines_en),
-        "missing_facts": [{"fact": item["fact"], "fields": item["fields"], "tools": item["tools"]} for item in items],
+        "missing_facts": [{"fact": item["fact"], "fields": item["fields"], "tools": item["tools"],
+                           **({"agent_note": item["agent_note"]} if item.get("agent_note") else {})} for item in items],
         "ask_if_missing": [{"field": item["field"], "question": item["question"], "fact": True} for item in items],
         "safe_defaults": [],
         "do_not_assume": [

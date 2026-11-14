@@ -326,7 +326,8 @@ def test_unknown_and_ambiguous_profiles_refuse_and_list_the_known_names(tmp_path
 
 
 def _asked(result: dict) -> list[str]:
-    return [item["field"] for item in result["details"]["ask_if_missing"]]
+    details = result["details"]   # MCP 缺省视图只留 agent_recovery 里那一份（审计 S-04）
+    return [item["field"] for item in details.get("ask_if_missing") or details["agent_recovery"]["ask_if_missing"]]
 
 
 def test_gate_still_blocks_and_asks_only_what_the_profile_lacks(tmp_path: Path, _no_elicit) -> None:

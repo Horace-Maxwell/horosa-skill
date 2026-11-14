@@ -108,6 +108,11 @@ ZONE_DOCUMENTED_DEFAULTS: dict[str, tuple[str, str]] = {
         ("{missing} not given: the mundane chart uses the upstream page default (MundaneMain: zone +08:00, ingress chart at "
          "116e23 / 23n26). The ingress moment is global but the houses depend on the place; give place, or zone + lat + lon, for a specific place."),
     ),
+    # 审计 S-26：万年历是查历，不起盘；农历按东八区定（与历算经度缺省 120e00 同一口径）。
+    "calendar_month": (
+        "没给 {missing}：万年历按东八区（+08:00）排农历与节气；要按别处的钟看节气交接时刻请给 zone。",
+        "{missing} not given: the calendar uses UTC+8 for the Chinese calendar and solar terms; give zone to see term times on another clock.",
+    ),
 }
 
 

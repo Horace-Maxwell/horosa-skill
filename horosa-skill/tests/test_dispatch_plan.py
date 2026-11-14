@@ -46,7 +46,9 @@ def test_moment_techniques_never_cast_on_the_birth_moment(service) -> None:
     assert not refused.ok and refused.code == "agent_guidance.required" and calls == []
     facts = refused.details["missing_facts"]
     assert facts[0]["fact"] == "question_moment" and "context.date" in facts[0]["fields"]
-    assert "服务端不拿自己的时钟" in refused.details["agent_recovery"]["prompt_to_user"]
+    # 给用户的问句不夹给 AI 的话（审计 S-04(e)）；「服务端不拿自己的时钟当此刻」在 agent_note 里
+    assert "服务端不拿自己的时钟" not in refused.details["agent_recovery"]["prompt_to_user"]
+    assert "never takes its own clock" in facts[0]["agent_note"]
 
     ran = svc.dispatch({"query": "用奇门看看这笔投资", "birth": BIRTH, "context": NOW, **OK})
     assert ran.ok and calls[-1][0] == "qimen" and calls[-1][1]["date"] == "2026-11-12" and calls[-1][1]["lat"] == "39n54"

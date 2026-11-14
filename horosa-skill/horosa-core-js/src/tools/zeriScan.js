@@ -65,7 +65,7 @@ import { buildQizhengZeriSnapshotExtra } from '../vendor/divination/zeri/qizheng
 import { compileIndiaTree, INDIA_CONDITION_TYPES } from '../vendor/divination/zeri/indiaZeriConditionTypes.js';
 import { buildIndiaZeriSnapshotExtra } from '../vendor/divination/zeri/indiaZeriSnapshot.js';
 import { zeriRowOpts, withLeafKind, explainAtFromList } from './zeriSnapshotOpts.js';
-import { checkConditionValues, invalidValuesMessage } from './zeriParamCheck.js';
+import { checkConditionValues, invalidValuesMessage, structuralMessage } from './zeriParamCheck.js';
 
 // 每个技法把它自己的四件套（编译 / 扫描 / 单点判读 / 快照）报到这里。`hourly` 标记区分
 // 黄历（日粒度，`scanHuangli({cfg, tree, …})`，不吃 geo/options）与其余五个（时辰粒度，
@@ -148,6 +148,9 @@ export async function runZeriScanRemote(payload) {
     if (!tree) { return fail(technique, action, 'missing_conditions', '未提供择时条件树（conditions）。'); }
     // 后端求值器对界外值同样落缺省分支：取值预检在本地先做（审计 S-01）。
     const checked = checkConditionValues(spec.registry, tree);
+    if (checked.structural.length) {
+      return fail(technique, action, 'invalid_conditions', structuralMessage(checked.structural), { structural: checked.structural, example: checked.example });
+    }
     if (checked.invalid.length) {
       return fail(technique, action, 'invalid_conditions', invalidValuesMessage(checked.invalid), { invalid: checked.invalid });
     }
@@ -239,6 +242,9 @@ export async function runZeriScan(payload) {
   }
   // 取值预检（审计 S-01）：下拉 / 多选的值必须在注册表选项里；标签唯一对得上的读成规范值并回说明，其余按字段报错。
   const checked = checkConditionValues(spec.registry, tree);
+  if (checked.structural.length) {
+    return fail(technique, action, 'invalid_conditions', structuralMessage(checked.structural), { structural: checked.structural, example: checked.example });
+  }
   if (checked.invalid.length) {
     return fail(technique, action, 'invalid_conditions', invalidValuesMessage(checked.invalid), { invalid: checked.invalid });
   }

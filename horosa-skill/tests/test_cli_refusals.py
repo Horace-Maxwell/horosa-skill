@@ -159,7 +159,10 @@ def test_cli_refusals_carry_the_recovery_hints_mcp_gives(service, tmp_path: Path
     on_mcp = _mcp_call(_service(tmp_path / "mcp"), tool, arguments)
     assert on_cli["code"] == on_mcp["code"]
     for key in ("hint", "next_action", "agent_recovery"):
-        assert key in on_cli["details"] and key in on_mcp["details"], key
+        assert key in on_cli["details"], key
+    # MCP 缺省视图只留一份恢复信息（审计 S-04）：next_action 在 agent_recovery 里，自指的通用 hint 不发
+    recovery = on_mcp["details"]["agent_recovery"]
+    assert recovery.get("prompt_to_user") and (recovery.get("next_action") or on_mcp["details"].get("next_action"))
 
 
 def test_an_unknown_tool_refusal_carries_agent_recovery(service) -> None:

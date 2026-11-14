@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from horosa_skill.cn_vocab import cn_field_validator
 from horosa_skill.schemas.tools.base import BirthInput, FlexibleModel, _AscRaModeKnob, _unadvertised
@@ -221,8 +221,10 @@ class NongliTimeInput(FlexibleModel):
 
 class CalendarMonthInput(FlexibleModel):
     # 黄历/万年历：date 所在公历月的整月月历（农历/干支/节气/朔望）。
+    # 审计 S-26：农历日期的拒绝指过来时说「给公历年、月」——以前不收 year / month、闸门还要问 3 题（含时区）。
+    # 现在 year + month 等于该月 1 日；zone 缺省 +08:00（农历按东八区定，与历算经度缺省 120e00 同一口径）；纯查历不过闸。
     date: str
-    zone: str
+    zone: str = "+08:00"
     lon: str = "120e00"  # 历算经度（节气/朔望真时刻按此），默认东经 120 度标准历算经度
     lat: str | None = None
     ad: int | None = 1
@@ -231,6 +233,16 @@ class CalendarMonthInput(FlexibleModel):
     hour: int | None = Field(default=None, description="0–23 整点小时；影响 [时辰吉凶] 的当前时标记。")
     tongshu: dict[str, Any] | None = Field(default=None, description="通书 {school,event,liexiuUse,mingYear}；school 键见 guidance")
     rizi: dict[str, Any] | None = Field(default=None, description="日子馆 {event, year, topN, persons:[{name,date,time,zone,gender,role}]}；给了 persons 才产 [日子馆·个性化择日]/[当事人八字]。")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _year_month(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("date") and data.get("year") not in (None, "") and data.get("month") not in (None, ""):
+            try:
+                return {**data, "date": f"{int(data['year']):04d}-{int(data['month']):02d}-01"}
+            except (TypeError, ValueError):
+                return data
+        return data
 
     @field_validator("rizi", mode="before")
     @classmethod

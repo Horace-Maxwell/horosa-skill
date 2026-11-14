@@ -2880,9 +2880,6 @@
    "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"Generate 黄历/万年历 month\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
-    "agent_confirmed_settings": "boolean",
-    "defaults_accepted": "boolean",
-    "clarification_notes": "string",
     "date": "string",
     "zone": "string",
     "lon": "string",

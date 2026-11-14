@@ -66,9 +66,7 @@
     "apEvents",
     "apMaxAge",
     "apMethod",
-    "apYear",
-    "hsys",
-    "zodiacal"
+    "apYear"
    ],
    "facts": [],
    "verdict": "block"
@@ -147,12 +145,10 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "mode",
     "startPlanet",
     "subRule",
-    "yearType",
-    "zodiacal"
+    "yearType"
    ],
    "facts": [],
    "verdict": "block"
@@ -367,11 +363,7 @@
    "code": "agent_guidance.required",
    "defaults": [
     "bezzaOrb",
-    "hsys",
-    "targetDate",
-    "targetTime",
-    "zodiacal",
-    "zodiacal"
+    "targetTime"
    ],
    "facts": [],
    "verdict": "block"
@@ -382,17 +374,7 @@
  },
  "calendar_month": {
   "bare": {
-   "ask": [
-    "date",
-    "lon",
-    "zone"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "lon"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "no_gender_defaults_accepted": {
    "verdict": "pass"
@@ -507,11 +489,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -549,11 +528,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -591,11 +567,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -663,11 +636,7 @@
     "timeline settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "dayMethod",
-    "orderType",
-    "startMode"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -707,9 +676,7 @@
     "distMethod",
     "distReleaser",
     "distYear",
-    "distYears",
-    "hsys",
-    "zodiacal"
+    "distYears"
    ],
    "facts": [],
    "verdict": "block"
@@ -757,7 +724,6 @@
    "code": "agent_guidance.required",
    "defaults": [
     "fenyeVersion",
-    "flowYear",
     "hsys",
     "ichingMerge",
     "zodiacal"
@@ -798,11 +764,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -861,10 +824,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -924,10 +884,7 @@
     "timelineStartYear/timelineCount"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -961,8 +918,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "koujing",
-    "qiMode"
+    "koujing"
    ],
    "facts": [],
    "verdict": "block"
@@ -1019,10 +975,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -1085,10 +1038,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -1124,11 +1074,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "datetime",
-    "dirLat/dirLon",
-    "dirZone",
-    "hsys",
-    "zodiacal"
+    "dirLat/dirLon"
    ],
    "facts": [],
    "verdict": "block"
@@ -1190,7 +1136,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "qiguaFa",
     "school"
    ],
    "facts": [],
@@ -1228,10 +1173,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -1293,11 +1235,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -1345,8 +1284,7 @@
    "defaults": [
     "after23NewDay",
     "huangdiOffset",
-    "quHuaGong",
-    "timeAlg"
+    "quHuaGong"
    ],
    "facts": [],
    "verdict": "block"
@@ -1381,7 +1319,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "category",
     "orbScale",
     "orbs",
     "school"
@@ -1479,7 +1416,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
     "indiaAyanamsa",
     "indiaHsys",
     "indiaTransitDays",
@@ -1519,9 +1455,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "rectifyRpSource",
-    "rectifyStepSeconds",
-    "rectifyWindowMinutes"
+    "rectifyRpSource"
    ],
    "facts": [],
    "verdict": "block"
@@ -1599,11 +1533,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "minorVariant",
-    "targetDate",
-    "targetTime",
-    "zodiacal"
+    "targetTime"
    ],
    "facts": [],
    "verdict": "block"
@@ -1641,12 +1572,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "jayFrom",
-    "targetDate",
-    "targetTime",
-    "zodiacal",
-    "zodiacal"
+    "targetTime"
    ],
    "facts": [],
    "verdict": "block"
@@ -1752,8 +1679,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "diFen",
-    "guirengType",
     "options.timeBasis",
     "options.wuxing",
     "options.流派五键"
@@ -1791,9 +1716,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
-    "mode",
-    "zodiacal"
+    "mode"
    ],
    "facts": [],
    "verdict": "block"
@@ -1887,7 +1810,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "guirengType",
     "isDiurnal",
     "options.castMethod",
@@ -2012,11 +1934,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "datetime",
-    "dirLat/dirLon",
-    "dirZone",
-    "hsys",
-    "zodiacal"
+    "dirLat/dirLon"
    ],
    "facts": [],
    "verdict": "block"
@@ -2053,10 +1971,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "ad",
-    "hsys",
-    "siderealAyanamsa",
-    "zodiacal"
+    "siderealAyanamsa"
    ],
    "facts": [],
    "verdict": "block"
@@ -2092,12 +2007,9 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "michonEqual",
     "michonOrb",
-    "michonSwap",
-    "zodiacal",
-    "zodiacal"
+    "michonSwap"
    ],
    "facts": [],
    "verdict": "block"
@@ -2198,15 +2110,11 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "nerK",
     "nerKeepDec",
     "nerOrb",
     "nerT0",
-    "targetDate",
-    "targetTime",
-    "zodiacal",
-    "zodiacal"
+    "targetTime"
    ],
    "facts": [],
    "verdict": "block"
@@ -2295,12 +2203,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
-    "pdMethod",
-    "pdProjection/pdFrame",
-    "pdTimeKey",
-    "pdtype",
-    "zodiacal"
+    "pdProjection/pdFrame"
    ],
    "facts": [],
    "verdict": "block"
@@ -2335,13 +2238,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "datetime",
-    "hsys",
-    "pdMethod",
-    "pdTimeKey",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -2381,11 +2278,9 @@
    "code": "agent_guidance.required",
    "defaults": [
     "direction",
-    "hsys",
     "maxYears",
     "persianYear",
-    "rateKey",
-    "zodiacal"
+    "rateKey"
    ],
    "facts": [],
    "verdict": "block"
@@ -2441,10 +2336,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -2480,10 +2372,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "arcSource",
-    "datetime",
-    "hsys",
-    "zodiacal"
+    "arcSource"
    ],
    "facts": [],
    "verdict": "block"
@@ -2514,10 +2403,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -2553,12 +2439,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "datetime",
-    "dirZone",
-    "hsys",
     "profGrain",
-    "profStart",
-    "zodiacal"
+    "profStart"
    ],
    "facts": [],
    "verdict": "block"
@@ -2592,10 +2474,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -2885,10 +2764,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -3009,7 +2885,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "lateZiHourUseNextDay"
    ],
    "facts": [],
@@ -3114,12 +2989,7 @@
     "technique settings"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "datetime",
-    "dirZone",
-    "hsys",
-    "zodiacal"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -3154,11 +3024,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "datetime",
-    "dirLat/dirLon",
-    "dirZone",
-    "hsys",
-    "zodiacal"
+    "dirLat/dirLon"
    ],
    "facts": [],
    "verdict": "block"
@@ -3402,7 +3268,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "lateZiHourUseNextDay"
    ],
    "facts": [],
@@ -3457,14 +3322,11 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
-    "targetDate",
     "targetTime",
     "tlAnnualDays",
     "tlAnnualOrder",
     "tlDevBasis",
     "tlDiurnalMode",
-    "tlMethod",
     "tlMovingStart",
     "tlMovingYear",
     "tlNineReverse",
@@ -3475,9 +3337,7 @@
     "tlTurnOrder",
     "tlTurnStart",
     "tlVariant",
-    "tlYearType",
-    "zodiacal",
-    "zodiacal"
+    "tlYearType"
    ],
    "facts": [],
    "verdict": "block"
@@ -3586,10 +3446,8 @@
    "code": "agent_guidance.required",
    "defaults": [
     "division",
-    "hsys",
     "lifespan",
-    "system",
-    "zodiacal"
+    "system"
    ],
    "facts": [],
    "verdict": "block"
@@ -3626,11 +3484,8 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "minorVariant",
-    "targetDate",
-    "targetTime",
-    "zodiacal"
+    "targetTime"
    ],
    "facts": [],
    "verdict": "block"
@@ -3815,12 +3670,10 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "hsys",
     "ys129Order",
     "ys129StartPlanet",
     "ys129SubRule",
-    "ys129YearType",
-    "zodiacal"
+    "ys129YearType"
    ],
    "facts": [],
    "verdict": "block"
@@ -3873,8 +3726,7 @@
     "annualMethod",
     "dayunLength",
     "dingYue",
-    "shenshaLayer",
-    "timeAlg"
+    "shenshaLayer"
    ],
    "facts": [],
    "verdict": "block"
@@ -3916,9 +3768,7 @@
     "school-params"
    ],
    "code": "agent_guidance.required",
-   "defaults": [
-    "school"
-   ],
+   "defaults": [],
    "facts": [],
    "verdict": "block"
   },
@@ -3952,7 +3802,6 @@
    "code": "agent_guidance.required",
    "defaults": [
     "hdTrueNode",
-    "hsys",
     "mayanCorrelation",
     "spiritQuadrant"
    ],
@@ -4124,9 +3973,7 @@
    "code": "agent_guidance.required",
    "defaults": [
     "aiMode",
-    "basePoint",
-    "hsys",
-    "zodiacal"
+    "basePoint"
    ],
    "facts": [],
    "verdict": "block"

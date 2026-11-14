@@ -49,16 +49,56 @@ function suggestionsFor(bad, opts) {
   return out;
 }
 
+// 结构性错误（审计 S-23）：扁平数组 →「未知条件类型:undefined」、参数键写成 value / shengxiao →「至少选择一项」、fix_fields.example:null。
+// 现在点名出错的那片叶子，并给这个工具一棵最小的合法条件树。
+function closeTypes(registry, given) {
+  const key = `${given || ''}`.toLowerCase();
+  if (!key) return [];
+  return Object.entries(registry)
+    .filter(([type, spec]) => type.toLowerCase().includes(key) || key.includes(type.toLowerCase()) || `${spec.label || ''}`.includes(`${given}`))
+    .slice(0, 5).map(([type, spec]) => ({ type, label: spec.label }));
+}
+
+export function exampleTree(registry) {
+  for (const [type, spec] of Object.entries(registry || {})) {
+    const params = { ...(spec.defaults || {}) };
+    let problem = 'x';
+    try { problem = typeof spec.validate === 'function' ? spec.validate(params) : ''; } catch (e) { problem = 'x'; }
+    if (!problem) return { kind: 'group', joiner: 'all', children: [{ type, params }] };
+  }
+  return { kind: 'group', joiner: 'all', children: [] };
+}
+
 export function checkConditionValues(registry, tree) {
   const notes = [];
   const invalid = [];
+  const structural = [];
+  if (Array.isArray(tree)) {
+    structural.push({ path: 'conditions', problem: 'flat_array',
+      message: '条件树的根要是一个组 {kind:"group", joiner:"all"|"any", children:[…]}，不是数组' });
+    return { tree, notes, invalid, structural, example: exampleTree(registry) };
+  }
   const walk = (node, path) => {
     if (!node || typeof node !== 'object') return node;
     if (node.kind === 'group' || Array.isArray(node.children)) {
       return { ...node, children: (node.children || []).map((child, i) => walk(child, `${path}.children[${i}]`)) };
     }
+    if (!node.type) {
+      structural.push({ path, problem: 'missing_type', message: `${path} 这片叶子没有 type（条件类键）` });
+      return node;
+    }
     const spec = registry[node.type];
-    if (!spec) return node; // 未知条件类型：交给 compile 报（它有现成的「未知条件类型」）
+    if (!spec) {
+      structural.push({ path, problem: 'unknown_type', given: node.type, message: `${path} 的条件类「${node.type}」不存在`,
+        did_you_mean: closeTypes(registry, node.type) });
+      return node;
+    }
+    const expected = [...new Set([...(spec.fields || []).map((field) => field.key), ...Object.keys(spec.defaults || {})])];
+    const unknownKeys = Object.keys(node.params || {}).filter((key) => !expected.includes(key));
+    if (unknownKeys.length && expected.length) {
+      structural.push({ path, problem: 'unknown_params', type: node.type, label: spec.label, given: unknownKeys, expected,
+        message: `「${spec.label}」（${path}）没有参数 ${unknownKeys.map((k) => `「${k}」`).join('')}；它的参数是 ${expected.join(' / ')}` });
+    }
     const params = { ...(node.params || {}) };
     for (const field of spec.fields || []) {
       if (field.kind !== 'select' && field.kind !== 'multiselect') continue;
@@ -101,7 +141,12 @@ export function checkConditionValues(registry, tree) {
     return { ...node, params };
   };
   const out = walk(tree, 'conditions');
-  return { tree: out, notes, invalid };
+  return { tree: out, notes, invalid, structural, ...(structural.length ? { example: exampleTree(registry) } : {}) };
+}
+
+export function structuralMessage(structural) {
+  return structural.map((row) => row.message + (row.did_you_mean && row.did_you_mean.length
+    ? `；是不是：${row.did_you_mean.map((c) => `${c.type}（${c.label}）`).join(' / ')}` : '')).join('；');
 }
 
 export function invalidValuesMessage(invalid) {

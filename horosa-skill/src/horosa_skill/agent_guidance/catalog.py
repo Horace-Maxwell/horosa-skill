@@ -237,6 +237,9 @@ def suggest_tools_for_intent(intent: str, *, limit: int = 5) -> list[dict[str, A
     for row in intent_table.candidate_details(names[:limit]):
         definition = TOOL_DEFINITIONS[row["tool"]]
         required = sorted(name for name, info in definition.input_model.model_fields.items() if info.is_required())
+        if {"zone", "lat", "lon"} <= set(required):
+            # 地点首选 place（审计 S-06）：一个地名补齐坐标与当日时区；列成必填的 zone / lat / lon 会把模型引去自填。
+            required = [name for name in required if name not in {"zone", "lat", "lon"}] + ["place | zone+lat+lon"]
         policy = TOOL_GUIDANCE.get(row["tool"], {})
         rows.append({
             **row,

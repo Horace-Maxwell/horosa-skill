@@ -9,7 +9,7 @@
 // computes `calcDunJia` on every call before overlaying ken onto it.
 import { scanQimen, explainQimenAt, QIMEN_MAX_TOTAL_HITS, QIMEN_MAX_SPAN_DAYS_TOTAL } from '../vendor/divination/zeri/qimenScanEngine.js';
 import { compileQimenTree, QIMEN_CONDITION_TYPES } from '../vendor/divination/zeri/qimenConditionTypes.js';
-import { checkConditionValues, invalidValuesMessage } from './zeriParamCheck.js';
+import { checkConditionValues, invalidValuesMessage, structuralMessage } from './zeriParamCheck.js';
 import { buildQimenZeriSnapshotExtra } from '../vendor/divination/zeri/qimenZeriSnapshot.js';
 import { zeriRowOpts, withLeafKind } from './zeriSnapshotOpts.js';
 
@@ -68,6 +68,15 @@ export async function runQimenZeri(payload) {
   }
   // 取值预检（审计 S-01）：下拉 / 多选的值必须在注册表选项里，界外值不许落到判定函数的缺省分支。
   const checked = checkConditionValues(QIMEN_CONDITION_TYPES, tree);
+  if (checked.structural.length) {
+    return {
+      tool: 'qimenzeri',
+      action: 'scan',
+      data: { ok: false, error: { code: 'invalid_conditions', message: structuralMessage(checked.structural),
+        details: { structural: checked.structural, example: checked.example } } },
+      snapshot_text: '',
+    };
+  }
   if (checked.invalid.length) {
     return {
       tool: 'qimenzeri',

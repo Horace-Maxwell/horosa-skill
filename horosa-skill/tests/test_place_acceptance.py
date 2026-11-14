@@ -191,7 +191,7 @@ def test_one_candidate_is_never_called_ambiguous(tmp_path: Path) -> None:
     """单候选（限定词核对不了 / 只有一个近似名）措辞是「请确认」，不说「不止一个」。负向对照：_refusal_texts 对单候选
     也用 ambiguous 那句 → 红。"""
     service = _service(tmp_path)
-    confirm = _refusal(service, "Saint Petersburg, FL")
+    confirm = _refusal(service, "Bath, England")   # 英国的「England」没有包围盒：核对不了，单候选请确认（美国州名已能按盒核对，F13）
     assert confirm.code == "place.ambiguous" and confirm.details["status"] == "confirm" and len(confirm.details["candidates"]) == 1
     near = _refusal(service, "Parris")
     assert near.details["status"] == "near" and len(near.details["candidates"]) == 1

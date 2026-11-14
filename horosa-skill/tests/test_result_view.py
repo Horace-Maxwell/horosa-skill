@@ -162,9 +162,19 @@ def test_results_without_reader_text_fall_back_to_a_generic_fit() -> None:
     assert shape_result(small, ViewRequest(view=READING), SMALL) == small
 
 
-def test_failed_envelopes_pass_through() -> None:
-    failed = {"ok": False, "tool": "bazi_birth", "data": {}, "code": "x", "warnings": []}
-    assert shape_result(failed, ViewRequest(view=READING), SMALL) == failed
+def test_failed_envelopes_keep_one_copy_of_the_recovery() -> None:
+    """审计 S-04：error.details 与顶层 details 两份、details 里 ask_if_missing / safe_defaults 与 agent_recovery 重复、空字段、自指 hint。"""
+    recovery = {"prompt_to_user": "问用户", "ask_if_missing": [{"field": "hsys"}], "safe_defaults": [{"field": "hsys", "value": 0}]}
+    details = {"ok": False, "code": "x", "message": "m", "ask_if_missing": [{"field": "hsys"}], "safe_defaults": [{"field": "hsys", "value": 0}],
+               "agent_recovery": recovery, "hint": "参数缺失或无效。请按 details.hint 补齐", "elicitation": {"status": "unsupported"},
+               "allowed": ["a", "b"]}
+    failed = {"ok": False, "tool": "bazi_birth", "version": "1", "data": {}, "code": "x", "message": "m", "warnings": [], "input_normalized": {},
+              "error": {"code": "x", "message": "m", "details": details}, "details": details}
+    out = shape_result(failed, ViewRequest(view=READING), SMALL)
+    assert out == {"ok": False, "tool": "bazi_birth", "version": "1", "input_normalized": {}, "code": "x", "message": "m",
+                   "error": {"code": "x", "message": "m"},
+                   "details": {"agent_recovery": recovery, "allowed": ["a", "b"]}}
+    assert shape_result(failed, ViewRequest(view=FULL), SMALL) == failed      # full 视图原样
 
 
 def test_view_knobs_are_taken_out_of_every_carrier() -> None:

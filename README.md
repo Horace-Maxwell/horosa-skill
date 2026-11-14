@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-119-1c1917?style=flat-square" alt="119 tools" />
-  <img src="https://img.shields.io/badge/测试-7876_passed-3e7c6f?style=flat-square" alt="7876 passed" />
+  <img src="https://img.shields.io/badge/测试-7884_passed-3e7c6f?style=flat-square" alt="7884 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -591,9 +591,9 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 119 / 119 `ok=true` |
-| 工程测试 | **7876 / 7876 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 498 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
-| 未确认参数时强制追问 | 109 个技法工具触发 `must_ask_user=true` |
-| 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
+| 工程测试 | **7884 / 7884 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 498 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 未确认参数时强制追问 | 108 个技法工具触发 `must_ask_user=true` |
+| 免闸直读 | 11 个注册表 / 知识 / 解析类工具（含查历）不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 117 个导出 technique；契约 v17 镜像桌面端 aiExport v65） |
 | 技法依据卡 | 每个起盘技法的响应附 `data.technique_card`（知识 / 导出注册表类不附），逐项设置带人读值与来源；算源声明与运行实测不符时显式亮警 |
 | 知识库 | 35 域；技法操作手册 296 条逐条带出处（生成器幂等，随上游版本重收割） |
@@ -607,7 +607,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 7876 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 7884 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

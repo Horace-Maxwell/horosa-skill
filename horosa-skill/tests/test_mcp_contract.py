@@ -268,7 +268,8 @@ def test_error_paths_return_a_conformant_envelope() -> None:
     assert failed["ok"] is False and failed["error"]["code"] == "runtime.external_unreachable"
     assert failed["code"] == failed["error"]["code"]
     assert failed["message"] == failed["error"]["message"]
-    assert failed["details"] == failed["error"]["details"]
+    # 审计 S-04：缺省视图只留一份 details（顶层）；error 只剩 code / message
+    assert isinstance(failed["details"], dict) and "details" not in failed["error"]
 
 
 def test_structured_output_is_opt_in_and_keeps_the_gate_working(monkeypatch: pytest.MonkeyPatch) -> None:

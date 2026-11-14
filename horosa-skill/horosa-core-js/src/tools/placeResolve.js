@@ -18,6 +18,25 @@ import CITY_TRAD_SIMP from '../vendor/place/data/cityTradSimpMap.json' with { ty
 import { enrichCity, foldAscii, foldTrad } from '../vendor/place/cityMatch.js';
 import ALIASES from './placeData/aliases.json' with { type: 'json' };
 import REGIONS from './placeData/regions.json' with { type: 'json' };
+import BOXES from './placeData/subdivision_boxes.json' with { type: 'json' };
+
+// 一级行政区包围盒（审计 F13 / S-15）：库里的 GeoNames 行只有国家码，「Portland, OR」以前消不了歧、候选之间只有坐标不同。
+// 限定词点到有包围盒的州 / 省 → 按包围盒筛候选（坐标仍只来自库里的条目，不新增地点）；候选展示时反查州名（唯一落在一个盒里才写）。
+const BOX_MARGIN = 0.05;
+function inBox(box, lat, lng, margin = BOX_MARGIN) {
+	return Array.isArray(box) && lat >= box[0] - margin && lat <= box[1] + margin && lng >= box[2] - margin && lng <= box[3] + margin;
+}
+function subdivisionOf(e) {
+	const country = e && (e.code || [...anchorsOf(e)].find((a) => a.startsWith('C:') && BOXES[a.slice(2)])?.slice(2));
+	const boxes = country ? BOXES[country] : null;
+	if (!boxes || !Number.isFinite(Number(e.lat))) return null;
+	// 标签只在恰好落在一个盒里（不加边距）时写：包围盒在州界处重叠（伊利诺伊的 Springfield 也在密苏里的盒里、拉斯维加斯也在加州的盒里），
+	// 落在两个以上就不写——写错州名比不写更糟。筛候选用的是限定词点名的那一个盒（applyQualifiers），不受这条影响。
+	const inside = Object.keys(boxes).filter((code) => inBox(boxes[code], Number(e.lat), Number(e.lng), 0));
+	if (inside.length !== 1) return null;
+	const row = (REGIONS.subdivisions[country] || []).find((r) => r[0] === inside[0]) || [inside[0]];
+	return { code: inside[0], name: row.slice(1).find((n) => CJK.test(n)) || row[1] || inside[0], en: row[1] || inside[0] };
+}
 
 export const POLICY = 'skill-place-acceptance/1';
 const NEAR_DEG = 0.25; // same proximity upstream place.js uses to merge one city's rows across the two libraries
@@ -180,8 +199,8 @@ async function buildIndex() {
 	}
 	for (const [country, subs] of Object.entries(REGIONS.subdivisions)) {
 		for (const [code, ...names] of subs) {
-			addKey(qualifiers, code.toLowerCase(), `S:${country}`);
-			for (const n of names) addKey(qualifiers, placeKey(n), `S:${country}`);
+			addKey(qualifiers, code.toLowerCase(), `S:${country}:${code}`);
+			for (const n of names) addKey(qualifiers, placeKey(n), `S:${country}:${code}`);
 		}
 	}
 	addKey(qualifiers, placeKey('中国'), 'C:CN');
@@ -391,13 +410,33 @@ function segmentCjk(ix, text) {
 }
 
 // Apply qualifiers to a pool. Every qualifier must be satisfied by the candidate's anchors; a subdivision
-// (US state …) is satisfied by the country but marked unverified.
+// (US state …) with a bounding box is checked against the candidate's coordinates (verified); without one it is
+// satisfied by the country but marked unverified.
+function subdivisionHit(a, e) {
+	const [, country, code] = a.split(':');
+	if (!anchorsOf(e).has(`C:${country}`)) return false;
+	const box = (BOXES[country] || {})[code];
+	return box ? inBox(box, Number(e.lat), Number(e.lng)) : true;
+}
+function boxed(a) {
+	const [, country, code] = a.split(':');
+	return !!(BOXES[country] || {})[code];
+}
 function applyQualifiers(pool, quals) {
 	if (!quals.length) return { hits: pool, unverified: [] };
 	const unverified = [];
-	const hits = pool.filter((h) => quals.every((q) => q.anchors.some((a) => (a.startsWith('S:') ? anchorsOf(h.e).has(`C:${a.slice(2)}`) : anchorsOf(h.e).has(a)))));
+	let hits = pool.filter((h) => quals.every((q) => q.anchors.some((a) => (a.startsWith('S:') ? subdivisionHit(a, h.e) : anchorsOf(h.e).has(a)))));
+	// 盒在州界重叠：「Springfield, MO」时伊利诺伊的 Springfield 也落在密苏里的盒里。几个都过时，只落在点名那个盒里的优先。
+	const named = quals.flatMap((q) => q.anchors.filter((a) => a.startsWith('S:') && boxed(a)).map((a) => a.split(':')[2]));
+	if (hits.length > 1 && named.length) {
+		// 同一个限定词也可能是国家码（「CA」= 加拿大 / 加州，「KY」= 开曼 / 肯塔基）：按国家码命中的候选一个都不丢，只在按州命中的里挑。
+		const byCountry = (h) => quals.some((q) => q.anchors.some((a) => !a.startsWith('S:') && anchorsOf(h.e).has(a)));
+		const only = hits.filter((h) => byCountry(h) || named.includes(subdivisionOf(h.e)?.code));
+		if (only.length && only.length < hits.length) hits = only;
+	}
 	for (const q of quals) {
-		const verified = q.anchors.some((a) => !a.startsWith('S:') && hits.some((h) => anchorsOf(h.e).has(a)));
+		const verified = q.anchors.some((a) => (a.startsWith('S:') ? boxed(a) && hits.some((h) => subdivisionHit(a, h.e))
+			: hits.some((h) => anchorsOf(h.e).has(a))));
 		if (!verified) unverified.push(q.text);
 	}
 	return { hits, unverified };
@@ -494,7 +533,9 @@ function suggestions(ix, key, limit) {
 // ---------------------------------------------------------------- verdict
 
 function view(h) {
-	return { name: h.e.name, region: h.e.region, en: h.e.en, gpsLat: h.e.lat, gpsLon: h.e.lng, where: whereOf(h.e), library: h.e.lib === 'S' ? 'cities' : 'citiesFull' };
+	const sub = subdivisionOf(h.e);
+	return { name: h.e.name, region: h.e.region, en: h.e.en, gpsLat: h.e.lat, gpsLon: h.e.lng, where: whereOf(h.e),
+		...(sub ? { subdivision: sub } : {}), library: h.e.lib === 'S' ? 'cities' : 'citiesFull' };
 }
 
 function upstreamView(c) {
@@ -518,7 +559,7 @@ function regionOnly(ix, query) {
 				const all = REGIONS.countries[a.slice(2)] || [];
 				names.push(`${all.find((n) => CJK.test(n)) || a.slice(2)} ${all[0] || ''}`.trim());
 			} else if (a.startsWith('S:')) {
-				names.push(`${q.text} (${a.slice(2)})`);
+				names.push(`${q.text} (${a.split(':')[1]})`);
 			}
 		}
 	}

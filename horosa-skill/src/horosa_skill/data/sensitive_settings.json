@@ -12,6 +12,7 @@
   ],
   "failure_code": "agent_guidance.required",
   "exempt_tools": [
+    "calendar_month",
     "astrodata",
     "export_parse",
     "export_registry",

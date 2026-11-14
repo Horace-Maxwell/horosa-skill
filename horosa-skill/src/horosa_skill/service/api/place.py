@@ -91,6 +91,9 @@ def _engine_messages(exc: ToolTransportError) -> list[str]:
 
 def _candidate_label(candidate: dict[str, Any]) -> str:
     region = f"{candidate.get('region') or ''}".strip()
+    sub = candidate.get("subdivision") if isinstance(candidate.get("subdivision"), dict) else None
+    if sub and sub.get("name"):
+        region = f"{region} · {sub['name']}" if region else str(sub["name"])   # 「波特兰（US · 缅因）」（审计 F13 / S-15）
     en = f"{candidate.get('en') or ''}".strip()
     head = f"{candidate.get('name')}（{region}）" if region else f"{candidate.get('name')}"
     return f"{head} {en} {candidate.get('lat')}/{candidate.get('lon')}".replace("  ", " ").strip()
@@ -116,6 +119,8 @@ def _compact(candidate: dict[str, Any]) -> dict[str, Any]:
         out["zone_at_time"] = candidate["zone_at_time"]
     if candidate.get("where"):
         out["where"] = list(candidate["where"])  # 由近及远的上级（省 / 市 / 国家），引擎按城市库给
+    if isinstance(candidate.get("subdivision"), dict):
+        out["subdivision"] = candidate["subdivision"]  # 州 / 省（按包围盒反查，只在唯一落在一个盒里时给）
     return out
 
 

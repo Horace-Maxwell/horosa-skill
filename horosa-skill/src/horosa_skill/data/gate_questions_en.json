@@ -164,7 +164,7 @@
   "请提供要换算的日期、时间和时区。": "Give the date, time and time zone to convert.",
   "请提供经度；如需真太阳时也请提供纬度。": "Give the longitude; for true solar time also the latitude.",
   "子时换日、晚子时时柱和时间算法是否沿用默认？": "Keep the defaults for the day change at zi hour, the late-zi hour pillar and the time algorithm?",
-  "要查询哪个月份的黄历？请给出该月内任一公历日期。": "Which month's calendar? Give any Gregorian date in that month.",
+  "要查询哪个月份的黄历？请给出该月内任一公历日期（或公历年、月）。": "Which month's calendar? Give any Gregorian date in that month (or the Gregorian year and month).",
   "用哪个时区？": "Which time zone?",
   "历算经度沿用东经120度标准，还是指定当地经度？": "Keep the standard 120°E longitude for the calendar, or use the local longitude?",
   "要查询哪些卦名？请给出一个或多个卦名。": "Which hexagram names? Give one or more names.",

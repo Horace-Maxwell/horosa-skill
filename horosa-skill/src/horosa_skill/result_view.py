@@ -622,6 +622,8 @@ def shape_result(raw: Any, request: ViewRequest, budget: Budget) -> Any:
     value = raw.model_dump(mode="json") if hasattr(raw, "model_dump") else raw
     if not isinstance(value, dict):
         return raw
+    if value.get("ok") is False:
+        return _with_notes(slim_failure(value), request.notes)
     if _is_envelope(value):
         shaped, slot = _plan_envelope(value, request)
         shaped = _fill(shaped, [slot] if slot else [], budget)
@@ -632,6 +634,42 @@ def shape_result(raw: Any, request: ViewRequest, budget: Budget) -> Any:
     else:
         shaped = value
     return _with_notes(fit_to_budget(shaped, budget), request.notes)
+
+
+# 失败 / 闸门回包的定型（审计 S-04）：审计时 71 个技法的闸门回包中位 8 KB、最大 12.5 KB，给用户的话只有 725 B——
+# error.details 与顶层 details 逐字节相同，两份里 ask_if_missing / safe_defaults 又各出现两次，外加空字段与自指的 hint。
+# 缺省视图只留一份：顶层 ok / code / message / details（agent_recovery 在里面）；error 只剩 code / message。full 视图与 CLI 原样。
+_RECOVERY_KEYS = frozenset({"ask_if_missing", "safe_defaults", "do_not_assume", "next_action", "must_ask_user", "kind", "reason",
+                            "prompt_to_user", "retry_requires_one_of", "retry_should_include"})
+_ECHO_KEYS = frozenset({"ok", "tool_name", "code", "message", "confirmation_fields"})
+_GENERIC_HINT = "参数缺失或无效。请按 details.hint"
+
+
+def _blank(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+_ENVELOPE_REQUIRED = frozenset({"ok", "tool", "version", "input_normalized"})   # schemas.common.ToolEnvelope 的必填键（声明 outputSchema 时要校验）
+
+
+def slim_failure(value: dict[str, Any]) -> dict[str, Any]:
+    out = {key: item for key, item in value.items() if not _blank(item) or (key in _ENVELOPE_REQUIRED and "tool" in value)}
+    if isinstance(out.get("error"), dict):
+        out["error"] = {key: out["error"][key] for key in ("code", "message") if key in out["error"]}
+    details = value.get("details")
+    if isinstance(details, dict):   # 顶层 code / message / details 三键保留（旧调用方按它们读）
+        recovery = details.get("agent_recovery") if isinstance(details.get("agent_recovery"), dict) else {}
+        slim: dict[str, Any] = {}
+        for key, item in details.items():
+            if _blank(item) or key in _ECHO_KEYS or (recovery and key in _RECOVERY_KEYS and key in recovery):
+                continue
+            if key == "elicitation" and item == {"status": "unsupported"}:
+                continue
+            if key == "hint" and str(item).startswith(_GENERIC_HINT):
+                continue   # 自指：「请按 details.hint 补齐」
+            slim[key] = item
+        out["details"] = slim
+    return out
 
 
 def _with_notes(raw: Any, notes: tuple[str, ...] | list[str]) -> Any:
