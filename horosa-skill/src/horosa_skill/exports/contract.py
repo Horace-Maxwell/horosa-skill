@@ -24,7 +24,6 @@ _EXPORT_TECHNIQUE_OVERRIDES: dict[str, str] = {
     "zr": "zodialrelease",
     "india_chart": "indiachart",
     "ziwei_birth": "ziwei",
-    "ziwei_rules": "ziwei",
     "bazi_birth": "bazi",
     "bazi_direct": "bazi",
     "liureng_gods": "liureng",

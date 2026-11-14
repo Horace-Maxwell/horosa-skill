@@ -1225,7 +1225,7 @@
       "endpoints": [
         "/ziwei/rules"
       ],
-      "export_technique": "ziwei",
+      "export_technique": "ziwei_rules",
       "notes": "Java 聚合层（:9999）计算，Python 只转发与排版"
     },
     "ziweizeri": {

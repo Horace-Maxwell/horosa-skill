@@ -287,6 +287,7 @@ AI_EXPORT_TECHNIQUES = [
     {"key": "astrodata", "label": "名人星盘库"},
     {"key": "bazi_inverse", "label": "八字反查"},
     {"key": "xuanshi", "label": "玄史知识库"},
+    {"key": "ziwei_rules", "label": "紫微规则库"},
     {"key": "qizhengelection", "label": "七政择日动盘"},
     {"key": "india_rectify", "label": "印度生时校正"},
     {"key": "planet_cycles", "label": "行星周期"},
@@ -552,6 +553,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 玄史知识库（skill 侧检索 tool，上游 aiExport 无对应导出技法——与 astrodata 同类，进 mirror 白名单）。
     # 段按 action 的响应形状条件产出：列表响应出 总览+列表、详情响应出 详情，引证有则聚合。
     "xuanshi": ["检索条件", "结果总览", "条目列表", "条目详情", "相关条目", "出处引证"],
+    # 紫微规则库（skill 侧参考工具，审计 O-02）：以前借紫微命盘的段表，缺省阅读视图给的是一张空命盘骨架、规则本身一个字不在。
+    # 段 = Java /ziwei/rules 回包的各张表（四化义 / 宫位 / 星曜 / 化象），上游 aiExport 无对应导出技法——与 xuanshi 同类。
+    "ziwei_rules": ["四化义", "宫位义", "宫位分类", "主星序", "星曜义", "双化", "多象", "化入各宫"],
     # 七政择日动盘（v0.33.0 批 I-1b，skill 侧工具）：起盘信息恒出；其余按 action 出（条件段双登记）。
     "qizhengelection": ["起盘信息", "择日动盘", "天象要素", "日月食搜索", "方位搜索"],
     # 印度生时校正（v0.33.0 批 I-2，/india/rectify）：五段恒出（语汇照上游校时器抽屉 §17）。
@@ -644,8 +648,6 @@ SECTIONS_NOT_PRODUCED_BY_DESIGN: dict[str, dict[str, str]] = {
         "断诀命中": "同上：没有六爻盘就没有断诀命中",
         "占类断语": "同上：没有六爻盘就没有占类断语",
     } for tool in ("gua_desc", "gua_meiyi")},
-    "ziwei_rules": {title: "紫微规则库只列规则、不排命盘：没有命盘就没有这一段（要命盘请用 ziwei_birth）"
-                    for title in ("身宫", "来因宫", "八字大运", "运限概览", "运限", "流派叠层")},
 }
 
 AI_EXPORT_OPTIONAL_SECTIONS = {

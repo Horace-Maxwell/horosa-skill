@@ -21,6 +21,7 @@ from horosa_skill.service._common import (
     _export_body,
     _is_astro_chart_payload,
     _missing_detail_text,
+    _render_snapshot_text,
     _stringify_export_body,
 )
 from horosa_skill.service.text.astro_core import (
@@ -46,7 +47,6 @@ from horosa_skill.service.text.chinese import (
     _build_jieqi_snapshot_text,
     _build_liureng_snapshot_text,
     _build_nongli_snapshot_text,
-    _build_ziwei_snapshot_text,
 )
 from horosa_skill.service.text.pd_zr import (
     _build_pdchart_snapshot_text,
@@ -72,6 +72,43 @@ from horosa_skill.service.text.western import (
 
 # 工具 → 导出键的表搬到了 exports/contract.py（knowledge 也要用）；名字留在这里，调用方不用改。
 
+
+
+def _ziwei_rule_lines(table: Any) -> str:
+    """{名: [条文…]} → 「名：条文 1；条文 2…」一名一行；值是嵌套表（化入各宫：化 → 宫 → 条文）就再分一层。"""
+    if not isinstance(table, dict) or not table:
+        return _ZIWEI_RULES_ABSENT
+    lines: list[str] = []
+    for name, value in table.items():
+        if isinstance(value, dict):
+            for sub, items in value.items():
+                body = "；".join(str(item).strip() for item in (items if isinstance(items, list) else [items]) if str(item).strip() and str(item).strip() != "==")
+                lines.append(f"{name}·{sub}：{body}")
+        else:
+            body = "；".join(str(item).strip() for item in (value if isinstance(value, list) else [value]) if str(item).strip() and str(item).strip() != "==")
+            lines.append(f"{name}：{body}")
+    return "\n".join(lines) or _ZIWEI_RULES_ABSENT
+
+
+_ZIWEI_RULES_ABSENT = "本次 /ziwei/rules 回包没有这张表（规则库由 Java 后端提供；后端版本旧或回包不全时会缺）"
+
+
+def _build_ziwei_rules_text(response_data: dict[str, Any]) -> str:
+    """紫微规则库正文（审计 O-02）：Java /ziwei/rules 的各张表按段写成条文。以前借命盘的快照器，正文是一张空命盘骨架
+    （「日期：— —」「命中格局：无」），模型照 SKILL「只从 export_text 解释」会答「没有命中格局」；规则本身只在 response_view=full 的原始树里。"""
+    rules = response_data.get("ZWRules") if isinstance(response_data.get("ZWRules"), dict) else {}
+    sihua = response_data.get("ZWRuleSihua") if isinstance(response_data.get("ZWRuleSihua"), dict) else {}
+    stars = rules.get("ZWStarArray")
+    return _render_snapshot_text([
+        ("四化义", _ziwei_rule_lines(rules.get("RuleSihua"))),
+        ("宫位义", _ziwei_rule_lines(rules.get("RuleHouses"))),
+        ("宫位分类", _ziwei_rule_lines(rules.get("RuleHouseType"))),
+        ("主星序", "、".join(str(star) for star in stars) if isinstance(stars, list) and stars else _ZIWEI_RULES_ABSENT),
+        ("星曜义", _ziwei_rule_lines(rules.get("RuleStars"))),
+        ("双化", _ziwei_rule_lines(sihua.get("TwoHua"))),
+        ("多象", _ziwei_rule_lines(sihua.get("MultiHua"))),
+        ("化入各宫", _ziwei_rule_lines(sihua.get("HuaInHouse"))),
+    ])
 
 def _build_export_provenance(technique: str, snapshot_text: str | None) -> dict[str, Any]:
     technique_info = get_technique_info(technique) or {}
@@ -119,8 +156,7 @@ def _auto_snapshot_text_for_tool(tool_name: str, input_normalized: dict[str, Any
     if tool_name == "relative":
         return _build_relative_snapshot_text(input_normalized, response_data)
     if tool_name == "ziwei_rules":
-        # ziwei_birth 由 _run_ziwei_tool 出 vendored 上游快照；这里只剩规则库（无盘）一支。
-        return _build_ziwei_snapshot_text(input_normalized, response_data)
+        return _build_ziwei_rules_text(response_data)
     if tool_name in {"liureng_gods", "liureng_runyear"}:
         return _build_liureng_snapshot_text(input_normalized, response_data)
     if tool_name == "jieqi_year":
