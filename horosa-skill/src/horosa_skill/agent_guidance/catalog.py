@@ -10,7 +10,8 @@ from horosa_skill.agent_guidance.tool_table import (
     REPORT_AND_MEMORY_GUIDANCE,
     TOOL_GUIDANCE,
 )
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+from horosa_skill.engine.synonyms import TOOL_SYNONYMS, display_name, synonym_scores
 
 # 软件用法帮助语料：随 guidance 返回，供 agent 据实回答「怎么装/怎么用/怎么出报告」类问题。
 SOFTWARE_USAGE_HELP: dict[str, list[str]] = {
@@ -33,31 +34,102 @@ SOFTWARE_USAGE_HELP: dict[str, list[str]] = {
 }
 
 
-def technique_index() -> dict[str, list[str]]:
-    """技法名索引：{domain: [tool_name, …]}。约 2.5 KB，只有名字没有描述。
+def technique_index() -> dict[str, dict[str, str]]:
+    """技法名索引：{domain: {tool_name: 中文名}}。约 4 KB。
 
     用在 `tool.unknown` 的 details 里做**自愈式报错**：模型点错名字时当场拿到全部合法名字，
     不必回头去读某个工具的描述。这让 `horosa_tool_run` 的描述得以从 4145 字符降到 1024 以内
     （OpenAI 的 function 描述上限；超了会被拒或截断，而它是精简面下抵达全部技法的唯一通道）。
+    带中文名（审计 S-10）：只有注册键时，七政四余 = guolao_chart、邵子参评数 = canping（旁边就是 shaozi 邵子神数），照拼音猜会选错。
     """
-    groups: dict[str, list[str]] = {}
+    groups: dict[str, dict[str, str]] = {}
     for name, definition in TOOL_DEFINITIONS.items():
-        groups.setdefault(str(definition.domain), []).append(name)
-    return {domain: sorted(names) for domain, names in sorted(groups.items())}
+        groups.setdefault(str(definition.domain), {})[name] = display_name(name)
+    return {domain: dict(sorted(names.items())) for domain, names in sorted(groups.items())}
+
+
+def _fold(text: object) -> str:
+    from horosa_skill.memory.search import normalize
+
+    return normalize(text).strip().lower()
+
+
+def _summary(name: str, chars: int = 40) -> str:
+    first = str(TOOL_DEFINITIONS[name].description or "").split(". ")[0].split("。")[0].strip()
+    return first if len(first) <= chars else first[: chars - 1] + "…"
+
+
+def _named_exactly(text: str) -> list[str]:
+    """叫这个名字的技法：同义词表（「八字」「小六壬」「七政四余」，繁简折叠后整词相等）优先，其次导出注册表 / 报告里的中文名。"""
+    from horosa_skill.memory.search import tools_named
+
+    wanted = _fold(text)
+    if not wanted:
+        return []
+    hits = sorted(name for name, words in TOOL_SYNONYMS.items()
+                  if name in TOOL_DEFINITIONS and any(_fold(word) == wanted for word in (name, *words)))
+    return hits or [name for name in tools_named(text) if name in TOOL_DEFINITIONS]
+
+
+def resolve_technique(name: object) -> tuple[str | None, tuple[str, str] | None]:
+    """技法名的宽松解析（审计 S-10）：注册键 / MCP 名之外，也认中文名与同义词（`八字` → bazi_birth、`小六壬` → xiaoliuren）。
+
+    唯一命中才用，并回一条说明 (zh, en)（run_tool 写进 warnings）；多个命中或没有命中返回 (None, None)，由 `tool.unknown` 给候选——
+    不替用户在两个技法里挑。"""
+    exact = resolve_tool_name(name)
+    if exact is not None or not isinstance(name, str):
+        return exact, None
+    hits = _named_exactly(name)
+    if len(hits) != 1:
+        return None, None
+    key = hits[0]
+    return key, (
+        f"技法名「{name.strip()}」按 {key}（{display_name(key)}）跑；下次可直接写 {key}。",
+        f"Technique name {name.strip()!r} was run as {key} ({display_name(key)}); you can pass {key} directly next time.",
+    )
+
+
+def technique_candidates(name: object, *, limit: int = 5) -> list[dict[str, str]]:
+    """点错名字时的候选（最多 5 个，各带中文名与一句话）：整词同名（多义时全列）→ 同义词互含 → 键名近似。"""
+    import difflib
+
+    text = str(name or "").strip()
+    if not text:
+        return []
+    picked: list[str] = list(_named_exactly(text))
+    picked += [tool for _, tool in synonym_scores(text) if tool in TOOL_DEFINITIONS]
+    folded = _fold(text)
+    if len(folded) >= 2:
+        picked += [tool for tool, words in TOOL_SYNONYMS.items()
+                   if tool in TOOL_DEFINITIONS and any(folded in _fold(word) for word in words)]
+    bare = text.lower().removeprefix("horosa_")
+    picked += difflib.get_close_matches(bare, list(TOOL_DEFINITIONS), n=limit, cutoff=0.6)
+    out: list[dict[str, str]] = []
+    for tool in dict.fromkeys(picked):
+        out.append({"tool_name": tool, "name": display_name(tool), "summary": _summary(tool)})
+        if len(out) >= limit:
+            break
+    return out
 
 
 def unknown_tool_details(tool_name: object) -> dict[str, Any]:
-    """`tool.unknown` 的统一 details（CLI / MCP / service 三处同形）：当场给出全部合法名字与两种写法的说明。"""
-    return {
-        "tool_name": tool_name,
+    """`tool.unknown` 的统一 details（CLI / MCP / service 三处同形）：先给最像的几个候选（带中文名），再给全部合法名字。"""
+    candidates = technique_candidates(tool_name)
+    details: dict[str, Any] = {"tool_name": tool_name}
+    if candidates:
+        details["candidates"] = candidates
+    details.update({
         "catalog": technique_index(),
-        "accepted_forms": "registry key (chart) or MCP name (horosa_astro_chart)",
+        "accepted_forms": "registry key (chart), MCP name (horosa_astro_chart), or an unambiguous Chinese name (八字 / 小六壬)",
         "hint": (
-            "details.catalog 按域列出全部合法技法名；也可跑 `horosa-skill tool list`，或读资源 horosa://catalog/techniques。"
-            " / details.catalog lists every valid technique by domain; `horosa-skill tool list` and the"
+            ("details.candidates 是最像的几个技法；" if candidates else "")
+            + "details.catalog 按域列出全部合法技法名（键 → 中文名）；也可跑 `horosa-skill tool list`，或读资源 horosa://catalog/techniques。"
+            + (" / details.candidates are the closest techniques;" if candidates else " /")
+            + " details.catalog lists every valid technique by domain (key → Chinese name); `horosa-skill tool list` and the"
             " horosa://catalog/techniques resource list them too."
         ),
-    }
+    })
+    return details
 
 
 def build_technique_catalog(*, label_chars: int = 72) -> str:

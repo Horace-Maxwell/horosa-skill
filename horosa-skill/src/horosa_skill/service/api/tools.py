@@ -16,7 +16,6 @@ from horosa_skill.decisions.layer import decision_records
 from horosa_skill.engine.registry import (
     TOOL_DEFINITIONS,
     ToolDefinition,
-    resolve_tool_name,
 )
 from horosa_skill.errors import HorosaSkillError, ToolValidationError, bilingual
 from horosa_skill.exports import build_export_registry, parse_export_content
@@ -719,10 +718,11 @@ class ToolsAPI:
         group_id: str | None = None,
         evaluation_case_id: str | None = None,
     ) -> ToolEnvelope:
-        resolved = resolve_tool_name(tool_name)
-        if resolved is None:
-            from horosa_skill.agent_guidance import unknown_tool_details
+        from horosa_skill.agent_guidance import resolve_technique, unknown_tool_details
 
+        # 注册键 / MCP 名，或唯一的中文名（「八字」→ bazi_birth，审计 S-10）；后者在 warnings 里说明按哪个技法跑。
+        resolved, name_note = resolve_technique(tool_name)
+        if resolved is None:
             raise ToolValidationError(
                 bilingual(f"未知技法：{tool_name}", f"Unknown tool: {tool_name}"),
                 code="tool.unknown",
@@ -745,6 +745,8 @@ class ToolsAPI:
             },
         ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), _run_tool_scope() as depth, input_notes_scope(fresh=_INSIDE_TECHNIQUE.get()) as input_notes:
             nested = depth > 1
+            if name_note:
+                F.add_input_note(*name_note)
             if nested:
                 # runner 拼子盘的调用：展示键不是算法输入，摘掉再算（见 _context.PRESENTATION_KEYS）。
                 payload = without_presentation_keys(payload)

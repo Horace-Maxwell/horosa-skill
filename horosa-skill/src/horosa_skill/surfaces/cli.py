@@ -18,7 +18,6 @@ from horosa_skill.engine.registry import (
     COMPACT_SURFACE_TOOL_COUNT,
     FACADE_TOOL_COUNT,
     TOOL_DEFINITIONS,
-    resolve_tool_name,
 )
 from horosa_skill.errors import RuntimeError, ToolValidationError, bilingual
 from horosa_skill.service import HorosaSkillService
@@ -725,9 +724,10 @@ def tool_run(
     service = _service()
     try:
         # chart 与 horosa_astro_chart 都收；必须在闸门前归一（闸门只拦已登记的名字）。
-        resolved = resolve_tool_name(tool_name)
+        from horosa_skill.agent_guidance import resolve_technique, unknown_tool_details
+
+        resolved, _name_note = resolve_technique(tool_name)  # 唯一中文名也收（S-10）；说明由 run_tool 写进 warnings
         if resolved is None:
-            from horosa_skill.agent_guidance import unknown_tool_details
 
             raise ToolValidationError(
                 bilingual(f"未知技法：{tool_name}", f"Unknown tool: {tool_name}"),
@@ -735,7 +735,7 @@ def tool_run(
                 details=unknown_tool_details(tool_name),
             )
         _enforce_agent_preflight(resolved, payload)
-        result = service.run_tool(resolved, payload, save_result=save_result, query_text=query_text)
+        result = service.run_tool(tool_name, payload, save_result=save_result, query_text=query_text)
     except ToolValidationError as exc:
         _refuse(exc)
     _emit_json(_localized(result.model_dump(mode="json")), output)

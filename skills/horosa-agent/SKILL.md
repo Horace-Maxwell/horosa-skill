@@ -277,10 +277,11 @@ those two get the full surface, 全量 132; `setup --surface full|compact` overr
 `horosa_dispatch`, `horosa_agent_guidance`, `horosa_hecan`, `horosa_place_search`, `horosa_profile`,
 `horosa_knowledge_search`, `horosa_memory_query`, `horosa_memory_show`, `horosa_memory_record_answer`,
 `horosa_report_template`, `horosa_report_render`, `horosa_report_from_tool`, `horosa_technique_report` — plus
-`horosa_tool_run`, which runs **any** technique by key or MCP name with the same fields and the same gate
+`horosa_tool_run`, which runs **any** technique by key, MCP name or an unambiguous Chinese name (八字 / 小六壬) with the same fields and the same gate
 (fields at the top level, or inside `request`). There are no flat `horosa_cn_*` / `horosa_astro_*` tools and no
 `horosa_knowledge_read`: use `horosa_tool_run {"tool_name": "knowledge_read", "request": <match.read>}`. A
-missing flat name is never a missing technique; an unknown `tool_name` returns `details.catalog`.
+missing flat name is never a missing technique; an unknown `tool_name` returns `details.candidates` (closest
+matches with Chinese names; pick from them or ask the user, never guess between two) and `details.catalog`.
 
 ```call
 horosa_tool_run {"tool_name": "bazi_birth", "date": "1990-05-03", "time": "08:00", "place": "上海", "gender": "女", "defaults_accepted": true, "clarification_notes": "用户说按星阙默认", "request": {"period": {"liunian": [2026]}}}

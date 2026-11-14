@@ -424,8 +424,8 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     "tool.unknown": {
         "kind": "input",
         "prompt_to_user": bilingual(
-            "工具名不存在。用 horosa_tool_run 描述里的技法目录或 resource horosa://catalog/techniques 核对名字。",
-            "Unknown tool name. Check the technique catalog in horosa_tool_run's description or resource horosa://catalog/techniques.",
+            "工具名不存在。先看 details.candidates（最像的几个，带中文名）；全部合法名字在 details.catalog（键 → 中文名）与 resource horosa://catalog/techniques。",
+            "Unknown tool name. Check details.candidates (the closest techniques, with Chinese names); every valid name is in details.catalog (key → Chinese name) and resource horosa://catalog/techniques.",
         ),
         "next_action": "pick_tool_from_catalog",
     },

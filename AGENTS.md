@@ -101,7 +101,10 @@ bundled Node headless 引擎 `horosa-core-js`），每个技法输出统一 enve
   （`agent_guidance.AGENT_OWNED_OPERATIONS`）。
 - 技法名两种写法都收（`chart` / `horosa_astro_chart`）：`engine/registry.resolve_tool_name` 是唯一解析点，CLI `tool run`、
   `horosa_tool_run`、`report_from_tool`、hecan `tools`、澄清闸、input contract 全走它；**闸门必须先解析再判**（闸门只拦已登记的名字，
-  只在执行层认 MCP 名就等于换个写法绕过闸门）。dispatch / hecan 收顶层平铺的出生信息（`DispatchInput._lift_flat_birth`）。
+  只在执行层认 MCP 名就等于换个写法绕过闸门）。唯一的中文名 / 同义词（`八字` / `小六壬` / `七政四余`）由
+  `agent_guidance.resolve_technique` 在它外面一层认（审计 S-10：精简面原本只认键，最自然的第一调 `tool_name:"八字"` 就是 tool.unknown）：
+  整词唯一命中才用、warnings 写明按哪个键跑；两个以上同名（`邵子`）不替用户挑，`tool.unknown` 的 `details.candidates` 给 ≤5 个带中文名的候选，
+  `details.catalog` 是 `{域: {键: 中文名}}`。dispatch / hecan 收顶层平铺的出生信息（`DispatchInput._lift_flat_birth`）。
 - **闸门逐题判定（v0.50.0）**：每个问题由 `agent_guidance/questions.py` 解析成「哪些键回答它（伪名展开、逐技法覆盖）+ 谓词 +
   是否事实」。未确认：只拦开着的问题，全答了就放行（`mode: nothing_to_confirm`）；确认 / 接受默认只回答**设置**，回答不了
   **事实**（结果依赖的性别、起课时刻、第二个人、目标年、卦名）——事实缺就拦并逐条点名。新问题必须有英文

@@ -14,6 +14,7 @@ from horosa_skill import __version__
 from horosa_skill.agent_guidance import (
     build_agent_guidance,
     build_tool_docstring,
+    resolve_technique,
     unknown_tool_details,
 )
 from horosa_skill.config import Settings
@@ -21,7 +22,6 @@ from horosa_skill.engine.registry import (
     COMPACT_SURFACE_TOOL_COUNT,
     FACADE_TOOL_COUNT,
     TOOL_DEFINITIONS,
-    resolve_tool_name,
 )
 from horosa_skill.errors import ToolValidationError, bilingual
 from horosa_skill.result_view import READING, Budget, ViewRequest, compact_json, guidance_index, shape_result
@@ -628,7 +628,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             # 剔除，避免 None 被当作「用户已提供该设置」而影响澄清闸的追问过滤。
             tool_name = str(kwargs.pop("tool_name", "") or "")
             raw_payload = _merge_mcp_arguments(kwargs)
-            resolved = resolve_tool_name(tool_name)
+            resolved, _name_note = resolve_technique(tool_name)  # 中文名唯一命中也收（S-10）；说明由 run_tool 写进 warnings
             if resolved is None:
                 return _mcp_error_envelope(
                     ToolValidationError(
@@ -641,8 +641,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                     ),
                     tool_name=tool_name or "horosa_tool_run",
                 )
-            # 两种写法（chart / horosa_astro_chart）都收；闸门与执行都用注册表键。
-            tool_name = resolved
+            # 注册键 / MCP 名 / 唯一中文名都收；闸门与模型用注册表键，交给 run_tool 的是原名（它再解析一次并写说明）。
+            requested, tool_name = tool_name, resolved
             try:
                 # `request` 是字符串时与其余工具同一套解析（FastMCP 只预解析得了合法 JSON 对象；坏 JSON / 标量
                 # 仍以字符串到这里）——此前这里把它静默换成 {}，载荷整份丢失。闸门须看解析后的载荷。
@@ -654,7 +654,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             async def _run(body: Any) -> Any:
                 model = TOOL_DEFINITIONS[tool_name].input_model
                 return await _run_tool_blocking(
-                    mcp, lambda: service.run_tool(tool_name, _mcp_payload(_placed(body, tool_name), model))
+                    mcp, lambda: service.run_tool(requested, _mcp_payload(_placed(body, tool_name), model))
                 )
 
             return await _gated_run(mcp, gate=tool_name, payload=payload, run=_run,
@@ -662,17 +662,17 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                                     operation="horosa_tool_run", tool_name=tool_name)
 
         horosa_tool_run.__doc__ = (
-            "Run any Horosa technique tool by name. Pass `tool_name` plus the tool's input fields: "
-            "the common birth/event fields are declared below, and **any other technique-specific "
-            "field must go inside `request`** (e.g. request={\"guirengType\":2}) — undeclared "
-            "top-level keys are dropped by the MCP argument layer. Same clarification gate and "
-            "envelope as the dedicated tools.\n"
+            "Run any Horosa technique tool by name. `tool_name` takes the registry key (bazi_birth), "
+            "the MCP name (horosa_cn_bazi_birth) or an unambiguous Chinese name (八字 / 小六壬 / 七政四余). "
+            "Pass the tool's input fields: the common birth/event fields are declared below; other "
+            "technique-specific fields go top-level or inside `request` (e.g. request={\"guirengType\":2}). "
+            "Same clarification gate and envelope as the dedicated tools.\n"
             # 🔴 技法目录不再内嵌：它有 4145 字符，而 OpenAI 的 function 描述上限是 1024 ——
             # 超限的后果是被拒或截断，而本工具是精简面下抵达全部技法的**唯一**通道。
             # 三条发现路径取代它：① 点错名字时 tool.unknown 的 details.catalog 直接给全部合法名字
             # （自愈式报错）；② 资源 horosa://catalog/techniques 有全文；③ horosa_agent_guidance。
             "Discover technique names via the horosa://catalog/techniques resource, "
-            "horosa_agent_guidance, or simply call with a wrong tool_name — the error lists them all."
+            "horosa_agent_guidance, or simply call with a wrong tool_name — the error lists the closest matches and all names."
         )
         # 必须手写 signature：函数是 `**kwargs` 多态入口，没有单一 input model 可推导。
         # 缺了它 FastMCP 会内省出一个名叫 `kwargs` 的 string 必填参数，整个工具无法调用——

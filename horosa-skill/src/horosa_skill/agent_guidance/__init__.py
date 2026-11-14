@@ -26,6 +26,8 @@ from horosa_skill.agent_guidance.catalog import (
     assert_guidance_covers_registered_tools,
     build_agent_guidance,
     build_technique_catalog,
+    resolve_technique,
+    technique_candidates,
     technique_index,
     unknown_tool_details,
 )
@@ -136,6 +138,8 @@ __all__ = [
     "build_tool_input_contract",
     "build_validation_recovery",
     "run_sensitive_settings_selftests",
+    "resolve_technique",
+    "technique_candidates",
     "technique_index",
     "unknown_tool_details",
     "validate_agent_preflight",
