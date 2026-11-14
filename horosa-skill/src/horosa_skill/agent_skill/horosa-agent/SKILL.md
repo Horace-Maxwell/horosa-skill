@@ -108,6 +108,8 @@ horosa_profile {"action": "save", "name": "妈妈", "data": {"date": "1962-03-08
 `place` in a profile **is** resolved to coordinates and a zone at save time. Later any technique takes
 `profile` (an alias works too; 合盘 `inner.profile` / `outer.profile`; dispatch / hecan `birth.profile`).
 Explicit fields override the profile. A profile stores facts only: settings are still asked by the gate.
+On a cast technique (奇门 / 六壬 / 六爻 / 塔罗 / 卜卦 …) a profile supplies the person only, never the birth moment:
+pass the question's moment; a birth-moment (终身局) cast needs explicit date / time.
 `profile.not_found` / `profile.ambiguous` list the known names: ask the user, do not pick the closest.
 `horosa_profile {"action": "list"}` lists them; `rename` and `delete` exist too.
 

@@ -833,8 +833,16 @@ def carries_profile(payload: Any, model: Any) -> bool:
     return any(not _blank(person.get(PROFILE_KEY)) for _slot, person, _allowed in _person_slots(payload, model))
 
 
-def expand_tool_payload(store: ProfileStore, payload: dict[str, Any], *, model: Any, domain: str | None) -> tuple[dict[str, Any], list[ProfileUse]]:
-    """技法载荷里的档案名 → 字段（显式字段逐键优先）。没有档案名时原样返回、不碰档案库。"""
+_CAST_MOMENT_FIELDS = frozenset({"date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "ad", "place"})
+
+
+def expand_tool_payload(
+    store: ProfileStore, payload: dict[str, Any], *, model: Any, domain: str | None, tool_name: str | None = None,
+) -> tuple[dict[str, Any], list[ProfileUse]]:
+    """技法载荷里的档案名 → 字段（显式字段逐键优先）。没有档案名时原样返回、不碰档案库。
+
+    起课类技法（time_roles 的 moment 角色）只取「人」（姓名 / 性别…），不取出生时地（审计 F09）：以前 `qimen {profile:"妈妈"}` 起的是
+    她 1963-03-08 06:00 的局。起课时刻是此刻；要按出生时刻起终身局，调用方显式给 date / time。"""
     if not carries_profile(payload, model) and not (isinstance(payload, dict) and PROFILE_KEY in payload and not owns_profile_key(model)):
         return payload, []
     out = dict(payload)
@@ -860,7 +868,22 @@ def expand_tool_payload(store: ProfileStore, payload: dict[str, Any], *, model: 
                     code="profile.not_applicable",
                     details={"profile": ref, "person_slots": [slot for slot in ("inner", "outer") if slot in fields]},
                 )
-            uses.append(_fill(out, lookup(ref), _field_filter(fields, domain), ""))
+            allowed = _field_filter(fields, domain)
+            profile = lookup(ref)
+            if _is_cast(tool_name):
+                base = allowed
+                allowed = lambda name, base=base: base(name) and name not in _CAST_MOMENT_FIELDS  # noqa: E731
+                skipped = [name for name in profile.fields if name in _CAST_MOMENT_FIELDS and base(name)]
+                if skipped:
+                    from horosa_skill import input_fields as F
+
+                    F.add_input_note(
+                        f"档案「{profile.name}」只取当事人（不取出生时地 {'/'.join(skipped)}）：起课时刻是此刻、地点是用户此刻所在地。"
+                        "要按出生时刻起终身局，请显式给 date / time。",
+                        f"Profile '{profile.name}' supplies the person only (not the birth {'/'.join(skipped)}): a cast uses the moment of the "
+                        "question and where the user is now. For a birth-moment (lifetime) chart, pass date / time explicitly.",
+                    )
+            uses.append(_fill(out, profile, allowed, ""))
     for slot, person, allowed in list(_person_slots(out, model)):
         if PROFILE_KEY not in person:
             continue
@@ -870,6 +893,14 @@ def expand_tool_payload(store: ProfileStore, payload: dict[str, Any], *, model: 
             uses.append(_fill(expanded, lookup(ref), allowed, slot))
         _replace_slot(out, slot, expanded)
     return out, uses
+
+
+def _is_cast(tool_name: str | None) -> bool:
+    if not tool_name:
+        return False
+    from horosa_skill.engine.time_roles import MOMENT, time_role
+
+    return time_role(tool_name) == MOMENT
 
 
 def _replace_slot(payload: dict[str, Any], slot: str, person: dict[str, Any]) -> None:
@@ -999,7 +1030,8 @@ def gate_view(settings: Any, tool_name: str, payload: Any) -> Any:
     definition = TOOL_DEFINITIONS.get(resolve_tool_name(tool_name) or "")
     if definition is None or not carries_profile(payload, definition.input_model):
         return payload
-    return expand_tool_payload(ProfileStore(settings), payload, model=definition.input_model, domain=definition.domain)[0]
+    return expand_tool_payload(ProfileStore(settings), payload, model=definition.input_model, domain=definition.domain,
+                               tool_name=definition.name)[0]
 
 
 def profile_summary_line(uses: list[ProfileUse]) -> str | None:

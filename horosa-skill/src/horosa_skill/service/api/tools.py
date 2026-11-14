@@ -482,7 +482,7 @@ class ToolsAPI:
         # 认不出 / 有歧义的档案名与坏入参同级：拒绝，不起盘（profile.not_found / profile.ambiguous）。
         try:
             payload, profile_uses = birth_profiles.expand_tool_payload(
-                self.profiles, payload, model=definition.input_model, domain=definition.domain
+                self.profiles, payload, model=definition.input_model, domain=definition.domain, tool_name=definition.name
             )
         except ToolValidationError as exc:
             trace["error_code"] = exc.code
