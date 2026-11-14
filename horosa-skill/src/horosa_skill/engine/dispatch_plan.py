@@ -218,6 +218,43 @@ def _apply_preferences(plan: ToolPlan, inputs: PlanInputs, fields: set[str]) -> 
             plan.used_keys.add(key)
 
 
+# 用户在问句里点名的设置（审计 S-12）：「凯尔特十字」以前拿到三张牌且无披露——dispatch 只从原话取年份。词表确定性匹配（不靠模型），
+# 唯一命中且调用方没另给才采用，warnings 写明「取自问句」；同时提到两种不替用户挑。值必须是引擎词表里的键（tool_table options_keys）。
+QUERY_SETTINGS: dict[str, dict[str, tuple[tuple[tuple[str, ...], str, str], ...]]] = {
+    "tarot": {"spread": (
+        (("凯尔特十字", "凯尔特", "celtic cross", "celtic"), "celtic", "凯尔特十字"),
+        (("马蹄阵", "马蹄", "horseshoe"), "horseshoe", "马蹄阵"),
+        (("单张", "一张牌", "single card"), "single", "单张"),
+        (("关系牌阵", "relationship spread"), "relation", "关系牌阵"),
+        (("生命之树", "tree of life"), "tree_of_life", "生命之树"),
+        (("十二宫牌阵", "星座牌阵", "zodiac spread"), "zodiac", "十二宫牌阵"),
+    )},
+}
+
+
+def _apply_query_settings(plan: ToolPlan, inputs: PlanInputs, fields: set[str]) -> None:
+    text = (inputs.query or "").lower()
+    if not text:
+        return
+    for field_name, options in QUERY_SETTINGS.get(plan.tool, {}).items():
+        if field_name not in fields or _present(plan.payload.get(field_name)):
+            continue
+        hits = {value: label for words, value, label in options if any(word.lower() in text for word in words)}
+        name = display_name(plan.tool)
+        if len(hits) == 1:
+            value, label = next(iter(hits.items()))
+            plan.payload[field_name] = value
+            plan.warnings.append(bilingual(
+                f"{name}的 {field_name} 取自问句：{label}（{field_name}={value}）；要别的请显式给 {field_name}。",
+                f"{plan.tool} {field_name} taken from the question: {label} ({field_name}={value}); pass {field_name} to choose another.",
+            ))
+        elif len(hits) > 1:
+            plan.warnings.append(bilingual(
+                f"问句里同时提到 {' / '.join(hits.values())}，{name}的 {field_name} 没有替你选，按缺省起；要哪种请显式给 {field_name}。",
+                f"The question names several {field_name} values ({', '.join(hits)}); {plan.tool} used its default — pass {field_name}.",
+            ))
+
+
 def _apply_question(plan: ToolPlan, inputs: PlanInputs, fields: set[str]) -> None:
     question = (inputs.query or "").strip()
     if not question:
@@ -451,6 +488,7 @@ def plan_tool(tool: str, inputs: PlanInputs) -> ToolPlan:
                     plan.payload[key] = inputs.query
         plan.time_basis = None
     _apply_preferences(plan, inputs, fields)
+    _apply_query_settings(plan, inputs, fields)
     _apply_question(plan, inputs, fields)
     plan.payload.update(inputs.confirmation)
     return plan
@@ -465,7 +503,7 @@ def plan_all(tools: list[str], inputs: PlanInputs) -> tuple[list[ToolPlan], list
     plans = [plan_tool(tool, inputs) for tool in tools]
     used = set().union(*(plan.used_keys for plan in plans)) if plans else set()
     unused = sorted(key for key in inputs.preferences if key not in used)
-    warnings: list[str] = []
+    warnings: list[str] = [warning for plan in plans for warning in plan.warnings]
     if unused:
         names = "、".join(display_name(tool) for tool in tools)
         warnings.append(bilingual(
