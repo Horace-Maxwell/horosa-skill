@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 _MANIFEST = re.compile(r"^([0-9a-f]{32})_manifest\.json$")
 _REPORT = re.compile(r"^([0-9a-f]{32})_(.+)_report_(\d{8}T\d{6}Z)\.(\w+)$")
-_ARTIFACT = re.compile(r"^([0-9a-f]{32})_(.+)_(\d+|dispatch)\.json$")
+_ARTIFACT = re.compile(r"^([0-9a-f]{32})_(.+)_(\d+|dispatch)\.json(?:\.gz)?$")
 _TMP = re.compile(r"^\..+\.(\d+)\.[0-9a-f]{8}\.tmp$")
 
 # 临时文件多旧才算残留：写它的进程已经不在且超过 10 分钟，或者不管谁写的、超过一天。
@@ -73,8 +73,10 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _read_json(path: Path) -> Any:
+    from horosa_skill.memory import artifact_io
+
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return artifact_io.read_json(path)
     except (OSError, ValueError):
         return None
 

@@ -31,7 +31,10 @@ def test_memory_store_writes_artifact(tmp_path) -> None:
     assert (tmp_path / "runs").exists()
     artifact_path = Path(ref.artifact_path)
     assert artifact_path.parent.parent.parent.parent == (tmp_path / "runs")
-    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    from horosa_skill.memory import artifact_io
+
+    assert artifact_path.name.endswith(".json.gz")   # 缺省压缩（审计待决项 7）
+    artifact = artifact_io.read_json(artifact_path)
     assert artifact["tool"] == "chart"
     assert artifact["record_meta"]["schema"] == "horosa.skill.record.v1"
     assert artifact["record_meta"]["trace_id"] == "trace-1"

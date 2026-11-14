@@ -109,6 +109,7 @@ NOT_CARRIED: dict[str, str] = {
     "HOROSA_TRACE_CAPTURE_PAYLOADS": "diagnostics",
     "HOROSA_DATA_PRIVATE": "behaviour",
     "HOROSA_MEMORY_MCP_DELETE": "behaviour",
+    "HOROSA_ARTIFACT_COMPRESS": "behaviour",
     "HOROSA_MCP_ISERROR": "behaviour",
     "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "diagnostics",
     "HOROSA_TRACE_OTLP_ENDPOINT": "diagnostics",

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import ast
+import gzip
 import hashlib
 import json
 import os
@@ -25,12 +26,16 @@ from horosa_skill.memory.store import MemoryStore
 TWO_MEGABYTES = "汉" * 700_000
 
 
+
+def _plain(raw: bytes) -> bytes:
+    return gzip.decompress(raw) if raw[:2] == b"\x1f\x8b" else raw
+
 def _settings(tmp_path: Path) -> Settings:
     return Settings(server_root="http://127.0.0.1:9", db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs")
 
 
-def _stored_run(tmp_path: Path, *, padding: str = "") -> tuple[MemoryStore, str, Path]:
-    store = MemoryStore(_settings(tmp_path))
+def _stored_run(tmp_path: Path, *, padding: str = "", compress: bool = True) -> tuple[MemoryStore, str, Path]:
+    store = MemoryStore(_settings(tmp_path).model_copy(update={"artifact_compress": compress}))
     run_id = store.create_run(entrypoint="tool", query_text="问事业", group_id="g")
     ref = store.record_tool_result(
         run_id=run_id, tool_name="chart", ok=True, input_normalized={"date": "1990-01-01"},
@@ -58,7 +63,8 @@ def _file_size_capped_at(limit: int) -> Iterator[None]:
 
 def test_a_failed_rewrite_leaves_the_stored_chart_intact(tmp_path: Path) -> None:
     """2026-11-06 实测：12 MB 真卷写满时 record_answer 把 63 KB 的盘面写成 0 字节，重试 `ok: true` 却再也救不回来。"""
-    store, run_id, artifact = _stored_run(tmp_path, padding=TWO_MEGABYTES)
+    # 明文产物：重复的填充压缩后只剩几 KB，写不到 1 MB 的上限（这条测的是写失败不动原文件，与压缩无关）
+    store, run_id, artifact = _stored_run(tmp_path, padding=TWO_MEGABYTES, compress=False)
     before = artifact.read_bytes()
 
     with _file_size_capped_at(1_000_000), pytest.raises(OSError):
@@ -94,7 +100,7 @@ def test_a_reader_in_flight_keeps_a_complete_copy(tmp_path: Path) -> None:
     store, run_id, artifact = _stored_run(tmp_path)
     with artifact.open("rb") as reader:
         store.attach_ai_response(run_id=run_id, ai_answer="解读正文")
-        assert json.loads(reader.read())["conversation"]["ai_answer_text"] is None
+        assert json.loads(_plain(reader.read()))["conversation"]["ai_answer_text"] is None
 
 
 def test_stored_size_and_sha_follow_a_refresh(tmp_path: Path) -> None:
@@ -129,7 +135,7 @@ def test_a_refresh_leaves_rendered_reports_alone(tmp_path: Path) -> None:
     store.attach_ai_response(run_id=run_id, ai_answer="解读正文")
 
     assert report.read_bytes() == before
-    assert json.loads(artifact.read_text(encoding="utf-8"))["conversation"]["ai_answer_text"] == "解读正文", "盘面产物照常刷新"
+    assert json.loads(_plain(artifact.read_bytes()))["conversation"]["ai_answer_text"] == "解读正文", "盘面产物照常刷新"
     reports = [a for a in store.query_runs(run_id=run_id, include_payload=False)[0]["artifacts"] if a["kind"].startswith("report_")]
     assert all(a["sha256"] == _sha256(Path(a["path"])) for a in reports)
 
@@ -330,14 +336,16 @@ def test_stored_artifacts_carry_no_pretty_printing(tmp_path: Path) -> None:
     store, run_id, artifact = _stored_run(tmp_path)
     manifest = next(artifact.parent.glob(f"{run_id}_manifest.json"))
     for path in (artifact, manifest):
-        raw = path.read_bytes()
+        raw = _plain(path.read_bytes())   # 产物缺省存 .json.gz（审计待决项 7）：解开后同样是紧凑 JSON
         assert b"\n" not in raw, path.name
         assert raw == json.dumps(json.loads(raw), ensure_ascii=False, separators=(",", ":")).encode("utf-8"), path.name
 
 
 def test_an_old_indented_artifact_still_reads_and_refreshes(tmp_path: Path) -> None:
     store, run_id, artifact = _stored_run(tmp_path)
-    artifact.write_text(json.dumps(json.loads(artifact.read_text(encoding="utf-8")), ensure_ascii=False, indent=2), encoding="utf-8")
+    from horosa_skill.memory import artifact_io
+
+    artifact.write_text(json.dumps(artifact_io.read_json(artifact), ensure_ascii=False, indent=2), encoding="utf-8")   # 旧版明文缩进
     store.attach_ai_response(run_id=run_id, ai_answer="解读正文")
     payload = next(a for a in store.query_runs(run_id=run_id)[0]["artifacts"] if a["kind"] == "tool_result")["payload"]
     assert payload["conversation"]["ai_answer_text"] == "解读正文" and payload["tool"] == "chart"

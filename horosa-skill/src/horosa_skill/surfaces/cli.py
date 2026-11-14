@@ -1644,6 +1644,15 @@ def memory_delete(
     _print_json(_localized(result))
 
 
+@memory_app.command("compact", help="Compress stored run artifacts to .json.gz (new ones already are) and reclaim database space; "
+                    "--decompress turns them back into plain .json (run it before downgrading to a version that cannot read .gz). 压缩存档。")
+def memory_compact(decompress: bool = typer.Option(False, "--decompress", help="Plain .json again.")) -> None:
+    from horosa_skill.memory import manage
+
+    service = _service()
+    _print_json(_localized(manage.compact_artifacts(service.store, decompress=decompress)))
+
+
 @memory_app.command("restore", help="Put a batch from the trash back (`memory delete` printed its trash_id; without --trash-id lists the trash). 从回收站放回。")
 def memory_restore(trash_id: str | None = typer.Option(None, "--trash-id", help="Batch to restore.")) -> None:
     from horosa_skill.memory import manage

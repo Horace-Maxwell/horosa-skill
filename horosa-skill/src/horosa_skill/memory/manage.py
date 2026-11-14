@@ -261,6 +261,42 @@ def purge_trash(trash_dir: Path | None, *, days: int = TRASH_DAYS, now: float | 
     return purged
 
 
+def compact_artifacts(store: MemoryStore, *, decompress: bool = False) -> dict[str, Any]:
+    """把存档产物压成 .json.gz（`decompress=True` 反过来），库里的路径跟着改；manifest 与报告不动。可中断、幂等：每份先写新文件、
+    改库、再删旧文件——断在中间只会多一份同内容的文件，下次跑照常收尾。最后 VACUUM（删除之后的库空间一并收回）。"""
+    from horosa_skill.memory import artifact_io
+
+    from horosa_skill.memory.store import _write_json_atomic
+
+    converted = failed = 0
+    saved = 0
+    problems: list[str] = []
+    with store.connect() as conn:
+        rows = conn.execute("SELECT id, path, kind FROM artifacts WHERE substr(kind, 1, 7) != 'report_' AND kind != 'run_manifest'").fetchall()
+    for row in rows:
+        path = Path(row["path"])
+        wanted = artifact_io.plain_name(path) if decompress else artifact_io.compressed_name(path)
+        if wanted == path or not path.is_file() or not artifact_io.is_json_artifact(path):
+            continue
+        try:
+            before = path.stat().st_size
+            _write_json_atomic(wanted, artifact_io.read_json(path), compress=not decompress)
+            after = wanted.stat().st_size
+            with store._writer() as conn:
+                conn.execute("UPDATE artifacts SET path = ?, file_size = ?, sha256 = NULL WHERE id = ?", (str(wanted), after, row["id"]))
+                conn.commit()
+            path.unlink()
+            converted += 1
+            saved += before - after
+        except (OSError, ValueError, EOFError) as exc:
+            failed += 1
+            problems.append(f"{path}: {type(exc).__name__}")
+    with store._writer() as conn:
+        conn.execute("VACUUM")
+    return {"ok": True, "mode": "decompress" if decompress else "compress", "converted": converted, "failed": failed,
+            "bytes_saved": saved, **({"problems": problems[:SAMPLE]} if problems else {})}
+
+
 def count_runs_mentioning(store: MemoryStore, names: list[str]) -> int:
     try:
         return len(select_runs(store, entities=names))
@@ -323,8 +359,15 @@ def export_runs(store: MemoryStore, selected: list[dict[str, Any]], out_dir: Pat
                 continue
             target_dir = folder / ("reports" if kind.startswith("report_") else "artifacts")
             target_dir.mkdir(exist_ok=True)
-            shutil.copy2(source, target_dir / source.name)
-            copied.append(f"{target_dir.name}/{source.name}")
+            if source.name.endswith(".json.gz"):   # 导出给人读：压缩过的产物解成明文 .json
+                from horosa_skill.memory import artifact_io
+
+                target = target_dir / artifact_io.plain_name(source).name
+                target.write_text(artifact_io.read_text(source), encoding="utf-8")
+            else:
+                target = target_dir / source.name
+                shutil.copy2(source, target)
+            copied.append(f"{target_dir.name}/{target.name}")
             if kind in {"tool_result", "dispatch_result", "hecan_result"}:
                 texts += [(str(artifact.get("tool_name")), text) for text in _search.export_texts_from_file(source)]
         try:

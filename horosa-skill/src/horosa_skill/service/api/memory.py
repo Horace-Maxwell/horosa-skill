@@ -346,7 +346,9 @@ def _attach_child_runs(service: HorosaSkillService, record: dict[str, Any], *, i
         for artifact in record.get("artifacts") or []:
             if artifact.get("kind") == "hecan_result" and artifact.get("exists"):
                 try:
-                    children = json.loads(Path(artifact["path"]).read_text(encoding="utf-8")).get("child_runs") or []
+                    from horosa_skill.memory import artifact_io
+
+                    children = artifact_io.read_json(Path(artifact["path"])).get("child_runs") or []
                 except (OSError, ValueError):
                     children = []
     record["child_runs"] = children

@@ -13,6 +13,7 @@ from typing import Any
 
 from fakes import FakeClient, FakeJsClient
 
+from horosa_skill.memory import artifact_io
 from horosa_skill.config import Settings
 from horosa_skill.memory.store import MemoryStore
 from horosa_skill.result_view import READING, Budget, ViewRequest, shape_result
@@ -42,7 +43,7 @@ def test_dispatch_warning_pointer_is_true_on_every_surface(tmp_path: Path) -> No
     })
     full = envelope.model_dump(mode="json")
     _assert_pointer_true(full)                                                          # service / CLI（CLI 打印同一份 model_dump）
-    _assert_pointer_true(json.loads(Path(envelope.memory_ref.artifact_path).read_text(encoding="utf-8")))  # 存档
+    _assert_pointer_true(artifact_io.read_json(Path(envelope.memory_ref.artifact_path)))  # 存档
     budget = Budget(max_tokens=40_000, max_chars=48_000)
     _assert_pointer_true(shape_result(full, ViewRequest(view=READING), budget))         # MCP 阅读视图
     shown = shape_result(service.show_memory({"run_id": envelope.memory_ref.run_id, "include_payload": True}),

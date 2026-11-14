@@ -410,7 +410,8 @@ def test_a_report_never_replaces_the_runs_own_stored_files(tmp_path: Path) -> No
         ):
             with pytest.raises(ToolValidationError) as caught:
                 call()
-            assert caught.value.code == "report.output_path_unusable" and caught.value.details["reason"] == "existing_file"
+            # 产物缺省 .json.gz（审计待决项 7）：点名它配 format=json 是扩展名对不上，同样一个字节都不写
+            assert caught.value.code == "report.output_path_unusable" and caught.value.details["reason"] in {"existing_file", "extension_mismatch"}
     assert {path: path.read_bytes() for path in before} == before
     assert _run_count(service) == 1  # report_from_tool 在起盘之前就拒了
     # 存档完好：这条 run 照常出报告
@@ -472,6 +473,10 @@ def test_by_default_an_existing_file_is_never_replaced(tmp_path: Path) -> None:
     second = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "六爻报告.json"})
     assert first["artifact_path"] != second["artifact_path"] and second["artifact_path"].endswith("六爻报告-2.json")
     for path in _stored_files(service, run_id):   # 存档与 manifest：报告另存，manifest 只是照常记下多了一份报告
+        if path.name.endswith(".gz"):   # 压缩产物配 format=json：扩展名对不上，拒绝（一个字节都不写）
+            with pytest.raises(ToolValidationError):
+                service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": str(path)})
+            continue
         out = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": str(path)})
         assert out["artifact_path"] != str(path) and out["output_path_adjustment"]["reason"] == "exists_kept"
 

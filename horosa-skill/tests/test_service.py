@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from horosa_skill.memory import artifact_io
 from horosa_skill.reports.question import analyze_question
 from horosa_skill.config import Settings
 from horosa_skill.exports.parser import parse_export_content
@@ -2461,7 +2462,7 @@ def test_response_view_trims_payload_but_archives_full(tmp_path) -> None:
     archived = None
     for artifact in shown["result"].get("artifacts", []):
         if artifact.get("kind") == "tool_result":
-            archived = json.loads(Path(artifact["path"]).read_text(encoding="utf-8"))
+            archived = artifact_io.read_json(Path(artifact["path"]))
             break
     assert archived and archived["data"]["snapshot_text"]
     assert archived["data"]["export_snapshot"]["export_text"]
@@ -2526,7 +2527,7 @@ def test_report_render_replays_legacy_archive_shape(tmp_path) -> None:
             artifact_path = artifact.get("path")
             break
     assert artifact_path
-    archive = json.loads(Path(artifact_path).read_text(encoding="utf-8"))
+    archive = artifact_io.read_json(Path(artifact_path))   # 旧归档明文写回 .gz 名下也读得出（按魔数判）
     data = archive["data"]
     # 还原旧归档形状：export_snapshot 带冗余全文键 + export_format 完整副本并存。
     legacy_snapshot = dict(data["export_snapshot"])

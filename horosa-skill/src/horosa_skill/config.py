@@ -69,6 +69,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_TRACE_CAPTURE_PAYLOADS": "stable",
     "HOROSA_DATA_PRIVATE": "stable",
     "HOROSA_MEMORY_MCP_DELETE": "stable",
+    "HOROSA_ARTIFACT_COMPRESS": "stable",
     "HOROSA_MCP_ISERROR": "stable",
     "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "stable",
     "HOROSA_TRACE_OTLP_ENDPOINT": "stable",
@@ -495,6 +496,7 @@ FIELD_ENV_MAP = {
     "trace_capture_payloads": "HOROSA_TRACE_CAPTURE_PAYLOADS",
     "data_private": "HOROSA_DATA_PRIVATE",
     "memory_mcp_delete": "HOROSA_MEMORY_MCP_DELETE",
+    "artifact_compress": "HOROSA_ARTIFACT_COMPRESS",
     "trace_capture_ai_answers": "HOROSA_TRACE_CAPTURE_AI_ANSWERS",
     "trace_otlp_endpoint": "HOROSA_TRACE_OTLP_ENDPOINT",
     "output_script": "HOROSA_OUTPUT_SCRIPT",
@@ -552,6 +554,7 @@ class Settings(BaseModel):
     # 新建的数据目录 / 存档 / 库按私有权限建（0700 / 0600）；行为由 fileperm 读同名环境变量，这里登记给 env 表与 doctor。
     data_private: bool = True
     memory_mcp_delete: bool = True   # horosa_memory_manage 的 delete（审计待决项 6）；共享部署设 0 关
+    artifact_compress: bool = True   # 新产物存 .json.gz（审计待决项 7）；0 = 照旧明文 .json
     mcp_transport: str = "stdio"     # serve 时的传输（不来自环境变量）：HTTP 且没设令牌时 MCP 面的删除缺省关
     trace_capture_ai_answers: bool = False
     trace_otlp_endpoint: str | None = None
@@ -615,6 +618,7 @@ class Settings(BaseModel):
             trace_capture_payloads=_env_bool("HOROSA_TRACE_CAPTURE_PAYLOADS", False),
             data_private=_env_bool("HOROSA_DATA_PRIVATE", True),
             memory_mcp_delete=_env_bool("HOROSA_MEMORY_MCP_DELETE", True),
+            artifact_compress=_env_bool("HOROSA_ARTIFACT_COMPRESS", True),
             trace_capture_ai_answers=_env_bool("HOROSA_TRACE_CAPTURE_AI_ANSWERS", False),
             trace_otlp_endpoint=_env_url("HOROSA_TRACE_OTLP_ENDPOINT"),
             output_script=_env_script("HOROSA_OUTPUT_SCRIPT"),

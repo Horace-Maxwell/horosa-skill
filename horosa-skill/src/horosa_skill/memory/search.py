@@ -224,9 +224,11 @@ def export_texts_from_file(path: Path) -> list[str]:
     """同 `export_texts`，但直接扫文件文本、只解码命中的那几个字符串：一份八字产物 600 多 KB，回填上万个不值得逐个整份解析。
 
     扫不出来（键写法不同、文件不是紧凑 JSON）就整份解析一次；读不了 / 不是 JSON 返回空列表（这份产物没有可搜的正文）。"""
+    from horosa_skill.memory import artifact_io
+
     try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, ValueError):
+        raw = artifact_io.read_text(path)
+    except (OSError, ValueError, EOFError):
         return []
     for key in ("export_text", "snapshot_text"):
         found: list[str] = []

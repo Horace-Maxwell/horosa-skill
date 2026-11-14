@@ -42,7 +42,7 @@ FORMAT_SUFFIXES: dict[str, tuple[str, ...]] = {
 # 不在这张表里的后缀（`报告.终稿`、`v1.2`）只是名字里带点，补上正确扩展名即可。
 _OTHER_TYPE_SUFFIXES = frozenset({
     ".pdf", ".docx", ".doc", ".json", ".png", ".ics", ".md", ".markdown", ".txt", ".rtf", ".odt", ".html", ".htm",
-    ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".csv", ".xlsx", ".xls", ".pptx", ".xml", ".yaml", ".yml", ".zip",
+    ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".csv", ".xlsx", ".xls", ".pptx", ".xml", ".yaml", ".yml", ".zip", ".gz",
 })
 
 # 单个文件名的上限。各家文件系统是 255（APFS / ext4 按 UTF-8 字节，NTFS 按 UTF-16 单元）；留出多图的 `_12`、

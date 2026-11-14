@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from horosa_skill import fsretry
+from horosa_skill.memory import artifact_io
 from horosa_skill.fileperm import make_private_file, new_file_mode
 from horosa_skill.config import Settings
 from horosa_skill.memory import search as _search
@@ -33,7 +34,7 @@ def _file_hash_info(path: Path) -> tuple[int, str | None]:
         return 0, None
 
 
-def _write_json_atomic(path: Path, payload: Any) -> tuple[int, str]:
+def _write_json_atomic(path: Path, payload: Any, *, compress: bool | None = None) -> tuple[int, str]:
     """把 JSON 写到 `path`，返回 (字节数, sha256)。要么换成完整的新文件，要么原文件一字不动。
 
     `runs/` 下的产物是一次起盘唯一的完整副本。`write_text` 先截断再写：磁盘写满 / 进程被杀时留下 0 字节，已有内容再也救不回来，
@@ -41,7 +42,10 @@ def _write_json_atomic(path: Path, payload: Any) -> tuple[int, str]:
     新文件的权限由 fileperm 定（缺省 0600，HOROSA_DATA_PRIVATE=0 回到按 umask）；改写时沿用原文件的权限。
     """
     # 不带缩进：没人读这些文件的排版。实测一份星盘产物省 20%（62.9 → 50.4 KB），结构多的引擎 JSON 省得更多（录制件最多 2.48 倍）。
-    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    from horosa_skill.memory import artifact_io
+
+    # 压不压看文件名（.json.gz = 压；审计待决项 7）：写回答案刷新产物时沿用原文件的形式，不会把 .gz 名下写成明文。
+    data = artifact_io.encode(payload, compress=path.name.endswith(".gz") if compress is None else compress)
     tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
     fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), new_file_mode(0o666))
     try:
@@ -1273,7 +1277,8 @@ class MemoryStore:
         target_dir = self.output_dir / now.strftime("%Y") / now.strftime("%m") / now.strftime("%d")
         target_dir.mkdir(parents=True, exist_ok=True)
         suffix = f"{tool_call_id}" if tool_call_id is not None else "dispatch"
-        target_path = target_dir / f"{run_id}_{_safe_file_component(tool_name)}_{suffix}.json"
+        compress = bool(getattr(self.settings, "artifact_compress", False))
+        target_path = target_dir / f"{run_id}_{_safe_file_component(tool_name)}_{suffix}.json{'.gz' if compress else ''}"
         artifact_payload = self._build_record_payload(
             run_id=run_id,
             tool_name=tool_name,
@@ -1283,7 +1288,7 @@ class MemoryStore:
             group_id=group_id,
             evaluation_case_id=evaluation_case_id,
         )
-        _write_json_atomic(target_path, artifact_payload)
+        _write_json_atomic(target_path, artifact_payload, compress=compress)
         return target_path
 
     def _get_run_row(self, run_id: str) -> sqlite3.Row | None:
@@ -1357,7 +1362,7 @@ class MemoryStore:
                 skipped.append({**entry, "reason": "missing"})
                 continue
             try:
-                raw_payload = json.loads(path.read_text(encoding="utf-8"))
+                raw_payload = artifact_io.read_json(path)
             except (OSError, ValueError) as exc:  # unreadable / not JSON: leave that artifact as written, refresh the rest
                 skipped.append({**entry, "reason": f"unreadable: {type(exc).__name__}"})
                 continue
@@ -1503,10 +1508,10 @@ class MemoryStore:
             record["file_size"], record["sha256"] = _file_hash_info(path)
         # 只有 JSON 产物有载荷可读；报告（PDF / DOCX / PNG / ICS / Markdown…）存在即完整——当 UTF-8 JSON 读必然报错，
         # 曾让出过报告的记录被判成「不完整、缺的盘面要重新起盘」（审计 S-02）。
-        if include_payload and path.suffix.lower() == ".json":
+        if include_payload and artifact_io.is_json_artifact(path):
             if record["exists"]:
                 try:
-                    record["payload"] = json.loads(path.read_text(encoding="utf-8"))
+                    record["payload"] = artifact_io.read_json(path)
                 except (OSError, ValueError) as exc:  # 读不了 / 坏 JSON：payload 置空，但把原因交给调用方
                     record["payload"] = None
                     record["payload_error"] = f"{type(exc).__name__}: {exc}"

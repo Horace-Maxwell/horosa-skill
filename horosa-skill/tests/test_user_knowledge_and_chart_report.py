@@ -249,12 +249,14 @@ def test_run_tool_attaches_selected_knowledge_without_touching_the_chart(tmp_pat
     assert "knowledge" not in result.input_normalized
     assert result.data["export_snapshot"] == plain.data["export_snapshot"]
     assert any("不存在" in w for w in result.warnings)
-    stored = "\n".join(f.read_text(encoding="utf-8") for f in (tmp_path / "runs").rglob("*.json"))
+    from horosa_skill.memory import artifact_io
+
+    stored = "\n".join(artifact_io.read_text(f) for f in (tmp_path / "runs").rglob("*.json*"))   # 产物缺省 .json.gz
     # 存档只记引用、不存正文。此前这里只查 `"knowledge":` 键——它从来不在存档里，真正装着全文的
     # `knowledge_context` 一直被存下来，断言却是绿的（因为错误的原因通过）。
     assert stored and "knowledge_context" in stored
     assert "欲识三元万法宗" not in stored and "先看盘面再看资料" not in stored
-    stored_run = json.loads(next((tmp_path / "runs").rglob("*_xiaoliuren_1.json")).read_text(encoding="utf-8"))
+    stored_run = artifact_io.read_json(next((tmp_path / "runs").rglob("*_xiaoliuren_1.json*")))
     refs = stored_run["data"]["knowledge_context"]["entries"]
     assert [ref["id"] for ref in refs] == ["滴天髓笔记", "通用"]
     assert all("text" not in ref and ref["text_stored"] is False and len(ref["sha256"]) == 64 for ref in refs)

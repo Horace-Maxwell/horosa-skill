@@ -68,6 +68,7 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_TRACE_DIR": "Where traces go (default <data dir>/traces).",
     "HOROSA_TRACE_CAPTURE_PAYLOADS": "`1` = include request payloads in traces.",
     "HOROSA_MCP_ISERROR": "`0` = never set `isError` on MCP results (old behaviour); default marks real failures, not ask-the-user refusals.",
+    "HOROSA_ARTIFACT_COMPRESS": "`0` = write stored run artifacts as plain `.json` instead of `.json.gz` (reading accepts both; `memory compact` / `--decompress` convert old ones).",
     "HOROSA_MEMORY_MCP_DELETE": "`0` = turn off `horosa_memory_manage` delete on the MCP surface (shared deployments). Over HTTP without HOROSA_MCP_TOKEN it is off anyway.",
     "HOROSA_DATA_PRIVATE": "`0` = create the data dir / runs / memory DB with the umask instead of 0700 / 0600 (shared container volumes).",
     "HOROSA_TRACE_CAPTURE_AI_ANSWERS": "`1` = include recorded AI answers in traces.",
