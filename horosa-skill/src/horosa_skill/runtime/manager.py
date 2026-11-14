@@ -404,6 +404,31 @@ def windows_runtime_path_ok(path: Path | str) -> bool:
     return str(path).isascii()
 
 
+def data_privacy_report(settings: Any) -> dict[str, Any]:
+    """数据目录与记忆库对本机其他用户是否可读（审计 O-05）。存档里是姓名、出生时刻地点、问题与 AI 解读；目录 0755 / 库 0644 时
+    同机别的账户都读得到（报告则是 0600，两边不一致）。只报不改：已有目录的权限是用户的（容器卷上别的进程可能要读），修复命令交给用户。
+    不进 issues（不让 doctor 因此 ok:false）；Windows 用户 profile 的 ACL 继承，不查。"""
+    if os.name == "nt":
+        return {"checked": False, "reason": "windows_acl", "flagged": [], "fix": None}
+    flagged: list[dict[str, Any]] = []
+    for label, path in (("data_dir", Path(settings.data_dir)), ("memory_db", Path(settings.db_path))):
+        try:
+            mode = stat.S_IMODE(path.stat().st_mode)
+        except OSError:
+            continue
+        if mode & 0o077:
+            flagged.append({"what": label, "path": str(path), "mode": oct(mode)})
+    data_dir = Path(settings.data_dir)
+    return {
+        "checked": True,
+        "readable_by_others": bool(flagged),
+        "flagged": flagged,
+        "fix": f"chmod 700 '{data_dir}'" if flagged else None,
+        "note": ("数据目录 / 记忆库对本机其他用户可读：存档里有姓名、出生时刻地点与解读。单人机器建议 chmod 700；"
+                 "容器卷上要给别的进程读的部署请保留。" if flagged else None),
+    }
+
+
 def windows_path_report(runtime_root: Path) -> dict[str, Any] | None:
     """doctor.windows：长路径开关 + 按最深载荷条目估的余量（负数 = install 会以 runtime.install_long_path 拒绝）
     + runtime 根是否纯 ASCII（否 = install 以 runtime.path_not_ascii 拒绝，doctor 报 windows:runtime_root_not_ascii）。"""
@@ -1430,6 +1455,7 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 "platform_requirements": (manifest.get("platform_requirements") if manifest else None),
                 "arch": arch_report(),
                 "windows": windows_path_report(self.runtime_root),
+                "privacy": data_privacy_report(self.settings),
                 "quarantine": quarantine,
                 "runtime_root": str(self.runtime_root),
                 "current_dir": str(self.current_dir),
