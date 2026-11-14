@@ -149,6 +149,11 @@ uv run horosa-skill report from-tool liureng_gods \
 - State limitations honestly (e.g. a conditional section absent, a switch not threaded) without
   hiding behind them.
 
+## 语言（v0.51.0）
+
+`language`：`zh-CN` / `zh-TW` / `zh-HK` 定中文简繁；`en` = **英文界面 + 原文盘面**——封面、目录、章节名、基本信息的项目名、页脚是英文，
+盘面段（引擎输出）保持中文原文不译，封面注明；`ai_report` 用英文写（模板的 `ai_instructions` 会多一条）。其余值回 warnings 说未生效。
+
 ## 输出路径（v0.40.0）
 
 三个报告工具的 `output_path` 只许落在报告输出目录（`HOROSA_SKILL_OUTPUT_DIR`，缺省 `<数据目录>/runs`）内：省略 = 存储层缺省产物路径；

@@ -57,7 +57,7 @@ _CURATED: dict[str, str] = {
     "tool_name": "技法名（chart / horosa_astro_chart 均可）；全表：horosa://catalog/techniques",
     "format": "输出格式",
     "style": "analysis=AI 解盘报告 chart=完整排盘",
-    "language": "报告语言",
+    "language": "报告语言：zh-CN / zh-TW / zh-HK；en = 英文界面、盘面中文原文",
     "title": "报告标题",
     "ai_report": "按 horosa_report_template 填的报告正文",
     "ai_answer_text": "AI 的解读全文（写回存档）",

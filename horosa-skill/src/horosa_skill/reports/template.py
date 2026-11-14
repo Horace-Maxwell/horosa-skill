@@ -69,7 +69,9 @@ def build_template(
         "user_question": user_question,
         "focus": {key: question_analysis.get(key) for key in ("focus_domains", "needs_timing", "needs_decision_support")
                   if question_analysis.get(key) not in (None, [], "")},
-        "ai_instructions": list(TEMPLATE_RULES),
+        "ai_instructions": [*TEMPLATE_RULES, *(
+            ["Write every ai_fillable field in English (the report frame is English; chart data stays in Chinese — quote a "
+             "Chinese term with its meaning when you rely on it)."] if str(language).strip().lower().split("-")[0] == "en" else [])],
         "source_context": {
             "input_normalized": payload.get("input_normalized") if isinstance(payload.get("input_normalized"), dict) else {},
             "summary": payload.get("summary") if isinstance(payload.get("summary"), list) else [],

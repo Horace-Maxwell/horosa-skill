@@ -21,11 +21,15 @@ _DOCX_ACCENTS = {"green": "0F766E", "blue": "2563EB", "amber": "B7791F"}
 _PDF_HEADING_LEVELS = {"summary": 0, "ai_topic": 0, "ai_section": 1, "figures": 1}
 
 
-def _labeler(script: str) -> Any:
-    """渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）按输出文字转一次。
+def _labeler(script: str, interface: Any = None) -> Any:
+    """渲染器自己写死的标签（目录 / 完整盘面 / 页脚…）按输出文字转一次；英文界面（document["interface"]="en"）换成英文。
 
     只用于字面量：文档里的文字调用方已转好，对繁体再转一次不幂等（萬里 → 萬裡、征戰 → 徵戰），绝不能整段再过一遍。
     """
+    if interface == "en":
+        from horosa_skill.reports.frame_en import label
+
+        return label
     if script == SIMPLIFIED:
         return str
     from horosa_skill.textscript import convert
@@ -272,7 +276,7 @@ def _engine_plain(text: str) -> str:
 
 def _reader_text(document: dict[str, Any], *, script: str = SIMPLIFIED, format_name: str = "pdf") -> str:
     """降级 TXT 的正文：与 PDF / DOCX 同一串块，只换成纯文字。没有任何人读内容（极简的测试文档）时退回 plain_text。"""
-    t = _labeler(script)
+    t = _labeler(script, document.get("interface"))
     kind = format_name.upper()
     out: list[str] = [
         t(f"说明：这份报告本应是 {kind}，排版时出了问题，改存为纯文本。内容与 {kind} 版相同；盘图画不出来，见同一报告的 PDF 或 PNG。"),
@@ -386,7 +390,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     from docx.oxml.ns import qn
     from docx.shared import Inches, Mm, Pt, RGBColor
 
-    t = _labeler(script)
+    t = _labeler(script, document.get("interface"))
     doc = Document()
     font_name = _docx_font_name(script)
     for section in doc.sections:
@@ -398,6 +402,11 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         section.right_margin = Inches(0.72)
     _docx_apply_base_styles(doc, font_name, qn, Pt, RGBColor)
     docx_content_width = Inches(6.25)
+    # 本报告里真有的盘面段号：段标题加书签、正文里的 [E3] 写成跳到书签的内部链接（审计 O-18，与 PDF 同一规则：只链真有的段）。
+    docx_anchors = frozenset(
+        str(section.get("cite_id")) for section in _human_sections(document) if section.get("group") == "chart" and section.get("cite_id")
+    )
+    bookmark_ids = iter(range(1, 10_000))
 
     def set_cell_shading(cell: Any, fill: str) -> None:
         tc_pr = cell._tc.get_or_add_tcPr()
@@ -489,6 +498,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
                 style_run(p.add_run(head), size=9.6, bold=True, color="0F766E")
         for data_row in rows:
             row = table.add_row()
+            row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))   # 一行不拆到两页（审计 O-18）
             for idx, cell in enumerate(row.cells):
                 cell.width = widths[idx]
                 set_cell_border(cell)
@@ -566,7 +576,7 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         outline.set(qn("w:val"), str(level))
         p_pr.append(outline)
 
-    def add_heading_block(text: str, *, level: int = 1) -> None:
+    def add_heading_block(text: str, *, level: int = 1, bookmark: str = "") -> None:
         table = doc.add_table(rows=1, cols=1)
         table.autofit = False
         set_table_full_width(table)
@@ -581,9 +591,19 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         p.paragraph_format.space_before = Pt(3)
         p.paragraph_format.space_after = Pt(3)
         set_outline_level(p, 0 if level == 1 else 1)
+        p.paragraph_format.keep_with_next = True   # 标题不落在页底、和正文分家（审计 O-18）
         run = p.add_run(text)
         style_run(run, size=16 if level == 1 else 12.5, bold=True, color="14211F" if level == 1 else "0F766E")
-        doc.add_paragraph()
+        if bookmark:
+            mark = str(next(bookmark_ids))
+            start = OxmlElement("w:bookmarkStart")
+            start.set(qn("w:id"), mark)
+            start.set(qn("w:name"), bookmark)
+            end = OxmlElement("w:bookmarkEnd")
+            end.set(qn("w:id"), mark)
+            p._p.insert(p._p.index(run._r), start)
+            p._p.append(end)
+        doc.add_paragraph().paragraph_format.keep_with_next = True
 
     def add_hyperlink(paragraph: Any, url: str, text: str, *, size: float, bold: bool, italic: bool, strike: bool) -> None:
         # 真超链接（w:hyperlink + 外部关系），不是蓝色文字。
@@ -600,6 +620,15 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         link.append(run._r)
         paragraph._p.append(link)
 
+    def add_cite_link(paragraph: Any, cite: str, *, size: float, bold: bool) -> None:
+        link = OxmlElement("w:hyperlink")
+        link.set(qn("w:anchor"), cite)
+        run = paragraph.add_run(f"[{cite}]")
+        style_run(run, size=size, bold=bold, color="0F766E")
+        run.font.underline = True
+        link.append(run._r)
+        paragraph._p.append(link)
+
     def add_spans(paragraph: Any, spans: list[Any], *, size: float = 10.2, color: str = "14211F", bold: bool = False) -> None:
         # 调用方 Markdown 的行内片段 → Word run：粗 / 斜 / 删除线 / 行内代码 / 换行 / 超链接；文字原样（不改数字、不换 emoji）。
         for span in spans:
@@ -609,10 +638,19 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
             if span.href:
                 add_hyperlink(paragraph, span.href, span.text, size=size, bold=bold or span.bold, italic=span.italic, strike=span.strike)
                 continue
-            run = paragraph.add_run(span.text)
-            style_run(run, size=size, bold=bold or span.bold, color="0F766E" if span.code else color)
-            if span.italic:
-                run.italic = True
+            pieces = [span.text] if span.code or not docx_anchors else _CITE_RE.split(span.text)
+            for index, piece in enumerate(pieces):
+                if index % 2 == 1:
+                    if piece in docx_anchors:
+                        add_cite_link(paragraph, piece, size=size, bold=bold or span.bold)
+                        continue
+                    piece = f"[{piece}]"
+                if not piece:
+                    continue
+                run = paragraph.add_run(piece)
+                style_run(run, size=size, bold=bold or span.bold, color="0F766E" if span.code else color)
+                if span.italic:
+                    run.italic = True
             if span.strike:
                 run.font.strike = True
 
@@ -815,11 +853,12 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
     # 域的缓存结果预填各章标题：WPS / Pages / 网页预览这些不更新域的软件也能看到一份目录（此前只印一句占位话）；
     # Word 打开时照常按 updateFields 重建成带页码、可点击的目录。
     placeholder = OxmlElement("w:r")
-    toc_lines = [t("目录（Word 中右键「更新域」生成页码）")] + [
-        (f"{section['cite_id']} · " if section.get("group") == "chart" and section.get("cite_id") else "")
-        + str(section.get("title") or "")
-        for section in _human_sections(document) if section.get("group") != "basis"
-    ]
+    # 占位目录与真实目录同源（审计 O-18：以前只列 E 段与技法依据，更新域后才冒出「解读目标 / AI 解读 / 正文解读」）：
+    # 按下面真的会写成标题块（带大纲级别）的那一串排。
+    toc_lines = [t("目录（Word 中右键「更新域」生成页码）"), str(document.get("intro_heading") or t("解读目标"))]
+    toc_lines += [str(section.get("title") or t("基本信息")) for section in _human_sections(document) if section.get("group") == "basis"]
+    toc_lines += [(f"{block.cite} · {block.text}" if block.cite else block.text) for block in body_blocks(document, t)
+                  if block.kind in {"heading", "part", "section"}]
     for index, line in enumerate(toc_lines):
         if index:
             placeholder.append(OxmlElement("w:br"))
@@ -860,7 +899,8 @@ def _render_docx(document: dict[str, Any], output_path: Path, script: str = SIMP
         elif block.kind == "figures":
             add_figures(figures)
         elif block.kind == "section":
-            add_heading_block(f"{block.cite} · {block.text}" if block.cite else block.text, level=2 if block.in_part else 1)
+            add_heading_block(f"{block.cite} · {block.text}" if block.cite else block.text, level=2 if block.in_part else 1,
+                              bookmark=block.cite if block.cite in docx_anchors else "")
             add_text(block.body)
         # orphan_figures：DOCX 一直不补印（盘图只跟着「完整盘面」走）
 
@@ -1299,7 +1339,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
 
     _extend_kinsoku()
     font_name, bold_font_name = _register_pdf_fonts(pdfmetrics, UnicodeCIDFont, TTFont, script)
-    t = _labeler(script)
+    t = _labeler(script, document.get("interface"))
     # 本机没有能嵌入的中文 TrueType：PDF 用 reportlab 自带的 CID 字体（不嵌入，由阅读器的中文字体显示）。此前静默如此（评审 R-16）：
     # 换台电脑打开字形可能不同、个别符号缺字。结果的 warnings 与 PDF 封面都写明，并说怎么办。
     font_note = "" if isinstance(pdfmetrics.getFont(font_name), TTFont) else t(
@@ -2034,9 +2074,16 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                     story.append(Paragraph(inline(body), quote_style))
             flush()
 
+        def bind_lead_in(flowables: list[Any]) -> None:
+            """以「：」结尾的引导句和下面的表排在同一页（审计 O-19：「多派用神对照：」在第 5 页底、表在第 6 页）。"""
+            last = flowables[-1] if flowables else None
+            if last is not None and re.sub(r"<[^>]+>", "", str(getattr(last, "text", "") or "")).rstrip().endswith(("：", ":")):
+                keep_with_next(last)
+
         def add_body(text: str) -> None:
             for kind, payload in _split_markdown_blocks(text):
                 if kind == "table":
+                    bind_lead_in(story)
                     add_data_table(payload["header"], payload["rows"])
                 else:
                     add_text(payload)
@@ -2079,6 +2126,7 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
                 elif isinstance(block, md.Code):
                     out.append(Paragraph(_code_markup(block.text), md_style("HorosaMdCode", code_style, indent + 6, quote)))
                 elif isinstance(block, md.Table):
+                    bind_lead_in(out)
                     header = [_MdCell.of(cell) for cell in block.header]
                     rows = [[_MdCell.of(cell) for cell in row] for row in block.rows]
                     out.extend(data_table_flowables(header, rows))
@@ -2322,7 +2370,13 @@ def _render_pdf(document: dict[str, Any], output_path: Path, script: str = SIMPL
         page_total["value"] = doc.page
         if stable:
             break
-    return [font_note] if font_note else []
+    notes = [font_note] if font_note else []
+    missing = sorted(getattr(patch_glyphs, "missing", ()) or ())
+    if missing:
+        shown = "、".join(missing[:20]) + ("…" if len(missing) > 20 else "")
+        notes.append(t(f"这份 PDF 里有 {len(missing)} 个字本机没有任何字体画得出，印出来是空白或方块：{shown}。"
+                       "DOCX 版由阅读器的字体显示，可能画得出；装一款收扩展 B 的字体（如 Windows 的 SimSun-ExtB）后重出 PDF 即可。"))
+    return notes
 
 
 # DOCX 的中文字体名候选：(本机探测的文件, 简体名, 繁体名, 香港名)。DOCX 不嵌入字体，名字写给**打开文档的那台电脑**看；
@@ -2445,9 +2499,11 @@ _SYMBOL_FALLBACKS = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf",
     "/usr/share/fonts/dejavu/DejaVuSans.ttf",
 )
+# macOS 的华文黑体 / 冬青黑体收了一部分扩展 B（𠮷 等；审计 O-17：本机 fc-list :charset=20bb7 有它们，补字链以前没列）。
+_MAC_EXT_B = ("/System/Library/Fonts/STHeiti Light.ttc", "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc")
 _PDF_GLYPH_FALLBACK_CANDIDATES: dict[str, tuple[str, ...]] = {
-    "sc": ("C:/Windows/Fonts/simsunb.ttf", "C:/Windows/Fonts/mingliub.ttc", *_SYMBOL_FALLBACKS),
-    "tc": ("C:/Windows/Fonts/mingliub.ttc", "C:/Windows/Fonts/simsunb.ttf", *_SYMBOL_FALLBACKS),
+    "sc": ("C:/Windows/Fonts/simsunb.ttf", "C:/Windows/Fonts/mingliub.ttc", *_MAC_EXT_B, *_SYMBOL_FALLBACKS),
+    "tc": ("C:/Windows/Fonts/mingliub.ttc", "C:/Windows/Fonts/simsunb.ttf", *_MAC_EXT_B, *_SYMBOL_FALLBACKS),
 }
 _GLYPH_FALLBACK_FROM = 0x80  # ASCII（含标记 <b>、&amp;、href 键）永远不会被包
 _SYMBOL_PLACEHOLDERS = ("▸", "•", "·")  # 画不了的符号换成第一个画得出的
@@ -2488,7 +2544,7 @@ def _wrap_missing_glyphs(markup: str, primary: Any, fallback: Any, fallback_font
     return _wrap_missing_glyphs_chain(markup, primary, [(fallback_font, fallback)])
 
 
-def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str, Any]]) -> str:
+def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str, Any]], missing: set[str] | None = None) -> str:
     """把主字体画不了的字按补字链找第一款画得了的字体，同字体的相邻字连成段包进 `<font name=…>`；
 
     补不了的文字、主字体有的字原样留着（正文文字从不替换）；**符号**（So / emoji 区）主字体与补字链都画不了时换成 ▸
@@ -2538,6 +2594,8 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
         font = None
         if code >= _GLYPH_FALLBACK_FROM and code not in primary:
             font = next((name for name, covered in chain if code in covered), None)
+            if font is None and missing is not None and not _is_blank(code):
+                missing.add(ch)   # 哪款字体都画不出：印出来是空白 / 方块（审计 O-17：以前不说）
         if font is None:
             flush()
             out.append(ch)
@@ -2548,6 +2606,22 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
         run.append(ch)
     flush()
     return "".join(out)
+
+
+def _is_blank(code: int) -> bool:
+    import unicodedata
+
+    return code in _BLANK_CODES or unicodedata.category(chr(code)) in _BLANK_CATEGORIES
+
+
+class _GlyphPatcher:
+    """给 Paragraph 标记补字的函数；顺手记下哪些字哪款字体都画不出（`missing`）。"""
+
+    def __init__(self, drawable: Any, chain: list[tuple[str, Any]]) -> None:
+        self.drawable, self.chain, self.missing = drawable, chain, set()
+
+    def __call__(self, markup: str) -> str:
+        return _wrap_missing_glyphs_chain(markup, self.drawable, self.chain, self.missing)
 
 
 class _AllOf:
@@ -2618,7 +2692,7 @@ def _pdf_glyph_fallback(pdfmetrics: Any, TTFont: Any, font_name: str, bold_font_
                                       italic=font.fontName, boldItalic=font.fontName)
         chain.append((font.fontName, _drawable_codes(font.face)))
     # 没有补字字体时也要过一遍：画不了的符号照样换掉（文字仍原样，逐字节不变）
-    return lambda markup: _wrap_missing_glyphs_chain(markup, drawable, chain)
+    return _GlyphPatcher(drawable, chain)
 
 
 # PDF 字体候选：(常规体路径, 常规体字面名, 粗体路径, 粗体字面名)。字面名 None = 取第 0 号子字体。

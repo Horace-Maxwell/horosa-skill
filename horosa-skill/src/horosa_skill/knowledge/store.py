@@ -851,6 +851,46 @@ TERM_ALIASES: dict[str, str] = {
     "significator": "应星",
 }
 
+# 语料没有中英并写、但叫法公认的英文术语（审计 O-08 / 待决项 5 对照层）：值必须是语料里的词（标题 / 小节名 / 加粗词），测试守。
+# void of course 在古典占星中文文献里就是「月亮空亡」（卜卦 / 择日手册「月亮空亡」口径）；不收任何语料里没有的中文词。
+CURATED_TERM_ALIASES: dict[str, str] = {
+    "void of course": "月亮空亡", "void-of-course": "月亮空亡", "voc moon": "月亮空亡",
+    "primary directions": "主限法", "zodiacal release": "黄道星释",
+}
+
+# 同一个东西上游两处叫法不同（审计 O-08）：工具正文 / 工具说明叫「黄道释放」（astroAiSnapshot.js），手册叫「黄道星释」。
+# 检索时把左边换成右边（右边是手册章名）；两边都是上游原文，不是 skill 编的。
+# 后两条：导出登记表的技法名 → 本技法手册名（对照层守卫 tests/test_fix314_knowledge_terms.py：每个技法名都得搜得到）。
+CJK_TERM_ALIASES: dict[str, str] = {"黄道释放": "黄道星释", "七政四余·张果": "七政四余", "印度律盘": "印度占星"}
+
+
+def _apply_term_aliases(query: str) -> tuple[str, list[tuple[str, str]]]:
+    aliased, used = retrieval.apply_aliases(query, {**TERM_ALIASES, **CURATED_TERM_ALIASES})
+    for source, target in CJK_TERM_ALIASES.items():
+        if source in aliased:
+            aliased = aliased.replace(source, target)
+            used = [*used, (source, target)]
+    return aliased, used
+
+
+# 术语索引（待决项 5 机械层）：语料里「**术语**：定义句」的句子。零新增文字，出处可读回。
+_DEFINITION = re.compile(r"\*\*([^*\n]{2,12})\*\*\s*[:：]\s*([^\n]{4,400})")
+
+
+@lru_cache(maxsize=1)
+def term_index() -> dict[str, tuple[tuple[SearchDoc, str], ...]]:
+    found: dict[str, list[tuple[SearchDoc, str]]] = {}
+    for doc in search_docs():
+        for match in _DEFINITION.finditer(doc.body):
+            sentence = re.split(r"(?<=[。；;])|\*\*", match.group(2))[0].strip().rstrip("，,、")
+            if len(sentence) < 4:
+                continue
+            term = retrieval.normalize(match.group(1)).strip()
+            rows = found.setdefault(term, [])
+            if all(row[0] is not doc for row in rows):
+                rows.append((doc, f"{match.group(1).strip()}：{sentence}"))
+    return {term: tuple(rows[:3]) for term, rows in found.items()}
+
 
 @lru_cache(maxsize=1)
 def search_vocabulary() -> frozenset[str]:
@@ -1158,7 +1198,7 @@ def rewrite_query(query: str) -> str | None:
     """检索会怎么改写这句话（英文换中文 + 去问句外壳 + 按语料词表切词），不管原句有没有命中；没得改返回 None。
 
     search_knowledge 只在原句命中太少时才改写；这里给评测与测试一个不依赖命中数的入口（contracts/knowledge_question_rewrite.json）。"""
-    aliased, used = retrieval.apply_aliases(query, TERM_ALIASES)
+    aliased, used = _apply_term_aliases(query)
     if used:  # 英文已经换成语料里的中文词：不再切（「主限法」切开只会变成「主限」）
         return aliased
     corpus = search_docs()
@@ -1217,7 +1257,7 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
     corpus = [doc for doc in search_docs() if not domain_filter or doc.domain == domain_filter]
     df: dict[tuple[str, ...], int] = {}
     # 英文术语先换成语料里的中文词（语料是中文写的）：「primary direction」→「主限法」。换了什么写进 aliases_used。
-    aliased, used = retrieval.apply_aliases(query, TERM_ALIASES)
+    aliased, used = _apply_term_aliases(query)
     stats: dict[str, Any] = {}
     ranked = _rank(corpus, aliased, df, stats)
     expanded = aliased if used else None
@@ -1232,6 +1272,11 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
             stats = {}
             ranked = [*ranked, *(row for row in _rank(corpus, rewritten, df, stats) if id(row[2]) not in found)]
     terms = [term for term in retrieval.parse_query(expanded or query).terms if term]
+    # 术语定义句（待决项 5 机械层）：查的就是一个术语时，条目里有「**术语**：定义」的那一句随命中带出（`definition`）。
+    # 不改排序：把带定义句的条目提到最前试过两种（全部提 / 只提非界面页），dev 与 seen 两套评测 hit@1 都跌破下限
+    # （界面页的「**标签**：」把讲这个词的条目挤下去），按 AGENTS §4.3.1 不收。
+    folded = retrieval.normalize(aliased).strip()
+    definitions = {id(doc): sentence for doc, sentence in term_index().get(folded, ())} if " " not in folded else {}
     matches = [
         {
             "domain": doc.domain,
@@ -1243,6 +1288,7 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
             "citation": doc.citation,
             "read": doc.read(),
             **({"exact": True} if exact else {}),
+            **({"definition": definitions[id(doc)]} if id(doc) in definitions else {}),
         }
         for score, exact, doc in ranked[: depth or limit]
     ]
@@ -1266,6 +1312,11 @@ def search_knowledge(payload: dict[str, Any], *, depth: int | None = None) -> di
             result["warnings"] = [bilingual(
                 f"没有一条同时含全部检索词（{'、'.join(stats['terms'])}），下面是只含其中一部分的结果。",
                 f"No entry contains all of the search terms ({', '.join(stats['terms'])}); these match only some of them.")]
+    if ranked and " " not in folded and not definitions and not any(row[0] >= _TIER_SCORE[2] for row in ranked):
+        # 只在正文里顺带提到（审计 O-08 / 待决项 5）：如实说没有定义条目，免得把一段不相干的手册当成解释。
+        result["warnings"] = [*result.get("warnings", []), bilingual(
+            f"知识库里没有「{query}」的定义条目；下面是正文里提到它的地方，不要当定义引。",
+            f"The knowledge base has no entry defining \"{query}\"; these are passages that mention it — do not cite them as a definition.")]
     if not ranked:
         result.update(no_match(query, corpus_suggestions(query, domain_filter)))
     if looks_traditional(query):

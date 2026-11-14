@@ -101,17 +101,26 @@ def _render_outcome_notes(rendered: dict[str, Any]) -> list[str]:
 
 
 
+def _is_english(language: Any) -> bool:
+    text = str(language or "").strip().lower()
+    return text == "en" or text.startswith("en-")
+
+
 def _note_language(result: dict[str, Any], language: Any) -> dict[str, Any]:
-    """`language` 只决定中文的简 / 繁（zh-CN / zh-TW / zh-HK…）。别的值（en / fr …）以前静默按中文出、结果里没有任何说明（审计 O-04）：
-    报告界面与盘面文字只有中文，AI 解读的语言由调用方写的 ai_report 决定——写明，不假装生效。"""
+    """`language`：中文标签决定简 / 繁；`en` = 英文界面 + 原文盘面（审计待决项 1）；别的值（fr …）以前静默按中文出（审计 O-04）——写明，不假装生效。"""
     text = str(language or "").strip()
     if not text or parse_script(text) is not None or text.lower() in {"zh-mo", "zh-hant-mo", "zh", "zh-hans", "zh-hant"}:
         return result
+    if _is_english(text):
+        result.setdefault("summary", []).append(
+            "language=en: the report frame (cover, contents, headings, labels) is in English; chart sections stay in the "
+            "engine's original Chinese. Write the ai_report in English.")
+        return result
     result.setdefault("warnings", []).append(bilingual(
-        f"language={text!r} 未生效：报告界面与盘面文字目前只有中文（简 / 繁，用 zh-CN / zh-TW / zh-HK 选）；"
+        f"language={text!r} 未生效：报告界面只有中文（简 / 繁，用 zh-CN / zh-TW / zh-HK 选）与英文（en，盘面仍是中文原文）；"
         "AI 解读部分用什么语言，由你写进 ai_report 的文字决定。",
-        f"language={text!r} had no effect: the report frame and chart text exist only in Chinese (Simplified / Traditional, chosen "
-        "with zh-CN / zh-TW / zh-HK); the AI reading is in whatever language you write into ai_report.",
+        f"language={text!r} had no effect: the report frame exists in Chinese (Simplified / Traditional: zh-CN / zh-TW / zh-HK) "
+        "and English (en; chart text stays Chinese); the AI reading is in whatever language you write into ai_report.",
     ))
     return result
 
@@ -468,6 +477,10 @@ class ReportsAPI:
                     tool_name=f"{tool_name}_{'chart' if chart_style else 'analysis'}",
                     format_name=normalized_format,
                 ))
+                if _is_english(language):
+                    from horosa_skill.reports.frame_en import english_frame
+
+                    document = english_frame(document)   # 审计待决项 1：英文界面 + 原文盘面
                 try:
                     rendered = render_report(document, output_path=output_path, format_name=normalized_format, script=script)
                 except OSError as exc:

@@ -1497,7 +1497,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   （Win：SimSun-ExtB / MingLiU-ExtB）→ 符号与拉丁扩展（mac：Arial Unicode + Apple Symbols；Win：Segoe UI Symbol + Arial；Linux：DejaVu）。
   阈值 0x80（埃及历 ḥ ṭ、梵文 ṇ ṃ 在 U+2E80 以下，旧阈值永远不补）。reportlab 只吃 TrueType 轮廓（.otf CFF 会抛 TTFError）。
   `_render_pdf` 里的 `Paragraph` 是包过一层的同名函数——新增段落照旧写 `Paragraph(...)` 即自动补字，别绕过它。
-  守卫 `tests/test_pdf_glyph_fallback.py`、`tests/test_report_polish.py`。
+  守卫 `tests/test_pdf_glyph_fallback.py`、`tests/test_report_polish.py`。O-17：mac 补华文 / 冬青黑体；画不出的字进 warnings（`test_fix314_pdf_missing_glyphs`）。
 
 - **完整排盘报告与 PDF 排版（v0.43.0 → v0.43.1-dev 重做）。** `style:"chart"` 不要 AI 解读、收录全部有内容的导出段；
   缺省 `analysis` 没解读仍回 `analysis_required`；没有盘面的工具（解析 / 注册表 / 知识检索）回 `report.no_chart_content`。现行规矩：
