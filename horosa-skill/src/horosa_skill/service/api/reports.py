@@ -99,6 +99,22 @@ def _render_outcome_notes(rendered: dict[str, Any]) -> list[str]:
     return notes
 
 
+
+
+def _note_language(result: dict[str, Any], language: Any) -> dict[str, Any]:
+    """`language` 只决定中文的简 / 繁（zh-CN / zh-TW / zh-HK…）。别的值（en / fr …）以前静默按中文出、结果里没有任何说明（审计 O-04）：
+    报告界面与盘面文字只有中文，AI 解读的语言由调用方写的 ai_report 决定——写明，不假装生效。"""
+    text = str(language or "").strip()
+    if not text or parse_script(text) is not None or text.lower() in {"zh-mo", "zh-hant-mo", "zh", "zh-hans", "zh-hant"}:
+        return result
+    result.setdefault("warnings", []).append(bilingual(
+        f"language={text!r} 未生效：报告界面与盘面文字目前只有中文（简 / 繁，用 zh-CN / zh-TW / zh-HK 选）；"
+        "AI 解读部分用什么语言，由你写进 ai_report 的文字决定。",
+        f"language={text!r} had no effect: the report frame and chart text exist only in Chinese (Simplified / Traditional, chosen "
+        "with zh-CN / zh-TW / zh-HK); the AI reading is in whatever language you write into ai_report.",
+    ))
+    return result
+
 class ReportsAPI:
     # 记忆三门面：入参归一、错误成形、结果瘦身都在 service/api/memory.py。
     def record_ai_answer(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -164,7 +180,7 @@ class ReportsAPI:
             template["group_id"] = trace["group_id"]
             trace["run_id"] = request.run_id
             trace["tool_name"] = template.get("tool_name")
-            return template
+            return _note_language(template, request.language)
 
     def _report_output_roots(self) -> list[Path]:
         """报告可写的根：输出目录 + `HOROSA_REPORT_OUTPUT_ROOTS`（os.pathsep 分隔）白名单。"""
@@ -353,7 +369,7 @@ class ReportsAPI:
                     trace["run_id"] = request.run_id
                     trace["artifact_path"] = result["artifact_path"]
                     trace["success"] = True
-                    return result
+                    return _note_language(result, request.language)
                 source_tool_name = str(source_artifact.get("tool_name") or request.tool_name or "")
                 normalized_ai_report = self._normalize_report_ai_payload(
                     ai_report=request.ai_report,
@@ -484,7 +500,7 @@ class ReportsAPI:
             trace["run_id"] = request.run_id
             trace["artifact_path"] = artifact["artifact_path"]
             trace["success"] = True
-            return result
+            return _note_language(result, request.language)
 
     def report_from_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.tracer.span(
