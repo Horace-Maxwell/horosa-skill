@@ -243,11 +243,12 @@ class KnowledgeSearchInput(FlexibleModel):
 class ProfileInput(FlexibleModel):
     """horosa_profile：命主档案（profiles.py）。广告层只有四个键 + request（tools/list 余量 ~1.9 KB）。"""
 
-    action: Literal["save", "get", "list", "delete", "rename"] = Field(description="save/get/list/delete/rename")
+    action: Literal["save", "get", "list", "delete", "rename", "export", "import"] = Field(description="save/get/list/delete/rename/export/import")
     name: str | None = Field(default=None, description="档案名（save/get/delete 必填）")
     data: dict[str, Any] | None = Field(
         default=None,
-        description="save：date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes；按名合并，null 删字段；rename：new_name",
+        description="save：date/time/zone/lat/lon/gender/ad/timeAlg + aliases/place/notes；按名合并，null 删字段；rename：new_name；"
+                    "import：path / overwrite / confirm_token",
     )
     detail: bool | None = Field(default=None, description="list 时连出生信息一起给")
     # 档案不过澄清闸（不起盘）：基类的闸门三键不进广告层。
@@ -304,6 +305,22 @@ class MemoryQueryInput(FlexibleModel):
     offset: int = 0
     # 缺省只回摘要（run_id、问题、技法、产物路径）；要全量用 horosa_memory_show，或显式传 true。
     include_payload: bool = False
+
+
+class MemoryManageInput(FlexibleModel):
+    """horosa_memory_manage（审计待决项 6）：本机存档的删除 / 放回 / 导出 / 用量。删除第一次永远是预演。"""
+
+    action: Literal["delete", "restore", "export", "usage"] = Field(description="delete/restore/export/usage")
+    run_ids: list[str] | None = Field(default=None, description="delete/export：要处理的 run")
+    entity: str | None = Field(default=None, description="delete/export：这个人的全部 run（档案名 / 别名都算）")
+    before: str | None = Field(default=None, description="delete：早于这个日期 / 时刻创建的 run")
+    keep_reports: bool = Field(default=False, description="delete：留下报告文件")
+    permanent: bool = Field(default=False, description="delete：直接抹除（缺省进回收站，30 天内可 restore）")
+    confirm_token: str | None = Field(default=None, description="delete：预演结果里的令牌（用户确认后才带）")
+    trash_id: str | None = Field(default=None, description="restore：回收站批次（不给 = 列出回收站）")
+    agent_confirmed_settings: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    defaults_accepted: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
 class MemoryShowInput(FlexibleModel):

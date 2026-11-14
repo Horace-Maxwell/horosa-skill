@@ -605,7 +605,7 @@ def export_profiles(store: ProfileStore) -> dict[str, Any]:
             "profiles": [item.as_dict() for item in items]}
 
 
-def import_profiles(store: ProfileStore, document: Any, *, overwrite: bool = False) -> dict[str, Any]:
+def import_profiles(store: ProfileStore, document: Any, *, overwrite: bool = False, dry_run: bool = False) -> dict[str, Any]:
     """CLI `profile import`：先整份校验（任何一条坏了就一条都不写，报出全部问题），再逐条 save。已有同名档案默认跳过，
     overwrite=True 才按名合并覆盖（与 save 同一套合并：文件里没有的字段保留）。坐标 / 时区照文件里存的，不重新解析地名。"""
     if not isinstance(document, dict) or document.get("format") != EXPORT_FORMAT or not isinstance(document.get("profiles"), list):
@@ -648,6 +648,10 @@ def import_profiles(store: ProfileStore, document: Any, *, overwrite: bool = Fal
             details={"problems": problems},
         )
     existing = {store_key(p.name): p.name for p in store.all()}
+    if dry_run:
+        clash = [name for name, _ in planned if store_key(name) in existing]
+        return {"ok": True, "action": "import", "mode": "preview", "would_add": [n for n, _ in planned if store_key(n) not in existing],
+                ("would_overwrite" if overwrite else "would_skip"): clash}
     imported: list[str] = []
     skipped: list[dict[str, str]] = []
     for name, data in planned:
@@ -668,7 +672,7 @@ USE_HINT = (
 
 def run_action(store: ProfileStore, payload: Any) -> dict[str, Any]:
     """horosa_profile / CLI `profile`：save / get / list / delete / rename（rename 的新名放 data.new_name）。
-    export / import 只在 CLI（profile export / profile import），MCP 面暂不开（留给维护者定）。"""
+    export / import 的 MCP 入口在 service/api/tools._profile_transfer（预演 + confirm_token，审计待决项 8）。"""
     from pydantic import ValidationError
 
     from horosa_skill.errors import validation_errors

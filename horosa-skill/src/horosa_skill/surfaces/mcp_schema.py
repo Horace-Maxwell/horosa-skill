@@ -512,7 +512,7 @@ def unadvertised_by_design() -> dict[str, frozenset[str]]:
 # 不过澄清闸的门面（report_from_tool 的闸门看的是 payload 里那份技法入参，顶层三键同样不起作用）。
 UNGATED_FACADES = frozenset({
     "horosa_agent_guidance", "horosa_knowledge_search", "horosa_place_search", "horosa_profile",
-    "horosa_memory_record_answer", "horosa_memory_query", "horosa_memory_show", "horosa_report_template",
+    "horosa_memory_record_answer", "horosa_memory_query", "horosa_memory_show", "horosa_memory_manage", "horosa_report_template",
     "horosa_report_render", "horosa_technique_report", "horosa_report_from_tool",
 })
 # 闭集取值进 enum（MCP-11）：模型照着 enum 填，不用从描述里猜。

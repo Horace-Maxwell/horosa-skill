@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT, TOOL_DEFINITIONS
+from horosa_skill.engine.registry import COMPACT_SURFACE_TOOL_COUNT, FACADE_TOOL_COUNT, FULL_SURFACE_TOOL_COUNT, TOOL_DEFINITIONS
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "horosa_skill"
 REPO = Path(__file__).resolve().parents[2]
@@ -44,7 +44,7 @@ def _stale(text: str, pattern: re.Pattern[str], allowed: set[int]) -> list[str]:
 def test_catalogue_counts_written_as_literals_are_current() -> None:
     techniques = len(TOOL_DEFINITIONS)
     facade_ok = {FACADE_TOOL_COUNT, COMPACT_SURFACE_TOOL_COUNT}
-    total_ok = {techniques, FACADE_TOOL_COUNT + techniques}
+    total_ok = {techniques, FULL_SURFACE_TOOL_COUNT}
     problems: dict[str, list[str]] = {}
     for path in _sources():
         text = path.read_text(encoding="utf-8")
@@ -52,7 +52,7 @@ def test_catalogue_counts_written_as_literals_are_current() -> None:
         if stale:
             problems[path.relative_to(REPO).as_posix()] = stale
     assert problems == {}, (
-        f"写死的目录数过期了（当前：{techniques} 技法、{FACADE_TOOL_COUNT} 门面、全量 {FACADE_TOOL_COUNT + techniques}、"
+        f"写死的目录数过期了（当前：{techniques} 技法、{FACADE_TOOL_COUNT} 门面、全量 {FULL_SURFACE_TOOL_COUNT}、"
         f"精简 {COMPACT_SURFACE_TOOL_COUNT}）——改成从注册表派生，或把句子改成不带数字"
     )
 

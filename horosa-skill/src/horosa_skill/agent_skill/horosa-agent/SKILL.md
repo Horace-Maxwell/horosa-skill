@@ -112,7 +112,8 @@ Explicit fields override the profile. A profile stores facts only: settings are 
 On a cast technique (奇门 / 六壬 / 六爻 / 塔罗 / 卜卦 …) a profile supplies the person only, never the birth moment:
 pass the question's moment; a birth-moment (终身局) cast needs explicit date / time.
 `profile.not_found` / `profile.ambiguous` list the known names: ask the user, do not pick the closest.
-`horosa_profile {"action": "list"}` lists them; `rename` and `delete` exist too.
+`horosa_profile {"action": "list"}` lists them; `rename` and `delete` exist too. `export` writes a private file and returns
+its path (never paste its contents); `import` (`data.path`) previews first and needs `data.confirm_token` after the user agrees.
 
 ```call
 horosa_cn_ziwei_birth {"profile": "我妈", "defaults_accepted": true, "clarification_notes": "用户说按默认"}
@@ -257,8 +258,11 @@ question's first words, whether an answer or report exists); `has_more` + `next_
 horosa_memory_query {"entity": "我妈", "tool": "八字", "limit": 5}
 ```
 
-Deleting, exporting or rebuilding memory is done by the user on the command line (`horosa-skill memory delete`
-/ `memory export` / `memory rebuild`); there is no MCP tool for it.
+`horosa_memory_manage` deletes, restores, exports, or reports disk usage. **Delete is two calls**: the first returns
+`mode:"preview"` with a `plan` (runs, reports, trace lines; trash or permanent) and a `confirm_token` (10 minutes) — tell the
+user what would go; only after they clearly agree, repeat the same selection with `confirm_token`. Never confirm for them.
+Deleted runs go to the trash with their reports and trace lines (`restore` with `trash_id` within 30 days); `permanent:true`
+only when the user says to erase; `keep_reports:true` keeps the report files. Rebuilding the index stays on the CLI (`memory rebuild`).
 
 ## 11. Knowledge
 
@@ -277,12 +281,12 @@ as 「用户笔记《标题》第几行」. They never change a chart. An empty 
 horosa_knowledge_search {"query": "空亡是什么意思？"}
 ```
 
-## 12. Compact surface (13 facades + `horosa_tool_run`)
+## 12. Compact surface (14 facades + `horosa_tool_run`)
 
 Every client except Claude Code and Claude Desktop gets the compact surface by default (`HOROSA_MCP_COMPACT=1`;
-those two get the full surface, 全量 131; `setup --surface full|compact` overrides). It has the 13 facades —
+those two get the full surface, 全量 132; `setup --surface full|compact` overrides). It has the 14 facades —
 `horosa_dispatch`, `horosa_agent_guidance`, `horosa_hecan`, `horosa_place_search`, `horosa_profile`,
-`horosa_knowledge_search`, `horosa_memory_query`, `horosa_memory_show`, `horosa_memory_record_answer`,
+`horosa_knowledge_search`, `horosa_memory_query`, `horosa_memory_show`, `horosa_memory_record_answer`, `horosa_memory_manage`,
 `horosa_report_template`, `horosa_report_render`, `horosa_report_from_tool`, `horosa_technique_report` — plus
 `horosa_tool_run`, which runs **any** technique by key, MCP name or an unambiguous Chinese name (八字 / 小六壬) with the same fields and the same gate
 (fields at the top level, or inside `request`). There are no flat `horosa_cn_*` / `horosa_astro_*` tools and no

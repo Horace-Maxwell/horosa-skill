@@ -1611,13 +1611,16 @@ def _memory_selection(service: HorosaSkillService, run_id: list[str] | None, ent
 @memory_app.command(
     "delete",
     help="Delete stored runs by --run-id / --entity / --before (AND). Dry run by default: lists what would go; --yes deletes rows, "
-    "search entries, artifacts and manifests. Rendered reports are listed, never deleted. 删除本机存档（默认只列出）。",
+    "search entries, artifacts, manifests, the run's reports and its trace lines. Deleted files go to the trash (<data>/trash, "
+    "kept 30 days, `memory restore`); --permanent erases them; --keep-reports keeps the reports. 删除本机存档（默认只列出）。",
 )
 def memory_delete(
     run_id: Optional[list[str]] = typer.Option(None, "--run-id", help="Run id to delete (repeatable)."),
     entity: str | None = typer.Option(None, help="Person: every run about them (a saved profile's name or alias covers all its names)."),
     before: str | None = typer.Option(None, help="Runs created before this date / ISO date-time (machine zone for a bare date; that day itself is kept)."),
     yes: bool = typer.Option(False, "--yes", help="Really delete. Without it nothing is touched."),
+    keep_reports: bool = typer.Option(False, "--keep-reports", help="Keep the rendered reports (DOCX / PDF …) of these runs."),
+    permanent: bool = typer.Option(False, "--permanent", help="Erase instead of moving to the trash."),
 ) -> None:
     import sqlite3
 
@@ -1626,7 +1629,10 @@ def memory_delete(
     service = _service()
     try:
         selected, criteria = _memory_selection(service, run_id, entity, before)
-        result = manage.delete_runs(service.store, selected, yes=yes)
+        manage.purge_trash(manage.trash_root(service.settings))
+        result = manage.delete_runs(service.store, selected, yes=yes, keep_reports=keep_reports,
+                                    trace_dir=service.settings.trace_dir,
+                                    trash_dir=None if permanent else manage.trash_root(service.settings))
     except (sqlite3.Error, OSError) as exc:
         _memory_store_refusal(service, exc)
     result["criteria"] = criteria
@@ -1636,6 +1642,21 @@ def memory_delete(
             "Quarantined copies of an earlier damaged database (quarantined_copies) may still contain these runs; delete them yourself if needed.",
         )
     _print_json(_localized(result))
+
+
+@memory_app.command("restore", help="Put a batch from the trash back (`memory delete` printed its trash_id; without --trash-id lists the trash). 从回收站放回。")
+def memory_restore(trash_id: str | None = typer.Option(None, "--trash-id", help="Batch to restore.")) -> None:
+    from horosa_skill.memory import manage
+
+    service = _service()
+    root = manage.trash_root(service.settings)
+    if not trash_id:
+        _print_json({"ok": True, "trash": manage.list_trash(root), "kept_days": manage.TRASH_DAYS})
+        return
+    if not (root / Path(trash_id).name / "trash.json").is_file():
+        _emit_refusal("memory.trash.unknown", bilingual(f"回收站里没有 {trash_id}。", f"No trash batch {trash_id}."),
+                      {"trash": [item["trash_id"] for item in manage.list_trash(root)]})
+    _print_json(_localized(manage.restore_trash(service.store, root, trash_id)))
 
 
 @memory_app.command(

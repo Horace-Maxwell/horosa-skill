@@ -39,6 +39,7 @@ from horosa_skill.schemas.tools import (
     KnowledgeSearchInput,
     MemoryAnswerInput,
     MemoryQueryInput,
+    MemoryManageInput,
     MemoryShowInput,
     PlaceSearchInput,
     ProfileInput,
@@ -86,6 +87,7 @@ from horosa_skill.surfaces.mcp_runner import (
 from horosa_skill.surfaces.mcp_schema import apply_advertised_schemas
 from horosa_skill.surfaces.mcp_surface import (
     _ANN_CALC,
+    _ANN_MEMORY_MANAGE,
     _ANN_PROFILE,
     _ANN_QUERY,
     _ANN_RENDER,
@@ -460,7 +462,8 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         doc=(
             "Saved birth profiles (命主档案), so a later chat can say 妈妈 instead of retyping. Save only after the user agrees. "
             "Then pass profile=\"<name|alias>\" in any technique payload (合盘 inner/outer.profile; dispatch birth.profile): "
-            "stored fields fill in, explicit fields win, the gate still asks what is missing."
+            "stored fields fill in, explicit fields win, the gate still asks what is missing. export → a private file (path only); "
+            "import (data.path) previews, then data.confirm_token once the user agrees."
         ),
     )
 
@@ -508,6 +511,20 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             "Fetch one stored run by run_id: the normalized input, each technique's reader text, any AI "
             "answer written back, and the paths of generated artifacts (JSON/DOCX/PDF). Use it to resume "
             "a past reading without re-casting the chart, or to continue a cut result exactly as its warnings say."
+        ),
+    )
+
+    _register_service_facade(
+        name="horosa_memory_manage",
+        method="memory_manage",
+        model=MemoryManageInput,
+        title="管理本机存档 / manage stored runs",
+        annotations=_ANN_MEMORY_MANAGE,
+        doc=(
+            "Delete / restore / export stored runs, or show disk usage. delete (run_ids / entity / before, AND) first returns a "
+            "preview (plan + confirm_token, must_ask_user): tell the user what goes, and only after they agree call again with "
+            "the same selection + confirm_token. Never confirm for them. Deleted runs go to the trash with their reports and "
+            "trace lines (restore with trash_id within 30 days); permanent=true erases; keep_reports keeps the reports."
         ),
     )
 

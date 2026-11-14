@@ -64,6 +64,10 @@ _ANN_REPORT_WRITE = mcp_types.ToolAnnotations(
 _ANN_PROFILE = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
 )
+# 存档管理（审计待决项 6）：delete 会删用户数据 → destructive；同参数重复调用结果相同 → idempotent。
+_ANN_MEMORY_MANAGE = mcp_types.ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
+)
 _ANN_REPORT_FROM_TOOL = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=True, openWorldHint=False
 )

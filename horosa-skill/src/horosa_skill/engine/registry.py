@@ -297,9 +297,9 @@ LOOKUP_TOOLS = frozenset({
 # 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
 # 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
 # 互不相同且都「有人守」。默认平铺面 = FULL_SURFACE_TOOL_COUNT（门面 + 广告出来的技法），任何文案都从这里算。
-FACADE_TOOL_COUNT = 13
+FACADE_TOOL_COUNT = 14
 
-# 精简面工具数 = 13 门面 + horosa_tool_run。README×2 的「13 个门面/13 facades」由 verify_docs_sync 锁步到此常量。
+# 精简面工具数 = 14 门面 + horosa_tool_run。README×2 的「14 个门面/14 facades」由 verify_docs_sync 锁步到此常量。
 COMPACT_SURFACE_TOOL_COUNT = FACADE_TOOL_COUNT + 1
 
 # 注册了、但不单独广告成平铺 MCP 工具的技法键（审计 S-16，维护者 2026-11-14 按推荐定）：bazi_direct 与 bazi_birth 同一引擎、同一输出

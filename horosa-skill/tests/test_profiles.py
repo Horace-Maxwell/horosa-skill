@@ -537,7 +537,7 @@ def test_profile_tool_is_on_both_surfaces_and_technique_schemas_gain_no_bytes(tm
     for tools in (full, compact):
         tool = tools["horosa_profile"]
         assert set(tool.input_schema["properties"]) == {"request", "action", "name", "data", "detail"}
-        assert tool.input_schema["properties"]["action"]["enum"] == ["save", "get", "list", "delete", "rename"]  # v0.50.0 rename
+        assert tool.input_schema["properties"]["action"]["enum"] == ["save", "get", "list", "delete", "rename", "export", "import"]  # v0.50.0 rename；审计待决项 8 export / import
         assert tool.annotations.destructive_hint is True and tool.annotations.read_only_hint is False
     assert "horosa_profile" in UNLOCALIZED_TOOLS
     assert "profile" in compact["horosa_tool_run"].input_schema["properties"]

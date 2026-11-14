@@ -138,6 +138,10 @@ class ReportsAPI:
         with self.tracer.span(workflow_name="memory.show", metadata={"entrypoint": "memory.show", "payload": payload}) as trace:
             return memory_api.show_memory(self, payload, trace)
 
+    def memory_manage(self, payload: dict[str, Any]) -> dict[str, Any]:
+        with self.tracer.span(workflow_name="memory.manage", metadata={"entrypoint": "memory.manage", "payload": payload}) as trace:
+            return memory_api.manage_memory(self, payload, trace)
+
     def _report_style(self, request: Any) -> str:
         style = str(getattr(request, "style", "") or "analysis").strip().lower()
         if style not in {"analysis", "chart"}:

@@ -810,6 +810,32 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "rewrite_time_filter",
     },
+    # horosa_memory_manage（审计待决项 6）：删除要用户亲口确认，令牌对不上 / 过期一律回到预演，绝不自己确认。
+    "memory.selection.missing": {"kind": "input", "next_action": "give_run_ids_entity_or_before"},
+    "memory.manage.token_invalid": {
+        "kind": "input",
+        "prompt_to_user": bilingual("选中的记录或选项变了：重新预演一次，把将删的内容告诉用户，用户同意后再删。",
+                                    "The selection or options changed: preview again, tell the user what would go, delete only after they agree."),
+        "next_action": "preview_again_then_ask_user",
+    },
+    "memory.manage.token_expired": {
+        "kind": "input",
+        "prompt_to_user": bilingual("确认令牌过期了：重新预演一次，再请用户确认。", "The confirmation expired: preview again and ask the user."),
+        "next_action": "preview_again_then_ask_user",
+    },
+    "memory.manage.delete_disabled": {
+        "kind": "environment",
+        "prompt_to_user": bilingual("这个部署关掉了 MCP 面的删除：请用户在本机终端运行 `horosa-skill memory delete`。",
+                                    "Deleting from the MCP surface is turned off here: ask the user to run `horosa-skill memory delete` locally."),
+        "next_action": "use_cli_memory_delete",
+    },
+    "memory.manage.invalid_payload": {"kind": "input", "next_action": "fix_fields"},
+    "memory.trash.unknown": {"kind": "input", "next_action": "list_trash_then_pick"},
+    "profile.import_token_invalid": {
+        "kind": "input",
+        "prompt_to_user": bilingual("确认令牌过期或文件变了：重新预演导入，再请用户确认。", "The confirmation expired or the file changed: preview the import again and ask the user."),
+        "next_action": "preview_again_then_ask_user",
+    },
     "memory.answer.empty": {"kind": "input", "next_action": "send_non_empty_answer"},
     "memory.answer.too_large": {
         "kind": "input",

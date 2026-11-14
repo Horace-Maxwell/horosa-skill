@@ -501,3 +501,124 @@ def record_ai_answer(service: HorosaSkillService, payload: dict[str, Any], trace
     result["group_id"] = trace["group_id"]
     trace["run_id"] = request.run_id
     return result
+
+
+# ---- horosa_memory_manage（审计待决项 6）-------------------------------------------------------------------------------
+# Claude Desktop / MCPB 用户没有 CLI：「把我妈的记录删掉」以前只能回答「请去终端跑命令」。删除第一次永远是预演（列出将删的 run、文件、报告、
+# trace 行数）并给一个 10 分钟有效、绑定这批 run 与选项的 confirm_token；用户确认后带 token 才真删。缺省进回收站（30 天内可 restore）。
+
+_CONFIRM_TTL_SECONDS = 600
+
+
+def _confirm_token(service: Any, run_ids: list[str], flags: dict[str, bool], expires: int) -> str:
+    import hashlib
+    import hmac
+    import os
+
+    secret = service.__dict__.setdefault("_memory_manage_secret", os.urandom(32))
+    body = json.dumps([sorted(run_ids), sorted(flags.items()), expires], separators=(",", ":"))
+    return f"{expires}.{hmac.new(secret, body.encode(), hashlib.sha256).hexdigest()[:32]}"
+
+
+def _manage_selection(service: Any, request: Any, *, allow_before: bool) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    from horosa_skill.memory import manage
+
+    if not (request.run_ids or request.entity or (allow_before and request.before)):
+        raise ToolValidationError(
+            bilingual("要给 run_ids、entity" + ("、before" if allow_before else "") + " 至少一个（条件之间是「并且」）。",
+                      "Give at least one of run_ids, entity" + (", before" if allow_before else "") + " (they combine with AND)."),
+            code="memory.selection.missing", details={"accepted": ["run_ids", "entity", *(["before"] if allow_before else [])]})
+    criteria: dict[str, Any] = {}
+    names, note = expand_entity(service, request.entity)
+    if note:
+        criteria["entity"] = note
+    bound = None
+    if allow_before and request.before:
+        try:
+            bound, source = timefilter.parse_bound(request.before, field="before", end=False, zone=None)
+        except timefilter.TimeFilterError as exc:
+            raise ToolValidationError(
+                bilingual(f"before={request.before!r} 不是能认的时间。", f"before={request.before!r} is not a recognised time."),
+                code="memory.query.invalid_time", details={"accepted_forms": list(timefilter.ACCEPTED_FORMS), "reason": exc.reason},
+            ) from exc
+        criteria["before"] = {"utc": bound, "zone_source": source}
+    return manage.select_runs(service.store, run_ids=list(request.run_ids or []), entities=names, before=bound), criteria
+
+
+def _delete_allowed(service: Any) -> str | None:
+    import os
+
+    if not service.settings.memory_mcp_delete:
+        return "HOROSA_MEMORY_MCP_DELETE=0"
+    if service.settings.mcp_transport != "stdio" and not os.environ.get("HOROSA_MCP_TOKEN"):
+        return "HTTP transport without HOROSA_MCP_TOKEN"
+    return None
+
+
+def manage_memory(service: Any, payload: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
+    import time
+    from datetime import UTC
+
+    from horosa_skill.memory import manage
+    from horosa_skill.service import _clock
+    from horosa_skill.schemas.tools.facades import MemoryManageInput
+
+    try:
+        request = MemoryManageInput.model_validate(payload)
+    except ValidationError as exc:
+        errors = validation_errors(exc)
+        raise ToolValidationError(bilingual("horosa_memory_manage 的参数不对。", "Invalid payload for horosa_memory_manage."),
+                                  code="memory.manage.invalid_payload", details={"errors": errors}) from exc
+    root = manage.trash_root(service.settings)
+    purged = manage.purge_trash(root)
+    base: dict[str, Any] = {"ok": True, "action": request.action, **({"trash_purged": purged} if purged else {})}
+    if request.action == "usage":
+        return {**base, "usage": service.store.storage_usage(), "trash": manage.list_trash(root)[:20], "trash_kept_days": manage.TRASH_DAYS}
+    if request.action == "restore":
+        if not request.trash_id:
+            return {**base, "trash": manage.list_trash(root), "trash_kept_days": manage.TRASH_DAYS}
+        if not (root / Path(request.trash_id).name / "trash.json").is_file():
+            raise ToolValidationError(bilingual(f"回收站里没有 {request.trash_id}。", f"No trash batch {request.trash_id}."),
+                                      code="memory.trash.unknown", details={"trash": [item["trash_id"] for item in manage.list_trash(root)]})
+        return {**base, **manage.restore_trash(service.store, root, request.trash_id)}
+    if request.action == "export":
+        selected, criteria = _manage_selection(service, request, allow_before=False)
+        out = Path(service.store.output_dir) / "exports" / _clock.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        return {**base, "criteria": criteria, **manage.export_runs(service.store, selected, out)}
+    # delete
+    refused = _delete_allowed(service)
+    if refused:
+        raise ToolValidationError(
+            bilingual(f"这个部署关掉了 MCP 面的删除（{refused}）。请用户在本机终端运行 `horosa-skill memory delete …`。",
+                      f"Deleting from the MCP surface is turned off here ({refused}). Ask the user to run `horosa-skill memory delete …` locally."),
+            code="memory.manage.delete_disabled", details={"reason": refused})
+    selected, criteria = _manage_selection(service, request, allow_before=True)
+    run_ids = [item["run_id"] for item in selected]
+    flags = {"keep_reports": request.keep_reports, "permanent": request.permanent}
+    kwargs = {"keep_reports": request.keep_reports, "trace_dir": service.settings.trace_dir,
+              "trash_dir": None if request.permanent else root}
+    if not request.confirm_token:
+        expires = int(time.time()) + _CONFIRM_TTL_SECONDS
+        plan = manage.delete_runs(service.store, selected, yes=False, **kwargs)
+        return {**base, "mode": "preview", "must_ask_user": True, "criteria": criteria, "plan": plan,
+                "confirm_token": _confirm_token(service, run_ids, flags, expires), "expires_in_seconds": _CONFIRM_TTL_SECONDS,
+                "next_step": bilingual(
+                    "把 plan 里将删的内容（条数、报告、是否进回收站）告诉用户，用户明确同意后再用同样的条件加 confirm_token 调一次。不要替用户确认。",
+                    "Tell the user what plan would delete (runs, reports, trash or permanent); only after they clearly agree, call again with the "
+                    "same selection plus confirm_token. Never confirm on their behalf.")}
+    try:
+        expires = int(request.confirm_token.split(".", 1)[0])
+    except ValueError:
+        expires = 0
+    if expires < time.time():
+        raise ToolValidationError(bilingual("confirm_token 过期了（10 分钟）：重新预演一次，再请用户确认。",
+                                            "confirm_token expired (10 minutes): preview again and ask the user."),
+                                  code="memory.manage.token_expired", details={"must_ask_user": True})
+    import hmac
+
+    if not hmac.compare_digest(request.confirm_token, _confirm_token(service, run_ids, flags, expires)):
+        raise ToolValidationError(bilingual("confirm_token 与这次的条件对不上（选中的记录或选项变了）：重新预演，再请用户确认。",
+                                            "confirm_token does not match this selection (the runs or options changed): preview again and ask the user."),
+                                  code="memory.manage.token_invalid", details={"must_ask_user": True})
+    result = manage.delete_runs(service.store, selected, yes=True, **kwargs)
+    return {**base, "mode": "deleted", "criteria": criteria, **result}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -481,7 +482,9 @@ class ToolsAPI:
         return store
 
     def profile(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """门面 horosa_profile：命主档案 save / get / list / delete / rename（CLI `profile` 走同一个函数；export / import 只在 CLI）。"""
+        """门面 horosa_profile：命主档案 save / get / list / delete / rename / export / import（CLI `profile` 走同一个函数）。"""
+        if isinstance(payload, dict) and payload.get("action") in {"export", "import"}:
+            return self._profile_transfer(payload)
         payload, resolution = self._profile_place_coordinates(payload)
         result = birth_profiles.run_action(self.profiles, payload)
         if result.get("action") == "delete":
@@ -492,6 +495,68 @@ class ToolsAPI:
                       "place_note": place_resolution_note(resolution),
                       "warnings": [*result.get("warnings", []), *place_caveat_notes(resolution)]}
         return result
+
+    def _profile_transfer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """档案导出 / 导入的 MCP 入口（审计待决项 8：MCPB 用户没有 CLI，换电脑搬档案是真实需求）。
+
+        export：写成报告输出目录里的一个 0600 文件，只回路径与名字清单（不把全部出生数据内联进对话）。
+        import：path 只认报告输出目录与 HOROSA_REPORT_OUTPUT_ROOTS；第一次是预演（将新增 / 将冲突逐条列名）+ confirm_token，
+        带 token 才写；整份先校验，坏一条一条都不写；文件内容只当数据（名字 / 备注原样存，读出时不当指令）。"""
+        import hashlib
+        import hmac
+        import json as _json
+        import os
+        import time
+        from datetime import UTC
+
+        from horosa_skill.fileperm import make_private_dir, make_private_file
+        from horosa_skill.service import _clock
+
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        if payload["action"] == "export":
+            document = birth_profiles.export_profiles(self.profiles)
+            folder = Path(self.store.output_dir) / "exports"
+            make_private_dir(folder)
+            path = folder / f"profiles-{_clock.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+            path.write_text(_json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+            make_private_file(path)
+            return {"ok": True, "action": "export", "path": str(path), "count": document["count"],
+                    "names": [item["name"] for item in document["profiles"]],
+                    "note": "文件含出生信息，是用户的私人数据：只把路径告诉用户，不要把内容贴进对话。"}
+        raw = str(data.get("path") or "").strip()
+        if not raw:
+            raise ToolValidationError(bilingual("import 要在 data.path 给导出文件的路径。", "import needs the export file path in data.path."),
+                                      code="profile.invalid_payload", details={"field": "data.path"})
+        path = self._report_output_path(raw, default=Path(self.store.output_dir) / "exports")
+        try:
+            blob = path.read_bytes()
+            document = _json.loads(blob.decode("utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ToolValidationError(bilingual(f"读不了 {path}：{type(exc).__name__}。", f"Cannot read {path}: {type(exc).__name__}."),
+                                      code="profile.invalid_payload", details={"field": "data.path", "path": str(path)}) from exc
+        overwrite = bool(data.get("overwrite"))
+        secret = self.__dict__.setdefault("_profile_import_secret", os.urandom(32))
+
+        def token(expires: int) -> str:
+            body = f"{hashlib.sha256(blob).hexdigest()}|{overwrite}|{expires}".encode()
+            return f"{expires}.{hmac.new(secret, body, hashlib.sha256).hexdigest()[:32]}"
+
+        given = str(data.get("confirm_token") or "")
+        if not given:
+            expires = int(time.time()) + 600
+            preview = birth_profiles.import_profiles(self.profiles, document, overwrite=overwrite, dry_run=True)
+            return {**preview, "path": str(path), "must_ask_user": True, "confirm_token": token(expires), "expires_in_seconds": 600,
+                    "next_step": "把将新增 / 将冲突的名字告诉用户，用户同意后用同样的 path / overwrite 加 data.confirm_token 再调一次。"}
+        try:
+            expires = int(given.split(".", 1)[0])
+        except ValueError:
+            expires = 0
+        if expires < time.time() or not hmac.compare_digest(given, token(expires)):
+            raise ToolValidationError(
+                bilingual("confirm_token 过期或与这次的文件 / 选项对不上：重新预演，再请用户确认。",
+                          "confirm_token expired or does not match this file / option: preview again and ask the user."),
+                code="profile.import_token_invalid", details={"must_ask_user": True})
+        return {**birth_profiles.import_profiles(self.profiles, document, overwrite=overwrite), "path": str(path)}
 
     def _profile_place_coordinates(self, payload: Any) -> tuple[Any, dict[str, Any] | None]:
         """save 时只给了地名、没给经纬度：用技法载荷同一条 `resolve_place_fields` 补 lat / lon（+ 按出生日期补 zone）。

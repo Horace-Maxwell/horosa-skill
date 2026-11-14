@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-119-1c1917?style=flat-square" alt="119 tools" />
-  <img src="https://img.shields.io/badge/测试-7860_passed-3e7c6f?style=flat-square" alt="7860 passed" />
+  <img src="https://img.shields.io/badge/测试-7873_passed-3e7c6f?style=flat-square" alt="7873 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -198,11 +198,11 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 
 | 客户端 | 传输 | 一行接入 | 默认工具面 | 注意 |
 | :-- | :-- | :-- | :-- | :-- |
-| **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 131 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
-| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 131 | skill + MCP 一步到位；插件装在 `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill`，首次运行 `uv run --directory "<那个目录>" horosa-skill install` 装离线 runtime（工具报 `runtime.not_installed` 时会给出带真实路径的这条命令） |
+| **Claude Code** | stdio | `setup --client claude-code`（CWD 有 `.mcp.json` 写项目级，否则自动 `claude mcp add --scope user`） | 全量 132 | 项目内直接用仓根 `.mcp.json`；[说明](./horosa-skill/examples/clients/claude-code.md) |
+| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | 全量 132 | skill + MCP 一步到位；插件装在 `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill`，首次运行 `uv run --directory "<那个目录>" horosa-skill install` 装离线 runtime（工具报 `runtime.not_installed` 时会给出带真实路径的这条命令） |
 | **Agent Plugins v1**（VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code） | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`；VS Code「Chat: Install Plugin From Source」填仓库地址；`qwen extensions install Horace-Maxwell/horosa-skill`；Kiro「Import power from GitHub」 | 精简 14 | 仓根 `plugin.json` + `mcp.json`（规范 1.0.0）：命令是 `uvx` + 钉当前版本的 wheel，**需先装 uv**；首次调用前 `uvx --from <wheel> horosa-skill install` 装离线 runtime。Codex 经 `codex plugin marketplace add Horace-Maxwell/horosa-skill` 读同一份清单（未实测）；OpenClaw / Claude Code 仍走 `.claude-plugin/` |
-| **MCP 官方注册中心** | stdio（`.mcpb`） | 在支持注册中心的客户端里搜 `horosa`（Goose、Junie、Copilot `/mcp search`、PulseMCP、Glama 都从这里取） | 全量 131 | 条目 `io.github.Horace-Maxwell/horosa-skill`，只登记每个 release 的 `.mcpb`（带 sha256，客户端装前校验）；v0.41.0 起每次发版翻公开后自动登记 |
-| **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 131 | `.mcpb` 在每个 release 的资产里 |
+| **MCP 官方注册中心** | stdio（`.mcpb`） | 在支持注册中心的客户端里搜 `horosa`（Goose、Junie、Copilot `/mcp search`、PulseMCP、Glama 都从这里取） | 全量 132 | 条目 `io.github.Horace-Maxwell/horosa-skill`，只登记每个 release 的 `.mcpb`（带 sha256，客户端装前校验）；v0.41.0 起每次发版翻公开后自动登记 |
+| **Claude Desktop** | stdio | `setup --client claude-desktop`，或安装 `.mcpb` 一键包 | 全量 132 | `.mcpb` 在每个 release 的资产里 |
 | **Cursor** | stdio | `setup --client cursor`（或 `client config --format cursor` 拿官方 deep link 点击即装） | 精简 14 | Cursor 全局约 40 工具上限，**超出静默丢弃** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode`（写用户级 `mcp.json`；或 `client config --format vscode` 拿 `vscode:mcp/install` 链接） | 精简 14 | 跨所有 server 共 128 工具上限；仓内已带 `.vscode/mcp.json` |
 | **Codex** | stdio | `setup --client codex`（原位合并 `~/.codex/config.toml`，含超时） | 精简 14 | 必须调高 `startup_timeout_sec`（默认 10 s）与 `tool_timeout_sec`（默认 60 s）；每工具 inputSchema ≤ 5000 B（0.158 缺省预算，本仓守卫） |
@@ -226,9 +226,9 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | **Augment Auggie CLI** | stdio | `setup --client augment`（写 `~/.augment/settings.json`（保留注释）） | 精简 14 | IDE 扩展用自己的设置面板，不读这个文件 |
 | **Deep Code** | stdio | `setup --client deepcode`（写 `~/.deepcode/settings.json`（严格 JSON；文件有注释则拒写——它会把整份连 API key 一起丢掉）） | 精简 14 | 单次工具调用固定 60 s 上限，长任务会超时；启动超时用 `DEEPCODE_MCP_TIMEOUT` |
 | **DeepSeek Harness（dsh）** | stdio | `setup --client dsh`（生成独立补丁 `~/.horosa/clients/dsh/horosa.cordis.yml`，`dsh web --patch <它>` 启用；不改你的 `cordis.patch.yml`） | 精简 14 | 开发者预览版，格式可能变 |
-| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 131 | — |
-| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 131 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
-| **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层**终结 OAuth 的 HTTPS 网关**（Cloudflare Access / oauth2-proxy）——两家连接器只接 OAuth，本 server 只提供静态 Bearer，网关负责把 OAuth 换成注入 `Authorization: Bearer <HOROSA_MCP_TOKEN>` | 全量 131 | **没有托管端点**；配方见 [说明](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
+| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | 全量 132 | — |
+| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <随机串>` | 全量 132 | [接入说明](./horosa-skill/examples/clients/openwebui-streamable-http.md)；跨机必须带令牌，且**没有 TLS**，请放反代后面 |
+| **ChatGPT / claude.ai 远程连接器** | streamable-http | 同上，再套一层**终结 OAuth 的 HTTPS 网关**（Cloudflare Access / oauth2-proxy）——两家连接器只接 OAuth，本 server 只提供静态 Bearer，网关负责把 OAuth 换成注入 `Authorization: Bearer <HOROSA_MCP_TOKEN>` | 全量 132 | **没有托管端点**；配方见 [说明](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
 
 </details>
 
@@ -246,7 +246,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | Intel Mac | ❌ 不支持载荷；JS 引擎可装（自 0.50.1） | arm64 载荷**不能**在 Rosetta 下跑（内含 JDK/Python 是原生 arm64）；本轮明确不做 x86_64 载荷。`install` 自动只装 JS 引擎（需 Node.js ≥ 20.10），其余技法走网关模式 |
 
 > [!TIP]
-> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 14 个门面工具（含按名直调的 `horosa_tool_run`，119 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；认不出的值会被忽略，问题写在 stderr、`horosa_agent_guidance` 的 `server_profile` 与 `doctor` 里；一个合法值都没有时只注册门面工具 + `horosa_tool_run`，不会悄悄变成全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
+> 上下文预算受限的客户端可设 `HOROSA_MCP_COMPACT=1`，只暴露 15 个门面工具（含按名直调的 `horosa_tool_run`，119 个技法仍可按名到达），澄清闸照常生效。或用 `HOROSA_TOOLSETS=astro,cn` 按域裁剪平铺面（合法域 astro/predict/chart/cn/shenshu/other/export/knowledge，别名 western/chinese/reference/all/none；认不出的值会被忽略，问题写在 stderr、`horosa_agent_guidance` 的 `server_profile` 与 `doctor` 里；一个合法值都没有时只注册门面工具 + `horosa_tool_run`，不会悄悄变成全量；只要裁剪生效就注册 `horosa_tool_run` 直呼通道；门面工具恒在）。根目录 `server.json` 为 MCP Registry 元数据，普通用户无需手改。
 
 > [!TIP]
 > **繁体输出**：在 Claude Desktop 扩展设置 / Claude Code 插件设置里勾「繁體中文輸出」，或设 `HOROSA_OUTPUT_SCRIPT=zh-Hant`（香港字形用 `zh-Hant-HK`；`setup --client <名> --output-script zh-Hant` 直接写进客户端配置）。排盘正文、段名、提示与报告转成繁体；回显的入参、设置值、选项、错误码保持原样（AI 原样送回也对得上），不设就是简体、与原来逐字相同。术数用字按 `沖 / 剋 / 曆` 而非 `衝 / 克 / 歷`。
@@ -421,7 +421,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 </details>
 
 <details>
-<summary><b>协议 / 知识（6）+ MCP 门面（14）</b></summary>
+<summary><b>协议 / 知识（6）+ MCP 门面（15）</b></summary>
 
 | 工具 ID | 名称 | 说明 |
 | --- | --- | --- |
@@ -429,7 +429,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | `export_registry` / `export_parse` | 导出协议注册表 / 正文解析器 | 机器可读导出总表 / 把导出文本解析回 JSON |
 | `knowledge_registry` / `knowledge_read` | 知识目录 / 读取器 | 35 域（hover 知识 + 技法操作手册 + 八字断语库）列出 / 读取 / `query` 跨域全文检索，逐条带出处 |
 
-计算工具之外是门面工具：全量面 = 118 个平铺技法 + 13 个门面（共 131；119 个技法里 `bazi_direct` 与 `bazi_birth` 同一输出，只作注册键别名、经 `horosa_tool_run` 可调）；精简面（`HOROSA_MCP_COMPACT=1`）只给 14 个门面工具 = 这 13 个 + 按名直呼的 `horosa_tool_run`（精简面没有平铺的知识 / 导出工具，`knowledge_read` 等也经 `horosa_tool_run` 到达）：
+计算工具之外是门面工具：全量面 = 118 个平铺技法 + 14 个门面（共 132；119 个技法里 `bazi_direct` 与 `bazi_birth` 同一输出，只作注册键别名、经 `horosa_tool_run` 可调）；精简面（`HOROSA_MCP_COMPACT=1`）只给 15 个门面工具 = 这 14 个 + 按名直呼的 `horosa_tool_run`（精简面没有平铺的知识 / 导出工具，`knowledge_read` 等也经 `horosa_tool_run` 到达）：
 
 | 门面 | 作用 |
 | --- | --- |
@@ -440,6 +440,7 @@ skill 是 agent 读的规则（先问后调 / 只读返回的快照 / 禁手算�
 | `horosa_technique_report` | 技法依据报告：单次 / 整场问答「用了什么技法、什么口径、谁算的」的确定性报告 |
 | `horosa_report_template` / `horosa_report_render` / `horosa_report_from_tool` | 咨询报告：AI 终稿 → JSON / DOCX / PDF，自动写回记忆；`format: "png"` 直接出盘图（支持图片的客户端里内联显示），`format: "ics"` 把择日命中与推运各期导出成日历（只用结果里写着的日期）；`output_path` 点名一个不是星阙报告的已有文件会被拒（`report.output_path_unusable`），不覆盖 |
 | `horosa_memory_query` / `horosa_memory_show` / `horosa_memory_record_answer` | 本地记忆：检索（人名 / 档案别名、技法中文名或 MCP 名、日期）/ 回看完整记录（阅读视图，可按段续读，`response_view: "full"` 取原始数据）/ 写回最终答案（旧答案留在历史里） |
+| `horosa_memory_manage` | 存档管理：删除（先预演、用户确认后带 `confirm_token` 才删；连报告与 trace 一起进回收站，30 天内可放回）/ 放回 / 导出 / 用量 |
 | `horosa_knowledge_search` | 检索知识：内置知识 + 你自己的笔记一起查（中文两字词即可、繁简互通，问句按知识库词表切词，常用英文术语换成中文再搜），每条带出处与行号，再用 `horosa_knowledge_read` 精读；你的笔记原文一律标 `untrusted: true`，夹在固定的双语围栏里，只当参考资料 |
 | `horosa_place_search` | 地名检索：星阙城市库离线解析（简繁 / 拼音 / 英文 / 常见缩写与旧称，可带省 / 国家 / 州），候选带 `31n13` 坐标串 + 十进制 + 当日时区（含夏令时 / 北京时间统一）；只有本名 / 英文名 / 全拼 / 别名正好对上才算唯一命中，同名多地一律请用户选。技法载荷也可直接传 `place` |
 | `horosa_profile` | 命主档案：把出生信息存成「我」「妈妈」（本机保存；`place` 存时就解析成坐标与时区；繁简同名算同一人；可改名），之后任一技法带 `profile: "妈妈"` 即可；显式字段优先，闸门照问未存的设置 |
@@ -590,7 +591,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 119 / 119 `ok=true` |
-| 工程测试 | **7860 / 7860 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 498 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **7873 / 7873 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 498 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 109 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 10 个注册表 / 知识 / 解析类工具不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 117 个导出 technique；契约 v17 镜像桌面端 aiExport v65） |
@@ -606,7 +607,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 7860 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 7873 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

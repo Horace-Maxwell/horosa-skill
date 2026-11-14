@@ -102,6 +102,7 @@ def _run_serve(
     # 🔴 `--transport http` 是最常见的手误（Claude Code 的 `claude mcp add --transport http` 用的
     # 就是这个词）。旧实现把未知值原样传给 SDK，得到的是一句不知所云的内部报错。
     transport = _normalized_transport(transport)
+    settings.mcp_transport = transport   # horosa_memory_manage：HTTP 且没设令牌时删除缺省关（审计待决项 6）
     # host/port 缺省来自 env（旧实现把 typer 的字面默认写死，于是 docker-compose 里设的
     # HOROSA_SKILL_HOST/PORT 永远不生效 —— 容器只监听 127.0.0.1，宿主怎么连都连不上）。
     if host is not None:

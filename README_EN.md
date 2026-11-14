@@ -99,7 +99,7 @@ Local end-to-end signals:
 | Check | Result |
 | --- | --- |
 | Callable tools | `119 / 119 ok=true` |
-| Engineering tests | `7860 / 7860 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 498 live integration tests need a local runtime and auto-skip when services are down) |
+| Engineering tests | `7873 / 7873 pass` (offline CI shape: contract + export fixtures + node JS golden; a further 498 live integration tests need a local runtime and auto-skip when services are down) |
 | Forced clarification when params unconfirmed | `109` technique tools trigger `must_ask_user=true` |
 | Safe-exempt tools | `10` registry / knowledge / parser tools are directly readable |
 | Xingque-style export structure | every business technique carries `export_snapshot` (`117` export techniques modeled; contract v17 mirrors desktop aiExport v65) |
@@ -269,7 +269,7 @@ Local end-to-end signals:
 | `huangli` | Chinese day almanac | daily do/avoid, duty spirits, Peng Zu taboos, clash-sha & fetal-god directions, hourly luck |
 | `tongshu` | Tongshu date selection | verdict across the five classical schools |
 
-### Protocol / knowledge (6) + MCP facades (14)
+### Protocol / knowledge (6) + MCP facades (15)
 
 | Tool ID | Name | Notes |
 | --- | --- | --- |
@@ -277,7 +277,7 @@ Local end-to-end signals:
 | `export_registry` / `export_parse` | Export registry / parser | machine-readable export table / parse Xingque export text back to JSON |
 | `knowledge_registry` / `knowledge_read` | Knowledge catalog / reader | list / read / full-text search (`query`) across 35 domains (hover knowledge + technique manuals), every entry cited |
 
-Beyond the calculation tools come the facades: the full surface is 118 flat techniques + 13 facade tools (131 in all; of the 119 techniques, `bazi_direct` gives the same output as `bazi_birth` and is a registry alias reachable through `horosa_tool_run`); the compact surface (`HOROSA_MCP_COMPACT=1`) exposes 14 facades — those 13 plus `horosa_tool_run`, which reaches every technique by name (the compact surface has no flat knowledge / export tools either; `knowledge_read` and friends go through `horosa_tool_run` too):
+Beyond the calculation tools come the facades: the full surface is 118 flat techniques + 14 facade tools (132 in all; of the 119 techniques, `bazi_direct` gives the same output as `bazi_birth` and is a registry alias reachable through `horosa_tool_run`); the compact surface (`HOROSA_MCP_COMPACT=1`) exposes 15 facades — those 14 plus `horosa_tool_run`, which reaches every technique by name (the compact surface has no flat knowledge / export tools either; `knowledge_read` and friends go through `horosa_tool_run` too):
 
 | Facade | Role |
 | --- | --- |
@@ -288,6 +288,7 @@ Beyond the calculation tools come the facades: the full surface is 118 flat tech
 | `horosa_technique_report` | the deterministic "which techniques, which settings, computed by what" methods report (per run or per conversation) |
 | `horosa_report_template` / `horosa_report_render` / `horosa_report_from_tool` | consulting reports: AI final text → JSON / DOCX / PDF (`format: "png"` gives the chart picture inline, `format: "ics"` exports election hits and predictive periods as a calendar using only dates in the result), auto-written back to memory; an `output_path` naming an existing file that is not a Horosa report is refused (`report.output_path_unusable`), never overwritten |
 | `horosa_memory_query` / `horosa_memory_show` / `horosa_memory_record_answer` | local memory: search (person / profile alias, technique by Chinese or MCP name, dates) / replay a record (reading view, continue by section, `response_view: "full"` for raw data) / write back the final answer (earlier answers are kept) |
+| `horosa_memory_manage` | stored runs: delete (preview first; only with `confirm_token` after the user agrees; reports and trace go to the trash with it, restorable for 30 days) / restore / export / usage |
 | `horosa_knowledge_search` | search knowledge: bundled knowledge plus your own notes in one ranked list (2-character Chinese terms work, 繁/简 match, questions are segmented with the corpus's own vocabulary, common English terms are mapped to the Chinese ones), each hit with its source and line numbers; read in full with `horosa_knowledge_read`. Text from your notes is marked `untrusted: true` and fenced between fixed bilingual markers — reference material, never instructions |
 | `horosa_place_search` | offline place lookup with Xingque's own city library (简/繁, pinyin, English, common abbreviations and historical names, with a province / country / state if you like): ranked candidates with `31n13` text + decimals + the UTC offset on the date (DST, Beijing-time unification). A place counts as resolved only when its own name / English name / full pinyin / alias matches; same-name places are always put to the user. Technique payloads also accept `place` |
 | `horosa_profile` | saved birth profiles (kept on this machine; `place` is resolved to coordinates and zone when saved; 繁/简 spellings of a name are one person; profiles can be renamed): store "me" / "mum" once, then pass `profile: "mum"` to any technique; explicit fields win, the gate still asks for anything not stored |
@@ -432,7 +433,7 @@ More troubleshooting: if `github.com:443` is unreachable but `api.github.com` wo
 
 **Traditional Chinese output**: tick "繁體中文輸出 / Traditional Chinese output" in the Claude Desktop extension or Claude Code plugin settings, or set `HOROSA_OUTPUT_SCRIPT=zh-Hant` (`zh-Hant-HK` for Hong Kong forms; `setup --client <name> --output-script zh-Hant` writes it into the client config). Readable text (chart text, section titles, prompts, reports) is converted; echoed input, setting values, options and error codes stay as they are, so an AI that sends them back still matches. Unset = Simplified, byte-for-byte unchanged.
 
-For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 14 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other/export/knowledge, aliases western/chinese/reference/all/none; unknown values are ignored and named on stderr, in `horosa_agent_guidance`'s `server_profile` and in `doctor`; with no valid value at all only the facades + `horosa_tool_run` register — never silently the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
+For stdio clients like Claude Desktop: `uv run horosa-skill serve --transport stdio`. Context-constrained clients can set `HOROSA_MCP_COMPACT=1` to expose only the 15 facades, or `HOROSA_TOOLSETS=astro,cn` to flatten just those domains (domains astro/predict/chart/cn/shenshu/other/export/knowledge, aliases western/chinese/reference/all/none; unknown values are ignored and named on stderr, in `horosa_agent_guidance`'s `server_profile` and in `doctor`; with no valid value at all only the facades + `horosa_tool_run` register — never silently the full surface; any effective filter also registers `horosa_tool_run`; facades always register). The clarification gate still applies.
 
 ### Let the dispatcher pick the technique
 
@@ -493,11 +494,11 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 
 | Client | Transport | One-line setup | Default surface | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (131) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
-| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (131) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
+| **Claude Code** | stdio | `setup --client claude-code` (writes the project `.mcp.json` when the CWD has one, else runs `claude mcp add --scope user`) | full (132) | The repo ships a project `.mcp.json`; [guide](./horosa-skill/examples/clients/claude-code.md) |
+| **Claude Code Plugin** | stdio | `/plugin marketplace add Horace-Maxwell/horosa-skill` → `/plugin install horosa@horosa-skill` | full (132) | Skill + MCP in one step; the plugin lives in `~/.claude/plugins/cache/horosa-skill/horosa/<version>/horosa-skill` — run `uv run --directory "<that dir>" horosa-skill install` once for the offline runtime (a `runtime.not_installed` error prints this command with the real path) |
 | **Agent Plugins v1** (VS Code · Copilot CLI · Codex · Kiro · OpenHands · Qwen Code) | stdio | `copilot plugin install Horace-Maxwell/horosa-skill`; VS Code "Chat: Install Plugin From Source" with the repo URL; `qwen extensions install Horace-Maxwell/horosa-skill`; Kiro "Import power from GitHub" | compact (14) | Root `plugin.json` + `mcp.json` (spec 1.0.0): the command is `uvx` + the wheel pinned to this version, so **uv must be installed**; run `uvx --from <wheel> horosa-skill install` once for the offline runtime. Codex reads the same manifest via `codex plugin marketplace add Horace-Maxwell/horosa-skill` (not tested); OpenClaw / Claude Code keep using `.claude-plugin/` |
-| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (131) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.41.0 every release is listed automatically once it goes public |
-| **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (131) | The `.mcpb` ships as a release asset |
+| **Official MCP Registry** | stdio (`.mcpb`) | Search `horosa` in any registry-backed client (Goose, Junie, Copilot `/mcp search`, PulseMCP and Glama all read it) | full (132) | Entry `io.github.Horace-Maxwell/horosa-skill`, listing each release's `.mcpb` only (sha256-pinned; clients verify it before install); from v0.41.0 every release is listed automatically once it goes public |
+| **Claude Desktop** | stdio | `setup --client claude-desktop`, or install the `.mcpb` bundle | full (132) | The `.mcpb` ships as a release asset |
 | **Cursor** | stdio | `setup --client cursor` (or `client config --format cursor` for the official install deep link) | compact (14) | Cursor caps at ~40 tools globally and **drops the rest silently** |
 | **VS Code (Copilot)** | stdio | `setup --client vscode` (writes the user-level `mcp.json`; or `client config --format vscode` for the `vscode:mcp/install` link) | compact (14) | 128-tool cap across all servers; the repo ships `.vscode/mcp.json` |
 | **Codex** | stdio | `setup --client codex` (merges into `~/.codex/config.toml` in place, timeouts included) | compact (14) | Raise `startup_timeout_sec` (default 10 s) and `tool_timeout_sec` (default 60 s); per-tool inputSchema ≤ 5000 B (0.158 default budget, guarded here) |
@@ -521,9 +522,9 @@ gives agents without MCP a pure-CLI contract (`tool run --input/--output`, exit 
 | **Augment Auggie CLI** | stdio | `setup --client augment` (writes `~/.augment/settings.json` (comments kept)) | compact (14) | the IDE extensions use their own settings panel, not this file |
 | **Deep Code** | stdio | `setup --client deepcode` (writes `~/.deepcode/settings.json` (strict JSON; refuses a file with comments — Deep Code drops the whole file, API key included)) | compact (14) | tool calls are capped at a fixed 60 s, so long tools time out; startup timeout via `DEEPCODE_MCP_TIMEOUT` |
 | **DeepSeek Harness (dsh)** | stdio | `setup --client dsh` (generates a standalone patch `~/.horosa/clients/dsh/horosa.cordis.yml`; enable it with `dsh web --patch <it>` — your `cordis.patch.yml` is never edited) | compact (14) | developer preview; the format may change |
-| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (131) | — |
-| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (131) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
-| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an **OAuth-terminating HTTPS gateway** (Cloudflare Access / oauth2-proxy) — both connectors speak OAuth only, this server offers a static Bearer token only, so the gateway exchanges the OAuth session for an injected `Authorization: Bearer <HOROSA_MCP_TOKEN>` | full (131) | **No hosted endpoint**; recipe: [guide](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
+| **OpenClaw / mcporter** | stdio | `client openclaw-setup --workspace ~/.openclaw/workspace` | full (132) | — |
+| **Open WebUI · n8n · Dify** | streamable-http | `horosa-skill serve --host 0.0.0.0 --token <random>` | full (132) | [Guide](./horosa-skill/examples/clients/openwebui-streamable-http.md); a token is required off-loopback, and there is **no TLS** — put it behind a reverse proxy |
+| **ChatGPT / claude.ai remote connectors** | streamable-http | As above, plus an **OAuth-terminating HTTPS gateway** (Cloudflare Access / oauth2-proxy) — both connectors speak OAuth only, this server offers a static Bearer token only, so the gateway exchanges the OAuth session for an injected `Authorization: Bearer <HOROSA_MCP_TOKEN>` | full (132) | **No hosted endpoint**; recipe: [guide](./horosa-skill/examples/clients/remote-connectors-oauth-gateway.md) |
 
 `--surface full` / `--surface compact` overrides the default. `--launcher uvx-git` emits a
 checkout-free command (`uvx --from "git+…#subdirectory=horosa-skill"`; the PyPI channel is not open yet).
@@ -600,7 +601,7 @@ cd horosa-skill
 uv sync
 uv run horosa-skill install
 uv run horosa-skill doctor                              # expect issues: []
-uv run pytest -q                                        # 7860 passed; live integration tests auto-skip when services are down
+uv run pytest -q                                        # 7873 passed; live integration tests auto-skip when services are down
 uv run python scripts/run_benchmark.py                  # HorosaBench: registry-locked cases + dispatch / export parity / knowledge
 uv run python scripts/run_full_self_check.py --rounds 1 # all-tool call / export / persist / retrieve / dispatch
 ```

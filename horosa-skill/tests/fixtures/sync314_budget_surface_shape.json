@@ -54,7 +54,7 @@
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "request": "object",
-    "action": "string enum=[\"save\",\"get\",\"list\",\"delete\",\"rename\"]",
+    "action": "string enum=[\"save\",\"get\",\"list\",\"delete\",\"rename\",\"export\",\"import\"]",
     "name": "string",
     "data": "object",
     "detail": "boolean"
@@ -102,6 +102,21 @@
     "response_tool": "string",
     "response_sections": "array items={\"type\":\"string\"}",
     "response_offset": "integer"
+   }
+  },
+  "horosa_memory_manage": {
+   "tool": "{\"annotations\":{\"destructiveHint\":true,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"管理本机存档 / manage stored runs\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "request": "object",
+    "action": "string enum=[\"delete\",\"restore\",\"export\",\"usage\"]",
+    "run_ids": "array items={\"type\":\"string\"}",
+    "entity": "string",
+    "before": "string",
+    "keep_reports": "boolean",
+    "permanent": "boolean",
+    "confirm_token": "string",
+    "trash_id": "string"
    }
   },
   "horosa_report_template": {
@@ -2952,7 +2967,7 @@
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "request": "object",
-    "action": "string enum=[\"save\",\"get\",\"list\",\"delete\",\"rename\"]",
+    "action": "string enum=[\"save\",\"get\",\"list\",\"delete\",\"rename\",\"export\",\"import\"]",
     "name": "string",
     "data": "object",
     "detail": "boolean"
@@ -3000,6 +3015,21 @@
     "response_tool": "string",
     "response_sections": "array items={\"type\":\"string\"}",
     "response_offset": "integer"
+   }
+  },
+  "horosa_memory_manage": {
+   "tool": "{\"annotations\":{\"destructiveHint\":true,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"管理本机存档 / manage stored runs\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "request": "object",
+    "action": "string enum=[\"delete\",\"restore\",\"export\",\"usage\"]",
+    "run_ids": "array items={\"type\":\"string\"}",
+    "entity": "string",
+    "before": "string",
+    "keep_reports": "boolean",
+    "permanent": "boolean",
+    "confirm_token": "string",
+    "trash_id": "string"
    }
   },
   "horosa_report_template": {

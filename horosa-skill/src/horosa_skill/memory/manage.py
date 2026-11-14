@@ -1,20 +1,29 @@
 """按人 / 按 run / 按时间删除与导出本机存档（CLI `memory delete` / `memory export`）。
 
-删除：默认只列出会删什么（dry-run），`yes=True` 才删。先删文件（产物、manifest）、再删行：中途断了，剩下的是「行在、文件没了」，
-再跑一次就删完；反过来会留下没有行的文件，`memory rebuild` 会把删掉的 run 又找回来。报告文件是交付给用户的，只列出、不删。
+删除：默认只列出会删什么（dry-run），`yes=True` 才删。先删文件（产物、manifest、报告）、再删行：中途断了，剩下的是「行在、文件没了」，
+再跑一次就删完；反过来会留下没有行的文件，`memory rebuild` 会把删掉的 run 又找回来。
+v0.51.0-dev（审计 O-06 / 待决项 6）：报告是这条 run 的派生物，缺省一起删（`keep_reports=True` 才留）；trace 里这些 run 的行一并抹掉
+（重写当日文件，原子替换）；给了 `trash_dir` 就移进回收站（`<data_dir>/trash/<id>/`，`restore_trash` 放回后照文件重建索引），
+不给就直接删。回收站 30 天后由 `purge_trash` 清掉。
 
 导出：每个 run 一个文件夹，里面是人能直接读的 `run.md`、manifest、产物 JSON 与报告副本，外加一份总目录 `index.md`。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import shutil
 import sqlite3
+import tempfile
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from horosa_skill import fsretry
 from horosa_skill.memory import search as _search
 from horosa_skill.memory.rebuild import quarantined_backups, scan_artifact_tree
 
@@ -79,16 +88,76 @@ def _run_files(store: MemoryStore, conn: sqlite3.Connection, run_ids: list[str])
     return list(files.values()), reports
 
 
-def delete_runs(store: MemoryStore, selected: list[dict[str, Any]], *, yes: bool) -> dict[str, Any]:
+TRASH_DAYS = 30
+
+
+def trash_root(settings: Any) -> Path:
+    """回收站：`<data_dir>/trash`（不在存档目录 runs/ 里——重建索引不会把删掉的 run 找回来）。"""
+    from horosa_skill.fileperm import make_private_dir
+
+    root = Path(settings.data_dir).expanduser() / "trash"
+    make_private_dir(root)
+    return root
+
+
+def _trace_files(trace_dir: Path | None) -> list[Path]:
+    return sorted(trace_dir.glob("*.jsonl")) if trace_dir is not None and trace_dir.is_dir() else []
+
+
+def _trace_hits(trace_dir: Path | None, run_ids: list[str]) -> int:
+    needles = [run_id for run_id in run_ids if run_id]
+    total = 0
+    for path in _trace_files(trace_dir):
+        try:
+            total += sum(1 for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+                         if any(needle in line for needle in needles))
+        except OSError:
+            continue
+    return total
+
+
+def _scrub_traces(trace_dir: Path | None, run_ids: list[str]) -> int:
+    """trace 里提到这些 run 的行抹掉：逐个文件重写到同目录临时文件再原子替换（审计 O-06：删除之后 trace 里还有这个人）。"""
+    needles = [run_id for run_id in run_ids if run_id]
+    removed = 0
+    for path in _trace_files(trace_dir):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+        except OSError:
+            continue
+        kept = [line for line in lines if not any(needle in line for needle in needles)]
+        if len(kept) == len(lines):
+            continue
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".scrub-", suffix=".jsonl")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.writelines(kept)
+        fsretry.replace(Path(tmp), path)
+        removed += len(lines) - len(kept)
+    return removed
+
+
+def _trash_target(store: MemoryStore, entry: Path, path: Path) -> Path:
+    try:
+        return entry / "files" / path.resolve().relative_to(Path(store.output_dir).resolve())
+    except (ValueError, OSError):
+        return entry / "outside" / hashlib.sha256(str(path).encode()).hexdigest()[:16] / path.name
+
+
+def delete_runs(store: MemoryStore, selected: list[dict[str, Any]], *, yes: bool, keep_reports: bool = False,
+                trace_dir: Path | None = None, trash_dir: Path | None = None) -> dict[str, Any]:
     run_ids = [item["run_id"] for item in selected]
     with store.connect() as conn:
         files, reports = _run_files(store, conn, run_ids)
+    if not keep_reports:
+        files = [*files, *(Path(path) for path in reports if Path(path) not in files)]
     report: dict[str, Any] = {
         "dry_run": not yes,
         "runs": len(run_ids),
         "sample": selected[:SAMPLE],
         "files": len([path for path in files if path.exists()]),
-        "reports_kept": reports,
+        **({"reports_kept": reports} if keep_reports else {"reports_deleted": reports}),
+        "trace_lines": _trace_hits(trace_dir, run_ids),
+        "disposal": "trash" if trash_dir is not None else "permanent",
         "deleted_runs": 0,
         "deleted_files": 0,
     }
@@ -99,13 +168,33 @@ def delete_runs(store: MemoryStore, selected: list[dict[str, Any]], *, yes: bool
         return report
     removed = 0
     failed: list[str] = []
+    moved: list[dict[str, str]] = []
+    entry: Path | None = None
+    if trash_dir is not None:
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        entry = trash_dir / f"{stamp}-{hashlib.sha256(','.join(sorted(run_ids)).encode()).hexdigest()[:8]}"
+        entry.mkdir(parents=True, exist_ok=True)
     for path in files:
         try:
-            if path.exists():
+            if not path.exists():
+                continue
+            if entry is not None:
+                target = _trash_target(store, entry, path)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(path), str(target))
+                moved.append({"from": str(path), "to": str(target)})
+            else:
                 path.unlink()
-                removed += 1
+            removed += 1
         except OSError as exc:
             failed.append(f"{path}: {type(exc).__name__}")
+    if entry is not None:
+        (entry / "trash.json").write_text(json.dumps({
+            "schema": "horosa.skill.memory.trash.v1", "deleted_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+            "run_ids": run_ids, "sample": selected[:SAMPLE], "files": moved,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        report["trash_id"] = entry.name
+    report["trace_lines_removed"] = _scrub_traces(trace_dir, run_ids)
     with store._writer() as conn:
         conn.execute("BEGIN IMMEDIATE")
         for start in range(0, len(run_ids), 400):
@@ -120,6 +209,56 @@ def delete_runs(store: MemoryStore, selected: list[dict[str, Any]], *, yes: bool
     if failed:
         report["files_not_deleted"] = failed
     return report
+
+
+def list_trash(trash_dir: Path | None) -> list[dict[str, Any]]:
+    out = []
+    for entry in sorted(trash_dir.iterdir(), reverse=True) if trash_dir is not None and trash_dir.is_dir() else []:
+        try:
+            meta = json.loads((entry / "trash.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        out.append({"trash_id": entry.name, "deleted_at": meta.get("deleted_at"), "runs": len(meta.get("run_ids") or []),
+                    "sample": (meta.get("sample") or [])[:5]})
+    return out
+
+
+def restore_trash(store: MemoryStore, trash_dir: Path, trash_id: str) -> dict[str, Any]:
+    """把回收站里的一批放回原处，再照文件重建这些 run 的索引（memory rebuild 的同一套）。原处已有同名文件的不覆盖、列出来。"""
+    from horosa_skill.memory.rebuild import rebuild_from_artifacts
+
+    entry = trash_dir / Path(trash_id).name
+    meta = json.loads((entry / "trash.json").read_text(encoding="utf-8"))
+    restored, skipped = 0, []
+    for item in meta.get("files") or []:
+        source, target = Path(item["to"]), Path(item["from"])
+        if not source.exists():
+            continue
+        if target.exists():
+            skipped.append(str(target))
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(target))
+        restored += 1
+    rebuilt = rebuild_from_artifacts(store, min_age_seconds=0, index_bodies=True)
+    if not skipped:
+        shutil.rmtree(entry, ignore_errors=True)
+    return {"ok": True, "trash_id": entry.name, "runs": len(meta.get("run_ids") or []), "restored_files": restored,
+            "not_restored_files": skipped, "restored_runs": rebuilt.get("restored_runs", {}).get("total", 0)}
+
+
+def purge_trash(trash_dir: Path | None, *, days: int = TRASH_DAYS, now: float | None = None) -> int:
+    """回收站里超过 `days` 天的批次彻底删掉；返回删掉几批。"""
+    cutoff = (now or time.time()) - days * 86400
+    purged = 0
+    for entry in trash_dir.iterdir() if trash_dir is not None and trash_dir.is_dir() else []:
+        try:
+            if entry.is_dir() and (entry / "trash.json").stat().st_mtime < cutoff:
+                shutil.rmtree(entry)
+                purged += 1
+        except OSError:
+            continue
+    return purged
 
 
 def count_runs_mentioning(store: MemoryStore, names: list[str]) -> int:
