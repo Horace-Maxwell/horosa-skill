@@ -225,7 +225,10 @@ class MingliRunners:
 
     def _run_bazi_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         params, snapshot = self._bazi_params(payload)
-        endpoint = "/bazi/direct" if tool_name == "bazi_direct" else "/bazi/birth"
+        # Java 回退恒走 /bazi/direct（两个技法同一条）：上游 AI 无头复算 buildBaziSnapshotForParams（BaZi.js:642）与「其他模块取八字底稿」
+        # 都经 fetchBaziDirectCached（:824-845，本地优先、回退 /bazi/direct）。以前 bazi_birth 回退 /bazi/birth——那个响应的 core 没有
+        # direction，快照只剩「本次本地计算结果未返回「大运」细项」（公元前 / 域外年份、byLon 都会走到；审计 S-16 复核时 live 实测）。
+        endpoint = "/bazi/direct"
         # byLon：本地引擎不实现，给了真值只有 Java 算得出 → 整盘走 Java 并如实告知（命宫起法随之标「子平数法(本域回退)」）。
         # adjustJieqi：v3.13.0 起上游恒发 0（见 _bazi_params），不再因它改走 Java；调用方显式要了 → 说清本次未调整。
         if payload.get("adjustJieqi") in (1, True, "1", "true"):

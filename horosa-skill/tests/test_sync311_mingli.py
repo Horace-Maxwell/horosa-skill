@@ -240,10 +240,11 @@ def test_bazi_java_only_knobs_and_bc_dates_route_to_java(tmp_path) -> None:
     service = _service(tmp_path, client=client, real={"bazi_local"})
     env = service.run_tool("bazi_birth", {"date": "0100-05-15", "time": "10:30:00", **_SH, "gender": 1, "ad": -1}, save_result=False)
     assert env.ok, env.error
-    sent = [p for ep, p in client.calls if ep == "/bazi/birth"]
+    # 回退端点 = 上游 fetchBaziDirectCached 的 /bazi/direct（两个技法同一条；/bazi/birth 的响应没有大运，见 test_fix314_bazi_java_fallback）
+    sent = [p for ep, p in client.calls if ep == "/bazi/direct"]
     assert sent and sent[0]["date"] == "-0100-05-15"
     assert env.data["compute_sources"] == {"bazi": "java"}
-    assert any("八字由 Java /bazi/birth 起盘" in w for w in env.warnings)
+    assert any("八字由 Java /bazi/direct 起盘" in w for w in env.warnings)
     client.calls.clear()
     direct = service.run_tool("bazi_direct", {"date": "1990-05-15", "time": "10:30:00", **_SH, "gender": 0, "byLon": True},
                               save_result=False)

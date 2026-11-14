@@ -2729,7 +2729,7 @@
    }
   },
   "horosa_cn_bazi_direct": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"生成八字直断\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"八字命盘，与 bazi_birth 同一引擎\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "agent_confirmed_settings": "boolean",

@@ -79,7 +79,7 @@ def test_south_month_reaches_java_when_the_chart_routes_there(tmp_path) -> None:
     service = _service(tmp_path, client=client, real={"bazi_local"})
     env = service.run_tool("bazi_birth", {**_SYD, "southMonth": "chong", "byLon": True}, save_result=False)
     assert env.ok, env.error
-    sent = [p for ep, p in client.calls if ep == "/bazi/birth"]
+    sent = [p for ep, p in client.calls if ep == "/bazi/direct"]   # 回退端点同上游 fetchBaziDirectCached
     assert sent and sent[0]["southMonth"] == "chong", sent
     assert env.data["compute_sources"] == {"bazi": "java"}
 

@@ -239,8 +239,8 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "jieqi_birth": ToolDefinition("jieqi_birth", "cn", "jieqi_birth", None, JieQiBirthInput, "出生节气窗：定位出生时刻前后的节气精确时刻并标出所落区间（八字起运窗同源数据）。Locate the solar terms bracketing a birth moment (the same window BaZi luck-period counting uses).", execution="local"),
     "ziwei_birth": ToolDefinition("ziwei_birth", "cn", "ziwei_birth", "/ziwei/birth", ZiWeiBirthInput, "生成紫微斗数命盘。Generate Zi Wei birth chart.", execution="local"),
     "ziwei_rules": ToolDefinition("ziwei_rules", "cn", "ziwei_rules", "/ziwei/rules", ZiWeiRulesInput, "获取紫微斗数规则库。Fetch Zi Wei rules."),
-    "bazi_birth": ToolDefinition("bazi_birth", "cn", "bazi_birth", "/bazi/birth", BaZiBirthInput, "生成八字命盘（四柱 / 大运 / 神煞 / 五行力量 / 格局）。Generate BaZi birth output.", execution="local"),
-    "bazi_direct": ToolDefinition("bazi_direct", "cn", "bazi_direct", "/bazi/direct", BaZiDirectInput, "生成八字直断。Generate BaZi direct output.", execution="local"),
+    "bazi_birth": ToolDefinition("bazi_birth", "cn", "bazi_birth", "/bazi/direct", BaZiBirthInput, "生成八字命盘（四柱 / 大运 / 神煞 / 五行力量 / 格局）。Generate BaZi birth output.", execution="local"),
+    "bazi_direct": ToolDefinition("bazi_direct", "cn", "bazi_direct", "/bazi/direct", BaZiDirectInput, "八字命盘，与 bazi_birth 同一引擎、同一输出（大运 / 流年 / 小运都在里面）；保留这个名字兼容旧调用，新调用用 bazi_birth。Same output as bazi_birth (kept for compatibility).", execution="local"),
     "liureng_gods": ToolDefinition(
         "liureng_gods",
         "cn",

@@ -76,7 +76,7 @@
         "java"
       ],
       "endpoints": [
-        "/bazi/birth"
+        "/bazi/direct"
       ],
       "export_technique": "bazi",
       "notes": "本地 vendored lunar.js 引擎优先（同星阙八字页 BaZi.js:716-755 fetchBaziCached），公元前等域外日期或 byLon 回退 Java /bazi/*（adjustJieqi 随上游 v3.13.0 恒发 0）；两路都由 vendored buildBaziSnapshotText 出快照（compute_sources.bazi = lunar-local | java）"
