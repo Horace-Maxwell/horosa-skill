@@ -532,6 +532,41 @@ def _lift_nested_party(out: dict[str, Any], fields: frozenset[str]) -> None:
                          f"Fields inside `{key}` were read as top-level arguments ({', '.join(lifted) or 'none new'}).")
 
 
+# 地点的常见别名 → `place`（审计 S-07）：模型写 city / location 时以前一律被当成「没人读的参数」，再让它去问用户时区和经纬度。
+PLACE_ALIASES = ("location", "city", "birthplace", "birth_place", "birthPlace", "出生地", "地点", "城市")
+
+
+def apply_field_aliases(payload: Any, *, model: Any = None) -> Any:
+    """别名改写提前到地名解析之前（审计 S-07 / F05）：地名解析先于归一化跑，别名若等到归一化才改，`city` 来不及变成 `place`，
+    `timezone` 也会被地名推出的时区顶掉（而规范名 `zone` 照用——同一个意思差一小时）。顶层与合盘双方各做一遍；改名进 warnings。"""
+    if not isinstance(payload, dict):
+        return payload
+    fields, _required = _model_fields(model)
+    out = dict(payload)
+    _apply_place_alias(out, path="", fields=fields)
+    _apply_aliases(out, path="", fields=fields)
+    for key in PARTY_KEYS:
+        if isinstance(out.get(key), dict):
+            party = dict(out[key])
+            _apply_place_alias(party, path=f"{key}.", fields=None)
+            _apply_aliases(party, path=f"{key}.", fields=None)
+            out[key] = party
+    return out
+
+
+def _apply_place_alias(out: dict[str, Any], *, path: str, fields: frozenset[str] | None) -> None:
+    for alias in PLACE_ALIASES:
+        if alias not in out or (fields is not None and alias in fields):
+            continue
+        value = out.pop(alias)
+        if not F.is_blank(out.get("place")) and out.get("place") != value:
+            F.add_input_note(f"`{path}{alias}` 与 `{path}place` 都给了且不同：按 `place`，`{alias}` 已忽略。",
+                             f"`{path}{alias}` and `{path}place` disagree; `place` was used and `{alias}` ignored.")
+            continue
+        out["place"] = value
+        F.add_input_note(f"参数 `{path}{alias}` 按地名 `{path}place` 读。", f"Argument `{path}{alias}` was read as the place name `{path}place`.")
+
+
 def _apply_aliases(out: dict[str, Any], *, path: str, fields: frozenset[str] | None) -> None:
     for alias, canonical in FIELD_ALIASES.items():
         if alias not in out or (fields is not None and (alias in fields or canonical not in fields)):

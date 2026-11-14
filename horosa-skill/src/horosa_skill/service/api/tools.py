@@ -24,6 +24,7 @@ from horosa_skill import input_fields as F
 from horosa_skill.input_fields import input_notes_scope, is_blank
 from horosa_skill.input_normalization import (
     _normalize_iana_zone_value,
+    apply_field_aliases,
     field_issues_error,
     missing_fields_error,
     normalize_request_payload,
@@ -440,7 +441,7 @@ class ToolsAPI:
         try:
             # 地名 → 坐标 + 时区（v0.48.0，service/api/place.py）：lat / lon / zone 是必填，place 得在归一化与校验之前补上；
             # 有歧义 / 找不到 / 旧 runtime 都是结构化拒绝（place.*，带 agent_recovery），同样有意抛出去。
-            payload = self.resolve_place_fields(payload, tool_name=tool_name)
+            payload = self.resolve_place_fields(apply_field_aliases(payload, model=definition.input_model), tool_name=tool_name)
         except ToolValidationError as exc:
             trace["error_code"] = exc.code
             raise
