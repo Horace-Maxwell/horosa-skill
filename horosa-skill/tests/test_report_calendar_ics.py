@@ -333,6 +333,12 @@ def test_report_from_tool_refuses_ics_before_casting_a_tool_with_no_dates(tmp_pa
     assert refused.value.code == "report.no_calendar_content" and calls == []  # 没白起一次盘
 
 
+def test_run_id_is_a_property_not_reader_text() -> None:
+    """审计 outputs 待决项 4：DESCRIPTION 是人读正文（会被同步、转发），run id 改放 X-HOROSA-RUN-ID；UID 照旧带它。"""
+    text = _ics(GOLDENS[0]).decode("utf-8")
+    assert "· run golden" not in text and "X-HOROSA-RUN-ID:golden" in text and "UID:golden-1@horosa-skill" in text
+
+
 if __name__ == "__main__":  # 重录金样（见模块说明）
     (FIXTURES / "calendar_ics").mkdir(exist_ok=True)
     for golden_name in GOLDENS:

@@ -1945,6 +1945,11 @@ IANA 按钟点换算），偏移与出生时不同才进 warnings；dispatch 的
 八十多万字节没有读者只进存档；钻取本来就是一次新调用。live 各 aiMode（含带当前目标时刻的盘）的正文与 stopLevelIdx=3 逐字相同。
 守卫 `tests/test_fix314_zr_stop_level.py`。
 
+**有意偏离上游文本：七政神数「当前大限」与演禽「贵格 / 贱格 / 福禄上格 / 贫贱下命」的排版（v0.51.0-dev，审计 O-14）**：两门后端把 dict /
+dict 列表直接交给 `horosa_engine_common.row()`，正文印成「palace_index：2；branch：2；branch_name：寅…」「name：蛟吞日月；ganzhi：壬午、name：…」。
+skill 按响应里的结构化值（`qizheng.dasha.current`、`literature.gui/jian/fulu/pinjian`）重排这几行（`service/runners/shenshu._undict_shenshu_rows`），
+值一字不改；响应里没有结构化值就原样不动。上游修了以后这层自然失效（行里不再有键名，结构化值照样能排）。守卫 `tests/test_fix314_no_raw_keys_in_text.py`（含 live）。
+
 **奇门节气种子要补日柱（v0.47.0，上游 preciseCalcBridge.fillJieqiDayGanzhiFromLocal）**：chart 服务的 Python `/jieqi/year` 从不带日柱
 （Java 版不加 `seedOnly` 才带）。`tools/qimen.js` 当年只抄了 `fetchPreciseJieqiSeed` 没抄补日柱，种子 `dayGanzhi` 全空 → 本地路由
 （飞盘 / 混合 / 日家 / 金函 / 刻家，置闰 / 无闰 / 茅山）回落 甲子 / 旧锚，局数大面积错，测试喂的是自带日柱的假种子所以一直绿。

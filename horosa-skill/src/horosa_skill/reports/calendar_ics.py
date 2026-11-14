@@ -206,7 +206,9 @@ def _table_lines(body: str, needle: str) -> list[str]:
 
 
 def _source_line(ctx: _Context) -> str:
-    return f"来源：星阙 Horosa · {ctx.label} · run {ctx.run_id}"
+    # run id 不进人读正文（审计 outputs 待决项 4：日历事件会被同步到云、被转发；报告自己的规则也是「人读正文不放 run id」），
+    # 改放 X-HOROSA-RUN-ID 属性（多数日历不显示，回查时仍对得上）；UID 照旧带它（RFC 5545：重复导入按 UID 更新）。
+    return f"来源：星阙 Horosa · {ctx.label}"
 
 
 def _describe(*parts: Any) -> str:
@@ -606,6 +608,6 @@ def render_ics(events: list[CalendarEvent], *, run_id: str, dtstamp: datetime, c
             elif event.duration_days:
                 lines.append(f"DURATION:P{int(event.duration_days)}D")
         lines += [f"SUMMARY:{escape_text(text(event.summary))}", f"DESCRIPTION:{escape_text(text(event.description))}",
-                  "TRANSP:TRANSPARENT", "END:VEVENT"]
+                  f"X-HOROSA-RUN-ID:{run_id}", "TRANSP:TRANSPARENT", "END:VEVENT"]
     lines.append("END:VCALENDAR")
     return "".join(fold_line(line) + "\r\n" for line in lines)

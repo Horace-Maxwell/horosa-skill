@@ -14,7 +14,8 @@ DESCRIPTION:奇门择日 · 命中第 1 段（共 4 段）\n时段（结果
  格·青龙回首\n判读:\n· 设定 吉格·青龙回首 → 实际 青
  龙回首@兑7宫 ✓\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n
  地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·
- 真太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+ 真太阳时··\n来源：星阙 Horosa · 奇门择日
+X-HOROSA-RUN-ID:golden
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
@@ -28,7 +29,8 @@ DESCRIPTION:奇门择日 · 命中第 2 段（共 4 段）\n时段（结果
  格·青龙回首\n判读:\n· 设定 吉格·青龙回首 → 实际 青
  龙回首@兑7宫 ✓\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n
  地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·
- 真太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+ 真太阳时··\n来源：星阙 Horosa · 奇门择日
+X-HOROSA-RUN-ID:golden
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
@@ -42,7 +44,8 @@ DESCRIPTION:奇门择日 · 命中第 3 段（共 4 段）\n时段（结果
  格·青龙回首\n判读:\n· 设定 吉格·青龙回首 → 实际 青
  龙回首@兑7宫 ✓\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n
  地点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·
- 真太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+ 真太阳时··\n来源：星阙 Horosa · 奇门择日
+X-HOROSA-RUN-ID:golden
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
@@ -55,7 +58,8 @@ DESCRIPTION:奇门择日 · 命中第 4 段（共 4 段）\n时段（结果
  原文，UTC-05:00）：2028-04-03 09:00 ~ 2028-04-03 11:00\n条件：吉
  格·青龙回首\n时间段：2028-04-01 00:00 → 2028-04-03 23:59\n地
  点：New York　时区：-05:00\n参数：·置闰··空亡·驿马·真
- 太阳时··\n来源：星阙 Horosa · 奇门择日 · run golden
+ 太阳时··\n来源：星阙 Horosa · 奇门择日
+X-HOROSA-RUN-ID:golden
 TRANSP:TRANSPARENT
 END:VEVENT
 END:VCALENDAR

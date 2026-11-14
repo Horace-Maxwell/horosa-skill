@@ -260,12 +260,18 @@ class _TextSlot:
     chosen: list[int]                   # 要给的段在 sections 里的位置（按原顺序）
     offset: int                         # 第一个要给的段从第几个字符起
     explicit: bool                      # 调用方点名了段 / 给了续读位置
+    merged: list[int] = field(default_factory=list)   # 合成末尾一段的「未返回」占位段（审计 O-15，只在缺省阅读视图）
     own: list[str] = field(default_factory=list)
     demand: float = 0.0
 
     def measure(self, budget: Budget) -> None:
         self.demand = sum(budget.text_fraction(_json_text(self._piece(pos, self._start(n, pos))))
-                          for n, pos in enumerate(self.chosen))
+                          for n, pos in enumerate(self.chosen)) + self._merged_cost(budget)
+
+    def _merged_cost(self, budget: Budget) -> float:
+        if not self.merged:
+            return 0.0
+        return budget.text_fraction(_json_text(merged_placeholder_block([self.sections[pos]["title"] for pos in self.merged]) + "\n\n"))
 
     def _start(self, n: int, pos: int) -> int:
         return min(self.offset, len(self.sections[pos]["body"])) if n == 0 else 0
@@ -278,7 +284,7 @@ class _TextSlot:
         """按额度放正文：整段优先、按原顺序；放不下的段先跳过，剩下的额度给第一个被跳过的段的开头。"""
         shown: dict[int, tuple[int, int]] = {}
         skipped: list[int] = []
-        remaining = allowance + 1e-9
+        remaining = allowance + 1e-9 - self._merged_cost(budget)
         for n, pos in enumerate(self.chosen):
             start = self._start(n, pos)
             cost = budget.text_fraction(_json_text(self._piece(pos, start)))
@@ -318,7 +324,7 @@ class _TextSlot:
 
     def _write(self, shown: dict[int, tuple[int, int]], skipped: list[int], partial: int | None) -> None:
         sections = self.sections
-        whole = not self.explicit and not skipped and len(shown) == len(sections) and all(
+        whole = not self.explicit and not skipped and not self.merged and len(shown) == len(sections) and all(
             shown[pos] == (0, len(section["body"])) for pos, section in enumerate(sections)
         )
         index: list[dict[str, Any]] = []
@@ -326,7 +332,9 @@ class _TextSlot:
             row: dict[str, Any] = {"index": section["index"], "title": section["title"], "chars": len(section["body"])}
             span = shown.get(pos)
             if not whole:
-                if span is None:
+                if pos in self.merged:
+                    row["shown"] = "merged"
+                elif span is None:
                     row["shown"] = "none"
                 elif span == (0, len(section["body"])):
                     row["shown"] = "full"
@@ -350,6 +358,8 @@ class _TextSlot:
                     if end < len(section["body"]):
                         text = text.rstrip("\n") + f"\n…（本段未完：给到第 {end} 字，共 {len(section['body'])} 字）"
                     parts.append(text)
+                if self.merged:
+                    parts.append(merged_placeholder_block([sections[pos]["title"] for pos in self.merged]))
                 self.snapshot["export_text"] = "\n\n".join(parts)
         self.own = [self._cut_note(shown, skipped, partial)] if skipped else []
 
@@ -379,6 +389,21 @@ class _TextSlot:
         if self.run_id:
             return f'horosa_memory_show(run_id="{self.run_id}", response_tool="{self.tool}", {picks})'
         return f"the same `{self.tool}` call + {picks}"
+
+
+_MISSING_PREFIX = "本次本地计算结果未返回「"
+MERGED_PLACEHOLDER_TITLE = "本次未返回的段"
+
+
+def is_missing_placeholder(body: str) -> bool:
+    """exports.contract.missing_detail_text 写的那句护栏（段里只有它）。"""
+    text = body.strip()
+    return text.startswith(_MISSING_PREFIX) and "\n" not in text
+
+
+def merged_placeholder_block(titles: list[str]) -> str:
+    return (f"[{MERGED_PLACEHOLDER_TITLE}]\n{'、'.join(titles)}（{len(titles)} 段）：本次本地计算结果没有这些段的细项；"
+            "报告只能基于已返回盘面判断，不能臆造外部依赖、桌面端服务或不存在的数据。")
 
 
 def _match_sections(sections: list[dict[str, Any]], wanted: tuple[Any, ...]) -> tuple[list[int], list[Any]]:
@@ -427,11 +452,16 @@ def _plan_envelope(
         return envelope, None
     tool = str(envelope.get("tool") or "")
     run_id = _run_id(envelope) or run_id
+    # 段名按简体给（审计 O-16：策天「[命宮]」而正文「宫名：命宫」）；繁体输出在进程出口再统一转。正文一字不动。
     sections = [
-        {"index": row.get("index", pos + 1), "title": str(row.get("title") or ""), "body": str(row.get("body") or "")}
+        {"index": row.get("index", pos + 1), "title": fold_to_simplified(str(row.get("title") or "")), "body": str(row.get("body") or "")}
         for pos, row in enumerate(snapshot.get("sections") or []) if isinstance(row, dict)
     ]
     verbatim = snapshot.get("export_text") if isinstance(snapshot.get("export_text"), str) else None
+    renamed = {f"[{row.get('title')}]": f"[{s['title']}]" for row, s in zip(
+        [row for row in snapshot.get("sections") or [] if isinstance(row, dict)], sections) if str(row.get("title") or "") != s["title"]}
+    if verbatim and renamed:
+        verbatim = "\n".join(renamed.get(line, line) for line in verbatim.split("\n"))
     if not sections:
         # 快照没分出段（解析不了的正文）：整篇当一段，照样能按预算裁、能续读。
         whole = verbatim if verbatim else str(data.get("snapshot_text") or "")
@@ -447,7 +477,7 @@ def _plan_envelope(
     if request.view == READING:
         slim["export_text"] = ""
     slim["sections"] = []
-    for key in ("missing_selected_sections", "unknown_detected_sections", "citation", "output_script"):
+    for key in ("missing_selected_sections", "unknown_detected_sections", "citation", "output_script", "script_note"):
         if snapshot.get(key):
             slim[key] = snapshot[key]
 
@@ -499,9 +529,17 @@ def _plan_envelope(
         offset = request.offset
         explicit = True
         chosen = [0]
+    merged: list[int] = []
+    if request.view == READING and not explicit:
+        # 占位段逐段各印一份护栏句：mundane 57 段里 25 段、cetian 56 段里 20 段，读起来像失败（审计 O-15）。
+        # 缺省阅读视图把它们合成末尾一段；点名段 / 续读 / sections 视图 / 全量视图 / 存档不变。
+        holders = [pos for pos in chosen if is_missing_placeholder(sections[pos]["body"])]
+        if len(holders) >= 2:
+            merged = holders
+            chosen = [pos for pos in chosen if pos not in holders]
     slot = _TextSlot(
         snapshot=slim, target=warnings if target is None else target, sections=sections, verbatim=verbatim,
-        view=request.view, tool=tool, run_id=run_id, chosen=chosen, offset=offset, explicit=explicit,
+        view=request.view, tool=tool, run_id=run_id, chosen=chosen, offset=offset, explicit=explicit, merged=merged,
     )
     return result, slot
 

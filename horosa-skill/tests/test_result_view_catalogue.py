@@ -54,7 +54,14 @@ def offline_service(tmp_path: Path) -> HorosaSkillService:
 
 def section_rows(envelope: dict[str, Any]) -> list[tuple[Any, Any]]:
     snapshot = (envelope.get("data") or {}).get("export_snapshot") or {}
-    return [(row.get("index"), row.get("title")) for row in snapshot.get("sections") or []]
+    # 视图里段名按简体给（审计 O-16）：比较时两边都折。
+    return [(row.get("index"), fold_to_simplified(str(row.get("title") or ""))) for row in snapshot.get("sections") or []]
+
+
+def folded_text(snapshot: dict[str, Any]) -> str:
+    """原始 export_text，段头按视图的规矩折成简体（正文不动）。"""
+    renamed = {f"[{row['title']}]": f"[{fold_to_simplified(row['title'])}]" for row in snapshot.get("sections") or []}
+    return "\n".join(renamed.get(line, line) for line in str(snapshot.get("export_text") or "").split("\n"))
 
 
 def section_bodies(envelope: dict[str, Any]) -> list[Any]:
@@ -126,7 +133,8 @@ def test_nested_calls_drop_presentation_keys_and_stay_unviewed(tmp_path: Path) -
 import asyncio  # noqa: E402
 import json  # noqa: E402
 
-from horosa_skill.result_view import FULL, READING, SECTIONS, TITLES, Budget, ViewRequest, estimate_tokens, shape_result  # noqa: E402
+from horosa_skill.textscript import fold_to_simplified  # noqa: E402
+from horosa_skill.result_view import FULL, READING, SECTIONS, TITLES, Budget, ViewRequest, estimate_tokens, is_missing_placeholder, shape_result  # noqa: E402
 from horosa_skill.surfaces import mcp_runner  # noqa: E402
 
 CLAUDE_CODE_SPILL_CHARS = 50_000   # 超过即落盘（contracts/third_party_facts.json · claude-code.tool-search）
@@ -151,7 +159,14 @@ def test_every_view_keeps_the_text_of_the_raw_run(tmp_path: Path) -> None:
             shaped = shape_result(raw, ViewRequest(view=view), UNLIMITED)
             problems = view_drift(raw, shaped, bodies=False)
             out = shaped["data"]["export_snapshot"]
-            if view == READING and out.get("export_text") != snapshot.get("export_text"):
+            holders = [row for row in snapshot.get("sections") or [] if is_missing_placeholder(str(row.get("body") or ""))]
+            if view == READING and len(holders) >= 2:
+                # 审计 O-15：缺省阅读视图把「未返回」占位段合成末尾一段；其余段逐字照给。
+                text = out.get("export_text") or ""
+                kept = [row for row in snapshot["sections"] if row not in holders]
+                if not all(f"[{fold_to_simplified(row['title'])}]\n{row['body']}" in text for row in kept) or text.count("本次本地计算结果") != 1:
+                    problems.append("export_text differs (merged placeholders)")
+            elif view == READING and out.get("export_text") != folded_text(snapshot):
                 problems.append("export_text differs")
             if view == SECTIONS and [row.get("body") for row in out["sections"]] != section_bodies(raw):
                 problems.append("section bodies differ")

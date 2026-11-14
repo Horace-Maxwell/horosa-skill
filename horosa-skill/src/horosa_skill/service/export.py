@@ -259,6 +259,11 @@ def _build_generated_export_snapshot(
     technique_info = get_technique_info(technique)
     if technique_info is None:
         return None
+    if technique == "generic" and tool_name:
+        # 「其他页面」是桌面端的页签名（审计 O-14）：快照的技法名与报告标题同源。
+        from horosa_skill.reports.source import report_technique_name
+
+        technique_info = {**technique_info, "label": report_technique_name(tool_name, technique_info.get("label") or "")}
 
     preset_sections = list(technique_info["preset_sections"])
     forbidden_sections = {f"{item or ''}".strip() for item in technique_info.get("forbidden_sections", [])}
@@ -358,7 +363,20 @@ def _build_generated_export_snapshot(
         "bundle_version": provenance.get("bundle_version"),
         "provenance": provenance,
         "citation": citation,
+        **({"script_note": SCRIPT_NOTE} if _quotes_traditional(export_text) else {}),
     }
+
+
+# 审计 O-16：一掌经 554 个繁体字、正传 83、河洛 28、策天段名全繁——条文是引文，照原书保留，但要说一声，免得读者以为输出乱了。
+SCRIPT_NOTE = "条文保留繁体原文（引文照原书，不折简体）；段名与说明文字按输出文字设定。"
+_TRADITIONAL_QUOTE_THRESHOLD = 20
+
+
+def _quotes_traditional(text: str) -> bool:
+    from horosa_skill.textscript import traditional_only_characters
+
+    marks = traditional_only_characters()
+    return sum(1 for ch in text if ch in marks) >= _TRADITIONAL_QUOTE_THRESHOLD
 
 
 def _attach_export_contract(tool_name: str, input_normalized: dict[str, Any], response_data: dict[str, Any]) -> dict[str, Any]:

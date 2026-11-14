@@ -759,10 +759,12 @@ def _build_nongli_snapshot_text(payload: dict[str, Any], response: dict[str, Any
         f"时区：{payload.get('zone', '—')}",
         f"经纬度：{payload.get('lon', '—')} {payload.get('lat', '—')}",
     ]
-    for key in ("birth", "nongli", "year", "yearJieqi", "monthGanZi", "dayGanZi", "time", "jiedelta", "chef"):
+    # 审计 O-14：以前印「birth： / yearJieqi： / jiedelta：」原始键。
+    for key, label in (("birth", "真太阳时"), ("nongli", "农历"), ("year", "农历年干支"), ("yearJieqi", "年柱（立春界）"),
+                       ("monthGanZi", "月柱"), ("dayGanZi", "日柱"), ("time", "时柱"), ("jiedelta", "节气"), ("chef", "人元司令")):
         value = response.get(key) if isinstance(response, dict) else None
         if value:
-            lines.append(f"{key}：{value}")
+            lines.append(f"{label}：{value}")
     return _render_snapshot_text([("起盘信息", _join_lines(lines))])
 
 

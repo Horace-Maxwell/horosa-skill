@@ -11,7 +11,7 @@ from horosa_skill.errors import (
     bilingual,
 )
 from horosa_skill.service import _clock
-from horosa_skill.service._common import _human_scalar, _replace_snapshot_section
+from horosa_skill.service._common import _human_scalar, _replace_snapshot_line, _replace_snapshot_section
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
 from horosa_skill.service.options_cn import (
@@ -31,6 +31,50 @@ from horosa_skill.service.options_cn import (
 )
 from horosa_skill.shenshu_options import SHENSHU_OPTION_KNOBS, resolve_shenshu_options
 
+
+
+# 审计 O-14：两门神数的后端把 dict / dict 列表直接交给 row()，正文印成「palace_index：2；branch：2；branch_name：寅…」
+# 「name：蛟吞日月；ganzhi：壬午、name：…」。按响应里的结构化值重排这几行（值一字不改，只换排版）；上游 bug 已记，AGENTS §10 登记。
+_XIANQIN_LITERATURE_ROWS = (("贵格", "gui"), ("贱格", "jian"), ("福禄上格", "fulu"), ("贫贱下命", "pinjian"))
+
+
+def _xianqin_literature_text(items: Any) -> str | None:
+    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+        return None
+    parts = []
+    for item in items:
+        name = f"{item.get('name') or ''}".strip()
+        extra = "；".join(f"{item.get(k)}".strip() for k in ("ganzhi", "stars", "condition") if f"{item.get(k) or ''}".strip())
+        if name:
+            parts.append(f"{name}（{extra}）" if extra else name)
+    return "、".join(parts) or "—"
+
+
+def _qizheng_dasha_text(current: Any) -> str | None:
+    if not isinstance(current, dict) or not current.get("palace_name"):
+        return None
+    span = f"{current.get('start_age')}-{current.get('end_age')}岁"
+    years = f"{current.get('start_year')}–{current.get('end_year')} 年" if current.get("start_year") is not None else ""
+    if current.get("years") is not None:
+        years = f"{years}，共 {current.get('years')} 年" if years else f"共 {current.get('years')} 年"
+    head = "｜".join(f"{v}" for v in (current.get("palace_name"), span, current.get("lord"), current.get("branch_name")) if v)
+    return f"{head}（{years}）" if years else head
+
+
+def _undict_shenshu_rows(key: str, response: Any, snapshot_text: str) -> str:
+    if not isinstance(response, dict):
+        return snapshot_text
+    if key == "qizhengkin":
+        dasha = (response.get("qizheng") or {}).get("dasha") if isinstance(response.get("qizheng"), dict) else None
+        text = _qizheng_dasha_text((dasha or {}).get("current") if isinstance(dasha, dict) else None)
+        if text:
+            snapshot_text = _replace_snapshot_line(snapshot_text, "年限", "当前大限", text)
+    if key == "xianqin" and isinstance(response.get("literature"), dict):
+        for label, field in _XIANQIN_LITERATURE_ROWS:
+            text = _xianqin_literature_text(response["literature"].get(field))
+            if text:
+                snapshot_text = _replace_snapshot_line(snapshot_text, "情性与格局", label, text)
+    return snapshot_text
 
 class ShenshuRunners:
     def _run_shenshu_tool(self, payload: dict[str, Any], key: str) -> dict[str, Any]:
@@ -123,6 +167,7 @@ class ShenshuRunners:
                 code="transport.shenshu_snapshot_unavailable",
                 details={"technique": key, "endpoint": endpoint, "engine": response.get("engine") if isinstance(response, dict) else None},
             )
+        snapshot_text = _undict_shenshu_rows(key, response, snapshot_text)
         if replay_note:
             # 上游 buildWuZhaoSnapshotForFields：回落干支起例后复现说明并入 [揲筮] 段（:394）。
             snapshot_text = _append_replay_note(snapshot_text, "揲筮", replay_note)

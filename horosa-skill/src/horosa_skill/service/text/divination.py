@@ -402,8 +402,31 @@ def _xuanshi_record_lines(rec: dict[str, Any], *, brief: bool) -> list[str]:
     return lines
 
 
+# 审计 O-14：[检索条件] 以前印「action：search / q：武则天 / limit：5」。
+_XUANSHI_ACTION_LABELS = {
+    "search": "全文检索", "events": "事件列表", "event": "事件详情", "celestial": "天象列表", "celestial_event": "天象详情",
+    "figures": "人物列表", "figure": "人物详情", "dynasties": "朝代列表", "dynasty": "朝代详情", "techniques": "术数门类列表",
+    "technique": "术数门类详情", "terms": "天象术语表", "term": "天象术语详情", "term_profile": "天象类概览", "timeline": "时间线",
+    "map": "地图", "graph": "人物关系图", "stories": "故事列表", "story": "故事详情", "channels": "频道", "daily": "每日一则",
+    "summary": "总览", "microchronology": "微观编年", "decade_omens": "十年天象", "facets": "分面统计", "events_meta": "事件元数据",
+}
+_XUANSHI_COND_LABELS = {
+    "q": "检索词", "limit": "条数上限", "offset": "跳过条数", "tradition": "传统", "dynasty": "朝代", "technique": "术数门类",
+    "history": "史书", "evidence": "证据等级", "page": "页码", "page_size": "每页条数", "id": "条目编号", "slug": "条目键",
+    "omen": "天象类", "source": "天象出处", "year_from": "起始年", "year_to": "结束年", "has_crosswalk": "有交叉对照",
+    "in_chapter": "见于天文志", "macro": "宏观段", "period": "时期", "top_n": "节点上限", "min_weight": "边最小权重",
+    "date_key": "日期", "decade": "十年期",
+}
+
+
+def _xuanshi_cond_value(value: Any) -> str:
+    return ("是" if value else "否") if isinstance(value, bool) else f"{value}"
+
+
 def _build_xuanshi_snapshot_text(action: str, body: dict[str, Any], response: Any) -> str:
-    cond = [f"action：{action}"] + [f"{k}：{v}" for k, v in body.items()]
+    action_text = _XUANSHI_ACTION_LABELS.get(action)
+    cond = [f"检索类型：{action_text}（{action}）" if action_text else f"检索类型：{action}"]
+    cond += [f"{_XUANSHI_COND_LABELS.get(k, k)}：{_xuanshi_cond_value(v)}" for k, v in body.items()]
     sections: list[tuple[str, str]] = [("检索条件", _join_lines(cond))]
     # 列表族：裸数组，或 {items|list|events|figures…: [...], total: n} 包装；详情族：单 dict 条目。
     items: list[Any] | None = None

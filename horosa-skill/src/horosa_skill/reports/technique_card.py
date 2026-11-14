@@ -138,7 +138,54 @@ _EXTRA_LABELS = {
     "orbScale": "容许度整体倍率", "orbs": "逐星容许度",
     "transformKind": "变换种类", "transformPlanet": "基准星", "transformShift": "宫位同转", "transformHouse": "对应宫头",
     "transformVariant": "变换口径", "zodiacVersion": "黄道版本",
+    # 审计 O-13：字段说明里取不到叫法的设置键（含 options 里的嵌套键），逐个按闸门问题与引擎词表的含义写。
+    "technique": "导出技法", "action": "检索动作", "category": "问事类别", "deck": "牌组", "desc": "排序", "limit": "条数上限",
+    "paiPanType": "排盘方式", "options": "口径覆写", "options.timeBasis": "时间基准", "options.style": "盘式", "options.tn": "太乙扫描口径",
+    "options.school": "流派", "options.wuxing": "五行口径", "options.流派五键": "流派五项", "options.castMethod": "起课法",
+    "options.timeAlg": "时间算法", "liureng_options.guirengType": "六壬贵人取法", "liureng_options.castMethod": "六壬起课法",
+    "qimen_options.qijuMethod": "奇门起局法", "taiyi_options.timeBasis": "太乙时间基准",
+    "taiyin": "太阴卦", "taiyang": "太阳卦", "shaoyang": "少阳卦", "shaoyin": "少阴卦",
+    "doubingSu28": "二十八宿度制", "houseStartMode": "人事十二宫起法", "lines": "爻（摇卦结果）", "gua_code": "卦码",
+    "dayunLength": "大运年数", "shenshaLayer": "神煞层", "fenyeVersion": "算命学藏干表", "ichingMerge": "易卦星盘合卦方式",
+    "mayanCorrelation": "玛雅历关联常数", "hdTrueNode": "人类图交点", "spiritQuadrant": "灵名字母象限",
+    "qiMode": "起局方式", "yongGong": "用宫", "qiguaShu": "起卦两数模式", "piKoujing": "闢卦口径", "lsMode": "地方空间线算法",
+    "orb": "容许度", "targetDate": "推运目标日", "targetTime": "推运目标时刻", "tlVariant": "时间主算法", "lifespan": "寿命基准",
+    "userAyanDeg": "自定义岁差度", "quesitedHouse": "所问之宫", "readingScope": "判读范围", "zodiacSystem": "黄道制",
+    "dirLat": "目标地纬度", "dirLon": "目标地经度", "dirZone": "目标时区", "pdTimeKey": "度数换算",
+    "startMode": "起运方式", "orderType": "排序方式", "dayMethod": "日计法", "sign": "星座", "house": "宫位", "planet": "行星",
+    "request": "整包载荷", "godKeyPos": "神煞主位", "minggongMethod": "命宫起法", "byLon": "按经度校时",
+    "adjustJieqi": "节气按纬度调整", "jieqis": "节气",
 }
+
+
+@lru_cache(maxsize=None)
+def _described_label(tool_name: str, key: str) -> str:
+    """没有专门叫法的设置键：取它的字段说明 / options_keys 说明里「：」之前那一截当读者看的名字（审计 O-13：114 张卡里 64 张
+    至少印了一项原始键名——maxSpanDays、godKeyPos、byLon…——同样的字印在报告封面「关键设置」与附录里）。都取不到才用键名。"""
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+
+    leaf = key.split(".")[-1]
+    texts: list[str] = []
+    definition = TOOL_DEFINITIONS.get(tool_name)
+    if definition is not None:
+        field = definition.input_model.model_fields.get(key)
+        if field is not None and field.description:
+            texts.append(field.description)
+    try:
+        from horosa_skill.agent_guidance import build_tool_input_contract
+
+        docs = build_tool_input_contract(tool_name).get("options_keys") or {}
+        for name in (key, leaf):
+            if isinstance(docs.get(name), str):
+                texts.append(docs[name])
+    except Exception:  # noqa: BLE001 — 说明取不到就退回键名，技法卡照出
+        texts = texts or []
+    for text in texts:
+        head = re.split(r"[：:（(；;，,。]", str(text).strip(), maxsplit=1)[0].strip()
+        head = re.sub(r"\s+[A-Za-z0-9_./–-]+$", "", head).strip()   # 「年数 1–40」「目标时刻 HH」→ 只留叫法
+        if head and head != key and head != leaf and len(head) <= 14 and not re.fullmatch(r"[A-Za-z0-9_./ -]+", head):
+            return head
+    return key
 
 
 def _field_keys(tool_name: str, field: str) -> list[str]:
@@ -252,7 +299,8 @@ def _settings_used(
             sent = value is not None and not (isinstance(value, str) and not value.strip())
             if not sent and "default" in spec:
                 value = spec["default"]
-            used[key] = {"label": labels.get(key) or _EXTRA_LABELS.get(key) or spec.get("label") or key, "value": value, "text": setting_text(key, value, spec), "source": "default"}
+            used[key] = {"label": labels.get(key) or _EXTRA_LABELS.get(key) or spec.get("label") or _described_label(tool_name, key),
+                         "value": value, "text": setting_text(key, value, spec), "source": "default"}
     for field, label, domains in _RESULT_SENSITIVE_FIELDS:
         if domains is not None and (domain or "") not in domains:
             continue

@@ -14,7 +14,8 @@ DESCRIPTION:黄历择吉 · 命中第 1 段（共 1 段）\n日期（结果
  判读:\n· 设定 宜含事项·宜:嫁娶 → 实际 宜:祭祀、嫁娶
  、纳婿、除服、成服、入殓、移柩(中:嫁娶) ✓\n时间范
  围:2028-04-01 ~ 2028-04-08(日粒度\;黄历日课与地点/时刻无关)
- \n来源：星阙 Horosa · 黄历择吉 · run golden
+ \n来源：星阙 Horosa · 黄历择吉
+X-HOROSA-RUN-ID:golden
 TRANSP:TRANSPARENT
 END:VEVENT
 END:VCALENDAR

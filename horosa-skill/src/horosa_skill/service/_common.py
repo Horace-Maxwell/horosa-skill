@@ -203,6 +203,21 @@ def _replace_snapshot_section(text: str, title: str, body: list[str] | None) -> 
     return re.sub(r"\n{3,}", "\n\n", merged).strip()
 
 
+def _replace_snapshot_line(text: str, title: str, label: str, value: str) -> str:
+    """把 `[title]` 段里以「label：」开头的那一行换成「label：value」；段或行不存在则原样返回。"""
+    lines = f"{text or ''}".split("\n")
+    header = f"[{title}]"
+    if header not in lines:
+        return text
+    idx = lines.index(header) + 1
+    while idx < len(lines) and not _SNAPSHOT_HEADER_LINE_RE.match(lines[idx]):
+        if lines[idx].startswith(f"{label}："):
+            lines[idx] = f"{label}：{value}"
+            return "\n".join(lines)
+        idx += 1
+    return text
+
+
 def _human_scalar(value: Any) -> str:
     """上游 humanReadableFields.formatHumanValue 的标量/数组子集（心易卦面只有这两形）。"""
     if value is None or value == "":
