@@ -370,7 +370,8 @@ def plan_tool(tool: str, inputs: PlanInputs) -> ToolPlan:
             plan.missing.append(_birth_fact(tool, missing))
 
     if role in (NATAL, NATAL_TARGET, NATAL_MOMENT):
-        plan.payload = dict(inputs.birth)
+        # 性别是给要它的技法的（八字 / 紫微…）：西占推运不收，以前照样下发，换来一句「gender 不是本技法的参数」（审计 F27）。
+        plan.payload = {key: value for key, value in inputs.birth.items() if key not in ("gender", "sex") or key in fields}
         need_birth()
         plan.time_basis = {"role": role, "birth": _moment_view(inputs.birth_fields), "source": "birth"}
         if role in (NATAL_TARGET, NATAL_MOMENT):

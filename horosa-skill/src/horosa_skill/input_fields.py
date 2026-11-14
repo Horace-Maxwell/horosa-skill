@@ -196,7 +196,12 @@ def parse_zone(value: Any) -> Parsed:
                 f"Zone {raw!r} carries seconds; only whole-minute offsets are accepted (for local mean time give an IANA name).",
             )
         sign = -1 if hm.group("sign") == "-" else 1
-        return Parsed(_zone_from_minutes(value, sign * (int(hm.group("hours")) * 60 + minutes)))
+        offset = _zone_from_minutes(value, sign * (int(hm.group("hours")) * 60 + minutes))
+        if not hm.group("sign") and not raw.upper().startswith(("UTC", "GMT", "UT")):
+            # 审计 F23：「08:00」不带正负号更像是把时刻填进了 zone——照读 +08:00，但说一声
+            return Parsed(offset, f"时区「{raw}」没有正负号，按 {offset} 读；若这是时刻，请放进 time、时区写成 +08:00 或给地名。",
+                          f"Zone '{raw}' has no sign and was read as {offset}; if it is a clock time, put it in `time` and give the zone as +08:00 or a place.")
+        return Parsed(offset)
     compact = _ZONE_COMPACT_RE.match(text)
     if compact:
         digits = compact.group("digits")
@@ -232,8 +237,12 @@ _TIME_CN_RE = re.compile(
     r"(?:(?P<second>[0-9零〇一二两兩三四五六七八九十]{1,3})秒)?|整)?$"
 )
 _TIME_AMPM_RE = re.compile(r"^(?:(?P<pre>[AP])\.?M\.?)?(?P<hour>\d{1,2})(?::(?P<minute>\d{2})(?::(?P<second>\d{2}))?)?(?:(?P<post>[AP])\.?M\.?)?$", re.IGNORECASE)
-_PERIOD_AM = ("凌晨", "清晨", "早晨", "早上", "上午", "早")
-_PERIOD_PM = ("下午", "傍晚", "晚上", "夜里", "夜裡", "夜晚", "晚")
+_PERIOD_AM = ("凌晨", "清晨", "早晨", "早上", "上午", "午前", "早")
+_PERIOD_PM = ("下午", "午后", "午後", "傍晚", "晚上", "夜里", "夜裡", "夜晚", "晚")
+# 审计 F23：时辰的「初 / 正」是确切钟点（辰初 07:00、辰正 08:00；子初 23:00、子正 00:00、午正 12:00）。
+_SHICHEN_EXACT_RE = re.compile(r"^(?P<zhi>[子丑寅卯辰巳午未申酉戌亥])(?P<mark>初|正)(?:时|時)?$")
+_NOON_WORDS = ("正午", "中午12点", "中午十二点", "NOON", "MIDDAY")
+_MIDNIGHT_WORDS = ("午夜", "半夜12点", "半夜十二点", "子夜", "MIDNIGHT")
 _PERIOD_NOON = ("中午", "正午")
 _PERIOD_MIDNIGHT = ("半夜", "午夜", "深夜")
 
@@ -318,6 +327,25 @@ def parse_time(value: Any) -> Parsed:
         )
     text = raw.upper().lstrip("T") if re.match(r"^[Tt]\d", raw) else raw.upper()
     text = text.replace(" ", "")
+    # 审计 F23：8.30am / 8h30 → 8:30；正午 / noon → 12:00；午夜 / midnight 要问是哪一天的零点。
+    text = re.sub(r"^(\d{1,2})[.H](\d{2})(?=$|[AP]|:)", r"\1:\2", text)
+    if text in _NOON_WORDS or raw in _NOON_WORDS:
+        return Parsed("12:00:00", f"时刻「{raw}」按 12:00 读。", f"Time '{raw}' was read as 12:00.")
+    if text in _MIDNIGHT_WORDS or raw in _MIDNIGHT_WORDS:
+        raise _time_issue(
+            "tool.time_midnight_ambiguous",
+            f"「{raw}」是哪一天的零点？当天开始的 00:00，还是当天结束（= 次日 00:00）？日期差一天，日柱 / 月亮都会变：请问用户。",
+            f"'{raw}': midnight at the start of the given day (00:00) or at its end (= next day 00:00)? The date differs by one day: ask the user.",
+            options=[{"value": "00:00", "label": "当天 00:00 / 00:00 that day"}, {"value": "next_day_00:00", "label": "次日 00:00 / 00:00 the next day"}],
+            ask_user=True, example="00:00:00",
+        )
+    exact = _SHICHEN_EXACT_RE.match(text)
+    if exact:
+        start = int(SHICHEN_SPANS[exact.group("zhi")][0][:2])
+        hour = start if exact.group("mark") == "初" else (start + 1) % 24
+        clock = f"{hour:02d}:00:00"
+        return Parsed(clock, f"「{raw}」是确切钟点：{clock}（{exact.group('zhi')}{exact.group('mark')}）。",
+                      f"'{raw}' names an exact hour: {clock}.")
     colon = _TIME_COLON_RE.match(text)
     if colon:
         return Parsed(_checked_clock(raw, int(colon.group("hour")), int(colon.group("minute")), int(colon.group("second") or 0)))
@@ -328,6 +356,10 @@ def parse_time(value: Any) -> Parsed:
     shichen = _SHICHEN_RE.match(text)
     if shichen:
         start, end = SHICHEN_SPANS[shichen.group("zhi")]
+        if shichen.group("zhi") == "子" and text[:1] in ("晚", "夜"):
+            start, end = "23:00", "24:00"   # 审计 F24：晚子时就是 23:00–24:00
+        elif shichen.group("zhi") == "子" and text[:1] == "早":
+            start, end = "00:00", "01:00"   # 早子时 = 次日 00:00–01:00
         raise _time_issue(
             "tool.time_is_shichen",
             f"「{raw}」是时辰（{start}–{end}），不是钟表时刻。两小时内的不同钟点会得到不同的命宫 / 上升、宫位与真太阳时换算，不能替用户挑一个：请问用户具体钟点；"
@@ -356,6 +388,16 @@ def parse_time(value: Any) -> Parsed:
             hour, minute, second = int(body_colon.group("hour")), int(body_colon.group("minute")), int(body_colon.group("second") or 0)
         if period:
             hour = _period_hour(raw, period, hour)
+        elif cn and hour is not None and 1 <= hour <= 12 and ("点" in body or "點" in body):   # 「8时30分」是公文式 24 小时写法，照读
+            # 审计 F25：「8点」口语里上午下午都可能——不替用户选（冒号写法 8:30 照旧按 24 小时读）。
+            am, pm = (0 if hour == 12 else hour), (12 if hour == 12 else hour + 12)
+            options = [f"{am:02d}:{minute:02d}", f"{pm:02d}:{minute:02d}"]
+            raise _time_issue(
+                "tool.time_ampm_unclear",
+                f"「{raw}」是上午还是下午（{options[0]} 还是 {options[1]}）？请问用户；用户说过「早上 / 晚上」就带上那个词。",
+                f"'{raw}': morning or evening ({options[0]} or {options[1]})? Ask the user; include the period word if they said one.",
+                options=options, ask_user=True, example=f"{options[0]}:00",
+            )
         clock = _checked_clock(raw, hour, minute, second)
         return Parsed(clock, f"时刻「{raw}」按 {clock} 读。", f"Time '{raw}' was read as {clock}.")
     ampm = _TIME_AMPM_RE.match(text)
@@ -526,11 +568,58 @@ def parse_lunar_date(raw: Any, *, forced: bool = False, leap: bool | None = None
                   f"'{text}' read as a lunar date: {shown} → Gregorian {solar.isoformat()}.", {"lunar_input": text})
 
 
+_EN_MONTHS = {name: index for index, names in enumerate((
+    ("JAN", "JANUARY"), ("FEB", "FEBRUARY"), ("MAR", "MARCH"), ("APR", "APRIL"), ("MAY",), ("JUN", "JUNE"), ("JUL", "JULY"),
+    ("AUG", "AUGUST"), ("SEP", "SEPT", "SEPTEMBER"), ("OCT", "OCTOBER"), ("NOV", "NOVEMBER"), ("DEC", "DECEMBER")), start=1) for name in names}
+_EN_MDY_RE = re.compile(r"^(?P<mon>[A-Za-z]{3,9})\.?\s+(?P<day>\d{1,2})(?:st|nd|rd|th)?,?\s+(?P<year>\d{3,4})$")
+_EN_DMY_RE = re.compile(r"^(?P<day>\d{1,2})(?:st|nd|rd|th)?\s+(?P<mon>[A-Za-z]{3,9})\.?,?\s+(?P<year>\d{3,4})$")
+_ROC_RE = re.compile(r"^民[国國](?P<year>\d{1,3})年(?P<month>\d{1,2})月(?P<day>\d{1,2})[日号號]?$")
+_BCE_CN_RE = re.compile(r"^公元前(?P<year>\d{1,5})年(?:(?P<month>\d{1,2})月(?:(?P<day>\d{1,2})[日号號]?)?)?$")
+_BCE_EN_RE = re.compile(r"^(?:(?P<year1>\d{1,5})[-/.](?P<month>\d{1,2})[-/.](?P<day>\d{1,2})|(?P<year2>\d{1,5}))\s*(?:BCE|BC|B\.C\.E?\.?)$", re.IGNORECASE)
+_PARTIAL_DATE_RE = re.compile(r"^(?:(?P<year>\d{4})(?:年|[-/.])?(?:(?P<month>\d{1,2})(?:月)?)?)$")
+_SOLAR_PREFIXES = ("公历", "公曆", "阳历", "陽曆", "西历", "西曆", "新历", "新曆")
+
+
+def _date_prelude(raw: str) -> Parsed | None:
+    """审计 F23：英文月名、「公历 / 阳历」前缀、民国纪年、公元前、只有年 / 年月（要问日）。都认不出就 None，交给后面的通用规则。"""
+    for prefix in _SOLAR_PREFIXES:
+        if raw.startswith(prefix) and len(raw) > len(prefix):
+            inner = parse_date(raw[len(prefix):].strip())
+            return Parsed(inner.value, f"「{raw}」按公历 {inner.value} 读。", f"'{raw}' was read as the Gregorian date {inner.value}.", inner.extra)
+    for pattern in (_EN_MDY_RE, _EN_DMY_RE):
+        match = pattern.match(raw)
+        if match and match.group("mon").upper() in _EN_MONTHS:
+            value = _checked_date(raw, int(match.group("year")), _EN_MONTHS[match.group("mon").upper()], int(match.group("day")))
+            return Parsed(value, f"日期「{raw}」按 {value} 读。", f"Date '{raw}' was read as {value}.")
+    roc = _ROC_RE.match(raw)
+    if roc:
+        value = _checked_date(raw, int(roc.group("year")) + 1911, int(roc.group("month")), int(roc.group("day")))
+        return Parsed(value, f"「{raw}」民国纪年 = 公历 {value}。", f"'{raw}' (Minguo calendar) = Gregorian {value}.")
+    bce = _BCE_CN_RE.match(raw) or _BCE_EN_RE.match(raw)
+    if bce:
+        year = int(bce.groupdict().get("year") or bce.groupdict().get("year1") or bce.groupdict().get("year2"))
+        if not (bce.groupdict().get("month") and bce.groupdict().get("day")):
+            raise _date_issue("tool.date_incomplete", f"「{raw}」只有年份（公元前 {year} 年）：请问用户月、日。",
+                              f"'{raw}' gives only the year ({year} BCE): ask the user for the month and day.", ask_user=True)
+        value = _checked_date(raw, -year, int(bce.group("month")), int(bce.group("day")))
+        return Parsed(value, f"「{raw}」= 公元前 {year} 年（历史纪年，没有公元 0 年）→ {value}。",
+                      f"'{raw}' = {year} BCE (historical numbering, no year 0) → {value}.")
+    partial = _PARTIAL_DATE_RE.match(raw)
+    if partial and not _DATE_COMPACT_RE.match(raw):
+        missing = "日" if partial.group("month") else "月、日"
+        raise _date_issue("tool.date_incomplete", f"「{raw}」缺{missing}：请问用户具体哪一天。",
+                          f"'{raw}' is missing the {'day' if partial.group('month') else 'month and day'}: ask the user for the exact date.", ask_user=True)
+    return None
+
+
 def parse_date(value: Any, *, era_explicit: bool = False) -> Parsed:
     """→ Parsed('YYYY-MM-DD'，extra 里可能带从 ISO 日期时间拆出的 time / zone)。`era_explicit` = 载荷显式给了 ad。"""
     if isinstance(value, (bool, float)):
         raise _date_issue("tool.invalid_date", f"日期不能是 {value!r}：请传 YYYY-MM-DD 字符串。", f"Date cannot be {value!r}; pass a YYYY-MM-DD string.")
     raw = clean_text(value)
+    pre = _date_prelude(raw)
+    if pre is not None:
+        return pre
     lunar = parse_lunar_date(raw)
     if lunar is not None:
         return lunar
@@ -709,17 +798,26 @@ def parse_coordinate(value: Any, *, axis: str) -> Parsed:
 
 # 性别标签 → 1 男 / 0 女（全仓唯一词表：service/_common._gender_label 的回显也用它）。键一律小写、NFKC、繁体折成简体后比较。
 GENDER_MALE_LABELS = frozenset({
-    "男", "male", "m", "boy", "man", "nan", "男性", "乾", "1", "乾造", "男命", "男士", "先生", "男生", "男孩", "男人", "♂", "mr", "mr.", "he", "him",
+    "男", "male", "m", "boy", "man", "男性", "乾", "1", "乾造", "男命", "男士", "先生", "男生", "男孩", "男人", "♂", "mr", "mr.", "he", "him",
 })
 GENDER_FEMALE_LABELS = frozenset({
-    "女", "female", "f", "girl", "woman", "nv", "女性", "坤", "0", "坤造", "女命", "女士", "小姐", "太太", "女生", "女孩", "女人", "♀", "ms", "ms.", "mrs",
+    "女", "female", "f", "girl", "woman", "女性", "坤", "0", "坤造", "女命", "女士", "小姐", "太太", "女生", "女孩", "女人", "♀", "ms", "ms.", "mrs",
     "mrs.", "miss", "she", "her",
 })
 
 
 def parse_gender(value: Any) -> Parsed:
+    # 审计 F29：「nan」「nv」两个拼音别名去掉、NaN 拒绝——序列化缺失值得到的 "NaN" 以前会变成男命。
+    # 布尔值照收（偏离审计建议）：好几个技法模型的 gender 是 bool，归一后存成 True / False，dispatch / 合参再交给 run_tool 时会再归一一次，
+    # 拒绝布尔值会把这条内部链路打断；广告层 gender 的类型是 integer / string，照 schema 填的客户端本来不传布尔值。
     if isinstance(value, bool):
         return Parsed(1 if value else 0)
+    if isinstance(value, float) and value != value:
+        raise FieldIssue(
+            "tool.invalid_gender", f"性别不能是 {value!r}：请问用户是男是女。", f"Gender cannot be {value!r}: ask the user.",
+            expected_zh="1 / 男 / male = 男；0 / 女 / female = 女", expected_en="1 / 男 / male = male; 0 / 女 / female = female",
+            example=1, options=[{"value": 1, "label": "男 / male"}, {"value": 0, "label": "女 / female"}], ask_user=True,
+        )
     if isinstance(value, int) and value in (0, 1):
         return Parsed(value)
     if isinstance(value, float) and value in (0.0, 1.0):

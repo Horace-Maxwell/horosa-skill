@@ -33,7 +33,7 @@ def test_shenshu_without_a_birth_time_is_refused_even_with_defaults_accepted(tmp
     payload = {"date": "1990-05-03", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "gender": 0, "defaults_accepted": True}
     with pytest.raises(ToolValidationError) as excinfo:
         _service(tmp_path).run_tool(tool, payload, save_result=False)
-    assert excinfo.value.code == "tool.missing_field"
+    assert excinfo.value.code in ("tool.missing_field", "tool.time_unknown")   # 审计 F28：本命类缺 time 与「不详」同码
     fields = excinfo.value.details["fields"]
     assert [entry["field"] for entry in fields] == ["time"] and fields[0]["ask_user"] is True
 

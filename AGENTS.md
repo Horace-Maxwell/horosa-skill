@@ -1945,6 +1945,10 @@ IANA 按钟点换算），偏移与出生时不同才进 warnings；dispatch 的
 八十多万字节没有读者只进存档；钻取本来就是一次新调用。live 各 aiMode（含带当前目标时刻的盘）的正文与 stopLevelIdx=3 逐字相同。
 守卫 `tests/test_fix314_zr_stop_level.py`。
 
+**有意偏离上游取法：地名的夏令时切换日（v0.51.0-dev，审计 F14）**：星阙选点按当日正午取偏移；钟点与正午偏移不同时 skill 以前一律拒、让用户在两个偏移里选
+（其中一个是错的）。现在钟点只对应一个偏移（1986-05-04 01:30 上海只能是 +08:00）→ 用钟点的偏移并在 caveat 里说明与正午取法不同；钟点真落在缺口 / 重叠里才问
+（`service/api/place._switch_day_is_ambiguous`，与 IANA 名路径同一个 `_wall_time_ambiguity`）。守卫 `tests/test_fix314_inputs_f.py`。
+
 **有意偏离上游文本：七政神数「当前大限」与演禽「贵格 / 贱格 / 福禄上格 / 贫贱下命」的排版（v0.51.0-dev，审计 O-14）**：两门后端把 dict /
 dict 列表直接交给 `horosa_engine_common.row()`，正文印成「palace_index：2；branch：2；branch_name：寅…」「name：蛟吞日月；ganzhi：壬午、name：…」。
 skill 按响应里的结构化值（`qizheng.dasha.current`、`literature.gui/jian/fulu/pinjian`）重排这几行（`service/runners/shenshu._undict_shenshu_rows`），

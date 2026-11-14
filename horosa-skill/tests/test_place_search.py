@@ -373,8 +373,10 @@ def test_explicit_zone_beats_the_place_zone(tmp_path: Path) -> None:
 
 @requires_engine
 def test_dst_switch_day_refuses_instead_of_guessing_the_zone(tmp_path: Path) -> None:
+    # 审计 F14：01:30 在 2026-03-08 纽约只可能是 -05:00（02:00 才拨快），不再问；真落在缺口（02:30）才问。
+    assert _service(tmp_path).resolve_place_fields({"date": "2026-03-08", "time": "01:30", "place": "New York"}, tool_name="chart")["zone"] == "-05:00"
     with pytest.raises(ToolValidationError) as exc:
-        _service(tmp_path).resolve_place_fields({"date": "2026-03-08", "time": "01:30", "place": "New York"}, tool_name="chart")
+        _service(tmp_path).resolve_place_fields({"date": "2026-03-08", "time": "02:30", "place": "New York"}, tool_name="chart")
     assert exc.value.code == "place.zone_ambiguous"
     assert exc.value.details["ask_if_missing"][0]["options"] == ["-04:00", "-05:00"]
 

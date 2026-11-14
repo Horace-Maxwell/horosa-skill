@@ -94,10 +94,22 @@ def normalize_request_payload(
 ) -> Any:
     """归一 + 校验。读不懂的字段一次全部列出：抛 `ToolValidationError`（见 `field_issues_error`）。`model` 给了就按它的字段集
     报「未知参数」并把 datetime / year 拆到声明了的字段上。`tool_name` 给了，追问开头点名是哪个技法的输入。"""
+    payload = _month_only_date(payload, model)
     normalized, issues = normalize_collecting_issues(payload, model=model, filled_by_place=_place_filled(place_records))
     if issues:
         raise field_issues_error(issues, tool_name=tool_name or _model_tool_name(model))
     return normalized
+
+
+def _month_only_date(payload: Any, model: Any) -> Any:
+    """万年历要的就是一个月（审计 F23）：「1990-05」= 该月 1 日。别的技法照旧把缺日当作要问的事。"""
+    if not isinstance(payload, dict) or _model_tool_name(model) != "calendar_month":
+        return payload
+    value = payload.get("date")
+    if isinstance(value, str) and re.fullmatch(r"\s*\d{4}[-/.]\d{1,2}\s*", value):
+        year, month = re.split(r"[-/.]", value.strip())
+        return {**payload, "date": f"{int(year):04d}-{int(month):02d}-01"}
+    return payload
 
 
 def _model_tool_name(model: Any) -> str | None:
@@ -819,6 +831,15 @@ def _is_cast_tool(tool_name: str | None) -> bool:
     return time_role(tool_name) == MOMENT
 
 
+def _is_natal_tool(tool_name: str | None) -> bool:
+    """本命类（出生时刻起盘）：缺 time 就是「不知道出生钟点」。择日窗口的 time 是锚点、起课的 time 是此刻，不在此列。"""
+    if not tool_name:
+        return False
+    from horosa_skill.engine.time_roles import NATAL, NATAL_MOMENT, NATAL_TARGET, time_role
+
+    return time_role(tool_name) in (NATAL, NATAL_TARGET, NATAL_MOMENT)
+
+
 def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     zh, en, example = _MISSING_TEXT.get(leaf, (f"`{leaf}`", f"`{leaf}`", None))
     ask = leaf in USER_FACT_FIELDS
@@ -857,6 +878,14 @@ def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any
             example = {"date": "YYYY-MM-DD", "time": "HH:MM", "place": "城市 / city"}
             ask = True
     code = "tool.missing_field"
+    if leaf == "time" and _is_natal_tool(tool_name):
+        # 审计 F28：省略 time 与写「不详」以前两种码两种话（tool.invalid_payload「缺 time：钟表时刻」对 tool.time_unknown 一整段说明）——
+        # 省略才是最常见的「不知道」。同码同文案。
+        try:
+            F.parse_time("")
+        except F.FieldIssue as issue:
+            return {"field": field, "code": issue.code, "got": None, "expected": bilingual(zh, en), "example": "HH:MM", "ask_user": True,
+                    "message": bilingual(issue.zh, issue.en)}
     if leaf == "time" and "time" in payload and F.is_blank(payload.get("time")):
         code = "tool.time_unknown"
     return {"field": field, "code": code, "got": None, "expected": bilingual(zh, en), "example": example, "ask_user": ask,

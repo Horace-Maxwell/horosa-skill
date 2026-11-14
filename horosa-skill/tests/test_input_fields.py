@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -105,16 +106,20 @@ def test_iana_zone_without_date_and_time_is_refused() -> None:
 
 TIME_ACCEPTED = [
     ("08:00", "08:00:00"), ("8:00", "08:00:00"), ("8:5", "08:05:00"), ("08:00:30", "08:00:30"), ("0830", "08:30:00"),
-    ("T08:30", "08:30:00"), ("8点", "08:00:00"), ("8點", "08:00:00"), ("8时30分", "08:30:00"), ("8時30分", "08:30:00"),
-    ("八点半", "08:30:00"), ("20点48", "20:48:00"), ("上午8点", "08:00:00"), ("下午3点", "15:00:00"), ("晚上8点半", "20:30:00"),
+    ("T08:30", "08:30:00"), ("8时30分", "08:30:00"), ("8時30分", "08:30:00"),
+    ("20点48", "20:48:00"), ("上午8点", "08:00:00"), ("下午3点", "15:00:00"), ("晚上8点半", "20:30:00"),
     ("早上6点", "06:00:00"), ("中午12点", "12:00:00"), ("凌晨3点", "03:00:00"), ("8:30 PM", "20:30:00"), ("PM 8:30", "20:30:00"),
-    ("8pm", "20:00:00"), ("12 AM", "00:00:00"), ("１０：３０", "10:30:00"), ("十点一刻", "10:15:00"),
+    ("8pm", "20:00:00"), ("12 AM", "00:00:00"), ("１０：３０", "10:30:00"), ("早上十点一刻", "10:15:00"), ("辰初", "07:00:00"), ("午正", "12:00:00"), ("正午", "12:00:00"), ("noon", "12:00:00"),
+    ("8.30am", "08:30:00"), ("8h30", "08:30:00"), ("午后2点", "14:00:00"),
 ]
 TIME_REFUSED = [
     ("24:00", "tool.invalid_time"), ("25:00", "tool.invalid_time"), ("08:60", "tool.invalid_time"), ("8", "tool.invalid_time"),
     (8.5, "tool.invalid_time"), ("abc", "tool.invalid_time"), ("13pm", "tool.invalid_time"), ("上午15点", "tool.invalid_time"),
     ("晚上12点", "tool.invalid_time"), ("辰时", "tool.time_is_shichen"), ("子時", "tool.time_is_shichen"),
     ("unknown", "tool.time_unknown"), ("不详", "tool.time_unknown"), ("不知道", "tool.time_unknown"), ("不詳", "tool.time_unknown"),
+    # 审计 F23 / F25：口语「8点」上午下午都可能；「午夜」要问是哪一天的零点
+    ("8点", "tool.time_ampm_unclear"), ("8點", "tool.time_ampm_unclear"), ("八点半", "tool.time_ampm_unclear"),
+    ("十点一刻", "tool.time_ampm_unclear"), ("午夜", "tool.time_midnight_ambiguous"), ("midnight", "tool.time_midnight_ambiguous"),
 ]
 
 
@@ -241,7 +246,7 @@ GENDER_ACCEPTED = [
     ("坤造", 0), ("男命", 1), ("女命", 0), ("先生", 1), ("小姐", 0), ("太太", 0), ("男生", 1), ("女生", 0), ("♂", 1), ("♀", 0),
     ("男士", 1), ("女士", 0), ("乾", 1), ("坤", 0), ("１", 1),
 ]
-GENDER_REFUSED = ["其他", "x", 2, -1, "unknown", "true", "both", 0.5]
+GENDER_REFUSED = ["其他", "x", 2, -1, "unknown", "true", "both", 0.5, "nan", "NaN", "nv"]   # 审计 F29：nan 不是性别
 
 
 @pytest.mark.parametrize(("value", "expected"), GENDER_ACCEPTED)
@@ -508,3 +513,40 @@ def test_hecan_tools_accept_a_comma_string_and_chinese_names() -> None:
 def test_predictive_defaults_turn_a_year_into_that_years_birthday(service: Any, tool_name: str) -> None:
     effective = service._apply_upstream_predictive_defaults(tool_name, {**BASE, "datetime": "2026"})
     assert effective["datetime"] == "2026-05-03 08:00"
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    ("May 3, 1990", "1990-05-03"), ("3 May 1990", "1990-05-03"), ("公历1990年5月3日", "1990-05-03"), ("阳历1990年5月3日", "1990-05-03"),
+    ("民国79年5月3日", "1990-05-03"), ("公元前500年3月21日", "-0500-03-21"), ("500-03-21 BCE", "-0500-03-21"),
+])
+def test_more_unambiguous_date_forms(value: str, expected: str) -> None:
+    """审计 F23：英文月名、明说公历、民国纪年、公元前——以前都被拒（「500-03-21 BCE」还怪到了时刻头上）。"""
+    assert _norm(date=value)["date"] == expected
+
+
+@pytest.mark.parametrize("value", ["1990年5月", "1990", "500 BC"])
+def test_a_date_without_its_day_asks_the_user(value: str) -> None:
+    from horosa_skill.errors import ToolValidationError
+
+    with pytest.raises(ToolValidationError) as caught:
+        _norm(date=value)
+    assert "date_incomplete" in str(caught.value.code) or "date_incomplete" in json.dumps(caught.value.details, ensure_ascii=False)
+
+
+def test_late_and_early_zi_spans_are_one_hour() -> None:
+    """审计 F24：晚子时 23:00–24:00、早子时 00:00–01:00（以前都给整个子时 23:00–01:00）。"""
+    from horosa_skill.errors import ToolValidationError
+
+    for value, span in (("晚子时", "23:00–24:00"), ("早子时", "00:00–01:00")):
+        with pytest.raises(ToolValidationError) as caught:
+            _norm(time=value)
+        assert span in json.dumps(caught.value.details, ensure_ascii=False)
+
+
+def test_an_unsigned_zone_is_read_but_flagged() -> None:
+    """审计 F23：zone「08:00」不带正负号，多半是把时刻填进了 zone——照读 +08:00，但说一声。"""
+    from horosa_skill.input_fields import parse_zone
+
+    parsed = parse_zone("08:00")
+    assert parsed.value == "+08:00" and "没有正负号" in parsed.note_zh
+    assert parse_zone("+08:00").note_zh == ""

@@ -13,10 +13,18 @@ def _normalized_gender(cls, payload):  # noqa: ANN001
     return cls.model_validate(normalize_request_payload(payload)).model_dump(exclude_none=True).get("gender")
 
 
-def test_birth_input_normalizes_bool_to_backend_int() -> None:
-    # Java 后端读 1/0；bool 直传会变成 JSON true/false
+def test_birth_input_refuses_nan_but_keeps_booleans() -> None:
+    # 审计 F29：序列化缺失值 "nan" / NaN 以前经拼音别名变成男命。布尔值照收（模型里 gender 是 bool，dispatch / 合参会再归一一次）。
+    import pytest
+
+    from horosa_skill.errors import ToolValidationError
+
     assert _normalized_gender(BaZiBirthInput, {**BASE, "gender": True}) == 1
     assert _normalized_gender(BaZiBirthInput, {**BASE, "gender": False}) == 0
+    for value in ("nan", "NaN", "nv", float("nan")):
+        with pytest.raises(ToolValidationError):
+            normalize_request_payload({**BASE, "gender": value})
+    assert _normalized_gender(BaZiBirthInput, {**BASE, "gender": 1}) == 1
 
 
 def test_birth_input_normalizes_cn_and_en_labels() -> None:

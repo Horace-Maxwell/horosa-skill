@@ -109,7 +109,7 @@ def test_time_cast_names_each_missing_place_field(tmp_path, tool: str, drop: str
     with pytest.raises(ToolValidationError) as caught:
         _service(tmp_path).run_tool(tool, payload, save_result=False)
     error = caught.value
-    assert error.code in ("tool.missing_field", "tool.invalid_payload"), (tool, error.code)
+    assert error.code in ("tool.missing_field", "tool.invalid_payload", "tool.time_unknown"), (tool, error.code)   # 审计 F28：缺 time 与「不详」同码
     assert drop in [item["field"] for item in error.details["fields"]], error.details["fields"]
     assert error.details["agent_recovery"]["next_action"] == "ask_user_then_retry"
 

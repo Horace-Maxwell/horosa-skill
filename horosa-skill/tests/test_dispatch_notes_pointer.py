@@ -39,7 +39,7 @@ def test_dispatch_warning_pointer_is_true_on_every_surface(tmp_path: Path) -> No
     service = _service(tmp_path)
     envelope = service.dispatch({
         "query": "看看我的八字", "save_result": True, "agent_confirmed_settings": True,
-        "birth": {"date": "1990年5月3日", "time": "8点半", "zone": "东八区", "lat": "31n13", "lon": "121e28", "gender": 1},
+        "birth": {"date": "1990年5月3日", "time": "早上8点半", "zone": "东八区", "lat": "31n13", "lon": "121e28", "gender": 1},
     })
     full = envelope.model_dump(mode="json")
     _assert_pointer_true(full)                                                          # service / CLI（CLI 打印同一份 model_dump）

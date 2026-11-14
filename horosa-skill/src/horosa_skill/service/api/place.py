@@ -37,6 +37,7 @@ from horosa_skill.input_normalization import (
     _format_compact_coordinate,
     _normalize_date_value,
     _normalize_iana_zone_value,
+    _wall_time_ambiguity,
     _normalize_time_value,
 )
 from horosa_skill.service import _clock
@@ -535,6 +536,22 @@ class PlaceAPI:
             item["zone_at_time"] = at_time
 
     @staticmethod
+    def _switch_day_is_ambiguous(item: dict[str, Any], *, date: str, time: str) -> bool:
+        """切换日：钟点真落在缺口（拨快跳过的那段）或重叠（拨回重复的那段）里才问；只对应一个偏移就不问（审计 F14）。"""
+        if not time or not item.get("iana"):
+            return True
+        return _wall_time_ambiguity({"zone": str(item["iana"]), "date": date, "time": time}, "zone") is not None
+
+    @staticmethod
+    def _switch_day_note(item: dict[str, Any], *, date: str, time: str) -> str:
+        return bilingual(
+            f"{item.get('name')} 在 {date} 这天切换夏令时 / 时区，钟点 {time} 只对应 {item.get('zone_at_time')}，按它起盘"
+            f"（星阙选点按当日正午取的是 {item.get('zone')}）。",
+            f"{item.get('name')} changes its offset on {date}; {time} local can only be {item.get('zone_at_time')}, which is used "
+            f"(the picker's noon anchor gives {item.get('zone')}).",
+        )
+
+    @staticmethod
     def _transition_note(item: dict[str, Any], *, date: str, time: str) -> str:
         return bilingual(
             f"{item.get('name')} 在 {date} 这一天偏移不唯一：星阙选点按当日正午取 {item.get('zone')}，钟点 {time} 实际是 "
@@ -603,13 +620,19 @@ class PlaceAPI:
         if not _present(out.get("pos")):
             out["pos"] = match["name"]  # 上游 createChartRecord / geoNameRawPatch 同样把地名写进 pos
         zone_source = "explicit"
+        switch_note = ""
         if not _present(out.get("zone")):
             if date is None:
                 zone_source = "not_filled_no_date"
             elif not match.get("zone"):
                 zone_source = "not_resolvable"
-            elif match.get("zone_at_time"):
+            elif match.get("zone_at_time") and self._switch_day_is_ambiguous(match, date=date, time=time or ""):
                 raise self._zone_refusal(query, match, date=date, time=time or "", tool_name=label)
+            elif match.get("zone_at_time"):
+                # 审计 F14：切换日的钟点只对应一个偏移（1986-05-04 01:30 上海只能是 +08:00）——用钟点那个偏移，并说明与星阙选点正午取法不同。
+                out["zone"] = match["zone_at_time"]
+                zone_source = "place_and_date"
+                switch_note = self._switch_day_note(match, date=date, time=time or "")
             else:
                 out["zone"] = match["zone"]
                 zone_source = "place_and_query_date" if dated is reference and (reference or {}).get(_QUERY_BASIS) else "place_and_date"
@@ -623,7 +646,8 @@ class PlaceAPI:
             "lat": match.get("lat"), "lon": match.get("lon"), "gpsLat": match.get("gpsLat"), "gpsLon": match.get("gpsLon"),
             "iana": match.get("iana"), "zone": out.get("zone") if zone_source in ("place_and_date", "place_and_query_date") else match.get("zone"),
             "zone_source": zone_source, "dst": match.get("dst"), "advisory": match.get("advisory"),
-            "date": date, "engine": ENGINE_LABEL, "caveat_notes": _verdict_caveats(verdict),
+            "date": date, "engine": ENGINE_LABEL,
+            "caveat_notes": [*_verdict_caveats(verdict), *([switch_note] if switch_note else [])],
         }
         return out
 
@@ -645,13 +669,15 @@ class PlaceAPI:
                     probe = {"name": query, "iana": point.get("iana"), "zone": point.get("zone")}
                     if time:
                         self._mark_zone_at_time(probe, date=text, time=time, cn_unified=_cn_unified_enabled(out))
-                    if probe.get("zone_at_time"):
+                    if probe.get("zone_at_time") and self._switch_day_is_ambiguous(probe, date=text, time=time or ""):
                         raise self._zone_refusal(query, probe, date=text, time=time or "", tool_name=tool_name)
-                    out["zone"] = point["zone"]
+                    out["zone"] = probe.get("zone_at_time") or point["zone"]
+                    if probe.get("zone_at_time"):
+                        record["caveat_notes"] = [self._switch_day_note(probe, date=text, time=time or "")]
                     if point.get("advisory") == "cn-unified":
                         out.setdefault("geoZone", point.get("geoZone"))
                         out["zoneAdvisory"] = "cn-unified"
-                    record.update({"zone": point["zone"], "iana": point.get("iana"), "dst": point.get("dst"),
+                    record.update({"zone": out["zone"], "iana": point.get("iana"), "dst": point.get("dst"),
                                    "zone_source": "coordinates_and_date", "date": text})
         out[PLACE_RESOLUTION_KEY] = record
         return out

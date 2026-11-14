@@ -978,6 +978,16 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "没有钟点（空、或「不详」）。钟点决定时柱、上升与宫位，不能默认成 0 点：请向用户问钟点。",
         "The clock time is missing or unknown. It decides the hour pillar, Ascendant and houses and must not default to midnight: ask the user."),
         "next_action": "ask_user_for_time"},
+    # 审计 F23 / F25：这几种写法有确定的两种读法，或缺了日子——问用户，不替用户选。
+    "tool.time_midnight_ambiguous": {"kind": "input", "prompt_to_user": bilingual(
+        "「午夜」是哪一天的零点：当天开始，还是当天结束（= 次日 00:00）？", "Midnight at the start of that day, or at its end (= the next day's 00:00)?"),
+        "next_action": "ask_user_for_time"},
+    "tool.time_ampm_unclear": {"kind": "input", "prompt_to_user": bilingual(
+        "是上午还是下午（details.options 两个钟点选一个）？", "Morning or evening (pick one of the two times in details.options)?"),
+        "next_action": "ask_user_for_time"},
+    "tool.date_incomplete": {"kind": "input", "prompt_to_user": bilingual(
+        "日期缺月 / 日：请问用户具体是哪一天。", "The date is missing the month / day: ask the user for the exact day."),
+        "next_action": "ask_user_for_date"},
     "tool.time_is_shichen": {"kind": "input", "prompt_to_user": bilingual(
         "给的是时辰（两小时一段），不是钟点：请向用户问具体钟点，不要替用户挑一个。",
         "A double-hour (时辰) was given, not a clock time: ask the user for the exact time instead of picking one."),

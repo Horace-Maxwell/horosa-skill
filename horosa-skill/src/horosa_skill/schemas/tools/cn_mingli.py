@@ -1,6 +1,8 @@
 """中国命理族输入：节气八字、八字、紫微、节气年、农历、月历、黄历、通书、统摄法、参评数、河洛、一掌经、反推八字。"""
 from __future__ import annotations
 
+import re
+
 from typing import Any
 
 from pydantic import Field, field_validator, model_validator
@@ -237,6 +239,10 @@ class CalendarMonthInput(FlexibleModel):
     @model_validator(mode="before")
     @classmethod
     def _year_month(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("date"), str) and re.fullmatch(r"\s*\d{4}[-/.]\d{1,2}\s*", data["date"]):
+            # 审计 F23：万年历要的就是一个月——「1990-05」= 该月 1 日
+            year, month = re.split(r"[-/.]", data["date"].strip())
+            return {**data, "date": f"{int(year):04d}-{int(month):02d}-01"}
         if isinstance(data, dict) and not data.get("date") and data.get("year") not in (None, "") and data.get("month") not in (None, ""):
             try:
                 return {**data, "date": f"{int(data['year']):04d}-{int(data['month']):02d}-01"}
