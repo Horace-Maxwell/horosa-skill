@@ -228,7 +228,8 @@ def test_bazi_upstream_options_are_reachable(tmp_path) -> None:
     shensha = _section(text, "神煞（四柱与三元）")
     assert "年柱：整柱=福星贵人、沐浴、月德贵人、德秀贵人、灾煞；" in shensha and "月柱：整柱=学堂、暗禄、亡神、病符、劫煞、" in shensha
     bad = service.run_tool("bazi_birth", {**base, "godKeyPos": "月"}, save_result=False)
-    assert bad.ok and any("八字 godKeyPos='月' 无法识别" in w for w in bad.warnings), bad.warnings
+    # 审计 F17：认不出的口径拒绝并列可选值（tool.invalid_option），不再按缺省起盘、只附告警
+    assert bad.ok is False and bad.error.code == "tool.invalid_option" and bad.error.details["field"] == "godKeyPos", bad.error
 
 
 @requires_node

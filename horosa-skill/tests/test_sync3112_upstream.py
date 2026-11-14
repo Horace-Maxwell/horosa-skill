@@ -68,7 +68,8 @@ def test_south_month_flips_the_month_pillar_only_for_southern_births(tmp_path) -
     # 技法依据卡回显：换过开关时报告里必须能看见（AGENTS §10）
     assert ("southMonth", "南半球月令", frozenset({"cn", "shenshu"})) in _RESULT_SENSITIVE_FIELDS
     bad = service.run_tool("bazi_birth", {**_SYD, "southMonth": "flip"}, save_result=False)
-    assert bad.ok and any("八字 southMonth='flip' 无法识别" in w for w in bad.warnings), bad.warnings
+    # 审计 F17：认不出的口径拒绝并列可选值（tool.invalid_option），不再按缺省起盘、只附告警
+    assert bad.ok is False and bad.error.code == "tool.invalid_option" and bad.error.details["field"] == "southMonth", bad.error
 
 
 @requires_node

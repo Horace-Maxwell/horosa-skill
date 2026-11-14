@@ -122,11 +122,10 @@ def test_bazi_info_gains_time_basis_and_shengxiao_lines(tmp_path) -> None:
     assert "生肖：猴（岁首=正月初一）" in lunar
     flipped = _section(_bazi_local_text(tmp_path, _bazi_payload(lateZiHourUseNextDay=0, after23NewDay=True)), "起盘信息")
     assert "时间基准：真太阳时(经度+均时差校正)；晚子时归次日：否；23 点换日：是" in flipped
-    # 认不出的岁首档不静默：按立春出、进 warnings（改这个参数结果必须变 / 变不了就得说）。
-    with svc._degrade_collector() as notes:
-        bogus = _section(_bazi_local_text(tmp_path, _bazi_payload(zodiacBoundary="spring")), "起盘信息")
-    assert "生肖：羊（岁首=立春）" in bogus
-    assert any("zodiacBoundary='spring'" in note for note in notes), notes
+    # 认不出的岁首档不静默——审计 F17：认不出的口径拒绝并列可选值（tool.invalid_option），不再按缺省起盘、只附告警。
+    with pytest.raises(ToolValidationError) as excinfo:
+        _bazi_local_text(tmp_path, _bazi_payload(zodiacBoundary="spring"))
+    assert excinfo.value.code == "tool.invalid_option" and excinfo.value.details["field"] == "zodiacBoundary"
 
 
 @requires_node

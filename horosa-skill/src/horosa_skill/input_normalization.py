@@ -808,6 +808,15 @@ def missing_fields_error(fields: list[str] | tuple[str, ...], *, tool_name: str,
     return field_issues_error(issues, extra_details={"missing": list(fields)}, tool_name=tool_name)
 
 
+def _is_cast_tool(tool_name: str | None) -> bool:
+    """起课类（time_roles 的 moment 角色：奇门 / 六壬 / 六爻 / 塔罗 / 卜卦 / 小六壬 …）。"""
+    if not tool_name:
+        return False
+    from horosa_skill.engine.time_roles import MOMENT, time_role
+
+    return time_role(tool_name) == MOMENT
+
+
 def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     zh, en, example = _MISSING_TEXT.get(leaf, (f"`{leaf}`", f"`{leaf}`", None))
     ask = leaf in USER_FACT_FIELDS
@@ -818,6 +827,18 @@ def _missing_entry(field: str, leaf: str, tool_name: str, payload: dict[str, Any
     if leaf == "zone" and resolution.get("zone_source") == "not_filled_no_date":
         zh = "时区：给了 place，但这个技法没有日期，地名换算不出当天的 UTC 偏移（夏令时、历史改制）——请直接给 zone（如 +08:00）"
         en = "the time zone: place was given, but this technique has no date, so the place cannot be turned into that day's UTC offset; pass zone (e.g. +08:00)"
+    if leaf in ("date", "time") and _is_cast_tool(tool_name):
+        # 起课的时刻是「此刻」（审计 F10）：以前沿用出生盘的话术（「缺 date：公历日期」，example 1990-05-03，ask_user:true），
+        # 等于让模型去问用户「今天几号」或照抄 1990 年的示例。服务端不拿自己的钟当用户的此刻（SKILL §4），由客户端传。
+        if leaf == "date":
+            zh = "起课日期：传用户提问那一刻的日期（你知道今天几号，不要问用户；用户说了别的时刻就用那个）"
+            en = "the casting date: pass the date of the moment the user asked (you know today's date; do not ask the user unless they named another moment)"
+            example = "YYYY-MM-DD"
+        else:
+            zh = "起课时间：传用户提问那一刻的钟点（你知道现在几点，不要问用户）"
+            en = "the casting time: pass the clock time of the moment the user asked (you know the current time; do not ask the user)"
+            example = "HH:MM"
+        ask = False
     if leaf in ("inner", "outer"):
         others = [key for key, value in payload.items() if isinstance(value, dict) and key not in ("inner", "outer")]
         if others:

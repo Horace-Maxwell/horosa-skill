@@ -136,6 +136,11 @@ class MingliRunners:
         # v3.13.1 天医口径（baziStoredOpt.js:15 BAZI_OPT_DOMAINS.tianyiSchool / techniqueMountSettings.js:2123-2126）。
         "tianyiSchool": ("xieji", "ziping"),
     }
+    # 常见说法 → 规范值（只收无歧义的；其余照旧按词表判）。
+    _BAZI_OPTION_SYNONYMS: dict[str, dict[str, Any]] = {
+        "southMonth": {"对冲": "chong", "南半球": "chong", "反转": "chong", "冲": "chong", "true": "chong", "1": "chong",
+                       "不对冲": "none", "不冲": "none", "北半球": "none", "false": "none", "0": "none"},
+    }
     _BAZI_OPTION_DEFAULTS: dict[str, Any] = {
         "godKeyPos": "年", "phaseType": 0, "timeAlg": 0, "minggongMethod": "tongxing",
         "fenyeVersion": "common", "cangVersion": "common", "dayunPrecision": "precise", "southMonth": "none",
@@ -149,6 +154,7 @@ class MingliRunners:
             return self._BAZI_OPTION_DEFAULTS.get(key)
         vocab = self._BAZI_OPTION_VOCAB[key]
         value = int(raw) if isinstance(vocab[0], int) and f"{raw}".lstrip("-").isdigit() else raw
+        value = self._BAZI_OPTION_SYNONYMS.get(key, {}).get(f"{value}".strip().lower(), value)
         if value in vocab:
             return value
         if key == "timeAlg":
@@ -158,13 +164,14 @@ class MingliRunners:
                 code="tool.bazi_timealg_unsupported",
                 details={"field": "timeAlg", "value": raw, "valid": list(vocab)},
             )
-        fallback = self._BAZI_OPTION_DEFAULTS.get(key)
-        _degrade(
-            "bazi %s %r unrecognised", key, raw,
-            note=f"八字 {key}={raw!r} 无法识别（可选 {' / '.join(str(v) for v in vocab)}），已按缺省"
-                 f"{f' {fallback}' if fallback is not None else ''}起盘。",
+        # 认不出 → 拒绝并列可选值（审计 F17）：以前按缺省起盘、只附一句告警——用户明说要南半球口径（southMonth=「南半球」），
+        # 拿到的是不对冲的月柱。上游靠下拉框兜住值域，headless 入口自己兜（AGENTS §4.4）。
+        raise ToolValidationError(
+            bilingual(f"八字 {key}={raw!r} 不在可选值里：{' / '.join(str(v) for v in vocab)}。",
+                      f"BaZi {key}={raw!r} is not one of: {' / '.join(str(v) for v in vocab)}."),
+            code="tool.invalid_option",
+            details={"field": key, "value": raw, "options": list(vocab)},
         )
-        return fallback
 
     def _bazi_params(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """上游 genParams（BaZi.js:1058-1087）同形同序的起盘参数 + 只进快照的附加项（:1029 snapshotParams / 挂载 period）。"""
@@ -220,8 +227,45 @@ class MingliRunners:
                 if value is not None:
                     snapshot[key] = value
         if isinstance(payload.get("period"), dict):
-            snapshot["period"] = payload["period"]
+            snapshot["period"] = self._bazi_period(payload["period"])
         return params, snapshot
+
+    @staticmethod
+    def _bazi_period(period: dict[str, Any]) -> dict[str, Any]:
+        """运限选择逐键校验（审计 F17）：{liunian: [公历年], liuyue: [节气月序 1–12], liuri: [YYYY-MM-DD], liushi: [时辰序 0–11]}
+        （vendored buildBaziPeriodLines 的读法）。以前 dict[str, Any] 照收，「明年」「13」原样打进正文（「流年：明年年」「第13月（）」）。
+        单个值收成一项的表；认不出 → tool.invalid_option，不替用户猜。"""
+        from horosa_skill import input_fields as F
+
+        def bad(field: str, value: Any, expected_zh: str, expected_en: str) -> ToolValidationError:
+            return ToolValidationError(
+                bilingual(f"八字 period.{field}={value!r} 读不懂：要 {expected_zh}。", f"BaZi period.{field}={value!r} is not understood: expected {expected_en}."),
+                code="tool.invalid_option", details={"field": f"period.{field}", "value": value, "options": [expected_zh]},
+            )
+
+        unknown = sorted(set(period) - {"liunian", "liuyue", "liuri", "liushi"})
+        if unknown:
+            raise bad(unknown[0], period[unknown[0]], "liunian / liuyue / liuri / liushi 之一", "one of liunian / liuyue / liuri / liushi")
+        out: dict[str, Any] = {}
+        for key, value in period.items():
+            items = value if isinstance(value, list) else [value]
+            cleaned: list[Any] = []
+            for item in items:
+                text = f"{item}".strip()
+                if key == "liuri":
+                    try:
+                        cleaned.append(F.parse_date(text).value)
+                    except F.FieldIssue:
+                        raise bad(key, item, "公历日期 YYYY-MM-DD", "a Gregorian date YYYY-MM-DD") from None
+                    continue
+                low, high, zh, en = {"liunian": (-9999, 9999, "公历年（如 2027；「明年」请换成年份）", "a Gregorian year such as 2027"),
+                                     "liuyue": (1, 12, "节气月序 1–12（1 = 寅月 / 立春起）", "a solar-term month number 1–12"),
+                                     "liushi": (0, 11, "时辰序 0–11（0 = 子时）", "a double-hour number 0–11 (0 = 子)")}[key]
+                if not text.lstrip("-").isdigit() or not low <= int(text) <= high:
+                    raise bad(key, item, zh, en)
+                cleaned.append(int(text))
+            out[key] = cleaned
+        return out
 
     def _run_bazi_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         params, snapshot = self._bazi_params(payload)

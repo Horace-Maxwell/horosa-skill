@@ -118,9 +118,9 @@ def test_bazi_tianyi_school_forwarded_only_when_non_default(tmp_path: Path) -> N
         assert "tianyiSchool" not in params
     params, _ = service._bazi_params({**_BAZI, "tianyiSchool": "ziping"})
     assert params["tianyiSchool"] == "ziping"
-    env = _run(service, "bazi_birth", {**_BAZI, "tianyiSchool": "bogus"})
-    assert any("tianyiSchool" in w for w in env.warnings)
-    assert _section(env.data["snapshot_text"], "神煞（四柱与三元）").splitlines()[0] == _XIEJI_LINE
+    # 审计 F17：认不出的口径拒绝并列可选值（tool.invalid_option），不再按缺省起盘、只附告警
+    bad = service.run_tool("bazi_birth", {**_BAZI, "tianyiSchool": "bogus"}, save_result=False)
+    assert bad.ok is False and bad.error.code == "tool.invalid_option" and bad.error.details["field"] == "tianyiSchool", bad.error
 
 
 def test_bazi_tianyi_school_declared_hidden_and_documented() -> None:
