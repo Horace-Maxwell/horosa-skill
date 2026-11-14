@@ -158,6 +158,11 @@ class AstrodataRunners:
                 details={"allowed_actions": sorted(self._XUANSHI_ACTIONS)},
             )
         path, keys = spec
+        if action == "search" and not str(payload.get("q") or "").strip():
+            # 没有检索词的全文检索恒为「命中 0 条」：以前当成功回，模型照转「没有记载」（审计 S-18）。
+            from horosa_skill.input_normalization import missing_fields_error
+
+            raise missing_fields_error(["q"], tool_name="xuanshi", payload=payload)
         source = dict(payload)
         if "slug" in keys and source.get("slug") is None:
             source["slug"] = source.get("id") if source.get("id") is not None else source.get("q")

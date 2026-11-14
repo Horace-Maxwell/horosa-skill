@@ -716,6 +716,9 @@ _MISSING_TEXT: dict[str, tuple[str, str, Any]] = {
     "lat": ("纬度 31n13 / 31.22；或传 `place`（地名）", "the latitude 31n13 / 31.22; or pass `place` (a place name)", "31n13"),
     "lon": ("经度 121e28 / 121.47；或传 `place`（地名）", "the longitude 121e28 / 121.47; or pass `place` (a place name)", "121e28"),
     "gender": ("性别 1 男 / 0 女", "the gender, 1 male / 0 female", 1),
+    "q": ("检索词 q（事件 / 人物 / 术数名，取自用户的问题；按条件浏览请换 action，如 events / figures / timeline）",
+          "the search term q (an event, person or technique, taken from the user's question; to browse instead, use another action such as events / figures / timeline)",
+          "袁天罡"),
 }
 
 

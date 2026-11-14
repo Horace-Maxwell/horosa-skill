@@ -1,7 +1,7 @@
 """门面工具输入：dispatch / hecan、导出与知识库、玄史、agent 指引、记忆、报告、技法依据报告。"""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -35,8 +35,12 @@ class XuanshiInput(FlexibleModel):
     #   map = 地理点位；graph = 人物共现网络；stories/story = 专题故事；channels = 频道；
     #   daily = 今日推送；summary = 全库统计；microchronology / decade_omens / facets /
     #   events_meta = 编年细化 / 十年灾异 / 分面计数 / 列表页元数据。
+    # 其余五个检索工具的检索词都叫 query：写成 query 曾被静默忽略、回「命中 0 条」（审计 S-18）。照收、不进广告层。
+    ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({"query"})
+
     action: str | None = "search"
     q: str | None = Field(default=None, description="全文检索词（事件/人物/术数名皆可）。")
+    query: str | None = Field(default=None, description="同 q（其余检索工具的检索词叫 query）；两个都给时按 q。")
     id: str | None = Field(default=None, description="详情键：事件 id（XTS-027）/ 编辑层 slug（fig-laozi）。")
     tradition: str | None = Field(default=None, description="传统过滤：正史 / 野载。")
     dynasty: str | None = Field(default=None, description="朝代过滤（如 唐 / 南北朝 / 志怪笔记）。")
@@ -58,6 +62,12 @@ class XuanshiInput(FlexibleModel):
     in_chapter: bool | None = Field(default=None, description="celestial：in_chapter。")
     top_n: int | None = Field(default=None, description="graph 节点上限（默认 70）。")
     min_weight: int | None = Field(default=None, description="graph 边最小权重（默认 2）。")
+
+    @model_validator(mode="after")
+    def _query_is_q(self) -> "XuanshiInput":
+        if (self.q is None or not str(self.q).strip()) and self.query and str(self.query).strip():
+            self.q = self.query
+        return self
 
 
 class TechniqueReportInput(FlexibleModel):
