@@ -1169,7 +1169,10 @@ def _citation(entry: UserKnowledgeEntry) -> str:
     return f"用户自备知识库 · {entry.title}（{entry.id}）"
 
 
-READ_MAX_CHARS = 20_000  # 不给翻页参数时一次最多返回多少字（客户端单次结果上限约 25k token；Claude Code 超 10k 就警告）
+# 不给翻页参数时一页最多多少字。按 MCP 结果预算算（审计 O-03）：预算 20k 估算 token、汉字每字 1.5，正文在结果里有 lines（逐行围栏，
+# 注入防护契约）/ text / rendered_text 三份——以前 20,000 字一页，长笔记首页必超预算，整个 data 被换成 {"omitted"…}，next_from_line 一起丢了。
+# 3,500 字 × 3 份 × 1.5 ≈ 16k token，给 outline 与信封留余量。
+READ_MAX_CHARS = 3_500
 
 
 def _outline(entry: UserKnowledgeEntry) -> list[dict[str, Any]]:
