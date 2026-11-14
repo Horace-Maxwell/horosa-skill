@@ -10,7 +10,7 @@ from typing import Any
 from mcp import types as mcp_types
 
 from horosa_skill.config import Settings
-from horosa_skill.engine.registry import TOOL_DEFINITIONS
+from horosa_skill.engine.registry import LOOKUP_TOOLS, TOOL_DEFINITIONS
 
 # HOROSA_TOOLSETS 的解析与「这一进程注册哪些工具」的计划在 surfaces/toolsets.py（不依赖 MCP SDK：doctor 也要读它）。
 from horosa_skill.surfaces.toolsets import (  # noqa: F401 - _resolve_toolsets 供测试 / 旧调用方
@@ -38,7 +38,8 @@ _SERVER_ICON = mcp_types.Icon(
 # Tool annotations（MCP 2025-11-25）：客户端用它决定确认摩擦/自动放行；目录审核要求标注准确。
 # 判定口径（如实标注，见 AGENTS.md §4 / LESSONS）：
 # - 全部工具 openWorldHint=False（local-first：只打本机 runtime，不出网）。
-# - 查询类（registry/knowledge/guidance/memory 读、报告模板）readOnlyHint=True + idempotent=True。
+# - 查询类（registry/knowledge/guidance/memory 读、报告模板、LOOKUP_TOOLS 查资料技法）readOnlyHint=True + idempotent=True；
+#   查资料技法 run_tool 缺省不存档，这个注解才是真的（审计 S-14）。
 # - 技法计算类 readOnlyHint=False（默认会写一条本地 run 记录，memory_query 可见）、
 #   destructiveHint=False（只追加、不改不删）、idempotentHint=False（重复调用会追加新 run 行）。
 # - 报告渲染 readOnly=False + idempotent=True（同 run_id+format 原子覆盖同一产物）；
@@ -67,20 +68,9 @@ _ANN_REPORT_FROM_TOOL = mcp_types.ToolAnnotations(
     readOnlyHint=False, destructiveHint=True, openWorldHint=False
 )
 
-_READONLY_TOOL_NAMES = {
-    "export_registry",
-    "export_parse",
-    "knowledge_registry",
-    "knowledge_read",
-    "ziwei_rules",
-    "gua_desc",
-    "gua_meiyi",
-    "astrodata",
-}
-
-
 def _tool_annotations(tool_name: str) -> mcp_types.ToolAnnotations:
-    if tool_name in _READONLY_TOOL_NAMES:
+    # 查资料类（engine/registry.LOOKUP_TOOLS）缺省不写 run（审计 S-14：以前标只读却每次落一个 run，并把记忆检索刷屏）。
+    if tool_name in LOOKUP_TOOLS:
         return _ANN_QUERY
     return _ANN_CALC
 

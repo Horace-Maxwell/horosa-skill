@@ -238,7 +238,8 @@ Details (citations `[E3]`, Markdown, paths, technique report): [`references/repo
 
 ## 10. Memory (stored runs)
 
-Technique, dispatch and 合参 calls are stored locally. `horosa_memory_query` filters (combine with AND): `entity` (a `name` you
+Technique, dispatch and 合参 calls are stored locally; lookups (registries, knowledge, rule tables, hexagram texts,
+celebrity data, 玄史) are not — re-call them, they always return the same. `horosa_memory_query` filters (combine with AND): `entity` (a `name` you
 passed, or a profile name / alias), `tool` (key, MCP name or Chinese name: `"八字"`), `text` (words; all must
 match), `after` / `before` (`"2026-11-11"` = that whole day; ISO date-time also works; turn "yesterday" into a
 date yourself), `group_id`, `limit` ≤ 100, `offset`. Each row is a summary (run, time, technique, person, the

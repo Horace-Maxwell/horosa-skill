@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from horosa_skill.agent_guidance import build_validation_recovery
-from horosa_skill.engine.registry import TOOL_DEFINITIONS, resolve_tool_name
+from horosa_skill.engine.registry import LOOKUP_TOOLS, TOOL_DEFINITIONS, resolve_tool_name
 from horosa_skill.errors import ToolValidationError, bilingual, validation_errors
 from horosa_skill.memory import search as memory_search
 from horosa_skill.memory import timefilter
@@ -209,6 +209,13 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
         applied["time"] = window
 
     scan: dict[str, Any] = {}
+    # 查资料类（注册表 / 知识库 / 卦辞 / 玄史…）的旧 run 缺省不列（审计 S-14：最近 8 条曾全是它们）；点名 tool / run_id / group_id 时照列。
+    hidden = None if (tools or request.run_id or request.group_id) else LOOKUP_TOOLS
+    if hidden:
+        applied["hidden_lookups"] = bilingual(
+            "只调用过查资料类工具（注册表 / 知识库 / 卦辞 / 名人库 / 玄史）的记录不列；要看传 tool。",
+            "Runs that only called lookup tools (registries / knowledge / hexagram texts / celebrity data / 玄史) are not listed; pass tool to see them.",
+        )
     try:
         results = service.store.query_runs(
             run_id=request.run_id,
@@ -223,6 +230,7 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
             offset=max(0, request.offset or 0),
             include_payload=request.include_payload,
             scan_report=scan,
+            hide_only=hidden,
         )
         has_more = len(results) > limit
         results = results[:limit]

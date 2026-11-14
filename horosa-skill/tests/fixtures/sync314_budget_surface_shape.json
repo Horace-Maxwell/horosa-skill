@@ -639,7 +639,7 @@
    }
   },
   "horosa_knowledge_xuanshi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"检索玄史（中国玄学史知识库）：7900+\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"检索玄史（中国玄学史知识库）：7900+\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "q": "string",

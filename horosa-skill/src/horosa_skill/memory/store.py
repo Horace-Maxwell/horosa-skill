@@ -951,9 +951,18 @@ class MemoryStore:
         artifact_kind: str | None,
         after: str | None,
         before: str | None,
+        hide_only: frozenset[str] | None = None,
     ) -> tuple[list[str], list[Any]]:
         sql: list[str] = []
         params: list[Any] = []
+        if hide_only:
+            # 只调用过这些工具的 run 不列（查资料类的旧记录，审计 S-14）；没有 tool_calls 行的 run（门面记录）照列。
+            marks = ",".join("?" for _ in hide_only)
+            sql.append(
+                "AND (NOT EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = runs.id)"
+                f" OR EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = runs.id AND t.tool_name NOT IN ({marks})))"
+            )
+            params.extend(sorted(hide_only))
         if run_id:
             sql.append("AND runs.id = ?")
             params.append(run_id)
@@ -1020,6 +1029,7 @@ class MemoryStore:
         include_payload: bool = True,
         include_history: bool = False,
         scan_report: dict[str, Any] | None = None,
+        hide_only: frozenset[str] | None = None,
     ) -> list[dict[str, Any]]:
         """按条件取 run，新的在前（`created_at`、同秒按写入顺序），顺序只由这两样定：翻页不重不漏。
 
@@ -1027,7 +1037,8 @@ class MemoryStore:
         路径、id、时间戳、JSON 键名不在文档里。老库升级后正文要从产物文件读进索引，一次查询只读一小会儿：
         `scan_report["not_scanned"]` 是符合其余条件、正文还没读进来的 run 数（它们的问题与答案已经可搜）。"""
         filters, params = self._run_filters(
-            run_id=run_id, group_id=group_id, tool=tool, entity=entity, artifact_kind=artifact_kind, after=after, before=before
+            run_id=run_id, group_id=group_id, tool=tool, entity=entity, artifact_kind=artifact_kind, after=after, before=before,
+            hide_only=hide_only,
         )
         terms = _search.query_terms(text)
         if scan_report is not None:

@@ -391,7 +391,9 @@ zhengchuan 的动态 JSON import 属性，都是这么被抹掉又被测试抓�
 
 **MCP 服务器面法则**（`surfaces/mcp_server.py` 注册工具；注解 / 工具集在 `mcp_surface.py`、入参归一在 `mcp_requests.py`、错误信封在 `mcp_errors.py`、并发与兜底在 `mcp_runner.py`、elicitation 在 `mcp_elicitation.py`、资源与提示词在 `mcp_catalog.py`）：全部工具带 **tool annotations**（口径：openWorldHint
 一律 False（local-first）；查询类 readOnly+idempotent=True；技法计算类 readOnly=False、destructive=False、
-idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核）；澄清闸走 **elicitation 双轨**
+idempotent=False——默认写一条本地 run 记录，必须如实标注，目录审核会核。查资料类技法（`engine/registry.LOOKUP_TOOLS`）
+run_tool 缺省**不存档**、注解由同一张表驱动（审计 S-14：以前标只读却每次落 run 并把记忆检索刷屏；续读走「同一调用 +
+response_sections / response_view」，不靠 run_id；`tests/test_fix314_lookups_readonly.py` 把注解与实际行为绑在一起））；澄清闸走 **elicitation 双轨**
 （客户端声明能力→原生表单，「按星阙默认」一跳闭环、「补充设置」只回带备注**绝不代答术数参数**；
 无能力/任何异常→逐字节回落 `agent_guidance.required` 错误往返；`HOROSA_MCP_ELICIT=0` 关闭）；
 **签名即契约**：每个 MCP 工具**必须**显式设 `__signature__`——漏设会让 FastMCP 内省 `**kwargs` 造出一个

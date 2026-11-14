@@ -14,6 +14,7 @@ from horosa_skill import __version__
 from horosa_skill.agent_guidance import build_tool_input_contract
 from horosa_skill.decisions.layer import decision_records
 from horosa_skill.engine.registry import (
+    LOOKUP_TOOLS,
     TOOL_DEFINITIONS,
     ToolDefinition,
 )
@@ -741,7 +742,7 @@ class ToolsAPI:
         tool_name: str,
         payload: dict[str, Any],
         *,
-        save_result: bool = True,
+        save_result: bool | None = None,
         run_id: str | None = None,
         query_text: str | None = None,
         group_id: str | None = None,
@@ -758,6 +759,8 @@ class ToolsAPI:
                 details=unknown_tool_details(tool_name),
             )
         tool_name = resolved
+        if save_result is None:
+            save_result = tool_name not in LOOKUP_TOOLS  # 查资料不存档（审计 S-14）；显式 True / False 照办
 
         definition = TOOL_DEFINITIONS[tool_name]
         workflow_group_id = group_id or self.tracer.new_group_id()

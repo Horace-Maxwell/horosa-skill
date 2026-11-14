@@ -286,6 +286,14 @@ def resolve_tool_name(name: object) -> str | None:
     return MCP_NAME_ALIASES.get(text)
 
 
+# 查资料类工具（审计 S-14）：注册表 / 知识库 / 规则表 / 卦辞 / 名人库 / 玄史——同参数恒得同结果，不起盘。
+# run_tool 缺省**不存档**（MCP 注解 readOnlyHint=True 因此是真的），记忆检索缺省也不列它们的旧记录。结果太长时阅读视图的续读写成
+# 「同一调用 + response_sections」（没有 run_id 时 result_view 的既有路径）。显式 save_result=True（CLI 开关、dispatch 组）照存。
+LOOKUP_TOOLS = frozenset({
+    "export_registry", "export_parse", "knowledge_registry", "knowledge_read", "ziwei_rules", "gua_desc", "gua_meiyi",
+    "astrodata", "xuanshi",
+})
+
 # 门面工具数（非技法工具：dispatch / guidance / tool_run / memory×3 / report×2 / export×… 等）。
 # 🔴 计数单一真值：以前 marketplace 说 97、instructions 说 106、字节契约说 115、实际 116 —— 四处
 # 互不相同且都「有人守」。默认平铺面 = FACADE_TOOL_COUNT + len(TOOL_DEFINITIONS)，任何文案都从这里算。
