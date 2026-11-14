@@ -173,6 +173,12 @@ class TraceRecorder:
                 if one_key in SENSITIVE_PAYLOAD_KEYS and not self.settings.trace_capture_payloads:
                     result[one_key] = "<redacted>"
                     continue
+                if one_key == "summary" and not self.settings.trace_capture_payloads and one_value:
+                    # 技法结果的 summary 带着盘面要点（「日期：1990-05-17 14:30」「种子:张三丰|…」），以前原文落 trace（审计 O-06）：
+                    # 载荷与正文都脱敏了，它是漏网的那份。只记行数。
+                    count = len(one_value) if isinstance(one_value, list) else 1
+                    result[one_key] = f"<redacted: {count} line(s)>"
+                    continue
                 if one_key in SENSITIVE_ANSWER_KEYS and not self.settings.trace_capture_ai_answers:
                     result[one_key] = "<redacted>"
                     continue
