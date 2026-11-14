@@ -81,10 +81,12 @@ def _jsonable(value: Any) -> Any:
     return repr(value)
 
 
-def normalize_request_payload(payload: Any, *, model: Any = None, tool_name: str | None = None) -> Any:
+def normalize_request_payload(
+    payload: Any, *, model: Any = None, tool_name: str | None = None, place_records: list[dict[str, Any]] | None = None,
+) -> Any:
     """归一 + 校验。读不懂的字段一次全部列出：抛 `ToolValidationError`（见 `field_issues_error`）。`model` 给了就按它的字段集
     报「未知参数」并把 datetime / year 拆到声明了的字段上。`tool_name` 给了，追问开头点名是哪个技法的输入。"""
-    normalized, issues = normalize_collecting_issues(payload, model=model)
+    normalized, issues = normalize_collecting_issues(payload, model=model, filled_by_place=_place_filled(place_records))
     if issues:
         raise field_issues_error(issues, tool_name=tool_name or _model_tool_name(model))
     return normalized
@@ -111,13 +113,15 @@ def technique_heading(tool_name: str | None) -> str | None:
     return bilingual(f"{named}的输入：", f"Input for {tool_name}:")
 
 
-def normalize_collecting_issues(payload: Any, *, model: Any = None) -> tuple[Any, list[dict[str, Any]]]:
+def normalize_collecting_issues(
+    payload: Any, *, model: Any = None, filled_by_place: frozenset[str] = frozenset(),
+) -> tuple[Any, list[dict[str, Any]]]:
     """同上，但不抛：返回 (归一后的载荷, 逐字段问题表)。命主档案（profiles.validate_birth_fields）用它并进自己的错误形状。"""
     issues = _Issues()
     if not isinstance(payload, dict):
         return _legacy_normalize(payload), issues.items
     fields, required = _model_fields(model)
-    normalized = _normalize_party(payload, path="", issues=issues, fields=fields, required=required)
+    normalized = _normalize_party(payload, path="", issues=issues, fields=fields, required=required, filled_by_place=filled_by_place)
     return normalized, issues.items
 
 
@@ -129,7 +133,8 @@ def _model_fields(model: Any) -> tuple[frozenset[str] | None, frozenset[str]]:
 
 
 def _normalize_party(
-    payload: dict[str, Any], *, path: str, issues: _Issues, fields: frozenset[str] | None, required: frozenset[str] = frozenset()
+    payload: dict[str, Any], *, path: str, issues: _Issues, fields: frozenset[str] | None, required: frozenset[str] = frozenset(),
+    filled_by_place: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in payload.items():
@@ -162,7 +167,7 @@ def _normalize_party(
     _strict_coordinates(out, path, issues)
     _strict(out, "gender", path, issues, F.parse_gender)
     if fields is not None:
-        _report_unknown_keys(out, fields)
+        _report_unknown_keys(out, fields, filled_by_place)
     return out
 
 
@@ -622,12 +627,25 @@ def _safe_date(value: Any) -> bool:
         return False
 
 
-def _report_unknown_keys(out: dict[str, Any], fields: frozenset[str]) -> None:
+def _place_filled(records: list[dict[str, Any]] | None) -> frozenset[str]:
+    """顶层 `place` 解析补进来的键（坐标恒补，时区按日期补到的才算）：不是调用方写的，不报「不是本技法的参数」（审计 S-11：
+    万年历传 place 曾被告「gpsLat、gpsLon 不是本技法的参数」）。调用方自己给了坐标时 status 是 explicit_coordinates，不在此列。
+    records = PlaceAPI.pop_place_records 取走的记录（归一化之前就从载荷里摘掉了）。"""
+    record = next((item for item in records or [] if isinstance(item, dict) and "spot" not in item), None)
+    if record is None or record.get("status") != "resolved":
+        return frozenset()
+    keys = {"lat", "lon", "gpsLat", "gpsLon"}
+    if str(record.get("zone_source") or "").startswith("place"):
+        keys.add("zone")
+    return frozenset(keys)
+
+
+def _report_unknown_keys(out: dict[str, Any], fields: frozenset[str], filled_by_place: frozenset[str] = frozenset()) -> None:
     # 恒星轨前端名 fixedStarOrb / fixedStarOrbMode：西占盘族（声明了后端名 starOrb 的模型）照读（chart_family.fixedStarOrbParamsFor、
     # judgeLayerHeadless 双名回退），不是「没人读的键」。
     read_aliases = CLASSICAL_UNDECLARED_FIELDS if "starOrb" in fields else ()
     unknown = [key for key in out if key not in fields and key not in NON_TECHNIQUE_KEYS and key not in read_aliases
-               and not key.startswith("_")]
+               and key not in filled_by_place and not key.startswith("_")]
     if not unknown:
         return
     vocabulary = sorted(fields | set(FIELD_ALIASES))

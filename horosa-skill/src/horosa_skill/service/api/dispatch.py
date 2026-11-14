@@ -583,10 +583,11 @@ class DispatchAPI:
             )
 
         def birth_payload() -> tuple[dict[str, Any], birth_profiles.ProfileUse | None]:
+            # exclude_unset：联合分支的缺省值不下发（审计 S-11，见 dispatch_plan.inputs_from_request）。
             if request.birth is not None:
-                return request.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "birth")
+                return request.birth.model_dump(exclude_none=True, exclude_unset=True), birth_profiles.use_for(profile_uses, "birth")
             if request.subject and request.subject.birth is not None:
-                return request.subject.birth.model_dump(exclude_none=True), birth_profiles.use_for(profile_uses, "subject.birth")
+                return request.subject.birth.model_dump(exclude_none=True, exclude_unset=True), birth_profiles.use_for(profile_uses, "subject.birth")
             return {}, None
 
         expanded_birth, birth_use = birth_payload()

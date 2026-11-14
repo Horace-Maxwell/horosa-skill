@@ -57,7 +57,12 @@ def _normalize_mcp_request(raw_request: Any, model: type[BaseModel], *, tool_nam
             raise
         # 技法模型：与 run_tool 同一份逐字段错误（每个字段一条恢复条目），不是整份闸门问卷。
         raise tool_error_from_validation(exc, tool_name=tool_name or _MODEL_TOOL_NAMES.get(model, "technique"), payload=body) from exc
-    return normalized.model_dump(exclude_none=True)
+    # dispatch / hecan：只交调用方给了的字段（审计 S-11）——`birth` 联合选中分支的缺省值（ad / byLon / hsys …）一旦在这里
+    # 写成显式值，就一路下发给子技法，CLI 与 MCP 的 normalized_inputs 也不一样。service 会再校验一遍，缺省值由它补。
+    return normalized.model_dump(exclude_none=True, exclude_unset=model.__name__ in _GIVEN_FIELDS_ONLY)
+
+
+_GIVEN_FIELDS_ONLY = frozenset({"DispatchInput", "HecanInput"})
 
 
 def _mcp_payload(raw_request: Any, model: type[BaseModel]) -> dict[str, Any]:

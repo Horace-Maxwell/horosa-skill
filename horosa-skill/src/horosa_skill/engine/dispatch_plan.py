@@ -549,10 +549,12 @@ def inputs_from_request(
     """DispatchInput / HecanInput → PlanInputs。服务层传 `birth_for_run`（带档案引用的出生载荷）；闸门不传，用展开后的。"""
     subject = getattr(request, "subject", None)
     birth_model = request.birth or (subject.birth if subject is not None else None)
-    birth_fields = birth_model.model_dump(exclude_none=True) if birth_model is not None else {}
+    # 只带调用方给了的字段（exclude_unset）：`birth` 是几种出生模型的联合，选中分支的缺省值（hsys / tradition / timeAlg / ad …）
+    # 曾一并下发，子技法挨个报「这些参数不是本技法的参数」（审计 S-11）——子技法自己的缺省与直调时一样由它的模型给。
+    birth_fields = birth_model.model_dump(exclude_none=True, exclude_unset=True) if birth_model is not None else {}
 
     def dump(model: Any) -> dict[str, Any] | None:
-        return model.model_dump(exclude_none=True) if model is not None else None
+        return model.model_dump(exclude_none=True, exclude_unset=True) if model is not None else None
 
     preferences = dict(request.preferences or {})
     for key, value in (getattr(request, "model_extra", None) or {}).items():

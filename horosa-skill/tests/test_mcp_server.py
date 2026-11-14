@@ -25,7 +25,8 @@ def test_normalize_mcp_request_accepts_json_string_for_structured_request() -> N
 def test_normalize_mcp_request_accepts_plain_dict() -> None:
     payload = _normalize_mcp_request({"query": "起一张当前星盘"}, DispatchInput)
     assert payload["query"] == "起一张当前星盘"
-    assert payload["save_result"] is True
+    # dispatch / hecan 只交给了的字段（审计 S-11）：缺省值由 service 再校验时补，存档缺省照旧是开
+    assert "save_result" not in payload and DispatchInput.model_validate(payload).save_result is True
 
 
 def test_normalize_mcp_request_rejects_non_object_payload() -> None:

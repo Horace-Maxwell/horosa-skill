@@ -449,7 +449,7 @@ class ToolsAPI:
         try:
             # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
             # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。
-            payload = normalize_request_payload(payload, model=definition.input_model, tool_name=tool_name)
+            payload = normalize_request_payload(payload, model=definition.input_model, tool_name=tool_name, place_records=place_records)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
             knowledge_selection = None
             if isinstance(payload, dict) and "knowledge" in payload:
