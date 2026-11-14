@@ -112,8 +112,9 @@ def _format_mapping(payload: dict[str, Any]) -> str:
 
 
 class ReportBuilder:
-    def build_template(self, *, run: dict[str, Any], source_artifact: dict[str, Any], language: str) -> dict[str, Any]:
-        return _build_template(run=run, source_artifact=source_artifact, language=language)
+    def build_template(self, *, run: dict[str, Any], source_artifact: dict[str, Any], language: str,
+                       include_text: bool = True) -> dict[str, Any]:
+        return _build_template(run=run, source_artifact=source_artifact, language=language, include_text=include_text)
 
     def chart_source(self, *, run: dict[str, Any], source_artifact: dict[str, Any]) -> dict[str, Any]:
         """盘图 PNG / 日历 ICS 要的那几样（只读存档，不建整份报告）：工具名、排盘报告式技法名、结果 data、入参、来源元信息。"""

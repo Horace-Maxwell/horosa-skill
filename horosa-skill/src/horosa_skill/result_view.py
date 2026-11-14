@@ -261,6 +261,7 @@ class _TextSlot:
     offset: int                         # 第一个要给的段从第几个字符起
     explicit: bool                      # 调用方点名了段 / 给了续读位置
     merged: list[int] = field(default_factory=list)   # 合成末尾一段的「未返回」占位段（审计 O-15，只在缺省阅读视图）
+    priority: tuple[str, ...] = ()      # 超预算时先放的段（exports.registry.READING_PRIORITY，审计 O-07）
     own: list[str] = field(default_factory=list)
     demand: float = 0.0
 
@@ -280,19 +281,34 @@ class _TextSlot:
         section = self.sections[pos]
         return f"[{section['title']}]\n{section['body'][start:]}\n\n"
 
+    def _order(self, budget: Budget, allowance: float) -> list[int]:
+        """放段的次序。放得下全部时就是原顺序；超预算且调用方没点名时：优先表里的段先放，其余按原顺序（审计 O-07）。"""
+        if self.explicit or self.demand <= allowance or not self.priority:
+            return list(self.chosen)
+        rank = {title: n for n, title in enumerate(self.priority)}
+        return sorted(self.chosen, key=lambda pos: (rank.get(self.sections[pos]["title"], len(rank)), self.chosen.index(pos)))
+
     def render(self, allowance: float, budget: Budget) -> None:
-        """按额度放正文：整段优先、按原顺序；放不下的段先跳过，剩下的额度给第一个被跳过的段的开头。"""
+        """按额度放正文：整段优先；放不下的段先跳过，剩下的额度给第一个被跳过的段的开头。
+
+        超预算且调用方没点名时（审计 O-07）：按优先表的次序放，且单段封顶——一段超过额度的 35% 就先不放，让后面的段先进，
+        最后剩下的额度给它开头（照样进续读清单）。以前一段 2 万字的「相位」整段占掉预算，后面 11 段一段都没有。"""
         shown: dict[int, tuple[int, int]] = {}
         skipped: list[int] = []
         remaining = allowance + 1e-9 - self._merged_cost(budget)
-        for n, pos in enumerate(self.chosen):
+        over = not self.explicit and self.demand > allowance
+        cap = _SINGLE_SECTION_SHARE * allowance
+        for pos in self._order(budget, allowance):
+            n = self.chosen.index(pos)
             start = self._start(n, pos)
             cost = budget.text_fraction(_json_text(self._piece(pos, start)))
-            if cost <= remaining:
+            if cost <= remaining and not (over and cost > cap):
                 shown[pos] = (start, len(self.sections[pos]["body"]))
                 remaining -= cost
             else:
                 skipped.append(pos)
+        # 续读清单与「给开头的那一段」按原顺序：续读时 response_offset 落在点名段里文档顺序最前的那段上。
+        skipped.sort(key=self.chosen.index)
         partial: int | None = None
         if skipped:
             pos = skipped[0]
@@ -319,7 +335,13 @@ class _TextSlot:
         if end == start:
             # 一整段只有一行（长表）：按字符截，每字符按最贵的算，保证不超。
             per_char = max(2 / budget.max_chars, 1.5 / budget.max_tokens)
-            end = start + int(room / per_char)
+            end = min(start + int(room / per_char), len(body))
+            # 截在分隔符后（审计 O-26：「关键岁数」一行 4,605 字，以前截在半个条目中间）：退回到最后一个「；。，、」之后，最多退 25%。
+            if end < len(body):
+                floor = start + (end - start) * 3 // 4
+                cut = max(body.rfind(mark, floor, end) for mark in "；。;，、")
+                if cut >= floor:
+                    end = cut + 1
         return min(end, len(body))
 
     def _write(self, shown: dict[int, tuple[int, int]], skipped: list[int], partial: int | None) -> None:
@@ -391,6 +413,7 @@ class _TextSlot:
         return f"the same `{self.tool}` call + {picks}"
 
 
+_SINGLE_SECTION_SHARE = 0.35
 _MISSING_PREFIX = "本次本地计算结果未返回「"
 MERGED_PLACEHOLDER_TITLE = "本次未返回的段"
 
@@ -424,6 +447,13 @@ def _match_sections(sections: list[dict[str, Any]], wanted: tuple[Any, ...]) -> 
         elif hit not in positions:
             positions.append(hit)
     return sorted(positions), unknown
+
+
+def _reading_priority(technique: Any) -> tuple[str, ...]:
+    from horosa_skill.exports.registry import READING_PRIORITY
+
+    key = technique.get("key") if isinstance(technique, dict) else None
+    return READING_PRIORITY.get(str(key or ""), ())
 
 
 def _is_envelope(value: Any) -> bool:
@@ -540,6 +570,7 @@ def _plan_envelope(
     slot = _TextSlot(
         snapshot=slim, target=warnings if target is None else target, sections=sections, verbatim=verbatim,
         view=request.view, tool=tool, run_id=run_id, chosen=chosen, offset=offset, explicit=explicit, merged=merged,
+        priority=_reading_priority(technique),
     )
     return result, slot
 
@@ -715,7 +746,20 @@ def _shape_memory(value: dict[str, Any], request: ViewRequest, budget: Budget) -
             f"这条记录里没有 `{request.tool}` 的结果；技法名见 artifacts[].tool_name。",
             f"this run has no result for `{request.tool}`; tool names are in artifacts[].tool_name.",
         ))
-    return _fill(result, slots, budget)
+    filled = _fill(result, slots, budget)
+    if (request.sections or request.offset) and slots and isinstance(filled.get("result"), dict) and request.view != FULL:
+        return _continuation_shape(filled, slots)
+    return filled
+
+
+def _continuation_shape(result: dict[str, Any], slots: list[_TextSlot]) -> dict[str, Any]:
+    """续读（点了 response_sections / response_offset）只回正文（审计 O-11）：以前每次带约 8 KB 与正文无关的信封——同一份输入
+    出现 4 遍（subject、tool_calls[].input、payload.input_normalized、record_meta.subject）、技法卡、绝对路径、sha256。"""
+    record = result["result"]
+    texts = [{"tool": slot.tool, "export_snapshot": slot.snapshot} for slot in slots]
+    out = {key: value for key, value in result.items() if key != "result"}
+    out["result"] = {"run_id": record.get("run_id"), "continuation": True, **(texts[0] if len(texts) == 1 else {"tools": texts})}
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------------

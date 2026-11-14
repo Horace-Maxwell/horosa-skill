@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from horosa_skill.reports.question import analyze_question
 from horosa_skill.config import Settings
 from horosa_skill.exports.parser import parse_export_content
 from horosa_skill.engine.registry import TOOL_DEFINITIONS
@@ -309,10 +310,8 @@ def test_liureng_headless_export_includes_courses_transmissions_without_mongodb_
     assert chart_call["gpsLon"] == 121.4667
 
     template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "liureng_gods"})
-    brief_text = json.dumps(template["conversation_brief"], ensure_ascii=False)
-    contract_text = json.dumps(template["targeted_analysis_contract"], ensure_ascii=False)
-    assert "不要把空字段或缺失章节解释成需要 MongoDB" in brief_text
-    assert "Never claim that Horosa Skill requires MongoDB" in contract_text
+    rules = json.dumps(template["ai_instructions"], ensure_ascii=False)   # 审计 O-23：规则只一份
+    assert "空字段或缺失段不是缺依赖" in rules and "MongoDB" in rules
 
 
 def test_service_memory_query_and_show(tmp_path) -> None:
@@ -1304,22 +1303,15 @@ def test_all_callable_techniques_can_generate_report_json_artifacts(tmp_path) ->
         assert template["schema"] == "horosa.skill.report.template.v1", tool_name
         assert template["technique"] == technique_key, tool_name
         assert template["source_export_sections"], tool_name
-        assert template["coverage_contract"]["all_source_export_sections_required"] is True, tool_name
-        assert template["coverage_contract"]["source_export_section_count"] == len(template["source_export_sections"]), tool_name
-        assert template["source_context"]["export_text"], tool_name
-        # 深审 F13：正文只给一份（export_text），段索引在 source_export_sections，不再在 source_context 里逐段再抄一遍正文。
+        # 审计 O-23：不再要求逐段全讲（coverage_contract 不进模板），正文缺省不再附（text_with 指向取全文的调用）。
+        assert "coverage_contract" not in template and "conversation_brief" not in template, tool_name
+        assert template["source_context"]["export_text_chars"] > 0 and "horosa_memory_show" in template["source_context"]["text_with"], tool_name
         assert "export_sections" not in template["source_context"], tool_name
-        assert "question_analysis" not in template["ai_fillable"] and "input_normalized" not in template["conversation_brief"]["user_context"]
-        assert template["targeted_analysis_contract"]["answer_priority"] == "directly_answer_user_question_first", tool_name
-        assert template["question_analysis"]["has_question"] is True, tool_name
-        assert template["targeted_analysis_contract"]["question_analysis"]["raw_question"] == f"生成 {tool_name} 报告", tool_name
-        assert template["targeted_analysis_contract"]["answer_plan"], tool_name
-        assert template["targeted_analysis_contract"]["targeted_answer_requirements"], tool_name
+        assert "question_analysis" not in template["ai_fillable"], tool_name
         assert template["ai_fillable"]["targeted_answer_requirements"], tool_name
         assert template["ai_fillable"]["answer_plan"], tool_name
         assert template["ai_fillable"]["analysis_focus"] == f"生成 {tool_name} 报告", tool_name
-        assert template["conversation_brief"]["role"].startswith("你是接入 Horosa Skill 的 AI 解盘助手"), tool_name
-        assert "像在 AI 对话窗口中完成一次认真解盘" in "\n".join(template["conversation_brief"]["output_style"]), tool_name
+        assert len(template["ai_instructions"]) == 6, tool_name
         assert "answer_text" in template["ai_fillable"], tool_name
         assert "direct_answer" in template["ai_fillable"], tool_name
 
@@ -1784,11 +1776,10 @@ def test_service_can_build_report_template_and_render_json_docx_pdf(tmp_path) ->
     assert template["tool_name"] == "chart"
     assert template["technique"] == "astrochart"
     assert template["source_export_sections"]
-    assert template["source_context"]["export_text"] and template["source_export_sections"][0]["title"]
-    assert template["coverage_contract"]["must_explain_sections"]
-    assert template["targeted_analysis_contract"]["required_ai_fields"]
-    assert template["question_analysis"]["focus_domains"] == ["general_reading"]
-    assert template["targeted_analysis_contract"]["answer_plan"]
+    assert template["source_context"]["text_with"] and template["source_export_sections"][0]["title"]
+    assert service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "chart", "include_text": True})["source_context"]["export_text"]
+    assert template["focus"]["focus_domains"] == ["general_reading"]
+    assert template["ai_fillable"]["answer_plan"]
     assert template["ai_fillable"]["direct_answer"] == ""
     service.record_ai_answer(
         {
@@ -1963,16 +1954,11 @@ def test_report_from_tool_without_ai_report_returns_analysis_packet_not_final_re
     assert result["tool_result"]["ok"] is True
     assert result["report_template"]["source_context"]["export_text"]
     assert result["report_template"]["source_export_sections"]
-    assert result["report_template"]["targeted_analysis_contract"]["targeted_answer_requirements"]
-    assert result["report_template"]["conversation_brief"]["role"].startswith("你是接入 Horosa Skill 的 AI 解盘助手")
-    assert "完整对话式解盘正文" in result["report_template"]["conversation_brief"]["final_ai_report_contract"]["answer_text"]
-    assert result["ai_process"]["input"]
-    assert result["ai_process"]["conversation_brief"]["plate_context"]["tool_name"] == "qimen"
-    assert result["ai_process"]["process"]
-    assert result["ai_process"]["output"].startswith("最终报告必须来自 AI")
-    assert "answer_text" in result["ai_process"]["ai_report_skeleton"]
+    assert result["report_template"]["ai_fillable"]["targeted_answer_requirements"]
+    assert "answer_text" in result["report_template"]["ai_fillable"]
+    assert result["ai_process"]["process"] and "ai_report_skeleton" not in result["ai_process"]   # 审计 O-23：骨架只一份
     assert result["ai_process"]["next_call"]["payload"]["run_id"] == result["run_id"]
-    assert result["ai_process"]["next_call"]["payload"]["ai_report"] == "<AI fills this object from ai_report_skeleton>"
+    assert result["ai_process"]["next_call"]["payload"]["ai_report"] == "<report_template.ai_fillable, filled in>"
 
     stored = service.show_memory({"run_id": result["run_id"], "include_payload": True})
     assert stored["ok"] is True
@@ -2042,12 +2028,12 @@ def test_report_contract_targets_user_question_and_memory_retrieval(tmp_path) ->
     assert result.memory_ref is not None
 
     template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "qimen"})
-    assert template["question_analysis"]["focus_domains"] == ["career", "timing", "decision"]
-    assert template["question_analysis"]["needs_timing"] is True
-    assert template["question_analysis"]["needs_decision_support"] is True
+    assert analyze_question(question)["focus_domains"] == ["career", "timing", "decision"]
+    assert analyze_question(question)["needs_timing"] is True
+    assert analyze_question(question)["needs_decision_support"] is True
     requirement_ids = {
         item["id"]
-        for item in template["targeted_analysis_contract"]["targeted_answer_requirements"]
+        for item in template["ai_fillable"]["targeted_answer_requirements"]
     }
     assert {"focus_career", "timing_window", "decision_support"}.issubset(requirement_ids)
     assert template["ai_fillable"]["targeted_answer_requirements"]
@@ -2127,7 +2113,7 @@ def test_targeted_consultation_report_roundtrip_persists_and_retrieves_ai_analys
     assert result.memory_ref is not None
 
     template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "qimen"})
-    assert template["question_analysis"]["focus_domains"] == ["career", "wealth", "timing", "decision"]
+    assert analyze_question(question)["focus_domains"] == ["career", "wealth", "timing", "decision"]
     source_title = template["source_export_sections"][0]["title"]
     ai_report = {
         "analysis_focus": question,
@@ -2337,17 +2323,18 @@ def test_report_question_analysis_understands_natural_timing_and_decision_words(
         query_text="重点分析事业、时间窗口、决策建议，并保留原始技法依据。",
     )
     assert result.memory_ref is not None
+    question = "重点分析事业、时间窗口、决策建议，并保留原始技法依据。"
 
     template = service.report_template({"run_id": result.memory_ref.run_id, "tool_name": "qimen"})
-    assert template["question_analysis"]["focus_domains"] == ["career", "timing", "decision"]
-    assert "时间窗口" in template["question_analysis"]["keywords_detected"]
-    assert "决策" in template["question_analysis"]["keywords_detected"]
-    assert "建议" in template["question_analysis"]["keywords_detected"]
-    assert template["question_analysis"]["needs_timing"] is True
-    assert template["question_analysis"]["needs_decision_support"] is True
+    assert analyze_question(question)["focus_domains"] == ["career", "timing", "decision"]
+    assert "时间窗口" in analyze_question(question)["keywords_detected"]
+    assert "决策" in analyze_question(question)["keywords_detected"]
+    assert "建议" in analyze_question(question)["keywords_detected"]
+    assert analyze_question(question)["needs_timing"] is True
+    assert analyze_question(question)["needs_decision_support"] is True
     requirement_ids = {
         item["id"]
-        for item in template["targeted_analysis_contract"]["targeted_answer_requirements"]
+        for item in template["ai_fillable"]["targeted_answer_requirements"]
     }
     assert {"focus_career", "timing_window", "decision_support"}.issubset(requirement_ids)
 

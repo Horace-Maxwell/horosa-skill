@@ -1,6 +1,6 @@
 """正文的版面顺序：DOCX 与 PDF 读同一串块，各自决定怎么画。
 
-这里定的是「印什么、按什么顺序」：结论卡、总览、完整盘面（盘图在最前）、AI 解读排在附录之前。怎么画（分页、字号、段内链接、分栏）
+这里定的是「印什么、按什么顺序」：结论卡、总览、AI 解读、完整盘面（盘图在最前）、附录（审计 O-09：结论先行，盘面是证据）。怎么画（分页、字号、段内链接、分栏）
 归渲染器，块只带用途（`role`），不带样式。
 
 封面、目录和报告说明不在这里：PDF 把基本信息画在封面上、报告说明只给解读报告，DOCX 把它们排在正文里、两种报告都有。
@@ -90,7 +90,7 @@ def _ai_body_blocks(ai_report: dict[str, Any], t: Any) -> list[Block]:
         return []
     blocks = [
         Block("part", t("AI 解读"), role="ai"),
-        Block("note", t("以下是 AI 依据上方盘面所作的解读，不是排盘引擎的输出；方括号里的 E 段号指向盘面原文。")),
+        Block("note", t("以下是 AI 依据后附盘面所作的解读，不是排盘引擎的输出；方括号里的 E 段号指向「完整盘面」里的原文。")),
     ]
     if basis:
         blocks.append(Block("card", t("起盘依据"), str(basis or ""), role="green"))
@@ -128,16 +128,14 @@ def body_blocks(document: dict[str, Any], t: Any = str) -> list[Block]:
     if show_ai and summary:
         blocks += [Block("heading", t("总览摘要"), role="summary"), Block("body", body=str(summary or ""))]
 
-    ai_body = _ai_body_blocks(ai_report, t) if show_ai else []
+    # 解读在盘面之前（审计 O-09）：以前星盘 35 页里解读从第 33 页开始、关系盘 58 页里从第 56 页开始。
+    blocks += _ai_body_blocks(ai_report, t) if show_ai else []
     parts = {"chart": t("完整盘面"), "appendix": t("附录")}
     current_group: str | None = None
     for section in _human_sections(document):
         group = section.get("group")
         if group == "basis":
             continue
-        if group == "appendix":  # 数据在前：AI 解读排在盘面之后、附录之前
-            blocks += ai_body
-            ai_body = []
         if group in parts and group != current_group:
             blocks.append(Block("part", parts[group], role=str(group)))
             if group == "chart" and (figures or figure_gaps):
@@ -146,7 +144,6 @@ def body_blocks(document: dict[str, Any], t: Any = str) -> list[Block]:
         current_group = group
         cite = str(section.get("cite_id") or "") if group == "chart" else ""
         blocks.append(Block("section", str(section.get("title") or t("章节")), str(section.get("body") or ""), role=str(group or ""), cite=cite, in_part=group in parts))
-    blocks += ai_body
     if figures and current_group is None:
         blocks.append(Block("orphan_figures", parts["chart"]))
     return blocks + figure_gaps  # 没有「完整盘面」部分时说明排在最后，不丢

@@ -213,8 +213,9 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
     hidden = None if (tools or request.run_id or request.group_id) else LOOKUP_TOOLS
     if hidden:
         applied["hidden_lookups"] = bilingual(
-            "只调用过查资料类工具（注册表 / 知识库 / 卦辞 / 名人库 / 玄史）的记录不列；要看传 tool。",
-            "Runs that only called lookup tools (registries / knowledge / hexagram texts / celebrity data / 玄史) are not listed; pass tool to see them.",
+            "只调用过查资料类工具（注册表 / 知识库 / 卦辞 / 名人库 / 玄史）的记录、只有失败调用的记录不列；要看传 tool 或 run_id。",
+            "Runs that only called lookup tools (registries / knowledge / hexagram texts / celebrity data / 玄史), and runs whose "
+            "calls all failed, are not listed; pass tool or run_id to see them.",
         )
     try:
         results = service.store.query_runs(
@@ -231,6 +232,7 @@ def query_memory(service: HorosaSkillService, payload: dict[str, Any], trace: di
             include_payload=request.include_payload,
             scan_report=scan,
             hide_only=hidden,
+            hide_failed=bool(hidden),   # 审计 O-10：只有失败调用的 run 缺省也不列
         )
         has_more = len(results) > limit
         results = results[:limit]

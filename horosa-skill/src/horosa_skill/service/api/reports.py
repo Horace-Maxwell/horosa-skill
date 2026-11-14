@@ -175,6 +175,7 @@ class ReportsAPI:
                 run=run,
                 source_artifact=source_artifact,
                 language=self._report_language(request),
+                include_text=request.include_text,
             )
             template["trace_id"] = trace["trace_id"]
             template["group_id"] = trace["group_id"]
@@ -240,7 +241,7 @@ class ReportsAPI:
             )
         return resolved
 
-    def _output_request(self, requested: str | None, format_name: str) -> output_paths.OutputRequest:
+    def _output_request(self, requested: str | None, format_name: str, *, overwrite: bool = False) -> output_paths.OutputRequest:
         """`output_path` 的事前检查（没有副作用，起盘 / 写回之前就能做）：过输出根的闸，再看它是目录还是文件、扩展名和 format
         对不对得上、名字是否过长、所在位置写不写得进去。问题一律 `report.output_path_not_allowed` / `report.output_path_unusable`。"""
         text = "" if requested is None else f"{requested}".strip()
@@ -260,8 +261,9 @@ class ReportsAPI:
         output_paths.check_path_length(path, requested=text)
         output_paths.check_not_store_area(path, protected=protected, requested=text)
         output_paths.check_writable(path, requested=text)
-        output_paths.check_replaceable(path, may_replace=self._is_recorded_report, requested=text)
-        return output_paths.OutputRequest("file", path, adjustment, requested=text)
+        if overwrite:
+            output_paths.check_replaceable(path, may_replace=self._is_recorded_report, requested=text)
+        return output_paths.OutputRequest("file", path, adjustment, requested=text, overwrite=overwrite)
 
     def _store_areas(self) -> list[Path]:
         """报告不能写进去的存储区（output_path.check_not_store_area）：记忆库文件及其 -wal / -shm / -journal、trace、档案、
@@ -302,9 +304,18 @@ class ReportsAPI:
         """落盘路径（`count` 张图各一个文件）。调用方点名的文件：没有就原子地占住；已有的只替换报告自己写过的。缺省名 /
         目录里的缺省名：整组占住一个没人用的名字（同一秒内两次调用各得各的）。返回（路径, 占位文件）；占位文件由调用方在
         finally 里逐个 `output_paths.release`。"""
+        if request.kind == "file" and request.path is not None and not request.overwrite:
+            # 缺省不替换任何已有文件：占不到原名就另存「名字-2」（审计 overwrite 待决项；以前同名的报告被静默替换）。
+            reserved = output_paths.reserve_set(request.path, count)
+            if reserved[0] != output_paths.numbered(request.path, count)[0]:
+                request.outcome.update({"reason": "exists_kept", "requested": request.requested, "saved_as": str(reserved[0])})
+            return reserved, list(reserved)
         if request.kind == "file" and request.path is not None:
             targets = output_paths.numbered(request.path, count)
+            existing = [path for path in targets if path.is_file()]
             placeholders = output_paths.claim_exact(targets, may_replace=self._is_recorded_report, requested=request.requested)
+            if existing:
+                request.outcome.update({"replaced_existing": True, "replaced_sha256": {str(p): _sha256_file(p) for p in existing}})
             return targets, placeholders
         target = default if request.kind == "default" or request.path is None else request.path / default.name
         reserved = output_paths.reserve_set(target, count)
@@ -312,10 +323,22 @@ class ReportsAPI:
 
     @staticmethod
     def _output_adjustment_fields(request: output_paths.OutputRequest, path: Any) -> dict[str, Any]:
-        return {"output_path_adjustment": request.adjustment} if request.adjustment else {}
+        fields: dict[str, Any] = {}
+        if request.outcome.get("reason") == "exists_kept":
+            fields["output_path_adjustment"] = {**(request.adjustment or {}), **request.outcome}
+        elif request.adjustment:
+            fields["output_path_adjustment"] = request.adjustment
+        if request.outcome.get("replaced_existing"):
+            fields["replaced_existing"] = True
+            fields["replaced_sha256"] = request.outcome["replaced_sha256"]
+        return fields
 
     @staticmethod
     def _output_adjustment_notes(request: output_paths.OutputRequest, path: Any) -> list[str]:
+        if request.outcome.get("reason") == "exists_kept":
+            return [f"{request.requested} 已经存在，没有替换（缺省 overwrite=false）；报告另存为 {path}。要替换星阙之前写的同名报告请传 overwrite=true。"]
+        if request.outcome.get("replaced_existing"):
+            return [f"已替换此前星阙写的同名报告 {path}（overwrite=true；旧文件 sha256 见 replaced_sha256）。"]
         if not request.adjustment:
             return []
         if request.adjustment["reason"] == "directory":
@@ -363,7 +386,7 @@ class ReportsAPI:
                 run, source_artifact = self._load_report_source(request.run_id, request.tool_name)
                 run_loaded = True
                 self._check_ai_size(request.ai_report, request.ai_answer_text)
-                output_request = self._output_request(request.output_path, normalized_format)
+                output_request = self._output_request(request.output_path, normalized_format, overwrite=bool(getattr(request, "overwrite", False)))
                 if engine_only:
                     result = self._render_engine_only(request, run, source_artifact, normalized_format, trace, output_request)
                     trace["run_id"] = request.run_id
@@ -377,6 +400,10 @@ class ReportsAPI:
                 )
                 answer_text = self._report_ai_answer_text(normalized_ai_report) if normalized_ai_report else ""
                 stored_answer = self._run_has_report_ai(run)
+                if chart_style and stored_answer and not answer_text and request.include_answer is not True:
+                    # 排盘报告缺省只要盘（审计 O-29）：以前这条 run 写回过解读，排盘报告就把那份解读也印进去，调用方没法只要盘。
+                    run = {key: value for key, value in run.items() if key not in ("ai_answer_text", "ai_answer_structured")}
+                    stored_answer = False
                 if not chart_style and not normalized_ai_report and not stored_answer:
                     template = self.report_builder.build_template(
                         run=run,
@@ -527,7 +554,7 @@ class ReportsAPI:
                 normalized_format = self._normalize_report_format(request.format)
                 report_style = "analysis" if normalized_format in _ENGINE_ONLY_FORMATS else self._report_style(request)
                 self._check_ai_size(request.ai_report, request.ai_answer_text)
-                self._output_request(request.output_path, normalized_format)
+                self._output_request(request.output_path, normalized_format, overwrite=bool(getattr(request, "overwrite", False)))
             except ToolValidationError as exc:
                 trace["error_code"] = exc.code
                 raise
@@ -642,8 +669,6 @@ class ReportsAPI:
         group_id: str,
         cast_now: bool = False,
     ) -> dict[str, Any]:
-        ai_fillable = template.get("ai_fillable") if isinstance(template.get("ai_fillable"), dict) else {}
-        conversation_brief = template.get("conversation_brief") if isinstance(template.get("conversation_brief"), dict) else {}
         return {
             "ok": True,
             "mode": "analysis_required",
@@ -655,36 +680,22 @@ class ReportsAPI:
             "tool_name": tool_name,
             "tool_result": tool_result,
             "report_template": template,
+            # 审计 O-23：规则、骨架只在 report_template 里给一份（以前 ai_process 再抄一遍骨架与 conversation_brief）。
             "ai_process": {
                 "schema": "horosa.skill.report.ai_process.v1",
-                "input": "用户的时间、地点、事情和工具 payload 已保存到本地 run。",
-                "conversation_brief": conversation_brief,
                 "process": [
-                    "读取 conversation_brief，明确用户问题、盘面上下文、解盘方法和输出口吻。",
-                    "阅读 report_template.source_context.export_text（逐段段号见 source_export_sections）中的真实起盘结果。",
-                    "像在 AI 对话窗口里正式解盘一样，先给结论，再给盘面依据、推理过程、风险边界和建议。",
-                    "把完整正文写入 ai_report.answer_text，同时填写 direct_answer、executive_summary、analysis_sections、recommendations、limitations、evidence。",
-                    "最后调用 horosa_report_render 或 horosa_report_from_tool，并把 ai_report 一起传入，生成最终 JSON/DOCX/PDF 和 memory。",
+                    "按 report_template.ai_instructions 读 report_template.source_context.export_text（段号见 source_export_sections）。",
+                    "填 report_template.ai_fillable（answer_text 写完整正文；direct_answer / executive_summary / analysis_sections / "
+                    "recommendations / limitations / evidence）。",
+                    "调 next_call，把填好的对象作 ai_report 传入，生成最终报告。",
                 ],
-                "output": "最终报告必须来自 AI 对真实盘结果和用户问题的分析；未填写 ai_report 时不会生成假装完成的最终解读报告。",
-                "ai_report_skeleton": {
-                    "analysis_focus": ai_fillable.get("analysis_focus", ""),
-                    "answer_text": ai_fillable.get("answer_text", ""),
-                    "direct_answer": ai_fillable.get("direct_answer", ""),
-                    "executive_summary": ai_fillable.get("executive_summary", ""),
-                    "analysis_sections": ai_fillable.get("analysis_sections", []),
-                    "recommendations": ai_fillable.get("recommendations", []),
-                    "limitations": ai_fillable.get("limitations", []),
-                    "evidence": ai_fillable.get("evidence", []),
-                    "follow_up_questions": ai_fillable.get("follow_up_questions", []),
-                },
                 "next_call": {
                     "tool": "horosa_report_render",
                     "payload": {
                         "run_id": run_id,
                         "tool_name": tool_name,
                         "format": format_name,
-                        "ai_report": "<AI fills this object from ai_report_skeleton>",
+                        "ai_report": "<report_template.ai_fillable, filled in>",
                     },
                 },
             },
@@ -1059,7 +1070,7 @@ class ReportsAPI:
                     code="report.technique.invalid_format",
                     details={"format": request.format, "accepted": list(_TECHNIQUE_REPORT_FORMATS), "allowed": list(_TECHNIQUE_REPORT_FORMATS)},
                 )
-            output_request = self._output_request(request.output_path, normalized_format)
+            output_request = self._output_request(request.output_path, normalized_format, overwrite=bool(getattr(request, "overwrite", False)))
 
             scope = "group" if request.group_id else "run"
             cards, source_runs = self._collect_technique_cards(
@@ -1242,3 +1253,13 @@ class ReportsAPI:
                 },
             )
         return run, source
+
+
+def _sha256_file(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

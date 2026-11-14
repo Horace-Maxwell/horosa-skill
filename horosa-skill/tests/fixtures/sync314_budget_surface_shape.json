@@ -111,7 +111,8 @@
     "request": "object",
     "run_id": "string",
     "tool_name": "string",
-    "language": "string"
+    "language": "string",
+    "include_text": "boolean"
    }
   },
   "horosa_report_render": {
@@ -127,8 +128,10 @@
     "title": "string",
     "ai_report": "object",
     "ai_answer_text": "string",
+    "include_answer": "boolean",
     "include_raw_json": "boolean",
-    "output_path": "string"
+    "output_path": "string",
+    "overwrite": "boolean"
    }
   },
   "horosa_hecan": {
@@ -160,6 +163,7 @@
     "format": "string enum=[\"markdown\",\"json\",\"docx\",\"pdf\"]",
     "title": "string",
     "output_path": "string",
+    "overwrite": "boolean",
     "include_sections": "boolean"
    }
   },
@@ -178,7 +182,8 @@
     "ai_report": "object",
     "ai_answer_text": "string",
     "include_raw_json": "boolean",
-    "output_path": "string"
+    "output_path": "string",
+    "overwrite": "boolean"
    }
   },
   "horosa_export_registry": {
@@ -3004,7 +3009,8 @@
     "request": "object",
     "run_id": "string",
     "tool_name": "string",
-    "language": "string"
+    "language": "string",
+    "include_text": "boolean"
    }
   },
   "horosa_report_render": {
@@ -3020,8 +3026,10 @@
     "title": "string",
     "ai_report": "object",
     "ai_answer_text": "string",
+    "include_answer": "boolean",
     "include_raw_json": "boolean",
-    "output_path": "string"
+    "output_path": "string",
+    "overwrite": "boolean"
    }
   },
   "horosa_hecan": {
@@ -3053,6 +3061,7 @@
     "format": "string enum=[\"markdown\",\"json\",\"docx\",\"pdf\"]",
     "title": "string",
     "output_path": "string",
+    "overwrite": "boolean",
     "include_sections": "boolean"
    }
   },
@@ -3071,7 +3080,8 @@
     "ai_report": "object",
     "ai_answer_text": "string",
     "include_raw_json": "boolean",
-    "output_path": "string"
+    "output_path": "string",
+    "overwrite": "boolean"
    }
   },
   "horosa_tool_run": {

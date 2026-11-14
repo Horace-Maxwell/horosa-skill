@@ -245,7 +245,7 @@ def test_knowledge_search_facade_fuses_bundled_and_user_results_and_pages(tmp_pa
     result = service.knowledge_search({"query": "休门", "limit": 3})
     domains = {m["domain"] for m in result["matches"]}
     assert "user" in domains and domains - {"user"}  # 内置与自备同在一个排好序的列表里（RRF 融合）
-    assert result["next_offset"] == 3 and "how_to_read" in result
+    assert result["next_offset"] == 3 and "how_to_read" not in result   # 审计 O-22：有命中时全量面不带
     second = service.knowledge_search({"query": "休门", "limit": 3, "offset": 3})
     assert not {(m["domain"], m["key"]) for m in second["matches"]} & {(m["domain"], m["key"]) for m in result["matches"]}
     only_mine = service.knowledge_search({"query": "休门", "domain": "user"})

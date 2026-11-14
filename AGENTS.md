@@ -1570,9 +1570,9 @@ A global stability pass hardened these; keep them true when you touch the releva
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
     **pin 住的上游**（本机 Horosa-Public 常超前，引了 pin 上没有的文件会打包失败）。
     下结论「结果里没有某数据」前先 dump 一份真实结果（v0.44.0 把太乙误列进未做清单）。
-  - **报告骨架（v0.45.0，全部技法共用）**：封面基本信息 + 「关键设置」（技法卡里的结果敏感口径，人读规则同附录）→ 核心结论 / 总览摘要
-    （AI，STORM 式 lead）→ 完整盘面（盘图 + 导出段，标题前印段号 `E{n}`，n = 导出段序号，与报告模板 `cite_id` 同号）→ 「AI 解读」部分
-    （注明不是引擎输出；起盘依据 / 正文解读 / 建议 / 不确定处与限制）→ 附录。PDF 里 AI 文字的 `[E3]` 链到该段（只链报告里真有的段号，
+  - **报告骨架（v0.45.0，全部技法共用；v0.51.0-dev 审计 O-09 起解读在盘面之前）**：封面基本信息 + 「关键设置」（技法卡里的结果敏感口径，人读规则同附录）→ 核心结论 / 总览摘要
+    （AI，STORM 式 lead）→ 「AI 解读」部分（注明不是引擎输出、依据后附盘面；起盘依据 / 正文解读 / 建议 / 不确定处与限制）→ 完整盘面（盘图 + 导出段，
+    标题前印段号 `E{n}`，n = 导出段序号，与报告模板 `cite_id` 同号）→ 附录。以前解读排在盘面之后：星盘 35 页里解读从第 33 页开始。排盘报告（style=chart）不变。PDF 里 AI 文字的 `[E3]` 链到该段（只链报告里真有的段号，
     悬空目标 reportlab 会报错）；DOCX 盘图带替代文字（`docPr descr`）。守卫 `tests/test_report_structure.py`。
   - **带标签 PDF（v0.45.1，`reports/pdf_tagging.py`）**：结构树在 reportlab 里自写（pikepdf 新版要 macOS 14/15，不加）。新加任何会**画东西**的
     flowable / 表 / onPage 回调，必须进标签或标 Artifact：段落用渲染器的 `Paragraph`（按样式名定 H/P），表用 `Table`（= 版式表）或

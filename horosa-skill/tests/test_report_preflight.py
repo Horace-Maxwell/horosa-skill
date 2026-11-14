@@ -97,6 +97,19 @@ def test_the_result_says_which_answer_was_printed(tmp_path: Path) -> None:
     assert any("存档" in line for line in blank["summary"])
 
 
+def test_a_chart_report_leaves_the_stored_answer_out_unless_asked(tmp_path: Path) -> None:
+    """排盘报告缺省只要盘（审计 O-29）：以前写回过解读的 run，排盘报告封面写「并附 AI 解读」、answer_source=stored。
+    负向对照（实跑过）：reports.py 里那段过滤去掉 → 第一个断言红。"""
+    service = _service(tmp_path)
+    run_id = _run(service)
+    service.report_render({"run_id": run_id, "format": "json", "ai_answer_text": ANSWER})
+    chart = service.report_render({"run_id": run_id, "format": "json", "style": "chart"})
+    assert chart["answer_source"] is None
+    assert _stored_answer(service, run_id) == ANSWER        # 存档里的解读不动
+    asked = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "include_answer": True})
+    assert asked["answer_source"] == "stored"
+
+
 def test_the_document_built_before_the_writeback_equals_the_one_built_after(tmp_path: Path) -> None:
     """写回挪到落盘之后，文档是照「写回之后 run 会是什么样」排的：新答案整份替换旧答案，不是和旧的结构化字段合并。"""
     import json
@@ -390,9 +403,10 @@ def test_a_report_never_replaces_the_runs_own_stored_files(tmp_path: Path) -> No
     before = _stored_files(service, run_id)
     for path in before:
         for call in (
-            lambda: service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": str(path)}),
+            lambda: service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": str(path),
+                                           "overwrite": True}),
             lambda: service.report_from_tool({"tool_name": "chart", "payload": CHART, "format": "json", "style": "chart",
-                                              "output_path": str(path)}),
+                                              "output_path": str(path), "overwrite": True}),
         ):
             with pytest.raises(ToolValidationError) as caught:
                 call()
@@ -411,26 +425,27 @@ def test_an_existing_file_of_the_users_is_kept_but_a_report_can_be_rewritten(tmp
     mine.parent.mkdir(parents=True, exist_ok=True)
     mine.write_text('{"mine": true}', encoding="utf-8")
     with pytest.raises(ToolValidationError) as caught:
-        service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "我的笔记.json"})
+        service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "我的笔记.json", "overwrite": True})
     assert caught.value.details["reason"] == "existing_file" and mine.read_text(encoding="utf-8") == '{"mine": true}'
     assert "不替换" in str(caught.value) and "not replaced" in str(caught.value)
     # 报告自己写过的那份（记忆库里记着）照旧可以重写
     first = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "同一份.json"})
-    again = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "同一份.json"})
-    assert first["artifact_path"] == again["artifact_path"]
+    again = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "同一份.json", "overwrite": True})
+    assert first["artifact_path"] == again["artifact_path"] and again["replaced_existing"] is True
+    assert list(again["replaced_sha256"].values())[0] and "replaced_existing" not in first
     # ICS 同一条规则
     from horosa_skill.testing_payloads import build_sample_payloads
 
     (tmp_path / "runs" / "日历.ics").write_text("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", encoding="utf-8")
     fd = service.run_tool("firdaria", build_sample_payloads()["firdaria"], save_result=True).memory_ref.run_id
     with pytest.raises(ToolValidationError) as ics:
-        service.report_render({"run_id": fd, "format": "ics", "output_path": "日历.ics"})
+        service.report_render({"run_id": fd, "format": "ics", "output_path": "日历.ics", "overwrite": True})
     assert ics.value.details["reason"] == "existing_file"
     # 多张 PNG 的 _1 / _2 也一样：点名 x.png，已有一个不是报告的 x_2.png → 拒绝，一个文件都不写
     (tmp_path / "runs" / "x_2.png").write_bytes(b"not a report")
     sr = service.run_tool("solarreturn", build_sample_payloads()["solarreturn"], save_result=True).memory_ref.run_id
     with pytest.raises(ToolValidationError) as png:
-        service.report_render({"run_id": sr, "format": "png", "output_path": "x.png"})
+        service.report_render({"run_id": sr, "format": "png", "output_path": "x.png", "overwrite": True})
     from horosa_skill.reports.renderers import SIMPLIFIED, _drawing_font_files
 
     if _drawing_font_files(SIMPLIFIED) is None:  # 没有中文 TrueType（CI ubuntu）：PNG 先因字体被拒，同样一个文件都不写
@@ -439,6 +454,26 @@ def test_an_existing_file_of_the_users_is_kept_but_a_report_can_be_rewritten(tmp
         assert png.value.details["reason"] == "existing_file"
     assert not (tmp_path / "runs" / "x.png").exists() and not (tmp_path / "runs" / "x_1.png").exists()
     assert (tmp_path / "runs" / "x_2.png").read_bytes() == b"not a report"
+
+
+def test_by_default_an_existing_file_is_never_replaced(tmp_path: Path) -> None:
+    """缺省 overwrite=false（审计 overwrite 待决项）：点名的文件已经在——用户的、存档的、星阙自己写过的都一样——另存「名字-2」，
+    结果带 output_path_adjustment.reason=exists_kept。以前同名报告被静默替换、结果里看不出来（O-24）。
+    负向对照（实跑过）：_claim_output 的缺省分支去掉（回到 claim_exact）→ 第二次出报告的路径相同，红。"""
+    service = _service(tmp_path)
+    run_id = _run(service)
+    mine = tmp_path / "runs" / "我的笔记.json"
+    mine.parent.mkdir(parents=True, exist_ok=True)
+    mine.write_text('{"mine": true}', encoding="utf-8")
+    kept = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "我的笔记.json"})
+    assert kept["artifact_path"].endswith("我的笔记-2.json") and mine.read_text(encoding="utf-8") == '{"mine": true}'
+    assert kept["output_path_adjustment"]["reason"] == "exists_kept" and any("没有替换" in line for line in kept["summary"])
+    first = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "六爻报告.json"})
+    second = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": "六爻报告.json"})
+    assert first["artifact_path"] != second["artifact_path"] and second["artifact_path"].endswith("六爻报告-2.json")
+    for path in _stored_files(service, run_id):   # 存档与 manifest：报告另存，manifest 只是照常记下多了一份报告
+        out = service.report_render({"run_id": run_id, "format": "json", "style": "chart", "output_path": str(path)})
+        assert out["artifact_path"] != str(path) and out["output_path_adjustment"]["reason"] == "exists_kept"
 
 
 def test_the_memory_store_and_its_neighbours_are_never_a_report_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

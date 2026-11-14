@@ -37,11 +37,12 @@ def test_template_hands_the_ai_the_same_section_numbers_the_report_prints(tmp_pa
     template = service.report_template({"run_id": run.memory_ref.run_id, "tool_name": "chart"})
     cites = [s["cite_id"] for s in template["source_export_sections"]]
     assert cites == [f"E{i}" for i in range(1, len(cites) + 1)]
-    assert [s["cite_id"] for s in template["ai_fillable"]["analysis_sections"]] == cites
+    assert template["ai_fillable"]["analysis_sections"] == []    # 审计 O-23：只写用得上的段，不预填全部段
+    assert not any("全部" in line and "章节" in line for line in template["ai_instructions"])
     assert any("[E3]" in line for line in template["ai_instructions"])
 
 
-def test_analysis_pdf_is_data_first_with_clickable_section_citations(tmp_path: Path, monkeypatch) -> None:
+def test_analysis_pdf_is_conclusion_first_with_clickable_section_citations(tmp_path: Path, monkeypatch) -> None:
     service = _service(tmp_path)
     run = _chart_run(service)
     (first, first_title), (second, _) = _produced_cites(run)[:2]
@@ -49,16 +50,16 @@ def test_analysis_pdf_is_data_first_with_clickable_section_citations(tmp_path: P
     service.report_render({"run_id": run.memory_ref.run_id, "tool_name": "chart", "format": "pdf",
                            "ai_report": _ai_report(first, second)})
     texts = spy.texts()
-    # 目录里也有这些字：从「核心结论」卡（只在正文里）起逐个往后找，顺序必须是 结论摘要 → 盘面 → AI 分节解读 → 附录。
+    # 目录里也有这些字：从「核心结论」卡（只在正文里）起逐个往后找，顺序必须是 结论摘要 → AI 分节解读 → 盘面 → 附录（审计 O-09）。
     position = texts.index("核心结论")
-    for label in ("完整盘面", "AI 解读", "附录"):
+    for label in ("AI 解读", "完整盘面", "附录"):
         position = texts.index(label, position + 1)
     assert f"{first} · {first_title}" in texts and "不确定处与限制" in texts
     raw = [item.text for flowable in spy.story for item in _flat(flowable) if isinstance(getattr(item, "text", None), str)]
     assert any(f'<a name="{first}"/>' in text for text in raw)  # 盘面段标题是跳转目标
     assert any(f'<a href="#{first}"' in text for text in raw)  # 摘要里的 [E1] 链过去
     assert not any('href="#E999"' in text for text in raw) and any("[E999]" in text for text in raw)
-    note = next(t for t in texts if t.startswith("以下是 AI 依据上方盘面"))
+    note = next(t for t in texts if t.startswith("以下是 AI 依据后附盘面"))
     assert "不是排盘引擎的输出" in note
 
 
@@ -70,7 +71,7 @@ def test_the_cover_lists_the_result_changing_settings() -> None:
     assert "关键设置" not in chart_basis_section({}, {}, card={})["items"]
 
 
-def test_docx_numbers_sections_puts_ai_after_the_chart_and_gives_figures_alt_text(tmp_path: Path) -> None:
+def test_docx_numbers_sections_puts_ai_before_the_chart_and_gives_figures_alt_text(tmp_path: Path) -> None:
     service = _service(tmp_path)
     run = _chart_run(service)
     (first, first_title), (second, _) = _produced_cites(run)[:2]
@@ -79,7 +80,8 @@ def test_docx_numbers_sections_puts_ai_after_the_chart_and_gives_figures_alt_tex
     xml = zipfile.ZipFile(rendered["artifact_path"]).read("word/document.xml").decode("utf-8")
     text = re.sub(r"<[^>]+>", "", xml)
     assert f"{first} · {first_title}" in text
-    assert text.index("核心结论") < text.index("完整盘面") < text.index("AI 解读") < text.index("附录")
+    body = text[text.index("核心结论"):]
+    assert body.index("AI 解读") < body.index("完整盘面") < body.index("附录")
     pictures = re.findall(r'<wp:docPr [^>]*>', xml)
     if pictures:  # 本机没有可用于画位图的字体时 DOCX 只放文字说明（见 _drawing_font_files）
         assert all(re.search(r'descr="[^"]+"', tag) for tag in pictures)

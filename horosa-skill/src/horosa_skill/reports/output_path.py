@@ -9,8 +9,10 @@
 - 缺省文件名只精确到秒 → 同一秒内对同一条 run 出两份（排盘版 + 解读版，或并发）后写的盖掉先写的。
 
 还有一件是丢数据（v0.50.0 评审 C-05）：输出根就是存档目录 `<data>/runs`，点名一个已有文件就原样替换——run 自己的存档、
-manifest 都能被一份报告盖掉，之后这条 run 再也出不了报告。现在只替换「报告写出来、记在记忆库里」的文件；记忆库、trace、
-档案、自备知识库、runtime 这些存储区一律不写。要不要加一个显式的覆盖开关，留给维护者定（见 docs/LESSONS.md）。
+manifest 都能被一份报告盖掉，之后这条 run 再也出不了报告。记忆库、trace、档案、自备知识库、runtime 这些存储区一律不写。
+v0.51.0-dev（审计 overwrite 待决项）：缺省 `overwrite=false`——点名的文件已经在，不管是谁写的都不替换，另存 `名字-2.pdf`
+（结果带 `output_path_adjustment.reason = "exists_kept"`）；`overwrite=true` 才替换，且只替换「报告写出来、记在记忆库里」的文件
+（结果带 `replaced_existing` 与旧文件 sha256），用户自己的文件照旧 `existing_file` 拒绝。
 
 这里的检查都没有副作用（不建目录、不写文件），所以能放在「起盘 / 写回 AI 解读」之前；`reserve` / `claim_exact` 才真的占名字。
 """
@@ -19,7 +21,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +75,10 @@ class OutputRequest:
     path: Path | None = None
     adjustment: dict[str, Any] | None = None
     requested: str = ""
+    overwrite: bool = False
+    # 占名时才知道的结果（审计 overwrite 待决项）：{"reason": "exists_kept", "requested", "saved_as"} 或
+    # {"replaced_existing": True, "replaced_sha256"}。frozen 只冻字段，dict 由 _claim_output 填。
+    outcome: dict[str, Any] = field(default_factory=dict)
 
 
 def unusable(reason: str, zh: str, en: str, **details: Any) -> ToolValidationError:

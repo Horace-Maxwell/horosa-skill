@@ -158,6 +158,7 @@ When the text is cut, `warnings` contains the exact follow-up call. **Make it be
 horosa_memory_show {"run_id": "<run_id>", "response_tool": "bazi_birth", "response_sections": ["大运"]}
 ```
 
+The continuation returns only the text: `result.export_snapshot.export_text` (plus `result.tool`, `result.run_id`).
 `response_sections` takes section titles or index numbers (`["9"]`). `response_view` changes the shape (same call or `horosa_memory_show`): `"sections"` (text per section),
 `"titles"` (index only, ~4 KB), `"full"` (the raw engine tree, often 100–300 KB+; only when you need a raw
 field). Never conclude from `titles` alone.

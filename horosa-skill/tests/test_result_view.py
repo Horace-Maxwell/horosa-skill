@@ -141,11 +141,14 @@ def test_memory_show_reading_view_pages_the_stored_envelope() -> None:
         {"kind": "tool_result", "tool_name": "bazi_birth", "payload": stored},
         {"kind": "dispatch_result", "tool_name": "horosa_dispatch", "payload": {"results": {"bazi_birth": stored}}},
     ]}, "warnings": []}
-    out = shape_result(raw, ViewRequest(view=READING, sections=(2,), tool="bazi_birth"), SMALL)
+    out = shape_result(raw, ViewRequest(view=READING, tool="bazi_birth"), SMALL)
     manifest, tool_result, dispatch = out["result"]["artifacts"]
     assert "payload" not in manifest
-    assert readable_text(tool_result["payload"]) == "[四柱]\n甲子"
+    assert readable_text(tool_result["payload"]) == "[起盘信息]\n日期\n\n[四柱]\n甲子"
     assert dispatch["payload"]["results"]["bazi_birth"]["ok"] is True and "data" not in dispatch["payload"]["results"]["bazi_birth"]
+    # 续读（点了段）只回正文（审计 O-11）
+    cont = shape_result(raw, ViewRequest(view=READING, sections=(2,), tool="bazi_birth"), SMALL)["result"]
+    assert cont["continuation"] is True and cont["tool"] == "bazi_birth" and cont["export_snapshot"]["export_text"] == "[四柱]\n甲子"
     missing = shape_result(raw, ViewRequest(view=READING, tool="qimen"), SMALL)
     assert any("qimen" in w for w in missing["warnings"])
 

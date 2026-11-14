@@ -51,7 +51,7 @@ def merge_ai_report(
         default_sections=default_report.get("analysis_sections") if isinstance(default_report.get("analysis_sections"), list) else [],
         export_sections=export_sections,
     )
-    # 人读版（PDF / DOCX）只印调用方自己写的：页面写着「以下是 AI 依据上方盘面所作的解读」，机器回填不能站在这个标题下。
+    # 人读版（PDF / DOCX）只印调用方自己写的：页面写着「以下是 AI 依据后附盘面所作的解读」，机器回填不能站在这个标题下。
     # 机器版 JSON 留着回填，它要覆盖全部章节。此前只有「调用方写了 answer_text」这一条路清空，其余路径把回填印了出来。
     def caller_list(key: str) -> list[Any]:
         value = base.get(key)

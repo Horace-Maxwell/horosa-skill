@@ -281,19 +281,19 @@ def test_the_read_hint_names_a_tool_this_surface_really_exposes(tmp_path: Path, 
         async with Client(mcp) as client:
             names = {tool.name for tool in (await client.list_tools()).tools}
             found = json.loads((await client.call_tool("horosa_knowledge_search", {"query": "七杀", "domain": "user"})).content[0].text)
-            hint_tool = re.search(r"horosa_\w+", found["how_to_read"]).group(0)
+            # 全量面不再每次带 how_to_read（审计 O-22，工具说明里写着）；精简面照带，指向 horosa_tool_run。
+            hint_tool = re.search(r"horosa_\w+", found["how_to_read"]).group(0) if compact else "horosa_knowledge_read"
             read = found["matches"][0]["read"]
             arguments = read if hint_tool == "horosa_knowledge_read" else {"tool_name": "knowledge_read", "request": read}
             body = json.loads((await client.call_tool(hint_tool, arguments)).content[0].text)
             return names, found, body
 
     names, found, body = asyncio.run(run())
-    chinese, english = found["how_to_read"].split(" / ", 1)
-    for half in (chinese, english):
+    assert ("how_to_read" in found) is compact
+    for half in found["how_to_read"].split(" / ", 1) if compact else ():
         first = re.search(r"horosa_\w+", half).group(0)
         assert first in names, f"{first} 不在这个工具面上"
-        if compact:
-            assert set(re.findall(r"horosa_\w+", half)) <= names
+        assert set(re.findall(r"horosa_\w+", half)) <= names
     assert ("horosa_knowledge_read" in names) is (not compact)
     assert body["ok"] is True and "月令透七杀" in json.dumps(body, ensure_ascii=False)  # 照着提示调，真的读到了
 

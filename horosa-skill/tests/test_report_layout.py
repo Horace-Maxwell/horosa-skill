@@ -30,17 +30,19 @@ def _kinds(blocks: list[Block]) -> list[str]:
     return [f"{b.kind}:{b.role}" if b.role else b.kind for b in blocks]
 
 
-def test_the_reading_order_is_data_first() -> None:
-    """结论摘要 → 完整盘面（盘图在最前）→ AI 解读 → 附录（AGENTS 9.3.1 的报告骨架）。"""
+def test_the_reading_order_is_conclusion_first() -> None:
+    """结论摘要 → AI 解读 → 完整盘面（盘图在最前）→ 附录（AGENTS 9.3.1 的报告骨架；审计 O-09 起解读在盘面之前）。"""
     blocks = body_blocks(_doc(ai_report=AI, figures=[{"kind": "wheel"}]))
     order = [b.text or b.kind for b in blocks if b.kind in {"card", "part", "figures", "section"}]
-    assert order == ["核心结论", "完整盘面", "figures", "起盘信息", "AI 解读", "起盘依据", "解盘步骤", "建议", "附录", "技法依据"]
+    assert order == ["核心结论", "AI 解读", "起盘依据", "解盘步骤", "建议", "完整盘面", "figures", "起盘信息", "附录", "技法依据"]
 
 
-def test_the_ai_reading_closes_the_document_when_there_is_no_appendix() -> None:
+def test_the_ai_reading_precedes_the_chart_when_there_is_no_appendix() -> None:
     document = _doc(ai_report=AI)
     document["sections"] = document["sections"][:2]
-    assert body_blocks(document)[-1] == Block("body", body="- 限制甲")
+    blocks = body_blocks(document)
+    limits = blocks.index(Block("body", body="- 限制甲"))
+    assert limits < next(n for n, b in enumerate(blocks) if b.kind == "part" and b.role == "chart")
 
 
 def test_nothing_of_the_ai_is_printed_when_show_ai_is_false() -> None:

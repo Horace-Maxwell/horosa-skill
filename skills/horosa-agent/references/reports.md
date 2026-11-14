@@ -55,7 +55,10 @@ horosa_report_render {"run_id": "<run_id>", "tool_name": "bazi_birth", "format":
 ```
 
 1. Call the calculation tool.
-2. Call `horosa_report_template` with the `run_id` and `tool_name`.
+2. Call `horosa_report_template` with the `run_id` and `tool_name`. It is a skeleton: six rules (`ai_instructions`), the section
+   list (`source_export_sections`: `cite_id` / `title` / `chars`) and `ai_fillable`. It does not repeat the chart text you already
+   read; if you no longer have it, make the `source_context.text_with` call (or pass `include_text: true`). Explain only the
+   sections the question needs.
 3. Fill the AI analysis fields **from the actual exported sections**: `answer_text`, `direct_answer`,
    `executive_summary`, `analysis_sections`, `evidence`, `recommendations`, `limitations`.
 4. Passing `ai_report` to `report_render`/`report_from_tool` auto-writes the answer back to the run —
@@ -151,11 +154,16 @@ uv run horosa-skill report from-tool liureng_gods \
 三个报告工具的 `output_path` 只许落在报告输出目录（`HOROSA_SKILL_OUTPUT_DIR`，缺省 `<数据目录>/runs`）内：省略 = 存储层缺省产物路径；
 相对路径按输出目录解析；绝对路径必须在输出目录或 `HOROSA_REPORT_OUTPUT_ROOTS`（`os.pathsep` 分隔的白名单根，由用户在环境里配）之内，
 否则 `report.output_path_not_allowed`（`details.allowed_roots` 列出可写根，不写任何文件）。这三个工具的 MCP annotations 标 `destructiveHint=true`
-（同名的、星阙自己写过的报告会被替换），客户端可能要求确认。
+（`overwrite:true` 时会替换星阙自己写过的同名报告），客户端可能要求确认。
+
+v0.51.0 起点名的文件已在时**缺省不替换**（`overwrite:false`）：不管是谁写的，都另存 `名字-2.pdf`，结果
+`output_path_adjustment.reason = "exists_kept"`（带 `requested` / `saved_as`）。用户明说「覆盖原来那份」才传 `overwrite:true`：
+只替换星阙写过的报告，结果带 `replaced_existing: true` 与旧文件 `replaced_sha256`；用户自己的文件、存档、manifest 仍回 `existing_file`。
+排盘报告（`style:"chart"`）缺省不附这条记录已存的解读；要附传 `include_answer:true`。
 
 v0.50.0 起 `output_path` 在起盘、写回解读**之前**整体检查（`report_from_tool` 被拒时不起盘、不存档）：给目录 → 缺省文件名写在里面；
 没写扩展名 → 补上，结果 `output_path_adjustment` 写明；下面这些回 `report.output_path_unusable`，`details.reason` 说是哪一种、什么都没写：
-`existing_file`（点名的文件已在、又不是星阙写过的报告——这条 run 的存档 / manifest、用户自己的文件一律不替换；要不要加覆盖开关待维护者定）、
+`existing_file`（只在 `overwrite:true` 时：点名的文件已在、又不是星阙写过的报告——这条 run 的存档 / manifest、用户自己的文件一律不替换）、
 `store_area`（记忆库、trace、档案、自备知识库、runtime 目录）、`extension_mismatch`（`.docx` 配 `format:"pdf"` 这类）、`name_too_long`、
 `path_refused_by_system`、`parent_not_directory`、`not_writable`、`no_free_name`；写盘时才暴露的问题是 `write_failed`。
 缺省文件名带样式（`_chart_report_` / `_analysis_report_`），同一秒内的调用各得各的名字（`-2`、`-3`）。不认识的 `format` 回 `report.format_unsupported`（`details.accepted` 列出可选值）。

@@ -650,6 +650,20 @@ SECTIONS_NOT_PRODUCED_BY_DESIGN: dict[str, dict[str, str]] = {
     } for tool in ("gua_desc", "gua_meiyi")},
 }
 
+# 阅读视图超预算时先放的段（审计 O-07）：以前按文档顺序贪心放，星盘族一段 2 万字的「相位」整段给，后面的「行星」「古典格局」
+# 「寿命格局」整段不给。只决定「一次给哪些」，输出仍按文档顺序；不在表里的段按文档顺序排在表内段之后。没进表的技法只受单段封顶约束。
+_CHART_READING_PRIORITY = ("起盘信息", "宫位宫头", "星与虚点", "行星", "古典格局", "寿命格局", "信息")
+READING_PRIORITY: dict[str, tuple[str, ...]] = {
+    **{key: _CHART_READING_PRIORITY for key in (
+        "astrochart", "astrochart_like", "hellenastro", "dwadasamsa", "draconic", "harmonic", "relocation", "transformchart",
+        "chart13", "germany")},
+    "sanshiunited": ("起盘信息", "概览", "占断向导", "奇门遁甲", "大六壬", "太乙", "课体结构", "奇门用神分论"),
+    "cetian": ("起盘", "农历与命身", "格局", "运限", "断诀"),
+    "mundane": ("起盘信息", "年盘概要", "世运问判", "盘型格局", "四季入境盘", "宫位宫头", "星与虚点", "行星"),
+    "relative": ("关系起盘信息", "八重合", "关系量化", "顺畅连接", "张力连接", "A对B相位", "B对A相位"),
+    "indiachart": ("星盘信息", "起盘信息", "行星", "大运Dasha", "瑜伽格局 Yogas", "Panchanga 五要素", "星曜状态"),
+}
+
 AI_EXPORT_OPTIONAL_SECTIONS = {
     # 月宿 (星阙 v2.6.4 西洋月宿)：仅恒星黄道(zodiacal=1)盘的 perchart 响应带 nakshatras，
     # 回归黄道盘不产出 → 列为可选段，避免 tropical 盘误报 missing。

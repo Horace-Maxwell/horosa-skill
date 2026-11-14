@@ -48,11 +48,15 @@ def test_read_only_annotation_matches_what_the_tool_does(tmp_path) -> None:
 
 
 def test_memory_query_does_not_list_lookup_runs_by_default(tmp_path) -> None:
-    _, service = _service(tmp_path)
+    from test_result_view_catalogue import offline_service
+
+    from horosa_skill.testing_payloads import build_sample_payloads
+
+    service = offline_service(tmp_path)
     service.run_tool("knowledge_registry", {}, save_result=True)
-    # 一条起盘类 run（离线时引擎不可达，失败信封照样存档——够当「带盘的记录」用）
-    chart = service.run_tool("xiaoliuren", {"date": "2026-11-13", "time": "10:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
-                                            "defaults_accepted": True}, save_result=True)
+    # 一条起盘成功的 run（假引擎）。审计 O-10 起只有失败调用的 run 缺省也不列，所以不能再拿离线失败信封充数。
+    chart = service.run_tool("sixyao", build_sample_payloads()["sixyao"], save_result=True)
+    assert chart.ok
     listed = service.query_memory({"limit": 8})
     assert [row["run_id"] for row in listed["results"]] == [chart.memory_ref.run_id]
     assert "hidden_lookups" in listed["applied_filters"]

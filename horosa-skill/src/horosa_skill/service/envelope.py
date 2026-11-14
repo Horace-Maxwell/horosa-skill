@@ -296,7 +296,11 @@ def export_headline(data: dict[str, Any], *, limit: int = 96) -> str | None:
     text = "；".join(facts)
     if len(text) > limit:
         text = text[:limit] + "…"
-    return f"已生成{label}（{len(sections)} 段）" + (f"：{text}" if text else "。")
+    # 段数与段索引对得上（审计 O-26：标题写 18 段、索引与告警写 20 段——差的是「未返回」占位段）。
+    holders = sum(1 for row in snapshot.get("sections") or [] if isinstance(row, dict)
+                  and str(row.get("body") or "").startswith(_PLACEHOLDER_PREFIX))
+    count = f"{len(sections)} 段" + (f"，另 {holders} 段未返回" if holders else "")
+    return f"已生成{label}（{count}）" + (f"：{text}" if text else "。")
 
 
 def _extract_entities(input_normalized: dict[str, Any], query_text: str | None = None) -> list[dict[str, Any]]:

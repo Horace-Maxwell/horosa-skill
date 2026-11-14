@@ -79,6 +79,7 @@ class TechniqueReportInput(FlexibleModel):
     format: str = "markdown"
     title: str | None = None
     output_path: str | None = Field(default=None, description="须在报告输出目录内（相对路径按它解析）")
+    overwrite: bool = Field(default=False, description="同名文件已在时：false=另存「名字-2」（缺省）；true=替换星阙写过的同名报告")
     # 是否把每个技法的产出段目录写进报告（默认写；关掉可得到极短的一页）。
     include_sections: bool | None = True
 
@@ -319,6 +320,7 @@ class ReportTemplateInput(FlexibleModel):
     run_id: str
     tool_name: str | None = None
     language: str | None = None
+    include_text: bool = Field(default=False, description="附上盘面全文（缺省只给取全文的调用）")
 
 
 class ReportRenderInput(FlexibleModel):
@@ -334,8 +336,10 @@ class ReportRenderInput(FlexibleModel):
     title: str | None = None
     ai_report: dict[str, Any] = Field(default_factory=dict)
     ai_answer_text: str | None = None
+    include_answer: bool | None = Field(default=None, description="chart 样式是否附上这条记录已存的解读（缺省不附）")
     include_raw_json: bool = False
     output_path: str | None = Field(default=None, description="须在报告输出目录内（相对路径按它解析）")
+    overwrite: bool = Field(default=False, description="同名文件已在时：false=另存「名字-2」（缺省）；true=替换星阙写过的同名报告")
 
 
 class ReportFromToolInput(FlexibleModel):
@@ -354,3 +358,4 @@ class ReportFromToolInput(FlexibleModel):
     ai_answer_text: str | None = None
     include_raw_json: bool = False
     output_path: str | None = Field(default=None, description="须在报告输出目录内（相对路径按它解析）")
+    overwrite: bool = Field(default=False, description="同名文件已在时：false=另存「名字-2」（缺省）；true=替换星阙写过的同名报告")

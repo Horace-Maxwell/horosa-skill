@@ -956,9 +956,16 @@ class MemoryStore:
         after: str | None,
         before: str | None,
         hide_only: frozenset[str] | None = None,
+        hide_failed: bool = False,
     ) -> tuple[list[str], list[Any]]:
         sql: list[str] = []
         params: list[Any] = []
+        if hide_failed:
+            # 只有失败调用的 run 不列（审计 O-10：export_parse / knowledge_read 失败也各落一个 run，排在检索最前）。
+            sql.append(
+                "AND (NOT EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = runs.id)"
+                " OR EXISTS (SELECT 1 FROM tool_calls t WHERE t.run_id = runs.id AND t.ok = 1))"
+            )
         if hide_only:
             # 只调用过这些工具的 run 不列（查资料类的旧记录，审计 S-14）；没有 tool_calls 行的 run（门面记录）照列。
             marks = ",".join("?" for _ in hide_only)
@@ -1034,6 +1041,7 @@ class MemoryStore:
         include_history: bool = False,
         scan_report: dict[str, Any] | None = None,
         hide_only: frozenset[str] | None = None,
+        hide_failed: bool = False,
     ) -> list[dict[str, Any]]:
         """按条件取 run，新的在前（`created_at`、同秒按写入顺序），顺序只由这两样定：翻页不重不漏。
 
@@ -1043,6 +1051,7 @@ class MemoryStore:
         filters, params = self._run_filters(
             run_id=run_id, group_id=group_id, tool=tool, entity=entity, artifact_kind=artifact_kind, after=after, before=before,
             hide_only=hide_only,
+            hide_failed=hide_failed,
         )
         terms = _search.query_terms(text)
         if scan_report is not None:

@@ -354,8 +354,24 @@ class ToolsAPI:
             raise ToolValidationError(bilingual("知识检索的参数不对。", "Invalid payload for knowledge search."),
                                       code="knowledge.search.invalid_payload", details={"errors": exc.errors()}) from exc
         result = self._search_knowledge(request.model_dump())
-        result["how_to_read"] = self._how_to_read(bool(result.get("matches")))
+        # 审计 O-22：固定文字只在有用时带——全量面的工具说明已写怎么精读，只有精简面（没有 horosa_knowledge_read）与零命中才给提示；
+        # 「有 N 个文件没读入」一个进程只说一次全文，之后一句计数。
+        if self.settings.mcp_compact or not result.get("matches"):
+            result["how_to_read"] = self._how_to_read(bool(result.get("matches")))
+        if result.get("warnings"):
+            result["warnings"] = [self._not_indexed_once(line) for line in result["warnings"]]
         return result
+
+    def _not_indexed_once(self, line: Any) -> Any:
+        match = re.match(r"知识库文件夹里有 (\d+) 个文件没有读入", str(line))
+        if not match:
+            return line
+        if not getattr(self, "_not_indexed_told", False):
+            self._not_indexed_told = True
+            return line
+        count = match.group(1)
+        return bilingual(f"知识库里仍有 {count} 个文件没读入（原因与办法见 horosa_knowledge_registry）。",
+                         f"{count} file(s) in the knowledge folder are still not read (see horosa_knowledge_registry).")
 
     def _how_to_read(self, found: bool) -> str:
         """怎么精读一条命中：点名的工具必须是这个进程真的暴露出去的那个。
@@ -386,7 +402,7 @@ class ToolsAPI:
     def _local_export_parse(self, payload: dict[str, Any]) -> dict[str, Any]:
         technique = _export_technique_key(payload.get("technique"))
         try:
-            return parse_export_content(
+            parsed = parse_export_content(
                 technique=technique,
                 content=payload["content"],
                 selected_sections=payload.get("selected_sections"),
@@ -408,6 +424,11 @@ class ToolsAPI:
                 details={"tool_name": "export_parse", "technique": payload.get("technique"),
                          "candidates": [{"key": i["key"], "label": i["label"]} for i in close]},
             ) from exc
+        # 每段正文以前给两遍：body + content（= "[段名]\nbody"），外加整篇 export_text（审计 O-28）。对外只留 body。
+        if isinstance(parsed, dict) and isinstance(parsed.get("sections"), list):
+            parsed = {**parsed, "sections": [{k: v for k, v in row.items() if k != "content"} if isinstance(row, dict) else row
+                                             for row in parsed["sections"]]}
+        return parsed
 
     def _local_knowledge_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
         domain, _notes = knowledge_search.resolve_domain(payload.get("domain"))
