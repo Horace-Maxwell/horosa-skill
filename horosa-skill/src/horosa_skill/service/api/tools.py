@@ -101,6 +101,26 @@ def _key_paths(payload: Any) -> frozenset[str]:
     return frozenset(paths)
 
 
+def _disclose_clock_target(tool_name: str, payload: dict[str, Any]) -> None:
+    """推运直调没给目标：照上游缺省按时钟取（此刻 / 今天 / 今年生日…），但**写明**（审计 F16）。以前 warnings 为空，
+    服务端托管在别处时「服务端的今天」未必是用户的今天，模型也不知道这张盘的目标是怎么来的。dispatch 路径另有要求（没给 context.date 就拦）。"""
+    from horosa_skill.engine import time_roles
+    from horosa_skill.service import _clock
+
+    if _INSIDE_TECHNIQUE.get() or time_roles.time_role(tool_name) != time_roles.NATAL_TARGET:
+        return
+    fields = time_roles.target_fields(tool_name)
+    if not fields or not is_blank(payload.get(fields[0])):
+        return
+    today = _clock.now().strftime("%Y-%m-%d")
+    F.add_input_note(
+        f"没给推运目标（`{fields[0]}`）：按本服务的时钟取上游缺省（今天是 {today}；返照取当年生日、推运取今天 / 此刻）。"
+        f"用户问的是别的年份或日期，或服务不在用户这台机器上，请显式传 `{fields[0]}`。",
+        f"No target given (`{fields[0]}`): the upstream default was taken from this service's clock (today is {today}; returns use this "
+        f"year's birthday, progressions today / now). If the user meant another year or date, or the service runs elsewhere, pass `{fields[0]}`.",
+    )
+
+
 def _require_result_facts(tool_name: str, payload: dict[str, Any], raw_payload: dict[str, Any] | None = None) -> None:
     # 时地：入参模型里不必填、这次起盘却要的字段（占时起课的 date/time/zone/lat/lon、读时区的神数与本地八字链的 zone）。
     # 以前缺 zone 时 /nongli/time 收到 null → HTTP 500 / KeyError，或后端悄悄按 +08:00 算（v0.50.0 深审余项）。
@@ -108,6 +128,7 @@ def _require_result_facts(tool_name: str, payload: dict[str, Any], raw_payload: 
     missing = [key for key in place_fields_required(tool_name, payload) if is_blank(payload.get(key)) and is_blank(legacy.get(key))]
     if missing:
         raise missing_fields_error(missing, tool_name=tool_name, payload={**(raw_payload or {}), **payload})
+    _disclose_clock_target(tool_name, payload)
     target = payload.get("datetime")
     if isinstance(target, str) and len(target) == 4 and target.isdigit() and tool_name not in _PERIOD_PREDICTIVE_TOOLS:
         # 只给年份的目标时刻只对「有那一年含义」的技法成立（返照 / 流年 / 小限 / 太阳弧，见 enrich._apply_yearly_target）。
