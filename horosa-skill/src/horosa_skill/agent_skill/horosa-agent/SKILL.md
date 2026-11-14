@@ -53,7 +53,8 @@ horosa_agent_guidance {"intent": "明天适合搬家吗"}
 ```
 
 - `horosa_agent_guidance {"tool_name": "<key>"}` gives one technique's full contract: `ask_if_missing`,
-  `safe_defaults`, `options_keys` (long option lists), and `input_contract.example_payload` (a live-tested call).
+  `safe_defaults`, `options_keys` (long option lists), and `input_contract.example_payload` (a live-tested call shape;
+  it deliberately has no confirmation flag — add one only after the user answers).
 - One request that may need several techniques, or you want the server to pick → `horosa_dispatch` (§7).
 - The user wants two techniques compared on one question → `horosa_hecan` (§7).
 

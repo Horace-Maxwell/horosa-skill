@@ -234,10 +234,52 @@ def _model_field_contract(tool_name: str) -> dict[str, Any]:
 # 「invalid_payload → 问用户」。testing_payloads 的样例每个都经 live 实例跑通（section_harness / 全面自检），
 # 这里把它们作为示例下发：去掉可由 lat/lon 推导的 gpsLat/gpsLon、把自测说明换成「用户已确认」的写法。
 EXAMPLE_NOTE = (
-    "Shape example from a live-verified run: replace every value with the user's own confirmed data. "
-    "agent_confirmed_settings is valid only after the user answered (defaults_accepted only after they accepted defaults). "
-    "示例取自 live 跑通的载荷：值全部换成用户确认过的数据；agent_confirmed_settings 只能在用户真回答后才带。"
+    "Shape example from a live-verified run: replace every value with the user's own data. It deliberately carries no "
+    "confirmation flag — add agent_confirmed_settings only after the user answered the gate (defaults_accepted only after they "
+    "accepted defaults). 示例取自 live 跑通的载荷：值全部换成用户自己的数据；示例故意不带确认位——用户真回答了闸门的问题才加 "
+    "agent_confirmed_settings（接受默认才加 defaults_accepted）。"
 )
+# 对外示例不带确认位、只留该技法读的键、用 place（审计 S-09）：以前 114 个里 106 个带 `agent_confirmed_settings: true` 和一句编好的
+# 「User confirmed…」，弱模型照抄就自我确认过闸；还带测试夹具值（name: Horosa Smoke）和塔罗 / 择日用不上的八个西占键。
+# live 测试样例（testing_payloads）照旧带确认位：section_harness / 面审计自己用它。
+_CONFIRMATION_KEYS = frozenset({"agent_confirmed_settings", "defaults_accepted", "clarification_notes"})
+_PUBLIC_EXTRA_KEYS = frozenset({"place", "question", "profile"})
+_WESTERN_DOMAINS = frozenset({"astro", "predict", "chart"})
+# 西占出盘口径键（BirthInput 继承来的）：中式 / 神数技法声明了却不读，示例里只会误导。hsys 不在此列（择日扫描转发它）。
+_WESTERN_DISPLAY_KEYS = ("simpleAsp", "strongRecption", "virtualPointReceiveAsp", "southchart", "tradition", "predictive", "zodiacal")
+_SAMPLE_PLACES = {("31n13", "121e28"): "上海", ("41s17", "174e46"): "惠灵顿", ("47n36", "122w20"): "西雅图"}
+
+
+def _public_party(person: dict[str, Any], fields: set[str] | None) -> dict[str, Any]:
+    out = {key: value for key, value in person.items()
+           if key not in _CONFIRMATION_KEYS and (fields is None or key in fields or key in _PUBLIC_EXTRA_KEYS)}
+    if out.get("name") == "Horosa Smoke":
+        out.pop("name")
+    place = _SAMPLE_PLACES.get((str(out.get("lat")), str(out.get("lon"))))
+    # 没有日期的技法（节气年盘只给年份）地名换不出当日时区：照留坐标与 zone。
+    if place and out.get("date") and (fields is None or {"lat", "lon", "zone"} <= fields):
+        for key in ("lat", "lon", "zone", "pos"):
+            out.pop(key, None)
+        out["place"] = place
+    return out
+
+
+def public_example(tool_name: str, example: dict[str, Any]) -> dict[str, Any]:
+    """live 样例 → 对外示例：去确认位与夹具值、去该技法不读的键与等于缺省值的设置键（塔罗 / 择日样例里八个西占键）、
+    已知样例坐标换成 place（地名连当日时区一起解析）；合盘两人同样处理。"""
+    model_fields = TOOL_DEFINITIONS[tool_name].input_model.model_fields
+    out = _public_party(example, set(model_fields))
+    for key in [k for k in out if k in model_fields and k not in ("date", "time", "gender", "question")]:
+        default = model_fields[key].default
+        if not model_fields[key].is_required() and out[key] == default and default is not None:
+            out.pop(key)
+    if TOOL_DEFINITIONS[tool_name].domain not in _WESTERN_DOMAINS:
+        for key in _WESTERN_DISPLAY_KEYS:
+            out.pop(key, None)
+    for slot in ("inner", "outer"):
+        if isinstance(out.get(slot), dict):
+            out[slot] = _public_party(out[slot], None)
+    return out
 _EXAMPLE_DERIVED_KEYS = frozenset({"gpsLat", "gpsLon"})
 _EXAMPLE_NOTES_TEXT = "User confirmed the birth/event data and the settings shown in this payload."
 _VERIFIED_EXAMPLES: dict[str, dict[str, Any]] | None = None
@@ -315,13 +357,13 @@ def build_tool_input_contract(tool_name: str) -> dict[str, Any]:
         contract["required_for_real_call"] = predictive["required_fields"]
         contract["target_fields"] = predictive["target_fields"]
         contract["output_contract"] = predictive["output_contract"]
-        contract["example_payload"] = predictive["example_payload"]
+        contract["example_payload"] = public_example(tool_name, predictive["example_payload"])
     elif policy:
         contract["required_for_real_call"] = contract["technical"]["technical_required_fields"]
     if not contract["example_payload"]:
         verified = verified_example_payload(tool_name)
         if verified is not None:
-            contract["example_payload"] = verified
+            contract["example_payload"] = public_example(tool_name, verified)
             contract["example_source"] = "live_verified_sample"
     if contract["example_payload"] or contract.get("example_source"):
         contract["example_note"] = EXAMPLE_NOTE

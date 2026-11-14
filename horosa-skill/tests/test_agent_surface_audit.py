@@ -245,9 +245,15 @@ def test_cli_help_counts_come_from_the_registry() -> None:
 
 
 @pytest.mark.parametrize("tool_name", sorted(TOOL_DEFINITIONS))
-def test_every_tool_contract_carries_an_example_that_passes_gate_and_model(tool_name) -> None:
+def test_every_tool_contract_carries_an_example_that_passes_gate_and_model(tool_name, tmp_path) -> None:
     contract = build_tool_input_contract(tool_name)
-    example = contract["example_payload"]
+    # 审计 S-09：对外示例不带确认位（以前 106 个带 agent_confirmed_settings + 编好的「User confirmed…」，弱模型照抄就自我确认过闸）。
+    # 这里像真实调用方一样：用户确认之后才加确认位；place 先换成坐标再过模型。
+    assert not {"agent_confirmed_settings", "defaults_accepted", "clarification_notes"} & set(contract["example_payload"])
+    example = {**contract["example_payload"], "agent_confirmed_settings": True}
+    _, service = _service(tmp_path)
+    example = service.resolve_place_fields(example, tool_name=tool_name)
+    example.pop("placeResolution", None)
     # `{}` is a real example for tools that take no input (ziwei_rules); a missing example has no example_note.
     assert contract.get("example_note") == EXAMPLE_NOTE, f"{tool_name}: no example payload"
     if TOOL_DEFINITIONS[tool_name].input_model.model_fields and any(
@@ -256,7 +262,7 @@ def test_every_tool_contract_carries_an_example_that_passes_gate_and_model(tool_
         assert example, f"{tool_name}: required fields but an empty example"
     assert validate_agent_preflight(tool_name, example)["ok"] is True
     TOOL_DEFINITIONS[tool_name].input_model.model_validate(normalize_request_payload(json.loads(json.dumps(example))))
-    blob = json.dumps(example, ensure_ascii=False)
+    blob = json.dumps(contract["example_payload"], ensure_ascii=False)   # 对外示例本身（解析 place 之后的坐标是服务端补的）
     assert "gpsLat" not in blob and "gpsLon" not in blob and "self-check fixture" not in blob
 
 
