@@ -88,10 +88,12 @@ def test_alias_keys_are_read_and_noted(server) -> None:
 
 
 def test_unknown_top_level_key_is_reported_with_a_close_match(server) -> None:
-    mcp, _seen = server
+    """审计 S-13 起：本技法参数的近似拼写（编辑距离 ≤ 2）拒绝并点名合法键，不再只告警、按缺省宫制照算；离得远的多余键照旧只告警。"""
+    mcp, seen = server
     body = _call(mcp, "horosa_astro_chart", {**BIRTH, "hsis": 3, **CONFIRM})
-    warnings = " ".join(body["warnings"])
-    assert "`hsis`" in warnings and "`hsys`" in warnings
+    assert body["ok"] is False and body["error"]["code"] == "tool.unknown_argument", body
+    assert "`hsis`" in json.dumps(body, ensure_ascii=False) and "`hsys`" in json.dumps(body, ensure_ascii=False)
+    assert seen == []   # 没起盘
 
 
 def test_request_payload_wrapper_is_unpacked(server) -> None:

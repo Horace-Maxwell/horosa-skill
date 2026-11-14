@@ -1005,6 +1005,10 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "推运目标时刻读不懂：传 YYYY（那一年）、YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS；时区放 dirZone。",
         "The target datetime was not understood: pass YYYY (that year), YYYY-MM-DD or YYYY-MM-DD HH:MM:SS; put the zone in dirZone."),
         "next_action": "fix_field_and_retry"},
+    "tool.unknown_argument": {"kind": "input", "prompt_to_user": bilingual(
+        "参数名写错了（与本技法的某个参数只差几个字）：按 details 里给的合法键名改了再调，不要问用户。",
+        "An argument name is misspelled (close to one of this technique's parameters): retry with the valid key in details; do not ask the user."),
+        "next_action": "fix_field_and_retry"},
     "tool.field_conflict": {"kind": "input", "prompt_to_user": bilingual(
         "同一件事在两个字段里给了不同的值：只在一处给（details.options 是两个候选）。",
         "Two fields give different values for the same thing: give it in one place only (details.options holds both candidates)."),

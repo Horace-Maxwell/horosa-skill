@@ -9,6 +9,8 @@ date / time / zone / 经纬度 / 性别 逐字段由 `input_fields.parse_*` 判�
 """
 from __future__ import annotations
 
+from functools import lru_cache
+
 import difflib
 import math
 import re
@@ -50,6 +52,12 @@ FIELD_ALIASES: dict[str, str] = {
     "birth_date": "date", "birthDate": "date", "birth_time": "time", "birthTime": "time",
     # 择日主题：runner 曾私下 `topicId or topic` 读它，不经词表、入口却说「没有哪个设置读它」（深审余项）。
     "topic": "topicId",
+}
+# 只在知道技法、且它声明了 datetime（推运目标）时才改名（审计 S-13：`target_year: 2027` 曾只换来一句告警，照样按 2026 算返照）。
+# 不进 FIELD_ALIASES：那张表在不知道技法时也改名，会把 dispatch 层的键改掉。
+TARGET_ALIASES: dict[str, str] = {
+    "target_year": "datetime", "targetYear": "datetime", "target_date": "datetime", "targetDate": "datetime",
+    "target_datetime": "datetime", "targetDatetime": "datetime", "target_time": "datetime", "targetTime": "datetime",
 }
 # 不是技法参数、但合法出现在载荷里的键（入口 / 闸门 / 派生）：不报「未知参数」。
 NON_TECHNIQUE_KEYS = frozenset({
@@ -167,7 +175,7 @@ def _normalize_party(
     _strict_coordinates(out, path, issues)
     _strict(out, "gender", path, issues, F.parse_gender)
     if fields is not None:
-        _report_unknown_keys(out, fields, filled_by_place)
+        _report_unknown_keys(out, fields, filled_by_place, path=path, issues=issues)
     return out
 
 
@@ -578,7 +586,8 @@ def _apply_place_alias(out: dict[str, Any], *, path: str, fields: frozenset[str]
 
 
 def _apply_aliases(out: dict[str, Any], *, path: str, fields: frozenset[str] | None) -> None:
-    for alias, canonical in FIELD_ALIASES.items():
+    aliases = {**FIELD_ALIASES, **(TARGET_ALIASES if fields is not None and "datetime" in fields else {})}
+    for alias, canonical in aliases.items():
         if alias not in out or (fields is not None and (alias in fields or canonical not in fields)):
             continue  # 模型自己声明了别名键，或根本没有规范键（改名只会把「没人读」的提示换成另一个名字）
         value = out.pop(alias)
@@ -640,7 +649,46 @@ def _place_filled(records: list[dict[str, Any]] | None) -> frozenset[str]:
     return frozenset(keys)
 
 
-def _report_unknown_keys(out: dict[str, Any], fields: frozenset[str], filled_by_place: frozenset[str] = frozenset()) -> None:
+def _edit_distance(a: str, b: str, limit: int) -> int:
+    """Levenshtein，超过 limit 提前返回 limit + 1。"""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        current = [i]
+        for j, cb in enumerate(b, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
+        if min(current) > limit:
+            return limit + 1
+        previous = current
+    return previous[-1]
+
+
+@lru_cache(maxsize=1)
+def _all_technique_fields() -> frozenset[str]:
+    from horosa_skill.engine.registry import TOOL_DEFINITIONS
+
+    return frozenset(name for definition in TOOL_DEFINITIONS.values() for name in definition.input_model.model_fields)
+
+
+def _near_miss(key: str, fields: frozenset[str]) -> str | None:
+    """`key` 是本技法某个参数写错了几个字 → 那个参数；多于一个同样近的不猜。忽略大小写与 _ / -；键长 ≥ 6 容 2 处差、4–5 容 1 处
+    （`tree` 与 `time` 差 2 处，是两回事）。别的技法真有的参数名不算写错（合参把八字的 byLon 交给紫微，`byLon` 与 `lon` 差 2 处）。
+    比 difflib 的相似度严：`direction` 与 `pdProjection` 相似度 0.76，却是两回事（pdchart 自己读 direction）。"""
+    norm = lambda text: text.lower().replace("_", "").replace("-", "")  # noqa: E731
+    wanted = norm(key)
+    if len(wanted) < 4 or key in _all_technique_fields():
+        return None
+    limit = 2 if len(wanted) >= 6 else 1
+    scored = sorted((_edit_distance(wanted, norm(name), limit), name) for name in fields if not name.startswith("_"))
+    best = [name for distance, name in scored if distance <= limit and distance == scored[0][0]]
+    return best[0] if len(best) == 1 else None
+
+
+def _report_unknown_keys(
+    out: dict[str, Any], fields: frozenset[str], filled_by_place: frozenset[str] = frozenset(), *, path: str = "",
+    issues: _Issues | None = None,
+) -> None:
     # 恒星轨前端名 fixedStarOrb / fixedStarOrbMode：西占盘族（声明了后端名 starOrb 的模型）照读（chart_family.fixedStarOrbParamsFor、
     # judgeLayerHeadless 双名回退），不是「没人读的键」。
     read_aliases = CLASSICAL_UNDECLARED_FIELDS if "starOrb" in fields else ()
@@ -653,8 +701,21 @@ def _report_unknown_keys(out: dict[str, Any], fields: frozenset[str], filled_by_
     for key in unknown:
         match = difflib.get_close_matches(key, vocabulary, n=1, cutoff=0.75)
         hint = FIELD_ALIASES.get(match[0], match[0]) if match else None
+        typo_of = _near_miss(key, fields) if out[key] is not None else None
+        if typo_of and issues is not None:
+            hint = typo_of
+            # 写错的是本技法的参数（审计 S-13）：照算就是拿缺省值算另一张盘、只附一句告警——拒绝，给最接近的合法键。
+            issues.add(path + key, out[key], F.FieldIssue(
+                "tool.unknown_argument",
+                f"`{path}{key}` 不是本技法的参数；是不是 `{path}{hint}`？照算会按 `{hint}` 的缺省值起盘。",
+                f"`{path}{key}` is not a parameter of this technique; did you mean `{path}{hint}`? Running as is would use `{hint}`'s default.",
+                expected_zh=f"`{hint}`", expected_en=f"`{hint}`", example={hint: out[key]},
+            ))
+            continue
         parts_zh.append(f"`{key}`" + (f"（是不是 `{hint}`？）" if hint else ""))
         parts_en.append(f"`{key}`" + (f" (did you mean `{hint}`?)" if hint else ""))
+    if not parts_zh:
+        return
     F.add_input_note(
         "这些参数不是本技法的参数，没有哪个设置读它们：" + "、".join(parts_zh) + "。",
         "These arguments are not parameters of this technique and no setting reads them: " + ", ".join(parts_en) + ".",

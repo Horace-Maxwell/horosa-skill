@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from horosa_skill.errors import ToolValidationError
 from fakes import FakeClient, FakeJsClient
 
 from horosa_skill.config import Settings
@@ -750,12 +752,20 @@ def test_raw_backend_keys_are_not_forwarded(tmp_path: Path) -> None:
     """后端认的裸键（method / yearType / maxAge / turnOrder …）不许绕过词表混进请求体：星阙页面与挂载从不发 maxAge，Java 白名单也不放行；
     skill 直连 chart 服务没有那层白名单。负向对照（实跑）：_directed_figure_body 不并入 _TIMELORD_RAW_KEYS → 红（maxAge=3、variant 进了请求体）。"""
     client = _Client()
-    payload = {**_birth("turn", "default"), "tlMethod": "turn", "method": "orb", "yearType": "hellenistic", "maxAge": 3, "variant": "classic", "turnOrder": "house"}
+    payload = {**_birth("turn", "default"), "tlMethod": "turn", "method": "orb", "maxAge": 3}
     result = _service(tmp_path, client).run_tool("timelords", payload, save_result=False)
     assert result.ok is True, result.error
     sent = client.sent()
     assert {k: sent[k] for k in ("method", "yearType", "turnOrder")} == {"method": "turn", "yearType": "solar", "turnOrder": "zodiac"}
     assert "maxAge" not in sent and "variant" not in sent
+    # 审计 S-13：与本技法参数只差前缀、又不是任何技法参数名的后端裸键（turnOrder ~ tlTurnOrder）拒绝并点名——以前只告警、按缺省次序照算，
+    # 调用方要的是 house 次序，拿到的是 zodiac 的表。yearType / variant 是别的技法真有的参数名（合参会把它们交过来），只告警、不下发。
+    with pytest.raises(ToolValidationError) as excinfo:
+        _service(tmp_path, _Client()).run_tool("timelords", {**payload, "turnOrder": "house"}, save_result=False)
+    assert excinfo.value.code == "tool.unknown_argument" and "`tlTurnOrder`" in str(excinfo.value)
+    client = _Client()
+    other = _service(tmp_path, client).run_tool("timelords", {**payload, "yearType": "hellenistic", "variant": "classic"}, save_result=False)
+    assert other.ok is True and "variant" not in client.sent() and client.sent()["yearType"] == "solar"
 
 
 def test_backend_echo_mismatch_is_an_error(tmp_path: Path) -> None:
