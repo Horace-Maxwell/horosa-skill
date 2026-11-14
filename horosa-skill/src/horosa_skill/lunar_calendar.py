@@ -17,8 +17,8 @@ WEEKDAYS = "一二三四五六日"
 class LunarDateError(ValueError):
     """kind：out_of_range / no_such_leap / day_out_of_range / leap_ambiguous（options 带两个公历日期）。"""
 
-    def __init__(self, kind: str, zh: str, en: str, *, options: list[dict[str, Any]] | None = None) -> None:
-        super().__init__(zh)
+    def __init__(self, *, kind: str, zh: str, en: str, options: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(f"{zh} / {en}")  # str(exc) 也是双语（与 errors.bilingual 同形）；调用方另取 zh / en 拼 FieldIssue
         self.kind, self.zh, self.en, self.options = kind, zh, en, options
 
 
@@ -37,8 +37,8 @@ def _months(year: int) -> list[tuple[int, int]]:
     entry = _table()["years"].get(str(year))
     if entry is None:
         lo, hi = year_range()
-        raise LunarDateError("out_of_range", f"农历自动换算只支持 {lo}–{hi} 年（{year} 年不在内）。",
-                             f"Lunar dates convert automatically only for {lo}–{hi} (not {year}).")
+        raise LunarDateError(kind="out_of_range", zh=f"农历自动换算只支持 {lo}–{hi} 年（{year} 年不在内）。",
+                             en=f"Lunar dates convert automatically only for {lo}–{hi} (not {year}).")
     return [(int(m), int(d)) for m, d in entry["months"]]
 
 
@@ -55,7 +55,7 @@ def to_solar(year: int, month: int, day: int, leap: bool | None = None) -> date:
     """leap=None：没说是不是闰月——该年恰好闰这个月时是歧义（leap_ambiguous），否则按平月。"""
     months = _months(year)
     if not 1 <= month <= 12:
-        raise LunarDateError("no_such_month", f"农历没有 {month} 月。", f"The lunar calendar has no month {month}.")
+        raise LunarDateError(kind="no_such_month", zh=f"农历没有 {month} 月。", en=f"The lunar calendar has no month {month}.")
     year_leap = leap_month(year)
     if leap is None and year_leap == month:
         plain, leaped = to_solar(year, month, min(day, _days(months, month)), False), None
@@ -67,26 +67,26 @@ def to_solar(year: int, month: int, day: int, leap: bool | None = None) -> date:
         if leaped is not None:
             options.append({"value": leaped.isoformat(), "label": f"{label(year, month, day, True)}（闰月）→ {leaped.isoformat()}"})
         raise LunarDateError(
-            "leap_ambiguous",
-            f"农历 {year} 年有两个{MONTH_NAMES[month]}月（平月与闰月），没说是哪一个。",
-            f"Lunar year {year} has two month-{month}s (regular and leap); which one is meant?",
+            kind="leap_ambiguous",
+            zh=f"农历 {year} 年有两个{MONTH_NAMES[month]}月（平月与闰月），没说是哪一个。",
+            en=f"Lunar year {year} has two month-{month}s (regular and leap); which one is meant?",
             options=options,
         )
     if leap and year_leap != month:
         has = f"这年闰{MONTH_NAMES[year_leap]}月" if year_leap else "这年没有闰月"
         has_en = f"its leap month is {year_leap}" if year_leap else "it has no leap month"
-        raise LunarDateError("no_such_leap", f"农历 {year} 年没有闰{MONTH_NAMES[month]}月（{has}）。",
-                             f"Lunar year {year} has no leap month {month} ({has_en}).")
+        raise LunarDateError(kind="no_such_leap", zh=f"农历 {year} 年没有闰{MONTH_NAMES[month]}月（{has}）。",
+                             en=f"Lunar year {year} has no leap month {month} ({has_en}).")
     start = date.fromisoformat(_table()["years"][str(year)]["start"])
     offset = 0
     for m, days in months:
         if m == (-month if leap else month):
             if not 1 <= day <= days:
-                raise LunarDateError("day_out_of_range", f"{label(year, month, 1, bool(leap))[:-2]}只有 {days} 天（没有 {day} 日）。",
-                                     f"Lunar month {'leap ' if leap else ''}{month} of {year} has {days} days (no day {day}).")
+                raise LunarDateError(kind="day_out_of_range", zh=f"{label(year, month, 1, bool(leap))[:-2]}只有 {days} 天（没有 {day} 日）。",
+                                     en=f"Lunar month {'leap ' if leap else ''}{month} of {year} has {days} days (no day {day}).")
             return start + timedelta(days=offset + day - 1)
         offset += days
-    raise LunarDateError("no_such_month", f"农历 {year} 年没有 {month} 月。", f"Lunar year {year} has no month {month}.")
+    raise LunarDateError(kind="no_such_month", zh=f"农历 {year} 年没有 {month} 月。", en=f"Lunar year {year} has no month {month}.")
 
 
 def _days(months: list[tuple[int, int]], month: int) -> int:

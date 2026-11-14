@@ -15,6 +15,7 @@ import { buildLiuRengReferenceContext } from '../src/vendor/liureng/liurengRefCo
 import { matchBiFa } from '../src/vendor/liureng/LRBiFaDoc.js';
 import { ZiLiuQin } from '../src/vendor/liureng/LRConst.js';
 import { runGuolaoMoira } from '../src/tools/guolaoMoira.js';
+import { checkConditionValues, invalidValuesMessage } from '../src/tools/zeriParamCheck.js';
 import { runXiaoLiuRen } from '../src/tools/xiaoliuren.js';
 import { runFeiGong } from '../src/tools/feigong.js';
 import { runXiaoChengTu } from '../src/tools/xiaochengtu.js';
@@ -2206,6 +2207,33 @@ check('jinkou 格式器把 ken 引擎的四位 / 三盘原样落进快照（夹�
   for (const row of ken.rows.filter((r) => r.label !== '人元')) {
     assert(text.includes(`| ${row.label} | ${row.gan} | ${row.content} | ${row.shenjiang} | ${row.element}${row.season} |`), `row ${row.label}`);
   }
+});
+
+// 择日条件取值预检（审计 S-01）：期望值来自下面这张手写的小注册表本身（与上游各择日注册表同形：select 带 options、showIf 控显隐），
+// 不依赖任何一张上游词表——规则是「value 照用 / 唯一等于标签就读成 value / 其余报错并列可选值、黄历用事给建议」。
+check('zeriParamCheck 标签读成规范值、界外值报错并给通书用事建议、隐藏字段不查', () => {
+  const registry = {
+    dun: { label: '阴阳遁', fields: [{ key: 'value', label: '遁', kind: 'select', options: [{ value: '阳', label: '阳遁' }, { value: '阴', label: '阴遁' }] }] },
+    yi: { label: '宜', fields: [{ key: 'items', label: '用事', kind: 'multiselect', options: ['移徙', '入宅', '嫁娶', '开市'] }] },
+    mid: { label: '中点', fields: [
+      { key: 'targetKind', label: '对象', kind: 'select', options: ['planet', 'angle'] },
+      { key: 'targetId', label: '四轴', kind: 'select', options: ['ASC', 'MC'], showIf: (p) => p.targetKind === 'angle' },
+    ] },
+  };
+  const tree = { kind: 'group', op: 'and', children: [
+    { type: 'dun', params: { value: '阴遁' } },
+    { type: 'yi', params: { items: '搬家' } },
+    { type: 'mid', params: { targetKind: 'planet', targetId: 'Sun' } },
+  ] };
+  const res = checkConditionValues(registry, tree);
+  assert(res.tree.children[0].params.value === '阴', JSON.stringify(res.tree.children[0]));
+  assert(res.invalid.length === 1, JSON.stringify(res.invalid));
+  assert(JSON.stringify(res.invalid[0].did_you_mean) === JSON.stringify(['移徙', '入宅']), JSON.stringify(res.invalid[0]));
+  assert(res.invalid[0].path === 'conditions.children[1]' && res.invalid[0].field === 'items', JSON.stringify(res.invalid[0]));
+  assert(res.tree.children[2].params.targetId === 'Sun', 'hidden field (showIf false) must not be checked');
+  assert(res.notes.length === 1 && res.notes[0].includes('「阴阳遁」的「遁」'), JSON.stringify(res.notes));
+  const msg = invalidValuesMessage(res.invalid);
+  assert(msg === '「宜」的「用事」取值 「搬家」 不在可选值里（可选：移徙/入宅/嫁娶/开市）；是不是指：移徙 / 入宅？', msg);
 });
 
 check('uranianExtra 虚星参考 = 上游八颗汉堡学派虚星表（周期 / 距离，vendored）', () => {

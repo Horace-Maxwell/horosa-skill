@@ -538,7 +538,8 @@ class ToolsAPI:
         cn_unified = payload.get("cnUnifiedZone") is not False
         try:
             point = self._zone_for_point(float(lat), float(lon), date=target_date, cn_unified=cn_unified)
-        except Exception:  # noqa: BLE001 — 换算不了（旧 runtime / 没有 JS 引擎）就不补，下游照旧按本命时区；不让一条说明拖垮起盘
+        except Exception as exc:  # noqa: BLE001 — 换算不了（旧 runtime / 没有 JS 引擎）就不补，下游照旧按本命时区；不让一条说明拖垮起盘
+            _degrade("推运目标时刻的时区换算不可得，目标时刻按出生时区读（要按别的时区读，传 dirZone）：%s", exc)
             return
         if not point:
             return

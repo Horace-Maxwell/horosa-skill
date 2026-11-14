@@ -84,7 +84,7 @@ def test_structured_leap_flag_and_julian_refusal() -> None:
 
 @requires_node
 def test_table_is_current_with_the_generator() -> None:
-    subprocess.run(["node", str(PKG / "scripts" / "gen_lunar_table.mjs"), "--check"], check=True, capture_output=True, text=True)
+    subprocess.run(["node", str(PKG / "scripts" / "gen_lunar_table.mjs"), "--check"], check=True, capture_output=True, text=True, encoding="utf-8")
 
 
 @requires_node
@@ -110,3 +110,17 @@ fs.writeFileSync(process.argv[2], JSON.stringify(rows));
     assert len(rows) > 73000
     bad = [row for row in rows if L.to_solar(row[1], row[2], row[3], bool(row[4])).isoformat() != row[0]]
     assert bad == [], bad[:5]
+
+
+def test_a_techniques_own_calendar_setting_is_not_taken_for_the_date_calendar() -> None:
+    """十年大运的 `calendarType: calendar_360` 是技法设置，不是「日期用什么历」。MCP 面的预归一化不知道技法（fields=None），
+    曾把它当成认不出的历法报 calendar_unsupported，十年大运整个起不了盘（全量 pytest 抓到）。"""
+    from horosa_skill.schemas.tools.predictive import DecennialsInput
+
+    for model in (None, DecennialsInput):
+        out, issues = normalize_collecting_issues({"date": "1990-04-09", "time": "08:00", "zone": "+08:00", "lat": "31n13",
+                                                   "lon": "121e28", "calendarType": "calendar_360"}, model=model)
+        assert issues == [] and out["calendarType"] == "calendar_360" and out["date"] == "1990-04-09"
+    # 不知道技法时，认得出的农历标记照样换算
+    out, issues = normalize_collecting_issues({"date": "1990-04-09", "calendar": "lunar"}, model=None)
+    assert issues == [] and out["date"] == "1990-05-03"

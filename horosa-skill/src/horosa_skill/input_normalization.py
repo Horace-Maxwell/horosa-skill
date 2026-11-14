@@ -184,6 +184,11 @@ def _apply_calendar_flags(out: dict[str, Any], path: str, issues: _Issues, field
     words = {str(flags[key]).strip().lower() for key in _CALENDAR_KEYS if key in flags and flags[key] not in (None, "")}
     lunar = bool(words & _LUNAR_WORDS) or any(F.is_truthy(flags[key]) for key in _LUNAR_BOOL_KEYS if key in flags)
     unknown = words - _LUNAR_WORDS - _SOLAR_WORDS - _JULIAN_WORDS
+    if unknown and fields is None:
+        # 不知道是哪个技法（MCP 面的预归一化）：认不出的值可能是技法自己的设置（十年大运 calendarType: calendar_360），
+        # 原样放回、交给按模型归一化的那一遍；那一遍知道字段表，没声明的键才在那里报 calendar_unsupported。
+        out.update(flags)
+        return
     if words & _JULIAN_WORDS or unknown:
         which = next(iter(words & _JULIAN_WORDS or unknown))
         issues.add(path + "calendar", which, F.FieldIssue(
