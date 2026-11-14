@@ -1199,6 +1199,26 @@ def validation_errors(exc: _Any) -> list[dict[str, _Any]]:
     return exc.errors(include_url=False, include_context=False)
 
 
+_UNION_TAG = _re.compile(r"(?:function-(?:after|before|wrap|plain)\[.*, )?[A-Z][A-Za-z0-9]*(?:Input|Model)\]?")
+
+
+def one_error_per_field(errors: list[dict[_Any, _Any]]) -> list[dict[str, _Any]]:
+    """`birth` 是几种出生模型的联合：pydantic 对每个分支各报一遍，`loc` 里夹着内部类名（BirthInput / ZiWeiBirthInput …）；
+    模型带 model_validator 时分支名是包装形 `function-after[_custom_terms_need_tables(), BirthInput]`。
+    摘掉类名、按（位置, 类型）去重 → 每个字段一条。dispatch / hecan 的服务层与 MCP 面的校验失败都走这里（审计 S-08：
+    MCP 面曾原样外露 `birth.function-after[...].zone`，缺地点的三个字段各问一遍）。"""
+    seen: set[tuple[str, str]] = set()
+    out: list[dict[str, _Any]] = []
+    for error in errors:
+        loc = [part for part in (error.get("loc") or []) if not (isinstance(part, str) and _UNION_TAG.fullmatch(part))]
+        key = (".".join(str(part) for part in loc), str(error.get("type")))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({**error, "loc": loc})
+    return out
+
+
 def recovery_for(code: str, details: dict[str, _Any] | None) -> dict[str, _Any]:
     """给 details 补 agent_recovery（kind/prompt_to_user/next_action[/commands]）与 hint；已带者不覆盖。"""
     result = dict(details) if isinstance(details, dict) else {}

@@ -10,16 +10,16 @@ from horosa_skill.agent_guidance import (
     build_validation_recovery,
     validate_agent_preflight,
 )
-from horosa_skill.errors import ToolValidationError, recovery_for
+from horosa_skill.errors import ToolValidationError, one_error_per_field, recovery_for
 from horosa_skill.schemas.common import DispatchEnvelope, ErrorInfo, ToolEnvelope
 
 
 def _validation_error(operation_name: str, tool_name: str | None, exc: ValidationError) -> ToolValidationError:
     """pydantic 校验失败 → 与闸门同形的、可直接转问用户的结构化错误。"""
-    errors = [
+    errors = one_error_per_field([
         {"loc": list(err.get("loc", [])), "msg": err.get("msg"), "type": err.get("type")}
         for err in exc.errors(include_url=False)
-    ]
+    ])
     recovery = build_validation_recovery(operation_name=operation_name, errors=errors, tool_name=tool_name)
     return ToolValidationError(
         f"{operation_name} payload failed validation; see details.agent_recovery.",
@@ -114,10 +114,10 @@ def _mcp_internal_error_payload(exc: Exception) -> dict[str, Any]:
 def _mcp_validation_error_payload(operation_name: str, tool_name: str | None, exc: ValidationError) -> dict[str, Any]:
     # 已确认但载荷畸形（类型错/字段形状错）→ 与闸门同形的「可转问用户」恢复契约，
     # 而不是让 pydantic 文本裸奔（agent_guidance.build_validation_recovery 是同一套机读结构）。
-    errors = [
+    errors = one_error_per_field([
         {"loc": list(err.get("loc", [])), "msg": err.get("msg"), "type": err.get("type")}
         for err in exc.errors(include_url=False)
-    ]
+    ])
     recovery = build_validation_recovery(operation_name=operation_name, errors=errors, tool_name=tool_name)
     details = recovery_for("tool.invalid_payload", {"validation_errors": errors, "agent_recovery": recovery})
     message = f"{operation_name} payload failed validation; see details.agent_recovery."

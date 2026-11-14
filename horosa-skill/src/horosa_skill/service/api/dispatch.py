@@ -1,7 +1,6 @@
 """跨技法 API（DispatchAPI）：hecan 合参、决策层各面（路由 / 性别 / 占类 / 忠实度）、dispatch。"""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -35,6 +34,7 @@ from horosa_skill.errors import (
     ToolValidationError,
     bilingual,
     lift_failures,
+    one_error_per_field,
     validation_errors,
 )
 from horosa_skill.input_normalization import normalize_request_payload
@@ -98,25 +98,6 @@ def _child_failure(tool_name: str, payload: dict[str, Any], exc: ToolValidationE
     )
 
 
-_UNION_TAG = re.compile(r"(?:function-(?:after|before|wrap|plain)\[.*, )?[A-Z][A-Za-z0-9]*(?:Input|Model)\]?")
-
-
-def _one_error_per_field(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """`birth` 是几种出生模型的联合：pydantic 对每个分支各报一遍，`loc` 里夹着内部类名（BirthInput / ZiWeiBirthInput …）；
-    模型带 model_validator 时分支名是包装形 `function-after[_custom_terms_need_tables(), BirthInput]`。
-    摘掉类名、按（位置, 类型）去重 → 每个字段一条。"""
-    seen: set[tuple[str, str]] = set()
-    out: list[dict[str, Any]] = []
-    for error in errors:
-        loc = [part for part in (error.get("loc") or []) if not (isinstance(part, str) and _UNION_TAG.fullmatch(part))]
-        key = (".".join(str(part) for part in loc), str(error.get("type")))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append({**error, "loc": loc})
-    return out
-
-
 def _validated(model: Any, payload: dict[str, Any]) -> Any:
     """校验 dispatch / hecan 的入参；严格校验不过（数字经纬度、数字时区）才归一化重来。
 
@@ -155,7 +136,7 @@ class DispatchAPI:
                 # 地名在校验之前换成坐标（birth / context / subject 里的 place；有歧义即结构化拒绝）。
                 request = _validated(HecanInput, self.resolve_place_fields(payload, tool_name="hecan"))
             except ValidationError as exc:
-                errors = validation_errors(exc)
+                errors = one_error_per_field(validation_errors(exc))
                 raise ToolValidationError(
                     "Invalid payload for horosa_hecan.",
                     code="hecan.invalid_payload",
@@ -545,7 +526,7 @@ class DispatchAPI:
             # 地名在校验之前换成坐标（birth / context / subject 里的 place；BirthInput 要 lat / lon / zone）。幂等：合参已解析过的原样过。
             request = _validated(DispatchInput, self.resolve_place_fields(payload, tool_name="dispatch"))
         except ValidationError as exc:
-            errors = _one_error_per_field(validation_errors(exc))
+            errors = one_error_per_field(validation_errors(exc))
             raise ToolValidationError(
                 "Invalid payload for horosa_dispatch.",
                 code="dispatch.invalid_payload",

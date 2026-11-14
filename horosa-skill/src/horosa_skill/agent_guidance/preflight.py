@@ -1,6 +1,8 @@
 """澄清闸：validate_agent_preflight 判定缺什么、该问用户还是 agent 自己能补（agent_recovery），以及敏感设置表自测。"""
 from __future__ import annotations
 
+import re
+
 from typing import Any
 
 from horosa_skill.agent_guidance.base import (
@@ -262,22 +264,51 @@ def _agent_fixable_recovery(operation: str, errors: list[dict[str, Any]]) -> dic
     }
 
 
+_PLACE_PARTS = frozenset({"zone", "lat", "lon"})
+
+
+def _clean_loc(loc: Any) -> list[str]:
+    """pydantic 的 loc 里夹着校验器节点（`function-after[_custom_terms_need_tables(), BirthInput]`）——给人看的字段路径只留真字段名（审计 S-08）。"""
+    parts = [str(part) for part in loc] if isinstance(loc, (list, tuple)) else []
+    return [part for part in parts if not re.search(r"[\[\]()]", part)]
+
+
 def _validation_questions(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
+    missing_place: dict[str, set[str]] = {}
     for error in errors:
         if not isinstance(error, dict):
             continue
-        loc = error.get("loc")
-        field = ".".join(str(part) for part in loc) if isinstance(loc, (list, tuple)) and loc else "(payload)"
+        parts = _clean_loc(error.get("loc"))
+        if parts and parts[-1] in _PLACE_PARTS and error.get("type") == "missing":
+            missing_place.setdefault(".".join(parts[:-1]), set()).add(parts[-1])
+            continue
+        field = ".".join(parts) if parts else "(payload)"
         if field in seen:
             continue
         seen.add(field)
-        problem = str(error.get("msg") or error.get("type") or "invalid")
+        if error.get("type") == "missing":
+            zh, en = f"`{field}` 缺失：请提供。", f"`{field}` is missing: please provide it."
+        else:
+            detail = str(error.get("msg") or error.get("type") or "invalid")
+            zh, en = f"`{field}` 不合法（{detail}）：请改正。", f"`{field}` is invalid ({detail}): please fix it."
         out.append({
             "field": field,
-            "question": bilingual(f"`{field}` 缺失或不合法（{problem}）：请提供 / 改正。", f"`{field}` is missing or invalid ({problem}): please provide / fix it."),
+            "question": bilingual(zh, en),
             "fact": True,  # 缺的是数据本身：确认标记补不了它
+        })
+    for prefix, keys in missing_place.items():
+        where = f"{prefix}." if prefix else ""
+        out.insert(0, {
+            "field": f"{where}place",
+            "question": bilingual(
+                f"缺{'出生' if prefix in ('', 'birth', 'subject') else ''}地点：请问用户在哪里（城市名，填 `{where}place`）；"
+                f"已知坐标时也可给 `{where}zone` + `{where}lat` + `{where}lon`。",
+                f"The place is missing: ask the user where (a city name, as `{where}place`); with known coordinates, "
+                f"`{where}zone` + `{where}lat` + `{where}lon` also work.",
+            ),
+            "fact": True,
         })
     return out[:8]
 
