@@ -251,6 +251,34 @@ _LOCAL_RUNNER_OVERRIDES: dict[str, Callable[[Any, str, dict[str, Any]], dict[str
 }
 
 
+def _window_search_models() -> tuple[type, ...]:
+    from horosa_skill.schemas.tools.election import QimenZeriInput, TianxingInput, ZeriScanInput
+
+    return (ZeriScanInput, QimenZeriInput, TianxingInput)
+
+
+def _anchor_window_search(definition: ToolDefinition, payload: Any) -> Any:
+    """择日窗口搜索：缺展示锚点 date / time 时取窗口起点 startDate / startTime（审计 S-17）。
+
+    这些技法的 date / time 只是 [起盘信息] 的锚点（展示盘按首个命中铸），真正的搜索范围是 startDate…endDate；以前缺了它们
+    就 tool.invalid_payload + must_ask_user——让模型去问用户一个没有意义的「基准时刻」，连带地名也换不出时区。
+    只在 date 与 time 都没给、startDate 给了时补（给了一半照旧按字段报），并在 warnings 说明。星历 / 回归时间线也有 startDate，
+    但那里的 date 是本命盘，不在此列——只认择日三类模型。"""
+    if not isinstance(payload, dict) or not issubclass(definition.input_model, _window_search_models()):
+        return payload
+    start = payload.get("startDate")
+    if F.is_blank(start) or not F.is_blank(payload.get("date")) or not F.is_blank(payload.get("time")):
+        return payload
+    start_time = payload.get("startTime")
+    start_time = "00:00" if F.is_blank(start_time) else start_time
+    F.add_input_note(
+        f"没给 date / time：展示锚点取搜索窗起点 {start} {start_time}（只用于起盘信息与按地名取当日时区，不影响搜索范围）。",
+        f"No date / time given: the display anchor is the search window start, {start} {start_time} "
+        "(it only labels the chart and dates the place's zone; the search range is unchanged).",
+    )
+    return {**payload, "date": start, "time": start_time}
+
+
 class ToolsAPI:
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -437,6 +465,7 @@ class ToolsAPI:
         except ToolValidationError as exc:
             trace["error_code"] = exc.code
             raise
+        payload = _anchor_window_search(definition, payload)
         try:
             # 地名 → 坐标 + 时区（v0.48.0，service/api/place.py）：lat / lon / zone 是必填，place 得在归一化与校验之前补上；
             # 有歧义 / 找不到 / 旧 runtime 都是结构化拒绝（place.*，带 agent_recovery），同样有意抛出去。

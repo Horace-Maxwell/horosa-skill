@@ -26,7 +26,9 @@ GLOBAL_AGENT_RULES: list[str] = [
     "After a tool call, treat export_snapshot.export_text, export_snapshot.sections, and summary as the source of truth.",
 ]
 
-COMMON_LOCATION_FIELDS = ["date", "time", "zone/timezone", "lat/lon or gpsLat/gpsLon/location"]
+COMMON_LOCATION_FIELDS = ["date", "time", "place（地名，连当日时区一起解析）or zone + lat/lon"]
+# 择日窗口搜索：date / time 只是展示锚点，缺省取搜索窗起点（审计 S-17，service/api/tools._anchor_window_search）。
+WINDOW_SEARCH_LOCATION_FIELDS = ["place（地名，连时区一起解析）or zone + lat/lon", "date/time 可省（缺省取搜索窗起点）"]
 COMMON_BIRTH_FIELDS = ["birth date", "birth time", "birth timezone", "birth place / longitude / latitude"]
 # 日界缺省（F2）：上游出厂缺省 1=「23 点算第二天」（utils/dayBoundary.js:29-35 defaultAfter23NewDay、models/astro.js:395-398）。
 # v0.40 前这里写「False=星阙默认」且 schema 硬塞 False 下发 → bazi/ziwei/liureng/nongli 静默按 24 点换日。

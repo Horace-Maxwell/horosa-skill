@@ -7,6 +7,7 @@ from horosa_skill.agent_guidance.base import (
     _AFTER23_DEFAULT_MEANING,
     COMMON_BIRTH_FIELDS,
     COMMON_LOCATION_FIELDS,
+    WINDOW_SEARCH_LOCATION_FIELDS,
 )
 from horosa_skill.agent_guidance.policies import (
     _QIMEN_QIJU_QUESTION,
@@ -179,7 +180,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "door（八门）、star（九星）、god（八神）、palace_flag（宫位标记）、men_gong_relation（门宫关系）、"
             "zhifu/zhishi（值符值使）、ju_info（局象：dun/juShu/sanYuan 至少给一项）。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找日子？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？（如某吉格出现、某门某宫等）"},
@@ -215,7 +216,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "yi_has（宜含事项） / ji_not（忌避事项） / jianchu（建除十二神） / tianshen_dao（黄黑道） / zhixiu（值宿(廿八宿)） / jishen_has（吉神宜趋） / xiongsha_not（凶煞回避） / nine_star（九星值日） / chong_shengxiao（冲煞生肖） / day_ganzhi（日干支） / nayin_wuxing（日纳音五行） / liuyao（六曜）；…共 26 类，完整表见 vendored huangliZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -246,7 +247,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "day_ganzhi（日柱干支） / hour_ganzhi（时柱干支） / month_year_gz（年月柱干支） / zhi_relation（支间关系） / gan_wuhe（天干五合） / sanhe_ju（地支三合局） / shensha_has（吉神在柱） / shensha_not（凶煞回避） / nayin_wuxing（柱纳音五行） / changsheng（日干长生态） / xunkong（旬空） / wuxing_day（日主五行）；…共 26 类，完整表见 vendored baziZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -276,7 +277,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "yinyang_ju（阴阳遁） / ju_num（局数） / taiyi_gong（太乙落宫） / wenchang_gong（文昌(天目)落宫） / shiji_gong（始击落宫） / jishen_gong（计神/合神落宫） / youshen_gong（游神落宫(五福/大游/小游)） / geju_kind（格局(掩迫关囚格对提挟击)） / victory_side（主客胜负） / suan_range（主客算区间） / suan_parity（算数阴阳(奇偶)） / dajiang_gong（主客大将宫）；…共 24 类，完整表见 vendored taiyiZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -307,7 +308,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "wuxing_ju（五行局） / ming_gong_zhi（命宫地支） / ming_zhu_xing（命宫正曜） / shen_zhu_xing（身宫正曜） / ming_changsheng（命宫长生态） / star_in_gong（星落宫名） / star_in_zhi（星落地支） / star_tong_gong（两星同宫） / sihua_star（生年四化为星） / sihua_in_gong（生年四化入宫） / sihua_dui_ming（四化会命宫(同宫/对照)） / star_brightness（星曜亮度）；…共 28 类，完整表见 vendored ziweiZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -338,7 +339,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "ke_name（课名(九宗门)） / chuan_zhi（三传含支） / chuan_jiang（三传天将） / chuan_liuqin（三传六亲） / chuan_kong（三传旬空） / chuan_ju（三传合局） / fa_yong（发用(初传)神煞） / tianpan_at（天盘乘临） / guiren_pos（贵人临支·顺逆） / jiang_at（天将临支） / yue_jiang_is（月将） / zhou_ye（昼占/夜占）；…共 27 类，完整表见 vendored liurengZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -368,7 +369,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "lr_ke_name（六壬·课名(九宗门)） / lr_chuan_zhi（六壬·三传含支） / lr_chuan_jiang（六壬·三传天将） / lr_chuan_liuqin（六壬·三传六亲） / lr_chuan_kong（六壬·三传旬空） / lr_chuan_ju（六壬·三传合局） / lr_fa_yong（六壬·发用(初传)神煞） / lr_tianpan_at（六壬·天盘乘临） / lr_guiren_pos（六壬·贵人临支·顺逆） / lr_jiang_at（六壬·天将临支） / lr_yue_jiang_is（六壬·月将） / lr_zhou_ye（六壬·昼占/夜占）；…共 70 类，完整表见 vendored sanshiZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -398,7 +399,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "body_in_gong（曜落地支宫） / body_in_xiu（曜落二十八宿） / dignity（曜庙旺状态） / dignity_seven（曜七态(殿垣庙旺乐喜怒)） / deg_lord（所在宿度主） / speed_state（曜行度态） / combust（合日伏焦） / day_night（昼占/夜占） / asc_gong（命宫(上升)落支） / body_rel（两曜宫位关系） / hua_lu（化曜(年干禄主)落处）。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -430,7 +431,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "叶 {kind:'leaf', type:'<键>', negate?, params:{…}}。条件类键（引擎自带词表，非本文件手抄）："
             "tithi（Tithi(月相日)） / vara（Vara(曜日·日出界)） / nakshatra（Nakshatra(月宿)） / yoga（Yoga(日月合行)） / karana（Karana(半日)） / lagna（Lagna(上升星座)） / planet_sign（曜落星座） / retro（曜顺逆） / day_kalam（日凶段(Rahu Kalam 类)） / tara_bala（Tara Bala(宿力)） / chandra_bala（Chandra Bala(月力)） / muhurta_seg（三十须臾(Muhurta/Abhijit)）；…共 18 类，完整表见 vendored indiaZeriConditionTypes。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "择日条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找？（起止日期）"},
             {"field": "conditions", "question": "择日要满足什么条件？"},
@@ -467,7 +468,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "\n单时判读：传 explainAt='YYYY-MM-DD HH:mm[:ss]' 可对该时刻逐叶判读（[单时判读] 段，"
             "每叶「设定/实际 ✓✗」，与扫描求值器绝对同源）——用于回答「为什么这个时刻中/不中选」。"
         ),
-        required_context=COMMON_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "征象条件 conditions", "用事主题"],
+        required_context=WINDOW_SEARCH_LOCATION_FIELDS + ["搜索窗 startDate/endDate", "征象条件 conditions", "用事主题"],
         ask_if_missing=[
             {"field": "startDate/endDate", "question": "要在哪段时间里找吉时？（起止日期）"},
             {"field": "conditions", "question": "要满足什么天象条件？（如月亮拱木星、日在白羊等）"},
