@@ -1477,7 +1477,9 @@ class MemoryStore:
             record["sha256"] = None
         elif not record.get("sha256"):
             record["file_size"], record["sha256"] = _file_hash_info(path)
-        if include_payload:
+        # 只有 JSON 产物有载荷可读；报告（PDF / DOCX / PNG / ICS / Markdown…）存在即完整——当 UTF-8 JSON 读必然报错，
+        # 曾让出过报告的记录被判成「不完整、缺的盘面要重新起盘」（审计 S-02）。
+        if include_payload and path.suffix.lower() == ".json":
             if record["exists"]:
                 try:
                     record["payload"] = json.loads(path.read_text(encoding="utf-8"))
