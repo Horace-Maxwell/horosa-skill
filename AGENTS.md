@@ -485,6 +485,13 @@ birth / subject / context、natal、davison）、`horosa_tool_run`、dispatch / 
 起课输入（nums / counts / 卦名）给了用不了就 `tool.<技法>_invalid_cast`，结果带 `cast_method`；本地历法域外 `tool.date_range_unsupported`。
 **缺时地**：模型里 zone 可选的技法逐个归属（`agent_guidance.questions`：`ZONE_FACT_TOOLS` / `place_fields_required` 占时起课 / `ZONE_FREE_TOOLS` 附理由 /
 `ZONE_DOCUMENTED_DEFAULTS` 照用并进 warnings），缺了由 `_require_result_facts` 逐字段报（`tool.missing_field`，提示「或传 place」）——绝不让引擎按 +08:00 兜底。
+**事实与缺省分清、写错的键名不照算（v0.51.0-dev 审计修复，台账 2026-11-14）**：出生时刻是事实——神数十四支 `SHENSHU_TIME_TOOLS` 缺 time
+拒（不按 00:00）；起课技法（time_roles moment）缺 date / time 的话术是「传此刻，你知道现在几点」（`ask_user:false`），带 profile 只取人、不取出生时地；
+合盘缺整个第二人 `ask_user:true`；择日窗口缺锚点 date / time 取 startDate / startTime（`_anchor_window_search`）；推运缺目标照上游缺省取时钟、warnings 写明
+（`_disclose_clock_target`——「缺就拒」与上游一致性用例冲突，退回次选）。本技法参数的近似拼写 → `tool.unknown_argument`（`_near_miss`：忽略大小写与 _ / -，
+键长 ≥ 6 容 2 处、4–5 容 1 处，值 None 不算，任何技法真有的参数名不算）；target_year 一类在声明了 datetime 时改名（`TARGET_ALIASES`，不进全局别名表）。
+dispatch / hecan 只下发调用方给了的字段（服务层 `model_dump(exclude_unset=True)`，MCP 面 `_normalize_mcp_request` 对这两个模型同样），place 补的键不报未知参数；
+pydantic 联合的校验错误统一过 `errors.one_error_per_field`（服务层、MCP 两个信封、hecan）。八字口径认不出 → `tool.invalid_option`（不按缺省），`period` 逐键校验。
 **择日的失败先问是不是入参**：`options_zeri.zeri_engine_input_error` 把窗口 / 条件树 / 坐标 / 历法域外映射成逐字段错误，本地扫描窗口越出公元 1–9999 扫描前拒；
 展示盘只吃择日技法声明的键。共用段表的工具按设计不出的段登记在 `exports.registry.SECTIONS_NOT_PRODUCED_BY_DESIGN`（带理由，走 not_requested，不留占位）。
 西占 / 推运 / 七政择日的词表集中在 `western_vocab.py`（v0.50.0-dev）：古典口径键值域取自 `CLASSICAL_PARAM_SPEC_NON_DEFAULT`、挂在 BirthInput，规范值同时是
