@@ -215,7 +215,8 @@ from test_local_js_tools import make_service, requires_chart, requires_current_r
 def _live(tmp_path, payload: dict):
     env = make_service(tmp_path).run_tool("acg", payload, save_result=False)
     assert env.ok, env.error
-    assert not env.warnings, env.warnings
+    # 上游金样用 UT 时刻配美国坐标：审计 F30 的「时区与经度差三小时以上」提示是该有的披露，其余告警一条都不许有
+    assert not [w for w in env.warnings if "不像同一个地方" not in w], env.warnings
     _clean(env)
     return env, _map(env.data["snapshot_text"])
 

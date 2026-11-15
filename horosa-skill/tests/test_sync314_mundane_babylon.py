@@ -163,7 +163,8 @@ from test_local_js_tools import make_service, requires_chart, requires_current_r
 def _live_sky(tmp_path, payload: dict) -> list[str]:
     env = make_service(tmp_path).run_tool("babylon", payload, save_result=False)
     assert env.ok, env.error
-    assert not env.warnings, env.warnings
+    # 参照数据用 UT 配异地坐标（审计 F30 提示）、公元前出生（审计 F22 历法口径说明）：这两类是该有的披露，其余告警一条都不许有
+    assert not [w for w in env.warnings if "不像同一个地方" not in w and "历史纪年" not in w], env.warnings
     _clean(env)
     body = _sky(env.data["snapshot_text"])
     assert body and len(body) == 4, body
