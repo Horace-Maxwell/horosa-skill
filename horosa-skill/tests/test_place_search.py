@@ -347,12 +347,13 @@ def test_unknown_place_is_a_clear_error(tmp_path: Path) -> None:
 
 
 def test_explicit_coordinates_and_zone_beat_place(tmp_path: Path) -> None:
-    """显式坐标在场时根本不查城市库（js_client 被调用即失败）；只给一半坐标是结构化错误，不拿 place 补另一半。
+    """显式坐标在场时城市库不参与定位（只核对标签离坐标多远，审计 F30；查不到照常）；只给一半坐标是结构化错误，不拿 place 补另一半。
     负向对照：去掉「两轴都给了就返回」的短路 → 红（实跑过）。"""
+    from horosa_skill.errors import ToolTransportError
 
     class _NoEngine:
         def run(self, *_a: Any, **_k: Any) -> dict[str, Any]:
-            raise AssertionError("explicit coordinates must not hit the place engine")
+            raise ToolTransportError("engine unavailable: the label check must degrade silently")
 
     service = _service(tmp_path, js_client=_NoEngine())
     out = service.resolve_place_fields(
@@ -367,8 +368,9 @@ def test_explicit_coordinates_and_zone_beat_place(tmp_path: Path) -> None:
 @requires_engine
 def test_explicit_zone_beats_the_place_zone(tmp_path: Path) -> None:
     out = _service(tmp_path).resolve_place_fields(
-        {"date": "1988-07-01", "time": "08:00", "zone": "+08:00", "place": "上海"}, tool_name="chart")
+        {"date": "1988-07-01", "time": "08:00", "zone": "+08:00", "place": "上海", "zone_confirmed": True}, tool_name="chart")
     assert out["zone"] == "+08:00" and out["lat"] == "31n13" and out["placeResolution"]["zone_source"] == "explicit"
+    assert "zone_confirmed" not in out
 
 
 @requires_engine

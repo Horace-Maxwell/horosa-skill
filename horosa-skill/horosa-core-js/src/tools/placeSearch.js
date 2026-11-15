@@ -67,7 +67,35 @@ async function decide(query, folded, dateStr, limit) {
 		const second = await decidePlace(folded, { upstream: await resolvePlaceOffline(folded, { dateStr, limit }), limit });
 		if (second.status === 'resolved') verdict = { ...second, query, folded_from: folded };
 	}
+	if (verdict.status === 'not_found') {
+		const shorter = await addressFallback(query, dateStr, limit);
+		if (shorter) verdict = shorter;
+	}
 	return { upstream, verdict };
+}
+
+// 长地址 / 医院 / 机场（审计 F18）：「广东省深圳市南山区粤海街道」「北京协和医院」「上海浦东机场」「北京附近」以前一律 not_found、零建议。
+// 从右往左逐段去掉末尾的街道 / 路 / 号 / 医院 / 机场 / 学校 / 「附近」，取第一个能唯一解析的前缀：resolved + caveat 写明丢了哪段、按哪一级取坐标。
+// 只在原样查不到时才走；坐标仍只来自库里的条目。
+const ADDRESS_TAIL = /(?:街道|大道|路|街|巷|弄|号|號|栋|棟|楼|樓|室|医院|醫院|机场|機場|火车站|車站|车站|大学|大學|学院|學院|中学|中學|小学|小學|村|社区|社區|附近|一带|一帶|周边|周邊|地区|地區)$/u;
+async function addressFallback(query, dateStr, limit) {
+	const text = `${query}`.trim();
+	const tail = ADDRESS_TAIL.exec(text);
+	if (!tail) return null;
+	// 从紧挨末尾关键词的那一处往前逐字试前缀（「北京协和医院」→「北京协和」→「北京」）：第一个能唯一解析的就用；
+	// 碰到歧义 / 太宽的前缀就停（「南山区粤海街道」截出的「南山区」不止一个，不替用户选）。
+	const words = [...text];
+	const cut = words.length - [...tail[0]].length;
+	for (let i = cut; i >= 1; i -= 1) {
+		const prefix = words.slice(0, i).join('').replace(/[,，、\s]+$/u, '');
+		if (!prefix) continue;
+		const v = await decidePlace(prefix, { upstream: await resolvePlaceOffline(prefix, { dateStr, limit }), limit });
+		if (v.status === 'resolved') {
+			return { ...v, query, phrase: prefix, caveats: [...(v.caveats || []), { code: 'address_truncated', dropped: words.slice(i).join(''), used: prefix }] };
+		}
+		if (v.status !== 'not_found' && v.status !== 'near') return null;
+	}
+	return null;
 }
 
 function brief(v) {

@@ -77,3 +77,47 @@ console.log(JSON.stringify(out));
     assert out["Springfield, MO"]["status"] == "resolved" and out["Springfield, MO"]["sub"] == "MO"
     assert out["Windsor, CA"]["status"] == "ambiguous"        # CA 也是加拿大的国家码：两边都留
     assert out["Bath, England"]["status"] == "confirm"        # 英国四部没有包围盒：照旧请确认
+
+
+@requires_node
+def test_long_addresses_fall_back_to_the_level_the_library_has() -> None:
+    """审计 F18：身份证式地址、出生医院、机场、「附近」以前一律 not_found、零建议；截短后歧义的不替用户选。
+    西贡等旧称进别名表：西贡既是香港西贡区也是胡志明市旧称 → 歧义请用户选。负向对照（实跑过）：decide 不走 addressFallback → 红。"""
+    from node_esm import run_node_esm
+
+    script = """
+const { runPlaceSearch } = await import(process.argv[1]);
+const out = {};
+for (const q of ['广东省深圳市南山区粤海街道', '北京协和医院', '上海浦东机场', '北京附近', '南山区粤海街道', '西贡', 'Stalingrad', '中国', 'Japan']) {
+  const v = (await runPlaceSearch({ query: q, date: '1990-05-03' })).data.verdict;
+  out[q] = { status: v.status, name: v.match ? v.match.name : null, caveats: (v.caveats || []).map((c) => c.code), n: (v.candidates || []).length };
+}
+console.log(JSON.stringify(out));
+"""
+    out = json.loads(run_node_esm(script, CORE / "src" / "tools" / "placeSearch.js", cwd=CORE))
+    assert {k: out["广东省深圳市南山区粤海街道"][k] for k in ("status", "name", "caveats")} == {"status": "resolved", "name": "南山区", "caveats": ["address_truncated"]}
+    assert out["北京协和医院"]["name"] == "北京" and out["上海浦东机场"]["name"] == "浦东新区" and out["北京附近"]["name"] == "北京"
+    assert out["南山区粤海街道"]["status"] == "not_found"
+    assert out["西贡"]["status"] == "ambiguous" and out["Stalingrad"]["caveats"] == ["alias_historical"]
+    # 审计 F32：只给国家时不列子串命中的「候选」（中国 → 西安、拉萨；Japan → Pajapan）
+    assert out["中国"]["status"] == out["Japan"]["status"] == "too_broad" and out["中国"]["n"] == out["Japan"]["n"] == 0
+
+
+@requires_node
+def test_bare_name_takes_the_one_curated_city_and_says_so(tmp_path: Path) -> None:
+    """待决项 5：光写 London → 伦敦（英国），披露；没有精选城市的同名（Dublin / Springfield）、同音的中国城市（Suzhou）、
+    经旧称别名到达的（Canton）照旧问。负向对照（实跑过）：placeResolve.js 里 prominence 分支的条件改成 false → 红。"""
+    from node_esm import run_node_esm
+
+    script = """
+const { decidePlace } = await import(process.argv[1]);
+const out = {};
+for (const q of ['London', 'Dublin', 'Springfield', 'Suzhou', 'Canton']) {
+  const r = await decidePlace(q, { limit: 10 });
+  out[q] = { status: r.status, by: r.matched_by || null, name: r.match ? r.match.name : null, caveats: (r.caveats || []).map((c) => c.code) };
+}
+console.log(JSON.stringify(out));
+"""
+    out = json.loads(run_node_esm(script, CORE / "src" / "tools" / "placeResolve.js", cwd=CORE))
+    assert out["London"] == {"status": "resolved", "by": "prominence", "name": "伦敦", "caveats": ["prominence_default"]}
+    assert {out[q]["status"] for q in ("Dublin", "Springfield", "Suzhou", "Canton")} == {"ambiguous"}

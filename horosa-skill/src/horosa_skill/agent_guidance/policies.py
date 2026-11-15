@@ -98,7 +98,7 @@ ASTRO_BIRTH_POLICY = _policy(
     intent="Birth/event astrology chart calculation.",
     required_context=COMMON_BIRTH_FIELDS,
     ask_if_missing=[
-        {"field": "date/time/place", "question": "请提供出生/事件的日期、时间、时区和地点。"},
+        {"field": "date/time/place", "question": "请提供出生/事件的日期、时间和地点（城市即可）。"},
         {
             "field": "hsys",
             "question": "宫制要用哪一种？（索引见上游表：1 是 Alcabitus，不是 Placidus）",
@@ -133,7 +133,7 @@ PREDICTIVE_POLICY = _policy(
     intent="Predictive astrology calculation based on a natal chart and a target time.",
     required_context=COMMON_BIRTH_FIELDS + ["target/prediction date or year"],
     ask_if_missing=[
-        {"field": "natal data", "question": "请提供本命出生日期、时间、时区和地点。"},
+        {"field": "natal data", "question": "请提供本命出生日期、时间和地点（城市即可）。"},
         {"field": "target time", "question": "要推哪一年/哪一天/哪个事件时间？"},
         {"field": "technique settings", "question": "是否沿用星阙默认推运设置？", "options": ["沿用默认", "指定主限/释放/返照等参数"]},
     ],
@@ -158,7 +158,7 @@ def _progression_target_policy(
         intent=intent,
         required_context=COMMON_BIRTH_FIELDS + [str(item.get("field")) for item in targets],
         ask_if_missing=[
-            {"field": "natal data", "question": "请提供本命出生日期、时间、时区和地点。"},
+            {"field": "natal data", "question": "请提供本命出生日期、时间和地点（城市即可）。"},
             *targets,
             {"field": "technique settings", "question": "是否沿用星阙默认推运设置？", "options": ["沿用默认", "指定参数"]},
         ],

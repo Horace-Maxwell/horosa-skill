@@ -10,9 +10,12 @@
 // Rule: a pick is auto-resolved only when an entry's own name, English name, full pinyin, its administrative stem
 // (朝阳区 → 朝阳, 北京城区 → 北京) or a skill alias equals the normalised query — script-, case-, spacing- and
 // punctuation-insensitive — optionally narrowed by qualifiers the library can check (country, Chinese admin
-// ancestry). A name that several distinct places share stays ambiguous: there is deliberately NO "prefer the bigger
-// city" rule (held for the maintainer). Nothing here edits or re-ranks the library; coordinates always come from
-// the library entry that was matched.
+// ancestry). A name that several distinct places share stays ambiguous — with one narrow exception decided by the
+// maintainer (audit 待决项 5, 2026-11-14): with no qualifier at all, when exactly ONE candidate is a curated city
+// (upstream cities.json, the small library) and every rival is an ordinary citiesFull row, the curated city is taken
+// (matched_by 'prominence', caveat 'prominence_default' — always disclosed). London → 伦敦 (not Ontario / Kentucky);
+// Dublin / Springfield / 朝阳 (no curated candidate) and two curated rivals stay ambiguous. Nothing here edits or
+// re-ranks the library; coordinates always come from the library entry that was matched.
 import CITIES from '../vendor/place/data/cities.json' with { type: 'json' };
 import CITY_TRAD_SIMP from '../vendor/place/data/cityTradSimpMap.json' with { type: 'json' };
 import { enrichCity, foldAscii, foldTrad } from '../vendor/place/cityMatch.js';
@@ -603,10 +606,9 @@ export async function decidePlace(query, { upstream = null, limit = 5, allCandid
 	if (!results.length) {
 		const regions = regionOnly(ix, raw);
 		if (regions) {
-			// "美国" / "Texas" / "BJ" (= Benin's ISO code): a region, not a place. Upstream's closest names ride along
-			// so the client can ask "did you mean …" (BJ → 北京 through pinyin initials) without the skill guessing.
-			const near = (upstream && Array.isArray(upstream.candidates) ? upstream.candidates : []).slice(0, cap);
-			return { ...base, status: 'too_broad', regions, candidates: near.map(upstreamView), total: near.length, suggestions: [] };
+			// "美国" / "Texas" / "BJ" (= Benin's ISO code): a region, not a place.
+			// 只给了国家 / 州：上游的子串命中（「中国」→ 西安、拉萨；「Japan」→ Pajapan）不是候选，不列（审计 F32）。
+			return { ...base, status: 'too_broad', regions, candidates: [], total: 0, suggestions: [] };
 		}
 		if (mismatched.length) {
 			const pool = distinct(ix, mismatched[0].pool);
@@ -649,6 +651,20 @@ export async function decidePlace(query, { upstream = null, limit = 5, allCandid
 	const union = [];
 	for (const r of results) for (const h of r.pool) if (!union.some((u) => u.e.id === h.e.id || near(u.e, h.e))) union.push(h);
 	union.sort(rank);
+	const curated = union.filter((h) => h.e.lib === 'S' && !h.alias); // 经别名到达的（Canton → 广州）不算：Canton 本身也是俄亥俄的城市名
+	// 同音的中国城市（Suzhou = 苏州 / 宿州，Fuzhou = 福州 / 抚州）都是大城：精选城市在中国、而对手里也有中国的地方 → 照旧问。
+	const inChina = (e) => Boolean(e.admin) || /^中国/.test(e.region || '') || e.region === 'CN' || /(省|自治区|特别行政区)$/.test(e.region || '');
+	const homophoneInChina = curated.length === 1 && inChina(curated[0].e) && union.some((u) => u !== curated[0] && inChina(u.e));
+	if (results.every((r) => r.quals.length === 0) && curated.length === 1 && !homophoneInChina && !isProvince(curated[0].e)) {
+		const h = curated[0];
+		const others = union.filter((u) => u !== h);
+		return {
+			...base, status: 'resolved', matched_by: 'prominence', alias: null, phrase: raw, qualifiers: [],
+			caveats: [{ code: 'prominence_default', used: h.e.name, others: others.length,
+				alternatives: others.slice(0, 3).map((u) => `${u.e.en || u.e.name}${u.e.region ? ` (${u.e.region})` : ''}`) }],
+			match: view(h), candidates: [view(h)], total: 1, suggestions: [],
+		};
+	}
 	return { ...base, status: 'ambiguous', candidates: union.slice(0, cap).map(view), total: union.length, suggestions: [] };
 }
 

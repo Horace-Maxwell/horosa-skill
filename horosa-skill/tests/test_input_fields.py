@@ -148,7 +148,7 @@ def test_midnight_24_offers_the_next_day_reading() -> None:
 DATE_ACCEPTED = [
     ("1990-05-03", "1990-05-03"), ("1990/5/3", "1990-05-03"), ("1990.5.3", "1990-05-03"), ("19900503", "1990-05-03"),
     ("1990年5月3日", "1990-05-03"), ("1990年5月3號", "1990-05-03"), ("１９９０-０５-０３", "1990-05-03"), ("2000-02-29", "2000-02-29"),
-    ("1900-02-28", "1900-02-28"), ("1500-02-29", "1500-02-29"), ("0000-05-03", "0000-05-03"), ("-0500-03-21", "-0500-03-21"),
+    ("1900-02-28", "1900-02-28"), ("1500-02-29", "1500-02-29"), ("-0500-03-21", "-0500-03-21"),
     ("3000-01-01", "3000-01-01"), ("9999-12-31", "9999-12-31"), ("31/12/1990", "1990-12-31"), ("12/31/1990", "1990-12-31"),
 ]
 DATE_REFUSED = [
@@ -359,7 +359,7 @@ def test_every_new_code_has_an_exact_recovery_entry() -> None:
 # 字段种类由 schema 推（键名 + 模型声明），不手列工具：新技法自动进来。
 FIELD_KINDS: dict[str, tuple[list[Any], set[str]]] = {
     "date": (["1990-02-30", "yesterday", "03/05/1990"], {"tool.invalid_date", "tool.ambiguous_date"}),
-    "time": (["25:00", "辰时", "abc"], {"tool.invalid_time", "tool.time_is_shichen"}),
+    "time": (["25:00", "子时", "abc"], {"tool.invalid_time", "tool.time_is_shichen"}),  # 「辰时」对中式命理照算（待决项 1），子时不分早晚处处要问
     "zone": (["480", "CST", "Mars/Base"], {"tool.invalid_zone"}),
     "lat": (["95", "121e28", "上海"], {"tool.invalid_coordinate"}),
     "lon": (["181", "31n13", "abc"], {"tool.invalid_coordinate"}),
@@ -550,3 +550,60 @@ def test_an_unsigned_zone_is_read_but_flagged() -> None:
     parsed = parse_zone("08:00")
     assert parsed.value == "+08:00" and "没有正负号" in parsed.note_zh
     assert parse_zone("+08:00").note_zh == ""
+
+
+@pytest.mark.parametrize("value", ["0000-05-03", "1582-10-10"])
+def test_year_zero_and_the_reform_gap_are_asked(value: str) -> None:
+    """审计 F22：历史纪年没有公元 0 年（0000 与 -0001 以前读成同一张盘）；1582-10-05…14 改历跳过，问用户是哪种读法。"""
+    with pytest.raises(ToolValidationError):
+        _norm(date=value)
+
+
+def test_dates_before_1583_say_how_they_were_read() -> None:
+    from horosa_skill.input_fields import parse_date
+
+    assert "公元前 500 年" in parse_date("-0500-03-21").note_zh and "公元 1037 年" in parse_date("1037-01-08").note_zh
+    assert parse_date("1990-05-03").note_zh == ""
+
+
+# 审计 F06：约数 / 时段 / 区间 → 问用户，options 给覆盖的区间；不再报「写法不对」让模型自己编一个。
+VAGUE_TIMES = [
+    ("下午", ["12:00–18:00"]), ("早上", ["05:00–09:00"]), ("凌晨", ["00:00–06:00"]), ("morning", ["05:00–12:00"]),
+    ("大概8点", ["08:00", "20:00"]), ("8点左右", ["08:00", "20:00"]), ("8点多", ["08:00", "20:00"]), ("下午三点左右", ["15:00"]),
+    ("around 3pm", ["15:00"]), ("约08:30", ["08:30"]), ("快12点", ["00:00", "12:00"]), ("晚上8点到10点", ["20:00–22:00"]),
+    ("八九点", ["08:00–09:00 或 / or 20:00–21:00"]), ("7点到9点", ["07:00–09:00 或 / or 19:00–21:00"]),
+]
+
+
+@pytest.mark.parametrize(("value", "options"), VAGUE_TIMES)
+def test_vague_times_are_asked_with_the_span_they_cover(value: str, options: list[str]) -> None:
+    """负向对照（实跑过）：parse_time 里不调 _approximate_time → 全部回到 tool.invalid_time（「八九点」是 KeyError）→ 红。"""
+    error = _refused(time=value)
+    assert error.code == "tool.time_approximate"
+    assert [option["value"] for option in error.details["options"]] == options
+    assert error.details["agent_recovery"]["must_ask_user"] is True
+
+
+def test_cn_hour_numbers_are_not_shadowed_by_the_lunar_reader() -> None:
+    """两个 _cn_number 同名时农历那个把钟点那个顶掉：「二十三点」KeyError、「十二三点」读成 12 点。负向对照：把农历那个改回同名 → 红。"""
+    assert _norm(time="二十三点")["time"] == "23:00:00"
+    assert _refused(time="十二三点").code == "tool.invalid_time"
+
+
+def test_confirmed_approximate_time_is_disclosed() -> None:
+    with input_notes_scope(fresh=True) as notes:
+        out = _norm(time="08:00", time_approximate=True)
+    assert out["time"] == "08:00:00" and "time_approximate" not in out
+    assert any("约数" in note for note in notes)
+
+
+def test_gregorian_date_with_a_matching_lunar_note_is_read_as_gregorian() -> None:
+    """审计 F34：「1990年5月3日（农历四月初九）」以前整体判成农历拒掉。负向对照（实跑过）：parse_date 不调 _annotated_lunar → 红。"""
+    assert _norm(date="1990年5月3日（农历四月初九）")["date"] == "1990-05-03"
+    assert _norm(date="1991-02-07（农历腊月廿三）")["date"] == "1991-02-07"
+
+
+def test_gregorian_date_with_a_conflicting_lunar_note_is_asked() -> None:
+    error = _refused(date="1990-05-03(农历四月初十)")
+    assert error.code == "tool.field_conflict" and error.details["agent_recovery"]["must_ask_user"] is True
+    assert [str(option.get("value", option)) if isinstance(option, dict) else option for option in error.details["options"]] == ["1990-05-03", "1990-05-04"]

@@ -91,6 +91,7 @@ DATE_SELECTION = IntentClass(
            "哪个日子", "什么日子", "宜不宜", "wedding date", "lucky day"),
     patterns=(
         r"适[合宜][^,，。?？]{0,10}[吗么不]",
+        r"[挑选找择][一个]{0,2}[^,，。?？]{0,8}(日子|吉日|好日|黄道吉日)",   # 审计 F21：「帮我在 12 月挑个结婚的日子」
         r"(pick|choose|find|select) (a|an|the) ((good|lucky|auspicious|wedding|moving|opening) )?(date|day)",
         r"auspicious (date|day|time)",
         r"(good|best|lucky) (day|date|time) (to|for)",
@@ -104,6 +105,45 @@ DATE_SELECTION = IntentClass(
     # 择日不配对：每种择日法的条件树词表不同，同一份 conditions 交给两种方法是错的。
     label_zh="择日", label_en="date selection",
 )
+
+# 审计 F21：「明天适合搬家吗」——点名了一天、问那一天宜不宜做一件事 → 缺省老黄历（披露），不是「在一段时间里找日子」。
+# 文本已折成简体小写（query_text.normalize_query）。
+SINGLE_DAY_PATTERN = (
+    r"(今天|今日|明天|明日|大后天|后天|[这本下]周[一二三四五六日天]|[这本下]个?星期[一二三四五六日天]|周[一二三四五六日天]|星期[一二三四五六日天]"
+    r"|\d{1,2}月\d{1,2}[日号]|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\btoday\b|\btomorrow\b|day after tomorrow"
+    r"|\bon (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)"
+)
+SUITABILITY_PATTERN = r"(适[合宜]|宜不宜|宜[^,，。?？]{0,6}[吗么]|good day|good time|ok to|okay to|auspicious)"
+# 「在一段时间里挑」的词：出现就不是单日问宜忌。
+RANGE_WORDS: tuple[str, ...] = ("哪天", "哪一天", "哪个日子", "挑", "选", "找", "吉日", "好日子", "which day", "pick", "choose", "find", "select")
+# 用事 → 黄历宜忌栏里的对应词（只用来告诉模型去宜 / 忌两栏里找哪个词；不改起盘参数）。
+YIJI_TERMS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("搬家", "乔迁", "搬新家", "入住", "move house", "moving", "move into", "move in"), "移徙 / 入宅"),
+    (("结婚", "嫁娶", "办婚礼", "领证", "wedding", "marry", "get married"), "嫁娶"),
+    (("订婚", "提亲", "engagement", "get engaged"), "纳采 / 订盟"),
+    (("开业", "开张", "开市", "开店", "open the shop", "open a shop", "open the store", "opening"), "开市"),
+    (("出行", "旅行", "旅游", "出门", "远行", "出差", "travel", "trip"), "出行"),
+    (("签约", "签合同", "交易", "买房", "sign the contract", "sign a contract", "signing"), "立券 / 交易"),
+    (("动土", "装修", "开工", "破土", "renovat", "construction"), "动土 / 修造"),
+    (("安床",), "安床"), (("理发", "剪头", "剃头", "haircut"), "理发"),
+    (("看病", "求医", "手术", "治病", "surgery", "see a doctor"), "求医 / 治病"),
+    (("安葬", "下葬", "burial", "funeral"), "安葬"), (("祭祀", "上坟", "扫墓"), "祭祀"),
+)
+
+
+def yiji_terms(text: str) -> tuple[str, str] | None:
+    """用事词 → (用户原词, 黄历宜忌词)。认不出 → None。"""
+    for words, term in YIJI_TERMS:
+        hit = next((word for word in words if word in text), None)
+        if hit:
+            return hit, term
+    return None
+
+
+def asks_one_day_suitability(text: str) -> bool:
+    return (bool(re.search(SINGLE_DAY_PATTERN, text)) and bool(re.search(SUITABILITY_PATTERN, text))
+            and not any(word in text for word in RANGE_WORDS))
+
 
 # 强时运词：出现就是问「什么时候 / 运势」，先于「会不会」类判断。
 LIFE_TIMING_STRONG: tuple[str, ...] = (

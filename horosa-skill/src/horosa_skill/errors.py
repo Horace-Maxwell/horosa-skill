@@ -985,6 +985,11 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
     "tool.time_ampm_unclear": {"kind": "input", "prompt_to_user": bilingual(
         "是上午还是下午（details.options 两个钟点选一个）？", "Morning or evening (pick one of the two times in details.options)?"),
         "next_action": "ask_user_for_time"},
+    # 审计 F06：约数 / 时段 / 区间——问用户能否说准；用户明说「就按 X 算」才带 time_approximate: true 重试。
+    "tool.time_approximate": {"kind": "input", "prompt_to_user": bilingual(
+        "给的是约数或时段（details.options 是它覆盖的区间）：能说得更准吗？若就按某个钟点算，结果会标明是约数。",
+        "That is an approximate time or a period (details.options shows the span): can you be more precise? If we go with one time, the result will mark it as approximate."),
+        "next_action": "ask_user_for_time"},
     "tool.date_incomplete": {"kind": "input", "prompt_to_user": bilingual(
         "日期缺月 / 日：请问用户具体是哪一天。", "The date is missing the month / day: ask the user for the exact day."),
         "next_action": "ask_user_for_date"},
@@ -1045,6 +1050,11 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "参数名写错了（与本技法的某个参数只差几个字）：按 details 里给的合法键名改了再调，不要问用户。",
         "An argument name is misspelled (close to one of this technique's parameters): retry with the valid key in details; do not ask the user."),
         "next_action": "fix_field_and_retry"},
+    # 待决项 3：显式偏移与地名当日的偏移正好差一个夏令时——问一次是哪一种钟。
+    "tool.zone_conflict": {"kind": "input", "prompt_to_user": bilingual(
+        "这个钟点是当时钟表上的时间（夏令时），还是已经换算成标准时间的？（details.options 两个偏移选一个）",
+        "Is this the clock time then in force (daylight saving), or already converted to standard time? (pick one offset in details.options)"),
+        "next_action": "ask_user_for_zone"},
     "tool.field_conflict": {"kind": "input", "prompt_to_user": bilingual(
         "同一件事在两个字段里给了不同的值：只在一处给（details.options 是两个候选）。",
         "Two fields give different values for the same thing: give it in one place only (details.options holds both candidates)."),

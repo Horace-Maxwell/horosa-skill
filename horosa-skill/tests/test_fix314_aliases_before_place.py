@@ -38,6 +38,7 @@ def test_place_aliases_resolve_like_place(tmp_path: Path, key: str) -> None:
 @requires_node
 @pytest.mark.parametrize("alias", ["timezone", "tz", "zone"])
 def test_an_explicit_zone_beats_the_place_zone_whatever_it_is_called(tmp_path: Path, alias: str) -> None:
-    result = _service(tmp_path).run_tool("chart", {**BIRTH, "place": "上海", alias: "+08:00"}, save_result=False)
+    # 1990-05-03 上海在行夏令时（+09:00）：显式 +08:00 正好差一个夏令时，先问一次（待决项 3，tool.zone_conflict）；确认后照用显式值。
+    result = _service(tmp_path).run_tool("chart", {**BIRTH, "place": "上海", alias: "+08:00", "zone_confirmed": True}, save_result=False)
     assert result.ok, result.error
     assert result.input_normalized["zone"] == "+08:00"

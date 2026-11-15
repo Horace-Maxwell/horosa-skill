@@ -485,6 +485,18 @@ def _route_by_intent(request: DispatchInput, text: str, raw_query: str, warnings
         return picked("sixyao", "起一卦", "casting a hexagram", "divination")
     if _contains_any(text, intents.SOLAR_TERM_NAMES):
         return RouteResult(["jieqi_year"], warnings, "calendar")
+    if intents.asks_one_day_suitability(text):
+        result = picked("huangli", "某一天宜不宜做某事", "whether one named day suits an activity", "calendar")
+        matter = intents.yiji_terms(text)
+        if matter:
+            warnings.append(bilingual(
+                f"「{matter[0]}」在黄历宜 / 忌两栏里对应「{matter[1]}」：看它落在宜还是忌。老黄历是这一天的通用宜忌、不看个人命盘；"
+                "要按八字或别的择日法挑日子，请点名（黄历择吉 / 八字择时 / 奇门择日…）。",
+                f"'{matter[0]}' corresponds to '{matter[1]}' in the almanac's do / don't columns: check which column lists it. "
+                "The almanac gives that day's general do's and don'ts, not a personal reading; for a personal or method-based "
+                "pick, name a date-selection method.",
+            ))
+        return result
     if intents.DATE_SELECTION.matches(text):
         _refuse_choice(intents.DATE_SELECTION, text)
     if _contains_any(text, intents.LIFE_TIMING_STRONG):
@@ -524,8 +536,30 @@ _GUIDANCE_HINT = bilingual(
 )
 
 
+_WINDOW_PATTERN = (r"(\d{1,2}月|[这本下]个?月|今年|明年|[这本下]周|[这本下]个?星期|年底|年初|月底|月初|春节前|国庆|"
+                   r"next (week|month|year)|this (week|month|year)|in (january|february|march|april|may|june|july|august|september|october|november|december))")
+
+
+def _date_selection_ask(text: str) -> tuple[str, str]:
+    """审计 F21：用户已经说了窗口 / 用事就不再问这两样，只问还缺的（择日法总要用户挑）。"""
+    has_window = bool(re.search(_WINDOW_PATTERN, text))
+    matter = intents.yiji_terms(text)
+    if not has_window and not matter:
+        return intents.DATE_SELECTION.ask_zh, intents.DATE_SELECTION.ask_en
+    method_zh = "用哪一种择日法来挑：黄历择吉 / 天星择日 / 奇门择日 / 八字择时…？"
+    method_en = "Which method should pick it: almanac (huanglizeri), celestial (tianxing), Qi Men, BaZi …?"
+    lead_zh = "" if has_window else "想在哪段时间里挑（从哪天到哪天）？"
+    lead_en = "" if has_window else "Which date range should be searched? "
+    if not matter:
+        lead_zh, lead_en = lead_zh + "挑日子做什么事？", lead_en + "For what purpose? "
+    tail_zh = f"（{matter[0]}在黄历里对应「{matter[1]}」）" if matter else ""
+    ask_zh, ask_en = lead_zh + method_zh + tail_zh, lead_en + method_en
+    return ask_zh, ask_en
+
+
 def _refuse_choice(intent: intents.IntentClass, text: str) -> None:
     names = list(intent.candidates)
+    ask_zh, ask_en = _date_selection_ask(text) if intent is intents.DATE_SELECTION else (intent.ask_zh, intent.ask_en)
     raise DispatchResolutionError(
         "识别出了意图，但有几种合适的技法，需要用户挑一种（technique choice required）。",
         code=intents.CODE_CHOICE,
@@ -536,7 +570,7 @@ def _refuse_choice(intent: intents.IntentClass, text: str) -> None:
             "hint": _GUIDANCE_HINT,
             "agent_recovery": intents.choice_recovery(
                 intent=intent, names=names, reason="technique_choice_required",
-                prompt_zh=intent.ask_zh, prompt_en=intent.ask_en,
+                prompt_zh=ask_zh, prompt_en=ask_en,
             ),
         },
     )

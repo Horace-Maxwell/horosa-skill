@@ -62,17 +62,18 @@ def _prompt_from_guidance(tool_name: str, ask_if_missing: list[dict[str, Any]], 
             f"{label} still needs these facts only the user knows (accepting defaults cannot stand in for them):",
         ]
     for index, item in enumerate([*facts, *settings][:8], start=1):
-        question = str(item.get("question") or item.get("field") or "请补充这个参数。")
+        question = _for_user(str(item.get("question") or item.get("field") or "请补充这个参数。"))
         options = item.get("options")
         if isinstance(options, list) and options:
-            question = f"{question} 可选 / options：{' / '.join(str(option) for option in options)}"
-        elif item.get("how_to_change"):
-            question = f"{question} {item['how_to_change']}"
+            question = f"{question} 可选 / options：{' / '.join(_for_user(str(option)) for option in options)}"
+        elif item.get("options_count"):
+            count = item["options_count"]
+            question = f"{question}（共 {count} 种可选，不指定就用星阙缺省 / {count} choices; the Xingque default applies unless you pick one）"
         lines.append(f"{index}. {question}")
     if safe_defaults and settings:
-        defaults = "; ".join(f"{item.get('field')}={item.get('value')}" for item in safe_defaults[:5])
-        lines.append(f"如果你想快速继续，也可以明确说“按星阙默认”，我会使用：{defaults}。")
-        lines.append(f"To continue immediately, say “use Xingque defaults” and I will use: {defaults}.")
+        defaults = "；".join(dict.fromkeys(p for p in (_default_phrase(item) for item in safe_defaults[:6] if isinstance(item, dict)) if p)) or "星阙默认设置"
+        lines.append(f"如果你想快速继续，也可以明确说“按星阙默认”，我会用：{defaults}。")
+        lines.append("To continue immediately, say “use Xingque defaults” and I will use the defaults listed above.")
     return "\n".join(lines)
 
 
@@ -121,6 +122,10 @@ def open_questions(tool_name: str, payload: dict[str, Any], *, confirmed: bool) 
     for question in policy.get("ask_if_missing", []):
         if not isinstance(question, dict):
             continue
+        narrowed = gate_questions.narrow(tool_name, question, payload)
+        if narrowed is None:
+            continue
+        question = narrowed
         if not gate_questions.applies(tool_name, question, payload) or gate_questions.answered(tool_name, question, payload):
             continue
         # 性别事实按这次的载荷判（神数正传·铁算心易是查询层，不分男女）：与技法入口的 tool.missing_gender 同一个 gender_required。
@@ -131,8 +136,37 @@ def open_questions(tool_name: str, payload: dict[str, Any], *, confirmed: bool) 
 
 
 def _unanswered_defaults(defaults: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """缺省句只列还没给的键（审计 S-04(d)：太阳返照已传 datetime:"2027"，提示仍说「我会使用 datetime=今年生日时刻」）。"""
-    return [item for item in defaults if not isinstance(item, dict) or payload.get(str(item.get("field") or "")) in (None, "")]
+    """缺省句只列还没给的键（审计 S-04(d)：太阳返照已传 datetime:"2027"，提示仍说「我会使用 datetime=今年生日时刻」）；
+    与这次载荷无关的也不列（审计 F26：没选恒星黄道不说岁差制、北纬不说南半球月令、钟点离 23 点远不说两个子时开关）。"""
+    def relevant(field: str) -> bool:
+        if field == "siderealAyanamsa":
+            return gate_questions._sidereal(payload)
+        if field == "southMonth":
+            return gate_questions._southern(payload)
+        if field in ("after23NewDay", "lateZiHourUseNextDay"):
+            return gate_questions.near_zi_hour(payload)
+        return True
+    return [item for item in defaults if not isinstance(item, dict)
+            or (payload.get(str(item.get("field") or "")) in (None, "") and relevant(str(item.get("field") or "")))]
+
+
+# 念给用户的话里不夹给 AI 看的键名（审计 F26）：括号里带 options_keys / 驼峰键 / 全大写常量 / 「=」/ 上游表索引的整段去掉。
+# 结构化的 ask_if_missing / safe_defaults 照旧带键，给 AI 用。
+_INTERNAL_PAREN = re.compile(
+    r"\s*[（(][^（）()]*(?:options_keys|horosa_|[a-z]+[A-Z][A-Za-z]*|[A-Z][A-Z_]{3,}|=|上游表|upstream index|see the upstream)[^（）()]*[）)]")
+
+
+def _for_user(text: str) -> str:
+    return _INTERNAL_PAREN.sub("", text).strip()
+
+
+def _default_phrase(item: dict[str, Any]) -> str:
+    """「星阙默认：23 点换日（缺省不传=引擎默认 1）；0=24 点换日」→「23 点换日」。"""
+    meaning = str(item.get("meaning") or "").strip()
+    meaning = re.sub(r"^(?:星阙默认|星阙缺省|默认|缺省)[：:]\s*", "", meaning)
+    meaning = re.sub(r"^\[([^\]]+)\]\s*", r"\1：", meaning)
+    head = re.split(r"[（(；;]", meaning, maxsplit=1)[0].strip()
+    return "" if head in ("", "星阙默认", "星阙缺省", "默认", "缺省") else head   # 只说了「默认」的条目不念（如 byLon）
 
 
 def _filter_provided_questions(ask_if_missing: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -230,8 +264,10 @@ def build_clarification_recovery(
 ) -> dict[str, Any]:
     """闸门之后才发现的「必须问用户」（v0.48.0：地名有歧义 / 找不到）：与闸门同一份 agent_recovery 形状
     （must_ask_user、双语 prompt_to_user、带 options 的 ask_if_missing、retry 三件），只是不给「按星阙默认」——地点没有默认值。"""
+    # 地点 / 时区是只有用户知道的事实，不是「设置」（审计 F26：地名歧义的抬头曾是「需要先确认这些会影响结果的设置」）。
+    facts = [{**item, "fact": True} if isinstance(item, dict) else item for item in ask_if_missing]
     return _agent_recovery(
-        tool_name=tool_name, ask_if_missing=ask_if_missing, safe_defaults=[], do_not_assume=do_not_assume, reason=reason,
+        tool_name=tool_name, ask_if_missing=facts, safe_defaults=[], do_not_assume=do_not_assume, reason=reason,
     )
 
 

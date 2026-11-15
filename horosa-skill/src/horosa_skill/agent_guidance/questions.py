@@ -29,8 +29,9 @@ _LOCATION = (("lat", "lon"), ("gpsLat", "gpsLon"), ("place",), ("location",))
 _ALIASES: dict[str, tuple[tuple[str, ...], ...]] = {
     "location": _LOCATION,
     "place": _LOCATION,
-    "birth data": (("date", "time", "zone", "@location"),),
-    "natal data": (("date", "time", "zone", "@location"),),
+    # 审计 F26：给了地名就不缺时区（地名按出生当日补时区）——以前给了 date + time + place 仍问「请提供出生日期、时间、时区和地点」。
+    "birth data": (("date", "time", "zone", "@location"), ("date", "time", "place")),
+    "natal data": (("date", "time", "zone", "@location"), ("date", "time", "place")),
     "date-time": (("date", "time"),),
     "target time": (("datetime",),),
     "four symbols": (("taiyin", "taiyang", "shaoyang", "shaoyin"),),
@@ -209,15 +210,69 @@ def _southern(payload: dict[str, Any]) -> bool:
     return False
 
 
-_PREDICATES = {"southern_latitude": _southern}
+def _sidereal(payload: dict[str, Any]) -> bool:
+    value = payload.get("zodiacal")
+    return str(value).strip().lower() in {"1", "sidereal", "恒星", "恒星黄道"} if value is not None else False
+
+
+_PREDICATES = {"southern_latitude": _southern, "sidereal": _sidereal}
 # 谓词登记（数据在这里，不靠问题里的说明文字）。
 _APPLIES_IF: dict[tuple[str, str], str] = {("bazi_birth", "southMonth"): "southern_latitude"}
+
+
+# 审计 F26：岁差制只在选了恒星黄道时才相关（任何技法）；没选就不问。
+_FIELD_APPLIES_IF: dict[str, str] = {"siderealAyanamsa": "sidereal"}
+_ZI_SWITCHES = ("after23NewDay", "lateZiHourUseNextDay")
+TRUE_SOLAR_QUESTION_ZH = "出生 / 起盘时刻按真太阳时还是直接时间（钟表时）算？"
+TRUE_SOLAR_OPTIONS = ["真太阳时（星阙默认）", "直接时间（钟表时）"]
+
+
+def _clock_minutes(value: Any) -> int | None:
+    match = re.match(r"^\s*(\d{1,2}):(\d{2})", str(value or ""))
+    return int(match.group(1)) * 60 + int(match.group(2)) if match else None
+
+
+def near_zi_hour(payload: dict[str, Any]) -> bool:
+    """钟表时刻或（能算时）地方平太阳时落在 23:00–01:00 附近 → 子时换日 / 晚子时两开关会起作用（late-zi.md）。
+    读不出钟点 → 当作相关（照问）。没经度时按钟点 20:00–04:00 放宽（真太阳时最多可比钟表早约 3 小时：喀什按北京时间）。"""
+    clock = _clock_minutes(payload.get("time"))
+    if clock is None:
+        return True
+    def within(minutes: int, low: int, high: int) -> bool:
+        minutes %= 1440
+        return minutes >= low or minutes <= high
+    try:
+        from horosa_skill.input_fields import parse_coordinate, parse_zone
+
+        lon = float(parse_coordinate(payload.get("lon"), axis="lon").value) if payload.get("lon") not in (None, "") else None
+        zone = parse_zone(payload.get("zone")).value if payload.get("zone") not in (None, "") else None
+    except Exception:  # noqa: BLE001 — 读不懂就退回只看钟点的宽窗口
+        lon, zone = None, None
+    if lon is None or not isinstance(zone, str) or not re.match(r"^[+-]\d{2}:\d{2}$", zone):
+        return within(clock, 20 * 60, 4 * 60 - 1)
+    zone_minutes = (1 if zone[0] == "+" else -1) * (int(zone[1:3]) * 60 + int(zone[4:6]))
+    solar = clock + round(lon * 4) - zone_minutes
+    # ±20 分钟给均时差留余量
+    return within(clock, 22 * 60 + 40, 80) or within(solar, 22 * 60 + 40, 80)
+
+
+def narrow(tool: str, question: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] | None:
+    """按载荷收窄问题（审计 F26）：「真太阳时、子时换日、晚子时」在钟点离 23–01 很远时只剩真太阳时一问；只问两开关的题直接不问。"""
+    field = str(question.get("field") or "")
+    parts = [part.strip() for part in field.split("/")]
+    if not any(switch in parts for switch in _ZI_SWITCHES) or near_zi_hour(payload):
+        return question
+    if "timeAlg" not in parts:
+        return None
+    return {**question, "field": "timeAlg", "question": TRUE_SOLAR_QUESTION_ZH, "options": list(TRUE_SOLAR_OPTIONS), "values": [0, 1]}
 
 
 def applies(tool: str, question: dict[str, Any], payload: dict[str, Any]) -> bool:
     field = str(question.get("field") or "")
     if (tool, field) in NON_BLOCKING:
         return False
+    if field in _FIELD_APPLIES_IF:
+        return _PREDICATES[_FIELD_APPLIES_IF[field]](payload)
     predicate = _APPLIES_IF.get((tool, field))
     return True if predicate is None else _PREDICATES[predicate](payload)
 

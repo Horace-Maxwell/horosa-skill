@@ -115,7 +115,7 @@ class DispatchInput(FlexibleModel):
 
         技法工具收平铺的 date/time/zone/lat/lon，dispatch / hecan 却要 `{"birth": {...}}`。agent 照技法工具的
         习惯平铺传过来时，旧行为是 FlexibleModel 把这些键当额外字段收下、路由却看不见 → 被选中的技法报缺 date，
-        而追问文本让用户「请提供出生日期、时间、时区和地点」——用户明明给过。显式给了 birth / subject 时不动。
+        而追问文本让用户「请提供出生日期、时间和地点（城市即可）」——用户明明给过。显式给了 birth / subject 时不动。
         """
         if not isinstance(data, dict) or data.get("birth") is not None or data.get("subject") is not None:
             return data

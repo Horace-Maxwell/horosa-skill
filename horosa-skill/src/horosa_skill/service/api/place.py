@@ -176,6 +176,23 @@ def _verdict_caveats(verdict: dict[str, Any]) -> list[str]:
                 f"Qualifier '{quals}' (state/province level) is not recorded in the city library; only the country was checked. "
                 f"The name is unique in the library, so {match.get('en') or match.get('name')} was used.",
             ))
+        elif code == "prominence_default":
+            # 待决项 5：光写一个名字、库里恰好一个精选城市 → 取它，每次都说
+            alts = "、".join(caveat.get("alternatives") or [])
+            notes.append(bilingual(
+                f"「{verdict.get('query')}」按最常指的{match.get('name')}（{match.get('region') or ''}）取；同名还有 {caveat.get('others')} 处"
+                f"{f'（{alts} 等）' if alts else ''}，如指别处请加国家或州。",
+                f"'{verdict.get('query')}' was taken as the best-known {match.get('en') or match.get('name')}; {caveat.get('others')} other places share the name"
+                f"{f' ({alts} …)' if alts else ''} — add the country or state if another was meant.",
+            ))
+        elif code == "address_truncated":
+            # 审计 F18：长地址 / 医院 / 机场——库里没有末段，按上一级取坐标
+            notes.append(bilingual(
+                f"城市库里没有「{caveat.get('dropped')}」，按上一级「{match.get('name')}」（{caveat.get('used')}）取坐标，偏差在十公里量级；"
+                "要更准请给经纬度。",
+                f"'{caveat.get('dropped')}' is not in the city library; coordinates are those of '{match.get('en') or match.get('name')}' "
+                f"({caveat.get('used')}), accurate to roughly ten kilometres. Give coordinates for more precision.",
+            ))
     return notes
 
 
@@ -196,6 +213,134 @@ def _query_date_reference(query: Any, context: dict[str, Any]) -> dict[str, Any]
     if target.get("year"):
         return {"date": f"{int(target['year']):04d}-01-01", _QUERY_BASIS: True}
     return None
+
+
+# 审计 F15：时区库（tzdb）在一个区第一次实行标准时之前给的是该区**参考城市**的地方平时（LMT）——北京 1900 年、西安 701 年、
+# 眉山 1037 年都拿到上海的 +08:05。改按出生地经度的地方平时（经度 ÷ 15，取到分钟），这是专业图集的通行做法；披露。
+# 中国大陆 1949-10-01 前：时区库只有上海的历史，当时全国分五个时区、战时各地用时不一 → 只给 caveat + 五时区制按经度的候选（不自动套）。
+_CN_MAINLAND_ZONES = frozenset({"Asia/Shanghai", "Asia/Urumqi", "Asia/Chongqing", "Asia/Harbin", "Asia/Kashgar", "PRC"})
+_CN_FIVE_ZONES = ((127.5, "+08:30", "长白"), (112.5, "+08:00", "中原"), (97.5, "+07:00", "陇蜀"), (82.5, "+06:00", "回藏"), (-999.0, "+05:30", "昆仑"))
+
+
+def _format_offset(minutes: int) -> str:
+    sign = "+" if minutes >= 0 else "-"
+    return f"{sign}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+
+
+def _is_local_mean_time(iana: Any, date: str) -> bool:
+    """这一天在该 IANA 区是否还是 LMT（标准时之前）。公元 1 年以前一律是。读不出 → False（不改）。"""
+    match = _DATE_RE.match(date or "")
+    if not match or not isinstance(iana, str) or not iana:
+        return False
+    year, month, day = int(match.group("year")), int(match.group("month")), int(match.group("day"))
+    if year < 1:
+        return True
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        return datetime(year, month, day, 12, tzinfo=ZoneInfo(iana)).tzname() == "LMT"
+    except (ValueError, KeyError, OverflowError):  # 不认识的区（ZoneInfoNotFoundError 是 KeyError）/ 越界日期：保持时区库的结果
+        return False
+
+
+def local_mean_time_override(iana: Any, date: str, gps_lon: Any, current_zone: Any) -> tuple[str, str] | None:
+    """(新偏移, 说明)；不是 LMT 时代或已经一致 → None。"""
+    if not isinstance(gps_lon, (int, float)) or not _is_local_mean_time(iana, date):
+        return None
+    zone = _format_offset(round(float(gps_lon) * 4))
+    if zone == current_zone:
+        return None
+    note = bilingual(
+        f"{date} 早于 {iana} 实行标准时：时区库给的 {current_zone} 是该区参考城市的地方平时，不是出生地的；"
+        f"改按出生地经度的地方平时 {zone}（经度 ÷ 15）起盘。若有当时当地的确切用时，请直接给 zone。",
+        f"{date} predates standard time in {iana}: the library's {current_zone} is the reference city's local mean time, not the birthplace's; "
+        f"the chart uses the birthplace's local mean time {zone} (longitude ÷ 15). Pass zone if the actual local clock is known.",
+    )
+    return zone, note
+
+
+def china_pre1949_caveat(iana: Any, date: str, gps_lon: Any, zone: Any) -> str:
+    match = _DATE_RE.match(date or "")
+    if not match or iana not in _CN_MAINLAND_ZONES or not isinstance(gps_lon, (int, float)) or _is_local_mean_time(iana, date):
+        return ""
+    if (int(match.group("year")), int(match.group("month")), int(match.group("day"))) >= (1949, 10, 1):
+        return ""
+    offset, name = next((o, n) for bound, o, n in _CN_FIVE_ZONES if float(gps_lon) >= bound)
+    if offset == zone:
+        return ""
+    return bilingual(
+        f"1949 年前中国全国分五个时区、战时各地用时不一，时区库只有上海的历史（这里给的是 {zone}）。按经度这里属{name}时区 {offset}："
+        "内陆出生请向用户核对当时用的钟，确认后直接给 zone。",
+        f"Before 1949 China used five time zones and wartime clocks varied; the library only has Shanghai's history (gave {zone}). "
+        f"By longitude this place was in the {name} zone ({offset}): for inland births confirm the clock then in use and pass zone.",
+    )
+
+
+def _offset_minutes(zone: Any) -> int | None:
+    match = re.match(r"^([+-])(\d{2}):(\d{2})$", str(zone or ""))
+    if not match:
+        return None
+    return (1 if match.group(1) == "+" else -1) * (int(match.group(2)) * 60 + int(match.group(3)))
+
+
+def _explicit_zone_check(out: dict[str, Any], query: str, match: dict[str, Any], *, date: str, time: str | None,
+                         confirmed: bool, tool_name: str) -> str:
+    """待决项 3：显式数字偏移 + 地名，两者推出的偏移不一致时。
+    - 正好差一个夏令时（显式 = 标准时而当时在行夏令时，或反过来）→ 问一次（tool.zone_conflict）；带 zone_confirmed: true 重试照用。
+      schema 曾教模型填 +08:00，1986–1991 中国夏季出生的盘就这样静默差一小时。
+    - 相差更多（海外华人用北京时间写纽约出生的时刻，是合法用法）→ 照算，写明换算成当地是几点。"""
+    from horosa_skill.input_fields import FieldIssue, parse_zone
+
+    try:
+        explicit = parse_zone(out.get("zone")).value
+    except FieldIssue:  # 写坏的 zone 交给校验层报
+        return ""
+    place_zone = match.get("zone_at_time") or match.get("zone")
+    given, local = _offset_minutes(explicit), _offset_minutes(place_zone)
+    if given is None or local is None or given == local:
+        return ""
+    dst = bool(match.get("dst"))
+    dst_pair = (dst and given == local - 60) or (not dst and given == local + 60)
+    if dst_pair and not confirmed:
+        clock = f" {time[:5]}" if time else ""
+        standard, summer = (explicit, place_zone) if dst else (place_zone, explicit)
+        options = [
+            {"value": summer, "label": f"{summer}：这是当时钟表上的时间（夏令时期间出生证、家人记的通常是这个）/ the clock time then in force (DST; what birth records usually show)"},
+            {"value": standard, "label": f"{standard}：这个钟点已经换算成标准时间 / this time was already converted to standard time"},
+        ]
+        raise ToolValidationError(
+            bilingual(f"zone {explicit} 与「{query}」在 {date}{clock} 的偏移 {place_zone} 正好差一个夏令时，需要用户确认。",
+                      f"zone {explicit} and the offset of '{query}' on {date}{clock} ({place_zone}) differ by exactly the DST hour; ask the user."),
+            code="tool.zone_conflict",
+            details={
+                "query": query, "explicit_zone": explicit, "place_zone": place_zone, "dst": dst, "options": options,
+                "example_payload": {"zone": summer, "zone_confirmed": True},
+                "agent_recovery": build_clarification_recovery(
+                    tool_name=tool_name,
+                    ask_if_missing=[{"field": "zone", "question": bilingual(
+                        f"{date}{clock} {query}{'在行夏令时' if dst else '不在夏令时'}（当时钟表是 {place_zone}）。这个钟点是当时钟表上的时间，还是已经换算过的？",
+                        f"On {date}{clock} {query} was {'on' if dst else 'not on'} daylight saving time (clocks showed {place_zone}). "
+                        "Is this the clock time then, or already converted?"), "options": [o["label"] for o in options]}],
+                    do_not_assume=["Do not choose between the two offsets yourself; retry with the chosen zone and zone_confirmed: true."],
+                    reason="zone_conflict"),
+            },
+        )
+    if dst_pair:
+        return bilingual(f"按用户确认，时刻用 zone {explicit} 读（「{query}」当日当时钟表为 {place_zone}）。",
+                         f"As the user confirmed, the time is read with zone {explicit} ('{query}' clocks then showed {place_zone}).")
+    if not time:
+        return bilingual(f"zone {explicit} 与「{query}」在 {date} 的偏移 {place_zone} 不同：按显式 zone 读。",
+                         f"zone {explicit} differs from the offset of '{query}' on {date} ({place_zone}); the explicit zone is used.")
+    from datetime import datetime, timedelta
+
+    try:
+        moment = datetime.strptime(f"{date} {time[:5]}", "%Y-%m-%d %H:%M") + timedelta(minutes=local - given)
+        local_text = moment.strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return ""
+    return bilingual(f"时刻按 {explicit} 读，即「{query}」当地 {local_text}（当地当时 {place_zone}）；若用户说的是当地时间，请改传 zone {place_zone}。",
+                     f"The time is read at {explicit}, i.e. {local_text} local time in '{query}' (then {place_zone}); if the user meant local time, pass zone {place_zone}.")
 
 
 def place_resolution_note(record: dict[str, Any]) -> str:
@@ -535,6 +680,30 @@ class PlaceAPI:
         if at_time and at_time != item["zone"]:
             item["zone_at_time"] = at_time
 
+    def _label_far_from_coordinates(self, query: str, out: dict[str, Any]) -> str:
+        """place 只作标签、坐标是调用方给的：标签地能唯一解析且离坐标 > 200 km 就说一声（审计 F30：「上海」+ 纽约的坐标以前只说 place 只作标签）。"""
+        import math
+
+        lat = next((v for v in (_coerce_coordinate_decimal(out.get(k)) for k in ("gpsLat", "lat")) if v is not None), None)
+        lon = next((v for v in (_coerce_coordinate_decimal(out.get(k)) for k in ("gpsLon", "lon")) if v is not None), None)
+        if lat is None or lon is None or not str(query or "").strip():
+            return ""
+        try:
+            raw = self._run_place_engine({"query": query, "limit": 1})
+        except (ToolValidationError, ToolTransportError):
+            return ""   # 探针：城市库不可用就不做这条核对（坐标照用、结果不变），空串就是答案
+        verdict = (raw.get("data") or {}).get("verdict") if isinstance(raw, dict) else None
+        match = verdict.get("match") if isinstance(verdict, dict) and verdict.get("status") == "resolved" else None
+        if not isinstance(match, dict) or not isinstance(match.get("gpsLat"), (int, float)):
+            return ""
+        p1, p2 = math.radians(lat), math.radians(float(match["gpsLat"]))
+        dl = math.radians(lon - float(match["gpsLon"]))
+        km = 6371 * math.acos(max(-1.0, min(1.0, math.sin(p1) * math.sin(p2) + math.cos(p1) * math.cos(p2) * math.cos(dl))))
+        if km <= 200:
+            return ""
+        return bilingual(f"place「{query}」只作标签，但它离给的坐标约 {round(km)} km：按坐标起盘；若坐标填错了请改正。",
+                         f"place '{query}' is only a label, but it is about {round(km)} km from the given coordinates; the chart uses the coordinates — fix them if they are wrong.")
+
     @staticmethod
     def _switch_day_is_ambiguous(item: dict[str, Any], *, date: str, time: str) -> bool:
         """切换日：钟点真落在缺口（拨快跳过的那段）或重叠（拨回重复的那段）里才问；只对应一个偏移就不问（审计 F14）。"""
@@ -621,6 +790,9 @@ class PlaceAPI:
             out["pos"] = match["name"]  # 上游 createChartRecord / geoNameRawPatch 同样把地名写进 pos
         zone_source = "explicit"
         switch_note = ""
+        confirmed = out.pop("zone_confirmed", None) is True
+        if _present(out.get("zone")) and date:
+            switch_note = _explicit_zone_check(out, query, match, date=date, time=time, confirmed=confirmed, tool_name=label)
         if not _present(out.get("zone")):
             if date is None:
                 zone_source = "not_filled_no_date"
@@ -639,6 +811,14 @@ class PlaceAPI:
                 if match.get("advisory") == "cn-unified":
                     out.setdefault("geoZone", match.get("geoZone"))
                     out["zoneAdvisory"] = "cn-unified"
+            if zone_source in ("place_and_date", "place_and_query_date") and date:
+                lmt = local_mean_time_override(match.get("iana"), date, match.get("gpsLon"), out.get("zone"))
+                if lmt:
+                    out["zone"], lmt_note = lmt
+                    switch_note = f"{switch_note}\n{lmt_note}".strip() if switch_note else lmt_note
+                else:
+                    pre1949 = china_pre1949_caveat(match.get("iana"), date, match.get("gpsLon"), out.get("zone"))
+                    switch_note = f"{switch_note}\n{pre1949}".strip() if switch_note and pre1949 else (pre1949 or switch_note)
         out[PLACE_RESOLUTION_KEY] = {
             "query": query, "status": "resolved", "confidence": "high",
             **_matched_facts(verdict),
@@ -647,7 +827,7 @@ class PlaceAPI:
             "iana": match.get("iana"), "zone": out.get("zone") if zone_source in ("place_and_date", "place_and_query_date") else match.get("zone"),
             "zone_source": zone_source, "dst": match.get("dst"), "advisory": match.get("advisory"),
             "date": date, "engine": ENGINE_LABEL,
-            "caveat_notes": [*_verdict_caveats(verdict), *([switch_note] if switch_note else [])],
+            "caveat_notes": [*_verdict_caveats(verdict), *(switch_note.split("\n") if switch_note else [])],
         }
         return out
 
@@ -657,6 +837,9 @@ class PlaceAPI:
         """lat / lon 都给了：坐标照用，place 只作标签。没给 zone 而有日期时按这组坐标补 zone（不再把 place 静默丢掉、
         再让校验层回头要 zone）；补不出就照旧交给校验层要 zone。"""
         record: dict[str, Any] = {"query": query, "status": "explicit_coordinates", "engine": ENGINE_LABEL}
+        far = self._label_far_from_coordinates(query, out)
+        if far:
+            record["caveat_notes"] = [far]
         if not _present(out.get("zone")):
             dated = out if _present(out.get("date")) or reference is None else reference
             text = _normalize_date_value(f"{dated.get('date')}".strip()) if _present(dated.get("date")) else ""
@@ -673,7 +856,15 @@ class PlaceAPI:
                         raise self._zone_refusal(query, probe, date=text, time=time or "", tool_name=tool_name)
                     out["zone"] = probe.get("zone_at_time") or point["zone"]
                     if probe.get("zone_at_time"):
-                        record["caveat_notes"] = [self._switch_day_note(probe, date=text, time=time or "")]
+                        record["caveat_notes"] = [*record.get("caveat_notes", []), self._switch_day_note(probe, date=text, time=time or "")]
+                    lmt = local_mean_time_override(point.get("iana"), text, lon, out["zone"])
+                    extra = ""
+                    if lmt:
+                        out["zone"], extra = lmt
+                    else:
+                        extra = china_pre1949_caveat(point.get("iana"), text, lon, out["zone"])
+                    if extra:
+                        record["caveat_notes"] = [*record.get("caveat_notes", []), extra]
                     if point.get("advisory") == "cn-unified":
                         out.setdefault("geoZone", point.get("geoZone"))
                         out["zoneAdvisory"] = "cn-unified"

@@ -799,7 +799,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ),
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
-            {"field": "birth data", "question": "请提供出生日期、时间、时区和出生地（藏历日界按当地经度算，易卦星盘读本命盘）。"},
+            {"field": "birth data", "question": "请提供出生日期、时间和出生地（城市即可；藏历日界按当地经度算，易卦星盘读本命盘）。"},
             {"field": "gender", "question": "性别？（藏占流年八卦男命起离顺行、女命起坎逆行）", "options": ["男", "女"], "values": [1, 0]},
             {"field": "flowYear", "question": "流年看哪一年？（藏占流年八卦 / 当年九宫、洛书流年、天中杀近年都跟它走）", "options": ["今年（默认）", "指定年份（flowYear，1–9999）"]},
             {
@@ -827,7 +827,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         ),
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "birth data", "question": "请提供出生日期、时间、时区和出生地（人类图按出生时刻算，灵名字母读上升与宫头）。"},
+            {"field": "birth data", "question": "请提供出生日期、时间和出生地（城市即可；人类图按出生时刻算，灵名字母读上升与宫头）。"},
             {
                 "field": "mayanCorrelation/hdTrueNode/spiritQuadrant/hsys",
                 "question": "玛雅历关联常数、人类图交点、灵名字母象限与宫制是否沿用星阙默认？",
@@ -845,7 +845,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="占星地图（AstroCartoGraphy）：本命时刻行星地理投影线（MC/IC 经度、天顶点、偕升纬度带、线交点）。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和出生地坐标。"},
+            {"field": "date/time/place", "question": "请提供出生日期、时间和出生地（城市名或坐标）。"},
             {"field": "mode", "question": "投影口径沿用默认吗？", "options": ["默认（mundo 真黄纬 + 大圆 + Sepharial 地理等价）", "指定 mode/lsMode/geodetic"]},
         ],
         safe_defaults=[
@@ -899,7 +899,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="宿占/宿盘（人事十二宫缺省按八字公式起盘，读 Java /chart 农历时支；ASC 档不需要）。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生/事件日期、时间、时区和地点。"},
+            {"field": "date/time/place", "question": "请提供出生/事件日期、时间和地点（城市即可）。"},
             {
                 "field": "doubingSu28/houseStartMode",
                 "question": "宿法与人事十二宫起法是否沿用星阙默认？（宿法改二十八宿度数，起法改宫序）",
@@ -942,7 +942,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="卜卦 / horary：盘的时刻是「提问的当下」（占者收到问题、心中疑问成形的那一刻），不是当事人的出生时间。按问题类别取事项宫。",
         required_context=["提问时刻 date/time/zone", "提问地点 lon/lat", "问题类别 category"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供「提问当下」的日期、时间、时区和地点（卜卦以提问时刻起盘，不是出生时间）。"},
+            {"field": "date/time/place", "question": "请提供「提问当下」的日期、时间和地点（城市即可；卜卦以提问时刻起盘，不是出生时间）。"},
             # 上游 CATEGORY_DEF 20 类（此前只列 14）；中文名/事项宫全表见 options_keys.category。
             {
                 "field": "category",
@@ -978,7 +978,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="择日 / electional：评估某个「候选时刻」适不适合做某事；盘的时刻是被评估的候选时间，topicId 决定用事规则包与红线。",
         required_context=["候选时刻 date/time/zone", "举事地点 lon/lat", "用事类型 topicId"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供要评估的候选日期、时间、时区和举事地点。"},
+            {"field": "date/time/place", "question": "请提供要评估的候选日期、时间和举事地点（城市即可）。"},
             {"field": "topicId", "question": "做什么事（用事类型）？", "options": ["结婚 marriage", "开业/创业 business", "入宅/迁居 move_in", "购屋 buy_property", "买卖交易 trade", "购车 buy_car", "签约 contract", "手术 surgery", "出行 travel", "求职 job_hunt", "其它（37 类全表见 options_keys.topicId）"]},
         ],
         safe_defaults=[
@@ -993,7 +993,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="天文地占 / astronomical geomancy：以「起卦时刻」确定性起卦（castMethod='time'，由 date/time 派生 timeSeed，同刻可复现），由 4 母卦推 16 图形入十二宫，取判官/见证/解读技法断吉凶。",
         required_context=["起卦时刻 date/time/zone", "起卦地点 lon/lat", "所问 question", "问类 questionType"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供起卦的日期、时间、时区和地点（地占以起卦时刻确定性起卦）。"},
+            {"field": "date/time/place", "question": "请提供起卦的日期、时间和地点（城市即可；地占以起卦时刻确定性起卦）。"},
             {"field": "question", "question": "所问何事？请给出具体问题。"},
             # 后端 _QTYPES 十一类（webgeomancysrv.py:42-46）；此前给的 lawsuit/theft/pregnancy/property/travel/hope
             # 后端不认、静默改回 custom。
@@ -1155,7 +1155,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="调波盘 / harmonic chart：本命各点黄经×调波数取调波位置，并找同频(合相)。",
         required_context=COMMON_BIRTH_FIELDS + ["harmonic number (调波数)"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生/事件日期、时间、时区和地点。"},
+            {"field": "date/time/place", "question": "请提供出生/事件日期、时间和地点（城市即可）。"},
             {"field": "harmonic", "question": "用哪个调波数？", "options": ["H9（星阙默认）", "H5", "H7", "指定其它调波数（1–360）"]},
         ],
         safe_defaults=[
@@ -1208,7 +1208,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="巴比伦占星：恒星黄道·毕宿锚盘（无宫位/无相位/无上升），解读装置是「位」三法与行星神性。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "date/time/place", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {
                 "field": "scheme/solstice",
                 "question": "实位派系与分至规范取哪一套？（派系改「位」的落点、分至规范改春分度数）",
@@ -1225,7 +1225,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="重置盘(relocation)：保留出生时刻，按新居住地重算十二宫与上升/中天（行星黄经不变）。",
         required_context=COMMON_BIRTH_FIELDS + ["relocLat", "relocLon"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和出生地点。"},
+            {"field": "date/time/place", "question": "请提供出生日期、时间和出生地点（城市即可）。"},
             {
                 "field": "relocLat/relocLon",
                 "question": "重置到哪个地点？（迁居/旅居地的经纬度，如伦敦 51n30 / 0w07）",
@@ -1239,7 +1239,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         "出变换后的整盘与各点变换前后的黄经。",
         required_context=COMMON_BIRTH_FIELDS + ["transformKind (变换种类)"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "date/time/place", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {
                 "field": "transformKind",
                 "question": "做哪一种变换？（旋转与翻转 / 分度重排 / 地方盘 / 换中心与换时刻 / 行星根数 / 坐标类比 六组共 33 种，每种是一张不同的盘；星阙默认倒置盘）",
@@ -1262,7 +1262,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         "并列真实星座（官方边界）、银河黄道、上次与下次换星座、十三宫。",
         required_context=COMMON_BIRTH_FIELDS + ["zodiacVersion (黄道版本)"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "date/time/place", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {
                 "field": "zodiacVersion",
                 "question": "用哪个黄道版本？（十三星座 / 十四星座 / 十二段不等分，共 19 种；各版本的座头与座长不同；星阙默认十三星座·甲本）",
@@ -1278,7 +1278,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="印度占星(Vedic)恒星黄道盘：分宫制全 24 制(indiaHsys 0–24) + 黄道岁差全 47(indiaAyanamsa)。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "date/time/place", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {
                 "field": "indiaHsys",
                 "question": "分宫制取哪一种？（共 24 制，缺省整宫/Rashi）",
@@ -1321,7 +1321,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="Relationship / relative chart.",
         required_context=["inner person birth data", "outer person birth data"],
         ask_if_missing=[
-            {"field": "inner/outer", "question": "请分别提供双方出生日期、时间、时区和地点。"},
+            {"field": "inner/outer", "question": "请分别提供双方出生日期、时间和地点（城市即可）。"},
             # 上游 AstroRelative.js hook 表 relative 0–4（此前只写「星阙默认」）。
             {
                 "field": "relative",
@@ -1347,7 +1347,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="Decennials / 十年大运 timeline.",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "birth data", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {"field": "timeline settings", "question": "十年大运算法设置是否沿用星阙默认？", "options": ["沿用默认", "指定起算/历法/排序/日法"]},
         ],
         safe_defaults=[
@@ -1373,7 +1373,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="紫微斗数命盘（四化流派 + 22 个传本/排盘开关 + 流派叠层，键表见 options_keys；任一传本开关非缺省即走本地 ZiweiCalc 重排，同星阙）。",
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
-            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "birth data", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {"field": "gender", "question": "紫微需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
             {"field": "after23NewDay/lateZiHourUseNextDay/timeAlg", "question": "子时换日、晚子时时柱和时间算法是否沿用星阙默认？", "options": ["沿用默认", "指定"]},
             {
@@ -1398,7 +1398,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="八字命盘（同星阙八字页：本地 lunar.js 引擎起盘，公元前等域外日期与 byLon 走 Java；盘法/流派键见 options_keys）。",
         required_context=COMMON_BIRTH_FIELDS,
         ask_if_missing=[
-            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "birth data", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {"field": "timeAlg/after23NewDay/lateZiHourUseNextDay", "question": "真太阳时、子时换日、晚子时时柱是否沿用星阙默认？", "options": ["沿用默认", "指定设置"]},
             {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
             {
@@ -1430,7 +1430,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         intent="八字大运/流年/direct flow（与 bazi_birth 同源本地引擎，盘法/流派键见 options_keys）。",
         required_context=COMMON_BIRTH_FIELDS + ["gender"],
         ask_if_missing=[
-            {"field": "birth data", "question": "请提供出生日期、时间、时区和地点。"},
+            {"field": "birth data", "question": "请提供出生日期、时间和地点（城市即可）。"},
             {"field": "gender", "question": "排大运需要性别，请选择。", "options": ["男", "女"], "values": [1, 0]},
         ],
         safe_defaults=[

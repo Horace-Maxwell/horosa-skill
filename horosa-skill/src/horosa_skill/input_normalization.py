@@ -63,7 +63,7 @@ TARGET_ALIASES: dict[str, str] = {
 NON_TECHNIQUE_KEYS = frozenset({
     "place", "profile", "knowledge", "name", "pos", "question", "agent_confirmed_settings", "defaults_accepted",
     "clarification_notes", "response_view", "geoZone", "zoneAdvisory", "placeResolution", "cnUnifiedZone", "request",
-    "tool_name", "save_result", "subject", "query", "group_id", "_place_records",
+    "tool_name", "save_result", "subject", "query", "group_id", "_place_records", "zone_confirmed",
 })
 # 只有用户知道的事实：缺了要问用户，不是改写法。
 USER_FACT_FIELDS = frozenset({"date", "time", "zone", "lat", "lon", "gender", "guaDate", "guaTime", "guaZone", "guaLat", "guaLon"})
@@ -179,6 +179,14 @@ def _normalize_party(
     for key in _TIME_KEYS:
         # 空串钟点：模型要求钟点 → 「钟点未知」问用户；否则等于没给。
         _strict(out, key, path, issues, F.parse_time, drop_blank=key not in required)
+    # 审计 F06：用户确认「就按约 8 点算」→ time + time_approximate: true（不广告，只出现在 tool.time_approximate 的示例里）。结果写明是约数。
+    out.pop("zone_confirmed", None)   # 待决项 3 的确认位：地名解析时已读过（service/api/place.py），不进引擎
+    approximate = out.pop("time_approximate", None)
+    if approximate is True and isinstance(out.get("time"), str):
+        F.add_input_note(
+            f"{path}time {out['time'][:5]} 是用户给的约数（确认按此起算）：时柱、命宫 / 上升、宫位与月亮的精确位置都随钟点变，这几处只作参考。",
+            f"{path}time {out['time'][:5]} is the user's approximate time (confirmed to use): the hour pillar, Ascendant / houses and the Moon's exact position move with the clock, so treat them as indicative only.",
+        )
     if "datetime" in out:
         _strict(out, "datetime", path, issues, _parse_target_datetime)
     flagged = {item["field"] for item in issues.items}
@@ -309,8 +317,9 @@ def _fold_era(out: dict[str, Any], date_key: str, era_key: str, path: str, issue
     if out[era_key] == -1 and not date.startswith("-"):
         out[date_key] = f"-{date}"
         F.add_input_note(
-            f"`{path}{era_key}`=-1：`{path}{date_key}` 按公元前读作 {out[date_key]}。",
-            f"`{path}{era_key}`=-1: `{path}{date_key}` was read as the BC date {out[date_key]}.",
+            f"`{path}{era_key}`=-1：`{path}{date_key}` 按公元前读作 {out[date_key]}（历史纪年，没有公元 0 年；1582 年以前各技法引擎的历法口径不一，以正文起盘信息为准）。",
+            f"`{path}{era_key}`=-1: `{path}{date_key}` was read as the BC date {out[date_key]} (historical numbering, no year 0; before 1582 "
+            "the engines differ on the calendar — the chart's header states what was used).",
         )
     if fields is not None and era_key not in fields:
         del out[era_key]  # 纪元已折进日期；本技法本来就不读 ad

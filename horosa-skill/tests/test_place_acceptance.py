@@ -256,9 +256,13 @@ def test_place_with_coordinates_but_no_zone_derives_the_zone_from_the_coordinate
 
 
 def test_explicit_zone_and_coordinates_still_skip_the_engine(tmp_path: Path) -> None:
+    """显式坐标 + 时区：城市库只用来核对标签离坐标多远（审计 F30），查不到也照常、坐标与时区一字不改。"""
+    from horosa_skill.errors import ToolTransportError
+
     class Boom:
         def run(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-            raise AssertionError("engine must not be called")
+            assert tool_name == "place_search" and set(payload) <= {"query", "limit"}, "only the label check may consult the library"
+            raise ToolTransportError("engine unavailable")
 
     out = _service(tmp_path, Boom()).resolve_place_fields(
         {"date": "1988-07-01", "lat": "31n13", "lon": "121e28", "zone": "+08:00", "place": "上海"}, tool_name="chart")

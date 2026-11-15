@@ -171,7 +171,6 @@
     "byLon",
     "godKeyPos",
     "minggongMethod",
-    "southMonth",
     "timeAlg"
    ],
    "facts": [
@@ -193,15 +192,13 @@
   "sample": {
    "ask": [
     "godKeyPos/minggongMethod/school",
-    "timeAlg/after23NewDay/lateZiHourUseNextDay"
+    "timeAlg"
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "byLon",
     "godKeyPos",
     "minggongMethod",
-    "southMonth",
     "timeAlg"
    ],
    "facts": [],
@@ -465,7 +462,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -474,7 +470,6 @@
     "ad",
     "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -484,16 +479,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "lifespanMethod",
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -504,7 +490,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -513,7 +498,6 @@
     "ad",
     "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -523,16 +507,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "lifespanMethod",
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -543,7 +518,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -552,7 +526,6 @@
     "ad",
     "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -562,16 +535,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "lifespanMethod",
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -740,7 +704,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -749,7 +712,6 @@
     "ad",
     "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -759,16 +721,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "lifespanMethod",
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -1015,7 +968,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -1023,7 +975,6 @@
    "defaults": [
     "ad",
     "hsys",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -1033,15 +984,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -1150,7 +1093,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -1158,7 +1100,6 @@
    "defaults": [
     "ad",
     "hsys",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -1168,15 +1109,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -1211,7 +1144,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -1220,7 +1152,6 @@
     "ad",
     "hsys",
     "lifespanMethod",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -1230,16 +1161,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "lifespanMethod",
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -1282,7 +1204,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "huangdiOffset",
     "quHuaGong"
    ],
@@ -1948,7 +1869,6 @@
    "ask": [
     "date/time/place",
     "hsys",
-    "siderealAyanamsa",
     "tradition",
     "zodiacal"
    ],
@@ -1956,7 +1876,6 @@
    "defaults": [
     "ad",
     "hsys",
-    "siderealAyanamsa",
     "zodiacal"
    ],
    "facts": [],
@@ -1966,15 +1885,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "siderealAyanamsa"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [
-    "siderealAyanamsa"
-   ],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -2139,13 +2050,7 @@
    "verdict": "pass"
   },
   "sample": {
-   "ask": [
-    "after23NewDay/lateZiHourUseNextDay/timeAlg"
-   ],
-   "code": "agent_guidance.required",
-   "defaults": [],
-   "facts": [],
-   "verdict": "block"
+   "verdict": "pass"
   },
   "sample_confirmed": {
    "verdict": "pass"
@@ -2513,7 +2418,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "paiPanType",
     "qijuMethod",
     "sex",
@@ -2560,7 +2464,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "maxSpanDays",
     "options",
     "paiPanType",
@@ -2950,9 +2853,7 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "gender",
-    "lateZiHourUseNextDay",
     "liuyaoSettings.askType",
     "liuyaoSettings.school",
     "timeAlg"
@@ -3722,7 +3623,6 @@
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "annualMethod",
     "dayunLength",
     "dingYue",
@@ -3843,12 +3743,10 @@
   },
   "sample": {
    "ask": [
-    "after23NewDay/lateZiHourUseNextDay/timeAlg",
     "sihuaSchool/传本"
    ],
    "code": "agent_guidance.required",
    "defaults": [
-    "after23NewDay",
     "sihuaSchool"
    ],
    "facts": [],

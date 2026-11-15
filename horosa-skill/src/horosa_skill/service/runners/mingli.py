@@ -317,6 +317,8 @@ class MingliRunners:
                 details={"reason": data.get("reason"), "message": data.get("message"), "java_fallback": bool(reason)},
             )
         local = bool(data.get("local"))
+        if local and str(params.get("timeAlg", 0)) == "0":
+            self._note_clock_reading(params, snapshot, data.get("bazi") or {})
         return {
             "bazi": data.get("bazi"),
             "gender": data.get("gender"),
@@ -325,6 +327,41 @@ class MingliRunners:
             "snapshot_text": text,
             "export_snapshot": self._augment_export_payload(technique="bazi", snapshot_text=text),
         }
+
+    def _note_clock_reading(self, params: dict[str, Any], snapshot: Any, bazi: dict[str, Any]) -> None:
+        """真太阳时把时辰 / 日子挪了（审计 F33：成都 23:10 → 真太阳时 21:09，时柱从子时变亥时）：说一句，并给出按钟表时间读的时柱 / 日柱。
+        另一种读法由引擎按「直接时间」再起一次（不手算）；钟表与真太阳时落在同一个时辰、同一天时不起。"""
+        nongli = bazi.get("nongli") if isinstance(bazi.get("nongli"), dict) else {}
+        clock, solar = str(nongli.get("clockTime") or ""), str(nongli.get("solarTime") or nongli.get("birth") or "")
+        if len(clock) < 16 or len(solar) < 16:
+            return
+
+        def bucket(text: str) -> tuple[str, int]:
+            hour = int(text[11:13])
+            return text[:10], ((hour + 1) // 2) % 12
+
+        if bucket(clock) == bucket(solar):
+            return
+        try:
+            other = self.js_client.run("bazi_local", {"params": {**params, "timeAlg": 1}, "snapshot": snapshot}) or {}
+        except Exception:  # noqa: BLE001 — 只是补一句说明，算不出就不说（探针，原结果不受影响）
+            return
+        alt = ((other.get("data") or {}).get("bazi") or {}).get("fourColumns") or {}
+        own = bazi.get("fourColumns") or {}
+
+        def gz(columns: dict[str, Any], key: str) -> str:
+            column = columns.get(key) if isinstance(columns.get(key), dict) else {}
+            return str(column.get("ganZhi") or column.get("ganzi") or "")
+
+        changed = [(label, gz(own, key), gz(alt, key)) for key, label in (("day", "日柱"), ("time", "时柱")) if gz(own, key) != gz(alt, key) and gz(alt, key)]
+        if not changed:
+            return
+        from horosa_skill.input_fields import add_input_note
+
+        parts_zh = "、".join(f"{label}按真太阳时是{mine}、按钟表时间是{theirs}" for label, mine, theirs in changed)
+        parts_en = "; ".join(f"{label}: {mine} by true solar time, {theirs} by clock time" for label, mine, theirs in changed)
+        add_input_note(f"真太阳时 {solar[11:16]}（钟表 {clock[11:16]}）跨了时辰：{parts_zh}。本盘按真太阳时；按钟表时间看请传 timeAlg=1。",
+                       f"True solar time {solar[11:16]} (clock {clock[11:16]}) crosses a double-hour — {parts_en}. This chart uses true solar time; pass timeAlg=1 for the clock reading.")
 
     # ── 紫微（F8）──────────────────────────────────────────────────────────────────────────────
     # 上游 AI 无头复算 buildZiweiSnapshotForParams（ZiWeiMain.js:716-822）：Java /ziwei/birth 起盘，四化流派非通用

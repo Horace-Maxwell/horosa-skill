@@ -310,6 +310,87 @@ def _period_hour(value: Any, period: str, hour: int) -> int:
     raise _time_issue("tool.invalid_time", f"「{value}」读不通，请改传 24 小时制 HH:MM。", f"'{value}' does not parse; pass a 24-hour HH:MM instead.")
 
 
+# 审计 F06：时段词单独出现、约数（大概 / 左右 / 多 / 快 / around）、钟点区间（7点到9点、八九点）——都不是确切钟点。
+# 以前报 tool.invalid_time 且不要求问用户，弱模型会把「下午」改成 15:00 或抄示例的 08:30。现在：问用户，options 给它覆盖的钟表区间。
+_PERIOD_SPANS: dict[str, tuple[str, str]] = {
+    "凌晨": ("00:00", "06:00"), "清晨": ("05:00", "07:00"), "早晨": ("05:00", "09:00"), "早上": ("05:00", "09:00"), "早": ("05:00", "09:00"),
+    "上午": ("08:00", "12:00"), "午前": ("08:00", "12:00"), "中午": ("11:00", "13:00"), "下午": ("12:00", "18:00"), "午后": ("12:00", "18:00"),
+    "午後": ("12:00", "18:00"), "傍晚": ("17:00", "19:00"), "晚上": ("18:00", "24:00"), "晚": ("18:00", "24:00"), "夜晚": ("18:00", "24:00"),
+    "夜里": ("21:00", "05:00"), "夜裡": ("21:00", "05:00"), "半夜": ("23:00", "03:00"), "深夜": ("23:00", "03:00"),
+    "MORNING": ("05:00", "12:00"), "INTHEMORNING": ("05:00", "12:00"), "AFTERNOON": ("12:00", "18:00"), "INTHEAFTERNOON": ("12:00", "18:00"),
+    "EVENING": ("18:00", "22:00"), "INTHEEVENING": ("18:00", "22:00"), "NIGHT": ("21:00", "05:00"), "ATNIGHT": ("21:00", "05:00"),
+}
+_APPROX_PREFIX_RE = re.compile(r"^(?:大概|大约|大約|约莫|約莫|约|約|大致|差不多|估计|估計|可能|ABOUT|AROUND|APPROXIMATELY|APPROX\.?|CIRCA|CA\.|~|～|≈)", re.IGNORECASE)
+_APPROX_SUFFIX_RE = re.compile(r"(?:左右|前后|前後|上下|多钟|多鐘|多|ISH)$", re.IGNORECASE)
+_BEFORE_RE = re.compile(r"^(?:快到|快|将近|將近|接近)(?P<rest>.+)$")
+_CN_HOUR = r"[0-9零〇一二两兩三四五六七八九十]{1,3}"
+_RANGE_RE = re.compile(rf"^(?P<period>[^0-9零〇一二两兩三四五六七八九十]*?)(?P<a>{_CN_HOUR})(?:点|點|时|時)?(?:到|至|-|~|～|—|–)(?P<b>{_CN_HOUR})(?:点钟|點鐘|点|點|时|時)$")
+_ADJ_RANGE_RE = re.compile(r"^(?P<period>[^0-9零〇一二两兩三四五六七八九十]*?)(?P<a>[一二三四五六七八九])(?P<b>[二三四五六七八九十])(?:点钟|點鐘|点|點)$")
+
+
+def _approximate_time(raw: str) -> FieldIssue | None:
+    """F06：是约数 / 时段 / 区间就返回一个要问用户的 FieldIssue（options = 覆盖的钟表区间或候选钟点）；不是就 None。"""
+    compact = raw.replace(" ", "")
+    key = compact.upper()
+
+    def issue(span: str, options: list[dict[str, str]]) -> FieldIssue:
+        first = next((o["value"] for o in options if re.match(r"^\d{2}:\d{2}$", o["value"])), "08:00")
+        return _time_issue(
+            "tool.time_approximate",
+            f"「{raw}」是约数 / 时段（{span}），不是确切钟点。时柱、命宫 / 上升与宫位都随钟点变，不能替用户挑一个：请问用户能否说得更准；"
+            "用户明确说「就按某个钟点算」时，传那个 time 并带 time_approximate: true，结果会标明这是约数。",
+            f"'{raw}' is approximate / a period ({span}), not an exact clock time. The hour pillar, Ascendant and houses all move with the clock, "
+            "so do not pick one: ask the user to be more precise; when the user explicitly says to use a given time, pass it with time_approximate: true "
+            "and the result will mark it as approximate.",
+            options=options, ask_user=True, example=f"{first}:00",
+        )
+
+    if key in _PERIOD_SPANS:
+        start, end = _PERIOD_SPANS[key]
+        return issue(f"{start}–{end}", [{"value": f"{start}–{end}", "label": f"「{raw}」覆盖的钟表区间 / clock span covered by '{raw}'"}])
+    ranged = _RANGE_RE.match(compact) or _ADJ_RANGE_RE.match(compact)
+    if ranged:
+        try:
+            a, b = _cn_number(ranged.group("a")), _cn_number(ranged.group("b"))
+        except KeyError:
+            return None
+        period = ranged.group("period")
+        if a is None or b is None or (period and period not in _PERIOD_SPANS):
+            return None
+        if period:
+            try:
+                a, b = _period_hour(raw, period, a), _period_hour(raw, period, b)
+            except FieldIssue:
+                return None
+        span = f"{a:02d}:00–{b:02d}:00" if period or a > 12 or b > 12 else f"{a:02d}:00–{b:02d}:00 或 / or {(a % 12) + 12:02d}:00–{(b % 12) + 12:02d}:00"
+        return issue(span, [{"value": span, "label": f"「{raw}」覆盖的钟表区间 / clock span covered by '{raw}'"}])
+    core, mode = compact, ""
+    before = _BEFORE_RE.match(core)
+    if before:
+        core, mode = before.group("rest"), "before"
+    else:
+        stripped = _APPROX_PREFIX_RE.sub("", core)
+        if stripped != core:
+            core, mode = stripped, "about"
+        tail = _APPROX_SUFFIX_RE.search(core)
+        if tail and tail.start() > 0:
+            mode = "after" if tail.group(0) in ("多", "多钟", "多鐘") and mode != "about" else "about"
+            core = core[: tail.start()]
+    if not mode or not core:
+        return None
+    try:
+        clocks = [parse_time(core).value[:5]]
+    except FieldIssue as inner:
+        if inner.code != "tool.time_ampm_unclear":
+            return None
+        clocks = [str(option) for option in (inner.options or [])][:2]
+    if not clocks:
+        return None
+    words = {"about": ("约", "about"), "after": ("刚过", "a little after"), "before": ("快到", "shortly before")}[mode]
+    options = [{"value": clock, "label": f"{words[0]} {clock}（约数，用户确认按此算再用）/ {words[1]} {clock} (approximate; use only if the user confirms)"} for clock in clocks]
+    return issue(" / ".join(f"{words[0]} {clock}" for clock in clocks), options)
+
+
 def parse_time(value: Any) -> Parsed:
     if isinstance(value, (bool, int, float)):
         raise _time_issue(
@@ -366,9 +447,15 @@ def parse_time(value: Any) -> Parsed:
             "只知道时辰时，把这一点如实告诉用户并由用户决定取哪个钟点。",
             f"'{raw}' is a double-hour ({start}–{end}), not a clock time. Different times inside it give different Ascendants, houses and true-solar-time results, "
             "so do not pick one: ask the user for the clock time, or let the user decide which time in the span to use.",
-            options=[{"value": f"{start}–{end}", "label": f"{shichen.group('zhi')}时的钟表时段 / clock span of this double-hour"}],
+            options=([{"value": "00:00–01:00", "label": "早子时（当天 00:00–01:00）/ early zi (00:00–01:00 that day)"},
+                      {"value": "23:00–24:00", "label": "晚子时（当天 23:00–24:00）/ late zi (23:00–24:00 that day)"}]
+                     if shichen.group("zhi") == "子" and not text[:1] in ("早", "晚", "夜") else
+                     [{"value": f"{start}–{end}", "label": f"{shichen.group('zhi')}时的钟表时段 / clock span of this double-hour"}]),
             ask_user=True,
         )
+    vague = _approximate_time(raw)
+    if vague is not None:
+        raise vague
     period = next((p for p in (*_PERIOD_AM, *_PERIOD_PM, *_PERIOD_NOON, *_PERIOD_MIDNIGHT) if raw.startswith(p) and len(raw) > len(p)), "")
     body = raw[len(period):].replace(" ", "") if period else raw.replace(" ", "")
     cn = _TIME_CN_RE.match(body)
@@ -438,8 +525,8 @@ def _date_issue(code: str, zh: str, en: str, *, options: list[Any] | None = None
 
 
 def days_in_month_certain(year: int, month: int) -> int:
-    """这个月**最多**有几天——只拒确定不存在的日子。1583 年起按格里历；此前闰日按儒略历（逢 4 年）且两种纪年法（有无 0 年）都放行，
-    1582-10-05…14 的改历缺口不拒：引擎在 1582 年以前按哪部历读，各技法并不一致（见 LESSONS），这里不替它们定。"""
+    """这个月**最多**有几天——只拒确定不存在的日子。1583 年起按格里历；此前闰日按儒略历（逢 4 年）且两种纪年法（有无 0 年）都放行。
+    1582-10-05…14 的改历缺口与公元 0 年由 _era_note 拒（审计 F22，问用户；以前不拒）。"""
     if month in (4, 6, 9, 11):
         return 30
     if month != 2:
@@ -447,6 +534,36 @@ def days_in_month_certain(year: int, month: int) -> int:
     if year >= 1583:
         return 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28
     return 29 if year % 4 == 0 or (year <= 0 and (year + 1) % 4 == 0) else 28
+
+
+def _era_note(year: int, month: int, day: int, raw: str) -> Parsed | None:
+    """审计 F22：历法口径要说出来。公元 0 年不存在（历史纪年）→ 拒；1582-10-05…14（改历跳过的日子）→ 拒并给两种读法；
+    1583 年以前 → 照算，但说清「历史纪年、无公元 0 年、按儒略历读」。"""
+    if year == 0:
+        raise _date_issue(
+            "tool.invalid_date",
+            f"「{raw}」：历史纪年没有公元 0 年。公元前 1 年写 -0001（本仓按历史纪年读，-0001 = 公元前 1 年），公元 1 年写 0001。",
+            f"'{raw}': historical numbering has no year 0. 1 BCE is -0001 here (read as historical numbering), 1 CE is 0001.",
+            options=[f"-0001-{month:02d}-{day:02d}", f"0001-{month:02d}-{day:02d}"], ask_user=True,
+        )
+    if year == 1582 and month == 10 and 5 <= day <= 14:
+        raise _date_issue(
+            "tool.invalid_date",
+            f"「{raw}」落在 1582 年改历跳过的日子里（儒略历 10 月 4 日的次日就是格里历 10 月 15 日）：这一天不存在。"
+            "若是按儒略历记的日子，换成格里历要加 10 天；请问用户是哪一种。",
+            f"'{raw}' falls in the days skipped by the 1582 reform (Julian 4 October was followed by Gregorian 15 October). "
+            "If it is a Julian date, the Gregorian equivalent is 10 days later; ask the user which was meant.",
+            options=[{"value": f"1582-10-{day + 10:02d}", "label": f"儒略历 10 月 {day} 日 = 格里历 1582-10-{day + 10:02d} / Julian 4–14 Oct → Gregorian"}],
+            ask_user=True,
+        )
+    if year < 1583:
+        canonical = f"{'-' if year < 0 else ''}{abs(year):04d}-{month:02d}-{day:02d}"
+        era_zh = f"公元前 {abs(year)} 年" if year < 0 else f"公元 {year} 年"
+        era_en = f"{abs(year)} BCE" if year < 0 else f"{year} CE"
+        return Parsed(canonical, f"日期 {canonical} 按{era_zh}读（历史纪年，没有公元 0 年）；1582-10-15 以前各技法引擎的历法口径不一（多数按儒略历），以正文起盘信息为准。",
+                      f"Date {canonical} was read as {era_en} (historical numbering, no year 0). Before 1582-10-15 the engines differ on the calendar "
+                      "(most use the Julian one); the chart's header states what was used.")
+    return None
 
 
 def _checked_date(value: Any, year: int, month: int, day: int) -> str:
@@ -478,13 +595,14 @@ _LUNAR_TEXT_RE = re.compile(
 _LUNAR_ISO_RE = re.compile(r"^(?P<year>-?\d{1,4})[-/.](?P<leap>闰|閏|L|l)?(?P<month>\d{1,2})[-/.](?P<day>\d{1,2})$")
 
 
-def _cn_number(text: str) -> int:
+def _cn_lunar_number(text: str) -> int:
+    """农历月日的中文数字（初九、十五、廿三、卅）。与上面钟点用的 _cn_number 分开命名——同名时这一个会把那一个顶掉，「二十三点」曾因此 KeyError。"""
     if text.isdigit():
         return int(text)
     if text in ("十",):
         return 10
     if text.startswith("初"):
-        return _cn_number(text[1:]) if text[1:] != "十" else 10
+        return _cn_lunar_number(text[1:]) if text[1:] != "十" else 10
     if text in ("二十",):
         return 20
     if text in ("三十", "卅"):
@@ -520,8 +638,8 @@ def _lunar_parts(raw: str, *, forced: bool) -> tuple[int | None, int, int, bool 
         month, day = _FESTIVALS[match.group("festival")]
         return year, month, day, False, text
     month_text, day_text = match.group("month"), match.group("day")
-    month = _LUNAR_MONTH_WORDS.get(month_text) or _cn_number(month_text)
-    day = _cn_number(day_text)
+    month = _LUNAR_MONTH_WORDS.get(month_text) or _cn_lunar_number(month_text)
+    day = _cn_lunar_number(day_text)
     chinese_numerals = not month_text.isdigit() or not day_text.isdigit()
     if not (marked or forced or chinese_numerals or match.group("leap")):
         return None  # 「1990年5月3日」——阿拉伯数字月日不带农历标记 = 公历，交给下面的公历规则
@@ -612,11 +730,57 @@ def _date_prelude(raw: str) -> Parsed | None:
     return None
 
 
+_ANNOTATED_LUNAR_RE = re.compile(r"^(?P<solar>[^()]+?)\s*\((?P<mark>农历|農曆|阴历|陰曆)\s*(?P<lunar>[^()]+)\)$")
+
+
+def _annotated_lunar(raw: str, *, era_explicit: bool) -> Parsed | None:
+    """审计 F34：「1990年5月3日（农历四月初九）」——公历 + 农历注释。以前整体判成农历拒掉。现在读公历，用注释核对：
+    对得上 → 放行并说明；对不上 → 问用户是哪一个（两个公历候选）。注释里没写年份时按公历那天所在的农历年补。"""
+    match = _ANNOTATED_LUNAR_RE.match(raw)
+    if not match:
+        return None
+    try:
+        solar = parse_date(match.group("solar"), era_explicit=era_explicit)
+    except FieldIssue:
+        return None
+    lunar_text = match.group("lunar").strip()
+    try:
+        from datetime import date as _date
+
+        from horosa_skill.lunar_calendar import to_solar
+
+        y, m, d = (int(part) for part in solar.value.split("-"))
+        year_hint = y if _date(y, m, d) >= to_solar(y, 1, 1) else y - 1   # 农历年从正月初一起
+    except (ValueError, KeyError, IndexError, OverflowError):  # 换算表域外 / 公元前：只读公历并在说明里写「没能核对」
+        year_hint = None
+    candidates = [lunar_text] if re.match(r"^-?\d{3,4}|^[〇零一二三四五六七八九]{4}", lunar_text) else (
+        [f"{year_hint}年{lunar_text}"] if year_hint else [])
+    try:
+        lunar = parse_lunar_date(f"农历{candidates[0]}", forced=True) if candidates else None
+    except FieldIssue:
+        lunar = None
+    if lunar is None:
+        return Parsed(solar.value, f"「{raw}」按公历 {solar.value} 读；括号里的农历注释没能核对。",
+                      f"'{raw}' was read as the Gregorian date {solar.value}; the lunar note in brackets could not be checked.")
+    if lunar.value == solar.value:
+        return Parsed(solar.value, f"「{raw}」按公历 {solar.value} 读，与农历注释对得上。",
+                      f"'{raw}' was read as the Gregorian date {solar.value}; it matches the lunar note.")
+    raise _date_issue(
+        "tool.field_conflict",
+        f"「{raw}」里公历 {solar.value} 与农历注释（= 公历 {lunar.value}）对不上：是哪一天？请问用户。",
+        f"In '{raw}' the Gregorian date {solar.value} and the lunar note (= {lunar.value}) disagree: ask the user which day.",
+        options=[solar.value, lunar.value], ask_user=True,
+    )
+
+
 def parse_date(value: Any, *, era_explicit: bool = False) -> Parsed:
     """→ Parsed('YYYY-MM-DD'，extra 里可能带从 ISO 日期时间拆出的 time / zone)。`era_explicit` = 载荷显式给了 ad。"""
     if isinstance(value, (bool, float)):
         raise _date_issue("tool.invalid_date", f"日期不能是 {value!r}：请传 YYYY-MM-DD 字符串。", f"Date cannot be {value!r}; pass a YYYY-MM-DD string.")
     raw = clean_text(value)
+    annotated = _annotated_lunar(raw, era_explicit=era_explicit)
+    if annotated is not None:
+        return annotated
     pre = _date_prelude(raw)
     if pre is not None:
         return pre
@@ -655,6 +819,10 @@ def parse_date(value: Any, *, era_explicit: bool = False) -> Parsed:
                 ask_user=True,
             )
         canonical = _checked_date(raw, year, int(match.group("month")), int(match.group("day")))
+        era = _era_note(year, int(match.group("month")), int(match.group("day")), raw)
+        # 显式带了 ad：纪元由 ad 折进日期（input_normalization._fold_era 写那条说明，带历法口径）；这里先说「按公元 500 年读」会与折后的公元前相反。
+        if era is not None and not era_explicit:
+            return era
         if canonical == raw:
             return Parsed(canonical)
         plain = _DATE_YMD_RE.match(raw) is not None and match.group("sep") in "-/"

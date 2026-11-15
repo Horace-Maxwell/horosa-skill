@@ -185,6 +185,81 @@ def _profile_runs_notice(store: Any, deleted: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _zone_longitude_note(payload: Any, place_records: list[dict[str, Any]]) -> None:
+    """显式时区与经度差三小时以上（审计 F30：zone 0 / -5 配上海的坐标以前照算无提示）：多半是填错了，照算但说一声。"""
+    if not isinstance(payload, dict) or any(str(r.get("zone_source") or "").startswith("place") for r in place_records or []):
+        return
+    from horosa_skill.input_fields import add_input_note
+    from horosa_skill.input_normalization import _coerce_coordinate_decimal
+
+    zone = str(payload.get("zone") or "")
+    match = re.fullmatch(r"([+-])(\d{2}):(\d{2})", zone)
+    lon = next((v for v in (_coerce_coordinate_decimal(payload.get(k)) for k in ("gpsLon", "lon")) if v is not None), None)
+    if not match or lon is None:
+        return
+    offset = (1 if match.group(1) == "+" else -1) * (int(match.group(2)) + int(match.group(3)) / 60)
+    if abs(lon / 15 - offset) > 3:
+        add_input_note(f"时区 {zone} 与经度 {round(lon, 2)}° 差 {round(abs(lon / 15 - offset), 1)} 小时，不像同一个地方：照算，请核对时区或坐标（或改传 place）。",
+                       f"Zone {zone} and longitude {round(lon, 2)}° differ by {round(abs(lon / 15 - offset), 1)} hours, which looks wrong; computed as given — check them (or pass place).")
+
+
+_PERSON_KEYS = ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "place", "profile", "name", "gender", "ad")
+
+
+def _promote_flat_first_person(tool_name: str, payload: Any) -> Any:
+    """合盘：第一人平铺在顶层（{date, time, place, outer: {…}}，弱模型很自然的写法）→ 提成 inner（审计 F31）。
+    以前回「缺 inner…收到的 ['placeResolution'] 不是这两个键」——泄漏内部键，也没把顶层的人提起来（dispatch 会提）。"""
+    if tool_name != "relative" or not isinstance(payload, dict) or isinstance(payload.get("inner"), dict):
+        return payload
+    # 只有档案名、没给 outer 时不提：那是放错了槽，profile.not_applicable 会点名 inner / outer 两个槽。
+    if not (payload.get("date") or (payload.get("profile") and isinstance(payload.get("outer"), dict))):
+        return payload
+    person = {key: payload[key] for key in _PERSON_KEYS if key in payload}
+    rest = {key: value for key, value in payload.items() if key not in person}
+    from horosa_skill.input_fields import add_input_note
+
+    add_input_note("顶层的出生字段读作第一人（inner）；第二人放在 outer。", "The top-level birth fields were read as the first person (inner); the second person goes in outer.")
+    return {**rest, "inner": person}
+
+
+# 待决项 1（第一档）：中式命理只到时辰粒度——时柱由时辰唯一确定，紫微 / 河洛 / 神数也只读时辰。用户只知道「辰时」时照算：
+# 取时辰中点、按直接时间（时辰本身是太阳时概念，不再做真太阳时换算），披露。西洋 / 七政 / 印度盘（上升两小时差 30°）仍问钟点。
+# 子时不分早晚的照旧问（早子 00–01 与晚子 23–24 差一天）。起课类神数（太玄 / 五兆 / 荆诀 / 皇极经世）用的是此刻，不在表里。
+SHICHEN_PRECISION_TOOLS: frozenset[str] = frozenset({
+    "bazi_birth", "bazi_direct", "ziwei_birth", "heluo", "canping", "yizhangjing", "zhengchuan",
+    "shaozi", "tieban", "beiji", "nanji", "chunzi", "xianqin", "cetian", "qizhengkin", "fendjing", "shenyishu",
+})
+_SHICHEN_ONLY_RE = re.compile(r"^(?P<early>早|晚|夜)?(?P<zhi>[子丑寅卯辰巳午未申酉戌亥])(?:时|時)?(?:辰)?$")
+
+
+def _accept_shichen(definition: Any, payload: Any) -> Any:
+    if definition.name not in SHICHEN_PRECISION_TOOLS or not isinstance(payload, dict) or not isinstance(payload.get("time"), str):
+        return payload
+    match = _SHICHEN_ONLY_RE.match(payload["time"].strip().replace(" ", ""))
+    if not match or (match.group("zhi") == "子" and not match.group("early")):
+        return payload
+    from horosa_skill.input_fields import SHICHEN_SPANS, add_input_note
+
+    zhi = match.group("zhi")
+    if zhi == "子":
+        clock = "23:30:00" if match.group("early") in ("晚", "夜") else "00:30:00"
+    else:
+        clock = f"{(int(SHICHEN_SPANS[zhi][0][:2]) + 1) % 24:02d}:00:00"
+    out = {**payload, "time": clock}
+    fields = getattr(definition.input_model, "model_fields", {}) or {}
+    direct = "timeAlg" in fields and out.get("timeAlg") in (None, "")
+    if direct:
+        out["timeAlg"] = 1
+    raw = payload["time"].strip()
+    add_input_note(
+        f"出生时刻只知时辰「{raw}」：按时辰中点 {clock[:5]}" + ("、直接时间（不做真太阳时换算）" if direct else "") + "起盘。"
+        "时柱由时辰唯一确定；分钟级的细节（真太阳时、刻分）不适用，若用户记得钟点请改传钟点。",
+        f"Only the double-hour '{raw}' is known: the chart uses its midpoint {clock[:5]}" + (" on direct (clock) time, no true-solar correction" if direct else "")
+        + ". The hour pillar is fixed by the double-hour; minute-level details do not apply — pass the clock time if the user remembers it.",
+    )
+    return out
+
+
 @dataclass
 class _ToolCall:
     """一次 run_tool 的现场。`input_normalized` 放这里而不是局部变量：计算途中它会被重新绑定（上游推运缺省、印度流派预设），
@@ -594,6 +669,7 @@ class ToolsAPI:
         """(规范化入参, 自备知识库点名, 并进来的命主档案, 地名解析记录, 调用方写了的键路径)。这一段的 ValidationError 有意抛出去：坏入参不是一次失败的计算。
         先并档案、再解析地名：档案只存 place 文字标签、不进载荷，所以两者不会互相覆盖；载荷自己的 place 照常解析。"""
         tool_name = definition.name
+        payload = _promote_flat_first_person(tool_name, payload)
         # 命主档案在归一化与校验**之前**并进来：显式字段逐键优先，模型缺省值不会冒充「显式」压掉档案里的值。
         # 认不出 / 有歧义的档案名与坏入参同级：拒绝，不起盘（profile.not_found / profile.ambiguous）。
         try:
@@ -604,7 +680,9 @@ class ToolsAPI:
             trace["error_code"] = exc.code
             raise
         payload = _anchor_window_search(definition, payload)
+        payload = _accept_shichen(definition, payload)
         try:
+            payload = self._resolve_dir_place(definition, payload)
             # 地名 → 坐标 + 时区（v0.48.0，service/api/place.py）：lat / lon / zone 是必填，place 得在归一化与校验之前补上；
             # 有歧义 / 找不到 / 旧 runtime 都是结构化拒绝（place.*，带 agent_recovery），同样有意抛出去。
             payload = self.resolve_place_fields(apply_field_aliases(payload, model=definition.input_model), tool_name=tool_name)
@@ -617,6 +695,7 @@ class ToolsAPI:
             # 归一 + 逐字段校验（v0.50.0，input_normalization）：读不懂的字段一次全列出（每个字段一条恢复条目），
             # 做了解读的（东八区 → +08:00、1990年5月3日…）记进 input_notes，成功信封的 warnings 回显。
             payload = normalize_request_payload(payload, model=definition.input_model, tool_name=tool_name, place_records=place_records)
+            _zone_longitude_note(payload, place_records)
             # 自备知识库点名只决定附加上下文：校验前取走，绝不进 input_normalized / 引擎请求 / 存档 subject。
             knowledge_selection = None
             if isinstance(payload, dict) and "knowledge" in payload:
@@ -678,6 +757,28 @@ class ToolsAPI:
         # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
         # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
         return self._attach_technique_card(tool_name, input_normalized, response_data)
+
+    def _resolve_dir_place(self, definition: Any, payload: Any) -> Any:
+        """推运地点按地名给（审计 F19）：「我现在住纽约，看今年的太阳返照」以前 dirPlace 只换来「不是本技法的参数」，盘按出生地算。
+        dirPlace 走同一条地名解析填 dirLat / dirLon；dirZone 由 _default_target_zone 按目标时刻在该地的偏移补（显式 dirZone 照用）。"""
+        fields = getattr(definition.input_model, "model_fields", {}) or {}
+        if not isinstance(payload, dict) or "dirLat" not in fields:
+            return payload
+        label = payload.get("dirPlace") or payload.get("current_place")
+        if not isinstance(label, str) or not label.strip():
+            return payload
+        out = {key: value for key, value in payload.items() if key not in ("dirPlace", "current_place")}
+        if out.get("dirLat") not in (None, "") and out.get("dirLon") not in (None, ""):
+            return out   # 显式坐标优先
+        target = re.match(r"^\s*(-?\d{1,5}-\d{2}-\d{2})", str(out.get("datetime") or ""))
+        probe = {"place": label.strip(), **({"date": target.group(1)} if target else ({"date": out["date"]} if out.get("date") else {}))}
+        resolved = self.resolve_place_fields(probe, tool_name=definition.name)
+        out["dirLat"], out["dirLon"] = resolved.get("lat"), resolved.get("lon")
+        from horosa_skill.input_fields import add_input_note
+
+        add_input_note(f"dirPlace「{label}」读作推运地点 {resolved.get('lat')} {resolved.get('lon')}；推运时区按目标时刻在该地的偏移取。",
+                       f"dirPlace '{label}' was read as the target location {resolved.get('lat')} {resolved.get('lon')}; the target zone follows that place at the target moment.")
+        return out
 
     def _default_target_zone(self, definition: Any, payload: dict[str, Any]) -> None:
         """推运目标时刻的时区缺省（审计 F03 / 待决项 6）：给了带钟点的目标时刻、没给 `dirZone` 时，按**目标地点在目标日期**的偏移取——

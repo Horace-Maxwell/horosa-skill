@@ -1448,16 +1448,20 @@
    "query": "明天适合搬家吗",
    "birth": true,
    "expect": {
-    "code": "dispatch.technique_choice_required",
-    "intent_class": "date_selection"
+    "tools": [
+     "huangli"
+    ],
+    "warn": true
    }
   },
   {
    "query": "明天適合搬家嗎",
    "birth": true,
    "expect": {
-    "code": "dispatch.technique_choice_required",
-    "intent_class": "date_selection"
+    "tools": [
+     "huangli"
+    ],
+    "warn": true
    }
   },
   {
@@ -1486,6 +1490,62 @@
   },
   {
    "query": "is tomorrow a good day to move house",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "huangli"
+    ],
+    "warn": true
+   }
+  },
+  {
+   "query": "后天宜不宜出行",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "huangli"
+    ],
+    "warn": true
+   }
+  },
+  {
+   "query": "12月5日适合开业吗",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "huangli"
+    ],
+    "warn": true
+   }
+  },
+  {
+   "query": "下周六適合結婚嗎",
+   "birth": true,
+   "expect": {
+    "tools": [
+     "huangli"
+    ],
+    "warn": true
+   }
+  },
+  {
+   "query": "帮我在12月挑个结婚的日子",
+   "birth": true,
+   "expect": {
+    "code": "dispatch.technique_choice_required",
+    "intent_class": "date_selection"
+   }
+  },
+  {
+   "query": "幫我在12月挑個結婚的日子",
+   "birth": true,
+   "expect": {
+    "code": "dispatch.technique_choice_required",
+    "intent_class": "date_selection"
+   }
+  },
+  {
+   "query": "下周哪天适合搬家",
    "birth": true,
    "expect": {
     "code": "dispatch.technique_choice_required",
