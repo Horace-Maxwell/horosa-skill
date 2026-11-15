@@ -86,6 +86,8 @@ from horosa_skill.agent_guidance.questions import gender_required, place_fields_
 
 # 技法内部再调技法（择日铸展示盘、三式合一、七政分盘…）时为 True：那些载荷是代码拼的事件时刻，不是用户的命主——性别闸只拦入口调用。
 _INSIDE_TECHNIQUE: ContextVar[bool] = ContextVar("horosa_inside_technique", default=False)
+# 这次 run_tool 是否要在 service 层判设置确认闸（审计 A-4）：档案并进来之后、地名解析之前判（与入口层同一份裁决）。
+_GATE_ENFORCE: ContextVar[bool] = ContextVar("horosa_gate_enforce", default=False)
 
 
 def _key_paths(payload: Any) -> frozenset[str]:
@@ -679,6 +681,14 @@ class ToolsAPI:
         except ToolValidationError as exc:
             trace["error_code"] = exc.code
             raise
+        if _GATE_ENFORCE.get():
+            from horosa_skill.service.api import gate as _gate
+
+            try:
+                _gate.enforce(tool_name, payload, "enforce")
+            except ToolValidationError as exc:
+                trace["error_code"] = exc.code
+                raise
         payload = _anchor_window_search(definition, payload)
         payload = _accept_shichen(definition, payload)
         try:
@@ -985,8 +995,13 @@ class ToolsAPI:
         query_text: str | None = None,
         group_id: str | None = None,
         evaluation_case_id: str | None = None,
+        gate: str | None = None,
     ) -> ToolEnvelope:
+        """`gate`：缺省 "enforce"（service 层判设置确认闸，审计 A-4）；调用方已过闸或内部嵌套调用传 "checked"。"""
         from horosa_skill.agent_guidance import resolve_technique, unknown_tool_details
+        from horosa_skill.service.api import gate as _gate
+
+        gate_mode = _gate.effective(gate)
 
         # 注册键 / MCP 名，或唯一的中文名（「八字」→ bazi_birth，审计 S-10）；后者在 warnings 里说明按哪个技法跑。
         resolved, name_note = resolve_technique(tool_name)
@@ -1020,8 +1035,12 @@ class ToolsAPI:
             if nested:
                 # runner 拼子盘的调用：展示键不是算法输入，摘掉再算（见 _context.PRESENTATION_KEYS）。
                 payload = without_presentation_keys(payload)
-            input_normalized, knowledge_selection, profile_uses, place_records, explicit_paths = self._validated_tool_input(
-                definition, payload, trace)
+            token = _GATE_ENFORCE.set(gate_mode == "enforce" and not nested and not _INSIDE_TECHNIQUE.get())
+            try:
+                input_normalized, knowledge_selection, profile_uses, place_records, explicit_paths = self._validated_tool_input(
+                    definition, payload, trace)
+            finally:
+                _GATE_ENFORCE.reset(token)
             call = _ToolCall(
                 definition, input_normalized, knowledge_selection, trace, degrade_notes,
                 profile_uses=profile_uses, place_records=place_records, input_notes=input_notes, explicit_paths=explicit_paths,

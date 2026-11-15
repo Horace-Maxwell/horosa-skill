@@ -257,3 +257,23 @@ def test_every_external_action_is_pinned_to_a_commit() -> None:
                 loose.append(f"{path.name}:{line_no} {match.group(1)}")
     assert not loose, loose
     assert (workflows.parent / "dependabot.yml").is_file(), "钉了提交号要有 Dependabot 跟进"
+
+
+def test_ci_checks_out_the_pinned_public_upstream_for_the_cross_tree_tests() -> None:
+    """审计平台待决项 13 / PF-20：55 条 [upstream-checkout] 对照测试在 CI 里整段跳过。负向对照：删掉 ci.yml 里设 HOROSA_SOURCE_ROOT 的那一步 → 红。"""
+    import json
+
+    text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+    test_job = text[text.index("\n  test:"):]
+    assert "steps.upstream.outputs.sha" in test_job and "HOROSA_SOURCE_ROOT=$GITHUB_WORKSPACE/.upstream/horosa-public" in test_job
+    state = json.loads((REPO_ROOT / "horosa-skill" / "contracts" / "upstream_provenance.json").read_text(encoding="utf-8"))
+    assert re.fullmatch(r"[0-9a-f]{40}", state["upstream_git_sha"])
+    assert state["upstream_repository"] == "Horace-Maxwell/Horosa-Web-App-comprehensively-improved-MacOS"
+
+
+def test_the_full_benchmark_runs_in_the_darwin_lane_without_blocking() -> None:
+    """审计平台待决项 14：HorosaBench 完整跑进有引擎的 lane，先只记录。负向对照：删掉这一步或去掉 continue-on-error → 红。"""
+    text = (WORKFLOWS / "runtime-matrix.yml").read_text(encoding="utf-8")
+    step = text[text.index("- name: HorosaBench (full suite, record only)"):]
+    step = step[: step.index("- name: Upload lane evidence")]
+    assert "matrix.platform == 'darwin-arm64'" in step and "continue-on-error: true" in step and "--require-full" in step

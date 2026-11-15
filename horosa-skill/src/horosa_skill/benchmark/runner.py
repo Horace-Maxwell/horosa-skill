@@ -135,11 +135,12 @@ def _run_case(case: dict[str, Any], service: Any, sample_payloads: dict[str, Any
             save_result=save_result,
             query_text=case.get("query"),
             evaluation_case_id=case["id"],
+            gate="checked",
         )
         return _evaluate_tool_case(case, result)
     elif case["kind"] == "dispatch":
         payload = _build_case_payload(case, sample_payloads)
-        result = service.dispatch(payload, evaluation_case_id=case["id"])
+        result = service.dispatch(payload, evaluation_case_id=case["id"], gate="checked")
         return _evaluate_dispatch_case(case, result)
     elif case["kind"] == "knowledge":
         payload = _build_case_payload(case, sample_payloads)
@@ -149,6 +150,7 @@ def _run_case(case: dict[str, Any], service: Any, sample_payloads: dict[str, Any
             save_result=save_result,
             query_text=case.get("query"),
             evaluation_case_id=case["id"],
+            gate="checked",
         )
         return _evaluate_knowledge_case(case, result)
     elif case["kind"] == "faithfulness":
@@ -159,6 +161,7 @@ def _run_case(case: dict[str, Any], service: Any, sample_payloads: dict[str, Any
             save_result=save_result,
             query_text=case.get("query"),
             evaluation_case_id=case["id"],
+            gate="checked",
         )
         return _evaluate_faithfulness_case(case, result)
     raise HorosaSkillError(

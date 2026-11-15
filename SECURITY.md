@@ -34,8 +34,11 @@ Security-sensitive areas in this repository include:
   report tools are annotated `destructiveHint=true`.
 - **HTTP transport is opt-in.** `serve --transport streamable-http` (or `sse`) bound to a **non-loopback** address
   refuses to start without a bearer token (`--token` / `HOROSA_MCP_TOKEN`; requests without it get 401) unless you pass
-  `--allow-unauthenticated`. Bound to loopback (`127.0.0.1` / `localhost` / `::1`, the default) it needs no token: any
-  local process can call it, the same trust level as the stdio transport. Every HTTP request's `Host` header is checked
+  `--allow-unauthenticated`. Bound to loopback (`127.0.0.1` / `localhost` / `::1`, the default) it also requires a token:
+  the first start generates one into `<data dir>/mcp-token` (mode 0600) and reuses it, because TCP loopback does not
+  separate local users; `--allow-unauthenticated` opts out. `--token-file` reads the token from a file that must not be
+  group/other-readable (a `--token` argument is visible in the process list). Browser `Origin`s are refused unless listed
+  in `HOROSA_MCP_ALLOWED_ORIGINS`; `GET /healthz` answers `ok` without auth and carries no data. Every HTTP request's `Host` header is checked
   against an allow-list (DNS-rebinding protection): the bind address, loopback, `host.docker.internal`, plus whatever
   `HOROSA_MCP_ALLOWED_HOSTS` adds (comma-separated `name:*`); anything else gets 421, and the 421 body and the start-up
   banner print the exact `HOROSA_MCP_ALLOWED_HOSTS=…` line to add. The token is compared in constant time as UTF-8 bytes.

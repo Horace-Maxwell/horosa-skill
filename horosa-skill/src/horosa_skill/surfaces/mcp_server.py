@@ -347,7 +347,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
         async def _run(payload: Any) -> Any:
             # 先解析地名（lat/lon/zone 必填，得在 MCP 层校验之前补上），再按档案感知的 _mcp_payload 交下去。
             return await _run_tool_blocking(
-                mcp, lambda: service.dispatch(_mcp_payload(_placed(payload, "dispatch"), DispatchInput))
+                mcp, lambda: service.dispatch(_mcp_payload(_placed(payload, "dispatch"), DispatchInput), gate="checked")
             )
 
         return await _gated_run(mcp, gate="dispatch", payload=_merge_mcp_arguments(kwargs), run=_run,
@@ -392,7 +392,9 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
                 # 再按档案感知的 _mcp_payload 交下去（raw 门面 = horosa_profile，原样收）。
                 def _call() -> dict[str, Any]:
                     body = _placed(payload, method) if gate is not None else payload
-                    return getattr(service, method)(_request_object(body) if raw else _mcp_payload(body, model), **(call_kwargs or {}))
+                    # 会起盘的门面已在 _gated_run 里过了闸：service 层不再判第二次（审计 A-4）
+                    extra = {**(call_kwargs or {}), **({"gate": "checked"} if gate is not None else {})}
+                    return getattr(service, method)(_request_object(body) if raw else _mcp_payload(body, model), **extra)
 
                 return await _guarded_facade(mcp, name, _call)
 
@@ -634,7 +636,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             # 闸门看的是技法载荷；放行（或表单答完）之后把最终载荷放回 ReportFromToolInput 的 payload 位。
             body = {**raw_payload, "payload": payload} if gated else raw_payload
             return await _guarded_facade(
-                mcp, "horosa_report_from_tool", lambda: service.report_from_tool(_normalize_mcp_request(body, ReportFromToolInput))
+                mcp, "horosa_report_from_tool", lambda: service.report_from_tool(_normalize_mcp_request(body, ReportFromToolInput), gate="checked")
             )
 
         return _ensure_error_contract(await _gated_run(
@@ -709,7 +711,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             async def _run(body: Any) -> Any:
                 model = TOOL_DEFINITIONS[tool_name].input_model
                 return await _run_tool_blocking(
-                    mcp, lambda: service.run_tool(requested, _mcp_payload(_placed(body, tool_name), model))
+                    mcp, lambda: service.run_tool(requested, _mcp_payload(_placed(body, tool_name), model), gate="checked")
                 )
 
             return await _gated_run(mcp, gate=tool_name, payload=payload, run=_run,
@@ -754,7 +756,7 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             async def _tool(**kwargs: Any) -> ToolEnvelope:
                 async def _run(payload: Any) -> Any:
                     return await _run_tool_blocking(
-                        mcp, lambda: service.run_tool(tool_name, _mcp_payload(_placed(payload, tool_name), model))
+                        mcp, lambda: service.run_tool(tool_name, _mcp_payload(_placed(payload, tool_name), model), gate="checked")
                     )
 
                 return await _gated_run(mcp, gate=tool_name, payload=_merge_mcp_arguments(kwargs), run=_run,

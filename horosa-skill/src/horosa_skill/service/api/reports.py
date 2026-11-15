@@ -546,7 +546,7 @@ class ReportsAPI:
             trace["success"] = True
             return _note_language(result, request.language)
 
-    def report_from_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def report_from_tool(self, payload: dict[str, Any], *, gate: str | None = None) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="report.from_tool",
             metadata={"entrypoint": "report.from_tool", "payload": payload},
@@ -587,6 +587,7 @@ class ReportsAPI:
                 save_result=True,
                 query_text=request.question,
                 group_id=trace["group_id"],
+                gate=gate,   # 审计 A-4：缺省在这次起盘时判闸；入口已过闸的传 "checked"
             )
             if not result.ok:
                 # 起盘失败就报起盘失败。往下走只会在「导出契约缺失」上再失败一次，真正的错误码与恢复说明全丢。

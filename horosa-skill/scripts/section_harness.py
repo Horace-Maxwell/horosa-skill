@@ -53,7 +53,7 @@ def main(argv: list[str]) -> int:
         payload = dict(payloads.get(tool) or {})
         payload.setdefault("agent_confirmed_settings", True)
         try:
-            env = service.run_tool(tool, payload, save_result=False)
+            env = service.run_tool(tool, payload, save_result=False, gate="checked")
         except Exception as exc:  # noqa: BLE001 - the harness must report, not crash
             report[tool] = {"ok": False, "error": f"EXC {type(exc).__name__}: {exc}"[:300]}
             continue

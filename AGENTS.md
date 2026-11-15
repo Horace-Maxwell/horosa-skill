@@ -1908,6 +1908,17 @@ A global stability pass hardened these; keep them true when you touch the releva
   的用例要先清 `HOROSA_*`；时间上限按要拦的回归定（脱敏旧实现 43.7 s → 线 10 s），给 ARM 仿真 lane 留余量。lane 的用例取自 main HEAD，修用例不必重打 tag。
 - **改 horosa-core-js/package.json 同一提交重生锁文件**（`npm install --package-lock-only`；v0.50.0 tag 因此作废，`test_lockfile_root_mirrors_package_json` 守）。
 
+### 9.5.3 审计后半程的四条（v0.51.0-dev）
+
+- **一个模块里顶层函数 / 类不许重名**：后定义的静默顶掉前一个（`_cn_number` 两份 → 「二十三点」KeyError）；ruff F811 抓不到，
+  守卫 `tests/test_no_shadowed_definitions.py`。
+- **会写进程状态的入口（os.environ / 模块级缺省）在测试里要经 monkeypatch 登记**：serve 的自动令牌写 `HOROSA_MCP_TOKEN`，
+  不登记就漏到按字母序在后面的用例（conftest `_mcp_token_never_leaks_between_tests`）。
+- **service 层设置确认闸**（`service/api/gate.py`）：`run_tool / dispatch / hecan / report_from_tool` 缺省 enforce；入口已过闸、内部嵌套、脚本一律写
+  `gate="checked"`（AST 守卫 `test_every_internal_and_surface_call_says_which_gate`）。测试套件缺省 checked，专测闸门标 `@pytest.mark.service_gate`。
+- **改输出缺省形态时，测「下一层」的老用例显式放开上一层**（full 视图超模型预算回目录，线上预算层的用例放开 `mcp.result_budget`），别为了让它们绿去改新形态。
+- **技法登记普查**：`scripts/technique_census.py <技法名>` 列它在哪些表里；`contracts/technique_census.json` 由 `--write` 录，改了表成员要重录（`tests/test_technique_census.py`）。
+
 ### 9.6 发布 · 分发（release / distribution）
 
 - **发布件 = darwin seed + 派生的 win32-x64 + JS 引擎资产（≥ 0.50.0）+ wheel + `.mcpb` + SBOM + 清单 + SHA256SUMS；PyPI 暂缓。** `publish-pypi.yml` 只手动
@@ -2024,9 +2035,16 @@ AI分析挂载 / 命盘事盘储存」四处走同一 builder + 同一段表—�
 - **地名「何时可以不问用户」是 skill 的规则，不镜像上游（v0.50.0，有意偏离）。** 上游 `resolvePlaceOffline` 原样跑、字段原样回（parity 金标照旧），
   但它的 high 会经拼音首字母（NYC → 银川）与地区半截提示（St. Petersburg → 佛州）给错城市。`src/tools/placeResolve.js` 另出 `verdict`：
   条目本名 / 英文名 / 全拼 / 行政区词干 / `placeData/aliases.json` 别名等于规范化查询才 resolved，可带库能核对的国家 / 行政区上级限定词；
-  同名多地一律问，没有「挑大城市」规则；只在用户写的分隔符上拆，跨逗号不粘连。别名只指向库里唯一一条（坐标从条目取，表里无坐标）；
+  同名多地照问——唯一的例外（v0.51.0-dev，待决项 5）：无限定词、候选里恰好一个精选城市（上游 cities.json）、不是经别名到达、对手里没有同在中国的地方
+  （Suzhou / Fuzhou 同音照问）→ 取它，`matched_by: prominence` + caveat `prominence_default` 每次披露；只在用户写的分隔符上拆，跨逗号不粘连。别名只指向库里唯一一条（坐标从条目取，表里无坐标）；
   `placeData/regions.json` 由 `scripts/gen_place_regions.mjs` 从 CLDR 生成，勿手改。改规则先跑 `tests/test_place_acceptance.py`（语料 + 全库性质）。
   re-vendor 后上游若修了首字母 / 头尾回退，规则照旧成立；城市库换版要重审语料里的歧义行。上游缺陷清单待报上游，skill 不改 vendored 原件。
+
+- **入参的时间 / 时区口径（v0.51.0-dev，有意偏离，审计输入一路）。** ① 标准时以前（tzdb 给 LMT）改按出生地经度的地方平时（北京 1900 → +07:46，
+  上游沿用参考城市上海的 +08:05），中国大陆 1949-10-01 前只给五时区制 caveat、不自动套（`service/api/place.py::local_mean_time_override`）；
+  ② 显式数字偏移与地名当日偏移正好差一个夏令时 → `tool.zone_conflict` 问一次（`zone_confirmed: true` 重试照用；坐标 + 偏移不做，会拦掉程序化调用）；
+  ③ 中式命理（八字 / 紫微 / 河洛 / 参评 / 一掌经 / 神数正传与命盘类神数）收「辰时」：时辰中点 + 直接时间（timeAlg=1，显式 timeAlg 照用），子时不分早晚照问（`service/api/tools.py::SHICHEN_PRECISION_TOOLS`）；
+  ④ 真太阳时挪了时辰 / 日子时另起一次直接时间并写明两种读法（只加说明，原结果不变）。上游没有这几条；re-vendor 时核对上游是否已改口径。
 
 - **`[古典格局]` 只挂上游会挂的盘（v0.50.0-dev）。** `engine.registry.CLASSICAL_ANALYSIS_TOOLS` 镜像钉版 `pipeline.js` 的 `CLASSICAL_SKIP_KEYS` /
   `CLASSICAL_SKIP_DERIVED`（`test_analysis_tool_set_mirrors_the_upstream_skip_list` 对钉版逐项比）：十三分 / 十二分 / 希腊分 / 调波 / 龙盘不挂（本命分析冒充派生盘结论），

@@ -169,6 +169,22 @@ jobs:
           # CJK stays in the work dir (data dir, client configs, logs); the runtime root keeps its spaces.
           $runtimeRoot = Join-Path $env:RUNNER_TEMP 'horosa lane runtime'
           uv run python scripts/verify_runtime_live.py "--${{ steps.source.outputs.mode }}" "${{ steps.source.outputs.value }}" --work-dir "$lane" --runtime-root "$runtimeRoot" --expect-payload-platform "${{ matrix.expect_payload }}" @extra --out "$lane\lane-report.json"
+      # 审计平台待决项 14：完整 HorosaBench 进有引擎的 lane（darwin-arm64；x64 lane 已到预算 93% 不放）。先只记录、不阻断
+      # （continue-on-error），bench.json 随 lane 证据上传；拿到两个版本的耗时与波动后再设门槛。
+      - name: HorosaBench (full suite, record only)
+        if: matrix.platform == 'darwin-arm64' && !inputs.skip_pytest
+        continue-on-error: true
+        working-directory: ./horosa-skill
+        shell: bash
+        env:
+          HOROSA_RUNTIME_ROOT: ${{ runner.temp }}/horosa 测试 lane/runtime
+          HOROSA_SKILL_DATA_DIR: ${{ runner.temp }}/horosa 测试 lane/bench-data
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          uv run python scripts/run_benchmark.py --require-full --output "${RUNNER_TEMP}/horosa 测试 lane/bench.json"
+          echo "::notice::HorosaBench full suite took $(( $(date +%s) - started ))s"
+          uv run horosa-skill runtime stop || true
       - name: Upload lane evidence (report, doctor snapshots, launcher + service logs)
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6

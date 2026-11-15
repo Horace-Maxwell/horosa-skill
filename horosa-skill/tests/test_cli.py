@@ -418,7 +418,7 @@ def test_report_from_tool_cli_forwards_ai_answer_and_structured_report(monkeypat
     captured: dict[str, object] = {}
 
     class ServiceStub:
-        def report_from_tool(self, payload: dict[str, object]) -> dict[str, object]:
+        def report_from_tool(self, payload: dict[str, object], gate: str | None = None) -> dict[str, object]:
             captured["payload"] = payload
             return {"ok": True, "artifact_path": str(output_path), "format": "docx"}
 

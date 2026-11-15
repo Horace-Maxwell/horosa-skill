@@ -192,7 +192,7 @@ def test_moira_recast_is_pinned_to_the_stored_run_and_must_match_it(tmp_path: Pa
     class Env:
         ok, error = True, None
 
-    def recast(tool, payload, save_result=True):
+    def recast(tool, payload, save_result=True, gate=None):
         assert tool == "guolao_chart" and save_result is False
         seen.append(payload)
         _capture_figure_data("guolao_moira", case["aux"]["moira"])
@@ -246,7 +246,7 @@ def test_guolao_chart_moira_uses_the_runners_own_settings_and_the_stored_moment(
     class Env:
         ok, error = True, None
 
-    def recast(tool, payload, save_result=True):
+    def recast(tool, payload, save_result=True, gate=None):
         assert tool == "guolao_chart" and save_result is False
         seen.append(payload)
         _capture_figure_data("guolao_moira", case["aux"]["moira"])

@@ -111,7 +111,7 @@ def _validated(model: Any, payload: dict[str, Any]) -> Any:
 
 
 class DispatchAPI:
-    def hecan(self, payload: dict[str, Any], *, include_results: bool = False) -> dict[str, Any]:
+    def hecan(self, payload: dict[str, Any], *, include_results: bool = False, gate: str | None = None) -> dict[str, Any]:
         """合参（v0.28.0 B3；v0.50.0 深审重做）：一问多技法交叉印证。
 
         传统方法论（三式互参、八字紫微互证）+ orchestrator-workers 编排：显式 `tools`（技法名与此前运行的 run_id 可混写，
@@ -124,6 +124,7 @@ class DispatchAPI:
         """
         from horosa_skill.engine import hecan_select
         from horosa_skill.service import hecan_template as tpl
+        from horosa_skill.service.api import gate as _gate
 
         with self.tracer.span(
             workflow_name="hecan.run",
@@ -132,6 +133,7 @@ class DispatchAPI:
             # 命主档案（birth.profile / subject.profile / subject.inner|outer.profile）先并进来才过得了校验；交给 dispatch 前摘回去，
             # 由 dispatch → run_tool 按选中的技法重新并、记出处。认不出的档案名在这里就拒。
             payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
+            _gate.enforce("hecan", payload, gate)   # 审计 A-4：service 层也判闸（入口已过闸的传 gate="checked"）
             try:
                 # 地名在校验之前换成坐标（birth / context / subject 里的 place；有歧义即结构化拒绝）。
                 request = _validated(HecanInput, self.resolve_place_fields(payload, tool_name="hecan"))
@@ -182,7 +184,7 @@ class DispatchAPI:
                 dispatch_payload = birth_profiles.restore_dispatch_refs(request.model_dump(exclude_none=True), profile_uses)
                 dispatch_payload.pop("tools", None)
                 dispatch_payload.pop("max_tools", None)
-                envelope = self.dispatch(dispatch_payload, preselected_tools=fresh, run_id=hecan_run_id, group_id=group_id)
+                envelope = self.dispatch(dispatch_payload, preselected_tools=fresh, run_id=hecan_run_id, group_id=group_id, gate="checked")
                 if not envelope.ok and not envelope.results:
                     # 载荷规划缺事实（起课时刻、第二个人……）：原样透出（含 agent_recovery），不包一层假成功。
                     return self._hecan_refusal(request, trace, code=envelope.code, message=envelope.message, details=envelope.details,
@@ -520,11 +522,16 @@ class DispatchAPI:
         preselected_tools: list[str] | None = None,
         run_id: str | None = None,
         group_id: str | None = None,
+        gate: str | None = None,
     ) -> DispatchEnvelope:
-        """`run_id` / `group_id`（合参内部用）：子技法记进合参自己的 run 与 group，不另开一条。"""
+        """`run_id` / `group_id`（合参内部用）：子技法记进合参自己的 run 与 group，不另开一条。
+        `gate`：缺省在 service 层判闸（审计 A-4，档案并进来之后判）；入口已过闸 / 合参内部传 "checked"。"""
+        from horosa_skill.service.api import gate as _gate
+
         # 命主档案先并进来（只为过 DispatchInput 校验；认不出的档案名在这里就拒）。交给各技法前摘回去：run_tool 按那个技法重新并
         # （性别只进读性别的技法）、在技法卡记出处。
         payload, profile_uses = birth_profiles.expand_dispatch_payload(self.profiles, payload)
+        _gate.enforce("dispatch", payload, gate)
         try:
             # 地名在校验之前换成坐标（birth / context / subject 里的 place；BirthInput 要 lat / lon / zone）。幂等：合参已解析过的原样过。
             request = _validated(DispatchInput, self.resolve_place_fields(payload, tool_name="dispatch"))
@@ -699,6 +706,7 @@ class DispatchAPI:
                         query_text=request.query,
                         group_id=trace["group_id"],
                         evaluation_case_id=evaluation_case_id,
+                        gate="checked",
                     )
                 except ToolValidationError as exc:
                     # 决策层兜底选中的工具随后因缺参被拒时，调用方必须能看到「这个工具是谁选的」——否则一个

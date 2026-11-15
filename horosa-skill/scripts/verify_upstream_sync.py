@@ -73,6 +73,8 @@ PKG_ROOT = REPO_ROOT / "horosa-skill"
 VENDOR_ROOT = REPO_ROOT / "vendor/runtime-source"
 CORE_JS_VENDOR = PKG_ROOT / "horosa-core-js/src/vendor"
 PROVENANCE = PKG_ROOT / "contracts" / "upstream_provenance.json"
+# 公开上游（Horosa-Public）的 GitHub 仓库：CI 按 upstream_provenance.json 里的这一项与提交号浅取（审计平台待决项 13）。
+UPSTREAM_REPOSITORY = "Horace-Maxwell/Horosa-Web-App-comprehensively-improved-MacOS"
 
 # 高信号哨兵：全是曾经出过事故或承载契约的文件（逐字节比对，便宜且致命）。
 SENTINELS = [
@@ -611,6 +613,8 @@ def main() -> None:
                         "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时"
                         "写入——红着写等于把失败洗成一条持久的「已核对」声明。"
                     ),
+                    # CI 按这两项浅取公开上游（审计平台待决项 13）；上游公开仓的地址。
+                    "upstream_repository": UPSTREAM_REPOSITORY,
                     "upstream_git_sha": pin_sha,
                     "upstream_git_committed_at": _git(upstream, "log", "-1", "--format=%cI", pin_sha),
                     "upstream_app_version": _upstream_app_version(upstream),

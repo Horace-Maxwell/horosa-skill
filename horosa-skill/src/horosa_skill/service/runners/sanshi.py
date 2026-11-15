@@ -583,11 +583,13 @@ class SanshiRunners:
                 "context": {"displaySolarTime": display_solar, "isDiurnal": is_diurnal},
             },
             save_result=False,
+            gate="checked",
         )
         taiyi_result = self.run_tool(
             "taiyi",
             {**shared, "options": taiyi_options, "nongli": nongli},
             save_result=False,
+            gate="checked",
         )
         # 口径参数认不出（*_invalid_option）是调用方输入错误，不是引擎故障：直接报错，不出残盘。
         for _res in (qimen_result, taiyi_result):

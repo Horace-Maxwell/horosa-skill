@@ -500,6 +500,7 @@ def selfcheck() -> None:
                 "agent_confirmed_settings": True,
             },
             query_text="selfcheck 活体体检",
+            gate="checked",
         )
         report["steps"]["compute"] = {"ok": result.ok, "tool": "nongli_time", "error": result.error.model_dump(mode="json") if result.error else None}
         probe_result = result
@@ -516,6 +517,7 @@ def selfcheck() -> None:
                     "clarification_notes": "selfcheck degraded chart-only probe",
                 },
                 query_text="selfcheck 降级 chart-only 活体体检",
+                gate="checked",
             )
             report["steps"]["compute_chart_only_fallback"] = {
                 "ok": fallback.ok,
@@ -755,7 +757,7 @@ def tool_run(
                 details=unknown_tool_details(tool_name),
             )
         _enforce_agent_preflight(resolved, payload)
-        result = service.run_tool(tool_name, payload, save_result=save_result, query_text=query_text)
+        result = service.run_tool(tool_name, payload, save_result=save_result, query_text=query_text, gate="checked")
     except ToolValidationError as exc:
         _refuse(exc)
     _emit_json(_localized(result.model_dump(mode="json")), output)
@@ -778,7 +780,7 @@ def export_registry(
     save_result: bool = typer.Option(False, help="Persist the result in local memory."),
 ) -> None:
     service = _service()
-    result = service.run_tool("export_registry", {"technique": technique} if technique else {}, save_result=save_result)
+    result = service.run_tool("export_registry", {"technique": technique} if technique else {}, save_result=save_result, gate="checked")
     _print_json(result.model_dump(mode="json"))
 
 
@@ -791,7 +793,7 @@ def export_parse(
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
     try:
-        result = service.run_tool("export_parse", payload, save_result=save_result)
+        result = service.run_tool("export_parse", payload, save_result=save_result, gate="checked")
     except ToolValidationError as exc:
         _refuse(exc)
     _print_json(result.model_dump(mode="json"))
@@ -803,7 +805,7 @@ def knowledge_registry(
     save_result: bool = typer.Option(False, help="Persist the result in local memory."),
 ) -> None:
     service = _service()
-    result = service.run_tool("knowledge_registry", {"domain": domain} if domain else {}, save_result=save_result)
+    result = service.run_tool("knowledge_registry", {"domain": domain} if domain else {}, save_result=save_result, gate="checked")
     _print_json(result.model_dump(mode="json"))
 
 
@@ -816,7 +818,7 @@ def knowledge_read(
     payload = _load_payload(stdin=stdin, input_file=input_file)
     service = _service()
     try:
-        result = service.run_tool("knowledge_read", payload, save_result=save_result)
+        result = service.run_tool("knowledge_read", payload, save_result=save_result, gate="checked")
     except ToolValidationError as exc:
         _refuse(exc)
     _print_json(_localized(result.model_dump(mode="json")))
@@ -1046,7 +1048,7 @@ def dispatch(
     service = _service()
     try:
         _enforce_agent_preflight("dispatch", payload)
-        result = service.dispatch(payload)
+        result = service.dispatch(payload, gate="checked")
     except ToolValidationError as exc:
         _refuse(exc)
     _emit_json(_localized(result.model_dump(mode="json")), output)
@@ -1095,7 +1097,7 @@ def hecan(
     service = _service()
     try:
         _enforce_agent_preflight("hecan", payload)
-        result = service.hecan(payload)
+        result = service.hecan(payload, gate="checked")
     except ToolValidationError as exc:
         _refuse(exc)
     _emit_json(_localized(result), output)
@@ -1513,7 +1515,8 @@ def report_from_tool(
                 "ai_answer_text": final_ai_answer_text,
                 "include_raw_json": include_raw_json,
                 "output_path": str(output.expanduser()) if output else None,
-            }
+            },
+            gate="checked",
         )
     except ToolValidationError as exc:
         _refuse(exc)

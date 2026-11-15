@@ -1,5 +1,6 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
+  "upstream_repository": "Horace-Maxwell/Horosa-Web-App-comprehensively-improved-MacOS",
   "upstream_git_sha": "e55c3a669bd1222c036a0b1a68b6b473e14ed63e",
   "upstream_git_committed_at": "2026-11-12T14:35:09-05:00",
   "upstream_app_version": "3.14.0",

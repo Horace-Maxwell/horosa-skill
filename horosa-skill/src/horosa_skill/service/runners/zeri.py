@@ -408,7 +408,7 @@ class ZeriRunners:
             if moment_payload is None:
                 return ""
             pick = f"{(hit or {}).get('pick') or (hit or {}).get('start') or ''}".strip()
-            chart_env = self.run_tool("chart", moment_payload, save_result=False)
+            chart_env = self.run_tool("chart", moment_payload, save_result=False, gate="checked")
             if not chart_env.ok:
                 _degrade("tianxing [选中时刻星盘] sub-chart failed: %s", chart_env.error.code if chart_env.error else "unknown")
                 return ""
@@ -429,7 +429,7 @@ class ZeriRunners:
         moment_payload = self._tianxing_moment_payload(payload, hit) if hit else None
         if moment_payload is None:
             raise ValueError(bilingual("没有命中区间，也就没有选中时刻", "no hit interval: there is no selected moment to chart"))
-        env = self.run_tool("chart", moment_payload, save_result=False)
+        env = self.run_tool("chart", moment_payload, save_result=False, gate="checked")
         if not env.ok or not isinstance(env.data, dict):
             raise ValueError(bilingual(f"选中时刻起盘失败：{env.error.code if env.error else 'unknown'}",
                                   f"selected-moment chart failed: {env.error.code if env.error else 'unknown'}"))
@@ -848,7 +848,7 @@ class ZeriRunners:
         # 不再重复拦（与 _tianxing_selected_moment_section 同款）。
         base_payload["agent_confirmed_settings"] = True
         base_payload.setdefault("clarification_notes", f"{tool_name} selected-moment sub-chart")
-        base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
+        base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False, gate="checked")
         if not base_env.ok:
             # 🔴 把基底工具的**原始报错**带出来。只说「铸盘失败」时，无 Mongo 机器上的
             # Java 9999 与真正的接线错误长得一模一样 —— 本轮 live 验证为区分这两者做了整轮排查，
@@ -1135,7 +1135,7 @@ class ZeriRunners:
         if spec["base_tool"]:
             pan_moment = intervals[0].get("pick") if intervals else f"{start_date} {start_time}"
             base_payload = self._zeri_backend_base_payload(tool_name, payload, pan_moment, scan_opts)
-            base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False)
+            base_env = self.run_tool(spec["base_tool"], base_payload, save_result=False, gate="checked")
             if base_env.ok and isinstance(base_env.data, dict):
                 base = base_env.data
                 base_text = base.get("snapshot_text")

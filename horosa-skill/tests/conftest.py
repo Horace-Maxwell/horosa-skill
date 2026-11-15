@@ -74,6 +74,16 @@ if str(REPO_SRC) not in _pythonpath:
 
 
 @pytest.fixture(autouse=True)
+def _service_gate_is_checked_unless_asked(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """service 层闸门缺省 enforce（审计 A-4）。测试套件里近千处直接调 service 测的是计算，不是闸门：缺省换成 checked；
+    专测闸门的用例标 @pytest.mark.service_gate 用真缺省（tests/test_fix314_service_gate.py）。"""
+    if request.node.get_closest_marker("service_gate") is None:
+        from horosa_skill.service.api import gate
+
+        monkeypatch.setattr(gate, "DEFAULT_GATE", gate.CHECKED)
+
+
+@pytest.fixture(autouse=True)
 def _mcp_token_never_leaks_between_tests(monkeypatch: pytest.MonkeyPatch) -> None:
     """serve 在回环 HTTP 上会生成令牌并写进 os.environ（审计 PF-05）——经 monkeypatch 登记这个键，用例结束时还原，
     后面断言「HTTP 且没令牌」的用例才不会被前面起过 serve 的用例带偏。"""
@@ -155,6 +165,7 @@ def _windows_file_sharing(request: pytest.FixtureRequest, monkeypatch: pytest.Mo
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "posix_file_semantics: 专测 POSIX 文件语义（开着也能替换 / 删），不装 Windows 共享规则的模拟")
+    config.addinivalue_line("markers", "service_gate: 用 service 层闸门的真缺省（enforce）跑，不套测试套件的 checked")
 
 
 # ---- skip reasons carry a tag (tests/skips.py; v0.50.0-dev, C-18 #2 / #10) ----------------------------------------

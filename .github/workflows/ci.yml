@@ -23,6 +23,30 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      # 审计平台待决项 13 / PF-20：按契约里的提交号浅取公开上游（约 86 MB 工作树），设 HOROSA_SOURCE_ROOT——
+      # 55 条 [upstream-checkout] 对照测试与跨树守卫以前在 CI 里整段跳过。上游再改写历史时这里红（该知道的事）。
+      - name: Read the pinned public upstream (contracts/upstream_provenance.json)
+        id: upstream
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          state = json.load(open("horosa-skill/contracts/upstream_provenance.json", encoding="utf-8"))
+          print("repo=" + state["upstream_repository"])
+          print("sha=" + state["upstream_git_sha"])
+          PY
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+        with:
+          repository: ${{ steps.upstream.outputs.repo }}
+          ref: ${{ steps.upstream.outputs.sha }}
+          path: .upstream/horosa-public
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Point the upstream-checkout tests at it
+        shell: bash
+        run: |
+          test "$(git -C .upstream/horosa-public rev-parse HEAD)" = "${{ steps.upstream.outputs.sha }}"
+          echo "HOROSA_SOURCE_ROOT=$GITHUB_WORKSPACE/.upstream/horosa-public" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:

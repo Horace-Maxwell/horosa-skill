@@ -633,7 +633,7 @@ class GuolaoRunners:
         if not payload.get("moiraTransitDate") and generated:
             payload["moiraTransitDate"] = _moira_transit_moment(payload, now=datetime.fromisoformat(generated))[0]
         with figure_capture() as captured:
-            env = self.run_tool("guolao_chart", payload, save_result=False)
+            env = self.run_tool("guolao_chart", payload, save_result=False, gate="checked")
         moira = captured.get("guolao_moira")
         if not env.ok or not isinstance(env.data, dict):
             raise ValueError(bilingual(f"重起七政盘失败：{env.error.code if env.error else 'unknown'}",

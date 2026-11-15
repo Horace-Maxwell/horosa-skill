@@ -96,6 +96,7 @@ def run_self_check(*, rounds: int = 2) -> dict:
                             copy.deepcopy(payload),
                             save_result=True,
                             query_text=f"{tool_name} 报告自检第 {round_index} 轮",
+                            gate="checked",
                         )
                         round_results.append(
                             {
@@ -453,7 +454,7 @@ def run_self_check(*, rounds: int = 2) -> dict:
                     "birth": payloads["qimen"],
                     "save_result": True,
                 }
-                dispatch = service.dispatch(dispatch_payload)
+                dispatch = service.dispatch(dispatch_payload, gate="checked")
                 queried_dispatch = service.store.query_runs(entity="甲", include_payload=True)
                 dispatch_result = {
                     "ok": dispatch.ok,
@@ -494,7 +495,7 @@ def run_self_check(*, rounds: int = 2) -> dict:
                 }
                 knowledge_reads: dict[str, dict] = {}
                 for case_name, case_payload in knowledge_cases.items():
-                    result = service.run_tool("knowledge_read", copy.deepcopy(case_payload), save_result=True)
+                    result = service.run_tool("knowledge_read", copy.deepcopy(case_payload), save_result=True, gate="checked")
                     queried = service.store.query_runs(tool="knowledge_read", include_payload=True, limit=20)
                     matched = next(
                         (
