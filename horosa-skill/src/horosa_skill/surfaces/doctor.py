@@ -118,7 +118,7 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 # tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
 _DOCTOR_WARNING_CODES = (
     "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
-    "env:rejected_value", "env:invalid_url", "js_engine:unavailable",
+    "env:rejected_value", "env:invalid_url", "js_engine:unavailable", "env:unknown_name",
     "config:toolsets_invalid",  # MCP-07（surface 批）：HOROSA_TOOLSETS 一个合法值都没有 / 有不认识的值
 )
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
@@ -193,6 +193,11 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
         "user_summary": "已装的离线 runtime 比最后一次看到的发布清单旧，或其导出契约（export_registry_version）低于本包期望——"
                         "能用，但新技法/新导出段可能缺失或对不上。",
         "next_action": "跑 `horosa-skill upgrade`（wheel / 插件 / MCPB 形态的完整命令见 warnings[].fix）；只想核对最新版本号可 `doctor --probe-network`。",
+    },
+    # 审计 PF-12：拼错的变量名以前只在 stderr 说一句「已忽略，不影响运行」——其实想设的那一项没生效。
+    "env:unknown_name": {
+        "user_summary": "有 HOROSA_* 环境变量名字不认识（拼错或来自更新版本），这一项没有生效（detail 里给最接近的正确名字）。",
+        "next_action": "改成正确的名字（docs/ENV_VARS.md），然后重启 AI 客户端。",
     },
     "env:rejected_value": {
         "user_summary": "有环境变量的值认不出或超出范围，已按默认值处理（detail 里点名变量、原因与实际用的值；密钥类的值不显示）。",
@@ -322,6 +327,15 @@ def _env_flag_audit() -> dict[str, Any]:
     return audit
 
 
+def _unknown_env_warnings() -> list[dict[str, str]]:
+    from horosa_skill.config import unknown_env_names
+
+    advice = _advice_for("env:unknown_name")
+    return [{"code": "env:unknown_name", "variable": row["name"],
+             "detail": f"{row['name']} is not a known variable" + (f"; did you mean {row['did_you_mean']}?" if row["did_you_mean"] else ""),
+             "fix": advice["next_action"]} for row in unknown_env_names()]
+
+
 def _env_rejection_warnings(rejected: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
     """E-10：认不出的 env 值一条一条点名（值已按名字遮过：密钥类整段遮掉，URL 遮 userinfo）。"""
     warnings: list[dict[str, str]] = []
@@ -350,9 +364,11 @@ def _explain_lines(report: dict[str, Any]) -> list[str]:
         ),
         f"服务：可达 {', '.join(str(x) for x in reachable) if reachable else '无'}；模式 {report.get('mode')}",
     ]
+    from horosa_skill.runtime.hints import contextualize
+
     for code in issues[:4]:
         advice = _advice_for(code)
-        lines.append(f"问题 {code}：{advice['user_summary']} → {advice['next_action']}")
+        lines.append(f"问题 {code}：{advice['user_summary']} → {contextualize(advice['next_action'])}")
     for warning in warnings[:2]:
         lines.append(f"提示 {warning.get('code')}：{warning.get('fix') or warning.get('detail')}")
     probe = report.get("network_probe")
@@ -726,6 +742,10 @@ def _doctor_report(settings: Settings, manager: HorosaRuntimeManager, *, probe_n
     return report
 
 
+class _MemoryAbsent(Exception):
+    """记忆库文件不存在：doctor 照实报 absent，不构造 MemoryStore（那会建库）。"""
+
+
 def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager, *, probe_network: bool = False) -> dict[str, Any]:
     from horosa_skill.runtime import budget as _budget
 
@@ -738,6 +758,9 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
     try:
         from horosa_skill.memory.store import MemoryStore as _MemoryStore
 
+        # 审计 PF-17(1)：体检不该有副作用——什么都没装的机器上跑一次 doctor 曾建出 memory.db / runs/ / traces/。
+        if not settings.db_path.exists():
+            raise _MemoryAbsent
         _store = _MemoryStore(settings)
         report["memory_db"] = {"path": str(settings.db_path), **_store.integrity_check(), "usage": _store.storage_usage()}
         # 存档健康（v0.50.0-dev）：隔离出来的坏库、没进库的 run 文件、崩溃残留、上次重建没做完——清点整棵 runs/，只报不改。
@@ -749,6 +772,9 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
             *({"code": "memory:needs_attention", "detail": line, "fix": "horosa-skill memory rebuild"}
               for line in report["memory_db"]["health"].get("warnings") or []),
         ]
+    except _MemoryAbsent:
+        report["memory_db"] = {"path": str(settings.db_path), "ok": True, "state": "absent",
+                               "detail": ["记忆库还没建（第一次存档时自动建）；doctor 只读，不替你建。"]}
     except Exception as exc:  # noqa: BLE001 - 体检项自身失败也要如实入报告
         report["memory_db"] = {"path": str(settings.db_path), "ok": False, "detail": [f"{exc}"]}
     # 可选向量检索：依赖看的是**跑 doctor 的这个环境**，客户端的 server 可能在另一个环境里（setup 的探针查的才是那边）。
@@ -808,11 +834,15 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
         *_internal_port_env_warnings(settings),
         *_payload_outdated_warnings(report),
         *_env_rejection_warnings(report["env_flags"]["rejected"]),
+        *_unknown_env_warnings(),
         *_toolsets_doctor_warnings(),  # MCP-07（surface 批）
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。
+    # 审计 PF-17(2)：带 fix 的告警用它自己的 fix（以前 advice 给通用的 `install --engine-only`，引擎明明在）。
+    fixes = {w.get("code"): w.get("fix") for w in report["warnings"] if isinstance(w, dict) and w.get("fix")}
     report["advice"] = [
-        {"code": code, **_advice_for(code, platform_supported=report["platform_supported"] is not False)}
+        {"code": code, **_advice_for(code, platform_supported=report["platform_supported"] is not False),
+         **({"next_action": fixes[code]} if code in fixes else {})}
         for code in [*(str(i) for i in report.get("issues") or []), *(w.get("code") for w in report["warnings"] if isinstance(w, dict))]
     ]
     report["unexpanded_env_templates"] = _unexpanded()

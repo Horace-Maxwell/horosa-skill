@@ -82,6 +82,8 @@ class TechniqueReportInput(FlexibleModel):
     overwrite: bool = Field(default=False, description="同名文件已在时：false=另存「名字-2」（缺省）；true=替换星阙写过的同名报告")
     # 是否把每个技法的产出段目录写进报告（默认写；关掉可得到极短的一页）。
     include_sections: bool | None = True
+    # 都不给 run_id / group_id 时：缺省拒绝并列出最近几条（审计 PF-09）；CLI 不带 id 时传 latest=true 取最近一条。
+    latest: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
 class DispatchSubjectInput(FlexibleModel):

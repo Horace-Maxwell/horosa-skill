@@ -91,6 +91,7 @@ NOT_CARRIED: dict[str, str] = {
     "HOROSA_JEV_API_KEY": "secret",
     # 只对 `serve` 的 HTTP 传输有意义（stdio 客户端用不到）
     "HOROSA_MCP_ALLOWED_HOSTS": "serve",
+    "HOROSA_MCP_ALLOWED_ORIGINS": "serve",
     "HOROSA_SKILL_HOST": "serve",
     "HOROSA_SKILL_PORT": "serve",
     # 只在安装 / 下载 runtime 时读

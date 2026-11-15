@@ -21,7 +21,9 @@ def build_transport_security(host: str, port: int) -> Any:
     hosts = [
         f"{host}:*", "127.0.0.1:*", "localhost:*", "[::1]:*", "host.docker.internal:*", *extra
     ]
-    origins = [f"http://{item}" for item in hosts] + [f"https://{item}" for item in hosts]
+    # 审计 PF-23：Origin 白名单以前跟 Host 走（任意本机端口的网页都放行）。MCP 客户端不是浏览器、不带 Origin；
+    # 浏览器页面（MCP Inspector 网页模式这类）要显式经 HOROSA_MCP_ALLOWED_ORIGINS 加（逗号分隔的完整 origin）。
+    origins = allowed_origins_extra()
     # 去重但保序（列表进日志/报错时可读）
     seen: set[str] = set()
     hosts = [h for h in hosts if not (h in seen or seen.add(h))]
@@ -74,3 +76,8 @@ def build_auth_settings(host: str, port: int, token: str | None) -> Any:
 
     base = f"http://{'127.0.0.1' if host in {'0.0.0.0', '::'} else host}:{port}"
     return AuthSettings(issuer_url=base, resource_server_url=None)
+
+
+def allowed_origins_extra() -> list[str]:
+    """HOROSA_MCP_ALLOWED_ORIGINS：浏览器页面的 Origin 放行项（如 http://localhost:6274），缺省为空（审计 PF-23）。"""
+    return [item.strip().rstrip("/") for item in (os.environ.get("HOROSA_MCP_ALLOWED_ORIGINS", "") or "").split(",") if item.strip()]

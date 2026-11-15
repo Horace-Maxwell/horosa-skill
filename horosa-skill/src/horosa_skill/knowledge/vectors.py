@@ -105,8 +105,8 @@ def status(settings: Any) -> dict[str, Any]:
         "deps_installed": deps,
         "model_present": model,
         "model_dir": str(folder),
-        "how_to_enable": "`horosa-skill setup --client <客户端> --vectors`：把依赖（约 128 MB）装进客户端起 server 的环境，"
-                         "下载并校验模型（24 MB），向量化笔记。源码 checkout 里只在终端用：`uv run --extra vectors horosa-skill knowledge index --vectors`。",
+        "how_to_enable": _contextual("`horosa-skill setup --client <客户端> --vectors`：把依赖（约 128 MB）装进客户端起 server 的环境，"
+                         "下载并校验模型（24 MB），向量化笔记。源码 checkout 里只在终端用：`uv run --extra vectors horosa-skill knowledge index --vectors`。"),
     }
 
 
@@ -204,3 +204,10 @@ def embedder(settings: Any) -> Any:
         if folder not in _EMBEDDERS:
             _EMBEDDERS[folder] = Embedder(Path(folder))
         return _EMBEDDERS[folder]
+
+
+def _contextual(text: str) -> str:
+    """命令按安装上下文写（审计 PF-10）。"""
+    from horosa_skill.runtime.hints import contextualize
+
+    return contextualize(text)

@@ -153,6 +153,8 @@ _NOT_ENV_FLAGS = {
     "HOROSA_TYPO_FLAG": "测试故意用的未知旗标",
     "HOROSA_TYPO_API_TOKEN": "测试故意用的未知旗标：名字像令牌，验被拒的值整段遮掉（test_env_rejections）",
     "HOROSA_TYPO_RUNTIME_MIROR": "测试故意拼错的 HOROSA_RUNTIME_MIRROR：验未知变量只告警一次（test_env_rejections）",
+    "HOROSA_MCP_COMPAT": "测试故意拼错的 HOROSA_MCP_COMPACT：验 client check 报 unknown_env_name 并给近似名（审计 PF-08）",
+    "HOROSA_TOOLSET": "测试故意拼错的 HOROSA_TOOLSETS：同上",
 }
 
 

@@ -1340,13 +1340,13 @@ def library_status(catalog: Catalog) -> dict[str, Any]:
         "exists": catalog.exists,
         "count": len(catalog.entries),
         **({"not_indexed": skipped["total"]} if skipped else {}),
-        "how_to_add": bilingual(
+        "how_to_add": _contextual_hint(bilingual(
             f"自备知识库是空的（{state_zh}）：把 {'、'.join(SUFFIXES)} 文本笔记放进 dir 指的文件夹（不存在就新建），"
             "下一次检索就能搜到，不用重启；也可以用命令 `horosa-skill knowledge add <名> --file <文件>`。",
             f"Your notes library is empty ({state_en}): put {', '.join(SUFFIXES)} text notes into the folder named in `dir` "
             "(create it if missing) and the next search will find them, no restart needed; "
             "or run `horosa-skill knowledge add <name> --file <file>`.",
-        ),
+        )),
     }
 
 
@@ -1442,3 +1442,10 @@ def overview(settings: Any, *, limit: int = 50) -> dict[str, Any]:
         "search_index": {"engine": "fts5-bm25" if catalog.index_ok else "substring",
                          "passages": catalog.index_report.get("chunks", 0)},
     }
+
+
+def _contextual_hint(text: str) -> str:
+    """命令按安装上下文写（审计 PF-10）。"""
+    from horosa_skill.runtime.hints import contextualize
+
+    return contextualize(text)

@@ -939,6 +939,15 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         "next_action": "render_pdf_or_install_cjk_font",
     },
     "report.from_tool.unsaved_result": {"kind": "input", "next_action": "rerun_with_save_result_true"},
+    # 审计 PF-09：不认识的参数 / 没指明哪一次运行——以前静默对「最近一条」出报告。
+    "report.technique.unknown_argument": {"kind": "input", "prompt_to_user": bilingual(
+        "有不认识的参数（details.unknown，did_you_mean 给最接近的）：改正后重试；按技法挑记录先用 horosa_memory_query 拿 run_id。",
+        "Unknown argument(s) (details.unknown; did_you_mean has the closest): fix and retry; to pick a run by technique, get its run_id from horosa_memory_query."),
+        "next_action": "fix_field_and_retry"},
+    "report.technique.scope_required": {"kind": "input", "prompt_to_user": bilingual(
+        "没指明是哪一次运行：从 details.recent 里选 run_id（或 group_id）重试；拿不准就问用户是哪一次。",
+        "No run was named: retry with a run_id (or group_id) from details.recent; ask the user if unsure which one."),
+        "next_action": "fix_field_and_retry"},
     "report.technique.no_cards": {
         "kind": "input",
         "prompt_to_user": bilingual(
@@ -1278,6 +1287,12 @@ def recovery_for(code: str, details: dict[str, _Any] | None) -> dict[str, _Any]:
     base = dict(RECOVERY_KINDS.get(kind) or RECOVERY_KINDS["input"])
     exact = RECOVERY_TABLE.get(f"{code}".strip()) or TOOL_CODE_FAMILIES.get(_tool_family(f"{code}".strip()) or "", {})
     recovery = {**base, **{k: v for k, v in exact.items() if k != "kind"}, "kind": kind, "code": f"{code}".strip(), "source": source}
+    # 审计 PF-03：恢复表里的命令按安装上下文写（wheel / uvx / 插件 / MCPB 用户照抄 `uv run horosa-skill …` 会跑错地方）。
+    from horosa_skill.runtime.hints import contextualize
+
+    for key in ("prompt_to_user", "next_action"):
+        if isinstance(recovery.get(key), str):
+            recovery[key] = contextualize(recovery[key])
     if "agent_recovery" not in result:
         result["agent_recovery"] = recovery
     elif isinstance(result["agent_recovery"], dict):

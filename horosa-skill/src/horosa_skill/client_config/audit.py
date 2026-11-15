@@ -332,10 +332,11 @@ def _client_check_report(targets: list[str], config_path: Path | None = None) ->
                 continue
             for entry_name, entry in entries:
                 problems = _audit_client_entry(entry_name, entry, client=name, config_dir=path.parent)
+                problems += _env_problems(entry, client=name)
                 found.append({
                     "path": str(path), "entry": entry_name, "ok": not problems,
                     "problems": problems,
-                    "tool_surface": "compact" if (entry.get("env") or {}).get("HOROSA_MCP_COMPACT") else "full",
+                    "tool_surface": "compact" if _compact_on(entry) else "full",
                     "recommended_surface": "compact" if _CLIENT_COMPACT_DEFAULT.get(name) else "full",
                 })
         results.append({
@@ -343,7 +344,7 @@ def _client_check_report(targets: list[str], config_path: Path | None = None) ->
             "searched": [str(Path(item).expanduser()) for item in candidates],
             "configured": bool([f for f in found if f.get("entry")]),
             "findings": found,
-            "fix_command": f"uv run horosa-skill client config --format {name}",
+            "fix_command": _cli(f"client config --format {name}"),
             # v0.41.0：skill 装没装、是不是本版——只报告，不计入 problems（MCP 连得上与否和它无关）。
             "skill": _client_skill_report(name),
         })
@@ -359,3 +360,68 @@ def _client_check_report(targets: list[str], config_path: Path | None = None) ->
         ),
         "clients": results,
     }
+
+
+def _cli(args: str) -> str:
+    """命令按安装上下文写（审计 PF-08 / PF-10：以前写死 `uv run`）。"""
+    from horosa_skill.runtime.hints import cli_command
+
+    return cli_command(args)
+
+
+# 审计 PF-08：有工具数上限的客户端（超出部分静默丢弃 / 不加载）。显式 HOROSA_MCP_COMPACT=0（setup --surface full 写的）= 用户知情，不报。
+CLIENT_TOOL_CAPS: dict[str, int] = {"cursor": 40, "windsurf": 100, "vscode": 128}
+
+
+def _compact_on(entry: dict[str, Any]) -> bool:
+    value = str((entry.get("env") or {}).get("HOROSA_MCP_COMPACT") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _env_problems(entry: dict[str, Any], *, client: str) -> list[dict[str, str]]:
+    """条目 env 里的 HOROSA_*：名字不在登记表 → unknown_env_name（给最接近的）；值过不了解析器 → rejected_env_value；
+    面超客户端上限 → tool_surface_exceeds_client_cap（审计 PF-08 / PF-12：以前三种都报「未发现问题」）。"""
+    import difflib
+    from unittest import mock
+
+    from horosa_skill import config as config_module
+    from horosa_skill.engine.registry import FULL_SURFACE_TOOL_COUNT
+
+    problems: list[dict[str, str]] = []
+    env = {str(k): str(v) for k, v in (entry.get("env") or {}).items() if str(k).startswith("HOROSA_")}
+    registry = config_module.ENV_FLAG_REGISTRY
+    for key in sorted(env):
+        if key in registry or key in config_module.REMOVED_ENV_FLAGS:
+            continue
+        guess = difflib.get_close_matches(key, list(registry), n=1, cutoff=0.75)
+        problems.append({
+            "code": "unknown_env_name",
+            "detail": f"`{key}` 不是 horosa 认识的环境变量（server 会忽略它）" + (f"；是不是 `{guess[0]}`？" if guess else "。"),
+            "fix": f"改成 `{guess[0]}`。" if guess else "删掉这一项，或查 docs/ENV_VARS.md 里的正确名字。",
+        })
+    known = {key: value for key, value in env.items() if key in registry and "${" not in value}
+    if known:
+        for key in known:
+            config_module._env_rejections.pop(key, None)
+        with mock.patch.dict("os.environ", known):
+            try:
+                config_module.Settings.from_env()
+            except (ValueError, TypeError):  # 严格档等启动期错误：交给下面逐项判
+                pass
+        for key in sorted(known):
+            rejected = config_module._env_rejections.pop(key, None)
+            if rejected and rejected.get("action") == "used_default":
+                problems.append({
+                    "code": "rejected_env_value",
+                    "detail": f"`{key}={rejected.get('value')}` 读不懂（{rejected.get('reason')}），server 会按缺省值跑。",
+                    "fix": f"改成合法的值（docs/ENV_VARS.md 的 `{key}` 一节）。",
+                })
+    cap = CLIENT_TOOL_CAPS.get(client)
+    explicit_full = str(env.get("HOROSA_MCP_COMPACT") or "").strip().lower() in {"0", "false", "no", "off"}
+    if cap and not _compact_on(entry) and not explicit_full and not env.get("HOROSA_TOOLSETS") and FULL_SURFACE_TOOL_COUNT > cap:
+        problems.append({
+            "code": "tool_surface_exceeds_client_cap",
+            "detail": f"{client} 约 {cap} 个工具上限，这条配置是全量面（{FULL_SURFACE_TOOL_COUNT} 个工具），超出部分会被丢掉。",
+            "fix": f"重跑 `{_cli(f'client config --format {client}')}`（缺省精简面），或在 env 里加 HOROSA_MCP_COMPACT=1。",
+        })
+    return problems

@@ -54,6 +54,7 @@ CASES: dict[str, Callable[[HorosaSkillService], Any]] = {
     "report.from_tool.invalid_payload": lambda svc: svc.report_from_tool({"tool_name": 3}),
     "report.render.invalid_payload": lambda svc: svc.report_render({"run_id": {"x": 1}}),
     "report.technique.invalid_payload": lambda svc: svc.technique_report({"include_sections": {"x": 1}}),
+    "report.technique.unknown_argument": lambda svc: svc.technique_report({"bogus_key": "x", "tool": "chart"}),
     "report.template.invalid_payload": lambda svc: svc.report_template({"run_id": ["x"]}),
     "knowledge.search.empty_query": lambda svc: svc.knowledge_search({"query": "  "}),
     "knowledge.search.invalid_payload": lambda svc: svc.knowledge_search({"query": "x", "limit": "many"}),

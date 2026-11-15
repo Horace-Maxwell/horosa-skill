@@ -478,7 +478,12 @@ def _default_setup_launcher(skill_root: Path | None) -> str:
 
 
 def _setup_command_text(client: str, *, launcher: str, config: Path | None, extra: tuple[str, ...] = ()) -> str:
-    prefix = ["uv", "run", "horosa-skill"] if launcher == "uv" else ["horosa-skill"]
+    """重试命令（审计 PF-10）：前缀按安装上下文（wheel / uvx / 插件 / MCPB），参数由本次实际传入的重建。"""
+    import shlex
+
+    from horosa_skill.runtime.hints import cli_prefix
+
+    prefix = shlex.split(cli_prefix()[2]) if launcher == "uv" else ["horosa-skill"]
     parts = [*prefix, "setup", "--client", client]
     if config is not None:
         parts += ["--config", str(config)]
@@ -523,6 +528,11 @@ def _run_setup(
     state: dict[str, Any] = {"config_untouched": True, "backup_path": None}
     total = len(_SETUP_STEPS)
     vectors_on, vectors_reason = _vectors_choice(vectors, settings)
+    # 重试命令带上这次实际传入的开关（审计 PF-10：以前丢了 --skip-install / --no-probe-network 等）。
+    passed: tuple[str, ...] = tuple(flag for flag, on in (
+        ("--skip-install", skip_install), ("--no-probe-network", not probe_network), ("--no-stdio-probe", not stdio_probe),
+        ("--no-skill", not skill), ("--dry-run", dry_run),
+    ) if on) + ((f"--surface", surface) if surface not in ("", "auto") else ()) + ((f"--scope", scope) if scope != "auto" else ())
 
     def fail(step: str, code: str, message: str, details: dict[str, Any] | None = None, *, retry_extra: tuple[str, ...] = ()) -> None:
         raise _SetupFailure({
@@ -533,7 +543,8 @@ def _run_setup(
             "details": details or {},
             "config_untouched": state["config_untouched"],
             "backup_path": state["backup_path"],
-            "retry_command": _setup_command_text(client_key, launcher=launcher_key, config=config, extra=retry_extra),
+            "retry_command": _setup_command_text(client_key, launcher=launcher_key, config=config,
+                                                 extra=(*passed, *(flag for flag in retry_extra if flag not in passed))),
             "client": client_key,
             "steps": steps,
         })

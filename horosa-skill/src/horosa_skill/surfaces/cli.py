@@ -352,13 +352,18 @@ def uninstall(
 def doctor(
     explain: bool = typer.Option(False, "--explain", help="Also print 6–10 lines of plain-language explanation to stderr (stdout stays pure JSON)."),
     probe_network: bool = typer.Option(False, "--probe-network", help="HEAD the runtime manifest URL through every mirror and report reachability (default: no external request)."),
+    exit_code: bool = typer.Option(False, "--exit-code", help="Exit 1 when the report says ok: false (default: always 0, the report is the result)."),
 ) -> None:
     settings = Settings.from_env()
+    settings.trace_enabled = False   # 审计 PF-17(1)：体检不写追踪（以前每跑一次在 traces/ 下多一行）
     report = _doctor_report(settings, runtime_helpers._runtime_manager(settings), probe_network=bool(_opt(probe_network, False)))
     if _opt(explain, False):
         for line in _explain_lines(report):
             typer.echo(line, err=True)
     _print_json(report)
+    # 审计 PF-17(3)：脚本要按退出码判；缺省仍是 0（报告本身就是结果，老脚本不变）。
+    if _opt(exit_code, False) and report.get("ok") is False:
+        raise typer.Exit(1)
 
 
 @app.command(
@@ -679,9 +684,13 @@ def serve(
         None, "--token",
         help="Shared bearer token required on every request (or HOROSA_MCP_TOKEN). 共享访问令牌。",
     ),
+    token_file: Path | None = typer.Option(
+        None, "--token-file",
+        help="Read the bearer token from this file (must not be readable by group/others). 从文件读令牌（不进进程列表）。",
+    ),
     allow_unauthenticated: bool = typer.Option(
         False, "--allow-unauthenticated",
-        help="Bind to a non-loopback address without a token (you accept the exposure). 明知无鉴权仍对外绑定。",
+        help="Serve HTTP without a token (loopback: skip the auto-generated token; other hosts: accept the exposure). 明知无鉴权仍起服务。",
     ),
     skip_runtime_start: bool = typer.Option(False, help="Do not auto-start the installed offline runtime."),
     stop_runtime_on_exit: bool = typer.Option(
@@ -696,6 +705,7 @@ def serve(
         host=_opt(host),
         port=_opt(port),
         token=_opt(token),
+        token_file=_opt(token_file),
         allow_unauthenticated=bool(_opt(allow_unauthenticated, False)),
         skip_runtime_start=bool(_opt(skip_runtime_start, False)),
         stop_runtime_on_exit=bool(_opt(stop_runtime_on_exit, False)),
@@ -1412,6 +1422,8 @@ def report_technique(
             {
                 "run_id": run_id,
                 "group_id": group_id,
+                # 终端里不带 id = 最近一条（MCP 面不带 id 会被拒并列出最近几条，审计 PF-09）
+                **({"latest": True} if not run_id and not group_id else {}),
                 "format": format_name,
                 "title": title,
                 "include_sections": include_sections,

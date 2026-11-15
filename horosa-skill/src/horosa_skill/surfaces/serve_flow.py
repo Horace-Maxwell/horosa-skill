@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+from typing import Any
 
 import typer
 
@@ -42,7 +43,45 @@ def _mask_token(token: str | None) -> str:
     return f"{token[:2]}…{token[-2:]}" if len(token) >= 16 else "****"
 
 
-def _serve_banner(*, host: str, port: int, transport: str, token: str | None, skip_runtime_start: bool) -> str:
+def _read_token_file(path: Any) -> str:
+    """--token-file：组 / 其他人可读的文件拒绝（POSIX）；空文件拒绝。"""
+    from pathlib import Path as _Path
+
+    target = _Path(path).expanduser()
+    if not target.is_file():
+        _emit_refusal("serve.token_file_missing", f"令牌文件不存在：{target}", {"path": str(target)})
+    if os.name == "posix" and target.stat().st_mode & 0o077:
+        _emit_refusal("serve.token_file_insecure", f"令牌文件 {target} 对组 / 其他用户可读——已拒绝启动。",
+                      {"path": str(target), "next_action": f"chmod 600 {target}"})
+    text = target.read_text(encoding="utf-8").strip()
+    if not text:
+        _emit_refusal("serve.token_file_empty", f"令牌文件是空的：{target}", {"path": str(target)})
+    return text
+
+
+def _auto_token(settings: Settings) -> tuple[str, str]:
+    """数据目录下的 mcp-token：有就复用，没有就生成（0600，原子写）。"""
+    import secrets
+
+    from horosa_skill.fsretry import replace as _replace
+
+    path = settings.data_dir / "mcp-token"
+    if path.is_file():
+        existing = path.read_text(encoding="utf-8").strip()
+        if existing:
+            return existing, str(path)
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    value = secrets.token_urlsafe(32)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(value + "\n")
+    _replace(tmp, path)
+    return value, str(path)
+
+
+def _serve_banner(*, host: str, port: int, transport: str, token: str | None, skip_runtime_start: bool,
+                  token_source: str | None = None) -> str:
     """HTTP 传输的启动横幅：只把**真能连上**的地址当连接地址给（MCP-09）。
 
     🔴 旧横幅印 `http://{host}:{port}/mcp` 与照抄它的 `claude mcp add`：绑到 0.0.0.0 时那是一个连不上的地址，
@@ -62,6 +101,9 @@ def _serve_banner(*, host: str, port: int, transport: str, token: str | None, sk
     ]
     if token:
         lines.append(f"访问令牌：已启用（Authorization: Bearer {_mask_token(token)}）。")
+        if token_source and token_source.startswith("file:"):
+            lines.append(f"令牌文件（自动生成，只有你能读）：{token_source[5:]}——客户端的 Authorization 头用它的内容；"
+                         "不想要令牌：serve 加 --allow-unauthenticated。")
     if view["blocked"]:
         lines.append(
             "同网段用这些地址来连会被 421 拒绝（Host 白名单 / DNS-rebinding 防护）：" + "、".join(view["blocked"])
@@ -69,8 +111,12 @@ def _serve_banner(*, host: str, port: int, transport: str, token: str | None, sk
         )
         lines.append(f"  {view['allowed_hosts_line']}")
     lines.append(f"当前放行的 Host：{', '.join(view['allowed_hosts'])}")
-    lines.append(f"接入 Claude Code：claude mcp add horosa --transport http {primary}")
-    lines.append("其他客户端：uv run horosa-skill client config --format <client>（见 README「接入 AI 客户端」）。")
+    from horosa_skill.runtime.hints import cli_command
+
+    # 审计 PF-13：SSE 要 --transport sse；开了令牌要带请求头（引用环境变量名，不把令牌印进命令）。
+    header = ' --header "Authorization: Bearer $HOROSA_MCP_TOKEN"' if token else ""
+    lines.append(f"接入 Claude Code：claude mcp add horosa --transport {'sse' if transport == 'sse' else 'http'} {primary}{header}")
+    lines.append(f"其他客户端：{cli_command('client config --format <client>')}（见 README「接入 AI 客户端」）。")
     if not skip_runtime_start:
         lines.append("正在启动本机 runtime（首次可能要几分钟）……")
     return "\n".join(lines)
@@ -97,6 +143,7 @@ def _run_serve(
     allow_unauthenticated: bool,
     skip_runtime_start: bool,
     stop_runtime_on_exit: bool,
+    token_file: Any = None,
 ) -> None:
     settings = Settings.from_env()
     # 🔴 `--transport http` 是最常见的手误（Claude Code 的 `claude mcp add --transport http` 用的
@@ -110,7 +157,19 @@ def _run_serve(
     if port is not None:
         settings.port = port
     host, port = settings.host, settings.port
+    if token:
+        # 审计 PF-14：命令行参数在进程列表里谁都看得见
+        typer.echo("提示：--token 会出现在进程列表（ps）里；改用 HOROSA_MCP_TOKEN 或 --token-file。", err=True)
+    if not token and token_file is not None:
+        token = _read_token_file(token_file)
     token = (token or os.environ.get("HOROSA_MCP_TOKEN", "") or "").strip() or None
+    token_source = "explicit" if token else None
+    # 审计 PF-05 / 平台待决项 6：回环 HTTP 也要令牌（TCP 回环不分用户，本机任何进程都能读记忆库、调工具）。
+    # 第一次起时生成一个存进数据目录（0600）并复用；--allow-unauthenticated 显式退出。stdio 不受影响。
+    if (not token and transport != "stdio" and not allow_unauthenticated
+            and host in {"127.0.0.1", "localhost", "::1"}):
+        token, token_path = _auto_token(settings)
+        token_source = f"file:{token_path}"
     if token:
         os.environ["HOROSA_MCP_TOKEN"] = token
     if transport != "stdio" and host not in {"127.0.0.1", "localhost", "::1"}:
@@ -162,7 +221,7 @@ def _run_serve(
     # （首次更久），期间用户盯着一个没有任何输出的终端，无从判断是卡住了还是在装。
     if transport != "stdio":
         typer.echo(_serve_banner(host=host, port=port, transport=transport, token=token,
-                                 skip_runtime_start=skip_runtime_start), err=True)
+                                 skip_runtime_start=skip_runtime_start, token_source=token_source), err=True)
     started_now = False
     if not skip_runtime_start:
         if transport == "stdio":

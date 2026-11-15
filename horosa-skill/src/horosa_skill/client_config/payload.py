@@ -281,7 +281,8 @@ def _build_client_config_payload(
     carried_env = env_carry.carried_env()
     shell_only_env = env_carry.shell_only()
     surface_env = {
-        **({"HOROSA_MCP_COMPACT": "1"} if use_compact else {}),
+        # 有上限的客户端上显式选全量：写 HOROSA_MCP_COMPACT=0 作「知情」标记，client check 不再报超上限（审计 PF-08）。
+        **({"HOROSA_MCP_COMPACT": "1"} if use_compact else {"HOROSA_MCP_COMPACT": "0"} if surface_key == "full" and _CLIENT_COMPACT_DEFAULT.get(key) else {}),
         **({"HOROSA_OUTPUT_SCRIPT": script} if script != SIMPLIFIED else {}),
         **carried_env,
     }
@@ -330,7 +331,11 @@ def _build_client_config_payload(
                 "note": ("或先 `" + (claude_cli.shell_text(stdio_command[:-2]) if launcher_key != "uv"
                                      else "uv run --directory <checkout>/horosa-skill horosa-skill serve")
                          + "` 再注册 HTTP 端点："),
+                # 回环 HTTP 也要令牌（审计 PF-05）：serve 第一次起时生成在数据目录的 mcp-token，这里引用变量名、不印令牌本身。
                 "command": claude_cli.shell_text(["claude", "mcp", "add", server_name, "--transport", "http", "http://127.0.0.1:8765/mcp"]),
+                # 命令里不放 $变量（cmd / PowerShell 的展开规则各不同，粘贴守卫要求三种 shell 读出同一条）
+                "token_note": ("回环 HTTP 也要令牌：serve 横幅写着令牌文件（数据目录下的 mcp-token）；给上面这条命令加 "
+                               "--header \"Authorization: Bearer <文件里那串>\"，或 serve 时显式 --allow-unauthenticated。"),
             },
         }
     elif key == "claude-desktop":

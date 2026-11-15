@@ -62,6 +62,8 @@ def register_resources(mcp: MCPServer, settings: Settings) -> None:
                 "chart_server_root": settings.chart_server_root,
                 # `setup --vectors` 的探针读这一项：依赖在不在这个 server 的环境里，只有这个进程自己知道。
                 "knowledge_vectors": _vectors.status(settings),
+                # 审计 PF-12：这个进程环境里不认识的 HOROSA_*（拼错 = 那一项没生效），带最接近的正确名字。
+                "unknown_env": __import__("horosa_skill.config", fromlist=["unknown_env_names"]).unknown_env_names(),
             },
             ensure_ascii=False,
             indent=2,

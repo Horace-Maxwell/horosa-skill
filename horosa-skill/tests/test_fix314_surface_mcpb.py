@@ -38,4 +38,4 @@ def test_claude_desktop_config_defaults_to_the_compact_surface() -> None:
     payload = json.loads(result.output)
     assert payload["mcpServers"]["horosa"]["env"]["HOROSA_MCP_COMPACT"] == "1"
     full = json.loads(CliRunner().invoke(app, ["client", "config", "--format", "claude-desktop", "--surface", "full"]).output)
-    assert "HOROSA_MCP_COMPACT" not in (full["mcpServers"]["horosa"].get("env") or {})
+    assert (full["mcpServers"]["horosa"].get("env") or {}).get("HOROSA_MCP_COMPACT") in (None, "0")

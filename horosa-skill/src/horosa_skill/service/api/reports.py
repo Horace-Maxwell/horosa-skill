@@ -1079,6 +1079,8 @@ class ReportsAPI:
                     },
                 ) from exc
 
+            # 审计 PF-09：认不出的参数以前静默忽略，对「最近一条」出报告（{"tool":"chart"} 拿到的是之前八字的那条）。
+            self._refuse_unknown_report_arguments(payload, TechniqueReportInput, code="report.technique.unknown_argument")
             normalized_format = str(request.format or "markdown").lower().strip()
             if normalized_format not in _TECHNIQUE_REPORT_FORMATS:
                 raise ToolValidationError(
@@ -1087,6 +1089,8 @@ class ReportsAPI:
                     code="report.technique.invalid_format",
                     details={"format": request.format, "accepted": list(_TECHNIQUE_REPORT_FORMATS), "allowed": list(_TECHNIQUE_REPORT_FORMATS)},
                 )
+            if not request.run_id and not request.group_id and request.latest is not True:
+                self._refuse_unscoped_technique_report()
             output_request = self._output_request(request.output_path, normalized_format, overwrite=bool(getattr(request, "overwrite", False)))
 
             scope = "group" if request.group_id else "run"
@@ -1159,6 +1163,48 @@ class ReportsAPI:
             trace["artifact_path"] = rendered["path"]
             trace["success"] = True
             return result
+
+    _COMMON_REPORT_KEYS = frozenset({"request", "knowledge", "profile", "agent_confirmed_settings", "defaults_accepted",
+                                     "clarification_notes", "response_view", "response_sections", "response_offset",
+                                     "response_tool", "response_path"})
+
+    @classmethod
+    def _refuse_unknown_report_arguments(cls, payload: Any, model: Any, *, code: str) -> None:
+        import difflib
+
+        if not isinstance(payload, dict):
+            return
+        known = set(model.model_fields) | cls._COMMON_REPORT_KEYS
+        unknown = sorted(key for key in payload if key not in known)
+        if not unknown:
+            return
+        guesses = {key: (difflib.get_close_matches(key, sorted(model.model_fields), n=1, cutoff=0.6) or [None])[0] for key in unknown}
+        hint = "；".join(f"`{k}`" + (f"（是不是 `{g}`？）" if g else "") for k, g in guesses.items())
+        raise ToolValidationError(
+            bilingual(f"不认识的参数：{hint}。要按技法挑记录，先用 horosa_memory_query(tool=…) 拿到 run_id。",
+                      f"Unknown argument(s): {', '.join(unknown)}. To pick a run by technique, get its run_id from horosa_memory_query(tool=…) first."),
+            code=code,
+            details={"unknown": unknown, "did_you_mean": guesses, "accepted": sorted(model.model_fields)},
+        )
+
+    def _refuse_unscoped_technique_report(self) -> None:
+        recent = []
+        for run in self.store.query_runs(include_payload=False, limit=8):
+            if run.get("run_id"):
+                recent.append({key: run.get(key) for key in ("run_id", "group_id", "entrypoint", "query_text", "created_at") if run.get(key)})
+        if not recent:
+            raise ToolValidationError(
+                bilingual("还没有带技法依据卡的存档：先跑一个技法工具（成功的调用都带卡）。",
+                          "No stored run carries a technique card yet — run a technique tool first "
+                          "(cards are attached to every successful technique call)."),
+                code="report.technique.no_cards", details={"run_id": None, "group_id": None},
+            )
+        raise ToolValidationError(
+            bilingual("没给 run_id 或 group_id：要给哪一次的技法依据出报告？recent 里是最近几条存档。",
+                      "No run_id or group_id: which run should the technique report cover? `recent` lists the latest stored runs."),
+            code="report.technique.scope_required",
+            details={"recent": recent[:5]},
+        )
 
     def _collect_technique_cards(
         self, *, run_id: str | None, group_id: str | None

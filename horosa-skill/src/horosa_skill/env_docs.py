@@ -55,6 +55,7 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_MCP_RESULT_MAX_CHARS": "Character budget for one MCP result in the reading view (default 48000, 4000–2000000; Claude Code spills results over 50000 characters to a file).",
     "HOROSA_MCP_TOKEN": "Bearer token required by `serve --transport streamable-http`. Never printed.",
     "HOROSA_MCP_ALLOWED_HOSTS": "Extra Host header values (comma-separated) the HTTP transport accepts.",
+    "HOROSA_MCP_ALLOWED_ORIGINS": "Browser Origins (comma-separated, e.g. http://localhost:6274) the HTTP transport accepts; empty by default.",
     "HOROSA_SKILL_HOST": "Bind address of the HTTP server (default 127.0.0.1).",
     "HOROSA_SKILL_PORT": "Port of the HTTP server (default 8765).",
     "HOROSA_OUTPUT_SCHEMA": "`1` = advertise outputSchema and return structuredContent on MCP tools.",

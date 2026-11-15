@@ -59,6 +59,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_MCP_ELICIT_TIMEOUT_SECONDS": "stable",
     "HOROSA_MCP_TOKEN": "stable",
     "HOROSA_MCP_ALLOWED_HOSTS": "stable",
+    "HOROSA_MCP_ALLOWED_ORIGINS": "stable",
     "HOROSA_TOOLSETS": "stable",
     "HOROSA_JS_ENGINE_TIMEOUT_SECONDS": "stable",
     "HOROSA_SKILL_HOST": "stable",
@@ -139,6 +140,20 @@ REMOVED_ENV_FLAGS: dict[str, str] = {}
 _ENV_AUDIT_DONE = False
 
 
+def unknown_env_guess(key: str) -> str | None:
+    """拼错的 HOROSA_* → 最接近的登记名（没有就 None）。doctor / client check / runtime/status 共用。"""
+    import difflib
+
+    found = difflib.get_close_matches(key, list(ENV_FLAG_REGISTRY), n=1, cutoff=0.75)
+    return found[0] if found else None
+
+
+def unknown_env_names() -> list[dict[str, str | None]]:
+    """本进程环境里不认识的 HOROSA_*（已移除的不算）：[{name, did_you_mean}]。"""
+    return [{"name": key, "did_you_mean": unknown_env_guess(key)} for key in sorted(os.environ)
+            if key.startswith("HOROSA_") and key not in ENV_FLAG_REGISTRY and key not in REMOVED_ENV_FLAGS]
+
+
 def audit_env_flags(*, force: bool = False, log: bool = True) -> list[str]:
     """扫描 HOROSA_* 环境变量：未知 → warn-and-ignore（返回并记日志，进程内只告警一次）；
     HOROSA_STRICT_CONFIG=1 时未知升级为 ValueError（显式选择加入的严格档）。
@@ -154,7 +169,9 @@ def audit_env_flags(*, force: bool = False, log: bool = True) -> list[str]:
         if key in REMOVED_ENV_FLAGS:
             warnings.append(f"环境变量 {key} 已在新版移除：{REMOVED_ENV_FLAGS[key]}（本次忽略）")
             continue
-        warnings.append(f"未知环境变量 {key}（拼写有误？或来自更新版本的 skill）——已忽略，不影响运行。")
+        guess = unknown_env_guess(key)
+        warnings.append(f"未知环境变量 {key}" + (f"（是不是 {guess}？）" if guess else "（拼写有误？或来自更新版本的 skill）")
+                        + "——这个变量不起作用（审计 PF-12：以前说「不影响运行」，其实是想设的那一项没生效）。")
     if warnings and (os.environ.get("HOROSA_STRICT_CONFIG", "").strip().lower() in {"1", "true", "yes"}):
         raise ValueError("HOROSA_STRICT_CONFIG=1：" + "；".join(warnings))
     if warnings and log and (force or not _ENV_AUDIT_DONE):
@@ -390,11 +407,14 @@ def _env_result_view(name: str) -> str:
         return READING
     view = normalize_view(raw_value)
     if view is None:
+        # 登记成「被拒」：doctor / client check 才看得见（审计 PF-08：以前只在 stderr 说一句）。
+        _record_rejection(name, raw_value, "not one of reading / sections / titles / full", used=READING)
         if name not in _warned_unexpanded:
             _warned_unexpanded.add(name)
             # 启动期配置通知：还没有工具调用可挂告警（同 _env_text 的未展开占位符）。
             logger.log(logging.WARNING, "%s=%r 认不出（可选 reading / sections / titles / full）——按 reading 返回。", name, raw_value)
         return READING
+    _clear_rejection(name)
     return view
 
 

@@ -11,7 +11,10 @@ Instead, report:
 - reproduction details
 - any suggested mitigation
 
-through a private channel controlled by the maintainer.
+through GitHub's private vulnerability reporting:
+<https://github.com/Horace-Maxwell/horosa-skill/security/advisories/new> (the **Security → Report a vulnerability**
+button). If that page is not available to you, open a public issue that only says you have a security report and asks
+for a private contact — no details in the issue.
 
 ## Scope
 
