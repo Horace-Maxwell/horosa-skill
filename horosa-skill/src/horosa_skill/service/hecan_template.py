@@ -59,9 +59,56 @@ def _sections(envelope: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
-def evidence(envelope: dict[str, Any], *, run_id: str | None, limit: int = EVIDENCE_CHARS) -> dict[str, Any] | None:
-    """正文节选：按段从头放，放到上限为止；第一段就超了就截它的前 `limit` 字。放不下的段列出来并给续读调用。"""
-    sections = _sections(envelope)
+# 审计 surface 待决项 3：合参保持摘录，但按问题选段。意图类（engine/intents.py）→ 段标题里的关键词；命中的段排在前面。
+# 段名各技法不同，按关键词子串匹配（不维护逐技法的段名表）；起盘信息类的首段总在最前（短，交代盘是怎么起的）。
+FOCUS_TERMS: dict[str, tuple[str, ...]] = {
+    "life_timing": ("大运", "流年", "运限", "行运", "推运", "返照", "小限", "法达", "流月", "岁运", "行年", "大限", "应期", "限"),
+    "relationship": ("合", "比较", "相位", "婚", "夫妻", "配偶", "六亲", "关系", "八重"),
+    "divination": ("用神", "占断", "课体", "断", "卦", "应期", "四课", "三传", "值符", "值使", "向导"),
+    "date_selection": ("宜", "忌", "吉", "择", "神煞"),
+    "natal": ("命宫", "格局", "四柱", "十神", "宫位", "行星", "星与虚点", "命盘", "主星"),
+}
+_LEAD_TITLES = ("起盘", "盘头", "信息", "概览", "概要")
+
+
+def focus_for(query: str | None) -> tuple[str, tuple[str, ...]]:
+    """问题 → (意图类, 段标题关键词)。认不出 → ("", ())，节选按原段序。"""
+    from horosa_skill.engine import intents
+    from horosa_skill.engine.query_text import normalize_query
+
+    text = normalize_query(query or "")
+    if not text:
+        return "", ()
+    for intent in (intents.RELATIONSHIP, intents.DATE_SELECTION, intents.DIVINATION, intents.LIFE_TIMING, intents.NATAL_CHOICE):
+        if intent.matches(text):
+            key = "natal" if intent is intents.NATAL_CHOICE else intent.key
+            return key, FOCUS_TERMS.get(key, ())
+    if any(word in text for word in intents.LIFE_TIMING_STRONG):
+        return "life_timing", FOCUS_TERMS["life_timing"]
+    return "", ()
+
+
+def _ordered(sections: list[dict[str, Any]], *, focus: tuple[str, ...], requested: tuple[str, ...]) -> list[dict[str, Any]]:
+    if not focus and not requested:
+        return sections
+    def rank(item: tuple[int, dict[str, Any]]) -> tuple[int, int]:
+        pos, section = item
+        title = section["title"]
+        if pos == 0 and any(word in title for word in _LEAD_TITLES):
+            return (0, pos)
+        if any(name and (name in title or title in name) for name in requested):
+            return (1, pos)
+        if any(word in title for word in focus):
+            return (2, pos)
+        return (3, pos)
+    return [section for _pos, section in sorted(enumerate(sections), key=rank)]
+
+
+def evidence(envelope: dict[str, Any], *, run_id: str | None, limit: int = EVIDENCE_CHARS,
+             focus: tuple[str, ...] = (), requested: tuple[str, ...] = ()) -> dict[str, Any] | None:
+    """正文节选：先放点名的段（evidence_sections）与对题的段（focus），其余按原序；放不下的段跳过、继续试后面更短的，
+    到上限为止；一段都放不下就截第一段的前 `limit` 字。没放进来的段列出来并给续读调用。"""
+    sections = _ordered(_sections(envelope), focus=focus, requested=requested)
     if not envelope.get("ok") or not sections:
         return None
     tool = str(envelope.get("tool") or "")
@@ -75,12 +122,10 @@ def evidence(envelope: dict[str, Any], *, run_id: str | None, limit: int = EVIDE
             parts.append(block)
             shown.append(section["title"])
             used += len(block) + 2
-            continue
-        if not parts:
-            parts.append(block[:limit].rstrip() + "…")
-            partial = section["title"]
-            used = limit
-        break
+    if not parts:
+        first = sections[0]
+        parts.append(f"[{first['title']}]\n{first['body']}"[:limit].rstrip() + "…")
+        partial = first["title"]
     omitted = [s for s in sections if s["title"] not in shown]
     total = sum(len(s["body"]) for s in sections)
     excerpt: dict[str, Any] = {
@@ -112,7 +157,8 @@ def headline(envelope: dict[str, Any]) -> str | None:
     return summary[0] if summary else None
 
 
-def technique_row(name: str, envelope: dict[str, Any], *, run_id: str | None, reused: bool) -> dict[str, Any]:
+def technique_row(name: str, envelope: dict[str, Any], *, run_id: str | None, reused: bool,
+                  focus: tuple[str, ...] = (), requested: tuple[str, ...] = ()) -> dict[str, Any]:
     data = envelope.get("data") if isinstance(envelope.get("data"), dict) else {}
     export = data.get("export_snapshot") if isinstance(data.get("export_snapshot"), dict) else {}
     info = export.get("technique") if isinstance(export.get("technique"), dict) else {}
@@ -130,7 +176,7 @@ def technique_row(name: str, envelope: dict[str, Any], *, run_id: str | None, re
             "unknown_detected_sections": export.get("unknown_detected_sections") or [],
         },
         "error": envelope.get("error"),
-        "evidence": evidence(envelope, run_id=run_id),
+        "evidence": evidence(envelope, run_id=run_id, focus=focus, requested=requested),
         "evidence_pointer": {"run_id": run_id, "read_with": "horosa_memory_show"},
     }
     return row

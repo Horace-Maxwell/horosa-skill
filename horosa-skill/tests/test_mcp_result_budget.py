@@ -30,7 +30,12 @@ def _server(tmp_path: Path):
                         db_path=tmp_path / "m.db", output_dir=tmp_path / "runs", runtime_root=tmp_path / "rt",
                         data_dir=tmp_path / "data")
     service = HorosaSkillService(settings, store=MemoryStore(settings))
-    return create_mcp_server(service, settings), service
+    mcp = create_mcp_server(service, settings)
+    # 这里测的是线上预算这一层：模型预算放开。缺省模型预算下 full 超了回键目录（审计 S-28，tests/test_fix314_full_view_budget.py）。
+    from horosa_skill.result_view import Budget
+
+    mcp.result_budget = Budget(max_tokens=10**9, max_chars=10**9)
+    return mcp, service
 
 
 def _call(mcp, name: str, args: dict) -> tuple[int, dict]:

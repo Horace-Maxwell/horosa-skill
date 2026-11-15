@@ -491,6 +491,10 @@ def test_real_local_techniques_run_concurrently_without_cross_talk(tmp_path) -> 
     assert len(set(expected.values())) == len(expected), "输入之间的答案必须互不相同，否则串扰看不出来"
 
     mcp = M.create_mcp_server(svc, settings)
+    # 本例比的是原始树里的快照（串扰）：模型预算放开，full 不回键目录（审计 S-28 的目录形态见 tests/test_fix314_full_view_budget.py）。
+    from horosa_skill.result_view import Budget
+
+    mcp.result_budget = Budget(max_tokens=10**9, max_chars=10**9)
     results: list[tuple[str, str, dict]] = []
 
     async def _storm():

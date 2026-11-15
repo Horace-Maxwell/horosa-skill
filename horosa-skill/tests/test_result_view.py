@@ -83,8 +83,11 @@ def test_sections_and_titles_views() -> None:
 
 
 def test_full_view_is_the_raw_result() -> None:
+    """放得下就是原始结果本身；放不下回键目录（审计 S-28，见 tests/test_fix314_full_view_budget.py）。"""
     raw = envelope([("起盘信息", "日期")])
-    assert shape_result(raw, ViewRequest(view=FULL), SMALL) is raw
+    from horosa_skill.result_view import Budget
+
+    assert shape_result(raw, ViewRequest(view=FULL), Budget(max_tokens=100_000, max_chars=400_000)) is raw
 
 
 def test_cut_by_sections_names_the_exact_follow_up_and_the_follow_up_works() -> None:

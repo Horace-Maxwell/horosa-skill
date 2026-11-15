@@ -133,6 +133,8 @@ class HecanInput(DispatchInput):
     # （ai_fillable：各技法结论槽 + 相互印证/分歧槽），分歧必须披露、不许平均——AI 填完即合参报告。
     tools: list[str] | None = None
     max_tools: int | None = 5
+    # 审计 surface 待决项 3：节选先放这些段（段名或段名的一部分，如「大运」「用神」）；不给 = 按问题的意图类选段。
+    evidence_sections: list[str] | None = None
 
     @field_validator("tools", mode="before")
     @classmethod
@@ -326,11 +328,12 @@ class MemoryManageInput(FlexibleModel):
 class MemoryShowInput(FlexibleModel):
     run_id: str
     include_payload: bool = True
-    # 以下四个只在 MCP 面生效（horosa_skill/result_view.py，进工具之前取走）：读回存档时按段翻页。
+    # 以下几个只在 MCP 面生效（horosa_skill/result_view.py，进工具之前取走）：读回存档时按段翻页、full 超预算时取子树。
     response_view: str | None = Field(default=None, description="reading/sections/titles/full")
     response_tool: str | None = Field(default=None, description="技法名")
     response_sections: list[int | str] | None = Field(default=None, description="段序号或标题")
     response_offset: int | None = Field(default=None, description="续读起点（字）")
+    response_path: str | None = Field(default=None, description="full 超预算时取的子树（如 data.export_snapshot）")
 
 
 class ReportTemplateInput(FlexibleModel):

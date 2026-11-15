@@ -269,7 +269,11 @@ def test_end_to_end_the_client_answers_the_form_and_the_gate_opens(tmp_path, mod
 
     async def answer(context, params):  # noqa: ANN001, ANN202
         asked.append(params.message)
-        return mcp_types.ElicitResult(action="accept", content={"decision": _ELICIT_DEFAULTS, "notes": ""})
+        # 表单里的事实题是必填（审计 S-27）：像真客户端一样，必填项要填（取第一个选项）。
+        schema = params.requested_schema or {}
+        required = {key: (schema.get("properties", {}).get(key, {}).get("enum") or [""])[0] for key in schema.get("required") or []
+                    if key != "decision"}
+        return mcp_types.ElicitResult(action="accept", content={"decision": _ELICIT_DEFAULTS, "notes": "", **required})
 
     async def run():  # noqa: ANN202
         async with Client(_gated_server(tmp_path), mode=mode, elicitation_callback=answer) as client:
@@ -307,3 +311,54 @@ def test_a_tampered_request_state_is_rejected_by_the_sdk(tmp_path) -> None:  # n
 
     errors = flat(raised.value)
     assert any(isinstance(e, MCPError) and "requestState" in str(e) for e in errors), errors
+
+
+def test_fact_questions_are_required_in_the_form_and_block_defaults_when_blank() -> None:
+    """审计 S-27：性别这类事实题在表单里必填；没答就「按默认继续」不放行（以前放行后在执行时被 tool.missing_gender 打回）。
+    负向对照（实跑过）：_gate_elicitation_schema 里事实题仍给 default="" → required 里没有 gender → 红。"""
+    gate = {"details": {"ask_if_missing": [
+        {"field": "gender", "question": "性别？", "options": ["男", "女"], "values": [1, 0], "fact": True},
+        {"field": "timeAlg", "question": "真太阳时？", "options": ["真太阳时", "直接时间"], "values": [0, 1]},
+    ]}}
+    schema = _gate_elicitation_schema(gate).model_json_schema()
+    assert "gender" in schema["required"] and "timeAlg" not in schema["required"]
+    assert _apply_gate_decision({"date": "1990-01-01"}, gate, _ELICIT_DEFAULTS, "", answers={}) is None
+    done = _apply_gate_decision({"date": "1990-01-01"}, gate, _ELICIT_DEFAULTS, "", answers={"gender": "女"})
+    assert done["gender"] == 0 and done["defaults_accepted"] is True
+
+
+def test_place_candidate_picked_in_the_form_becomes_coordinates() -> None:
+    """审计 S-27 / S-05：地名歧义并进同一张表；选了候选就写回它的坐标（顶层 place 留作标签）。"""
+    gate = {"details": {"ask_if_missing": [
+        {"field": "place", "question": "「朝阳」是哪一个？", "options": ["朝阳市（辽宁省）", "朝阳区（北京城区）"],
+         "values": [{"lat": 41.57, "lon": 120.45}, {"lat": 39.92, "lon": 116.44}], "fact": True},
+    ]}}
+    done = _apply_gate_decision({"place": "朝阳", "date": "1990-01-01"}, gate, _ELICIT_DEFAULTS, "", answers={"place": "朝阳区（北京城区）"})
+    assert (done["lat"], done["lon"], done["place"]) == (39.92, 116.44, "朝阳")
+
+
+def test_place_ambiguity_joins_the_settings_questionnaire() -> None:
+    """审计 S-05：London + 设置以前拒两轮（先设置闸门、答完再报 place.ambiguous）。现在闸门阶段的地名拒绝并进同一份问卷。
+    负向对照（实跑过）：_gate_view_with_places 吞掉 ToolValidationError（回 None）→ 只剩设置题 → 红。"""
+    import asyncio
+
+    from horosa_skill.agent_guidance.preflight import build_clarification_recovery
+    from horosa_skill.errors import ToolValidationError
+    from horosa_skill.surfaces.mcp_errors import _agent_preflight_error
+    from horosa_skill.surfaces.mcp_server import _gate_view_with_places, _merge_place_questions
+
+    def resolver(view, gate):  # noqa: ANN001, ANN202
+        ask = [{"field": "place", "question": "「朝阳」是哪一个？", "options": ["朝阳市（辽宁省）", "朝阳区（北京城区）"]}]
+        raise ToolValidationError("ambiguous", code="place.ambiguous", details={
+            "query": "朝阳", "candidates": [], "ask_if_missing": ask,
+            "agent_recovery": build_clarification_recovery(tool_name=gate, ask_if_missing=ask, do_not_assume=[], reason="place_ambiguous")})
+
+    class _Mcp:
+        gate_place_resolver = staticmethod(resolver)
+
+    view, place_error = asyncio.run(_gate_view_with_places(_Mcp(), "chart", {"place": "朝阳", "date": "1990-05-03", "time": "08:00"}))
+    assert place_error is not None and place_error["code"] == "place.ambiguous"
+    error = _merge_place_questions(_agent_preflight_error("chart", view), place_error)
+    fields = [item["field"] for item in error["details"]["agent_recovery"]["ask_if_missing"]]
+    assert fields[0] == "place" and "hsys" in fields
+    assert "朝阳" in error["details"]["agent_recovery"]["prompt_to_user"]

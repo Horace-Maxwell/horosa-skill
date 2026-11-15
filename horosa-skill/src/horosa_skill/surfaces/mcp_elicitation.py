@@ -99,10 +99,12 @@ def _gate_elicitation_schema(gate_error: dict[str, Any] | None = None) -> type[B
             continue
         if len(fields) - 1 >= _ELICIT_MAX_QUESTIONS:
             break
-        fields[name] = (
-            str,
-            Field(default="", description=str(item.get("question") or item.get("field") or ""), json_schema_extra={"enum": [*options, ""]}),
-        )
+        description = _strip_internal(str(item.get("question") or item.get("field") or ""))
+        if item.get("fact"):
+            # 审计 S-27：事实题必填（表单里留空再点「按默认」会在执行时被打回）。
+            fields[name] = (str, Field(..., description=description, json_schema_extra={"enum": options}))
+        else:
+            fields[name] = (str, Field(default="", description=description, json_schema_extra={"enum": [*options, ""]}))
     fields["notes"] = (str, "")
     return create_model("HorosaGateDecision", **fields)
 
@@ -136,7 +138,9 @@ def _apply_gate_answers(
         values = item.get("values")
         if isinstance(values, list) and len(values) == len(options) and field and "/" not in field:
             value = values[options.index(text)]
-            if value is not None:
+            if isinstance(value, dict):
+                applied.setdefault("__place__", {}).update(value)   # 地名候选 → 坐标（_apply_gate_decision 只写回顶层 place）
+            elif value is not None:
                 applied[field] = value
     return applied, noted
 
@@ -146,6 +150,16 @@ def _apply_gate_decision(
 ) -> dict[str, Any] | None:
     """纯函数：把表单答案落到载荷（接受默认 / 逐题作答）或闸门错误（用户备注），不碰传输层，可离线测。"""
     applied, noted = _apply_gate_answers(gate_error, answers)
+    place_pick = applied.pop("__place__", None)
+    if place_pick and payload.get("place") not in (None, ""):
+        applied.update(place_pick)   # 地名留作标签，坐标优先（place.py 的显式坐标路径按坐标 + 日期补时区）
+    # 事实题（地点、性别…）没答就不能「按默认继续」：确认位回答不了事实，放行只会在执行时再被拒一次。
+    facts_open = [item for item in _gate_questions(gate_error)
+                  if item.get("fact") and item.get("options") and not (answers or {}).get(_form_field_name(item.get("field")))]
+    if facts_open and decision in (_ELICIT_DEFAULTS, _ELICIT_PROVIDE):
+        if notes:
+            gate_error.setdefault("details", {})["user_notes"] = notes
+        return None
     if decision == _ELICIT_DEFAULTS:
         updated = dict(payload)
         updated.update(applied)
@@ -175,9 +189,18 @@ def _apply_gate_decision(
 GATE_INPUT_KEY = "horosa_gate"
 
 
+def _strip_internal(text: str) -> str:
+    from horosa_skill.agent_guidance.preflight import _for_user
+
+    return _for_user(text)
+
+
 def _gate_prompt(tool_name: str, gate_error: dict[str, Any]) -> str:
-    return (gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
-            or f"调用 {tool_name} 前需要确认会影响结果的设置。")
+    """表单标题（审计 S-27）：选项已经是表单字段，标题里不再逐条列一遍（以前 1.5 KB 中英长文）。"""
+    prompt = (gate_error.get("details", {}).get("agent_recovery", {}).get("prompt_to_user")
+              or f"调用 {tool_name} 前需要确认会影响结果的设置。")
+    lines = [re.sub(r"\s*可选 / options：.*$", "", line) for line in str(prompt).splitlines()]
+    return _strip_internal("\n".join(line for line in lines if line.strip()))
 
 
 def _question_digest(tool_name: str, prompt: str, schema: dict[str, Any]) -> str:

@@ -40,7 +40,8 @@ _CLIENT_COMPACT_DEFAULT = {
     "cline": True,
     "zed": True,
     "claude-code": False,
-    "claude-desktop": False,
+    # 审计 surface 待决项 1(b)：Desktop 是否像 Claude Code 那样把工具延迟到工具搜索之后未核实——按不延迟算，缺省精简面。
+    "claude-desktop": True,
     **{key: True for key in clients_extra.EXTRA_CLIENTS},
 }
 _CLIENT_COMPACT_REASON = {
@@ -51,6 +52,7 @@ _CLIENT_COMPACT_REASON = {
     "windsurf": "Windsurf（现 Devin Desktop）：旧 Cascade 100 个工具上限，Devin Local 未公布上限且无工具搜索",
     "cline": "Cline 无工具搜索，全量面偏重",
     "zed": "Zed 无工具搜索，全量面偏重",
+    "claude-desktop": "Claude Desktop：全量 tools/list 约 9 万 token 开场就进上下文（是否延迟加载未核实，按不延迟算）；要全量传 --surface full",
     **{key: spec.compact_reason for key, spec in clients_extra.EXTRA_CLIENTS.items()},
 }
 

@@ -161,8 +161,8 @@ horosa_memory_show {"run_id": "<run_id>", "response_tool": "bazi_birth", "respon
 
 The continuation returns only the text: `result.export_snapshot.export_text` (plus `result.tool`, `result.run_id`).
 `response_sections` takes section titles or index numbers (`["9"]`). `response_view` changes the shape (same call or `horosa_memory_show`): `"sections"` (text per section),
-`"titles"` (index only, ~4 KB), `"full"` (the raw engine tree, often 100–300 KB+; only when you need a raw
-field). Never conclude from `titles` alone.
+`"titles"` (index only, ~4 KB), `"full"` (the raw engine tree; only when you need a raw field — over the result
+budget it returns a key `directory` with sizes: call again with `response_path:"data.bazi.fourColumns"`). Never conclude from `titles` alone.
 
 ## 6. When a call is refused (`ok: false`)
 
@@ -283,8 +283,9 @@ horosa_knowledge_search {"query": "空亡是什么意思？"}
 
 ## 12. Compact surface (14 facades + `horosa_tool_run`)
 
-Every client except Claude Code and Claude Desktop gets the compact surface by default (`HOROSA_MCP_COMPACT=1`;
-those two get the full surface, 全量 132; `setup --surface full|compact` overrides). It has the 14 facades —
+Every client except Claude Code gets the compact surface by default (`HOROSA_MCP_COMPACT=1`; Claude Code defers tools
+behind tool search and gets the full surface, 全量 132; `setup --surface full|compact` overrides; the `.mcpb` bundle has a
+"Compact tool surface" checkbox, ticked by default). It has the 14 facades —
 `horosa_dispatch`, `horosa_agent_guidance`, `horosa_hecan`, `horosa_place_search`, `horosa_profile`,
 `horosa_knowledge_search`, `horosa_memory_query`, `horosa_memory_show`, `horosa_memory_record_answer`, `horosa_memory_manage`,
 `horosa_report_template`, `horosa_report_render`, `horosa_report_from_tool`, `horosa_technique_report` — plus

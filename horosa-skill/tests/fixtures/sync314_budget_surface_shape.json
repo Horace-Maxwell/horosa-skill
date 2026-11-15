@@ -101,7 +101,8 @@
     "response_view": "string",
     "response_tool": "string",
     "response_sections": "array items={\"type\":\"string\"}",
-    "response_offset": "integer"
+    "response_offset": "integer",
+    "response_path": "string"
    }
   },
   "horosa_memory_manage": {
@@ -165,7 +166,8 @@
     "knowledge": "string",
     "request": "object",
     "tools": "array items={\"type\":\"string\"}",
-    "max_tools": "integer"
+    "max_tools": "integer",
+    "evidence_sections": "array items={\"type\":\"string\"}"
    }
   },
   "horosa_technique_report": {
@@ -3011,7 +3013,8 @@
     "response_view": "string",
     "response_tool": "string",
     "response_sections": "array items={\"type\":\"string\"}",
-    "response_offset": "integer"
+    "response_offset": "integer",
+    "response_path": "string"
    }
   },
   "horosa_memory_manage": {
@@ -3075,7 +3078,8 @@
     "knowledge": "string",
     "request": "object",
     "tools": "array items={\"type\":\"string\"}",
-    "max_tools": "integer"
+    "max_tools": "integer",
+    "evidence_sections": "array items={\"type\":\"string\"}"
    }
   },
   "horosa_technique_report": {

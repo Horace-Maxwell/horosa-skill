@@ -210,17 +210,44 @@ def _mentions_place(payload: Any) -> bool:
     return any(_mentions_place(payload.get(key)) for key in ("birth", "context", "subject", "inner", "outer"))
 
 
-async def _gate_view_with_places(mcp: MCPServer, gate: str, view: Any) -> Any:
-    """[dispatch 批 v0.50 F9] 闸门判定前把 `place` 换成坐标（与执行时同一个解析器）。"""
+async def _gate_view_with_places(mcp: MCPServer, gate: str, view: Any) -> tuple[Any, dict[str, Any] | None]:
+    """[dispatch 批 v0.50 F9] 闸门判定前把 `place` 换成坐标（与执行时同一个解析器）。
+
+    审计 S-05：地名有歧义 / 找不到 / 时区要确认时，以前这里吞掉、留到执行时再拒——用户答完设置又被问一次地点。
+    现在把那条结构化拒绝交回去（第二个返回值），由 _gated_run 并进同一份问卷。"""
     resolver = getattr(mcp, "gate_place_resolver", None)
     if resolver is None or not _mentions_place(view):
-        return view
+        return view, None
     import anyio
 
     try:
-        return await anyio.to_thread.run_sync(lambda: resolver(dict(view), gate))
-    except Exception:  # noqa: BLE001 - 解析失败留给执行时报（带候选）；闸门不因此崩
-        return view
+        return await anyio.to_thread.run_sync(lambda: resolver(dict(view), gate)), None
+    except ToolValidationError as exc:
+        recovery = (exc.details or {}).get("agent_recovery") if isinstance(exc.details, dict) else None
+        if isinstance(recovery, dict) and recovery.get("must_ask_user"):
+            return view, _mcp_error_payload(exc)
+        return view, None   # 模型自己能改的写法错：留给执行时按字段报
+    except Exception:  # noqa: BLE001 - 解析器崩了留给执行时报；闸门不因此崩
+        return view, None
+
+
+def _merge_place_questions(error: dict[str, Any], place_error: dict[str, Any]) -> dict[str, Any]:
+    """审计 S-05：设置闸门与地点问题并成一份问卷（一轮问完）；地点题排在前面（它是事实）。"""
+    details = error.setdefault("details", {})
+    place_details = place_error.get("details") or {}
+    place_items = [dict(item, fact=True) for item in (place_details.get("ask_if_missing") or []) if isinstance(item, dict)]
+    details["ask_if_missing"] = [*place_items, *(details.get("ask_if_missing") or [])]
+    recovery = details.get("agent_recovery")
+    place_recovery = place_details.get("agent_recovery") or {}
+    if isinstance(recovery, dict):
+        recovery["ask_if_missing"] = [*place_items, *(recovery.get("ask_if_missing") or [])]
+        place_prompt = str(place_recovery.get("prompt_to_user") or "").strip()
+        if place_prompt:
+            recovery["prompt_to_user"] = f"{place_prompt}\n\n{recovery.get('prompt_to_user') or ''}".strip()
+        recovery["do_not_assume"] = [*(place_recovery.get("do_not_assume") or []), *(recovery.get("do_not_assume") or [])]
+    details["place_refusal"] = {"code": place_error.get("code"), "candidates": place_details.get("candidates") or [],
+                                "query": place_details.get("query")}
+    return error
 
 
 async def _gated_run(
@@ -253,8 +280,10 @@ async def _gated_run(
             return refuse(_mcp_internal_error_payload(exc))
         # [dispatch 批 v0.50 F9] 闸门看地名解析之后的载荷：给了 place 就不再追问地点 / 时区。解析在工作线程里（会起 node）；
         # 解析失败（有歧义 / 找不到）不在这里报——闸门照旧判定，执行时由地名解析给出带候选的结构化拒绝。
-        view = await _gate_view_with_places(mcp, gate, view)
+        view, place_error = await _gate_view_with_places(mcp, gate, view)
         error = _agent_preflight_error(gate, view)
+        if place_error is not None:
+            error = _merge_place_questions(error, place_error) if error is not None else place_error
         if error is not None:
             updated = await _maybe_elicit_gate(mcp, gate, payload, error)
             if isinstance(updated, mcp_types.InputRequiredResult):

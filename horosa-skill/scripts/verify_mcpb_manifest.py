@@ -106,6 +106,23 @@ def bundle_content_errors() -> list[str]:
     return problems
 
 
+def policy_errors(manifest: dict) -> list[str]:
+    """审计 surface 待决项 1(a)(b)：隐私政策链接、Claude Desktop 缺省精简面。"""
+    problems: list[str] = []
+    # MCPB MANIFEST.md：extension 连外部服务处理用户数据时必填——本包有可选外发（HOROSA_JEV、追踪）。
+    policies = manifest.get("privacy_policies")
+    if not isinstance(policies, list) or not policies or not all(isinstance(u, str) and u.startswith("https://") for u in policies):
+        problems.append("privacy_policies must be a non-empty list of https URLs (the bundle has optional outbound paths: HOROSA_JEV, tracing)")
+    # 全量 tools/list 约 9 万 token 开场进上下文；Desktop 缺省精简面，用户可取消勾选。
+    compact = (manifest.get("user_config") or {}).get("compact_tools") or {}
+    if compact.get("type") != "boolean" or compact.get("default") is not True:
+        problems.append("user_config.compact_tools must be a boolean defaulting to true (Claude Desktop starts on the compact surface)")
+    env = ((manifest.get("server") or {}).get("mcp_config") or {}).get("env") or {}
+    if env.get("HOROSA_MCP_COMPACT") != "${user_config.compact_tools}":
+        problems.append("mcp_config.env.HOROSA_MCP_COMPACT must be ${user_config.compact_tools}")
+    return problems
+
+
 def manifest_errors() -> list[str]:
     problems: list[str] = []
     if not MANIFEST.is_file():
@@ -144,6 +161,7 @@ def manifest_errors() -> list[str]:
     if match and manifest.get("version") != match.group(1):
         problems.append(f"manifest version {manifest.get('version')!r} != package version {match.group(1)!r}")
 
+    problems.extend(policy_errors(manifest))
     declared = set((manifest.get("user_config") or {}).keys())
     blob = json.dumps(config, ensure_ascii=False)
     used = set(re.findall(r"\$\{user_config\.([A-Za-z0-9_]+)\}", blob))

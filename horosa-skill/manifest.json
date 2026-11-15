@@ -13,6 +13,9 @@
   "documentation": "https://github.com/Horace-Maxwell/horosa-skill#readme",
   "support": "https://github.com/Horace-Maxwell/horosa-skill/issues",
   "license": "AGPL-3.0-only",
+  "privacy_policies": [
+    "https://horosa.org/privacy"
+  ],
   "keywords": [
     "astrology",
     "metaphysics",
@@ -42,7 +45,8 @@
         "HOROSA_PLUGIN_ROOT": "${__dirname}",
         "HOROSA_JEV": "${user_config.jev_mode}",
         "HOROSA_JEV_API_KEY": "${user_config.jev_api_key}",
-        "HOROSA_OUTPUT_SCRIPT": "${user_config.traditional_chinese}"
+        "HOROSA_OUTPUT_SCRIPT": "${user_config.traditional_chinese}",
+        "HOROSA_MCP_COMPACT": "${user_config.compact_tools}"
       }
     }
   },
@@ -71,6 +75,13 @@
       "type": "directory",
       "title": "Local runs & reports directory",
       "description": "Where run records, report artifacts and the SQLite index are stored. Leave empty for ~/.horosa-skill.",
+      "required": false
+    },
+    "compact_tools": {
+      "type": "boolean",
+      "title": "精简工具面 / Compact tool surface",
+      "description": "默认勾选：只广告门面工具（horosa_tool_run 按名调任意技法），工具定义开场约 7,500 token；取消勾选 = 平铺全部技法工具（约 9 万 token 的工具定义进上下文）。Ticked (default): the facade tools only (horosa_tool_run reaches any technique by name), about 7,500 tokens of tool definitions; untick to list every technique tool (about 90,000 tokens).",
+      "default": true,
       "required": false
     },
     "traditional_chinese": {

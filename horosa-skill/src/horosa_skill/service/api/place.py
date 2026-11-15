@@ -878,8 +878,13 @@ class PlaceAPI:
         texts = _refusal_texts(query, verdict)
         candidates = [_compact(item) for item in verdict.get("candidates") or []]
         suggestions = [_compact(item) for item in verdict.get("suggestions") or []]
-        options = [_candidate_label(c) for c in (candidates or suggestions)] or list(texts.get("options") or [])
-        ask = [{"field": "place", "question": texts["question"], **({"options": options} if options else {})}]
+        pool = candidates or suggestions
+        options = [_candidate_label(c) for c in pool] or list(texts.get("options") or [])
+        # 审计 S-27：表单里选了某个候选就能直接用——values 给该候选的坐标（只写回顶层 place 的技法载荷；时区按坐标 + 日期补）。
+        values = [{"lat": c.get("gpsLat"), "lon": c.get("gpsLon")} for c in pool
+                  if isinstance(c.get("gpsLat"), (int, float)) and isinstance(c.get("gpsLon"), (int, float))]
+        ask = [{"field": "place", "question": texts["question"], **({"options": options} if options else {}),
+                **({"values": values} if options and len(values) == len(options) else {})}]
         do_not_assume = [
             "Never pick one of several places yourself; never invent coordinates or a UTC offset.",
             "After the user answers, retry with the chosen candidate's lat/lon/gpsLat/gpsLon (and zone), or a more specific place.",

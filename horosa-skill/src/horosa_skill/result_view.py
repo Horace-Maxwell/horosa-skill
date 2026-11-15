@@ -35,7 +35,7 @@ VIEWS: tuple[str, ...] = (READING, SECTIONS, TITLES, FULL)
 VIEW_ALIASES: dict[str, str] = {"raw": FULL}
 
 # 只管返回体形状的调用参数：MCP 面在进工具之前取走，服务层与存档都见不到它们。
-VIEW_KNOBS: tuple[str, ...] = ("response_view", "response_sections", "response_offset", "response_tool")
+VIEW_KNOBS: tuple[str, ...] = ("response_view", "response_sections", "response_offset", "response_tool", "response_path")
 # 参数可能嵌在哪一层：顶层、整包载荷 `request`、horosa_tool_run / report_from_tool 的 `payload`。
 _KNOB_CARRIERS: tuple[str, ...] = ("request", "payload")
 
@@ -85,6 +85,7 @@ class ViewRequest:
     offset: int = 0
     tool: str | None = None
     notes: tuple[str, ...] = ()
+    path: str = ""
 
 
 def compact_json(value: Any) -> str:
@@ -179,8 +180,9 @@ def take_view_request(arguments: Any, *, default_view: str) -> tuple[Any, ViewRe
         from horosa_skill.agent_guidance import resolve_technique
 
         tool = resolve_technique(tool)[0] or tool
+    path = str(found.get("response_path") or "").strip().strip(".")
     return cleaned, ViewRequest(
-        view=view, sections=_selection(found.get("response_sections")), offset=offset, tool=tool, notes=tuple(notes),
+        view=view, sections=_selection(found.get("response_sections")), offset=offset, tool=tool, notes=tuple(notes), path=path,
     )
 
 
@@ -618,7 +620,14 @@ def _fill(result: dict[str, Any], slots: list[_TextSlot], budget: Budget) -> dic
 def shape_result(raw: Any, request: ViewRequest, budget: Budget) -> Any:
     """按视图与模型预算整形一个工具结果。`full` 视图原样返回（只并入参数说明）。"""
     if request.view == FULL:
-        return _with_notes(raw, request.notes)
+        # 审计 S-28：full 以前没有上限（八字一次 36 万字节、单个 text 块）。放得下照原样；放不下回键目录 + 各子树字节数，
+        # 用 response_path 取子树（同一次调用 / memory_show 都认）。
+        full = raw.model_dump(mode="json") if hasattr(raw, "model_dump") else raw
+        if request.path:
+            return _with_notes(_full_subtree(full, request.path, budget), request.notes)
+        if not isinstance(full, (dict, list)) or budget.value_fraction(full) <= 1.0:
+            return _with_notes(raw, request.notes)
+        return _with_notes(_full_directory(full, full, "", budget), request.notes)
     value = raw.model_dump(mode="json") if hasattr(raw, "model_dump") else raw
     if not isinstance(value, dict):
         return raw
@@ -634,6 +643,63 @@ def shape_result(raw: Any, request: ViewRequest, budget: Budget) -> Any:
     else:
         shaped = value
     return _with_notes(fit_to_budget(shaped, budget), request.notes)
+
+
+_DIRECTORY_LIMIT = 80
+
+
+def _byte_size(value: Any) -> int:
+    return len(compact_json(value).encode("utf-8"))
+
+
+def _directory_rows(value: Any, prefix: str, budget: Budget, depth: int, rows: list[dict[str, Any]]) -> None:
+    items = list(value.items()) if isinstance(value, dict) else list(enumerate(value)) if isinstance(value, list) else []
+    for key, child in items:
+        if len(rows) >= _DIRECTORY_LIMIT:
+            return
+        path = f"{prefix}.{key}" if prefix else str(key)
+        kind = "object" if isinstance(child, dict) else "array" if isinstance(child, list) else type(child).__name__
+        row: dict[str, Any] = {"path": path, "type": kind, "bytes": _byte_size(child)}
+        if isinstance(child, (dict, list)):
+            row["children"] = len(child)
+        rows.append(row)
+        # 放不下的子树再往下展开一层（两层为止），模型能直接挑一个放得下的路径
+        if depth < 2 and isinstance(child, (dict, list)) and budget.value_fraction(child) > 1.0:
+            _directory_rows(child, path, budget, depth + 1, rows)
+
+
+def _full_directory(root: Any, node: Any, prefix: str, budget: Budget, *, note_zh: str = "", note_en: str = "") -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    _directory_rows(node, prefix, budget, 1, rows)
+    head = {key: value for key, value in root.items() if not isinstance(value, (dict, list))} if isinstance(root, dict) else {}
+    return {
+        **head,
+        "response_view": {
+            "view": FULL, "exceeds_budget": True, "path": prefix or None, "total_bytes": _byte_size(node),
+            "directory": rows, "directory_truncated": len(rows) >= _DIRECTORY_LIMIT,
+            "how": bilingual(
+                (note_zh + "；" if note_zh else "") + "完整结果超出单次回包预算：按 directory 挑一个放得下的路径，带 response_view=\"full\" 与 "
+                "response_path=\"data.xxx\" 重新调用（或 horosa_memory_show 带同样两个参数读存档）。",
+                (note_en + "; " if note_en else "") + "The full result exceeds the per-result budget: pick a path from directory that fits and call again with "
+                "response_view=\"full\" and response_path=\"data.xxx\" (or horosa_memory_show with the same two arguments).",
+            ),
+        },
+    }
+
+
+def _full_subtree(root: Any, path: str, budget: Budget) -> dict[str, Any]:
+    node: Any = root
+    for part in path.split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.lstrip("-").isdigit() and -len(node) <= int(part) < len(node):
+            node = node[int(part)]
+        else:
+            return _full_directory(root, root, "", budget, note_zh=f"response_path「{path}」不存在", note_en=f"response_path '{path}' does not exist")
+    if budget.value_fraction(node) <= 1.0:
+        head = {key: root.get(key) for key in ("ok", "tool", "run_id") if isinstance(root, dict) and key in root}
+        return {**head, "response_view": {"view": FULL, "path": path}, "value": node}
+    return _full_directory(root, node, path, budget, note_zh=f"「{path}」本身也放不下", note_en=f"'{path}' itself does not fit")
 
 
 # 失败 / 闸门回包的定型（审计 S-04）：审计时 71 个技法的闸门回包中位 8 KB、最大 12.5 KB，给用户的话只有 725 B——

@@ -271,7 +271,7 @@ def test_default_result_of_every_technique_fits_the_model_budget(tmp_path: Path,
 
 
 def test_full_view_is_still_reachable_and_wire_bounded(tmp_path: Path) -> None:
-    """`response_view="full"` 拿回原始树（v0.49.0 的缺省），只受线上预算管。"""
+    """`response_view="full"` 拿回原始树（v0.49.0 的缺省）；超出模型预算时先回键目录，response_path 取子树（审计 S-28）。"""
     service = offline_service(tmp_path)
     mcp = mcp_server(service)
     payloads = build_sample_payloads()
@@ -281,6 +281,13 @@ def test_full_view_is_still_reachable_and_wire_bounded(tmp_path: Path) -> None:
         body = json.loads(text)
         raw = service.run_tool(label, {**payloads[label], **CONFIRM}, save_result=False).model_dump(mode="json")
         assert wire <= mcp_runner.MCP_RESULT_WIRE_BUDGET
+        if (body.get("response_view") or {}).get("exceeds_budget"):
+            paths = {row["path"] for row in body["response_view"]["directory"]}
+            assert {f"data.{key}" for key in raw["data"]} <= paths, label   # 原始字段都在目录里
+            [(_, _, sub)] = call_all(mcp, [(label, (TOOL_DEFINITIONS[label].mcp_name, {
+                **payloads[label], **CONFIRM, "response_view": "full", "response_path": "data.export_snapshot.export_text"}))])
+            assert json.loads(sub)["value"] == raw["data"]["export_snapshot"]["export_text"]
+            continue
         assert set(body["data"]) == set(raw["data"]), label          # 原始字段都在
         assert body["data"]["export_snapshot"]["export_text"] == raw["data"]["export_snapshot"]["export_text"]
 

@@ -197,8 +197,11 @@ class DispatchAPI:
             child_runs = [{"tool": name, "run_id": run, "reused": True} for name, run, _env in reused]
             child_runs += [{"tool": name, "run_id": hecan_run_id, "reused": False} for name in fresh if name in fresh_results]
             run_of = {row["tool"]: row["run_id"] for row in child_runs}
+            intent_key, focus = tpl.focus_for(request.query)
+            requested = tuple(str(name).strip() for name in (request.evidence_sections or []) if str(name).strip())
             techniques = [
-                tpl.technique_row(name, envelopes[name], run_id=run_of.get(name), reused=name in reused_names) for name in selected
+                tpl.technique_row(name, envelopes[name], run_id=run_of.get(name), reused=name in reused_names, focus=focus, requested=requested)
+                for name in selected
             ]
             cards = [card for name in selected
                      if isinstance(card := (envelopes[name].get("data") or {}).get("technique_card"), dict)]

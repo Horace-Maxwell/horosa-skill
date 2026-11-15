@@ -284,6 +284,7 @@ def advertised_dispatch_schema(*, hecan: bool) -> dict[str, Any]:
     if hecan:
         props["tools"] = {"type": "array", "items": {"type": "string"}, "description": "技法名或已有 run_id（复用不重算）；缺省按问题配两种"}
         props["max_tools"] = {"type": "integer", "description": "合参技法上限（默认 5）"}
+        props["evidence_sections"] = {"type": "array", "items": {"type": "string"}, "description": "节选先放的段名（如 大运、用神）；缺省按问题选段"}
     return {"type": "object", "properties": props, "additionalProperties": True}
 
 
@@ -442,11 +443,30 @@ def _with_tool_run_docs(schema: dict[str, Any]) -> dict[str, Any]:
     return {**schema, "properties": props}
 
 
+# 审计 S-30：HOROSA_OUTPUT_SCHEMA=1 时每个工具各带一份完整的 ToolEnvelope schema，tools/list 涨到 485 KB。
+# 改成全体共用一个极小的 outputSchema（只约束 ok / result 外形）；服务端仍按函数的返回模型校验结构化结果（SDK 的 output_model 不动）。
+MINIMAL_OUTPUT_SCHEMA: dict[str, Any] = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "additionalProperties": True}
+MINIMAL_WRAPPED_OUTPUT_SCHEMA: dict[str, Any] = {"type": "object", "properties": {"result": {}}, "required": ["result"], "additionalProperties": True}
+
+
+def share_minimal_output_schema(manager: Any) -> int:
+    """把已声明 outputSchema 的工具改成共用的极小 schema；返回改了几个。没开 HOROSA_OUTPUT_SCHEMA 时没有工具声明，什么也不做。"""
+    changed = 0
+    for tool in manager.list_tools():
+        metadata = getattr(tool, "fn_metadata", None)
+        if metadata is None or metadata.output_schema is None:
+            continue
+        metadata.output_schema = dict(MINIMAL_WRAPPED_OUTPUT_SCHEMA if metadata.wrap_output else MINIMAL_OUTPUT_SCHEMA)
+        changed += 1
+    return changed
+
+
 def apply_advertised_schemas(mcp: Any) -> dict[str, int]:
     """注册完成后重写各工具的广告层 schema/描述；返回 {mcp_name: 隐藏旋钮数}（测试/棘轮用）。"""
     manager = getattr(mcp, "_tool_manager", None)
     if manager is None:
         return {}
+    share_minimal_output_schema(manager)
     by_mcp_name = {definition.mcp_name: name for name, definition in TOOL_DEFINITIONS.items()}
     hidden: dict[str, int] = {}
     for tool in manager.list_tools():
