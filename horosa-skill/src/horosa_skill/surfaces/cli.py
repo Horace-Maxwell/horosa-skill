@@ -227,7 +227,7 @@ def _emit_json(data: object, output: Optional[Path] = None) -> None:
 UNLOCALIZED_COMMANDS = PROTOCOL_OPERATIONS | frozenset({
     "jev_status", "jev_events", "uninstall", "doctor", "setup", "selfcheck", "runtime_status",
     "runtime_start", "runtime_restart", "tool_list", "benchmark_run", "benchmark_faithfulness", "trace_latest",
-    "client_check", "client_skill", "client_config", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check",
+    "client_check", "client_skill", "client_config", "client_remove", "client_openclaw_config", "client_openclaw_setup", "client_openclaw_check",
     "memory_prune", "memory_rebuild", "knowledge_mine", "knowledge_add", "knowledge_remove", "knowledge_trash", "knowledge_restore",
     "knowledge_index",
 })
@@ -287,7 +287,7 @@ _ENTRY_HELP = (
 
 
 def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str, sha256: str | None = None,
-                 engine_only: bool = False) -> None:
+                 engine_only: bool = False, allow_downgrade: bool = False) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     typer.echo(
@@ -297,7 +297,7 @@ def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, 
     )
     try:
         result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer(),
-                                 sha256=sha256, engine_only=engine_only)
+                                 sha256=sha256, engine_only=engine_only, allow_downgrade=allow_downgrade)
     except RuntimeError as exc:
         _refuse(exc)
     except OSError as exc:
@@ -318,16 +318,19 @@ def install(
         False, "--engine-only",
         help="Install only the platform-independent JS engine (horosa-core-js, ~7MB; needs Node.js >= 20.10 on PATH) under the runtime root — any OS. Platforms without a runtime archive (Linux, Intel Mac) get it automatically. 只装 JS 引擎（任何平台）。",
     ),
+    allow_downgrade: bool = typer.Option(False, "--allow-downgrade", help="Install even when the manifest's runtime is older than the installed one. 允许降级。"),
 ) -> None:
-    _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256), engine_only=bool(_opt(engine_only, False)))
+    _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256), engine_only=bool(_opt(engine_only, False)),
+                 allow_downgrade=bool(_opt(allow_downgrade, False)))
 
 
 @app.command(help="Version-aware install alias: skips the 730MB download when already up to date. 升级（已最新则秒退）。")
 def upgrade(
     manifest_url: str | None = typer.Option(None, help="Release manifest URL that maps platforms to runtime archives."),
     force: bool = typer.Option(False, help="Reinstall even if the same runtime version is already present."),
+    allow_downgrade: bool = typer.Option(False, "--allow-downgrade", help="Install even when the manifest's runtime is older than the installed one. 允许降级。"),
 ) -> None:
-    _run_install(None, manifest_url, force, mode="upgrade")
+    _run_install(None, manifest_url, force, mode="upgrade", allow_downgrade=bool(_opt(allow_downgrade, False)))
 
 
 @app.command(help="Uninstall the offline runtime (dry-run by default; --yes to execute). 卸载 runtime（默认只打印将删清单）。")
@@ -337,6 +340,7 @@ def uninstall(
     purge_profiles: bool = typer.Option(False, "--purge-profiles", help="With --purge-data: also delete your saved birth profiles (horosa_profile). 连命主档案一起删（不可恢复）。"),
     yes: bool = typer.Option(False, "--yes", help="Actually delete. Without this flag only the removal plan is printed."),
     engine_only: bool = typer.Option(False, "--engine-only", help="Remove only the standalone JS engine asset (`install --engine-only`); the offline runtime and your data stay. 只删 JS 引擎资产。"),
+    clients: bool = typer.Option(False, "--clients", help="Also remove the horosa entries from MCP client configs (backup first; plain-JSON configs only). 连客户端配置里的条目一起拿掉。"),
 ) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
@@ -345,6 +349,13 @@ def uninstall(
                                    engine_only=bool(_opt(engine_only, False)))
     except RuntimeError as exc:
         _refuse(exc)
+    # 审计 PF-07：客户端条目、装进去的 skill、wheel 缓存都在别处——列出来并给命令（--clients 时顺手把条目拿掉）。
+    from horosa_skill.client_config.audit import elsewhere_report, remove_client_entries
+
+    elsewhere = elsewhere_report()
+    if _opt(clients, False):
+        elsewhere["removed"] = [remove_client_entries(row["client"], dry_run=not yes) for row in elsewhere["client_configs"]]
+    result["elsewhere"] = elsewhere
     _print_json(result)
 
 
@@ -1157,6 +1168,19 @@ def client_check(
     客户端里安静地少了这个 server —— 没有任何一处会告诉他们哪一步错了。
     """
     _print_json(_client_check_report([client] if client else list(_CLIENT_NAMES), config_path))
+
+
+@client_app.command("remove", help="Remove the horosa entry from a client's MCP config (backup + atomic; plain JSON only). 从客户端配置里拿掉 horosa 条目。")
+def client_remove(
+    client: str = typer.Option(..., "--client", help="Target client (same keys as `setup --client`)."),
+    config_path: Path = typer.Option(None, "--config", help="Edit this exact config file instead of the known locations."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report what would be removed; write nothing."),
+) -> None:
+    from horosa_skill.client_config.audit import remove_client_entries
+
+    if client.strip().lower() not in _CLIENT_NAMES:
+        raise typer.BadParameter(f"未知客户端 `{client}`。可选：{', '.join(_CLIENT_NAMES)}")
+    _print_json(remove_client_entries(client.strip().lower(), config_path=config_path, dry_run=bool(_opt(dry_run, False))))
 
 
 @client_app.command(

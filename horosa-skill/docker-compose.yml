@@ -1,8 +1,16 @@
 services:
   horosa-skill:
     build: .
+    # 审计 PF-15：只在宿主回环上发布（与 serve 的态度一致）；要给局域网用，改成 "8765:8765" 并配好令牌与 Host 白名单。
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       HOROSA_SERVER_ROOT: ${HOROSA_SERVER_ROOT:-http://host.docker.internal:9999}
       # 🔴 两个 ROOT 都要给：只设 Java 后端那条时 chart 族（西占 chart / 三式 ken / 神数 …）会在容器里找 127.0.0.1:8899 → 全部失败。
@@ -16,9 +24,10 @@ services:
       # 客户端用 host.docker.internal 来连，这两种默认已放行；别的机器用宿主的局域网 IP / 主机名来连时，把它加在这里，
       # 否则 421（启动横幅与 421 回包都会印出要加的那一行）。
       HOROSA_MCP_ALLOWED_HOSTS: ${HOROSA_MCP_ALLOWED_HOSTS:-host.docker.internal:8765}
+    # 镜像改非 root、数据移到 /data：换新卷名（旧卷里的文件属 root）。迁移见 README「Docker」一节。
     volumes:
-      - horosa_skill_data:/root/.horosa-skill
+      - horosa_skill_data_v2:/data
 
 volumes:
-  horosa_skill_data:
+  horosa_skill_data_v2:
 

@@ -477,6 +477,17 @@ def _default_setup_launcher(skill_root: Path | None) -> str:
     return "uv"
 
 
+def _url_reachable(url: str) -> bool:
+    """HEAD 一下原站地址（5 秒）：预下载失败时判断「原站也不通」（审计 PF-16）。"""
+    import httpx
+
+    try:
+        with httpx.Client(timeout=5.0, follow_redirects=True) as http:
+            return http.head(url).status_code < 400
+    except (httpx.HTTPError, OSError, ValueError):  # 探针：连不上就是答案
+        return False
+
+
 def _setup_command_text(client: str, *, launcher: str, config: Path | None, extra: tuple[str, ...] = ()) -> str:
     """重试命令（审计 PF-10）：前缀按安装上下文（wheel / uvx / 插件 / MCPB），参数由本次实际传入的重建。"""
     import shlex
@@ -655,8 +666,19 @@ def _run_setup(
             from horosa_skill.runtime.mirrors import preferred_mirror_url
 
             announce("config", "预下载 wheel 到 ~/.horosa/wheels/（配置里写本地路径；--no-cache-wheel 可跳过）…")
-            cached, wheel_cache_note = _cache_wheel(preferred_mirror_url(zero_install_wheel_url()))
+            original = zero_install_wheel_url()
+            cached, wheel_cache_note = _cache_wheel(preferred_mirror_url(original), sums_url=original.rsplit("/", 1)[0] + "/SHA256SUMS.txt")
             wheel_source = str(cached) if cached else None
+            if cached is None and not _url_reachable(original):
+                # 审计 PF-16：预下载失败、原站也不通 → 写进去的配置客户端起不来。在写配置之前失败（config_untouched），给三条路。
+                fail("config", "setup.wheel_unreachable",
+                     bilingual("wheel 取不到（预下载失败、github.com 也不通）：没有写客户端配置。",
+                               "The wheel is unreachable (pre-download failed and github.com is unreachable): the client config was not written."),
+                     {"note": wheel_cache_note, "next_action": bilingual(
+                         "三条路（docs/INSTALL_RESTRICTED_NETWORK.md）：设 https 镜像 HOROSA_RUNTIME_MIRROR 后重试；"
+                         "或在能联网的机器下载 wheel 拷过来、用 --launcher uv 指向源码 checkout；或 --no-cache-wheel 照写原站地址（以后联网再起）。",
+                         "Three routes (docs/INSTALL_RESTRICTED_NETWORK.md): set an https HOROSA_RUNTIME_MIRROR and retry; or copy the wheel from a "
+                         "connected machine / use --launcher uv with a checkout; or --no-cache-wheel to write the original URL anyway.")})
         payload, stdio_command, surface_env = _build_client_config_payload(
             format_name=client_key, skill_root=root, server_name=server_name, launcher=launcher_key, surface=surface,
             wheel_source=wheel_source, output_script=output_script, entry=entry, vectors=vectors_on,

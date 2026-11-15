@@ -291,13 +291,14 @@ def test_launcher_uvx_wheel_emits_pinned_release_url(monkeypatch: pytest.MonkeyP
     assert "uvx --from" in payload["launcher"]["install_hint"]
 
 
-def test_launcher_uvx_wheel_uses_the_first_mirror_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
-
+def test_launcher_uvx_wheel_never_writes_a_mirror_url_into_the_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """审计 PF-02：配置里写镜像 URL = 客户端每次冷启动从镜像取可执行文件。镜像只用来下载（alternatives 照列）。"""
     monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "https://mirror.example/gh, https://m2.example.org/")
     monkeypatch.setattr(client_payload, "resolve_uvx_command", lambda: ["/opt/uv/bin/uvx"])
     payload = _payload("--format", "cursor", "--launcher", "uvx-wheel")
     url = payload["mcpServers"]["horosa"]["args"][1]
-    assert url.startswith("https://mirror.example/gh/Horace-Maxwell/horosa-skill/releases/download/v")
+    assert url.startswith("https://github.com/Horace-Maxwell/horosa-skill/releases/download/v")
+    assert any("原站地址" in w for w in payload.get("warnings") or [])
     alternatives = payload["launcher"]["alternatives"]
     assert len(alternatives) == 3 and alternatives[-1].startswith("https://github.com/")
     assert alternatives[1].startswith("https://m2.example.org/Horace-Maxwell/")

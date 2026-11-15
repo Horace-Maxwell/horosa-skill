@@ -128,4 +128,11 @@ class HostGuidanceMiddleware:
                             "headers": [(b"content-type", b"text/plain; charset=utf-8"), (b"content-length", str(len(body)).encode())]})
                 await send({"type": "http.response.body", "body": body})
                 return
+            # 审计 PF-15：容器 HEALTHCHECK 用的存活探针——不过鉴权、不带任何数据，只回 ok。
+            if scope.get("path") == "/healthz" and scope.get("method") in ("GET", "HEAD"):
+                body = b"ok\n"
+                await send({"type": "http.response.start", "status": 200,
+                            "headers": [(b"content-type", b"text/plain; charset=utf-8"), (b"content-length", str(len(body)).encode())]})
+                await send({"type": "http.response.body", "body": body if scope.get("method") == "GET" else b""})
+                return
         await self.app(scope, receive, send)

@@ -10,7 +10,7 @@
 <p>
   <a href="https://github.com/Horace-Maxwell/horosa-skill/releases/latest"><img src="https://img.shields.io/github/v/release/Horace-Maxwell/horosa-skill?display_name=tag&style=flat-square&color=a87c38&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/技法-119-1c1917?style=flat-square" alt="119 tools" />
-  <img src="https://img.shields.io/badge/测试-7979_passed-3e7c6f?style=flat-square" alt="7979 passed" />
+  <img src="https://img.shields.io/badge/测试-7989_passed-3e7c6f?style=flat-square" alt="7989 passed" />
   <img src="https://img.shields.io/badge/runtime-offline_first-3e7c6f?style=flat-square" alt="offline" />
   <img src="https://img.shields.io/badge/macOS_·_Windows-1c1917?style=flat-square" alt="macOS and Windows" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1c1917?style=flat-square" alt="AGPL-3.0" /></a>
@@ -141,7 +141,8 @@ uvx --from "$WHL" horosa-skill serve --transport stdio    # 给客户端直连�
 > 任何平台都可以用 `install --engine-only` 只装它，`uninstall --engine-only` 只删它。要 Java / chart 服务算的技法（紫微、西占、三式、神数等）
 > 走 **MCP 网关**：把 `HOROSA_SERVER_ROOT` / `HOROSA_CHART_SERVER_ROOT` 指向宿主机或另一台装了 runtime 的机器即可。
 > 仓库附带**实验性**的 `horosa-skill/Dockerfile` + `docker-compose.yml`（网关镜像：自带钉版本的 Node 与 JS 引擎，容器内没有离线 runtime，
-> 必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`）；
+> 必须设上面两个变量；绑 0.0.0.0 必须给 `HOROSA_MCP_TOKEN`；以非 root 的 10001 运行，数据在卷 `horosa_skill_data_v2:/data`，
+> compose 只在宿主回环上发布端口。从旧卷迁移：`docker run --rm -v horosa-skill_horosa_skill_data:/from -v horosa-skill_horosa_skill_data_v2:/to alpine sh -c "cp -a /from/. /to/ && chown -R 10001:10001 /to"`）；
 > 手工起也行：`pip install "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v0.50.1/horosa_skill-0.50.1-py3-none-any.whl"` 后 `horosa-skill serve --transport streamable-http` 即为网关（PyPI 尚未开通，装的是发布页的 wheel）。
 
 <details>
@@ -591,7 +592,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 | 检查项 | 结果 |
 | --- | --- |
 | 可调用工具 | 119 / 119 `ok=true` |
-| 工程测试 | **7979 / 7979 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 498 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
+| 工程测试 | **7989 / 7989 pass**（离线 CI 形状：契约 + 导出 fixture + node JS golden；另 498 项 live 集成测试需本地 runtime，服务未起时自动 skip） |
 | 未确认参数时强制追问 | 108 个技法工具触发 `must_ask_user=true` |
 | 免闸直读 | 11 个注册表 / 知识 / 解析类工具（含查历）不经澄清闸 |
 | 星阙式导出结构 | 每个业务技法均带 `export_snapshot`（已建模 117 个导出 technique；契约 v17 镜像桌面端 aiExport v65） |
@@ -607,7 +608,7 @@ uv run horosa-skill memory show <run_id>         # 精确回看某次完整调�
 ```bash
 cd horosa-skill && uv sync && uv run horosa-skill install
 uv run horosa-skill doctor                              # 期望 issues: []
-uv run pytest -q                                        # 7979 passed（live 集成测试在服务未起时 skip）
+uv run pytest -q                                        # 7989 passed（live 集成测试在服务未起时 skip）
 uv run python scripts/run_full_self_check.py --rounds 1 # 全工具调用 / 导出 / 落库 / 检索 / dispatch 汇总
 ```
 

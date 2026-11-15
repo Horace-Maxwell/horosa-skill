@@ -34,6 +34,7 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_RUNTIME_MANIFEST_URL": "Release manifest to install from (default: the latest GitHub release). A manifest without sha256 is refused for network downloads.",
     "HOROSA_RUNTIME_PLATFORM": "Force the payload platform key (darwin-arm64 / win32-x64) instead of detecting it.",
     "HOROSA_RUNTIME_RELEASE_REPO": "GitHub owner/repo the default manifest URL points at.",
+    "HOROSA_RUNTIME_MIRROR_ALLOW_HTTP": "Set to 1 to accept plain-http (non-loopback) mirrors in HOROSA_RUNTIME_MIRROR; refused by default.",
     "HOROSA_RUNTIME_MIRROR": "Comma-separated URL prefixes that replace https://github.com for the manifest, the runtime archive and the wheel; the original URL is always tried last.",
     "HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS": "Read timeout between 1 MiB chunks of the runtime download (default 120 s).",
     "HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS": "Retries per download source when no progress is made (default 3, 1-20).",

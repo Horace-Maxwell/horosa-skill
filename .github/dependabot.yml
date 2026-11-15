@@ -1,0 +1,11 @@
+# 审计 PF-18 / PF-15：workflow 里的 action 钉到提交号、Dockerfile 的基础镜像钉 digest 之后，由 Dependabot 跟进新版本。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /horosa-skill
+    schedule:
+      interval: weekly

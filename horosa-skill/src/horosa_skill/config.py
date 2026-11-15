@@ -41,6 +41,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_RUNTIME_PLATFORM": "stable",
     "HOROSA_RUNTIME_RELEASE_REPO": "stable",
     "HOROSA_RUNTIME_MIRROR": "stable",
+    "HOROSA_RUNTIME_MIRROR_ALLOW_HTTP": "stable",
     # v0.38.0 B6 下载旋钮：慢网 / 企业代理下 120 s 读超时与 3 次重试不够时可调（每个镜像各算一轮）。
     "HOROSA_RUNTIME_DOWNLOAD_TIMEOUT_SECONDS": "stable",
     "HOROSA_RUNTIME_DOWNLOAD_ATTEMPTS": "stable",
@@ -698,4 +699,12 @@ class Settings(BaseModel):
 
     @property
     def default_runtime_manifest_url(self) -> str:
+        """缺省清单钉本包版本（审计 PF-04）：钉在旧版本的 wheel 以前装到的 runtime 随 latest 漂移；镜像缓存了旧清单就是一次静默降级。
+        这个版本的清单不存在（未发布的开发版）时 install 退到 latest 并告警（latest_runtime_manifest_url）。"""
+        from horosa_skill import __version__
+
+        return f"https://github.com/{self.runtime_release_repo}/releases/download/v{__version__}/runtime-manifest.json"
+
+    @property
+    def latest_runtime_manifest_url(self) -> str:
         return f"https://github.com/{self.runtime_release_repo}/releases/latest/download/runtime-manifest.json"

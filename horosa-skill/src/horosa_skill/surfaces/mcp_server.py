@@ -138,14 +138,14 @@ _JEV_CLAIM = (
     "machine. HOROSA_JEV is ON: redacted request text is sent to TypeSafe Jev (cloud)\n"
     "for routing/clarification; results self-report it in technique_card.decisions."
 )
-# HOROSA_TRACE_OTLP_ENDPOINT 设了时同理（每条追踪事件都 POST 到那个地址）：第三种说法；两者都开就两句都说。
+# HOROSA_TRACE_OTLP_ENDPOINT 设了时同理：第三种说法；两者都开就两句都说。外发只有白名单键（审计 PF-06，tracing.OUTBOUND_KEYS）。
 _OTLP_CLAIM = (
-    "machine. HOROSA_TRACE_OTLP_ENDPOINT is set: every trace event is POSTed to that\n"
-    "endpoint (payload fields redacted unless trace capture is on)."
+    "machine. HOROSA_TRACE_OTLP_ENDPOINT is set: trace metadata (ids, tool, timing,\n"
+    "error code; no chart data) is exported there as OTLP."
 )
 _JEV_OTLP_CLAIM = (
     "machine. HOROSA_JEV is ON: redacted request text goes to TypeSafe Jev (cloud);\n"
-    "HOROSA_TRACE_OTLP_ENDPOINT is set: every trace event is POSTed there."
+    "HOROSA_TRACE_OTLP_ENDPOINT is set: trace metadata (no chart data) goes there."
 )
 _JEV_TRIMS = (
     ("\nsuch a chart. Also 农历/节气/黄历 conversion, celebrity birth data.", "\nsuch a chart, 农历/节气/黄历 conversion, celebrity birth data."),

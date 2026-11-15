@@ -537,6 +537,11 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "fix_external_address_or_unset",
     },
+    # 审计 PF-04：清单比已装的旧（钉了旧版本的镜像缓存 / 手给的旧清单）——不静默降级。
+    "runtime.install_downgrade_refused": {"kind": "runtime", "prompt_to_user": bilingual(
+        "要装的 runtime 比已装的旧，已拒绝（details 里是两个版本）。确要降级：`horosa-skill install --allow-downgrade`。",
+        "The runtime to install is older than the installed one (versions in details). To downgrade anyway: `horosa-skill install --allow-downgrade`."),
+        "next_action": "confirm_downgrade_or_fix_manifest"},
     "runtime.install_long_path": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

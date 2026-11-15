@@ -118,7 +118,7 @@ def _listener_scope_warnings(scope: dict[str, Any]) -> list[dict[str, str]]:
 # tests/test_doctor_machine_conditions.py::test_every_doctor_code_has_advice 锁步，并扫源码里新增的字面量。
 _DOCTOR_WARNING_CODES = (
     "listener:not_loopback_only", "platform:emulated_process", "env:internal_port_override", "runtime:payload_outdated",
-    "env:rejected_value", "env:invalid_url", "js_engine:unavailable", "env:unknown_name",
+    "env:rejected_value", "env:invalid_url", "js_engine:unavailable", "env:unknown_name", "trace:insecure_endpoint",
     "config:toolsets_invalid",  # MCP-07（surface 批）：HOROSA_TOOLSETS 一个合法值都没有 / 有不认识的值
 )
 _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
@@ -195,6 +195,11 @@ _DOCTOR_ADVICE: dict[str, dict[str, str]] = {
         "next_action": "跑 `horosa-skill upgrade`（wheel / 插件 / MCPB 形态的完整命令见 warnings[].fix）；只想核对最新版本号可 `doctor --probe-network`。",
     },
     # 审计 PF-12：拼错的变量名以前只在 stderr 说一句「已忽略，不影响运行」——其实想设的那一项没生效。
+    # 审计 PF-06：追踪外发到非回环的明文 http 端点——元数据也会被路上的人看到。
+    "trace:insecure_endpoint": {
+        "user_summary": "追踪外发端点是非回环的明文 http：外发的追踪元数据（工具名、耗时、错误码）路上可见。",
+        "next_action": "把 HOROSA_TRACE_OTLP_ENDPOINT 换成 https（或本机收集器），然后重启 AI 客户端。",
+    },
     "env:unknown_name": {
         "user_summary": "有 HOROSA_* 环境变量名字不认识（拼错或来自更新版本），这一项没有生效（detail 里给最接近的正确名字）。",
         "next_action": "改成正确的名字（docs/ENV_VARS.md），然后重启 AI 客户端。",
@@ -325,6 +330,18 @@ def _env_flag_audit() -> dict[str, Any]:
     audit["set"] = {key: ENV_FLAG_REGISTRY.get(key, "unknown") for key in sorted(os.environ) if key.startswith("HOROSA_")}
     audit["rejected"] = env_rejections()
     return audit
+
+
+def _trace_endpoint_warnings(settings: Any) -> list[dict[str, str]]:
+    from urllib.parse import urlparse
+
+    endpoint = getattr(settings, "trace_otlp_endpoint", None)
+    parsed = urlparse(str(endpoint or ""))
+    if not endpoint or parsed.scheme != "http" or (parsed.hostname or "") in {"127.0.0.1", "localhost", "::1"}:
+        return []
+    advice = _advice_for("trace:insecure_endpoint")
+    return [{"code": "trace:insecure_endpoint", "detail": f"HOROSA_TRACE_OTLP_ENDPOINT={parsed.scheme}://{parsed.hostname}…",
+             "fix": advice["next_action"]}]
 
 
 def _unknown_env_warnings() -> list[dict[str, str]]:
@@ -835,6 +852,7 @@ def _doctor_report_unbudgeted(settings: Settings, manager: HorosaRuntimeManager,
         *_payload_outdated_warnings(report),
         *_env_rejection_warnings(report["env_flags"]["rejected"]),
         *_unknown_env_warnings(),
+        *_trace_endpoint_warnings(settings),
         *_toolsets_doctor_warnings(),  # MCP-07（surface 批）
     ]
     # v0.38.0 B6：每个码一条人话（issues 与 warnings 都有），脚本用户与 agent 不用再猜码的意思。

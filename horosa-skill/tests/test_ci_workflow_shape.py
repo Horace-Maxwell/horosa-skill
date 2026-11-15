@@ -239,3 +239,21 @@ def test_concurrency_check_catches_a_shared_main_group() -> None:
         "cancel-in-progress is not limited to pull requests",
     ]
     assert "top-level `permissions: contents: read` missing" in ci_permission_and_concurrency_problems("concurrency:\n")
+
+
+def test_every_external_action_is_pinned_to_a_commit() -> None:
+    """审计 PF-18：action 只钉 tag / 分支（release-runtime 还带 id-token / attestations 写权限）。负向对照：把一处改回 @v5 → 红。"""
+    import re
+    from pathlib import Path
+
+    workflows = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+    loose = []
+    for path in sorted(workflows.glob("*.yml")):
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            match = re.search(r"uses:\s*(\S+)", line)
+            if not match or match.group(1).startswith("./"):
+                continue
+            if not re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", match.group(1)):
+                loose.append(f"{path.name}:{line_no} {match.group(1)}")
+    assert not loose, loose
+    assert (workflows.parent / "dependabot.yml").is_file(), "钉了提交号要有 Dependabot 跟进"

@@ -74,6 +74,14 @@ if str(REPO_SRC) not in _pythonpath:
 
 
 @pytest.fixture(autouse=True)
+def _mcp_token_never_leaks_between_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """serve 在回环 HTTP 上会生成令牌并写进 os.environ（审计 PF-05）——经 monkeypatch 登记这个键，用例结束时还原，
+    后面断言「HTTP 且没令牌」的用例才不会被前面起过 serve 的用例带偏。"""
+    monkeypatch.setenv("HOROSA_MCP_TOKEN", "")
+    monkeypatch.delenv("HOROSA_MCP_TOKEN")
+
+
+@pytest.fixture(autouse=True)
 def _host_smart_app_control_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     """生成的客户端配置不许随维护机的 Smart App Control 状态变（v0.43.1-dev）。
 

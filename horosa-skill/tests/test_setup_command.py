@@ -411,7 +411,8 @@ def test_uvx_wheel_launcher_honours_the_mirror(tmp_path: Path, monkeypatch: pyte
     report = _stdout_json(_run("--client", "cursor", "--config", str(config), "--launcher", "uvx-wheel",
                                "--dry-run", "--no-probe-network"))
     assert report["launcher"]["kind"] == "uvx-wheel"
-    assert report["launcher"]["wheel_url"].startswith("https://mirror.example/gh/")
+    # 审计 PF-02：配置里写原站地址（或本地已核过的 wheel），镜像只用来下载
+    assert report["launcher"]["wheel_url"].startswith("https://github.com/")
     args = report["steps"]["config"]["server_block"]["horosa"]["args"]
     assert "--from" in args and args[args.index("--from") + 1] == report["launcher"]["wheel_url"]
     assert "horosa-skill setup --client cursor" in report["recheck_command"] or report["recheck_command"].startswith("horosa-skill ")
@@ -891,3 +892,38 @@ def test_setup_names_the_windows_file_lock_when_the_probe_dies_on_it(tmp_path: P
     assert failure["message"] == diagnosis["explanation"], "认出来就换成人话，而不是通用那句"
     assert failure["steps"]["stdio_probe"]["diagnosis"] == diagnosis, "步骤记录里也带上（lane 报告读的是它）"
     assert failure["details"]["stderr_tail"] == _WINDOWS_FILE_LOCK_STDERR, "原始 stderr 仍原样保留"
+
+
+def test_unreachable_wheel_fails_before_the_config_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """审计 PF-16：预下载失败、原站也不通时以前照写一条客户端起不来的配置。负向对照（实跑过）：去掉 setup.wheel_unreachable 分支 → 配置被写 → 红。"""
+    from horosa_skill.surfaces import setup_flow as flow
+
+    monkeypatch.setattr(flow, "_cache_wheel", lambda *a, **k: (None, "wheel 预下载失败（ConnectError）"))
+    monkeypatch.setattr(flow, "_url_reachable", lambda url: False)
+    config = tmp_path / "mcp.json"
+    result = _run("--client", "cursor", "--config", str(config), "--launcher", "uvx-wheel", "--skip-install",
+                  "--no-probe-network", "--no-stdio-probe")
+    assert result.exit_code != 0
+    report = _stderr_json(result)
+    assert report["code"] == "setup.wheel_unreachable" and report["config_untouched"] is True
+    assert not config.exists()
+    assert "--skip-install" in report["retry_command"] and "--no-probe-network" in report["retry_command"]
+
+
+def test_a_mirrored_wheel_that_disagrees_with_the_origin_digest_is_discarded(tmp_path: Path) -> None:
+    """审计 PF-02：镜像给的 wheel 以前只核结构与版本。负向对照：不比原站摘要 → 照收 → 红。"""
+    import zipfile
+
+    from horosa_skill import __version__
+    from horosa_skill.client_config.payload import _cache_wheel
+
+    def fetch(url: str, part: Path) -> None:
+        with zipfile.ZipFile(part, "w") as archive:
+            archive.writestr(f"horosa_skill-{__version__}.dist-info/METADATA", f"Version: {__version__}\n")
+            archive.writestr("horosa_skill/__init__.py", "")
+
+    name = f"horosa_skill-{__version__}-py3-none-any.whl"
+    path, note = _cache_wheel("https://mirror.example/x.whl", dest_dir=tmp_path, fetch=fetch,
+                              sums_url="https://github.com/o/r/releases/download/v1/SHA256SUMS.txt",
+                              fetch_text=lambda url: f"{'0' * 64}  {name}\n")
+    assert path is None and "不一致" in (note or "")

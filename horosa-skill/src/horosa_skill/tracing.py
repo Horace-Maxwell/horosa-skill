@@ -157,14 +157,12 @@ class TraceRecorder:
         append_line(target, line)
 
     def _emit_otlp(self, event: dict[str, Any]) -> None:
+        """审计 PF-06：外发改白名单 + 真 OTLP/HTTP JSON + 有界后台队列。
+        以前把整条本地事件（出生时刻、用户写的地名、家目录路径）同步 POST 出去，每次调用最多卡 2 秒，格式也不是 OTLP。"""
         endpoint = self.settings.trace_otlp_endpoint
         if not endpoint:
             return
-        try:
-            with httpx.Client(timeout=2.0) as client:
-                client.post(endpoint, json=event)
-        except Exception:
-            return
+        _OUTBOUND.submit(endpoint, otlp_payload(event))
 
     def _sanitize(self, value: Any, *, key: str | None = None) -> Any:
         if isinstance(value, dict):
@@ -187,3 +185,96 @@ class TraceRecorder:
         if isinstance(value, list):
             return [self._sanitize(item, key=key) for item in value]
         return value
+
+
+# ---- 外发（审计 PF-06）-----------------------------------------------------------------------------------------
+# 只有这些键离开本机；其余（载荷、summary、错误原文、路径）只进本地 .jsonl。
+OUTBOUND_KEYS: tuple[str, ...] = ("trace_id", "group_id", "workflow_name", "tool", "tool_name", "ok", "error_code",
+                                  "duration_ms", "started_at", "finished_at")
+
+
+def outbound_view(event: dict[str, Any]) -> dict[str, Any]:
+    from horosa_skill import __version__
+
+    return {**{key: event[key] for key in OUTBOUND_KEYS if key in event and not isinstance(event[key], (dict, list))},
+            "version": __version__}
+
+
+def _unix_nanos(text: Any) -> int:
+    try:
+        return int(datetime.fromisoformat(str(text)).timestamp() * 1_000_000_000)
+    except (TypeError, ValueError):
+        return int(time.time() * 1_000_000_000)
+
+
+def otlp_payload(event: dict[str, Any]) -> dict[str, Any]:
+    """一条事件 → OTLP/HTTP JSON 的 ExportTraceServiceRequest（只带 outbound_view 的键）。"""
+    view = outbound_view(event)
+    trace_hex = uuid.UUID(str(view.get("trace_id"))).hex if _is_uuid(view.get("trace_id")) else uuid.uuid4().hex
+    attributes = [{"key": f"horosa.{key}", "value": ({"boolValue": value} if isinstance(value, bool) else
+                                                     {"doubleValue": value} if isinstance(value, float) else
+                                                     {"intValue": str(value)} if isinstance(value, int) else {"stringValue": str(value)})}
+                  for key, value in view.items() if key not in ("trace_id", "started_at", "finished_at")]
+    span = {
+        "traceId": trace_hex, "spanId": uuid.uuid4().hex[:16], "name": str(view.get("workflow_name") or "horosa"),
+        "kind": 1, "startTimeUnixNano": str(_unix_nanos(view.get("started_at"))), "endTimeUnixNano": str(_unix_nanos(view.get("finished_at"))),
+        "attributes": attributes, "status": {"code": 1 if view.get("ok", True) is not False and not view.get("error_code") else 2},
+    }
+    return {"resourceSpans": [{
+        "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "horosa-skill"}}]},
+        "scopeSpans": [{"scope": {"name": "horosa-skill", "version": str(view.get("version"))}, "spans": [span]}],
+    }]}
+
+
+def _is_uuid(value: Any) -> bool:
+    try:
+        uuid.UUID(str(value))
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+class _OutboundQueue:
+    """有界后台队列：调用方从不等网络；满了就丢（计数），进程退出不等待（daemon 线程）。"""
+
+    def __init__(self, maxsize: int = 256) -> None:
+        import queue
+
+        self._queue: "queue.Queue[tuple[str, dict[str, Any]]]" = queue.Queue(maxsize=maxsize)
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+        self.dropped = 0
+        self.sent = 0
+
+    def submit(self, endpoint: str, payload: dict[str, Any]) -> None:
+        import queue
+
+        with self._lock:
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(target=self._run, name="horosa-trace-export", daemon=True)
+                self._thread.start()
+        try:
+            self._queue.put_nowait((endpoint, payload))
+        except queue.Full:
+            self.dropped += 1
+
+    def _run(self) -> None:
+        while True:
+            endpoint, payload = self._queue.get()
+            try:
+                with httpx.Client(timeout=2.0) as client:
+                    client.post(endpoint, json=payload)
+                self.sent += 1
+            except Exception:  # noqa: BLE001 — 外发是可选诊断：失败只是少一条
+                pass
+            finally:
+                self._queue.task_done()
+
+    def join(self, timeout: float = 5.0) -> None:
+        """测试用：等队列清空（有上限）。"""
+        deadline = time.monotonic() + timeout
+        while self._queue.unfinished_tasks and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+
+_OUTBOUND = _OutboundQueue()

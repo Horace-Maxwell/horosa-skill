@@ -88,7 +88,29 @@ def _wheel_looks_valid(path: Path, version: str) -> bool:
         return False
 
 
-def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None = None, fetch: Any | None = None) -> tuple[Path | None, str | None]:
+def _original_digest(sums_url: str, name: str, *, fetch_text: Any | None = None) -> str | None:
+    """原站发布页 SHA256SUMS.txt 里这个文件的摘要；取不到 → None（审计 PF-02：镜像给的 wheel 要对照可信值）。"""
+    import httpx
+
+    try:
+        if fetch_text is not None:
+            text = fetch_text(sums_url)
+        else:
+            with httpx.Client(timeout=5.0, follow_redirects=True) as http:
+                response = http.get(sums_url)
+                response.raise_for_status()
+                text = response.text
+    except (httpx.HTTPError, OSError, ValueError):  # 探针：原站不通 / 读不出就是「没法对照」，由调用方写告警
+        return None
+    for line in str(text).splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1].lstrip("*") == name:
+            return parts[0].lower()
+    return None
+
+
+def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None = None, fetch: Any | None = None,
+                 sums_url: str | None = None, fetch_text: Any | None = None) -> tuple[Path | None, str | None]:
     """把发布页的 wheel 预下载到 ~/.horosa/wheels/（v0.38.1 C15），返回 (本地路径 | None, 警告 | None)。
 
     🔴 为什么：`uvx --from <URL>` 按 URL 缓存环境，但 uv 对直链依赖「尊重 HTTP 缓存头」——每次客户端冷启动都可能
@@ -119,9 +141,18 @@ def _cache_wheel(url: str, *, version: str | None = None, dest_dir: Path | None 
             part.unlink(missing_ok=True)
             return None, f"下载到的文件不是 horosa_skill {version} 的 wheel（结构或版本不符），配置里保留 URL。"
         digest = hashlib.sha256(part.read_bytes()).hexdigest()
+        note = None
+        if sums_url:
+            trusted = _original_digest(sums_url, dest.name, fetch_text=fetch_text)
+            if trusted is not None and trusted != digest:
+                part.unlink(missing_ok=True)
+                return None, (f"下载到的 wheel 与原站 SHA256SUMS.txt 的摘要不一致（{digest[:12]}… ≠ {trusted[:12]}…）：已丢弃，"
+                              "不写进配置。镜像可能被篡改或缓存了别的文件。")
+            if trusted is None and url != sums_url.rsplit("/", 1)[0] + "/" + dest.name:
+                note = "wheel 来自镜像，原站的 SHA256SUMS.txt 取不到、没能对照摘要（只核了结构与版本）。"
         part.replace(dest)
         dest.with_name(dest.name + ".sha256").write_text(f"{digest}  {dest.name}\n", encoding="utf-8")
-        return dest, None
+        return dest, note
     except Exception as exc:  # noqa: BLE001 - 预下载失败不阻断 setup：配置回退到 URL 形态
         return None, f"wheel 预下载失败（{type(exc).__name__}: {exc}）；配置里保留 URL，客户端冷启动时再取。"
 
@@ -222,11 +253,15 @@ def _build_client_config_payload(
 
         wheel_url = zero_install_wheel_url()
         # `wheel_source`（setup 预下载到 ~/.horosa/wheels 的本地文件）优先：冷启动零网络、离线可用。
-        from_value = wheel_source or preferred_mirror_url(wheel_url)
+        # 审计 PF-02：配置里只写本地已核过的 wheel 或原站 https 地址——写镜像 URL = 客户端每次冷启动从镜像取可执行文件。
+        from_value = wheel_source or wheel_url
+        if not wheel_source and len(mirror_candidates(wheel_url)) > 1:
+            warnings.append("配了镜像而 wheel 没有预下载到本机：配置里写的是原站地址（客户端冷启动不从镜像取可执行文件）。"
+                            "github.com 不通时先跑 setup（会经镜像预下载并对照摘要），或按 docs/INSTALL_RESTRICTED_NETWORK.md 离线搬运。")
         stdio_command = [*uvx_command, "--from", vectors_source(from_value) if vectors else from_value,
                          "horosa-skill", "serve", "--transport", "stdio"]
         launcher_info.update({
-            "wheel_url": preferred_mirror_url(wheel_url),
+            "wheel_url": wheel_url,
             **({"wheel_cached_path": wheel_source} if wheel_source else {}),
             "alternatives": mirror_candidates(wheel_url),
             "pinned_version": __version__,

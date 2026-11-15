@@ -223,6 +223,6 @@ def test_ci_wheel_path_runs_a_real_stdio_probe_on_both_os() -> None:
 def test_completeness_checks_mains_server_json_even_on_release_events() -> None:
     """v0.46.1：release(edited) 事件默认检出 tag 的提交，那里的 server.json 还是上一版 mcpb sha（回填在打 tag 之后才落 main）
     → 编辑发布说明必然误报（41144995786）。负向对照：去掉 checkout 的 ref → 红。"""
-    step = COMPLETENESS[COMPLETENESS.index("- uses: actions/checkout@v5"):]
+    step = COMPLETENESS[COMPLETENESS.index("- uses: actions/checkout@"):]   # 钉了提交号（审计 PF-18），按前缀找
     step = step[: step.index("- name:")]
     assert "ref: ${{ github.event.repository.default_branch }}" in step

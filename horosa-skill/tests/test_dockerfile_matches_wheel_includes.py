@@ -83,15 +83,19 @@ def docker_engine_problems(dockerfile: str, dockerignore: str, *, node_pin: str,
     node_stage = next(((image, alias) for image, alias in froms if image.startswith("node:")), None)
     if node_stage is None:
         return ["no pinned node:<version>-<debian>-slim stage"]
-    match = re.fullmatch(r"node:(\d+)\.(\d+)\.(\d+)-([a-z]+)-slim", node_stage[0])
+    match = re.fullmatch(r"node:(\d+)\.(\d+)\.(\d+)-([a-z]+)-slim(?:@sha256:[0-9a-f]{64})?", node_stage[0])
     if not match:
         return [f"node stage image {node_stage[0]!r} is not pinned to an exact version and Debian release"]
+    # 审计 PF-15：两个阶段都要钉 digest（只钉 tag 会被上游改写）
+    for image, _alias in froms:
+        if not re.search(r"@sha256:[0-9a-f]{64}$", image):
+            problems.append(f"stage image {image} is not pinned to a digest (@sha256:…)")
     version = tuple(int(part) for part in match.groups()[:3])
     if ".".join(map(str, version)) != node_pin:
         problems.append(f"node stage is {node_stage[0]}, the runtime's Node pin is {node_pin}")
     if version < floor:
         problems.append(f"node {version} is below the engine floor {floor}")
-    final_image = froms[-1][0]
+    final_image = froms[-1][0].split("@", 1)[0]
     if not final_image.endswith(f"-{match.group(4)}"):
         problems.append(f"final stage {final_image} is not on the node stage's Debian release ({match.group(4)}): the copied binary needs its glibc")
     alias = node_stage[1]

@@ -195,3 +195,183 @@ def test_doctor_has_no_side_effects_and_can_signal_failure(tmp_path, monkeypatch
     assert not (data / "memory.db").exists() and not (data / "traces").exists()
     flagged = CliRunner().invoke(app, ["doctor", "--exit-code"])
     assert flagged.exit_code == (1 if report.get("ok") is False else 0)
+
+
+def test_plain_http_mirrors_are_refused_unless_allowed(monkeypatch) -> None:
+    """审计 PF-01 第 2 层：明文 http 镜像（回环除外）以前照收。负向对照（实跑过）：mirror_prefixes 不过滤 → 红。"""
+    from horosa_skill.runtime.mirrors import mirror_candidates, mirror_prefixes
+
+    url = "https://github.com/Horace-Maxwell/horosa-skill/releases/download/v1/x.tar.gz"
+    monkeypatch.delenv("HOROSA_RUNTIME_MIRROR_ALLOW_HTTP", raising=False)
+    monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "http://mirror.example, http://127.0.0.1:18794, https://safe.example")
+    usable, rejected = mirror_prefixes()
+    assert rejected == ["http://mirror.example"] and usable == ["http://127.0.0.1:18794", "https://safe.example"]
+    assert not any(c.startswith("http://mirror.example") for c in mirror_candidates(url))
+    monkeypatch.setenv("HOROSA_RUNTIME_MIRROR_ALLOW_HTTP", "1")
+    assert mirror_candidates(url)[0].startswith("http://mirror.example")
+
+
+def test_manifest_comes_from_the_origin_first_and_a_mirror_only_asserts_integrity(tmp_path, monkeypatch) -> None:
+    """审计 PF-01 第 1 层：以前镜像的清单优先，结果写 sha256_verified: true。负向对照（实跑过）：候选不重排 → 先取镜像 → 红。"""
+    import httpx
+
+    from horosa_skill.config import Settings
+    from horosa_skill.runtime.manager import HorosaRuntimeManager
+
+    monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "https://mirror.example/gh")
+    asked: list[str] = []
+    manifest = '{"version": "9.9.9", "platforms": {}}'
+
+    class _Client:
+        def __init__(self, *a, **k):  # noqa: ANN002, ANN003
+            pass
+
+        def __enter__(self):  # noqa: ANN204
+            return self
+
+        def __exit__(self, *a):  # noqa: ANN002, ANN204
+            return False
+
+        def get(self, url):  # noqa: ANN001, ANN201
+            asked.append(url)
+            if url.startswith("https://github.com") and origin_down:
+                raise httpx.ConnectError("down")
+            return httpx.Response(200, text=manifest, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "Client", _Client)
+    settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", data_dir=tmp_path,
+                        db_path=tmp_path / "m.db", output_dir=tmp_path / "runs", runtime_root=tmp_path / "rt")
+    manager = HorosaRuntimeManager(settings)
+    location = "https://github.com/Horace-Maxwell/horosa-skill/releases/latest/download/runtime-manifest.json"
+    origin_down = False
+    manager._read_json_location(location)
+    assert asked[0] == location and manager._manifest_via_mirror is None
+    origin_down = True
+    asked.clear()
+    manager._read_json_location(location)
+    assert asked[0] == location and manager._manifest_via_mirror == "mirror.example"
+    assert [w["code"] for w in manager._mirror_trust_warnings()] == ["runtime.install_mirror_trusted"]
+
+
+def test_install_refuses_a_silent_downgrade_and_pins_the_manifest_to_the_package(tmp_path) -> None:
+    """审计 PF-04：清单 0.38.0 对已装 0.50.1 以前照装、当场删旧副本。负向对照（实跑过）：去掉降级判定 → 继续下载 → 红。"""
+    import json
+
+    from horosa_skill import __version__
+    from horosa_skill.config import Settings
+    from horosa_skill.errors import RuntimeInstallError
+    from horosa_skill.runtime.manager import HorosaRuntimeManager, _platform_key
+
+    settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", data_dir=tmp_path / "d",
+                        db_path=tmp_path / "m.db", output_dir=tmp_path / "runs", runtime_root=tmp_path / "rt")
+    assert settings.default_runtime_manifest_url.endswith(f"/releases/download/v{__version__}/runtime-manifest.json")
+    manager = HorosaRuntimeManager(settings)
+    manager.current_dir.mkdir(parents=True)
+    (manager.current_dir / "runtime-manifest.json").write_text(json.dumps({"version": "0.50.1", "platform": _platform_key()}), encoding="utf-8")
+    old = tmp_path / "old-manifest.json"
+    old.write_text(json.dumps({"version": "0.38.0", "platforms": {_platform_key(): {
+        "url": "https://example.invalid/never.tar.gz", "sha256": "0" * 64}}}), encoding="utf-8")
+    with pytest.raises(RuntimeInstallError) as caught:
+        manager.install(manifest_url=str(old))
+    assert caught.value.code == "runtime.install_downgrade_refused"
+    assert caught.value.details["previous_version"] == "0.50.1" and caught.value.details["version"] == "0.38.0"
+
+
+def test_trace_export_is_a_whitelisted_otlp_span_off_the_calling_thread(monkeypatch) -> None:
+    """审计 PF-06：以前整条本地事件（出生时刻、地名、家目录路径）同步 POST 出去。负向对照（实跑过）：otlp_payload 改回整条事件 → 红。"""
+    import json
+    import time
+
+    from horosa_skill import tracing
+
+    event = {"trace_id": "3f2c1d8e-0000-4000-8000-000000000001", "workflow_name": "tool.run", "tool": "bazi_birth", "ok": False,
+             "error_code": "place.not_found", "error_message": "没有找到地名「张三家王府井大街99号」", "duration_ms": 12.5,
+             "summary": ["日期：1990-05-17 08:30:00"], "artifact_path": "/Users/someone/.horosa-skill/runs/x.json",
+             "started_at": "2026-11-14T10:00:00+00:00", "finished_at": "2026-11-14T10:00:01+00:00"}
+    payload = tracing.otlp_payload(event)
+    text = json.dumps(payload, ensure_ascii=False)
+    for secret in ("张三", "1990-05-17", "/Users/someone", "王府井"):
+        assert secret not in text, secret
+    span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+    assert span["traceId"] == "3f2c1d8e000040008000000000000001" and span["status"]["code"] == 2
+    queue = tracing._OutboundQueue()
+    slow: list[float] = []
+
+    class _Client:
+        def __init__(self, *a, **k):  # noqa: ANN002, ANN003
+            pass
+
+        def __enter__(self):  # noqa: ANN204
+            return self
+
+        def __exit__(self, *a):  # noqa: ANN002, ANN204
+            return False
+
+        def post(self, url, json):  # noqa: ANN001, A002, ANN201
+            time.sleep(0.3)
+            slow.append(time.monotonic())
+
+    monkeypatch.setattr(tracing.httpx, "Client", _Client)
+    started = time.monotonic()
+    queue.submit("http://127.0.0.1:9/v1/traces", payload)
+    assert time.monotonic() - started < 0.1, "提交不能等网络"
+    queue.join()
+    assert queue.sent == 1
+
+
+def test_client_remove_takes_only_our_entry_out_with_a_backup(tmp_path) -> None:
+    """审计 PF-07：卸载后客户端配置条目还在，CLI 没有「拿掉条目」的命令。负向对照：remove_client_entries 不删 → 红。"""
+    import json
+
+    from horosa_skill.client_config.audit import remove_client_entries
+
+    config = tmp_path / "mcp.json"
+    config.write_text(json.dumps({"mcpServers": {"horosa": {"command": "uvx"}, "other": {"command": "x"}}}), encoding="utf-8")
+    planned = remove_client_entries("cursor", config_path=config, dry_run=True)
+    assert planned["results"][0]["action"] == "would_remove" and "horosa" in json.loads(config.read_text())["mcpServers"]
+    done = remove_client_entries("cursor", config_path=config)
+    assert done["results"][0]["action"] == "removed" and done["results"][0]["backup"]
+    assert json.loads(config.read_text(encoding="utf-8"))["mcpServers"] == {"other": {"command": "x"}}
+    jsonc = tmp_path / "settings.json"
+    jsonc.write_text('{\n  // 注释\n  "mcpServers": {"horosa": {}}\n}\n', encoding="utf-8")
+    assert remove_client_entries("vscode", config_path=jsonc)["results"][0]["action"] == "manual"
+
+
+def test_uninstall_lists_what_it_leaves_elsewhere(tmp_path, monkeypatch) -> None:
+    import json
+
+    from horosa_skill.client_config import audit, locations
+
+    cursor = tmp_path / ".cursor" / "mcp.json"
+    cursor.parent.mkdir(parents=True)
+    cursor.write_text(json.dumps({"mcpServers": {"horosa": {"command": "uvx"}}}), encoding="utf-8")
+    monkeypatch.setattr(locations, "_client_config_locations", lambda name: [cursor] if name == "cursor" else [])
+    monkeypatch.setattr(audit, "_client_skill_report", lambda name: [])
+    report = audit.elsewhere_report()
+    assert report["client_configs"] == [{"client": "cursor", "path": str(cursor), "remove": audit._cli("client remove --client cursor")}]
+
+
+def test_container_runs_as_non_root_with_a_healthcheck_and_loopback_ports() -> None:
+    """审计 PF-15：root 运行、无 HEALTHCHECK、compose 端口对所有网卡、无加固。负向对照：去掉 USER / HEALTHCHECK → 红。"""
+    import asyncio
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "USER 10001:10001" in dockerfile and "HEALTHCHECK" in dockerfile and "pip install --no-cache-dir uv" not in dockerfile
+    assert '"127.0.0.1:8765:8765"' in compose and "read_only: true" in compose and "- ALL" in compose and "no-new-privileges:true" in compose
+
+    from horosa_skill.surfaces.mcp_hosts import HostGuidanceMiddleware
+
+    sent: list[dict] = []
+
+    async def inner(scope, receive, send):  # noqa: ANN001, ANN202
+        raise AssertionError("healthz must not reach the MCP app (no auth, no data)")
+
+    async def send(message):  # noqa: ANN001, ANN202
+        sent.append(message)
+
+    scope = {"type": "http", "path": "/healthz", "method": "GET", "headers": [(b"host", b"127.0.0.1:8765")]}
+    asyncio.run(HostGuidanceMiddleware(inner, ["127.0.0.1:*"])(scope, None, send))
+    assert sent[0]["status"] == 200 and sent[1]["body"] == b"ok\n"

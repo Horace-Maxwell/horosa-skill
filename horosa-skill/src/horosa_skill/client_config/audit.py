@@ -425,3 +425,82 @@ def _env_problems(entry: dict[str, Any], *, client: str) -> list[dict[str, str]]
             "fix": f"重跑 `{_cli(f'client config --format {client}')}`（缺省精简面），或在 env 里加 HOROSA_MCP_COMPACT=1。",
         })
     return problems
+
+
+# ---- 审计 PF-07：卸载之后的残留（客户端条目 / 装进去的 skill / wheel 缓存）与 `client remove` --------------------
+
+
+def _horosa_keys(payload: Any) -> list[tuple[str, str]]:
+    """(根键, 条目名)：只看顶层的 server 表（Claude Code 的 projects.* 嵌套不自动改）。"""
+    found: list[tuple[str, str]] = []
+    if isinstance(payload, dict):
+        for key in _SERVER_ROOT_KEYS:
+            block = payload.get(key)
+            if isinstance(block, dict):
+                found += [(key, str(name)) for name in block if "horosa" in str(name).lower() and isinstance(block[name], dict)]
+    return found
+
+
+def remove_client_entries(client: str, *, config_path: Path | None = None, dry_run: bool = False) -> dict[str, Any]:
+    """把 horosa 条目从客户端配置里拿掉：只删自己的键、先备份、原子替换（与 setup 同一个落盘口）。
+    带注释的 JSONC / TOML / YAML 不自动改（会丢注释与格式），列出位置让用户手动删。"""
+    from horosa_skill.client_config.merge import _commit_config
+
+    candidates = [config_path] if config_path else client_locations._client_config_locations(client)
+    results: list[dict[str, Any]] = []
+    for candidate in candidates:
+        path = Path(candidate).expanduser()
+        if not path.is_file():
+            continue
+        if path.suffix != ".json":
+            results.append({"path": str(path), "action": "manual", "reason": "不是纯 JSON（TOML / YAML / JSONC）：请手动删 horosa 那一节。"})
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            results.append({"path": str(path), "action": "manual", "reason": "文件带注释或尾逗号：自动改写会丢掉它们，请手动删 horosa 条目。"})
+            continue
+        keys = _horosa_keys(payload)
+        if not keys:
+            continue
+        if dry_run:
+            results.append({"path": str(path), "action": "would_remove", "entries": [name for _root, name in keys]})
+            continue
+        for root, name in keys:
+            del payload[root][name]
+        committed = _commit_config(path, (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        results.append({"path": str(path), "action": "removed", "entries": [name for _root, name in keys], "backup": committed.get("backup")})
+    return {"client": client, "dry_run": dry_run, "results": results,
+            "next_action": "重启该客户端，它就不会再拉起 horosa。" if any(r["action"] == "removed" for r in results) else None}
+
+
+def elsewhere_report() -> dict[str, Any]:
+    """卸载计划里的「别处」：带 horosa 条目的客户端配置、装进去的 horosa-agent skill、wheel 缓存，每项给处理命令。"""
+    from horosa_skill.client_config.payload import _wheel_cache_dir
+
+    configs: list[dict[str, Any]] = []
+    for name in _CLIENT_NAMES:
+        for candidate in client_locations._client_config_locations(name):
+            path = Path(candidate).expanduser()
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8-sig")
+            except OSError:
+                continue
+            if "horosa" not in text.lower():
+                continue
+            configs.append({"client": name, "path": str(path), "remove": _cli(f"client remove --client {name}")})
+    skills: list[dict[str, Any]] = []
+    for name in _CLIENT_NAMES:
+        for row in _client_skill_report(name):
+            if row.get("state") in ("current", "outdated", "modified", "current_unmarked") and row.get("path") and row["path"] not in {s["path"] for s in skills}:
+                skills.append({"client": name, "path": row["path"], "remove": f"删除这个文件夹：{row['path']}"})
+    wheels = _wheel_cache_dir()
+    return {
+        "client_configs": configs,
+        "skills": skills,
+        "wheel_cache": {"path": str(wheels), "remove": f"删除这个文件夹：{wheels}"} if wheels.is_dir() else None,
+        "note": "卸载只删 runtime 与（可选）数据目录；这些在别处的东西要单独处理，否则客户端下次启动还会拉起 horosa。",
+    }

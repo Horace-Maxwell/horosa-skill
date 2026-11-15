@@ -647,6 +647,7 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
         progress: Any | None = None,
         sha256: str | None = None,
         engine_only: bool = False,
+        allow_downgrade: bool = False,
     ) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="runtime.install",
@@ -675,10 +676,22 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
 
             if source is None:
                 manifest_location = manifest_url or self.settings.runtime_manifest_url
+                pinned_default = not manifest_location
                 if not manifest_location:
                     manifest_location = self.settings.default_runtime_manifest_url
-                manifest_data = self._read_json_location(manifest_location)
+                try:
+                    manifest_data = self._read_json_location(manifest_location)
+                except RuntimeInstallError:
+                    if not pinned_default:
+                        raise
+                    # 本包版本的清单不存在（未发布的开发版 / 发布不完整）：退到 latest，说清楚。
+                    manifest_location = self.settings.latest_runtime_manifest_url
+                    manifest_data = self._read_json_location(manifest_location)
+                    install_warnings.append({"code": "runtime.manifest_pin_missing", "message": bilingual(
+                        "本包版本的 runtime 清单取不到，改用 latest 清单（runtime 版本可能与包不一致）。",
+                        "This package version's runtime manifest is unavailable; using the latest manifest (the runtime may not match the package).")})
                 self._remember_latest_manifest(manifest_data, manifest_location)
+                install_warnings.extend(self._mirror_trust_warnings())
                 platforms = manifest_data.get("platforms", {})
                 asset_meta = platforms.get(platform_name)
                 if not isinstance(asset_meta, dict):
@@ -750,6 +763,18 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                     )
                 # 版本短路：manifest 版本与已装 current 版本一致且非 --force → 直接跳过大包下载。
                 # （损坏 manifest 读为 None 不短路 → 自然走重装；--archive 路径仍由解包后深比较兜底。）
+                if self.current_dir.exists():
+                    previous_version = str((self.load_installed_manifest() or {}).get("version") or "").strip() or None
+                    target = str(manifest_data.get("version") or "").strip()
+                    # 审计 PF-04：清单比已装的旧 → 拒（apt 降级要 --allow-downgrades）；以前不分升降、当场删旧副本。
+                    if previous_version and target and _version_key(target) < _version_key(previous_version) and not allow_downgrade:
+                        raise RuntimeInstallError(
+                            bilingual(f"清单里的 runtime {target} 比已装的 {previous_version} 旧：不降级。确要降级请加 --allow-downgrade。",
+                                      f"The manifest's runtime {target} is older than the installed {previous_version}: not downgrading. Pass --allow-downgrade to do it."),
+                            code="runtime.install_downgrade_refused",
+                            details={"previous_version": previous_version, "version": target, "manifest_url": manifest_location},
+                        )
+                    self._previous_version = previous_version
                 if not force and self.current_dir.exists():
                     installed_manifest = self.load_installed_manifest()
                     installed_version = str((installed_manifest or {}).get("version") or "").strip()
@@ -796,7 +821,9 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                         code="runtime.install_sha256_mismatch",
                         details={"archive": str(archive_path), "expected_sha256": expected_sha256.lower(), "actual_sha256": actual_sha256},
                     )
-                integrity = {"archive_sha256": actual_sha256, "sha256_verified": bool(expected_sha256)}
+                via_mirror = getattr(self, "_manifest_via_mirror", None)
+                integrity = {"archive_sha256": actual_sha256, "sha256_verified": bool(expected_sha256) and not via_mirror,
+                             **({"integrity": "mirror_asserted", "manifest_mirror": via_mirror} if via_mirror and expected_sha256 else {})}
                 # manifest 声明的归档类型必须与资产扩展名一致（防声明 zip 实传 tar.gz 之类的静默错配）。
                 declared_type = str((asset_meta or {}).get("archive_type") or "").strip().lower()
                 if declared_type:
@@ -890,6 +917,8 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 "manifest": manifest,
                 "stopped_before_swap": was_running,
                 "restarted": restarted,
+                "previous_version": getattr(self, "_previous_version", None),
+                "version": manifest.get("version"),
                 "download": getattr(self, "_last_download", None),
                 **integrity,
                 "asset": asset_meta or {},
@@ -1288,7 +1317,9 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
             self.stop_local_services(ignore_clients=True)
         except Exception as exc:  # noqa: BLE001 - 卸载前停服务尽力而为，失败不阻断删除
             # v0.41.1：记下来——随后删除若在 Windows 上撞文件锁，用户要知道是「服务没停掉」。
-            stop_error = f"{type(exc).__name__}: {exc}"
+            # 审计 PF-07：本来就没装 runtime 时「停不了」不是问题，不报。
+            if getattr(exc, "code", None) != "runtime.not_installed":
+                stop_error = f"{type(exc).__name__}: {exc}"
         removed: list[str] = []
         for text in removal_plan:
             path = Path(text)
@@ -2055,6 +2086,26 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
             )
         return local_path
 
+    def _mirror_trust_warnings(self) -> list[dict[str, Any]]:
+        """审计 PF-01：清单来自镜像（原站不通）/ 配了明文 http 镜像被拒 → 结果 warnings 里说清楚。"""
+        from horosa_skill.runtime.mirrors import mirror_prefixes
+
+        warnings: list[dict[str, Any]] = []
+        host = getattr(self, "_manifest_via_mirror", None)
+        if host:
+            warnings.append({"code": "runtime.install_mirror_trusted", "mirror": host, "message": bilingual(
+                f"原站取不到发布清单，用的是镜像 {host} 给的清单：归档摘要只是这个镜像自己的说法（integrity: mirror_asserted）。"
+                "只在信任这个镜像时继续；能连 github.com 时重装一次即可换成原站摘要。",
+                f"The release manifest came from mirror {host} (github.com unreachable): the archive digest is only that mirror's claim "
+                "(integrity: mirror_asserted). Proceed only if you trust it; reinstall once github.com is reachable.")})
+        _usable, rejected = mirror_prefixes()
+        if rejected:
+            warnings.append({"code": "runtime.mirror_insecure_ignored", "mirrors": rejected, "message": bilingual(
+                f"明文 http 镜像已忽略（中间人能换掉清单与归档）：{', '.join(rejected)}；改用 https，或确知风险时设 HOROSA_RUNTIME_MIRROR_ALLOW_HTTP=1。",
+                f"Plain-http mirrors were ignored (a man-in-the-middle could swap the manifest and archive): {', '.join(rejected)}; "
+                "use https, or set HOROSA_RUNTIME_MIRROR_ALLOW_HTTP=1 if you accept the risk.")})
+        return warnings
+
     def _mirror_candidates(self, url: str) -> list[str]:
         """HOROSA_RUNTIME_MIRROR（逗号分隔前缀）对 github.com URL 做前缀替换：镜像在前、原始 URL 兜底。
 
@@ -2308,9 +2359,16 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
         if _is_url(location) and urlparse(location).scheme != "file":
             last_error: Exception | None = None
             failures: list[str] = []
-            for candidate in self._mirror_candidates(location):
+            self._manifest_via_mirror = None
+            candidates = self._mirror_candidates(location)
+            # 审计 PF-01 第 1 层：清单只有几 KB、摘要只来自它——先试原站（5 秒），成了镜像只送归档字节；原站不通才退到镜像，
+            # 那时完整性只是镜像自己的说法（integrity: mirror_asserted + 告警），不写 sha256_verified: true。
+            if len(candidates) > 1:
+                candidates = [location, *(c for c in candidates if c != location)]
+            for index, candidate in enumerate(candidates):
+                timeout = 5.0 if index == 0 and len(candidates) > 1 else 60.0
                 try:
-                    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
                         response = client.get(candidate)
                         response.raise_for_status()
                         payload, problem = _parse_manifest_text(response.text)
@@ -2319,6 +2377,8 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                     failures.append(f"{candidate}: {type(exc).__name__}: {exc}"[:240])
                     continue
                 if payload is not None:
+                    if candidate != location:
+                        self._manifest_via_mirror = urlparse(candidate).hostname or candidate
                     return payload
                 # 镜像常回 200 + 错误页（HTML，或 {"message": …}）：内容不对同样换下一个候选，原始 URL 永远是最后一个。
                 failures.append(f"{candidate}: {problem}"[:240])
@@ -3370,3 +3430,14 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
         if len(runtime_parts) >= 2 and runtime_parts[-1] == "runtime" and runtime_parts[-2] == ".horosa":
             return str(runtime_root.parent.parent)
         return str(Path.home())
+
+
+def _version_key(text: str) -> tuple:
+    """「0.50.1」→ (0, 50, 1)；带后缀的段按数字前缀比（0.50.1rc1 → 0.50.1），读不出的段当 0。"""
+    import re as _re
+
+    parts = []
+    for piece in str(text).lstrip("v").split("."):
+        match = _re.match(r"\d+", piece)
+        parts.append(int(match.group(0)) if match else 0)
+    return tuple(parts)
