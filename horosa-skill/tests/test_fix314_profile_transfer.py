@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -23,7 +24,8 @@ def test_export_writes_a_private_file_and_returns_only_names(tmp_path: Path) -> 
     path = Path(out["path"])
     assert out["names"] == ["妈妈"] and "1960-03-01" not in json.dumps(out, ensure_ascii=False)
     assert json.loads(path.read_text(encoding="utf-8"))["profiles"][0]["name"] == "妈妈"
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if os.name != "nt":  # Windows 没有 POSIX 权限位（chmod 只设只读标志，私密靠用户目录 ACL）；windows-smoke 在这里拿到 0o666
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_import_previews_and_needs_the_token(tmp_path: Path) -> None:

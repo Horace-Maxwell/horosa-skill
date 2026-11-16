@@ -8,14 +8,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import simulate_fonts
 from test_user_knowledge_and_chart_report import _chart_run, _service
 
 from horosa_skill.reports.renderers import _PDF_GLYPH_FALLBACK_CANDIDATES, _wrap_missing_glyphs_chain
 
-NOBODY = "\U0002B820"   # 扩展 E，系统字体都没有；不在罕见字回退表里
+NOBODY = "\U0002B820"   # 扩展 E；不在罕见字回退表里（Windows 11 的 SimSun-ExtG 收它，所以第一条用例模拟无字体）
 
 
-def test_an_undrawable_character_is_named_in_the_warnings(tmp_path: Path) -> None:
+def test_an_undrawable_character_is_named_in_the_warnings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 「画不出」按模拟的无字体现场定（conftest.simulate_fonts）：Windows 11 的 SimSun-ExtG 真收扩展 E，
+    # 按本机字体判时 windows-smoke 在这里红过（v0.51 PR #23）。补字链本身由下一条用例守。
+    simulate_fonts(monkeypatch, "no_fonts")
     service = _service(tmp_path)
     run_id = _chart_run(service).memory_ref.run_id
     out = service.report_render({"run_id": run_id, "tool_name": "chart", "format": "pdf",
