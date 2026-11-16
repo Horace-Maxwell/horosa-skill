@@ -53,6 +53,7 @@ DIVERGENCE_WHITELIST = {
     "india_rectify": "印度生时校正为 skill 侧工具（/india/rectify 直连）；上游校时器是印占页抽屉 UI（§17），无 AI 导出契约",
     "planet_cycles": "行星周期为 skill 侧工具（/astroextra/planetcycles 直连，greatconj 泛化）；上游是世运页图层，无 AI 导出契约",
     "jieqi_birth": "出生节气窗为 skill 侧工具（/jieqi/birth 直连，八字起运窗同源）；上游无独立导出页",
+    "ziwei_rules": "紫微规则库为 skill 侧查资料 tool（审计 O-02 起正文改为 8 段规则条文、单独成导出技法键）；上游规则库是紫微页的说明面板，无 AI 导出契约",
 }
 
 # upstream export keys the skill deliberately does NOT mirror. Every entry needs a reason and a ledger

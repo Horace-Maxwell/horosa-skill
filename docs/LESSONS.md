@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.51.0 (2026-11-16) | 发版 preflight 的 export-contract mirror 红：审计 O-02 新增的 skill 侧导出键 `ziwei_rules` 没进 `DIVERGENCE_WHITELIST`——这道检查要 vendor/runtime-source，CI 不跑，只有 preflight 才看得见 | 补白名单条目（附理由）；新增 skill 侧导出键时同一提交登记白名单，并在本机带 HOROSA_SOURCE_ROOT 跑一次 verify_export_contract_mirror.py |
 | v0.51.0-dev (2026-11-16) | v3.14.0 分支第一次跑 GitHub CI（PR #23）红三处 CI 专有：上游对拍用例读 gitignored 的 vendor/runtime-source；自动令牌用例写死 18765 而 CI 上它被别的用例占着；CI 新检出公开上游（PF-20）后 `verify_upstream_sync.py` 把 vendored 树「缺失」全报成漂移 | 对拍一律读 HOROSA_SOURCE_ROOT、缺则 `[upstream-checkout]` 跳过；与端口无关的用例 monkeypatch `port_bindable`；没有 vendored 树时 2 / 2b 两节可见跳过、`--require-upstream` 照旧硬拦 |
 | v0.51.0-dev (2026-11-14) | 审计「全按推荐做」后半程：同名函数顶掉前一个（「二十三点」KeyError）、serve 写 os.environ 的令牌漏到后面的用例、full 视图改目录撞线上预算的老用例、地名「显著度」默认撞同音城市、闸门下沉 service 层要给近千处直调开口子 | 顶层重名用 AST 守卫（ruff F811 抓不到）；进程级副作用经 monkeypatch 登记；改输出形态时把测「下一层」的老用例显式放开上一层；缺省规则逐个排除同名同音与别名；service 闸缺省 enforce + 测试套件 checked + 专测用例真缺省 + AST 要求每处调用写 gate= |
 | v0.51.0-dev (2026-11-14) | AI 调用面审计修复：全量门禁抓到农历输入吞掉十年大运 calendarType 等四处衔接；近似键拒绝三类假阳性；推运缺目标「就拒」撞 90 条上游一致性用例；核实「逐字相同」时发现八字 Java 回退丢大运；MCP 面校验与服务层不同路；--help 跑了真 harness、`| tail` 吞掉 FAIL | 每项 test_fix314_* + 负向对照；改缺省先查一致性用例；核实审计跑遍各条路径；脚本先读用法；校验看退出码 |
@@ -259,6 +260,15 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.51.0 / 2026-11-16 — 只有 preflight 跑的检查，改动它覆盖的东西时要手动跑
+
+- **症状**：v0.51.0 发版 preflight 红 `export-contract mirror`：`skill export-technique keys not present in vendored upstream …: ['ziwei_rules']`。PR #23 的 CI 与本机 25 道门禁都绿。
+- **根因**：审计 O-02 把紫微规则库正文单独做成导出技法键 `ziwei_rules`（skill 侧、上游无对应导出契约），没登记 `scripts/verify_export_contract_mirror.py` 的
+  `DIVERGENCE_WHITELIST`。这道检查读 gitignored 的 vendor/runtime-source，`run_ci_gates.py` / CI 不跑它（test_guard_wiring 写明），只在 preflight 跑。
+- **修复**：补白名单条目并写理由。
+- **规则**：新增 / 改名 skill 侧导出技法键时，同一提交登记白名单，并在本机 `HOROSA_SOURCE_ROOT=<上游> uv run python scripts/verify_export_contract_mirror.py`。
+  待做：CI 已检出公开上游（PF-20），可让这道检查在没有 vendored 树时改读 HOROSA_SOURCE_ROOT、进 CI。
 
 ### v0.51.0-dev / 2026-11-16 — 分支 100 个提交没跑过 GitHub CI：本机有、CI 没有的三样东西
 
