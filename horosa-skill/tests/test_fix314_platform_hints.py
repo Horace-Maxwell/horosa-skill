@@ -2,10 +2,17 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 
 import pytest
 
 from horosa_skill.runtime import hints
+
+
+def _origin(url: str) -> tuple[str, str | None]:
+    """(scheme, host) of a URL: compare parsed origins, not substrings (CodeQL py/incomplete-url-substring-sanitization)."""
+    parts = urlsplit(url)
+    return parts.scheme, parts.hostname
 
 WHEEL = ("wheel", None, 'uvx --from "https://example.invalid/horosa_skill-9.9.9-py3-none-any.whl" horosa-skill')
 BARE = re.compile(r"`(?:uv run )?horosa-skill ")
@@ -206,9 +213,9 @@ def test_plain_http_mirrors_are_refused_unless_allowed(monkeypatch) -> None:
     monkeypatch.setenv("HOROSA_RUNTIME_MIRROR", "http://mirror.example, http://127.0.0.1:18794, https://safe.example")
     usable, rejected = mirror_prefixes()
     assert rejected == ["http://mirror.example"] and usable == ["http://127.0.0.1:18794", "https://safe.example"]
-    assert not any(c.startswith("http://mirror.example") for c in mirror_candidates(url))
+    assert not any(_origin(c) == ("http", "mirror.example") for c in mirror_candidates(url))
     monkeypatch.setenv("HOROSA_RUNTIME_MIRROR_ALLOW_HTTP", "1")
-    assert mirror_candidates(url)[0].startswith("http://mirror.example")
+    assert _origin(mirror_candidates(url)[0]) == ("http", "mirror.example")
 
 
 def test_manifest_comes_from_the_origin_first_and_a_mirror_only_asserts_integrity(tmp_path, monkeypatch) -> None:
@@ -234,7 +241,7 @@ def test_manifest_comes_from_the_origin_first_and_a_mirror_only_asserts_integrit
 
         def get(self, url):  # noqa: ANN001, ANN201
             asked.append(url)
-            if url.startswith("https://github.com") and origin_down:
+            if _origin(url) == ("https", "github.com") and origin_down:
                 raise httpx.ConnectError("down")
             return httpx.Response(200, text=manifest, request=httpx.Request("GET", url))
 
