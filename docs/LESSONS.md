@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.51.0-dev (2026-11-16) | v3.14.0 分支第一次跑 GitHub CI（PR #23）红三处 CI 专有：上游对拍用例读 gitignored 的 vendor/runtime-source；自动令牌用例写死 18765 而 CI 上它被别的用例占着；CI 新检出公开上游（PF-20）后 `verify_upstream_sync.py` 把 vendored 树「缺失」全报成漂移 | 对拍一律读 HOROSA_SOURCE_ROOT、缺则 `[upstream-checkout]` 跳过；与端口无关的用例 monkeypatch `port_bindable`；没有 vendored 树时 2 / 2b 两节可见跳过、`--require-upstream` 照旧硬拦 |
 | v0.51.0-dev (2026-11-14) | 审计「全按推荐做」后半程：同名函数顶掉前一个（「二十三点」KeyError）、serve 写 os.environ 的令牌漏到后面的用例、full 视图改目录撞线上预算的老用例、地名「显著度」默认撞同音城市、闸门下沉 service 层要给近千处直调开口子 | 顶层重名用 AST 守卫（ruff F811 抓不到）；进程级副作用经 monkeypatch 登记；改输出形态时把测「下一层」的老用例显式放开上一层；缺省规则逐个排除同名同音与别名；service 闸缺省 enforce + 测试套件 checked + 专测用例真缺省 + AST 要求每处调用写 gate= |
 | v0.51.0-dev (2026-11-14) | AI 调用面审计修复：全量门禁抓到农历输入吞掉十年大运 calendarType 等四处衔接；近似键拒绝三类假阳性；推运缺目标「就拒」撞 90 条上游一致性用例；核实「逐字相同」时发现八字 Java 回退丢大运；MCP 面校验与服务层不同路；--help 跑了真 harness、`| tail` 吞掉 FAIL | 每项 test_fix314_* + 负向对照；改缺省先查一致性用例；核实审计跑遍各条路径；脚本先读用法；校验看退出码 |
 | v0.51.0-dev (2026-11-13) | 上游 v3.14.0 同步的十二个并行批同时因额度耗尽停在半途；接手合并撞出七处衔接（同一移植做两遍、manifest 删条被加回、「两边都留」吞括号、两套标签、生成件随功能、工具数改写器认错旧数、豁免按工具粒度） | 串行接手；manifest 三方 JSON 合并；保留合并后立即 ast.parse；每批合入即跑该批离线 + live；生成件最后统一；不擅自并行派 agent |
@@ -258,6 +259,18 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.51.0-dev / 2026-11-16 — 分支 100 个提交没跑过 GitHub CI：本机有、CI 没有的三样东西
+
+- **症状**：feat/upstream-v3.14.0 一直只推分支（ci.yml 只在 push main / PR 触发），开 PR #23 后 Linux `test` 红：① `test_sync314_predictive_exports`
+  两条读 `vendor/runtime-source/.../presets.js`（FileNotFoundError）；② `test_serve_wires_the_auto_token…` 拿到 `serve.port_in_use`（18765）；
+  修完再跑，③ `verify_upstream_sync.py` 一步报 vendored 哨兵与子树「missing in vendor/runtime-source」几十条。本机 25 道门禁一直全绿。
+- **根因**：本机有、CI 没有——gitignored 的重灌树 `vendor/runtime-source`（①③；③ 是 PF-20 让 CI 设了 HOROSA_SOURCE_ROOT 后才进到跨树比对）、
+  空闲的 18765（②，CI 上另有用例起本地 HTTP 服务占它）。用例 docstring 还写着「随仓提交」，与 .gitignore 相反。
+- **修复**：① 读 HOROSA_SOURCE_ROOT，缺则 `[upstream-checkout]` 跳过；② monkeypatch `ports.port_bindable`（占住 18765 复现红、改后绿）；
+  ③ 没有 vendored 树时 2 / 2b 可见跳过（`::notice::` + 摘要写 skipped），`--require-upstream`（preflight）缺树照旧 FAIL——
+  `test_ci_shape_skips_only_the_vendored_tree_sections_and_preflight_still_requires_them` 守（负向对照：旧脚本红）。
+- **规则**：长分支合并前先开 PR 让 CI 跑（不只是本机门禁）；用例里出现 `vendor/runtime-source` 就要有跳过分支；用例别写死端口除非它测的就是端口。
 
 ### v0.51.0-dev / 2026-11-14 — 审计「全按推荐做」后半程：输出 / 输入 / 调用面 / 平台四路剩余项与待决项，七批串行
 

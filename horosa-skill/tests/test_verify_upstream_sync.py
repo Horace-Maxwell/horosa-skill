@@ -434,3 +434,27 @@ def test_preflight_checks_the_pin_after_the_gates_that_may_rewrite_it() -> None:
     src = (Path(__file__).resolve().parents[1] / "scripts" / "preflight_release.py").read_text(encoding="utf-8")
     main = src[src.index("def main() -> int:"):]
     assert main.index("for label, argv in GATES:") < main.index("upstream_pin_failures(")
+
+
+# --- CI shape: upstream checkout present, vendor/runtime-source (gitignored) absent ------------------------------------
+
+_UPSTREAM = guard.os.environ.get("HOROSA_SOURCE_ROOT")
+
+
+@pytest.mark.skipif(
+    not _UPSTREAM or not (Path(_UPSTREAM) / "Horosa-Web").is_dir(),
+    reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set",
+)
+def test_ci_shape_skips_only_the_vendored_tree_sections_and_preflight_still_requires_them(monkeypatch, tmp_path, capsys) -> None:
+    """CI 检出了公开上游（PF-20）却没有 gitignored 的 vendor/runtime-source：此前 2 / 2b 两节把每个文件都报成
+    「missing in vendor/runtime-source」，v0.51 PR 的 Linux CI 红在这里。现在：CI 形状可见地跳过这两节、其余照断言；
+    --require-upstream（发布 preflight）缺这棵树照旧 FAIL。负向对照（实跑）：去掉 vendored_tree 判断 → 第一段 SystemExit 红。"""
+    monkeypatch.setattr(guard, "VENDOR_ROOT", tmp_path / "no-vendor-tree")
+    monkeypatch.setattr(guard.sys, "argv", ["verify_upstream_sync.py"])
+    guard.main()
+    out = capsys.readouterr().out
+    assert "sentinel / subtree comparison skipped" in out and "upstream-sync: ok" in out
+    assert "sentinels skipped (no vendor/runtime-source)" in out
+    monkeypatch.setattr(guard.sys, "argv", ["verify_upstream_sync.py", "--require-upstream"])
+    with pytest.raises(SystemExit, match="release preflight needs it"):
+        guard.main()

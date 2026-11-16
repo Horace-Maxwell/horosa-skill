@@ -489,9 +489,20 @@ def main() -> None:
                 "shipping a technique upstream retired; confirm before re-recording."
             )
 
+    # 2 / 2b 比的是 vendor/runtime-source（gitignored 的本机重灌树）。GitHub CI 按契约提交号检出公开上游（PF-20）、
+    # 却没有这棵树：此前这两节在 CI 上把每个文件都报成「missing in vendor/runtime-source」（v0.51 PR 的 Linux CI 红在这里）。
+    # 没有这棵树 = 这两节做不了：CI 上可见地跳过；发布前（--require-upstream，preflight）照旧硬拦。
+    vendored_tree = VENDOR_ROOT.is_dir()
+    if not vendored_tree:
+        message = "vendor/runtime-source absent (gitignored local re-vendor tree) — sentinel / subtree comparison skipped"
+        if args.require_upstream:
+            raise SystemExit(f"upstream-sync: FAIL — {message}; the release preflight needs it "
+                             "(run scripts/sync_vendored_runtime_sources.sh).")
+        print(f"::notice::upstream-sync — {message}")
+
     # 2. vendored sentinels
     sentinel_drift: list[str] = []
-    for rel in SENTINELS:
+    for rel in SENTINELS if vendored_tree else ():
         up_path, vendored_path = upstream / rel, VENDOR_ROOT / rel
         if not up_path.is_file():
             sentinel_drift.append(f"{rel}: missing upstream (renamed/removed?)")
@@ -507,7 +518,7 @@ def main() -> None:
     tree_drift: list[str] = []
     tree_notices: list[str] = []
     tree_checked = 0
-    for rel, spec in SENTINEL_TREES.items():
+    for rel, spec in (SENTINEL_TREES.items() if vendored_tree else ()):
         vendored_files = _tree_files(VENDOR_ROOT / rel)
         upstream_files = _tree_files(upstream / rel)
         tree_checked += len(vendored_files)
@@ -640,7 +651,8 @@ def main() -> None:
     app_version = _upstream_app_version(upstream) or "?"
     print(
         f"upstream-sync: ok (upstream {app_version} @ {upstream_sha[:12] or '?'}; aiExport v{upstream_version} "
-        f"== mirror; {len(upstream_keys)} technique keys; {len(SENTINELS)} sentinels identical; "
+        f"== mirror; {len(upstream_keys)} technique keys; "
+        f"{f'{len(SENTINELS)} sentinels identical' if vendored_tree else 'sentinels skipped (no vendor/runtime-source)'}; "
         f"{compared} core-js files identical, {len(unmatched)} unmatched/bespoke; "
         f"{tree_checked} runtime-subtree files compared)"
     )
