@@ -152,6 +152,10 @@ def test_serve_wires_the_auto_token_and_refuses_a_world_readable_token_file(tmp_
 
     monkeypatch.setattr(serve_flow, "_serve_banner", fake_banner)
     monkeypatch.setattr(serve_flow, "HorosaSkillService", lambda *a, **k: None)
+    # 端口是否真空闲与本用例无关：CI 上 18765 可能正被别的用例占着（v0.51 PR 的 Linux CI 在这里拿到 serve.port_in_use）。
+    from horosa_skill.runtime import ports
+
+    monkeypatch.setattr(ports, "port_bindable", lambda *a, **k: True)
     # _run_serve 直接写 os.environ：先经 monkeypatch 登记，测试结束时还原（否则令牌漏进后面的用例）
     monkeypatch.setenv("HOROSA_MCP_TOKEN", "placeholder")
     monkeypatch.delenv("HOROSA_MCP_TOKEN", raising=False)

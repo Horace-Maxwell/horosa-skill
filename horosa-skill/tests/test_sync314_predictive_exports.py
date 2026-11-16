@@ -5,11 +5,13 @@ AI_EXPORT_MEANING_ONLY_TECHNIQUES（发布说明：「星曜后天信息」两�
 十五个里十四个是星运键（zodialrelease / decennials / planetaryages / persiandirected / yearsystem129 / balbillus / triplicityrulers /
 keypoints / lunationphase / extrareturns / neroman / bezzafigure / jayprofection / michon），加七政 guolao；新键 timelords 直接进新表。
 
-权威 = 仓内 vendored 的上游 presets.js（vendor/runtime-source，verify_upstream_sync 的 SENTINEL_TREES 逐文件对上游；随仓提交，不跳过）。只比 skill 已有的导出键：
+权威 = 上游 checkout 的 presets.js（HOROSA_SOURCE_ROOT；CI 按契约提交号浅取公开上游并设它，没设就 [upstream-checkout] 跳过——
+vendor/runtime-source 是 gitignored 的本机重灌树，CI 上没有，v0.51 PR 在这里红过）。只比 skill 已有的导出键：
 别的批还没接进来的上游新键（变换盘 transformchart …）不在本文件裁决。
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -18,8 +20,11 @@ import pytest
 from horosa_skill.exports import registry as R
 from horosa_skill.exports.parser import parse_export_content
 
-REPO = Path(__file__).resolve().parents[2]
-PRESETS = REPO / "vendor" / "runtime-source" / "Horosa-Web" / "astrostudyui" / "src" / "utils" / "aiExport" / "presets.js"
+_UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
+PRESETS = (Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" / "src" / "utils" / "aiExport" / "presets.js") if _UPSTREAM_ROOT else None
+pytestmark = pytest.mark.skipif(
+    PRESETS is None or not PRESETS.is_file(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
+)
 # 上游导出键 → skill 导出键（占星地图：上游 locastro，skill acg）。
 KEY_MAP = {"locastro": "acg"}
 MOVED = ["zodialrelease", "decennials", "planetaryages", "persiandirected", "yearsystem129", "balbillus", "triplicityrulers", "keypoints",
@@ -27,6 +32,7 @@ MOVED = ["zodialrelease", "decennials", "planetaryages", "persiandirected", "yea
 
 
 def _upstream_list(name: str, opener: str) -> list[str]:
+    assert PRESETS is not None
     text = PRESETS.read_text(encoding="utf-8")
     start = text.index(f"export const {name} = {opener}")
     body = text[start: text.index("]", start)]
