@@ -1018,7 +1018,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   `--junitxml` 逐条耗时 × 各 lane 实测倍率（本机 → darwin 1.8× / windows-latest 3.7× / windows-11-arm 6.2×）估一次，不够先加；
   极圈盘（纬度 ≥66°）引擎每起一次盘 3–10 s，live 用例里别成批起。lane 跑的是从 macOS 录的金标：一律经 `tests/float_tree.py` 的
   `golden_diff` / `golden_text_diff` / `golden_text_contains` 比——POSIX 逐值（容差 1e-7）、Windows 只比形状（键 / 长度 / 类型；正文去数字后同一组行、
-  不论顺序）。Windows 载荷是 MSVC 编的同一份引擎：速度百分比差到 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序，没有哪个容差兜得住；
+  行序与行内列表项的次序都不论）。Windows 载荷是 MSVC 编的同一份引擎：速度百分比差到 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序，没有哪个容差兜得住；
   值级真相由 darwin lane + 维护者本机守，别在用例里 `==` 全精度、也别为 Windows 调大容差。用例里「vendored 树缺席时退回」的写死值（如 `PD_SYNC_REV_FALLBACK`）lane 上就是真用的值，
   re-vendor 时一并推进（有守卫）。
   v0.49.0 把 nt 从 2700 提到 3600：windows-latest 在 v0.48.0 已用 93%，这版测试又多约 8%。发版前看上一版的 near-budget 注解，提前加。

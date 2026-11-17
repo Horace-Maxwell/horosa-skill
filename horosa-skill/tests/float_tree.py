@@ -110,8 +110,17 @@ def golden_diff(actual: Any, expected: Any, **tolerance: float) -> list[str]:
     return float_tree_diff(actual, expected, **tolerance) if VALUE_GOLDEN_HOST else shape_diff(actual, expected)
 
 
+# Inline lists (「世俗相位(比例):日合月(差 0.1°)、天顶刑福点(…)、…」) reorder inside the line too (third matrix run): each
+# masked line is compared as the sorted multiset of its pieces between list separators.
+_LIST_SEPARATORS = re.compile(r"[、，,；;：:]")
+
+
+def _normalized(line: str) -> str:
+    return "\x1f".join(sorted(_LIST_SEPARATORS.split(_DIGITS.sub("#", line))))
+
+
 def _masked_lines(text: str) -> list[str]:
-    return sorted(_DIGITS.sub("#", line) for line in text.splitlines())
+    return sorted(_normalized(line) for line in text.splitlines())
 
 
 def golden_text_diff(actual: str, expected: str) -> list[str]:
@@ -119,7 +128,10 @@ def golden_text_diff(actual: str, expected: str) -> list[str]:
     if VALUE_GOLDEN_HOST:
         return [] if actual == expected else [f"text differs (first {next((i for i, (x, y) in enumerate(zip(actual, expected)) if x != y), min(len(actual), len(expected)))} chars equal)"]
     mine, theirs = _masked_lines(actual), _masked_lines(expected)
-    return [] if mine == theirs else sorted(set(mine) ^ set(theirs))[:20] or [f"line counts {len(mine)} != {len(theirs)}"]
+    if mine == theirs:
+        return []
+    readable = {_normalized(line): _DIGITS.sub("#", line) for line in (*expected.splitlines(), *actual.splitlines())}
+    return [readable[key] for key in sorted(set(mine) ^ set(theirs))][:20] or [f"line counts {len(mine)} != {len(theirs)}"]
 
 
 def golden_text_contains(haystack: str, block: str) -> list[str]:
@@ -127,4 +139,4 @@ def golden_text_contains(haystack: str, block: str) -> list[str]:
     if VALUE_GOLDEN_HOST:
         return [] if block in haystack else ["block not found verbatim"]
     lines = set(_masked_lines(haystack))
-    return [line for line in _masked_lines(block) if line not in lines]
+    return [_DIGITS.sub("#", line) for line in block.splitlines() if _normalized(line) not in lines]

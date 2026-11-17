@@ -84,3 +84,15 @@ def test_on_windows_a_change_in_shape_or_wording_still_fails(monkeypatch) -> Non
     assert float_tree.golden_text_diff(WIN_TEXT.replace("刑", "冲"), MAC_TEXT) != []                  # a changed label
     assert float_tree.golden_text_diff(WIN_TEXT.rsplit("\n", 1)[0], MAC_TEXT) != []                   # a missing line
     assert float_tree.golden_text_contains(WIN_TEXT, "入世相位:下降 合 太阳 0.03°") == ["入世相位:下降 合 太阳 #.#°"]
+
+
+def test_on_windows_an_inline_list_may_reorder_but_not_change(monkeypatch) -> None:
+    """Third matrix run (44055112124, windows-latest): the in-mundo aspects print on one line and a near-tie swapped two items."""
+    mac = "[盘面细节]\n世俗相位(比例):日合月(差 0.12°)、上升合福点(差 0.03°)、天顶刑福点(差 0.03°)、海冲南交(差 1.10°)、海合北交(差 1.10°)"
+    win = "[盘面细节]\n世俗相位(比例):日合月(差 0.12°)、天顶刑福点(差 0.03°)、上升合福点(差 0.03°)、海合北交(差 1.10°)、海冲南交(差 1.10°)"
+    monkeypatch.setattr(float_tree, "VALUE_GOLDEN_HOST", True)
+    assert float_tree.golden_text_diff(win, mac) != []
+    monkeypatch.setattr(float_tree, "VALUE_GOLDEN_HOST", False)
+    assert float_tree.golden_text_diff(win, mac) == []
+    assert float_tree.golden_text_diff(win.replace("天顶刑福点", "天顶冲福点"), mac) != []        # a changed aspect
+    assert float_tree.golden_text_diff(win.rsplit("、", 1)[0], mac) != []                          # a dropped aspect
