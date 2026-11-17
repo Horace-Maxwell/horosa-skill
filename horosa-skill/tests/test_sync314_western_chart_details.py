@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from float_tree import float_tree_diff
 from fakes import CaptureClient, FakeClient, FakeJsClient
 from node_esm import run_node_esm
 from skips import needs_upstream, upstream_path
@@ -537,8 +538,8 @@ def test_live_chart_details_equal_the_upstream_goldens(case: str, tmp_path, monk
     assert result.ok, result.error
     details = result.data["chart_details"]
     golden = FX["goldens"][case]
-    differing = [name for name in ALL_TABLES if json.loads(json.dumps(details["tables"][name]["data"])) != golden[name]]
-    assert differing == []
+    differing = {name: diff for name in ALL_TABLES if (diff := float_tree_diff(json.loads(json.dumps(details["tables"][name]["data"])), golden[name]))}
+    assert differing == {}
     assert _section(result.data["snapshot_text"], "盘面细节") == FX["texts"][case]
     assert details["fertility_from"] == "2026-01-01 12:00:00"
     assert details["settings"]["detailVariant"] == golden["variant"] and details["settings"]["detailLunar"] == golden["lunarDays"]["method"]

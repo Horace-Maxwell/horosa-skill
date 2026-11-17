@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from float_tree import float_tree_diff
 
 from horosa_skill.errors import ToolValidationError
 from fakes import FakeClient, FakeJsClient
@@ -1010,9 +1011,9 @@ def test_live_engine_reproduces_the_fixture(tmp_path: Path, method: str, name: s
     payload = {k: v for k, v in _payload(method, name).items() if k != "tlMethod"}
     result = _live(tmp_path, method, PLAN[method][name].get("_birth", "seattle"), **payload)
     raw = result.data["raw"]
-    assert raw["rows"] == scenario["response"]["rows"]
+    assert float_tree_diff(raw["rows"], scenario["response"]["rows"]) == []          # 夹具在 macOS 抓，Windows 引擎浮点末位会差
     for key in ("kind", "method", "yearType", "currentIndex", "pastEnd", "hourLord", "ascSign", "startLord", "polar", "target"):
-        assert raw.get(key) == scenario["response"].get(key), key
+        assert float_tree_diff(raw.get(key), scenario["response"].get(key)) == [], key
     assert scenario["upstream"]["text"] in result.data["snapshot_text"]
     snap = result.data["export_snapshot"]
     assert snap["missing_selected_sections"] == [] and snap["unknown_detected_sections"] == []
@@ -1075,10 +1076,15 @@ def test_live_nodes_follow_the_chart_node_setting_and_zodiac_does_not_change_the
 
 @requires_current_runtime_contract
 @requires_chart
-def test_live_every_method_answers_inside_the_polar_circle(tmp_path: Path) -> None:
-    """极圈内十二法都有结果（上游 test_every_method_answers_inside_the_polar_circle）；九分主上升时档改按度数并写明。"""
-    for method in METHODS:
-        result = _live(tmp_path, method, "polar", **({"tlNineTime": "ascension"} if method == "nineparts" else {}))
-        assert result.data["raw"]["rows"], method
-    polar = _live(tmp_path, "nineparts", "polar", tlNineTime="ascension")
-    assert "极圈内斜升不单调,上升时档不成立,已改按度数" in polar.data["snapshot_text"]
+def test_live_polar_circle_through_the_tool(tmp_path: Path) -> None:
+    """极圈盘走完整工具链：九分主上升时档改按度数并写明；事件类取行数最多的 moving 作代表。
+
+    只跑这两法（v0.51.0 发版矩阵超时）：引擎里极圈分支只有九分主一处（timelord_tables.py `polar = abs(phi) >= 90 − ε`），
+    其余十法的表与纬度无关；「十二法极圈内都有结果」由上游 test_every_method_answers_inside_the_polar_circle 在引擎层逐法守，
+    skill 的 runner / 导出链对十二法在西雅图盘逐法都跑（test_live_engine_reproduces_the_fixture）。而北纬 70° 每起一次盘引擎就要
+    ~10 s（47°N 0.06 s；66°N 2.6 s；纬度越高越慢，与宫制无关），本条原先十二法 × 两次请求 = 本机 145–260 s、windows-11-arm 约 6×。"""
+    nine = _live(tmp_path, "nineparts", "polar", tlNineTime="ascension")
+    assert nine.data["raw"]["rows"] and nine.data["raw"]["polar"] is True
+    assert "极圈内斜升不单调,上升时档不成立,已改按度数" in nine.data["snapshot_text"]
+    moving = _live(tmp_path, "moving", "polar")
+    assert moving.data["raw"]["rows"]

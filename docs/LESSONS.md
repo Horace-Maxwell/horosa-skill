@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.51.0 (2026-11-17) | 发版矩阵三 lane 全红：pytest 三处都撞预算被杀（darwin 74% / x64 80% / arm 78%，v3.14.0 同步加约 1000 条 live 值金标、极圈盘一次 ~10 s 被一条用例起 24 次）；外加两类只在 lane 才有的红——`PD_SYNC_REV` 的写死回退值落后上游（v26 vs v28，本机读 vendored 树、CI 不跑 live），Windows 上从 macOS 录的金标全精度 `==` 差末位 | 本机 junit 逐条耗时 × lane 倍率估预算（posix 3000 / nt 6000 / arm +4200、job 200 分）；极圈扫只留有极圈分支的两法；`tests/float_tree.py` 容差比；回退值改常量并守与 vendored 相等（负向对照实跑） |
 | v0.51.0 (2026-11-16) | 发版 preflight 的 export-contract mirror 红：审计 O-02 新增的 skill 侧导出键 `ziwei_rules` 没进 `DIVERGENCE_WHITELIST`——这道检查要 vendor/runtime-source，CI 不跑，只有 preflight 才看得见 | 补白名单条目（附理由）；新增 skill 侧导出键时同一提交登记白名单，并在本机带 HOROSA_SOURCE_ROOT 跑一次 verify_export_contract_mirror.py |
 | v0.51.0-dev (2026-11-16) | v3.14.0 分支第一次跑 GitHub CI（PR #23）红三处 CI 专有：上游对拍用例读 gitignored 的 vendor/runtime-source；自动令牌用例写死 18765 而 CI 上它被别的用例占着；CI 新检出公开上游（PF-20）后 `verify_upstream_sync.py` 把 vendored 树「缺失」全报成漂移 | 对拍一律读 HOROSA_SOURCE_ROOT、缺则 `[upstream-checkout]` 跳过；与端口无关的用例 monkeypatch `port_bindable`；没有 vendored 树时 2 / 2b 两节可见跳过、`--require-upstream` 照旧硬拦 |
 | v0.51.0-dev (2026-11-14) | 审计「全按推荐做」后半程：同名函数顶掉前一个（「二十三点」KeyError）、serve 写 os.environ 的令牌漏到后面的用例、full 视图改目录撞线上预算的老用例、地名「显著度」默认撞同音城市、闸门下沉 service 层要给近千处直调开口子 | 顶层重名用 AST 守卫（ruff F811 抓不到）；进程级副作用经 monkeypatch 登记；改输出形态时把测「下一层」的老用例显式放开上一层；缺省规则逐个排除同名同音与别名；service 闸缺省 enforce + 测试套件 checked + 专测用例真缺省 + AST 要求每处调用写 gate= |
@@ -260,6 +261,30 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.51.0 / 2026-11-17 — 发版矩阵三 lane 全红：套件慢一倍撞预算，外加两类只在 lane 上才有的红
+
+- **症状**：release-runtime run 43988165149（publish=true）三条 lane 的 pytest 全在预算处被杀：darwin 1500 s 跑到 74%、windows-latest 3600 s 到 80%、
+  windows-11-arm 5400 s 到 78%；publish 跳过、草稿没转公开。被杀前 pytest.log 里还有 F：三 lane 同红 `test_pd_v12_engine_rev_and_core5_fallback`，
+  两条 Windows lane 同红 `test_live_every_transform_kind_equals_the_upstream_full_golden[vertical/improved]`、x64 另红 `test_live_superimposed_tables_equal_the_upstream_golden`。
+  PR #23 的 CI、本机 25 道门禁、本机 live 全套都绿。
+- **怎么定位的**：超时没有 `-rf` 摘要，只有一串点；数 pytest.log 里的进度字符得到序号（3786 / 6630 / 6688），本机同参数 `--collect-only` 按序号对回用例名
+  （darwin 6344/8496 = 74.7% 与日志的 [74%] 对上）。本机 `--junitxml` 逐条耗时累加到各 lane 停下的序号，得到每条 lane 相对本机的倍率。
+- **根因 1（超时）**：v3.14.0 同步加了约 1000 条 live 用例（变换盘逐种、盘面细节 30 表、时主十二法逐法逐选项的值金标），本机整套 1485–1558 s，
+  估算 darwin ~2800 / x64 ~5700 / arm ~9600 s。其中一条 `test_live_every_method_answers_inside_the_polar_circle` 独占 145–260 s：北纬 70° 的盘
+  引擎每起一次 ~10 s（47°N 0.06 s、66°N 2.6 s、67°N 4.5 s，与宫制、predictive 无关——上游引擎特性，只报不改），这条十二法 × 每法两次请求。
+  v0.50.1 收尾时 x64 已 93% 的 near-budget 注解早就提醒过。
+- **根因 2（pdSyncRev）**：`test_local_js_tools.py` 的期望 `PD_SYNC_REV` 读 vendored 树的 helper.py，缺树时退回写死的 `pd_method_sync_v26`；上游 v3.14.0
+  已推到 v28。本机有 vendored 树（读到 v28）、CI 没有 chart 服务（这条跳过），只有 lane「无 vendored 树 + 真 chart 服务」走回退。
+- **根因 3（Windows 金标）**：变换盘 / 盘面细节 / 时主的值金标在 macOS 录，用 `==` 比全精度浮点（`vertical` 的赤纬、`golden` 的黄经…）。Windows 载荷是
+  MSVC 编的同一份引擎，三角函数末位会差；按 6 位舍入比的黄经大多过、全精度比的必红。后两条（盘面细节、时主夹具）Windows lane 还没跑到，同样写法。
+- **修复**：① 极圈扫只留有极圈分支的九分主（`timelord_tables.py` 的 `polar` 只此一处）+ 事件类代表 moving，十二法极圈由上游引擎层用例守，本机 145–260 → 39 s；
+  预算按估算放到各 lane ~80%：posix 3000、nt 6000、仿真 +4200（总 10200 s），runtime-matrix job 120 → 200 分钟（守卫算术照旧）。
+  ② 回退值改成具名常量 `PD_SYNC_REV_FALLBACK = v28`，新用例 `test_pd_sync_rev_fallback_tracks_the_vendored_engine` 在 vendored 树在场时要求二者相等
+  （负向对照：改回 v26 红、v28 绿）。③ 新增 `tests/float_tree.py`（结构 / 字符串 / 布尔 / None 照旧精确，数值 1e-7 容差，报差异路径），四处金标比较改用它；
+  `tests/test_float_tree.py` 证明末位噪声（4 ulp）旧 `==` 红、新比较绿，1e-5 的真变化照红。
+- **规则**：同步上游（尤其加了成批 live 值金标）后、打 tag 前，用本机 junit 逐条耗时 × lane 倍率估一次预算，不够先加；live 用例别成批起高纬盘；
+  跨平台比浮点金标用 `float_tree_diff`；「vendored 树缺席时退回」的写死值就是 lane 上的真值，re-vendor 时一并推进。
 
 ### v0.51.0 / 2026-11-16 — 只有 preflight 跑的检查，改动它覆盖的东西时要手动跑
 

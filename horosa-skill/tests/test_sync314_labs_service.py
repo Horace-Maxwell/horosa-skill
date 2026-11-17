@@ -12,6 +12,7 @@ from functools import cache
 from pathlib import Path
 
 import pytest
+from float_tree import float_tree_diff
 from fakes import FakeClient, FakeJsClient
 
 from horosa_skill import auxlab_vocab as V
@@ -129,7 +130,8 @@ def test_transformchart_novien_end_to_end(tmp_path: Path) -> None:
     assert data["transform"]["kind"] == "novien" and data["transform"]["label"] == "九分盘" and data["transform"]["options_used"] == ["variant"]
     assert data["settings"] == {"kind": "novien", "planet": "Moon", "shift": False, "house": 1, "variant": "improved"}
     assert data["request"] == {"transformKind": "novien", "transformVariant": "improved"}
-    assert [[row["id"], round(row["lon"], 6)] for row in data["positions"]] == golden()["transform_full_B"]["novien/improved"]["positions"]
+    assert float_tree_diff([[row["id"], row["lon"]] for row in data["positions"]], golden()["transform_full_B"]["novien/improved"]["positions"],
+                           abs_tol=1e-6) == []
     assert data["params_ignored"] == [] and not any("用不上" in warning for warning in result.warnings)
     assert "_derivedSelf" not in json.dumps(export, ensure_ascii=False)
 

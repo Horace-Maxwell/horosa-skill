@@ -46,13 +46,17 @@ for _stream in (sys.stdout, sys.stderr):
 # Windows lanes hit the flat 1500 s budget). Budget by host: the number is a ceiling for a healthy run, not a target.
 # v0.48.0: windows-latest used 2504 / 2700 s (93%, the new near-budget annotation lit on its first run); v0.49.0 adds ~8% to the
 # suite (report figures) → nt 3600 s. The emulated lane's total stays 5400 s (extra 2700 → 1800), so the job timeout is unchanged.
-PYTEST_BUDGET_SECONDS = {"nt": 3600, "posix": 1500}
+# v0.51.0: the v3.14.0 sync added ~1000 live tests (value goldens per transform / table / time-lord method) and the draft matrix
+# was killed on all three lanes (darwin at 74% of 1500 s, windows-latest 80% of 3600, windows-11-arm 78% of 5400). Local per-test
+# timings × each lane's measured slowdown (1.8× / 3.7× / 6.2× this Mac) project 2350 / 4840 / 8130 s after trimming the polar
+# sweep → posix 3000, nt 6000, emulated extra 4200 (each lane ~80% of its ceiling; job timeout 200 min).
+PYTEST_BUDGET_SECONDS = {"nt": 6000, "posix": 3000}
 # windows-11-arm runs the x64 payload under emulation and is the slowest, noisiest lane: v0.45.0 needed 2580 s of 2700, v0.45.1's
 # draft hit the ceiling at ~98% with zero failures while windows-latest took 1389 s → +900 s (3600). v0.47.x then ran at 3466 /
 # 3496 s of 3600 (96–97%, unnoticed) and v0.48.0's draft (+176 tests) was killed at 86% with zero failures → +2700 s (5400).
 # Only that lane gets the extra; the job timeout (runtime-matrix.yml) must still cover it plus ≥15 min of install / start /
 # client steps (~9–14 min measured).
-EMULATED_PYTEST_EXTRA_SECONDS = 1800  # nt 3600 + 1800 = 5400 s, the same total as v0.48.0
+EMULATED_PYTEST_EXTRA_SECONDS = 4200  # nt 6000 + 4200 = 10200 s (v0.51.0); job timeout 200 min = 170 + 30 for the other steps
 # A lane whose pytest used more than this share of its budget prints a GitHub `::warning::` annotation (it lands in the run's
 # ANNOTATIONS, which `gh run watch` prints at the end of every release run) and records it in lane-report.json — v0.47.x sat at
 # 96–97% for two releases because nobody opened the lane reports to look.

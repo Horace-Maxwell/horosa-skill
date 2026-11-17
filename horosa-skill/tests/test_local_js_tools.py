@@ -1603,9 +1603,14 @@ def _pd_live_payload(**overrides):
     return payload
 
 
-# 主限法引擎同源版本：取 vendored 上游 astrostudy/helper.py 的 PD_SYNC_REV（v3.13.0 = pd_method_sync_v26）——重同步上游即随之推进，
-# 与 AGENTS.md §8 的防陈旧闸同源；vendored 树缺席（CI）时退回下面这个已核过的值。
-def _vendored_pd_sync_rev() -> str:
+# 主限法引擎同源版本：取 vendored 上游 astrostudy/helper.py 的 PD_SYNC_REV——重同步上游即随之推进，与 AGENTS.md §8 的防陈旧闸同源；
+# vendored 树缺席（CI / 发版矩阵 lane）时退回 PD_SYNC_REV_FALLBACK。v0.51.0 发版矩阵三 lane 全红在此：上游 v3.14.0 已推到 v28、
+# 回退值仍是 v26；本机有 vendored 树、CI 没有 chart 服务（这条跳过），只有 lane（无 vendored 树、有真 chart 服务）走回退。
+# test_pd_sync_rev_fallback_tracks_the_vendored_engine 在 vendored 树在场时把二者钉成相等，re-vendor 漏推进当场红。
+PD_SYNC_REV_FALLBACK = "pd_method_sync_v28"   # 上游星阙 v3.14.0（Horosa-Public e55c3a66）
+
+
+def _vendored_helper_pd_sync_rev() -> str | None:
     import re
 
     helper = pathlib.Path(__file__).resolve().parents[2] / "vendor" / "runtime-source" / "Horosa-Web" / "astropy" / "astrostudy" / "helper.py"
@@ -1613,10 +1618,24 @@ def _vendored_pd_sync_rev() -> str:
         m = re.search(r"^PD_SYNC_REV = '([^']+)'", helper.read_text(encoding="utf-8"), re.M)
         if m:
             return m.group(1)
-    return "pd_method_sync_v26"
+    return None
+
+
+def _vendored_pd_sync_rev() -> str:
+    return _vendored_helper_pd_sync_rev() or PD_SYNC_REV_FALLBACK
 
 
 PD_SYNC_REV = _vendored_pd_sync_rev()
+
+
+def test_pd_sync_rev_fallback_tracks_the_vendored_engine() -> None:
+    """发版矩阵 lane 没有 vendored 树，只认 PD_SYNC_REV_FALLBACK；它落后于 vendored 引擎 = lane 上主限法同源闸必红（v0.51.0 踩过）。"""
+    vendored = _vendored_helper_pd_sync_rev()
+    if vendored is None:
+        pytest.skip("[upstream-checkout] vendor/runtime-source absent — nothing to compare the fallback against")
+    assert PD_SYNC_REV_FALLBACK == vendored, (
+        f"PD_SYNC_REV_FALLBACK={PD_SYNC_REV_FALLBACK} 落后于 vendored helper.py 的 {vendored}：re-vendor 后把回退值一并推进"
+    )
 
 
 @requires_chart

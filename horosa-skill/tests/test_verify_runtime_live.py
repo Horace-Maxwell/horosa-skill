@@ -292,8 +292,8 @@ def test_claude_user_scope_step_never_touches_the_invoking_users_claude_config(t
 def test_pytest_budget_is_host_aware() -> None:
     """2026-09-28 schedule matrix: both Windows lanes hit the flat 1500 s pytest budget (darwin needed 583 s for the same 1771
     tests; Windows runners are 4–5× slower on this suite). The ceiling is per host, and BUDGET reads it for the current one."""
-    assert live.PYTEST_BUDGET_SECONDS["posix"] == 1500
-    assert live.PYTEST_BUDGET_SECONDS["nt"] >= 2700
+    assert live.PYTEST_BUDGET_SECONDS["posix"] >= 3000          # v0.51.0: 1500 killed darwin at 74% of the v3.14.0 suite
+    assert live.PYTEST_BUDGET_SECONDS["nt"] >= 2 * live.PYTEST_BUDGET_SECONDS["posix"]
     assert live.BUDGET["pytest"] == live.PYTEST_BUDGET_SECONDS["nt" if os.name == "nt" else "posix"]
 
 
