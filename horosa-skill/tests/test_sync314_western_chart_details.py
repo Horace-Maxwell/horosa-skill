@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from float_tree import float_tree_diff
+from float_tree import golden_diff, golden_text_diff
 from fakes import CaptureClient, FakeClient, FakeJsClient
 from node_esm import run_node_esm
 from skips import needs_upstream, upstream_path
@@ -538,9 +538,10 @@ def test_live_chart_details_equal_the_upstream_goldens(case: str, tmp_path, monk
     assert result.ok, result.error
     details = result.data["chart_details"]
     golden = FX["goldens"][case]
-    differing = {name: diff for name in ALL_TABLES if (diff := float_tree_diff(json.loads(json.dumps(details["tables"][name]["data"])), golden[name]))}
+    # 金标在 macOS 录：POSIX 逐值（容差 1e-7）、Windows 比形状与去数字的行（tests/float_tree.py 写明为什么）。
+    differing = {name: diff for name in ALL_TABLES if (diff := golden_diff(json.loads(json.dumps(details["tables"][name]["data"])), golden[name]))}
     assert differing == {}
-    assert _section(result.data["snapshot_text"], "盘面细节") == FX["texts"][case]
+    assert golden_text_diff(_section(result.data["snapshot_text"], "盘面细节"), FX["texts"][case]) == []
     assert details["fertility_from"] == "2026-01-01 12:00:00"
     assert details["settings"]["detailVariant"] == golden["variant"] and details["settings"]["detailLunar"] == golden["lunarDays"]["method"]
     export = result.data["export_snapshot"]
@@ -558,8 +559,8 @@ def test_live_relocation_details_and_classical_analysis_follow_the_new_place(tmp
     reloc = service.run_tool("relocation", {**at_place, "lat": "10s00", "lon": "20w00", "relocLat": at_place["lat"], "relocLon": at_place["lon"]}, save_result=False)
     assert reloc.ok, reloc.error
     tables = reloc.data["chart_details"]["tables"]
-    assert [name for name in ALL_TABLES if json.loads(json.dumps(tables[name]["data"])) != FX["goldens"][case][name]] == []
-    assert _section(reloc.data["snapshot_text"], "盘面细节") == FX["texts"][case]
+    assert {name: diff for name in ALL_TABLES if (diff := golden_diff(json.loads(json.dumps(tables[name]["data"])), FX["goldens"][case][name]))} == {}
+    assert golden_text_diff(_section(reloc.data["snapshot_text"], "盘面细节"), FX["texts"][case]) == []
     assert reloc.data["chart_details"]["computed_at"] == {"lat": at_place["lat"], "lon": at_place["lon"]}
     natal_there = service.run_tool("chart", at_place, save_result=False)
     natal_birthplace = service.run_tool("chart", {**at_place, "lat": "10s00", "lon": "20w00"}, save_result=False)

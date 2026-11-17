@@ -181,3 +181,26 @@ def test_every_curated_fragment_occurs_in_a_recorded_live_export() -> None:
             text = _recorded(name, path)
             missing = [fragment for fragment in case["required_fragments"] if fragment not in text]
             assert not missing, (case["id"], name, missing)
+
+
+def test_every_dispatch_case_gets_past_the_gate_offline(tmp_path) -> None:
+    """v0.51.0 release matrix: the darwin lane's full HorosaBench came back 124/125 — `dispatch_qimen_liureng_combo` still put
+    the question moment in `birth`, which the audit's gate now refuses for cast techniques (`agent_guidance.required:
+    question_moment`, birth data cannot stand in for it). Offline runs skip every requires_runtime case, so nothing saw it.
+    The gate decides before any engine is called, so each dispatch case can be checked here: anything but a gate refusal
+    (offline: the unreachable runtime) means the case is still a valid request. Negative control: with the moment back in
+    `birth` this fails with agent_guidance.required."""
+    from horosa_skill.benchmark.runner import _build_case_payload
+    from horosa_skill.memory.store import MemoryStore
+    from horosa_skill.service import HorosaSkillService
+
+    settings = Settings(server_root="http://127.0.0.1:9", chart_server_root="http://127.0.0.1:9", runtime_root=tmp_path / "runtime",
+                        db_path=tmp_path / "memory.db", output_dir=tmp_path / "runs", trace_dir=tmp_path / "traces")
+    service = HorosaSkillService(settings, store=MemoryStore(settings))
+    cases = [case for case in load_benchmark_dataset()["cases"] if case["kind"] == "dispatch"]
+    assert cases
+    for case in cases:
+        result = service.dispatch(_build_case_payload(case, {}), evaluation_case_id=case["id"], gate="checked")
+        code = result.error.code if not result.ok and result.error else None
+        assert code is None or not code.startswith("agent_guidance."), (case["id"], code, result.error)
+        assert sorted(result.selected_tools) == sorted(case["expected_selected_tools"]), case["id"]

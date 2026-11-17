@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.51.0 (2026-11-17) | 第二次矩阵：预算够了（darwin 66% / x64 78%），x64 仍红 8 条——Windows 引擎与 macOS 金标的差不止末位：速度百分比 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序；另 darwin 全量基准 124/125（`dispatch_qimen_liureng_combo` 把占时放 birth，被审计后的闸门拒） | 金标比较按主机分：POSIX 逐值、Windows 比形状 + 去数字的行（`golden_diff` 等）；基准 case 改 context + 离线过闸守卫（负向对照实跑） |
 | v0.51.0 (2026-11-17) | 发版矩阵三 lane 全红：pytest 三处都撞预算被杀（darwin 74% / x64 80% / arm 78%，v3.14.0 同步加约 1000 条 live 值金标、极圈盘一次 ~10 s 被一条用例起 24 次）；外加两类只在 lane 才有的红——`PD_SYNC_REV` 的写死回退值落后上游（v26 vs v28，本机读 vendored 树、CI 不跑 live），Windows 上从 macOS 录的金标全精度 `==` 差末位 | 本机 junit 逐条耗时 × lane 倍率估预算（posix 3000 / nt 6000 / arm +4200、job 200 分）；极圈扫只留有极圈分支的两法；`tests/float_tree.py` 容差比；回退值改常量并守与 vendored 相等（负向对照实跑） |
 | v0.51.0 (2026-11-16) | 发版 preflight 的 export-contract mirror 红：审计 O-02 新增的 skill 侧导出键 `ziwei_rules` 没进 `DIVERGENCE_WHITELIST`——这道检查要 vendor/runtime-source，CI 不跑，只有 preflight 才看得见 | 补白名单条目（附理由）；新增 skill 侧导出键时同一提交登记白名单，并在本机带 HOROSA_SOURCE_ROOT 跑一次 verify_export_contract_mirror.py |
 | v0.51.0-dev (2026-11-16) | v3.14.0 分支第一次跑 GitHub CI（PR #23）红三处 CI 专有：上游对拍用例读 gitignored 的 vendor/runtime-source；自动令牌用例写死 18765 而 CI 上它被别的用例占着；CI 新检出公开上游（PF-20）后 `verify_upstream_sync.py` 把 vendored 树「缺失」全报成漂移 | 对拍一律读 HOROSA_SOURCE_ROOT、缺则 `[upstream-checkout]` 跳过；与端口无关的用例 monkeypatch `port_bindable`；没有 vendored 树时 2 / 2b 两节可见跳过、`--require-upstream` 照旧硬拦 |
@@ -261,6 +262,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.51.0 / 2026-11-17 — 第二次矩阵：Windows 引擎和 macOS 金标差的不只是浮点末位
+
+- **症状**：run 44026495396（预算放宽后）darwin 绿、pytest 1994 / 3000 s；windows-latest 跑完 4662 / 6000 s 但红 8 条：时主九分主两条
+  （`end` / `start` `00:38:41` vs `00:38:42`）、发展年龄两档那条（另一处没改的 `==`，`at` 差 ~4e-10）、盘面细节四张盘 + 重置盘一条
+  （`planetDetails.speedPct / speedMeanPct` 差到 ~4e-6；`inMundo` 相位行 MC/Asc、北/南交换序；`sunPhases` 时刻差一秒）。同 lane 的全量
+  HorosaBench（record only）124/125：`dispatch_qimen_liureng_combo` 被 `agent_guidance.required: question_moment` 拒。
+- **根因**：① 上一条只按「末位噪声」设了 1e-7 容差，但 Windows 载荷的差会被放大和离散化：速度是数值微分（噪声 × 1/dt）、时刻截到整秒（边界上一翻就是 1 s）、
+  排序键近乎并列时行换序（70°N 上升与天顶几乎重合）——没有一个容差能同时兜住而不变成「什么都过」。② 基准数据集的 dispatch case 把占时写在 `birth`；
+  审计后占类技法的时刻只认 `context`（闸门是对的），离线跑基准跳过所有 requires_runtime 的 case，所以只有 darwin lane 的全量跑看得见。
+- **修复**：`tests/float_tree.py` 加 `golden_diff` / `golden_text_diff` / `golden_text_contains`：POSIX 照旧逐值（1e-7），Windows 比形状（键、长度、类型）
+  与去数字后的行（多重集，不论顺序）；七处金标比较改用。`tests/test_float_tree.py` 用 lane 实际回的 Windows 值做夹具：POSIX 分支仍红、Windows 分支绿、
+  Windows 分支下少一行 / 多一个键 / 换了标签照红。基准 case 改把时刻放 `context`；`test_every_dispatch_case_gets_past_the_gate_offline`
+  离线把每条 dispatch case 过一遍闸门（负向对照：换回 HEAD 的数据集红 `agent_guidance.required`）。
+- **规则**：跨平台的值金标只在录它的平台上逐值比；其它平台比形状并在 helper 里写明为什么。新加闸门规则时，把基准数据集里的 case 也过一遍（离线就能查）。
 
 ### v0.51.0 / 2026-11-17 — 发版矩阵三 lane 全红：套件慢一倍撞预算，外加两类只在 lane 上才有的红
 

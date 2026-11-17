@@ -9,7 +9,7 @@ import json
 import re
 
 import pytest
-from float_tree import float_tree_diff
+from float_tree import golden_diff
 from skips import needs_upstream, upstream_path
 from test_local_js_tools import make_service, requires_chart
 from test_sync314_labs_goldens import (
@@ -63,12 +63,12 @@ def _assert_matches(result, want: dict, key: str) -> None:
     assert export["missing_selected_sections"] == [], (key, export["missing_selected_sections"])
     assert export["unknown_detected_sections"] == [], (key, export["unknown_detected_sections"])
     # 金标在 macOS 录、Windows 载荷是 MSVC 编的同一份引擎：浮点末位会差，按容差比（tests/float_tree.py；金标黄经已舍到 6 位 → 1e-6）。
-    assert float_tree_diff([[row["id"], row["lon"]] for row in data["positions"]], want["positions"], abs_tol=1e-6) == [], key
+    assert golden_diff([[row["id"], row["lon"]] for row in data["positions"]], want["positions"], abs_tol=1e-6) == [], key
     raw_houses = sorted(data["raw"]["chart"]["chart"]["houses"], key=_house_number)
-    assert float_tree_diff([house["lon"] for house in raw_houses], want["cusps"], abs_tol=1e-6) == [], key
+    assert golden_diff([house["lon"] for house in raw_houses], want["cusps"], abs_tol=1e-6) == [], key
     assert raw_houses[0].get("hsysDerived") == want["derived"], key
     assert data["transform"]["moment"] == want["moment"], key
-    assert float_tree_diff(data.get("vertical"), want["vertical"]) == [], key
+    assert golden_diff(data.get("vertical"), want["vertical"]) == [], key
     titles = _sections(data["snapshot_text"])
     preset = AI_EXPORT_PRESET_SECTIONS["transformchart"]
     assert titles == [title for title in preset if title in titles], key
@@ -104,7 +104,7 @@ def test_live_superimposed_tables_equal_the_upstream_golden(tmp_path) -> None:
     result = make_service(tmp_path).run_tool("transformchart", {**BIRTH_B, **_extra("superimposed/improved")}, save_result=False)
     want = golden()["transform_full_B"]["superimposed/improved"]
     assert result.data["rulers"] == want["rulers"]
-    assert float_tree_diff(result.data["golden"], want["golden"]) == []
+    assert golden_diff(result.data["golden"], want["golden"]) == []
 
 
 @requires_chart

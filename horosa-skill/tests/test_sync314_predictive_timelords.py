@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from float_tree import float_tree_diff
+from float_tree import golden_diff, golden_text_contains
 
 from horosa_skill.errors import ToolValidationError
 from fakes import FakeClient, FakeJsClient
@@ -1011,10 +1011,11 @@ def test_live_engine_reproduces_the_fixture(tmp_path: Path, method: str, name: s
     payload = {k: v for k, v in _payload(method, name).items() if k != "tlMethod"}
     result = _live(tmp_path, method, PLAN[method][name].get("_birth", "seattle"), **payload)
     raw = result.data["raw"]
-    assert float_tree_diff(raw["rows"], scenario["response"]["rows"]) == []          # 夹具在 macOS 抓，Windows 引擎浮点末位会差
+    # 夹具在 macOS 抓：POSIX 逐值、Windows 比形状（截到秒的时刻会差一秒，见 tests/float_tree.py）。
+    assert golden_diff(raw["rows"], scenario["response"]["rows"]) == []
     for key in ("kind", "method", "yearType", "currentIndex", "pastEnd", "hourLord", "ascSign", "startLord", "polar", "target"):
-        assert float_tree_diff(raw.get(key), scenario["response"].get(key)) == [], key
-    assert scenario["upstream"]["text"] in result.data["snapshot_text"]
+        assert golden_diff(raw.get(key), scenario["response"].get(key)) == [], key
+    assert golden_text_contains(result.data["snapshot_text"], scenario["upstream"]["text"]) == []
     snap = result.data["export_snapshot"]
     assert snap["missing_selected_sections"] == [] and snap["unknown_detected_sections"] == []
 
@@ -1058,7 +1059,8 @@ def test_live_variant_reaches_the_house_based_developmental_ages_only(tmp_path: 
     house = [_live(tmp_path, "devages", tlDevBasis="house", tlVariant=v).data["raw"]["rows"] for v in ("improved", "classic")]
     assert house[0] != house[1]
     sign = _live(tmp_path, "devages", tlVariant="classic")
-    assert sign.data["settings_ignored"] == ["tlVariant"] and sign.data["raw"]["rows"] == _scenario("devages", "default")["response"]["rows"]
+    assert sign.data["settings_ignored"] == ["tlVariant"]
+    assert golden_diff(sign.data["raw"]["rows"], _scenario("devages", "default")["response"]["rows"]) == []
 
 
 @requires_current_runtime_contract
@@ -1070,7 +1072,7 @@ def test_live_nodes_follow_the_chart_node_setting_and_zodiac_does_not_change_the
     node = lambda result: next(r["at"] for r in result.data["raw"]["rows"] if r["point"] == "North Node")  # noqa: E731
     assert abs(((node(mean) - node(true) + 180) % 360) - 180) > 0.05
     sidereal = _live(tmp_path, "turn", zodiacal=1)
-    assert sidereal.data["raw"]["rows"] == _scenario("turn", "default")["response"]["rows"]
+    assert golden_diff(sidereal.data["raw"]["rows"], _scenario("turn", "default")["response"]["rows"]) == []
     assert "黄道：恒星黄道" in sidereal.data["snapshot_text"]
 
 
