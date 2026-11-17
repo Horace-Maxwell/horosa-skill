@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.51.1-dev (2026-11-17) | v0.51.0 的三条收尾：预算只有「发版前手算一次」的口头规则；ci.yml 两个 job 在 95–97% 才被取消时才发现；export-contract mirror 只在 preflight 跑 | `estimate_lane_budget.py`（本机 junit → 三 lane 估算，超 85% 退出 1）；`ci_job_budget.py` 首末两步、超 85% 打注解；mirror 进 CI 读钉住的公开上游、preflight 带 `--require-vendored`（各有负向对照） |
 | v0.51.0 (2026-11-17) | 第二次矩阵：预算够了（darwin 66% / x64 78%），x64 仍红 8 条——Windows 引擎与 macOS 金标的差不止末位：速度百分比 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序；另 darwin 全量基准 124/125（`dispatch_qimen_liureng_combo` 把占时放 birth，被审计后的闸门拒） | 金标比较按主机分：POSIX 逐值、Windows 比形状 + 去数字的行（`golden_diff` 等）；基准 case 改 context + 离线过闸守卫（负向对照实跑） |
 | v0.51.0 (2026-11-17) | 发版矩阵三 lane 全红：pytest 三处都撞预算被杀（darwin 74% / x64 80% / arm 78%，v3.14.0 同步加约 1000 条 live 值金标、极圈盘一次 ~10 s 被一条用例起 24 次）；外加两类只在 lane 才有的红——`PD_SYNC_REV` 的写死回退值落后上游（v26 vs v28，本机读 vendored 树、CI 不跑 live），Windows 上从 macOS 录的金标全精度 `==` 差末位 | 本机 junit 逐条耗时 × lane 倍率估预算（posix 3000 / nt 6000 / arm +4200、job 200 分）；极圈扫只留有极圈分支的两法；`tests/float_tree.py` 容差比；回退值改常量并守与 vendored 相等（负向对照实跑） |
 | v0.51.0 (2026-11-16) | 发版 preflight 的 export-contract mirror 红：审计 O-02 新增的 skill 侧导出键 `ziwei_rules` 没进 `DIVERGENCE_WHITELIST`——这道检查要 vendor/runtime-source，CI 不跑，只有 preflight 才看得见 | 补白名单条目（附理由）；新增 skill 侧导出键时同一提交登记白名单，并在本机带 HOROSA_SOURCE_ROOT 跑一次 verify_export_contract_mirror.py |
@@ -262,6 +263,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.51.1-dev / 2026-11-17 — v0.51.0 留下的三条：把「记得看」改成机器说
+
+- **背景**：v0.51.0 发版的四次 release-runtime 与两次 CI 取消，暴露三处只靠人记的地方。① lane 预算：规则写的是「同步上游后打 tag 前用本机 junit × 倍率估一次」，
+  但没有工具，倍率只在当时的会话里；② ci.yml 的 `test`（19–24 / 25 分）和 `windows-smoke`（45–57 / 60 分）绿着跑到 95–97%，没有任何信号，
+  直到各被取消一次；③ `verify_export_contract_mirror.py` 要 gitignored 的 vendored 树，只在 preflight 跑——审计新加的 `ziwei_rules` 漏登白名单，
+  PR CI 与本机 25 道门禁都绿，到发版 preflight 才红。
+- **修复**：① `scripts/estimate_lane_budget.py <junit.xml>`：逐条耗时之和 × `verify_runtime_live.LANE_SLOWDOWN_VS_MAINTAINER_MAC` 对照三条 lane 的预算与
+  runtime-matrix 的 job 超时，超 `PYTEST_BUDGET_WARN_FRACTION` 退出 1 并给出要加到多少；倍率按 v0.51.0 通过的那次 run（darwin 2076 / x64 4802 / ARM 8182 s）对同一套件本机 1185 s 标定为 1.8 / 4.1 / 6.9；先前按被杀 lane 停点估的 3.7 / 6.2 对两条 Windows lane 偏乐观约 10%。
+  负向对照：v0.50.1 的旧预算对 v0.51.0 的套件三 lane 全报、未裁极圈扫的 1558 s 本机跑三 lane 全报。② ci.yml 两个 job 首步记开始时间、末步
+  `scripts/ci_job_budget.py --job <id>`（`!cancelled()`，从 ci.yml 读本 job 的 `timeout-minutes`，超 85% 打 `::warning::`，从不让 job 失败）；
+  `tests/test_ci_job_budget.py` 守首末两步在场（负向对照：删掉 windows-smoke 末步即红并点名）。③ mirror 守卫无 vendored 树时读
+  `$HOROSA_SOURCE_ROOT` 的 aiExport.js（CI 已按契约提交号检出公开上游，PF-20），ci.yml 加一步；preflight 与 Windows 构建带 `--require-vendored`
+  仍验随包那份。`tests/test_verify_export_contract_mirror.py` 在 CI 形状下重放 v0.51.0 的漏登（去掉 `ziwei_rules` 白名单即红）。
+- **规则**：凡是「发版前记得看一下」的检查，要么变成脚本 + 退出码，要么变成 CI 注解；只在发版路径上跑的守卫，能读公开上游就搬进 CI。
 
 ### v0.51.0 / 2026-11-17 — 第二次矩阵：Windows 引擎和 macOS 金标差的不只是浮点末位
 

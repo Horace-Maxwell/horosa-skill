@@ -34,7 +34,7 @@ def test_preflight_runs_both_vendor_freshness_guards(monkeypatch: pytest.MonkeyP
 
     flat = [" ".join(cmd) for cmd in calls]
     assert any("verify_vendor_runtime_sources.py" in cmd for cmd in flat)
-    assert any("verify_export_contract_mirror.py" in cmd for cmd in flat)
+    assert any("verify_export_contract_mirror.py --require-vendored" in cmd for cmd in flat)   # gates the copy it packs
 
 
 @pytest.mark.parametrize(

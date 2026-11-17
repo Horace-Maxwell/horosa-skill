@@ -103,6 +103,8 @@ Runtime release 采用「轻仓库 + 重 release 资产」模式；v0.38.0 起�
 
 ```bash
 # 0. 前提：main 已推送且 ci.yml 绿；上游 pin 已在上游公开远端；版本已 bump（python scripts/bump_version.py X.Y.Z → uv lock → run_ci_gates）
+#    同步过上游（或 live 用例成批增加）的版本：本机 vendored 实例 live 全套带 --junitxml 跑一次，再
+#    uv run python scripts/estimate_lane_budget.py <junit.xml>   # 三条 lane 的 pytest 估算 vs 预算 / job 超时；非 0 先加预算（v0.51.0 三 lane 全被杀）
 HOROSA_SOURCE_ROOT=… uv run python scripts/preflight_release.py           # 全绿；若重写了 provenance 就提交它
 git tag vX.Y.Z && git push origin vX.Y.Z
 bash horosa-skill/scripts/publish_release.sh --draft --dispatch           # seed / JS 引擎资产 / .mcpb / wheel / SBOM 上 DRAFT；dispatch release-runtime.yml

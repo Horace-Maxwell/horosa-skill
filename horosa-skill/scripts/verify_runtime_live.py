@@ -61,6 +61,12 @@ EMULATED_PYTEST_EXTRA_SECONDS = 4200  # nt 6000 + 4200 = 10200 s (v0.51.0); job 
 # ANNOTATIONS, which `gh run watch` prints at the end of every release run) and records it in lane-report.json — v0.47.x sat at
 # 96–97% for two releases because nobody opened the lane reports to look.
 PYTEST_BUDGET_WARN_FRACTION = 0.85
+# How much slower each release lane runs the live suite than the maintainer's Apple-Silicon Mac (same tests, vendored engine
+# on 8877/9977). Calibrated on v0.51.0's passing release run 44098676839 (darwin 2076 / windows-latest 4802 / windows-11-arm
+# 8182 s) against the same suite locally (1185 s, junit): 1.75 / 4.05 / 6.9. A first estimate from the killed lanes' stop points
+# (1.8 / 3.7 / 6.2) was ~10% optimistic on both Windows lanes. scripts/estimate_lane_budget.py turns a local `--junitxml` run
+# into per-lane projections against the budgets above — run it before tagging after any large upstream sync.
+LANE_SLOWDOWN_VS_MAINTAINER_MAC = {"darwin-arm64": 1.8, "win32-x64": 4.1, "win32-arm64": 6.9}
 # The slowest tests go into pytest.log, so the next slow lane says WHICH tests grew instead of only that the suite did.
 PYTEST_DURATIONS_SHOWN = 25
 BUDGET = {"install": 600, "doctor": 120, "start": 900, "engine": 300, "setup": 600,

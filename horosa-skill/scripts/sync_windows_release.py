@@ -299,12 +299,14 @@ def preflight_vendor_sources() -> None:
     `verify_export_contract_mirror.py`'s per-key coverage catches that. Both, before every build.
     """
     print("\n[preflight] vendored runtime-source freshness (required-paths + export-contract mirror)…")
-    for script, hint in (
-        ("verify_vendor_runtime_sources.py", "required vendored inputs are missing"),
-        ("verify_export_contract_mirror.py", "the vendored upstream tree is behind this release"),
+    # --require-vendored: since v0.51.0 the mirror guard also runs in CI against the upstream checkout; here it must gate
+    # the vendored copy this build packs.
+    for script, extra, hint in (
+        ("verify_vendor_runtime_sources.py", [], "required vendored inputs are missing"),
+        ("verify_export_contract_mirror.py", ["--require-vendored"], "the vendored upstream tree is behind this release"),
     ):
         try:
-            run(["uv", "run", "python", f"scripts/{script}"], cwd=SKILL_ROOT)
+            run(["uv", "run", "python", f"scripts/{script}", *extra], cwd=SKILL_ROOT)
         except subprocess.CalledProcessError:
             sys.exit(
                 f"\n[STOP] {script} failed — {hint}.\n"

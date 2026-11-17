@@ -5,9 +5,9 @@ has bitten twice — a guard exists, looks authoritative, and is wired into **no
 
 * `release.yml` (`runs-on: self-hosted`, zero runners registered) owned the two cross-tree gates for
   20 consecutive tags; not one step ever executed.
-* `verify_export_contract_mirror.py` needs `vendor/runtime-source`, which is gitignored — so it cannot
-  run on GitHub CI at all. It is only real because `preflight_release.py` calls it. Nothing asserted
-  that until this test.
+* `verify_export_contract_mirror.py` needed `vendor/runtime-source`, which is gitignored — so it could not
+  run on GitHub CI at all and was only real because `preflight_release.py` called it (v0.51.0: CI now runs it
+  against the pinned upstream checkout; preflight still gates the vendored copy with `--require-vendored`).
 
 So: a guard is only a guard if some runner invokes it. This test is deliberately dumb — it greps the
 runners for each script's filename — because anything cleverer would itself need a guard.
@@ -62,8 +62,8 @@ def test_cross_tree_guards_are_wired_into_preflight_not_only_ci() -> None:
     preflight = (SCRIPTS / "preflight_release.py").read_text(encoding="utf-8")
     assert "--require-upstream" in preflight, "verify_upstream_sync 的跨树模式必须由 preflight 调用"
     assert '"--source", "upstream"' in preflight, "段级欠账棘轮的上游模式必须由 preflight 调用"
-    assert "verify_export_contract_mirror.py" in preflight, (
-        "mirror 守卫需要 vendor/runtime-source（gitignored），CI 上跑不了 —— 它只能靠 preflight 做真"
+    assert '"scripts/verify_export_contract_mirror.py", "--require-vendored"' in preflight, (
+        "mirror 守卫在 preflight 必须验随包走的 vendored 那份（CI 上读的是钉住的公开上游）"
     )
 
 

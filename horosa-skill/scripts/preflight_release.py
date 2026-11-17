@@ -51,7 +51,8 @@ GATES: tuple[tuple[str, list[str]], ...] = (
     ("vendored runtime inputs", ["scripts/verify_vendor_runtime_sources.py"]),
     # 报告盘图用星阙 app 原版绘图代码（horosa-core-js/dist/app-charts.cjs）：必须与 pin 住的上游逐字节重建一致。
     ("app chart bundle vs pinned upstream", ["scripts/verify_app_charts_bundle.py"]),
-    ("export-contract mirror", ["scripts/verify_export_contract_mirror.py"]),
+    # --require-vendored：CI 也跑这道（读钉住的公开上游，v0.51.0 起），preflight 要验的是随包走的 vendored 那份。
+    ("export-contract mirror", ["scripts/verify_export_contract_mirror.py", "--require-vendored"]),
     ("technique compute-source declarations", ["scripts/verify_technique_provenance.py"]),
     ("docs sync", ["scripts/verify_docs_sync.py"]),
     ("runtime-builder parity", ["scripts/verify_builder_parity.py"]),

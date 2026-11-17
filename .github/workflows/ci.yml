@@ -23,6 +23,10 @@ jobs:
     # v0.51.0：25 → 40。v3.14.0 同步后整 job 19–24 分钟（ec626fa1 用了 24:19 / 25 = 97%），e83b6450 在单元测试一步被超时取消。
     timeout-minutes: 40
     steps:
+      # v0.51.0：两个 job 都在 95–97% 才被超时取消时才发现——末步 ci_job_budget.py 超 85% 打注解（与发版 lane 同一阈值）。
+      - name: Record job start
+        shell: bash
+        run: echo "HOROSA_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
       # 审计平台待决项 13 / PF-20：按契约里的提交号浅取公开上游（约 86 MB 工作树），设 HOROSA_SOURCE_ROOT——
       # 55 条 [upstream-checkout] 对照测试与跨树守卫以前在 CI 里整段跳过。上游再改写历史时这里红（该知道的事）。
@@ -91,6 +95,11 @@ jobs:
       - name: Verify upstream-sync state currency (cross-tree diff needs an upstream checkout)
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_upstream_sync.py
+      # v0.51.0：以前只在发版 preflight 跑（要 gitignored 的 vendored 树），审计新加的 skill 侧导出键 ziwei_rules 漏登白名单，
+      # PR CI 与本机 25 道门禁都绿、到 preflight 才红。CI 上没有 vendored 树时读上面钉住的公开上游（同一份 aiExport.js）。
+      - name: Verify export-contract mirror (skill export keys ↔ upstream aiExport, both directions)
+        working-directory: ./horosa-skill
+        run: uv run python scripts/verify_export_contract_mirror.py
       - name: Verify technique compute-source declarations
         working-directory: ./horosa-skill
         run: uv run python scripts/verify_technique_provenance.py
@@ -178,6 +187,9 @@ jobs:
       - name: Run HorosaBench local-only smoke
         working-directory: ./horosa-skill
         run: uv run python scripts/run_benchmark.py --skip-runtime
+      - name: Job time vs its timeout
+        if: ${{ !cancelled() }}
+        run: python horosa-skill/scripts/ci_job_budget.py --job test
 
   windows-smoke:
     runs-on: windows-latest
@@ -189,6 +201,10 @@ jobs:
       run:
         shell: pwsh
     steps:
+      # v0.51.0：两个 job 都在 95–97% 才被超时取消时才发现——末步 ci_job_budget.py 超 85% 打注解（与发版 lane 同一阈值）。
+      - name: Record job start
+        shell: bash
+        run: echo "HOROSA_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
@@ -280,3 +296,6 @@ jobs:
           $codexCheck = Get-Content -Raw -LiteralPath "$root\codex-check.json" | ConvertFrom-Json -AsHashtable
           if (-not $codexCheck['ok']) { throw "codex client check found problems: $($codexCheck['summary'])" }
           uv run python -c 'import sys, tomllib; s = tomllib.load(open(sys.argv[1], "rb"))["mcp_servers"]["horosa"]; assert s["startup_timeout_sec"] == 120 and s["tool_timeout_sec"] == 600, s; assert ":" in s["command"] and s["command"].lower().endswith("uv.exe"), s["command"]; print("codex toml ok:", s["command"])' "$root\codex-config.toml"
+      - name: Job time vs its timeout
+        if: ${{ !cancelled() }}
+        run: python horosa-skill/scripts/ci_job_budget.py --job windows-smoke

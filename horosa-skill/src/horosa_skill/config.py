@@ -97,6 +97,7 @@ ENV_FLAG_REGISTRY: dict[str, str] = {
     "HOROSA_ROOT": "internal",
     "HOROSA_LOG_ROOT": "internal",
     "HOROSA_SOURCE_ROOT": "internal",
+    "HOROSA_JOB_STARTED": "internal",   # ci.yml 首步写、末步 scripts/ci_job_budget.py 读（job 用掉自身超时的比例）
     "HOROSA_WINDOWS_SOURCE_ROOT": "internal",
     "HOROSA_LINUX_JAVA_HOME": "internal",
     "HOROSA_LINUX_PYTHON_HOME": "internal",

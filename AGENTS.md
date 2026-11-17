@@ -259,7 +259,8 @@ v0.40.0 重跑即复发；现在 `build_hover_knowledge_bundle.mjs` 写相对上
 
 **同步守卫三层（缺一层就会静默漂）**：① `verify_upstream_sync.py` = vendored ↔ **上游 HEAD**
 （版本恒等 + 哨兵 sha256 + core-js 逐文件；无上游树时 skipped 而非绿，release 链用 `--require-upstream`）；
-② `verify_export_contract_mirror.py` = skill 常量 ↔ vendored（版本 + 技法键）；
+② `verify_export_contract_mirror.py` = skill 常量 ↔ vendored（版本 + 技法键；v0.51.1-dev 起 CI 也跑——无 vendored 树时读钉住的公开上游，
+preflight / Windows 构建带 `--require-vendored` 验随包那份；以前只有 preflight 跑，审计新加的 `ziwei_rules` 到发版才红）；
 ③ `verify_export_section_baseline.py` = **段级欠账棘轮**，基线在 `contracts/export_section_debt.json`
 （受 git 跟踪，新增欠账 fail、还清也 fail 提示 `--update-baseline`）。
 **`MIRRORED_UPSTREAM_AIEXPORT_VERSION` 只表示「对账基准版本」，不表示「该版段全有了」**——键级对齐
@@ -1014,8 +1015,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   live pytest 的闸门 skip 理由不得出现）。**维护者本机 live 全套仍是 tag 前闸**（§8），矩阵是发布前的第二道、每周一次的第三道。
   pytest 预算按主机：nt 6000 / posix 3000，仿真的 windows-11-arm 另加 `EMULATED_PYTEST_EXTRA_SECONDS`（v0.45.1 在 2700 s、v0.48.0
   在 3600 s 处零失败被杀——后者前两版已占 96–97% 没人看）；现为 +4200 s（总 10200 s）、job 200 分钟，加完要装得进 job 超时（留 ≥15 分钟）。
-  **v0.51.0（上游大同步）三 lane 同被杀**：v3.14.0 同步加了约 1000 条 live 值金标，整套慢一倍。**同步上游后、打 tag 前**用本机
-  `--junitxml` 逐条耗时 × 各 lane 实测倍率（本机 → darwin 1.8× / windows-latest 3.7× / windows-11-arm 6.2×）估一次，不够先加；
+  **v0.51.0（上游大同步）三 lane 同被杀**：v3.14.0 同步加了约 1000 条 live 值金标，整套慢一倍。**同步上游后、打 tag 前**本机 live 全套带
+  `--junitxml` 跑一次，交给 `scripts/estimate_lane_budget.py`（v0.51.1-dev）：逐条耗时 × 各 lane 实测倍率（`LANE_SLOWDOWN_VS_MAINTAINER_MAC`，本机 →
+  darwin 1.8× / windows-latest 4.1× / windows-11-arm 6.9×，按 v0.51.0 过的那次实测标定）对照预算与 job 超时，超 85% 退出 1，不够先加；
   极圈盘（纬度 ≥66°）引擎每起一次盘 3–10 s，live 用例里别成批起。lane 跑的是从 macOS 录的金标：一律经 `tests/float_tree.py` 的
   `golden_diff` / `golden_text_diff` / `golden_text_contains` 比——POSIX 逐值（容差 1e-7）、Windows 只比形状（键 / 长度 / 类型；正文去数字后同一组行、
   行序与行内列表项的次序都不论）。Windows 载荷是 MSVC 编的同一份引擎：速度百分比差到 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序，没有哪个容差兜得住；
@@ -1024,6 +1026,9 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   v0.49.0 把 nt 从 2700 提到 3600：windows-latest 在 v0.48.0 已用 93%，这版测试又多约 8%。发版前看上一版的 near-budget 注解，提前加。
   lane 超 85% 预算会打 `::warning title=lane pytest near its budget` 注解：**发版收尾读 run 的 ANNOTATIONS**，见到就在下一版前加时或查
   pytest.log 里的 `--durations` 榜。lane 脚本取自派发提交，不是 tag。
+  **ci.yml 两个 job 同一阈值（v0.51.1-dev）**：首步记开始时间、末步 `scripts/ci_job_budget.py --job <id>` 读本 job 自己的 `timeout-minutes`，
+  超 85% 打 `::warning title=ci job near its timeout` 注解（`tests/test_ci_job_budget.py` 守首末两步在场）。见到就加 timeout 或查哪步长了——
+  v0.51.0 两个 job 都在 95–97% 才被取消时才发现。
 - **合并后查冲突标记**：每次 fetch/ff 后 `git grep -nE '^(<<<<<<<|=======|>>>>>>>)'`（v0.11.0 曾把
   `>>>>>>> <sha>` 留上 main）；`verify_docs_sync.py` 在 CI 里也查。
 
@@ -1778,7 +1783,7 @@ A global stability pass hardened these; keep them true when you touch the releva
   `tests/test_test_isolation.py` 守；要测默认路径解析本身的用例自己再 monkeypatch。
 - **本机门禁镜像也跑多行步骤：`run_ci_gates.ci_test_steps` 收「每一行都是 `uv run …`」的 `run: |` 块（v0.41.1）。** 旧解析器跳过所有多行块，
   两行的 `verify_runtime_scripts.py`（+ `--self-test`）从没在本机跑过，文档却写「每个 verify_* 都跑」；测试只核单行步骤，所以同样看不见。
-  现在 `tests/test_guard_wiring.py` 要求 ci.yml test 作业里点名的**每一个** `verify_*.py` 都进镜像（镜像 25 步）。
+  现在 `tests/test_guard_wiring.py` 要求 ci.yml test 作业里点名的**每一个** `verify_*.py` 都进镜像（镜像 26 步，v0.51.1-dev 加 export-contract mirror）。
 - **monkeypatch 目标必须被它所在的模块用到（`tests/test_monkeypatch_targets.py` 的 `useless_patch_reason`）。** 函数挪走、旧模块只留 re-export 时，
   `monkeypatch.setattr("horosa_skill.A.f", …)` 照样成功却不起作用，测试「因为错误的原因通过」。拆大模块时：被 patch 的名字跟着代码走，
   或让调用方经模块查名（`module.f()`），别靠 re-export 兜。

@@ -96,6 +96,7 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_LOG_ROOT": "Launcher-internal: where the Windows start script writes its logs.",
     "HOROSA_LAUNCH_NONCE": "Launcher-internal: proves a running service was started by this runtime root.",
     "HOROSA_SOURCE_ROOT": "Maintainer scripts: path of the upstream Horosa-Public checkout used for vendoring and gates.",
+    "HOROSA_JOB_STARTED": "CI only: epoch seconds a ci.yml job started; scripts/ci_job_budget.py compares it with the job's timeout.",
     "HOROSA_WINDOWS_SOURCE_ROOT": "Maintainer scripts: Windows build source tree for payload sync.",
     "HOROSA_LINUX_JAVA_HOME": "Payload build scripts: JDK to bundle for a Linux build.",
     "HOROSA_LINUX_PYTHON_HOME": "Payload build scripts: Python to bundle for a Linux build.",

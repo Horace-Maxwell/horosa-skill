@@ -18,7 +18,11 @@ upstream HEAD) that let ~20 techniques drift silently before v0.23.0:
 
 Deliberately NOT a per-section diff: internal preset↔builder consistency is already asserted by the
 offline contract tests (missing/unknown == []); this guard's unique job is the cross-tree version + key
-alignment. Run by preflight_release.py and sync_windows_release.py (not in CI: it needs the upstream tree).
+alignment. Run by preflight_release.py and sync_windows_release.py with `--require-vendored` (they gate the
+copy that ships), and by ci.yml against the public upstream checkout CI pins to the contract commit (PF-20):
+with no vendored tree the script reads `$HOROSA_SOURCE_ROOT/Horosa-Web/…/aiExport.js` instead. Until v0.51.0 it
+ran only at preflight — the audit's new skill-side key `ziwei_rules` passed PR CI and 25 local gates and first
+went red at release preflight.
 
 ⚠️ 本守卫的盲区（v0.31.0 实证）：它只比 vendored 镜像的版本常量与 key 集合——上游**加段不 bump
 版本**时（v3.9.5 horary +9、常量原地 56）本守卫全绿穿透。同步健康的权威判据是
@@ -27,12 +31,15 @@ verify_upstream_sync.py（sentinel sha256）与 verify_export_section_baseline.p
 """
 from __future__ import annotations
 
+import argparse
+import os
 import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VENDORED_AIEXPORT = REPO_ROOT / "vendor/runtime-source/Horosa-Web/astrostudyui/src/utils/aiExport.js"
+AIEXPORT_RELPATH = Path("Horosa-Web/astrostudyui/src/utils/aiExport.js")
+VENDORED_AIEXPORT = REPO_ROOT / "vendor/runtime-source" / AIEXPORT_RELPATH
 
 # Documented skill↔upstream key-name divergences: the skill export key differs from the upstream one.
 # A skill key is valid if its alias is present in the vendored upstream keys.
@@ -78,22 +85,43 @@ def _load_skill_registry():
     return registry
 
 
-def main() -> None:
-    if not VENDORED_AIEXPORT.is_file():
+def resolve_aiexport(*, require_vendored: bool) -> tuple[Path, str]:
+    """(aiExport.js path, label): the vendored copy if present; otherwise the upstream checkout named by
+    HOROSA_SOURCE_ROOT, unless the caller gates the vendored tree itself (`--require-vendored`)."""
+    if VENDORED_AIEXPORT.is_file():
+        return VENDORED_AIEXPORT, "vendored"
+    if require_vendored:
         raise SystemExit(
             f"vendored aiExport.js not found at {VENDORED_AIEXPORT}\n"
-            "run sync_vendored_runtime_sources.py first (mirror guard needs the vendored upstream copy)."
+            "run sync_vendored_runtime_sources.py first (--require-vendored: this run gates the copy that ships)."
         )
+    source_root = os.environ.get("HOROSA_SOURCE_ROOT", "").strip()
+    candidate = Path(source_root) / AIEXPORT_RELPATH if source_root else None
+    if candidate is None or not candidate.is_file():
+        raise SystemExit(
+            "export-contract mirror needs aiExport.js: no vendor/runtime-source tree, and HOROSA_SOURCE_ROOT "
+            f"{'is not set' if not source_root else f'has no {AIEXPORT_RELPATH}'}.\n"
+            "CI sets it to the pinned public upstream checkout; locally run sync_vendored_runtime_sources.py or export it."
+        )
+    return candidate, "upstream checkout"
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--require-vendored", action="store_true",
+                        help="fail unless vendor/runtime-source is present (release preflight / Windows build gate)")
+    args = parser.parse_args(argv)
+    aiexport, source_label = resolve_aiexport(require_vendored=args.require_vendored)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from _upstream_preset import read_aiexport_source  # 门面 + aiExport/ 目录（上游 v3.12.0 拆分）
 
-    text = read_aiexport_source(VENDORED_AIEXPORT)
+    text = read_aiexport_source(aiexport)
     registry = _load_skill_registry()
 
     # 1. version lockstep
     vm = _VERSION_RE.search(text)
     if not vm:
-        raise SystemExit(f"could not read AI_EXPORT_SETTINGS_VERSION from {VENDORED_AIEXPORT}")
+        raise SystemExit(f"could not read AI_EXPORT_SETTINGS_VERSION from {aiexport}")
     vendored_version = int(vm.group(1))
     mirrored = int(registry.MIRRORED_UPSTREAM_AIEXPORT_VERSION)
     if vendored_version != mirrored:
@@ -107,7 +135,7 @@ def main() -> None:
     # 2. technique-key coverage
     block = _TECHNIQUES_BLOCK_RE.search(text)
     if not block:
-        raise SystemExit(f"could not locate AI_EXPORT_TECHNIQUES array in {VENDORED_AIEXPORT}")
+        raise SystemExit(f"could not locate AI_EXPORT_TECHNIQUES array in {aiexport}")
     upstream_keys = set(_KEY_RE.findall(block.group(1)))
     if not upstream_keys:
         raise SystemExit("parsed AI_EXPORT_TECHNIQUES but found zero keys — parser or source changed shape")
@@ -149,7 +177,7 @@ def main() -> None:
         raise SystemExit(f"KEY_ALIAS targets missing from vendored upstream: {stale_aliases} (upstream renamed again?)")
 
     print(
-        f"export-contract-mirror: ok (aiExport v{vendored_version} == MIRRORED v{mirrored}; "
+        f"export-contract-mirror: ok ({source_label}; aiExport v{vendored_version} == MIRRORED v{mirrored}; "
         f"{len(skill_keys)} skill keys, {len(upstream_keys)} upstream keys, "
         f"{len([k for k in skill_keys if k in DIVERGENCE_WHITELIST])} whitelisted, "
         f"{len(UPSTREAM_ONLY_LEDGER)} upstream-only ledgered)"

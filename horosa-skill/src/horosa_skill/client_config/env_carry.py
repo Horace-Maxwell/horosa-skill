@@ -128,6 +128,7 @@ NOT_CARRIED: dict[str, str] = {
     "HOROSA_ROOT": "internal",
     "HOROSA_LOG_ROOT": "internal",
     "HOROSA_SOURCE_ROOT": "internal",
+    "HOROSA_JOB_STARTED": "internal",
     "HOROSA_WINDOWS_SOURCE_ROOT": "internal",
     "HOROSA_LINUX_JAVA_HOME": "internal",
     "HOROSA_LINUX_PYTHON_HOME": "internal",
