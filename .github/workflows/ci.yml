@@ -20,7 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     # v0.46.0：15 → 25。v0.45.1 时整个 job 已用 14:34 / 15（97%，单元测试 12:13）；v3.13.0 同步加了约 200 条测试后单元测试
     # 12:51，job 在零安装步被超时取消（41115172448，所有已跑步骤全绿）。按 LESSONS v0.45.1「占比 > 90% 就提前加」留足余量。
-    timeout-minutes: 25
+    # v0.51.0：25 → 40。v3.14.0 同步后整 job 19–24 分钟（ec626fa1 用了 24:19 / 25 = 97%），e83b6450 在单元测试一步被超时取消。
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
       # 审计平台待决项 13 / PF-20：按契约里的提交号浅取公开上游（约 86 MB 工作树），设 HOROSA_SOURCE_ROOT——
@@ -182,7 +183,8 @@ jobs:
     runs-on: windows-latest
     # 单元测试一步在 windows-latest 上 30–42 分钟（2026-11 近 12 次），前后固定步骤（core-js 自检、OpenClaw smoke）约 6 分钟：
     # 45 时已在 87–100% 之间，bb12577f 的 smoke 开跑 2 分钟就被整 job 超时取消（所有已跑步骤全绿）。
-    timeout-minutes: 60
+    # v0.51.0：60 → 90。v3.14.0 同步后整 job 45–57 分钟（95%），030d8784 在单元测试一步被 60 分钟超时取消、重跑才绿。
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
