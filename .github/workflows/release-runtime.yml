@@ -141,7 +141,7 @@ jobs:
           uv run python scripts/build_runtime_release_windows.py --seed "dist\runtime\${{ needs.resolve.outputs.seed }}" --out-dir dist\runtime --python "$env:pythonLocation\python.exe"
           if (-not (Test-Path -LiteralPath "dist\runtime\${{ needs.resolve.outputs.windows_zip }}")) { throw "derived archive missing: ${{ needs.resolve.outputs.windows_zip }}" }
       - name: Upload the derived Windows payload
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: windows-payload
           path: horosa-skill/dist/runtime/${{ needs.resolve.outputs.windows_zip }}
@@ -213,7 +213,7 @@ jobs:
             --manifest dist/runtime/runtime-manifest.json \
             --expect-platforms darwin-arm64,win32-x64
       - name: Upload the assembled release set (the matrix installs from this)
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: runtime-release-assets
           if-no-files-found: error
