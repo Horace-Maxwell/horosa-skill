@@ -25,6 +25,9 @@ uv run horosa-skill install
 - 同一个开关同时作用于 **runtime 清单、runtime 归档、wheel 资产 URL**：`client config --launcher uvx-wheel` 生成的配置
   会直接把镜像后的 wheel URL 写进去（`launcher.alternatives` 列出全部候选）。
 - 下载支持断点续传（`.part` 落在 `<runtime_root>/downloads/`，按归档的 sha256 定名并带一份记来历的 `.part.json`，重跑 `install` 接着传；续传带 `If-Range`，资源变了就从头下；续出来对不上 sha256 会自动从头再下一次）。断线时**有进展的那几次不算重试次数**；同一个归档同一时间只有一个 `install` 在下。一律校验 sha256：清单里本平台没有 sha256 时**拒装**（`runtime.install_sha256_missing`），除非你用 `--sha256` 自己给出摘要（v0.50.0 起；此前是不声不响地不校验）。
+- 从发布页 wheel 装的 horosa-skill（`uvx --from …whl` / `pip install …whl`，v0.52.0 起）**自带本版 runtime 与 JS 引擎资产的 sha256**：镜像给的清单只要摘要与包内钉值一致，
+  走镜像也算「已校验」；不一致就拒装（`runtime.install_pin_mismatch`）——换一个镜像或直连原站。要装与这个 wheel 不同版本的 runtime（`--manifest-url` 指向别的版本），
+  需要 `--sha256 <那一版的摘要>`，或确知来源时加 `--allow-unpinned`（`runtime.install_unpinned_version`）。源码 checkout 不带钉值，照旧按清单摘要校验。
 
 ## 2. API 直链 + 本地归档：`install --archive`
 

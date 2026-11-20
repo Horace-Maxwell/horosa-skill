@@ -115,6 +115,9 @@ class EngineAssetMixin:
             entry = raw_entry
             source = str(entry["url"]).strip()
             listed = str(entry.get("sha256") or "").strip().lower() or None
+            # 审计 PF-01 第 3 层：发布页 wheel 带的钉值核清单里的 JS 引擎资产
+            self.check_runtime_pin(manifest_data, meta=entry, platform=None, core_js=True, sha256_given=bool(pinned),
+                                   allow_unpinned=bool(getattr(self, "_allow_unpinned", False)), location=location)
             if pinned and listed and listed != pinned:
                 raise RuntimeValidationError(
                     bilingual(

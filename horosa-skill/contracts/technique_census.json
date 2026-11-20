@@ -1,6 +1,6 @@
 {
  "_comment": "技法登记普查（审计 A-1 第 0 期 / PF-21）：一个技法散在几十张表里，新增 / 改名时漏一张没人知道。",
- "tables": 56,
+ "tables": 61,
  "techniques": {
   "acg": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -16,6 +16,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
+   "service.birth_time:_CHART_REFUSE",
    "western_options_doc:CHART_DETAILS_DOC_TOOLS"
   ],
   "agepoint": [
@@ -27,6 +28,7 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "astrodata": [
@@ -53,7 +55,8 @@
    "exports.registry:AI_EXPORT_DEFAULT_OFF_SECTIONS",
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
-   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS"
+   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "balbillus": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -66,6 +69,7 @@
    "exports.registry:AI_EXPORT_MEANING_ONLY_TECHNIQUES",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "bazi_birth": [
@@ -82,7 +86,8 @@
    "reports.figures:_APP_ONLY",
    "reports.technique_card:_DAY_BOUNDARY_DEFAULT_TOOLS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
-   "service.api.tools:_LOCAL_RUNNER_OVERRIDES"
+   "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:SUPPORTED_TOOLS"
   ],
   "bazi_direct": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -99,7 +104,8 @@
    "reports.source:_REPORT_TECHNIQUE_NAMES",
    "reports.technique_card:_DAY_BOUNDARY_DEFAULT_TOOLS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
-   "service.api.tools:_LOCAL_RUNNER_OVERRIDES"
+   "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:SUPPORTED_TOOLS"
   ],
   "bazi_inverse": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -144,6 +150,7 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -161,6 +168,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.aux_charts:AUX_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "calendar_month": [
@@ -187,7 +195,8 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
-   "service.api.tools:SHICHEN_PRECISION_TOOLS"
+   "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "cetian": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -206,6 +215,7 @@
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -221,6 +231,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
+   "service.birth_time:SUPPORTED_TOOLS",
+   "service.birth_time:WESTERN_TOOLS",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS",
    "western_options_doc:CHART_DETAILS_DOC_TOOLS"
   ],
@@ -234,6 +246,7 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
+   "service.birth_time:_CHART_REFUSE",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS"
   ],
   "chart13": [
@@ -249,6 +262,8 @@
    "exports.registry:READING_PRIORITY",
    "exports.registry:SECTIONS_NOT_PRODUCED_BY_DESIGN",
    "reports.source:_REPORT_TECHNIQUE_NAMES",
+   "service.birth_time:SUPPORTED_TOOLS",
+   "service.birth_time:WESTERN_TOOLS",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS"
   ],
   "chunzi": [
@@ -264,6 +279,7 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -281,6 +297,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.calendar_ics:CALENDAR_TOOLS",
    "reports.calendar_ics:_EXTRACTORS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "distributions": [
@@ -295,6 +312,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.calendar_ics:CALENDAR_TOOLS",
    "reports.calendar_ics:_EXTRACTORS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "dongya": [
@@ -308,7 +326,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
-   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS"
+   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "draconic": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -324,6 +343,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "exports.registry:READING_PRIORITY",
+   "service.birth_time:SUPPORTED_TOOLS",
+   "service.birth_time:WESTERN_TOOLS",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS"
   ],
   "election": [
@@ -353,6 +374,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.calendar_ics:CALENDAR_TOOLS",
    "reports.calendar_ics:_EXTRACTORS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "export_parse": [
@@ -392,6 +414,7 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "feigong": [
@@ -418,6 +441,7 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -437,6 +461,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.calendar_ics:CALENDAR_TOOLS",
    "reports.calendar_ics:_EXTRACTORS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "geomancy": [
@@ -469,7 +494,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "exports.registry:READING_PRIORITY",
-   "reports.source:_REPORT_TECHNIQUE_NAMES"
+   "reports.source:_REPORT_TECHNIQUE_NAMES",
+   "service.birth_time:SUPPORTED_TOOLS"
   ],
   "givenyear": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -485,6 +511,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_PERIOD_PREDICTIVE_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service.enrich:_RETURN_PREDICTIVE_TOOLS",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
@@ -539,7 +566,8 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
    "reports.aux_charts:AUX_TOOLS",
-   "reports.figures:_WHEEL_EXCLUDED"
+   "reports.figures:_WHEEL_EXCLUDED",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "harmonic": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -555,6 +583,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "exports.registry:READING_PRIORITY",
+   "service.birth_time:SUPPORTED_TOOLS",
+   "service.birth_time:WESTERN_TOOLS",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS"
   ],
   "hellen_chart": [
@@ -567,6 +597,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
+   "service.birth_time:SUPPORTED_TOOLS",
+   "service.birth_time:WESTERN_TOOLS",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS"
   ],
   "heluo": [
@@ -584,7 +616,8 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
-   "service.api.tools:SHICHEN_PRECISION_TOOLS"
+   "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "horary": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -638,7 +671,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
-   "reports.figures:_WHEEL_EXCLUDED"
+   "reports.figures:_WHEEL_EXCLUDED",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "india_rectify": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -648,7 +682,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
-   "reports.figures:_WHEEL_EXCLUDED"
+   "reports.figures:_WHEEL_EXCLUDED",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "indiazeri": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -679,6 +714,7 @@
    "exports.registry:AI_EXPORT_PLANET_INFO_TECHNIQUES",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "jayprofection": [
@@ -694,6 +730,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.aux_charts:AUX_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "jieqi_birth": [
@@ -703,7 +740,8 @@
    "decisions.surfaces.routing:_FAMILY_OF",
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
-   "exports.registry:AI_EXPORT_PRESET_SECTIONS"
+   "exports.registry:AI_EXPORT_PRESET_SECTIONS",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "jieqi_year": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -726,6 +764,7 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
+   "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -756,6 +795,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "knowledge_read": [
@@ -826,7 +866,8 @@
    "reports.app_charts:_LIURENG_TOOLS",
    "reports.source:_REPORT_TECHNIQUE_NAMES",
    "reports.technique_card:_DAY_BOUNDARY_DEFAULT_TOOLS",
-   "service.api.tools:_LOCAL_RUNNER_OVERRIDES"
+   "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "liurengzeri": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -858,6 +899,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_PERIOD_PREDICTIVE_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service.enrich:_RETURN_PREDICTIVE_TOOLS",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
@@ -873,6 +915,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "michon": [
@@ -888,6 +931,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "mundane": [
@@ -915,6 +959,7 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -932,6 +977,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.aux_charts:AUX_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "nongli_time": [
@@ -970,7 +1016,8 @@
    "decisions.surfaces.routing:_FAMILY_OF",
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
-   "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES"
+   "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "pdchart": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -980,7 +1027,8 @@
    "decisions.surfaces.routing:_FAMILY_OF",
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
-   "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES"
+   "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "persiandirected": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -994,6 +1042,7 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "planet_cycles": [
@@ -1018,6 +1067,7 @@
    "exports.registry:AI_EXPORT_MEANING_ONLY_TECHNIQUES",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "planetaryarc": [
@@ -1032,6 +1082,7 @@
    "exports.registry:AI_EXPORT_PLANET_INFO_TECHNIQUES",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "prenatalsyzygy": [
@@ -1044,6 +1095,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.aux_charts:AUX_TOOLS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "profection": [
@@ -1061,6 +1113,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_PERIOD_PREDICTIVE_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "prog": [
@@ -1076,6 +1129,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.aux_charts:AUX_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "qimen": [
@@ -1143,6 +1197,7 @@
    "reports.figures:_APP_ONLY",
    "reports.figures:_WHEEL_EXCLUDED",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1193,6 +1248,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "exports.registry:READING_PRIORITY",
+   "service.birth_time:_CHART_REFUSE",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS",
    "western_options_doc:CHART_DETAILS_DOC_TOOLS"
   ],
@@ -1208,6 +1264,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.calendar_ics:CALENDAR_TOOLS",
    "reports.calendar_ics:_EXTRACTORS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "sanshiunited": [
@@ -1254,6 +1311,7 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1269,6 +1327,7 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1300,6 +1359,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_PERIOD_PREDICTIVE_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "solarreturn": [
@@ -1317,6 +1377,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_PERIOD_PREDICTIVE_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service.enrich:_RETURN_PREDICTIVE_TOOLS",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
@@ -1331,7 +1392,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
-   "reports.figures:_WHEEL_EXCLUDED"
+   "reports.figures:_WHEEL_EXCLUDED",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "taixuan": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1344,6 +1406,7 @@
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_DEFAULT_OFF_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
+   "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1420,6 +1483,7 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1437,6 +1501,7 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "tongshefa": [
@@ -1481,6 +1546,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "exports.registry:READING_PRIORITY",
+   "service.birth_time:_CHART_REFUSE",
    "service.export:_CHART_FAMILY_SNAPSHOT_TOOLS"
   ],
   "triplicityrulers": [
@@ -1495,6 +1561,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "vedicprog": [
@@ -1510,6 +1577,7 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.aux_charts:AUX_TOOLS",
+   "service.birth_time:_PREDICTIVE_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "wangji": [
@@ -1524,6 +1592,7 @@
    "exports.registry:AI_EXPORT_DEFAULT_OFF_SECTIONS",
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
+   "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1542,6 +1611,7 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
+   "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1560,6 +1630,7 @@
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
    "shenshu_options:_RAW_KNOBS"
@@ -1616,6 +1687,7 @@
    "exports.registry:AI_EXPORT_MEANING_ONLY_TECHNIQUES",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE",
    "service:_PREDICTIVE_METHOD_NOTES"
   ],
   "yizhangjing": [
@@ -1634,7 +1706,8 @@
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
    "reports.figures:_APP_ONLY",
-   "service.api.tools:SHICHEN_PRECISION_TOOLS"
+   "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "zhengchuan": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1648,7 +1721,8 @@
    "exports.registry:AI_EXPORT_OPTIONAL_SECTIONS",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
-   "service.api.tools:SHICHEN_PRECISION_TOOLS"
+   "service.api.tools:SHICHEN_PRECISION_TOOLS",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "zhufang": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1660,7 +1734,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
-   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS"
+   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "ziwei_birth": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1676,7 +1751,8 @@
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
    "reports.technique_card:_DAY_BOUNDARY_DEFAULT_TOOLS",
    "service.api.tools:SHICHEN_PRECISION_TOOLS",
-   "service.api.tools:_LOCAL_RUNNER_OVERRIDES"
+   "service.api.tools:_LOCAL_RUNNER_OVERRIDES",
+   "service.birth_time:_MINGLI_REFUSE"
   ],
   "ziwei_rules": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1715,7 +1791,8 @@
    "engine.time_roles:TIME_ROLES",
    "exports.contract:TOOL_EXPORT_TECHNIQUE_MAP",
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
-   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS"
+   "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
+   "service.birth_time:_CHART_REFUSE"
   ],
   "zr": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1728,7 +1805,8 @@
    "exports.contract:_EXPORT_TECHNIQUE_OVERRIDES",
    "reports.calendar_ics:CALENDAR_TOOLS",
    "reports.calendar_ics:_EXTRACTORS",
-   "reports.source:_REPORT_TECHNIQUE_NAMES"
+   "reports.source:_REPORT_TECHNIQUE_NAMES",
+   "service.birth_time:_CHART_REFUSE"
   ]
  }
 }

@@ -71,7 +71,35 @@ def host_path_hits(entries: dict[str, bytes]) -> list[str]:
     return hits
 
 
+def pinned_wheel_problems(wheel: Path, *, version: str) -> list[str]:
+    """发布流水线重建的 wheel（审计 PF-01 第 3 层）：必须带 horosa_skill/data/runtime_pins.json，版本对得上、两个平台 + JS 引擎都钉了。"""
+    name = "horosa_skill/data/runtime_pins.json"
+    with zipfile.ZipFile(wheel) as archive:
+        if name not in archive.namelist():
+            return [f"{wheel.name} carries no {name}"]
+        pins = json.loads(archive.read(name).decode("utf-8"))
+    problems = []
+    if pins.get("version") != version:
+        problems.append(f"runtime_pins.json version {pins.get('version')!r} != release {version!r}")
+    for platform in ("darwin-arm64", "win32-x64"):
+        if not (pins.get("platforms") or {}).get(platform, {}).get("sha256"):
+            problems.append(f"runtime_pins.json does not pin {platform}")
+    if not (pins.get("core_js") or {}).get("sha256"):
+        problems.append("runtime_pins.json does not pin core_js")
+    return problems
+
+
 def main() -> int:
+    if "--pinned-wheel" in sys.argv:
+        # release-runtime.yml assemble：核重建出来的那个 wheel，不重新构建
+        index = sys.argv.index("--pinned-wheel")
+        wheel, version = Path(sys.argv[index + 1]), sys.argv[sys.argv.index("--version") + 1]
+        problems = pinned_wheel_problems(wheel, version=version)
+        for line in problems:
+            print(f"wheel-contents: {line}", file=sys.stderr)
+        if not problems:
+            print(f"wheel-contents OK: {wheel.name} pins the {version} runtime (darwin-arm64, win32-x64, core_js)")
+        return 1 if problems else 0
     with tempfile.TemporaryDirectory(prefix="horosa-wheel-") as tmp:
         completed = subprocess.run(
             ["uv", "build", "--wheel", "-o", tmp], cwd=PKG_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False

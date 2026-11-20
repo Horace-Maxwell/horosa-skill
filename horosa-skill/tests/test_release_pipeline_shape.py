@@ -226,3 +226,16 @@ def test_completeness_checks_mains_server_json_even_on_release_events() -> None:
     step = COMPLETENESS[COMPLETENESS.index("- uses: actions/checkout@"):]   # 钉了提交号（审计 PF-18），按前缀找
     step = step[: step.index("- name:")]
     assert "ref: ${{ github.event.repository.default_branch }}" in step
+
+
+def test_assemble_rebuilds_the_wheel_from_the_tag_with_runtime_pins() -> None:
+    """审计 PF-01 第 3 层：wheel 要在两个平台归档都齐了之后、用 tag 的源码重建并带钉值，SHA256SUMS 按重建后的 wheel 算并上传。
+    负向对照：删掉 write_runtime_pins 那一行或 wheel 不进上传 → 红。"""
+    text = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release-runtime.yml").read_text(encoding="utf-8")
+    assemble = text[text.index("\n  assemble:"):text.index("\n  matrix:")]
+    pins_at = assemble.index("scripts/write_runtime_pins.py")
+    assert assemble.index("generate_release_manifest.py") < pins_at < assemble.index("sha256sum")
+    assert 'git worktree add --detach "${RUNNER_TEMP}/tagtree" "${TAG}"' in assemble
+    assert "verify_wheel_contents.py --pinned-wheel" in assemble
+    upload = assemble[assemble.index("Upload the Windows half"):]
+    assert 'horosa_skill-${TAG#v}-py3-none-any.whl' in upload

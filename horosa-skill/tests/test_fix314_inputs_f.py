@@ -31,11 +31,13 @@ def test_a_missing_time_reads_like_an_unknown_time() -> None:
                         output_dir=d / "runs", runtime_root=d / "rt")
     service = HorosaSkillService(settings, store=MemoryStore(settings))
     codes = []
+    # 八字的「不详」现在排三柱（出生时刻未知模式，tests/test_v052_birth_time_unknown.py）；要时辰的技法两种写法仍同码要问
     for payload in ({k: v for k, v in BIRTH.items() if k != "time"}, {**BIRTH, "time": "不详"}):
         with pytest.raises(ToolValidationError) as caught:
-            service.run_tool("bazi_birth", {**payload, "defaults_accepted": True}, save_result=False)
-        codes.append((caught.value.code, str(caught.value).split("\n")[-1]))
-    assert codes[0] == codes[1] and codes[0][0] == "tool.time_unknown", codes
+            service.run_tool("ziwei_birth", {**payload, "defaults_accepted": True}, save_result=False)
+        codes.append(caught.value.code)
+        assert caught.value.details["agent_recovery"]["must_ask_user"] is True
+    assert codes == ["tool.time_unknown", "tool.time_unknown"], codes
 
 
 @pytest.mark.parametrize(("date", "time", "place", "zone"), [("1986-05-04", "01:30", "上海", "+08:00"), ("2026-03-08", "01:30", "New York", "-05:00")])

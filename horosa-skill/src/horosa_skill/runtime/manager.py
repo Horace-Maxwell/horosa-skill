@@ -648,6 +648,7 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
         sha256: str | None = None,
         engine_only: bool = False,
         allow_downgrade: bool = False,
+        allow_unpinned: bool = False,
     ) -> dict[str, Any]:
         with self.tracer.span(
             workflow_name="runtime.install",
@@ -655,6 +656,8 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                       "engine_only": engine_only},
         ) as trace:
             platform_name = platform_key or self.settings.runtime_platform or _platform_key()
+            self._allow_unpinned = allow_unpinned   # 引擎资产路径（install_engine_only）也读它
+            self._runtime_pinned = False
             self._last_download = None
             if engine_only:
                 # v0.50.0-dev E-02：只装平台无关的 JS 引擎资产（任何平台；`current/` 不动）。
@@ -743,6 +746,10 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 _assert_min_os(asset_meta.get("min_os"), platform_name)
                 source = str(asset_meta.get("url") or "").strip()
                 expected_sha256 = str(asset_meta.get("sha256") or "").strip() or None
+                # 审计 PF-01 第 3 层：发布页 wheel 带钉值——清单里的摘要必须与包内钉值一致（清单来自镜像也一样）
+                self._runtime_pinned = self.check_runtime_pin(
+                    manifest_data, meta=asset_meta, platform=platform_name, core_js=False,
+                    sha256_given=bool(pinned_sha256), allow_unpinned=allow_unpinned, location=manifest_location)
                 if pinned_sha256 and expected_sha256 and expected_sha256.lower() != pinned_sha256:
                     # 下载 730 MB 之前就拒：用户钉的摘要与清单说的不是同一个文件。
                     raise RuntimeValidationError(
@@ -822,8 +829,11 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                         details={"archive": str(archive_path), "expected_sha256": expected_sha256.lower(), "actual_sha256": actual_sha256},
                     )
                 via_mirror = getattr(self, "_manifest_via_mirror", None)
-                integrity = {"archive_sha256": actual_sha256, "sha256_verified": bool(expected_sha256) and not via_mirror,
-                             **({"integrity": "mirror_asserted", "manifest_mirror": via_mirror} if via_mirror and expected_sha256 else {})}
+                pinned_ok = bool(getattr(self, "_runtime_pinned", False)) and source is not None and archive is None
+                # 钉值核过的摘要不依赖清单来源：镜像的清单也算 verified（字节与包内钉值一致）
+                integrity = {"archive_sha256": actual_sha256, "sha256_verified": bool(expected_sha256) and (not via_mirror or pinned_ok),
+                             "pinned": pinned_ok,
+                             **({"integrity": "mirror_asserted", "manifest_mirror": via_mirror} if via_mirror and expected_sha256 and not pinned_ok else {})}
                 # manifest 声明的归档类型必须与资产扩展名一致（防声明 zip 实传 tar.gz 之类的静默错配）。
                 declared_type = str((asset_meta or {}).get("archive_type") or "").strip().lower()
                 if declared_type:
@@ -876,9 +886,10 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                             "group_id": trace["group_id"],
                         }
                 was_running = self._swap_in_payload(payload_root, manifest, previous_dir, warnings=install_warnings)
-                cleanup_warning = self._remove_previous_dir_best_effort(previous_dir)
-                if cleanup_warning:
-                    install_warnings.append(cleanup_warning)
+                # 审计 PF-04：旧副本留到新 runtime 第一次起成功（start_local_services 确认后才删）；起不来就自动换回。
+                # 磁盘峰值不变：安装途中本来就是「旧 current + 解包中的新载荷」两份并存。
+                self._mark_upgrade_pending(previous_dir, previous_version=getattr(self, "_previous_version", None),
+                                           version=manifest.get("version"))
 
             # 安装成功后清理断点续传缓存（失败路径保留 .part 供下次续传）。
             downloads_dir = self.runtime_root / "downloads"
@@ -897,11 +908,15 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                     }
                 except (HorosaSkillError, RuntimeError) as exc:
                     restarted = {"ok": False, "code": getattr(exc, "code", None), "message": str(exc)}
-                    install_warnings.append({
-                        "code": "runtime.restart_after_upgrade_failed",
-                        "message": f"新 runtime 已装好，但重新启动失败：{getattr(exc, 'code', '')} {exc}",
-                        "next_action": "跑 `horosa-skill runtime start`；仍失败看 `horosa-skill doctor`。",
-                    })
+                    if getattr(exc, "code", None) == "runtime.install_rolled_back":
+                        install_warnings.append({"code": "runtime.install_rolled_back", "message": str(exc),
+                                                 "details": getattr(exc, "details", None)})
+                    else:
+                        install_warnings.append({
+                            "code": "runtime.restart_after_upgrade_failed",
+                            "message": f"新 runtime 已装好，但重新启动失败：{getattr(exc, 'code', '')} {exc}",
+                            "next_action": "跑 `horosa-skill runtime start`；仍失败看 `horosa-skill doctor`。",
+                        })
 
             trace["platform"] = platform_name
             trace["manifest_version"] = manifest.get("version")
@@ -919,6 +934,8 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 "restarted": restarted,
                 "previous_version": getattr(self, "_previous_version", None),
                 "version": manifest.get("version"),
+                # 审计 PF-04：旧副本留到新版第一次起成功；起不来自动换回（runtime.install_rolled_back）
+                "previous_kept_until_first_start": self.upgrade_pending() is not None,
                 "download": getattr(self, "_last_download", None),
                 **integrity,
                 "asset": asset_meta or {},
@@ -1496,6 +1513,8 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 "latest_version": freshness["latest_version"],
                 "freshness": freshness,
                 "previous_dir": str(previous_dir) if previous_dir.exists() else None,
+                # 审计 PF-04：升级后还没起成功过（旧副本留着，起不来会自动换回）
+                "upgrade_pending": self.upgrade_pending(),
                 "manifest": manifest,
                 "manifest_issue": manifest_issue,
                 "runtime_state": runtime_state,
@@ -1516,7 +1535,89 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 "group_id": trace["group_id"],
             }
 
+    # ---- 审计 PF-04：升级后旧副本留到新版第一次起成功，起不来自动换回 ------------------------------------------
+
+    _UPGRADE_PENDING = ".upgrade-pending.json"
+    _ROLLBACK_CODES = frozenset({"runtime.start_failed", "runtime.start_timeout"})
+
+    def _mark_upgrade_pending(self, previous_dir: Path, *, previous_version: Any, version: Any) -> None:
+        marker = self.runtime_root / self._UPGRADE_PENDING
+        if not self._payload_is_complete(previous_dir):
+            marker.unlink(missing_ok=True)
+            return
+        tmp = marker.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"previous_version": previous_version, "version": version, "since": self._utc_now()},
+                                  ensure_ascii=False), encoding="utf-8", newline="\n")
+        fsretry.replace(tmp, marker)
+
+    def upgrade_pending(self) -> dict[str, Any] | None:
+        marker = self.runtime_root / self._UPGRADE_PENDING
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _confirm_pending_upgrade(self) -> dict[str, Any] | None:
+        """新 runtime 起成功了：旧副本可以删了。删不掉（Windows 文件锁）只留着、回一条 runtime.previous_cleanup_deferred，下次 install 再删。"""
+        if self.upgrade_pending() is None:
+            return None
+        (self.runtime_root / self._UPGRADE_PENDING).unlink(missing_ok=True)
+        return self._remove_previous_dir_best_effort(self.runtime_root / "previous")
+
+    def _rollback_pending_upgrade(self) -> dict[str, Any] | None:
+        """新 runtime 起不来、旧副本还完整 → 换回旧版。返回 {rolled_back_to, failed_version}；不能回滚 → None。"""
+        pending = self.upgrade_pending()
+        previous_dir = self.runtime_root / "previous"
+        if pending is None or not self._payload_is_complete(previous_dir):
+            return None
+        try:
+            self.stop_local_services(ignore_clients=True)
+        except (HorosaSkillError, RuntimeError, OSError) as exc:
+            # 起失败的新 runtime 可能一个进程都没有：停不了不拦回滚，记一笔
+            logger.log(logging.WARNING, "rollback: stopping the failed runtime: %s", exc)
+        lock_path = self.runtime_root / ".runtime-start.lock"
+        self._acquire_swap_lock(lock_path)
+        failed = self.runtime_root / "failed-upgrade"
+        try:
+            if failed.exists():
+                _rmtree_force(failed)
+            self.current_dir.replace(failed)
+            previous_dir.replace(self.current_dir)
+        finally:
+            release_lock(lock_path)
+        (self.runtime_root / self._UPGRADE_PENDING).unlink(missing_ok=True)
+        try:
+            _rmtree_force(failed)
+        except OSError as exc:
+            logger.log(logging.WARNING, "rollback: removing the failed runtime copy %s: %s", failed, exc)
+        return {"rolled_back_to": pending.get("previous_version"), "failed_version": pending.get("version")}
+
     def start_local_services(self, *, wait_seconds: float | None = None) -> dict[str, Any]:
+        """启动本机 runtime；升级后第一次起成功时删旧副本，起不来（start_failed / start_timeout 且端口没被别人占）时自动换回旧版。"""
+        try:
+            result = self._start_local_services_impl(wait_seconds=wait_seconds)
+        except RuntimeInstallError as exc:
+            details = exc.details if isinstance(exc.details, dict) else {}
+            if exc.code in self._ROLLBACK_CODES and not details.get("port_takers"):
+                rolled = self._rollback_pending_upgrade()
+                if rolled:
+                    raise RuntimeInstallError(
+                        bilingual(f"新装的 runtime {rolled.get('failed_version')} 起不来（{exc.code}），已自动换回旧版 {rolled.get('rolled_back_to')}；"
+                                  "再起一次即可用旧版。",
+                                  f"The newly installed runtime {rolled.get('failed_version')} failed to start ({exc.code}); rolled back to "
+                                  f"{rolled.get('rolled_back_to')} automatically — start again to use it."),
+                        code="runtime.install_rolled_back",
+                        details={**rolled, "start_error": {"code": exc.code, "message": str(exc), "details": details}},
+                    ) from exc
+            raise
+        if result.get("ok") and not result.get("starting") and not result.get("degraded") and result.get("mode") != "external":
+            deferred = self._confirm_pending_upgrade()
+            if deferred:
+                result = {**result, "previous_cleanup": deferred}
+        return result
+
+    def _start_local_services_impl(self, *, wait_seconds: float | None = None) -> dict[str, Any]:
         """启动本机 runtime。
 
         `wait_seconds=None` = 用满 runtime_start_timeout_seconds（`runtime start`/install/selfcheck）；
@@ -2085,6 +2186,42 @@ class HorosaRuntimeManager(EngineAssetMixin, MacLauncherPatchMixin, WindowsBootJ
                 details={"archive": str(local_path)},
             )
         return local_path
+
+    def check_runtime_pin(self, manifest_data: dict[str, Any] | None, *, meta: dict[str, Any] | None, platform: str | None,
+                          core_js: bool, sha256_given: bool, allow_unpinned: bool, location: str | None) -> bool:
+        """包内钉值（runtime/pins.py）核清单：一致 → True；没钉 → False；不一致 / 版本没钉又没给 --sha256 → 拒。"""
+        from horosa_skill.runtime import pins as _pins
+
+        loaded = _pins.load()
+        if loaded is None or not isinstance(manifest_data, dict):
+            return False
+        version = manifest_data.get("version")
+        entry = _pins.expected(loaded, version, platform=platform, core_js=core_js)
+        if entry is None:
+            if str(loaded.get("version")) != str(version or "") and not sha256_given and not allow_unpinned:
+                raise RuntimeValidationError(
+                    bilingual(f"清单是 {version or '版本不明'}，本包只钉了 {loaded.get('version')} 的 runtime 摘要：不装没钉过的版本。"
+                              "手里有该版本归档的摘要就加 --sha256；确知来源时加 --allow-unpinned。",
+                              f"The manifest is {version or 'unversioned'}, but this package only pins runtime digests for {loaded.get('version')}: "
+                              "not installing an unpinned version. Pass --sha256 with that release's digest, or --allow-unpinned if you trust the source."),
+                    code="runtime.install_unpinned_version",
+                    details={"manifest_version": version, "pinned_version": loaded.get("version"), "manifest_url": location},
+                )
+            return False
+        listed = str((meta or {}).get("sha256") or "").lower()
+        size = (meta or {}).get("size")
+        size_differs = entry.get("size") is not None and size is not None and int(size) != int(entry["size"])
+        if listed != str(entry.get("sha256") or "").lower() or size_differs:
+            raise RuntimeValidationError(
+                bilingual("发布清单里的摘要与本包钉住的不一致：清单（或给它的镜像）不可信，一个字节都没装。",
+                          "The release manifest's digest differs from the one pinned inside this package: the manifest (or the mirror "
+                          "that served it) is not trustworthy; nothing was installed."),
+                code="runtime.install_pin_mismatch",
+                details={"asset": "core_js" if core_js else platform, "manifest_sha256": listed or None, "manifest_size": size,
+                         "pinned_sha256": entry.get("sha256"), "pinned_size": entry.get("size"), "manifest_url": location,
+                         "manifest_mirror": getattr(self, "_manifest_via_mirror", None)},
+            )
+        return True
 
     def _mirror_trust_warnings(self) -> list[dict[str, Any]]:
         """审计 PF-01：清单来自镜像（原站不通）/ 配了明文 http 镜像被拒 → 结果 warnings 里说清楚。"""

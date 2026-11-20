@@ -2125,19 +2125,24 @@ def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypat
 
 
 def test_previous_dir_cleanup_failure_is_a_warning_not_a_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Windows 常见：句柄未释放时旧目录删不掉。新载荷已就位 → ok + warning，不回滚、不报错。"""
+    """Windows 常见：句柄未释放时旧目录删不掉。审计 PF-04 起旧副本本来就留到新版第一次起成功（install 不删）；
+    确认时删不掉 → 启动结果带 runtime.previous_cleanup_deferred，不回滚、不报错。"""
     manager = _manager_with_runtime(tmp_path)
     monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
+    result = manager.install(archive=_archive_of(tmp_path), force=True)
+    assert result["ok"] is True and result["changed"] is True and result["warnings"] == []
+    assert (manager.runtime_root / "previous").exists() and manager.current_dir.exists()
+    assert result["previous_kept_until_first_start"] is True
+    assert manager.doctor()["previous_dir"] == str(manager.runtime_root / "previous")
 
     def locked_rmtree(path: Path) -> None:
         raise PermissionError(32, "The process cannot access the file because it is being used by another process", str(path))
 
     monkeypatch.setattr("horosa_skill.runtime.manager._rmtree_force", locked_rmtree)
-    result = manager.install(archive=_archive_of(tmp_path), force=True)
-    assert result["ok"] is True and result["changed"] is True
-    assert [w["code"] for w in result["warnings"]] == ["runtime.previous_cleanup_deferred"]
-    assert (manager.runtime_root / "previous").exists() and manager.current_dir.exists()
-    assert manager.doctor()["previous_dir"] == str(manager.runtime_root / "previous")
+    monkeypatch.setattr(manager, "_start_local_services_impl", lambda **kwargs: {"ok": True, "already_running": False})
+    started = manager.start_local_services()
+    assert started["previous_cleanup"]["code"] == "runtime.previous_cleanup_deferred"
+    assert (manager.runtime_root / "previous").exists() and manager.upgrade_pending() is None
 
 
 def test_locked_previous_dir_aborts_before_touching_current(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

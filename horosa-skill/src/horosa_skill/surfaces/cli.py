@@ -287,7 +287,7 @@ _ENTRY_HELP = (
 
 
 def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, mode: str, sha256: str | None = None,
-                 engine_only: bool = False, allow_downgrade: bool = False) -> None:
+                 engine_only: bool = False, allow_downgrade: bool = False, allow_unpinned: bool = False) -> None:
     settings = Settings.from_env()
     manager = runtime_helpers._runtime_manager(settings)
     typer.echo(
@@ -297,7 +297,8 @@ def _run_install(archive: str | None, manifest_url: str | None, force: bool, *, 
     )
     try:
         result = manager.install(archive=archive, manifest_url=manifest_url, force=force, progress=_install_progress_printer(),
-                                 sha256=sha256, engine_only=engine_only, allow_downgrade=allow_downgrade)
+                                 sha256=sha256, engine_only=engine_only, allow_downgrade=allow_downgrade,
+                                 allow_unpinned=allow_unpinned)
     except RuntimeError as exc:
         _refuse(exc)
     except OSError as exc:
@@ -319,9 +320,10 @@ def install(
         help="Install only the platform-independent JS engine (horosa-core-js, ~7MB; needs Node.js >= 20.10 on PATH) under the runtime root — any OS. Platforms without a runtime archive (Linux, Intel Mac) get it automatically. 只装 JS 引擎（任何平台）。",
     ),
     allow_downgrade: bool = typer.Option(False, "--allow-downgrade", help="Install even when the manifest's runtime is older than the installed one. 允许降级。"),
+    allow_unpinned: bool = typer.Option(False, "--allow-unpinned", help="Install a runtime version this package has no pinned digests for (wheel installs pin their own release). 允许装没钉摘要的版本。"),
 ) -> None:
     _run_install(archive, manifest_url, force, mode="install", sha256=_opt(sha256), engine_only=bool(_opt(engine_only, False)),
-                 allow_downgrade=bool(_opt(allow_downgrade, False)))
+                 allow_downgrade=bool(_opt(allow_downgrade, False)), allow_unpinned=bool(_opt(allow_unpinned, False)))
 
 
 @app.command(help="Version-aware install alias: skips the 730MB download when already up to date. 升级（已最新则秒退）。")
