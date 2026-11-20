@@ -112,7 +112,7 @@ jobs:
       # v0.38.0 B3：wheel 资产是免 git / 免 PyPI 的零安装通路（`uvx --from <wheel URL>`），README / SKILL /
       # server.json 里钉版本的命令直指它。资产要在场，而且那条命令要真的跑通——「文档写了」不算证据。
       # 只对 ≥ 0.38.0 的发布断言：更早的 release 本来就没有这件资产，不该让它们回头变红。
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - name: Assert the wheel asset is present and the zero-install command works
         env:
           TAG: ${{ steps.latest.outputs.tag }}
