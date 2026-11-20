@@ -109,6 +109,7 @@ HOROSA_SOURCE_ROOT=… uv run python scripts/preflight_release.py           # �
 git tag vX.Y.Z && git push origin vX.Y.Z
 bash horosa-skill/scripts/publish_release.sh --draft --dispatch           # seed / JS 引擎资产 / .mcpb / wheel / SBOM 上 DRAFT；dispatch release-runtime.yml
 #    → 派生 Windows 半 → assemble（双平台清单钉 tag + size + 顶层 core_js 条目、SHA256SUMS、SBOM、attestation）→ runtime-matrix 三台真机（真下载 + 25 个客户端 + HTTP 握手）
+#      assemble 还在 tag worktree 里写 runtime_pins.json、重建 wheel 并替换草稿那份（v0.52.0 起；SHA256SUMS 算的是带钉值的 wheel）
 git add server.json && git commit -m "chore(release): pin mcpb sha" && git push   # mcpb sha 必须来自这一次 --draft 构建（打包不可复现）
 python horosa-skill/scripts/sync_windows_release.py --check --tag vX.Y.Z --draft   # 必须 [OK]；[GAP] 才是权威
 gh workflow run release-runtime.yml -f version=X.Y.Z -f publish=true -f run_matrix=true -f arm_nonblocking=false -f dry_run=false

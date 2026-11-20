@@ -196,6 +196,17 @@ jobs:
             "${CORE_JS_ARGS[@]}" \
             --url-base "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}" \
             --output dist/runtime/runtime-manifest.json
+          # 审计 PF-01 第 3 层：两个平台的归档都齐了，才生成包内钉值并用 tag 的源码重建 wheel（这个 job 的检出是触发时的 main，
+          # 不是 tag），换掉草稿里维护机先建的那份。SHA256SUMS 在下一行按重建后的 wheel 算。
+          git fetch --depth 1 origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          rm -rf "${RUNNER_TEMP}/tagtree" && git worktree add --detach "${RUNNER_TEMP}/tagtree" "${TAG}"
+          uv run python scripts/write_runtime_pins.py --manifest dist/runtime/runtime-manifest.json \
+            --output "${RUNNER_TEMP}/tagtree/horosa-skill/src/horosa_skill/data/runtime_pins.json"
+          rm -rf dist/pinned-wheel && ( cd "${RUNNER_TEMP}/tagtree/horosa-skill" && uv build --wheel -o "${GITHUB_WORKSPACE}/horosa-skill/dist/pinned-wheel" )
+          PINNED_WHEEL="$(ls dist/pinned-wheel/*.whl)"
+          test "$(basename "${PINNED_WHEEL}")" = "horosa_skill-${VERSION}-py3-none-any.whl"
+          uv run python scripts/verify_wheel_contents.py --pinned-wheel "${PINNED_WHEEL}" --version "${VERSION}"
+          mv -f "${PINNED_WHEEL}" "dist/runtime/horosa_skill-${VERSION}-py3-none-any.whl"
           ( cd dist/runtime && sha256sum "${{ needs.resolve.outputs.seed }}" "${{ needs.resolve.outputs.windows_zip }}" $(ls horosa-core-js-*.tar.gz *.mcpb *.whl 2>/dev/null || true) > SHA256SUMS.txt && cat SHA256SUMS.txt )
           uv run python scripts/generate_sbom.py --project-root . --runtime-manifest dist/runtime/runtime-manifest.json --output dist/runtime/horosa-skill-sbom.json
       - name: Verify the release set (entries, embedded manifests, native arch, size, exact platform set, JS engine asset)
@@ -231,9 +242,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" --clobber \
+          TAG="${{ needs.resolve.outputs.tag }}"
+          gh release upload "${TAG}" --repo "${GITHUB_REPOSITORY}" --clobber \
             "dist/runtime/${{ needs.resolve.outputs.windows_zip }}" \
-            dist/runtime/runtime-manifest.json dist/runtime/SHA256SUMS.txt dist/runtime/horosa-skill-sbom.json
+            dist/runtime/runtime-manifest.json dist/runtime/SHA256SUMS.txt dist/runtime/horosa-skill-sbom.json \
+            "dist/runtime/horosa_skill-${TAG#v}-py3-none-any.whl"
       - name: Attest build provenance (archives + manifest; the step release.yml never got to run)
         if: ${{ !inputs.dry_run }}
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a  # v3

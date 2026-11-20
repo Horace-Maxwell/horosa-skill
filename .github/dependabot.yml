@@ -9,3 +9,11 @@ updates:
     directory: /horosa-skill
     schedule:
       interval: weekly
+    ignore:
+      # 网关镜像的 Python 跟包的口径走（3.12：requires-python、uv 管的 venv、runtime 内置解释器）；同版本的 digest 刷新照收。
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Node 钉死跟离线 runtime 的工具链一致（contracts/runtime_toolchain.json → node.version），随工具链一起升，
+      # tests/test_dockerfile_matches_wheel_includes.py 在两者不一致时红。
+      - dependency-name: node
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
