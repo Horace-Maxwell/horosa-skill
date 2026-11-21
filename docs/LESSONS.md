@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.52.0-dev (2026-11-20) | 三件加固（wheel 钉 runtime 摘要、升级失败自动回滚、出生时刻未知模式）；未知模式的西洋过滤器离线样例全绿，对 vendored 实例实跑才看到六类宫位 / 阿拉伯点漏网，德国派「主体：Asc」只删标题把相位行挂到上一块 | 过滤正文按块删；改过滤器必须实跑真盘读正文；新行为与旧测试冲突时改写旧测试的契约而不是删 |
+| v0.52.0-dev (2026-11-20) | 三件加固（wheel 钉 runtime 摘要、升级失败自动回滚、出生时刻未知模式）；未知模式的西洋过滤器离线样例全绿，对 vendored 实例实跑才看到六类宫位 / 阿拉伯点漏网，德国派「主体：Asc」只删标题把相位行挂到上一块 | 过滤正文按块删；改过滤器必须实跑真盘读正文；新行为与旧测试冲突时改写旧测试的契约而不是删；macOS 布局夹具碰上按宿主判定的完整性 → 加模拟 Linux 档 |
 | v0.51.1-dev (2026-11-17) | v0.51.0 的三条收尾：预算只有「发版前手算一次」的口头规则；ci.yml 两个 job 在 95–97% 才被取消时才发现；export-contract mirror 只在 preflight 跑 | `estimate_lane_budget.py`（本机 junit → 三 lane 估算，超 85% 退出 1）；`ci_job_budget.py` 首末两步、超 85% 打注解；mirror 进 CI 读钉住的公开上游、preflight 带 `--require-vendored`（各有负向对照） |
 | v0.51.0 (2026-11-17) | 第二次矩阵：预算够了（darwin 66% / x64 78%），x64 仍红 8 条——Windows 引擎与 macOS 金标的差不止末位：速度百分比 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序；另 darwin 全量基准 124/125（`dispatch_qimen_liureng_combo` 把占时放 birth，被审计后的闸门拒） | 金标比较按主机分：POSIX 逐值、Windows 比形状 + 去数字的行（`golden_diff` 等）；基准 case 改 context + 离线过闸守卫（负向对照实跑） |
 | v0.51.0 (2026-11-17) | 发版矩阵三 lane 全红：pytest 三处都撞预算被杀（darwin 74% / x64 80% / arm 78%，v3.14.0 同步加约 1000 条 live 值金标、极圈盘一次 ~10 s 被一条用例起 24 次）；外加两类只在 lane 才有的红——`PD_SYNC_REV` 的写死回退值落后上游（v26 vs v28，本机读 vendored 树、CI 不跑 live），Windows 上从 macOS 录的金标全精度 `==` 差末位 | 本机 junit 逐条耗时 × lane 倍率估预算（posix 3000 / nt 6000 / arm +4200、job 200 分）；极圈扫只留有极圈分支的两法；`tests/float_tree.py` 容差比；回退值改常量并守与 vendored 相等（负向对照实跑） |
@@ -281,6 +281,11 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
   （负向对照：`_filter_body` 换回逐行删 → 红在宫位标记与孤儿相位行）；覆盖测试锁「每个本命技法都声明了未知时刻怎么办」。回滚 4 条、pins 6 条 + 流水线形状 1 条各有负向对照。
 - **顺带**：`test_fix314_inputs_f.py` 原断言「八字传『不详』与缺 time 同码拒绝」——新行为下八字的「不详」是三柱，旧测试按新契约改写为用紫微比两种写法（仍同码、仍
   `must_ask_user`），并在注释里指向新测试；不是删掉了事。`test_runtime_manager.py` 的「删 previous 失败只告警」同理改到 `start_local_services` 的 `previous_cleanup`。
+- **PR #30 的 CI 补一刀**：本机 26 道门禁全绿，CI 的 test（Linux）与 windows-smoke 同红一条——
+  `test_previous_dir_cleanup_failure_is_a_warning_not_a_failure` 的 `previous_kept_until_first_start` 是 False。根因：`create_runtime_archive` 是
+  macOS 布局，`_payload_is_complete` 按宿主平台找 `runtime/linux/…` / `runtime/windows/…`，旧副本在 CI 上「不完整」，升级标记从没写过。代码没错（真实载荷与宿主同布局），
+  错在用例只在维护机的平台上成立。修：用例按宿主补齐 `_required_paths`（`_complete_for_this_host`，并断言补齐后确实完整），加 `host=linux` 档在 macOS 上模拟
+  Linux 路径判定（负向对照：去掉补齐 → `[linux]` 档在本机红，与 CI 同因）。rollback 的四条用例替身了 `_payload_is_complete`，不受影响。
 - **规则**：过滤 / 改写引擎正文的代码，离线样例只能证明语法；必须对 vendored 实例实跑真盘、读一遍输出再定稿，并把实跑看到的真实行收进夹具。块结构的正文删标题必须连块删。
 
 ### v0.51.1-dev / 2026-11-17 — v0.51.0 留下的三条：把「记得看」改成机器说

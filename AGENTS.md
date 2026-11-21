@@ -1929,6 +1929,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **lane 的环境 ≠ CI 的环境**（v0.50.1 发版矩阵三 lane 同红）：lane 的 pytest 设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，断言「没有 warnings」
   的用例要先清 `HOROSA_*`；时间上限按要拦的回归定（脱敏旧实现 43.7 s → 线 10 s），给 ARM 仿真 lane 留余量。lane 的用例取自 main HEAD，修用例不必重打 tag。
 - **改 horosa-core-js/package.json 同一提交重生锁文件**（`npm install --package-lock-only`；v0.50.0 tag 因此作废，`test_lockfile_root_mirrors_package_json` 守）。
+- **夹具是 macOS 布局、判定按宿主平台（v0.52.0-dev，PR #30 Linux + Windows 同红）**：`create_runtime_archive` 造 `runtime/mac/…`，而
+  `_payload_is_complete` / `_required_paths` 按宿主取 `runtime/linux/…` / `runtime/windows/…`——凡断言「载荷完整」才会发生的行为（升级标记、
+  崩溃后恢复），本机绿、CI 两个平台都红。用例里按宿主补齐（`tests/test_runtime_manager.py::_complete_for_this_host`），并加 `host=linux` 档
+  （`monkeypatch` `platform.system` → "Linux"），让 macOS 本机就能看见这一类。
 
 ### 9.5.3 审计后半程的四条（v0.51.0-dev）
 

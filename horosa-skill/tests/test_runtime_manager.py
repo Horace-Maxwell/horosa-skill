@@ -2124,10 +2124,31 @@ def test_install_stop_failure_leaves_current_untouched(tmp_path: Path, monkeypat
     assert marker.exists()
 
 
-def test_previous_dir_cleanup_failure_is_a_warning_not_a_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _complete_for_this_host(manager: HorosaRuntimeManager) -> None:
+    """create_runtime_archive 是 macOS 布局；「载荷完整」按宿主平台的路径判（runtime/linux/…、runtime/windows/…）。
+    把本宿主要求的文件补齐，旧副本才算完整、才会留到首次启动（PR #30 的 CI：Linux / Windows 上标记从没写过）。"""
+    root = manager.current_dir
+    for _, relative, kind in manager._required_paths(manager._validate_payload_root(root)):
+        target = root / relative
+        if kind == "dir":
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch()
+    assert manager._payload_is_complete(root)
+
+
+@pytest.mark.parametrize("host", ["native", "linux"])
+def test_previous_dir_cleanup_failure_is_a_warning_not_a_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host: str) -> None:
     """Windows 常见：句柄未释放时旧目录删不掉。审计 PF-04 起旧副本本来就留到新版第一次起成功（install 不删）；
-    确认时删不掉 → 启动结果带 runtime.previous_cleanup_deferred，不回滚、不报错。"""
+    确认时删不掉 → 启动结果带 runtime.previous_cleanup_deferred，不回滚、不报错。
+    host=linux 在 macOS 上模拟 Linux 宿主的路径判定：负向对照（实跑过）去掉 _complete_for_this_host → 这一档在 macOS 本机就红（与 CI 同因）。"""
+    if host == "linux":
+        if os.name != "posix":
+            pytest.skip("[host] simulating a Linux host only makes sense on POSIX")
+        monkeypatch.setattr("horosa_skill.runtime.manager.platform.system", lambda: "Linux")
     manager = _manager_with_runtime(tmp_path)
+    _complete_for_this_host(manager)
     monkeypatch.setattr(manager, "endpoint_identities", lambda endpoints=None: _endpoints(verdict="ours", reachable=False))
     result = manager.install(archive=_archive_of(tmp_path), force=True)
     assert result["ok"] is True and result["changed"] is True and result["warnings"] == []
