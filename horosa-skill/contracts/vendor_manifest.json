@@ -356,7 +356,7 @@
       "mode": "bespoke",
       "why": "v0.40 mingli F9：自上游 BaZi.js 逐字抽出的八字快照闭包（gzText/gzCells/buildBaziPeriodLines/buildBaziSnapshotText/normalizeBaziResult 及其常量，:34-43/:79-265/:267-610/:658-687）；该文件其余是 React 组件，整份 vendor 不可行。此前八字快照是 Python 手写 port（缺纳音长生列/命宫起法标注/起运行/小运年龄口径/三维分列…）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/cntradition/BaZi.js",
-      "derived_sha256": "07eb4ac4c433cc251ec53c7a06a80ea746a823f54343078094a55aec3228be0e"
+      "derived_sha256": "9420b2e06a2055e55b5219ad2fc761b86b7ed36bec113f8af2a5a3dbeeba4a65"
     },
     "bazi/baziTiaoHou.js": {
       "upstream": "utils/baziTiaoHou.js",
@@ -448,9 +448,38 @@
     "constants/AstroConst.js": {
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
-      "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。",
-      "extracts": [],
-      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
+      "why": "Uranian 虚星表所需子集，**逐值抽取**。块界=下一个顶层 `export const`（上游多数常量不带结尾分号，按分号切会卷进后续声明）；且必须保持上游原序——LIST_URANIAN 引用了排在其后的符号，重排即 ReferenceError before initialization。（v3.15.0：上游 AstroConst.js 成了 `export { … } from './AstroConst/*'` 门面——名字仍从门面导出（_top_level_exports 认 re-export 列表），值住在子文件，故子文件进 also_derived_from 逐个比戳；逐名值审计无差异。）",
+      "extracts": [
+        "SUN",
+        "MOON",
+        "MERCURY",
+        "VENUS",
+        "MARS",
+        "JUPITER",
+        "SATURN",
+        "URANUS",
+        "NEPTUNE",
+        "PLUTO",
+        "CUPIDO",
+        "HADES",
+        "ZEUS",
+        "KRONOS",
+        "APOLLON",
+        "ADMETOS",
+        "VULCANUS",
+        "POSEIDON",
+        "LIST_URANIAN",
+        "ARIES_POINT",
+        "NORTH_NODE",
+        "VERTEX",
+        "EAST_POINT",
+        "ASC",
+        "MC"
+      ],
+      "upstream_sha256": "496dbbcef3146065c91d661013dc3ab7268ff93514185556ab08ecfaab6e428d",
+      "also_derived_from": {
+        "constants/AstroConst/bodies.js": "132cea8e118604fe142ebc237da8da3782d83fb1dc180430ed0ed2c46722095d"
+      }
     },
     "constants/ZWText.js": {
       "upstream": "constants/ZWText.js",
@@ -1261,13 +1290,13 @@
       "mode": "bespoke",
       "why": "自上游 utils/helper.js 抽出 littleEndian / randomNum（供 gua 引擎装卦用）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "utils/helper.js",
-      "derived_sha256": "394b39e10a45bbf2380f15b9568108f1f4d936a213780565003eb7a7557df014"
+      "derived_sha256": "da41efe9e1e4001bb4603f088b84337a6c0cb8e668229731a60cd532b05cdbbf"
     },
     "gua/littleEndian.js": {
       "mode": "bespoke",
       "why": "自上游 utils/helper.js 逐字取出的单个纯函数；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "utils/helper.js",
-      "derived_sha256": "394b39e10a45bbf2380f15b9568108f1f4d936a213780565003eb7a7557df014"
+      "derived_sha256": "da41efe9e1e4001bb4603f088b84337a6c0cb8e668229731a60cd532b05cdbbf"
     },
     "gua/liuyaoDongBian.js": {
       "upstream": "components/gua/liuyaoDongBian.js",
@@ -1469,13 +1498,13 @@
       "mode": "bespoke",
       "why": "自上游 GuoLaoMoiraPanel.js 逐字抽出 buildGuolaoMoiraInfoFacts（右栏「命身与限度 / 三主·化曜 / 难仇恩用 / 五限 / 行运法」事实层，v3.11.0 [Q-231/Q-434/Q-435]）及其全部依赖闭包（deriveGuolaoMasters / anchorFromObject / suHostForLon / baziStemBranch …）；该文件其余是 React 表格组件（JSX），整份 vendor 不可行。上游页面与 AI 快照同取此函数。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/guolao/GuoLaoMoiraPanel.js",
-      "derived_sha256": "22eaafc23b5c42a692969503730be30840543d8b5eee307520eddb45296605a1"
+      "derived_sha256": "4ea2275f1b86d498f1890e5c67da1e30f0950f6cdb9138c07e8332c43bfcee77"
     },
     "guolao/guolaoMoira.js": {
       "mode": "bespoke",
       "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包，外加 wave3b 同源快照段（与格局闭包共用 msg/objectLon/houseFullLabel/computeAscSignIndex/orderGods 与同一 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、[神煞] buildRulesGodsSection → buildHouseGodsSection、[相位] buildGuolaoAspectSection（v3.13.1 起含 buildGuolaoAspectRows → guolaoMoiraWheelLimits.js 的 computeMoiraAspectPairs 七政相位单源；此前为 GUOLAO_ASPECT_LABEL_CN/aspectName/buildAspectRows 通用占星表）与 splitDegree，逐字；buildGuolaoSnapshotTablesForSnapshot 为 skill 桥接（同 buildLocalMoiraPatternsForSnapshot）。normalizeGuolaoLifeMode 取 guolaoMoiraWheelLimits.js 的 GuoLaoChartStyle 逐字版（此前本文件留着只认 yumao/cotrans 的旧平移件）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 v3.13.0：上游把 GuoLaoChartMain.js 的这些闭包拆进 components/guolao/main/（snapshot.js 为主源，另 moiraConst/format/fieldModes/aspectsNodeMode）；msg/signDegMin 取 AstroHelper.js，formatGodName 取 GuoLaoMoiraWheel.js，命主/宿度制偏好取 GuoLaoChartStyle.js —— derived_from 改指 main/snapshot.js，其余源登记 also_derived_from 逐个看守。 v3.14.0（复核）：main/snapshot.js 只改 _buildGuolaoSnapshotTextV2Core 开头（赤仪上升取法：按 guolaoAscRaModeOf 换上升点）与 [起盘信息] 多一行，本件抽出的格局闭包 / 宫宿 / 神煞 / 相位段函数体未动；换上升点收在 guolaoSnapshotSections.js 的 applyGuolaoAscRaMode，由 tools/guolaoMoira.js、tools/guolaoStarDignity.js 各入口先调（上游在 core 里一次换、各段同读）。GuoLaoMoiraWheel.js 的改动（suNameOf 悬浮提示取宿 / speedText 小数位 / shouldComponentUpdate / 量尺寸 / rect 描边）都在未抽出的 UI 部分。",
       "derived_from": "components/guolao/main/snapshot.js",
-      "derived_sha256": "2a18ed60eb00935d3526c8f2e9e725f9a3493cb4e4415f3d61bffe5f6c5b724e",
+      "derived_sha256": "3ae101e454a89079ce84cd3e6f1742df034109efeac03f86c23861581fd3bfb8",
       "also_derived_from": {
         "components/guolao/main/moiraConst.js": "f94c5e26109da2401b3abeffb4e6f644c59acbca6679a279ed4c275476fb79d9",
         "components/guolao/main/format.js": "3b1960703d573c17d2849ed0da78d295f6b112d55aa31d07c4f36920c3216fc5",
@@ -1483,7 +1512,8 @@
         "components/guolao/main/aspectsNodeMode.js": "ddf44e20e53cd26167cb459672b32fb88b88a387e6b7e318bb7bc98559bb4d38",
         "components/astro/AstroHelper.js": "83143d6d3530f9279845a93edb394ade88962351d441f6a6b60d927bf75c6636",
         "components/guolao/GuoLaoChartStyle.js": "1f9777c766cf9dcb8fd1201abc5cc1b6252014b71be1843ed0ef75601eccca1b",
-        "components/guolao/GuoLaoMoiraWheel.js": "91412a151a3eb02a5d3eaa3333cbb500f3fc5a4b8bd0fed466d332c2e5715711"
+        "components/guolao/moiraWheel/geometry.js": "cdcdd4220f92cb7b38780919453222a188d0e3faecd29b9e33d15271f24b0fb1",
+        "components/guolao/moiraWheel/limits.js": "82adf121cd008b146271d8bd7e40a38d4bd92d2c0d639935b3d1e60c2b09a977"
       }
     },
     "guolao/guolaoMoiraTables.js": {
@@ -1494,19 +1524,26 @@
     },
     "guolao/guolaoMoiraWheelLimits.js": {
       "mode": "bespoke",
-      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖，另 wave3b 抽 cleanText / formatGodName / godsFromRuleHits / longLifeCharFor（[神煞] 段 buildRulesGodsSection 的 moira* 依赖）；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写；guolaoMoira.js 亦从这里取同一份），getStoredGuolaoLifeMode 为 headless 缺省 asc。v3.13.1 另逐字抽 PLANET_DEFS / MOIRA_ASPECTS / MOIRA_DEFAULT_ASPECTS / moiraHiddenIds / moiraObjSpeed / computeMoiraAspectPairs（七政相位单源，guolaoMoira.js 的 [相位] 段 import）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 v3.14.0（复核）：上游该文件改的是 UI（suNameOf 悬浮提示按显示度取宿名、speedText toFixed 4→3、mapCuspsToDisplay 注释、shouldComponentUpdate、measureContainer 塌缩守卫、背景 rect stroke），本件抽出的函数（lifeDegree / buildGuolaoLimitTable / birthYearBasis / computeMoiraAspectPairs / PLANET_DEFS / MOIRA_ASPECTS …）无一处改动，副本不动。",
-      "derived_from": "components/guolao/GuoLaoMoiraWheel.js",
-      "derived_sha256": "91412a151a3eb02a5d3eaa3333cbb500f3fc5a4b8bd0fed466d332c2e5715711"
+      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖，另 wave3b 抽 cleanText / formatGodName / godsFromRuleHits / longLifeCharFor（[神煞] 段 buildRulesGodsSection 的 moira* 依赖）；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写；guolaoMoira.js 亦从这里取同一份），getStoredGuolaoLifeMode 为 headless 缺省 asc。v3.13.1 另逐字抽 PLANET_DEFS / MOIRA_ASPECTS / MOIRA_DEFAULT_ASPECTS / moiraHiddenIds / moiraObjSpeed / computeMoiraAspectPairs（七政相位单源，guolaoMoira.js 的 [相位] 段 import）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 v3.14.0（复核）：上游该文件改的是 UI（suNameOf 悬浮提示按显示度取宿名、speedText toFixed 4→3、mapCuspsToDisplay 注释、shouldComponentUpdate、measureContainer 塌缩守卫、背景 rect stroke），本件抽出的函数（lifeDegree / buildGuolaoLimitTable / birthYearBasis / computeMoiraAspectPairs / PLANET_DEFS / MOIRA_ASPECTS …）无一处改动，副本不动。（v3.15.0 上游把 GuoLaoMoiraWheel.js 拆成壳 + moiraWheel/*：derived_from 改指函数现居的 limits.js，其余来源文件进 also_derived_from，逐个比戳。）",
+      "derived_from": "components/guolao/moiraWheel/limits.js",
+      "derived_sha256": "82adf121cd008b146271d8bd7e40a38d4bd92d2c0d639935b3d1e60c2b09a977",
+      "also_derived_from": {
+        "components/guolao/moiraWheel/constants.js": "6b14c86acf2e977da09038e8a74e63a10fd08e58e1bac5e6cab337757a47e078",
+        "components/guolao/moiraWheel/geometry.js": "cdcdd4220f92cb7b38780919453222a188d0e3faecd29b9e33d15271f24b0fb1",
+        "components/guolao/moiraWheel/gods.js": "2a8038f68fe65a1861e03f004af807cb052afca06bfd598e463f2abd85a2b10c",
+        "components/guolao/moiraWheel/text.js": "5039b2cbcefc53ff0bf3824ddd41043ad20d5af20e82128469e89093eb969bb8",
+        "components/guolao/guolaoMoiraTables.js": "4c06f6643fb6f9b39e8488c41b037471a55e17ed22cd37ac1a388543b0498ce7"
+      }
     },
     "guolao/guolaoSnapshotSections.js": {
       "mode": "bespoke",
       "why": "自上游 GuoLaoChartMain.js 逐字抽出的 AI 快照段 builder：buildGuolaoAnchorLines（[起盘信息] 命度/身度/宿主行）/ buildGuolaoMastersSection（[三主与化曜]）/ buildGuolaoLimitCalcSection（[限法实算]）/ buildGuolaoLimitSection（[大限] GFM 表 + 所选行运法结构）。该文件 4350 行，其余是 React 组件与取数编排。与 guolaoMoira.js（同源的政余格局闭包）分文件：各自看守同一源 sha。源一动即红、复核后 --restamp。 🔴 v3.13.0：快照段 builder 现在 components/guolao/main/snapshot.js（主源），查名助手在 main/fieldModes.js / aspectsNodeMode.js / params.js、宿度制缺省在 GuoLaoChartStyle.js（GUOLAO_DEFAULT_SU28_MODE=0）—— 后几份登记 also_derived_from。 v3.13.1：逐字增 guolaoSunriseMode（main/params.js:29-35）与 [起盘信息]「日出口径」行（main/snapshot.js:1153）。 v3.14.0：逐字增 applyGuolaoAscRaMode（main/snapshot.js:1129-1133 的上升点换法，收成函数）与 [起盘信息]「上升取法」行（:1169，仅赤仪 displayCoord==='equatorial'）；ascRaMode 函数取自 verbatim 的 utils/ascRaMode.js。",
       "derived_from": "components/guolao/main/snapshot.js",
-      "derived_sha256": "2a18ed60eb00935d3526c8f2e9e725f9a3493cb4e4415f3d61bffe5f6c5b724e",
+      "derived_sha256": "3ae101e454a89079ce84cd3e6f1742df034109efeac03f86c23861581fd3bfb8",
       "also_derived_from": {
         "components/guolao/main/fieldModes.js": "2efaf950e2f0c197bb45333b986c09b35a0e504573005821142e71aa028383c7",
         "components/guolao/main/aspectsNodeMode.js": "ddf44e20e53cd26167cb459672b32fb88b88a387e6b7e318bb7bc98559bb4d38",
-        "components/guolao/main/params.js": "e4189ae6d71efbdcdd3d353cff23754fb83a609cb45c6cffe4b01eb503de02d3",
+        "components/guolao/main/params.js": "e10516483e14e76feec9ae982384efcdc3c56b2402b44f95f8c44602f21a5bbb",
         "components/guolao/GuoLaoChartStyle.js": "1f9777c766cf9dcb8fd1201abc5cc1b6252014b71be1843ed0ef75601eccca1b"
       }
     },
@@ -1536,7 +1573,7 @@
     "india/indiaConst.js": {
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
-      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）；wave3b 另抽印占岁差 47 制表 / 分宫制表及其归一、ayanamsaLabel / zodiacalDisplayText（[起盘信息] 口径行 indiaCalibreLine 的依赖）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与口径行、[大运Dasha] 体系切换。 v3.14.0：另抽宿数口径 / 中栏盘面两组显示常量（INDIA_NAKSHATRA_COUNT_* / INDIA_STAGE_MODE_*）——verbatim 的 utils/indiaExtraTables.js 的 INDIA_TABLE_SETTINGS 取它们作值域；INDIA_SCHOOL_DEFAULTS.parashari.tabs 随上游补 '17'（补充表页签）。",
+      "why": "印占流派（五支+西方恒星）/ 大运流派开关 22 键 / 大运体系 15 档常量与归一函数，逐块抽取（上游全文件 import 了 headless 不存在的色板/主题模块）；wave3b 另抽印占岁差 47 制表 / 分宫制表及其归一、ayanamsaLabel / zodiacalDisplayText（[起盘信息] 口径行 indiaCalibreLine 的依赖）。消费方 india/jyotishSnapshot.js：[起盘信息] 流派行与口径行、[大运Dasha] 体系切换。 v3.14.0：另抽宿数口径 / 中栏盘面两组显示常量（INDIA_NAKSHATRA_COUNT_* / INDIA_STAGE_MODE_*）——verbatim 的 utils/indiaExtraTables.js 的 INDIA_TABLE_SETTINGS 取它们作值域；INDIA_SCHOOL_DEFAULTS.parashari.tabs 随上游补 '17'（补充表页签）。（v3.15.0：上游 AstroConst.js 成了 `export { … } from './AstroConst/*'` 门面——名字仍从门面导出（_top_level_exports 认 re-export 列表），值住在子文件，故子文件进 also_derived_from 逐个比戳；逐名值审计无差异。）",
       "extracts": [
         "SIDEREAL",
         "INDIA_AYANAMSA_DEFAULT",
@@ -1567,16 +1604,24 @@
         "INDIA_STAGE_MODE_DEFAULT",
         "normalizeIndiaStageMode"
       ],
-      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
+      "upstream_sha256": "496dbbcef3146065c91d661013dc3ab7268ff93514185556ab08ecfaab6e428d",
+      "also_derived_from": {
+        "constants/AstroConst/bodies.js": "132cea8e118604fe142ebc237da8da3782d83fb1dc180430ed0ed2c46722095d",
+        "constants/AstroConst/chartOptions.js": "49b4f1ab987f72c056717af1578a9d607da825a313e5f3f41e2a9d2978de00dc",
+        "constants/AstroConst/indiaOptions.js": "6f37860f00a80394a56f542d32fbc4d32fcf5ee65ed1b4e5b959965ad196412d"
+      }
     },
     "india/jyotishSnapshot.js": {
       "mode": "bespoke",
-      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 一处声明式偏离（上游 v3.14.0 e55c3a66 仍在的 bug，重抽时必须保留，直到上游修复）：三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。（此前的偏离 ① SIGN_CN_S/scS 上提，上游 v3.14.0 已自己上提，现为上游原文。） v3.13.0：另逐字搬 components/astro/indiaMain/jyotishData.js（宿名/尊贵/年主取用/partialErrors 标签、Praśna 名表）与 indiaMain/dasha.js（charaAntarYears）——两模块顶层 import moment / 全量 AstroConst / derivedChartSource，整份 vendor 不可行；登记 also_derived_from 看守。 v3.14.0：[Yoga 判定表] / [印占补充表] 两段的行 builder 走 verbatim 的 utils/indiaExtraTables.js；[穿界时刻] 不在本文件（Python 取 /astroextra/transitevents，tools/indiaJyotish.js 调 buildTransitEventLines）。",
-      "derived_from": "components/astro/IndiaChart.js",
-      "derived_sha256": "65ced7d0a79ad412f04e33f3cb70ebf5a6ec942f4642632251dd4f95e955f800",
+      "why": "自上游 IndiaChart.js 逐字抽出的 Jyotish 快照段构造器（仅剥 React 外壳）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 一处声明式偏离（上游 v3.14.0 e55c3a66 仍在的 bug，重抽时必须保留，直到上游修复）：三旗盘月序读 m.index ?? m.month——后端 month_rows 的键是 month，上游读 index 恒 undefined。（此前的偏离 ① SIGN_CN_S/scS 上提，上游 v3.14.0 已自己上提，现为上游原文。） v3.13.0：另逐字搬 components/astro/indiaMain/jyotishData.js（宿名/尊贵/年主取用/partialErrors 标签、Praśna 名表）与 indiaMain/dasha.js（charaAntarYears）——两模块顶层 import moment / 全量 AstroConst / derivedChartSource，整份 vendor 不可行；登记 also_derived_from 看守。 v3.14.0：[Yoga 判定表] / [印占补充表] 两段的行 builder 走 verbatim 的 utils/indiaExtraTables.js；[穿界时刻] 不在本文件（Python 取 /astroextra/transitevents，tools/indiaJyotish.js 调 buildTransitEventLines）。（v3.15.0：上游把 IndiaChart.js 拆成壳 + indiaChart/*，derived_from 改指 buildJyotishSnapshotLines 现居的 jyotishLines.js；Gochara 遮蔽标注四处随上游改用 gocharaVedhaBlocker / gocharaAvText。）",
+      "derived_from": "components/astro/indiaChart/jyotishLines.js",
+      "derived_sha256": "0190f18e05bbdadf7c6c513947eacd4d3d3c5f27ba1a2cc5959edecf7c8c0546",
       "also_derived_from": {
-        "components/astro/indiaMain/jyotishData.js": "5a6b8d716683b3115ac34acbd93b44e94187baebb4b91feed3b0bc24cfead637",
-        "components/astro/indiaMain/dasha.js": "aa60d66cd331852100f1be5aaf927e878caeb9292c6e5155fe3d1b68f921a765"
+        "components/astro/indiaMain/jyotishData.js": "b529aeed07322bce43de27bdf38d56c42a16bbb6450efecbc4b527e58f5f0824",
+        "components/astro/indiaMain/dasha.js": "aa60d66cd331852100f1be5aaf927e878caeb9292c6e5155fe3d1b68f921a765",
+        "components/astro/indiaChart/dashaLines.js": "7c7dcc5d1aaa154c2fb40770a02eb97302da62178840352a165beb285fb98879",
+        "components/astro/indiaChart/request.js": "1f1fbcbab6f85163a30449213819a9827f5474056354d48e5cb54a068716980a",
+        "components/astro/indiaChart/snapshot.js": "de851ca597febff136592305e124d6145720df725fa72c76752165b5eda32b6a"
       }
     },
     "jinkou/JinKouCalc.js": {
@@ -1935,9 +1980,9 @@
     },
     "mundane/mundaneAiSnapshot.js": {
       "mode": "bespoke",
-      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（v3.14.0 :2871-3018；10fb75de→e55c3a66 方法体逐字未变）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。",
-      "derived_from": "components/mundane/MundaneMain.js",
-      "derived_sha256": "d638e0ecd2c9f4281600dfc425a77985dd99fc375ad26d1262ba862c4b44cf02"
+      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（v3.14.0 :2871-3018；10fb75de→e55c3a66 方法体逐字未变）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。（v3.15.0：上游把 MundaneMain 拆成壳 + main/*，类方法 buildAiSnapshot 原样搬到 main/compute.js 的方法集（逐行对比 149 行无改动），derived_from 随之改指。）",
+      "derived_from": "components/mundane/main/compute.js",
+      "derived_sha256": "851cd180f6af33e0f3e252457d40054f1690db5b2edb5d3210191f9c9350893d"
     },
     "mundane/mundaneHorary.js": {
       "upstream": "divination/mundane/mundaneHorary.js",
@@ -2152,7 +2197,7 @@
     "sanshi/sanshiAstroConst.js": {
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
-      "why": "SanShiUnitedMain.js 纯逻辑段读到的 24 个常量（十行星 / 十二星座 / ASC / MC）逐值抽出。共享 src/constants/AstroConst.js 缺 URANUS/NEPTUNE/PLUTO/MC（外圈「星盘」行会静默少四颗），而它另有七政 / 卜卦 / 天星消费方，故不在此改它。 v3.14.0（复核）：上游 AstroConst.js 只改一处 tabs 列表（'16' 后加 '17'），不在这 24 个常量里，副本不动。",
+      "why": "SanShiUnitedMain.js 纯逻辑段读到的 24 个常量（十行星 / 十二星座 / ASC / MC）逐值抽出。共享 src/constants/AstroConst.js 缺 URANUS/NEPTUNE/PLUTO/MC（外圈「星盘」行会静默少四颗），而它另有七政 / 卜卦 / 天星消费方，故不在此改它。 v3.14.0（复核）：上游 AstroConst.js 只改一处 tabs 列表（'16' 后加 '17'），不在这 24 个常量里，副本不动。（v3.15.0：上游 AstroConst.js 成了 `export { … } from './AstroConst/*'` 门面——名字仍从门面导出（_top_level_exports 认 re-export 列表），值住在子文件，故子文件进 also_derived_from 逐个比戳；逐名值审计无差异。）",
       "extracts": [
         "SUN",
         "MOON",
@@ -2179,7 +2224,10 @@
         "ASC",
         "MC"
       ],
-      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
+      "upstream_sha256": "496dbbcef3146065c91d661013dc3ab7268ff93514185556ab08ecfaab6e428d",
+      "also_derived_from": {
+        "constants/AstroConst/bodies.js": "132cea8e118604fe142ebc237da8da3782d83fb1dc180430ed0ed2c46722095d"
+      }
     },
     "sanshi/sanshiAstroHelper.js": {
       "upstream": "components/astro/AstroHelper.js",
@@ -3030,7 +3078,7 @@
       "mode": "bespoke",
       "why": "自上游 XiaoChengTuMain.js 逐字抽出 buildXiaoChengTuSnapshotText（函数体逐字同，剥 React 外壳 + LUOSHU_ROWS 常量）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
       "derived_from": "components/xiaochengtu/XiaoChengTuMain.js",
-      "derived_sha256": "94079f78121e3c781d008450c67858dcae9e753eeeeaf9a3a7d35f3088c3c511"
+      "derived_sha256": "5d52e266c7e35a759cca58a166c99801ca7dd3bcdb6dd29cb5cae98b3bb38091"
     },
     "xiaoliuren/xiaoliurenConst.js": {
       "upstream": "components/xiaoliuren/core/xiaoliurenConst.js",
@@ -3320,15 +3368,15 @@
     },
     "ziwei/ziweiSnapshotLayers.js": {
       "mode": "bespoke",
-      "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
+      "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。（v3.15.0：上游把 ZiWeiMain 拆成壳 + main/*，抽取的函数原样在 main/snapshot.js，derived_from 随之改指。）",
+      "derived_from": "components/ziwei/main/snapshot.js",
+      "derived_sha256": "41fe43dce774d09fff16b4a779955d8fb6cddc96f208808a2de70e45c2bbadf7"
     },
     "ziwei/ziweiSnapshotText.js": {
       "mode": "bespoke",
-      "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
+      "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。（v3.15.0：上游把 ZiWeiMain 拆成壳 + main/*，抽取的函数原样在 main/snapshot.js，derived_from 随之改指。）",
+      "derived_from": "components/ziwei/main/snapshot.js",
+      "derived_sha256": "41fe43dce774d09fff16b4a779955d8fb6cddc96f208808a2de70e45c2bbadf7"
     },
     "ziwei/zwLuckItems.js": {
       "mode": "bespoke",

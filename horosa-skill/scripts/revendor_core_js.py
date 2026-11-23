@@ -700,9 +700,20 @@ def apply_deviations(text: str, deviations: list[dict]) -> tuple[str, list[str]]
 
 
 def _top_level_exports(text: str) -> set[str]:
+    """Names a module exports: declarations plus `export { a, b as c }` lists (re-exports included, v0.53.0).
+
+    v3.15.0 turned `constants/AstroConst.js` into a facade of `export { … } from './AstroConst/*'` lists. Counting only
+    `export const` made every curated subset of it report «N names no longer exported» although upstream callers still
+    import them from that exact path. The *values* live in the sub-files — curated entries list those under
+    `also_derived_from` so each one is sha-watched (hand_made_drift)."""
     names: set[str] = set()
-    for match in re.finditer(r"^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)", text, re.M):
+    for match in re.finditer(r"^export\s+(?:async\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)", text, re.M):
         names.add(match.group(1))
+    for match in re.finditer(r"^export\s*\{([^}]*)\}", text, re.M):
+        for item in match.group(1).split(","):
+            item = item.strip()
+            if item:
+                names.add(item.split(" as ")[-1].strip())
     return names
 
 

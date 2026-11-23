@@ -219,3 +219,12 @@ def test_without_the_pruning_the_facade_keeps_the_dead_name() -> None:
     stripped, _ = rv._strip_fetch_helpers(src)
     assert "fetchQimenPan" in stripped
     assert "fetchQimenPan" not in rv._prune_fetch_reexports(stripped)[0]
+
+
+def test_reexport_lists_count_as_exports_for_curated_checks() -> None:
+    """v3.15.0 AstroConst facade: `export { SUN, MC } from './AstroConst/bodies';` still exports SUN / MC."""
+    facade = "export { SUN, MC as MIDHEAVEN } from './AstroConst/bodies';\nexport { X } from './y';\nexport const LOCAL = 1;\n"
+    assert rv._top_level_exports(facade) == {"SUN", "MIDHEAVEN", "X", "LOCAL"}
+    # Negative control: the declaration-only rule (pre-v0.53.0) saw only LOCAL.
+    import re
+    assert {m.group(1) for m in re.finditer(r"^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)", facade, re.M)} == {"LOCAL"}

@@ -47,6 +47,8 @@ import { zeriRowOpts, withLeafKind } from '../src/tools/zeriSnapshotOpts.js';
 import { runAcgSection } from '../src/tools/acgSection.js';
 import { runBabylon } from '../src/tools/babylon.js';
 import { runBaziLocal } from '../src/tools/baziLocal.js';
+import { Gua64 } from '../src/vendor/gua/GuaConst.js';
+import { buildJyotishSnapshotLines } from '../src/vendor/india/jyotishSnapshot.js';
 import { alignJavaBaziAges } from '../src/vendor/bazi/baziSnapshot.js';
 import { isSouthLatitude } from '../src/vendor/bazi/baziLunarLocal.js';
 import { heluoSolarTermOfDate } from '../src/vendor/heluo/heluoLocal.js';
@@ -1713,6 +1715,19 @@ check('baziLocal 值级金标：晚子时四象限 + 命宫起法 + Java 回退�
   const jv = runBaziLocal({ params: genParams({}), java_result: { bazi: { nongli: { year: '丙午', month: '四月', day: '十一' }, fourColumns: { ming: { stem: { cell: '甲' }, branch: { cell: '子' } } } }, gender: 'Male' } });
   assert(jv.data.local === false && jv.snapshot_text.includes('命宫：甲子（起法：子平数法(本域回退)）') && !jv.snapshot_text.includes('[五行力量]'),
     `java fallback: ${jv.snapshot_text.slice(0, 400)}`);
+  // v3.15.0 [卦释]（BaZi.js buildBaziSnapshotText）：胎元 + 四柱逐行本卦 / 互卦 / 旁通。旁通按定义 = 本卦六爻全反，
+  // 这里用 64 卦表独立反推（不抄输出）：庚辰日柱本卦雷风恒 → 旁通风雷益；Java 回退结果没有卦数据 → 不产段。
+  const gs = runBaziLocal({ params: genParams({ date: '1990-05-15', time: '10:30:00', lat: '31n14', timeAlg: 0, after23NewDay: 1, lateZiHourUseNextDay: 1 }) }).snapshot_text;
+  const guaSec = gs.slice(gs.indexOf('[卦释]')).split('\n\n')[0].split('\n');
+  assert(guaSec[0] === '[卦释]' && guaSec.length === 6 && guaSec[1].startsWith('胎元 ') && guaSec[5].startsWith('时柱 '), guaSec.join(' | '));
+  const byName = new Map(Gua64.map((g) => [g.name, g.value]));
+  guaSec.slice(1).forEach((line) => {
+    const m = /:本卦 (\S+) · 互卦 (\S+) · 旁通 (\S+)$/.exec(line);
+    assert(m && byName.has(m[1]) && byName.has(m[3]), `卦释 行形: ${line}`);
+    assert(byName.get(m[3]).join('') === byName.get(m[1]).map((y) => 1 - y).join(''), `旁通 ≠ 本卦全反: ${line}`);
+  });
+  assert(guaSec.includes('日柱 庚辰:本卦 雷风恒 · 互卦 泽天夬 · 旁通 风雷益'), guaSec.join(' | '));
+  assert(!jv.snapshot_text.includes('[卦释]'), 'java fallback without gua data must not emit [卦释]');
 });
 
 // 紫微（tools/ziweiBirth.js = 上游 buildZiweiSnapshotForParams，ZiWeiMain.js:716-822）：传本开关非缺省 → 本地 ZiweiCalc；
@@ -2387,6 +2402,25 @@ try {
 // 🔴 收尾前再等一次：中途那句 `await Promise.all(pending)` 之后登记的 async check，其失败会在「all passed」打印之后才到，
 // 退出码照样 0（v0.50.0-dev 加 qimenzeri 金标时撞上：变异体打印了 FAIL，进程却以 0 退出）。
 await Promise.all(pending);
+
+check('jyotish Gochara 遮蔽标注（v3.15.0）：凶位不标、吉位写出遮蔽曜、罗睺只给 SAV', () => {
+  // 上游 indiaMain/jyotishData.js gocharaVedhaBlocker / gocharaAvText：只有「吉位被别的曜遮」（vedhaBy）才写被遮；
+  // 引擎对凶位的 effective 本来就是 false —— v3.14.0 拿它判，凶位一律标「Vedha遮」。
+  const out = buildJyotishSnapshotLines({ jyotish: { gochara: {
+    available: true,
+    fromMoon: [
+      { planet: 'Saturn', planetLabel: '土星', signLabel: '摩羯', house: 8, good: false, effective: false, vedhaBy: null, av: { savBindu: 22, bavBindu: 3 } },
+      { planet: 'Jupiter', planetLabel: '木星', signLabel: '巨蟹', house: 11, good: true, effective: false, vedhaBy: 'Mars', av: { savBindu: 39, bavBindu: 6 } },
+      { planet: 'North Node', planetLabel: '罗睺', signLabel: '双鱼', house: 3, good: true, effective: true, vedhaBy: null, av: { savBindu: 28, bavBindu: null } },
+    ],
+    fromLagna: [{ planet: 'Saturn', planetLabel: '土星', house: 6, good: false, effective: false, vedhaBy: null }],
+  } } });
+  const moon = out['行运 Gochara（从月·八分点）'].join('\n');
+  assert(moon.includes('| 土星 | 摩羯 从月第8宫 | 凶 | SAV22/BAV3 |'), moon);
+  assert(moon.includes('| 木星 | 巨蟹 从月第11宫 | 吉(被火星Vedha遮) | SAV39/BAV6 |'), moon);
+  assert(moon.includes('| 罗睺 | 双鱼 从月第3宫 | 吉 | SAV28 |') && !moon.includes('BAVnull'), moon);
+  assert(!out['行运 Gochara（从命）'].join('\n').includes('Vedha'), out['行运 Gochara（从命）'].join('\n'));
+});
 
 if (failures > 0) {
   console.error(`\nselfcheck: ${failures} failure(s)`);

@@ -55,6 +55,20 @@ export function tajikaYearLordViaLabel(via){
 	return TAJIKA_YEAR_LORD_VIA_CN[via] || `${via}`;
 }
 
+// ── indiaMain/jyotishData.js 逐字（v3.15.0 新增：Gochara 遮蔽只标「吉位被别的曜遮」+ 遮者名；罗睺 / 计都只给 SAV）──
+// 行运 Gochara 的 Vedha 与八分点(页面与 AI 快照同读):
+//   只有「吉位被别的曜遮」才算被遮 —— 引擎对凶位的 effective 本来就是假,不能拿它判(此前凶位一律标「Vedha 遮」);
+//   罗睺 / 计都没有自己的八分点(BAV),只给 SAV。
+const GOCHARA_PLANET_CN = Object.freeze({ Sun: '太阳', Moon: '月亮', Mars: '火星', Mercury: '水星', Jupiter: '木星', Venus: '金星', Saturn: '土星', 'North Node': '罗睺', 'South Node': '计都' });
+export function gocharaVedhaBlocker(it){
+	if(!it || !it.vedhaBy){ return ''; }
+	return GOCHARA_PLANET_CN[it.vedhaBy] || `${it.vedhaBy}`;
+}
+export function gocharaAvText(av){
+	if(!av || av.savBindu === undefined || av.savBindu === null){ return ''; }
+	return (av.bavBindu === undefined || av.bavBindu === null) ? `SAV${av.savBindu}` : `SAV${av.savBindu}/BAV${av.bavBindu}`;
+}
+
 // ── indiaMain/jyotishData.js:31-61 逐字 ──
 // 引擎子块失败的落账名(jyotish.partialErrors)→ 中文段名:页面提示与 AI 快照「未能计算」段共用这一张。
 // 子块内部落账名带点(kp.deep / muhurta.panchaka …);整块失败时是块键本身(kp / muhurta / dasha …)。没登记的名字原样写出(不吞)。
@@ -572,8 +586,8 @@ export function buildJyotishSnapshotLines(chartObj){
 		const sa = goc.saturnAfflictions || {};
 		const ss = sa.sadeSati || {};
 		const gmoRows = goc.fromMoon.map((it)=>{
-			const av = it.av && it.av.savBindu !== undefined ? `SAV${it.av.savBindu}/BAV${it.av.bavBindu}` : '';
-			return [`${it.planetLabel || it.planet}`, `${it.signLabel || ''} 从月第${it.house}宫`, `${(it.good || it.auspicious) ? '吉' : '凶'}${it.effective === false ? '(Vedha遮)' : ''}`, av];
+			const vb = gocharaVedhaBlocker(it);
+			return [`${it.planetLabel || it.planet}`, `${it.signLabel || ''} 从月第${it.house}宫`, `${(it.good || it.auspicious) ? '吉' : '凶'}${vb ? `(被${vb}Vedha遮)` : ''}`, gocharaAvText(it.av)];
 		});
 		const gmoOut = gfmTable(['星曜', '座·从月宫', '吉凶', '八分点'], gmoRows);
 		if(ss.active){ gmoOut.unshift(`Sade Sati 进行中（${ss.phaseLabel || ss.phase || ''}）`); }
@@ -653,16 +667,16 @@ export function buildJyotishSnapshotLines(chartObj){
 	}
 	const gocL = j.gochara && j.gochara.fromLagna;
 	if(Array.isArray(gocL) && gocL.length){
-		out['行运 Gochara（从命）'] = gfmTable(['星曜', '从命宫', '吉凶'], gocL.map((it)=>[`${it.planetLabel || it.label || it.planet}`, `从命第${it.house}宫`, `${(it.good || it.auspicious) ? '吉位' : '凶位'}${it.effective === false ? '(Vedha遮)' : ''}`]));
+		out['行运 Gochara（从命）'] = gfmTable(['星曜', '从命宫', '吉凶'], gocL.map((it)=>[`${it.planetLabel || it.label || it.planet}`, `从命第${it.house}宫`, `${(it.good || it.auspicious) ? '吉位' : '凶位'}${gocharaVedhaBlocker(it) ? `(被${gocharaVedhaBlocker(it)}Vedha遮)` : ''}`]));
 	}
 	// 从日(第三基准)与过运×大运联动:页面逐曜过运卡都显示,Vedha 遮蔽者开关在这两处也会改判。
 	const gocS = j.gochara && j.gochara.fromSun;
 	if(Array.isArray(gocS) && gocS.length){
-		out['行运 Gochara（从日）'] = gfmTable(['星曜', '从日宫', '吉凶'], gocS.map((it)=>[`${it.planetLabel || it.label || it.planet}`, `从日第${it.house}宫`, `${(it.good || it.auspicious) ? '吉位' : '凶位'}${it.effective === false ? '(Vedha遮)' : ''}`]));
+		out['行运 Gochara（从日）'] = gfmTable(['星曜', '从日宫', '吉凶'], gocS.map((it)=>[`${it.planetLabel || it.label || it.planet}`, `从日第${it.house}宫`, `${(it.good || it.auspicious) ? '吉位' : '凶位'}${gocharaVedhaBlocker(it) ? `(被${gocharaVedhaBlocker(it)}Vedha遮)` : ''}`]));
 	}
 	const dl = j.gochara && j.gochara.dashaLink;
 	if(dl && dl.mahaLord){
-		const tfm = (t)=>(t ? `（从月第${t.house}宫·${(t.good || t.auspicious) ? '吉位' : '凶位'}${t.effective === false ? '·Vedha遮' : ''}）` : '');
+		const tfm = (t)=>(t ? `（从月第${t.house}宫·${(t.good || t.auspicious) ? '吉位' : '凶位'}${gocharaVedhaBlocker(t) ? `·被${gocharaVedhaBlocker(t)}Vedha遮` : ''}）` : '');
 		out['过运×大运联动'] = [
 			`体系：${dl.systemLabel || 'Vimshottari'}${dl.atDate ? `；过运日 ${dl.atDate}` : ''}`,
 			`大运主：${(dl.mahaLord || {}).label || (dl.mahaLord || {}).key || '—'}${tfm(dl.transitFromMoon)}`,
