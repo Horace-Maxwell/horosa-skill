@@ -442,7 +442,9 @@ AI_EXPORT_PRESET_SECTIONS = {
     # 上游 v3.11 [Q-445]（aiExport.js:590）：+回归与主限（页面按需拉取物：日/月返 + 择日日期前后主限命中，
     # electionSnapshot 只在 extra 有料时成段）。skill 在给了 natal（本命出生资料）时由 Python 求根/取数后经
     # extra 传入；缺 natal 不产 → 条件段双登记。
-    "election": ["起盘信息", "流派口径", "总评", "红线", "分项", "尊贵强弱", "阿拉伯点", "择前考量", "用事专属", "危象日参照", "应期", "本命合参", "回归与主限", "时势合参", "建议"],
+    # skill 段（缀后）：[择优扫描]——给了 scanMode 时（上游 v3.15.0 scan_election_moments 的排名 + 推荐语；上游走 AI 工具 JSON、
+    # 不进 aiExport），其余各段是第 1 名时刻的完整判读。
+    "election": ["起盘信息", "流派口径", "总评", "红线", "分项", "尊贵强弱", "阿拉伯点", "择前考量", "用事专属", "危象日参照", "应期", "本命合参", "回归与主限", "时势合参", "建议", "择优扫描"],
     # 上游 huangji preset 逐字逐序（aiExport.js:669）。sync311 F15：撤 skill 自造的 [心易起卦]——所选心易法的
     # 卦面按上游 buildHuangJiSnapshotForFields 进 [心易发微]（xinyiMethod=none 时该段不出 → 条件段双登记）。
     "wangji": ["起盘", "元会运世", "天道卦", "人事卦", "心易发微", "经典原文", "历史年表"],
@@ -808,7 +810,7 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     "calendar": ["选中日详情", "时辰吉凶", "物候·六曜·数九三伏", "流年年神方位", "通书择日", "日子馆·个性化择日", "当事人八字", "老黄历", "日子馆", "个性化吉日榜"],
     # 择日: 用事专属 only when the topic rule-pack produced items; 应期 is never emitted by 星阙's builder.
     # 回归与主限（v3.11 [Q-445]）：只在给了 natal 且日/月返或主限命中至少一项有料时成段。
-    "election": ["用事专属", "应期", "危象日参照", "本命合参", "回归与主限", "时势合参"],
+    "election": ["用事专属", "应期", "危象日参照", "本命合参", "回归与主限", "时势合参", "择优扫描"],
     # 七政四余: 政余格局 = Moira 格局 DSL 本地评估（失败 → '无'）；虚实/本命化曜/流年流曜 = Java /qizheng/moira
     # 规则层（v0.36.0 C1 接活）——Java 不可用（chart-only 降级）时三段缺席并进 warnings → 可选段。
     # [三主与化曜]/[限法实算]（上游 v3.11.0 [Q-435]）上游「有数据才产段」；skill 侧由 core-js 段 builder 从命度/四柱派生，

@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from horosa_skill.civil_calendar import _civil_date_str_of_jdn, _civil_jdn, _format_signed_date, _parse_date_parts
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual, tool_code
 from horosa_skill.service._common import (
     _chart_at_moment_date_fields,
@@ -16,6 +17,40 @@ from horosa_skill.service._common import (
     _to_slash_date,
 )
 from horosa_skill.service._context import _degrade
+
+
+# 择日盘逐时 / 逐日择优的候选时刻：上游 v3.15.0 utils/aiTools/tools/scanElectionMoments.js electionScanCandidates 的逐式端口
+# （那份文件拖着 AI 助手壳 _shared / storageutil / workspaceBridge，不能整份 vendor；排名与推荐语不在这里——走 vendored
+# divination/election/workflow.js 的 rankResults / buildScanRecommendation，见 horosa-core-js/src/tools/election.js action=scan）。
+_ELECTION_SCAN_BASE_RE = re.compile(r"^(-?\d{4,5})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?")
+ELECTION_SCAN_MODES = ("hours", "days")
+ELECTION_SCAN_LIMIT_MAX = 17  # 上游 inputSchema limit maximum（= hours 窗 6..22 的候选数）
+ELECTION_SCAN_LIMIT_DEFAULT = 5
+# 上游择日盘页弹窗标题（ElectionMain.js renderScanModal）
+ELECTION_SCAN_TITLES = {"hours": "本日逐时择优（6:00–22:00）", "days": "未来 14 日同时刻择优"}
+
+
+def _election_scan_candidates(base: str, mode: str) -> list[dict[str, Any]]:
+    """hours = 同日 6..22 整点（label 'HH:00'）；days = 起点起 14 日同一时刻（民用历加天，label 'MM/DD HH:mm'）。"""
+    m = _ELECTION_SCAN_BASE_RE.match(f"{base or ''}")
+    if not m:
+        return []
+    y, mo, d, hh, mi, ss = m.groups()
+    out: list[dict[str, Any]] = []
+    if mode == "days":
+        # 民用历加天（1582 以前按儒略历、公元前同样成立）：civilJdnOfDateStr / civilDateStrOfJdn 同口径。
+        parts = _parse_date_parts(f"{y}-{mo}-{d}")
+        if parts is None:
+            return []
+        jdn0 = _civil_jdn(*parts)
+        for i in range(14):
+            ds = _civil_date_str_of_jdn(jdn0 + i)
+            md = ds[-5:].replace("-", "/", 1)
+            out.append({"time": f"{ds} {hh}:{mi}:{ss or '00'}", "label": f"{md} {hh}:{mi}", "idx": i})
+    else:
+        for i, h in enumerate(range(6, 23)):
+            out.append({"time": f"{y}-{mo}-{d} {h:02d}:00:00", "label": f"{h:02d}:00", "idx": i})
+    return out
 
 
 class HoraryElectionRunners:
@@ -207,9 +242,8 @@ class HoraryElectionRunners:
         js_payload["crisisChart"] = crisis_chart
         js_payload["crisisDate"] = date
 
-    def _run_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
-        # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
+    def _election_setup(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None, dict[str, Any], dict[str, Any]]:
+        """单刻判读与择优扫描共用的起盘前准备 → (payload（已定宫制）, natal_spec, resolved, chart_payload, js_payload 底)。"""
         topic_id = f"{payload.get('topicId') or 'marriage'}".strip() or "marriage"  # `topic` 在入口按别名读成 topicId（经词表）
         # natal（可选，本命出生资料）：先验全再起任何盘——缺字段是输入错，不许半途静默少段。
         natal_spec = self._election_natal_spec(payload)
@@ -227,12 +261,7 @@ class HoraryElectionRunners:
         for stale in ("datetime", "dirZone", "dirLat", "dirLon", "topicId", "topic", "school", "options", "natal",
                       "crisisBase", *self._ELECTION_TOPIC_INPUTS):
             chart_payload.pop(stale, None)
-        # 随盘容许度 orbs / orbScale 同卜卦：随 **payload 进择日盘的 /chart（上游 v3.14.0 buildChartParams）。本命盘 / 病始盘 /
-        # 返照盘不带（上游 selectNatal / fetchCrisisBase / fetchReturnSet 的请求体没有这一对）。
-        response = self._call_remote("/chart", chart_payload)
-        self._note_unused_orb_ids("election", payload, response)
-        js_payload: dict[str, Any] = {
-            "chart": response,
+        js_base: dict[str, Any] = {
             "topicId": topic_id,
             # 流派档 + 13 个判读层参数：JS 侧按 ELECTION_PARAM_BY_KEY 过滤并回执。
             "school": payload.get("school"),
@@ -242,6 +271,20 @@ class HoraryElectionRunners:
             # 用事专属四键（上游左栏按用事显示：买卖方向 / 护符主星 / 手术部位 / 部位延及对宫）。
             **{k: payload[k] for k in self._ELECTION_TOPIC_INPUTS if payload.get(k) is not None},
         }
+        return payload, natal_spec, resolved, chart_payload, js_base
+
+    def _run_election_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 择日 (electional): cast the traditional chart at a candidate moment, then run the vendored 星阙
+        # election engine (runElection + buildElectionSnapshot). topicId drives the rule pack + hard flags.
+        if payload.get("scanMode") is not None or payload.get("scanLimit") is not None:
+            return self._run_election_scan(payload)
+        payload, natal_spec, resolved, chart_payload, js_base = self._election_setup(payload)
+        topic_id = js_base["topicId"]
+        # 随盘容许度 orbs / orbScale 同卜卦：随 **payload 进择日盘的 /chart（上游 v3.14.0 buildChartParams）。本命盘 / 病始盘 /
+        # 返照盘不带（上游 selectNatal / fetchCrisisBase / fetchReturnSet 的请求体没有这一对）。
+        response = self._call_remote("/chart", chart_payload)
+        self._note_unused_orb_ids("election", payload, response)
+        js_payload: dict[str, Any] = {"chart": response, **js_base}
         self._election_crisis(payload, js_payload)
         natal_returns: dict[str, Any] | None = None
         if natal_spec is not None:
@@ -286,6 +329,136 @@ class HoraryElectionRunners:
         if snapshot_error:
             result["snapshot_error"] = snapshot_error
         return result
+
+    # ── 择日·逐时 / 逐日择优（上游 v3.15.0 scan_election_moments）────────────────────────────────────
+    # 与择日盘页「本日逐时择优（6:00–22:00）/ 未来 14 日同时刻」同一候选窗与排名；每个候选按同一口径重算同一个核
+    # （宫制 / 流派 / 判读层 / 本命合参 / 危象日都与单刻判读同 opts，runElectionForRecord 同语义）。skill 多做一步：
+    # 第 1 名时刻再出完整判读（上游让 AI 另调 cast_technique），排名表成快照末尾的 skill 段 [择优扫描]。
+    _ELECTION_SCAN_KEYS = ("scanMode", "scanLimit")
+
+    @staticmethod
+    def _election_scan_settings(payload: dict[str, Any]) -> tuple[str, int]:
+        mode, limit = payload.get("scanMode"), payload.get("scanLimit")
+        invalid: list[dict[str, Any]] = []
+        if mode is None:
+            invalid.append({"key": "scanLimit", "value": limit, "allowed": "只在给了 scanMode（hours | days）时生效"})
+        elif f"{mode}".strip() not in ELECTION_SCAN_MODES:
+            invalid.append({"key": "scanMode", "value": mode, "allowed": list(ELECTION_SCAN_MODES)})
+        if limit is None:
+            limit_value = ELECTION_SCAN_LIMIT_DEFAULT
+        else:
+            limit_value = limit if isinstance(limit, int) and not isinstance(limit, bool) else None
+            if limit_value is None and isinstance(limit, str) and limit.strip().isdigit():
+                limit_value = int(limit.strip())
+            if limit_value is None or not 1 <= limit_value <= ELECTION_SCAN_LIMIT_MAX:
+                invalid.append({"key": "scanLimit", "value": limit, "allowed": f"1–{ELECTION_SCAN_LIMIT_MAX} 的整数（缺省 {ELECTION_SCAN_LIMIT_DEFAULT}）"})
+        if invalid:
+            raise ToolValidationError(
+                bilingual("择日择优扫描设置无效：" + "；".join(f"{i['key']}={i['value']!r}（{i['allowed']}）" for i in invalid),
+                          "invalid election scan setting(s): " + ", ".join(i["key"] for i in invalid)),
+                code="tool.election_invalid_setting",
+                details={"invalid": invalid},
+            )
+        return f"{mode}".strip(), int(limit_value)
+
+    @staticmethod
+    def _election_scan_base(payload: dict[str, Any]) -> str:
+        """起点时刻串（上游 record.divTime 同形 'YYYY-MM-DD HH:mm:ss'，公元前年带前导负号）。"""
+        parts = _parse_date_parts(payload.get("date"))
+        tm = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?", f"{payload.get('time') or ''}".strip())
+        if parts is None or tm is None:
+            return ""
+        year, month, day = parts
+        if payload.get("ad") == -1 and year > 0:
+            year = -year
+        return f"{_format_signed_date(year, month, day)} {int(tm.group(1)):02d}:{tm.group(2)}:{tm.group(3) or '00'}"
+
+    @staticmethod
+    def _election_moment_fields(moment: Any) -> dict[str, Any]:
+        """候选时刻串 → 入参同形 {ad, date: 'YYYY-MM-DD'（不带符号）, time}：前导 '-' = 公元前（纪元随时刻本身）。"""
+        date_part, _, time_part = f"{moment or ''}".strip().partition(" ")
+        return {"ad": -1 if date_part.startswith("-") else 1, "date": date_part.lstrip("-"), "time": time_part or "12:00:00"}
+
+    def _run_election_scan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        mode, limit = self._election_scan_settings(payload)
+        base_payload = {k: v for k, v in payload.items() if k not in self._ELECTION_SCAN_KEYS}
+        cands = _election_scan_candidates(self._election_scan_base(base_payload), mode)
+        if not cands:
+            raise ToolValidationError(
+                bilingual("择优扫描的起点时刻没取到（date 须 YYYY-MM-DD、time 须 HH:mm[:ss]）",
+                          "election scan: could not read the starting moment from date/time"),
+                code="tool.election_invalid_setting",
+                details={"invalid": [{"key": "date/time", "value": f"{payload.get('date')} {payload.get('time')}", "allowed": "YYYY-MM-DD + HH:mm[:ss]"}]},
+            )
+        setup_payload, natal_spec, _resolved, chart_payload, js_base = self._election_setup(base_payload)
+        js_payload: dict[str, Any] = {**js_base, "action": "scan", "mode": mode, "limit": limit}
+        self._election_crisis(setup_payload, js_payload)
+        if natal_spec is not None:
+            try:
+                js_payload["natalChart"] = self._election_natal_chart(setup_payload, natal_spec)
+            except Exception as exc:  # noqa: BLE001 — 本命盘起不来：各候选按无本命评分，并说出来
+                _degrade("election scan natal chart failed: %s", exc, note=f"择优扫描：本命盘起盘失败（{exc}），各候选未并入本命合参。")
+        failed: list[str] = []
+        rows: list[dict[str, Any]] = []
+        for cand in cands:
+            chart = None
+            try:
+                rsp = self._call_remote("/chart", {**chart_payload, **self._election_moment_fields(cand["time"])})
+                chart = rsp if isinstance(rsp, dict) and isinstance(rsp.get("chart"), dict) else None
+            except ToolValidationError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — 上游同：起不来的候选记作失败、不参与排名（下面统一说出来）
+                failed.append(f"{cand['time']}（{exc}）")
+            rows.append({**cand, "chart": chart})
+        if failed:
+            _degrade("election scan: %d candidate chart(s) failed", len(failed),
+                     note=f"择优扫描：{len(failed)} 个候选时刻起盘失败、未参与排名：{'；'.join(failed[:3])}{' …' if len(failed) > 3 else ''}")
+        js = self.js_client.run("election", {**js_payload, "candidates": rows})
+        data = js.get("data") if isinstance(js, dict) and isinstance(js.get("data"), dict) else {}
+        self._raise_invalid_divination_inputs("election", data.get("invalid_inputs"))
+        natal_echo = data.get("natal") if isinstance(data.get("natal"), dict) else None
+        if natal_spec is not None and natal_echo is not None and not natal_echo.get("integrated"):
+            _degrade("election scan natal chart not integrated: %s", natal_echo.get("error"))
+        for err in data.get("extra_errors") or []:
+            _degrade("election scan extra input failed: %s", err, note=f"择优扫描：{err}")
+        ranked = data.get("ranked") if isinstance(data.get("ranked"), list) else []
+        if not ranked:
+            raise ToolTransportError(
+                bilingual("择优扫描：候选时刻一个也没排出来（需本机计算服务在线）", "election scan: no candidate moment could be scored"),
+                code="tool.election_scan_failed",
+                details={"mode": mode, "candidates": len(cands), "failed": failed[:5]},
+            )
+        scan = {
+            "mode": data.get("mode") or mode,
+            "total": data.get("total"),
+            "failed": data.get("failed"),
+            "ranked": [{k: row.get(k) for k in ("time", "score", "grade", "crit", "high")} for row in ranked],
+            "recommendation": data.get("recommendation") or "",
+        }
+        best = ranked[0]
+        # 第 1 名时刻的完整判读：同一 payload 只换时刻（与候选盘同一写法，分数对得上 [总评]）。
+        result = self._run_election_tool({**base_payload, **self._election_moment_fields(best.get("time"))})
+        section = self._election_scan_section(scan, ranked, mode)
+        snapshot_text = f"{result.get('snapshot_text') or ''}".rstrip()
+        snapshot_text = f"{snapshot_text}\n\n{section}" if snapshot_text else section
+        result["snapshot_text"] = snapshot_text
+        result["export_snapshot"] = self._augment_export_payload(technique="election", snapshot_text=snapshot_text)
+        result["scan"] = scan
+        return result
+
+    @classmethod
+    def _election_scan_section(cls, scan: dict[str, Any], ranked: list[dict[str, Any]], mode: str) -> str:
+        """[择优扫描]：上游弹窗的推荐语 + 消去法说明 + 排名行（名次 / 时刻 / 分 / 等级 / 红线数），末行指明下文判读是哪一刻。"""
+        lines = ["[择优扫描]", f"窗口：{ELECTION_SCAN_TITLES.get(mode, mode)}"]
+        failed = scan.get("failed") or 0
+        lines.append(f"已评 {scan.get('total')} 个候选时刻" + (f"（{failed} 个未能起盘评分）" if failed else "") + "。")
+        # 上游弹窗首行：buildScanRecommendation(r) + 「没有完美的择日盘」——以下为窗口内消去法排名，分高者先。
+        lines.append(f"{scan.get('recommendation') or ''}「没有完美的择日盘」——以下为窗口内消去法排名，分高者先。")
+        for i, row in enumerate(ranked, 1):
+            flags = (f" · 严重红线 {row.get('crit')}" if row.get("crit") else "") + (f" · 较重红线 {row.get('high')}" if row.get("high") else "")
+            lines.append(f"{i}. {row.get('time')}（{row.get('label')}）· {row.get('score')} 分 · {row.get('grade')}{flags}")
+        lines.append(f"本快照其余各段为第 1 名 {ranked[0].get('time')} 的完整判读；要看别的时刻，换 date/time 单刻再起。")
+        return "\n".join(lines)
 
     # ── 择日·本命合参 + 回归与主限（上游 v3.11 [Q-445]）─────────────────────────────────────────
     # 上游页面：左栏「选本命盘」（ElectionMain.js:173 selectNatal）→ natalFacts 进 runElection（[本命合参]）；
@@ -334,16 +507,8 @@ class HoraryElectionRunners:
         natal_ad = natal.get("ad") if natal.get("ad") is not None else 1
         natal_date = f"{natal.get('date')}".strip()
         natal_time = f"{natal.get('time')}".strip() or "12:00:00"
-        # selectNatal（:173-181）：本命参数 + 页面宫制/黄道 + tradition 1 / predictive 0 / pdaspects。
-        natal_chart_payload = _drop_none({
-            "ad": natal_ad, "date": natal_date, "time": natal_time,
-            "zone": natal.get("zone"), "lat": natal.get("lat"), "lon": natal.get("lon"),
-            "gpsLat": natal.get("gpsLat"), "gpsLon": natal.get("gpsLon"),
-            "hsys": hsys, "zodiacal": zodiacal, "siderealAyanamsa": ayanamsa,
-            "tradition": 1, "predictive": 0, "pdaspects": [0, 60, 90, 120, 180],
-        })
         try:
-            natal_chart = self._call_remote("/chart", natal_chart_payload)
+            natal_chart = self._election_natal_chart(payload, natal)
         except Exception as exc:  # noqa: BLE001 — 本命盘起不来：择日盘照出，合参两段缺席并说出来
             _degrade("election natal chart failed: %s", exc)
             return {"solarReturn": None, "lunarReturn": None, "pdTimeKey": None, "pdHits": [], "error": str(exc)}
@@ -389,6 +554,20 @@ class HoraryElectionRunners:
             "pdTimeKey": pd_time_key,
             "pdHits": pd_hits,
         }
+
+    def _election_natal_chart(self, payload: dict[str, Any], natal: dict[str, Any]) -> Any:
+        """selectNatal（ElectionMain.js:173-181）：本命参数 + 择日盘宫制/黄道 + tradition 1 / predictive 0 / pdaspects 起本命盘。"""
+        natal_chart_payload = _drop_none({
+            "ad": natal.get("ad") if natal.get("ad") is not None else 1,
+            "date": f"{natal.get('date')}".strip(), "time": f"{natal.get('time')}".strip() or "12:00:00",
+            "zone": natal.get("zone"), "lat": natal.get("lat"), "lon": natal.get("lon"),
+            "gpsLat": natal.get("gpsLat"), "gpsLon": natal.get("gpsLon"),
+            "hsys": payload.get("hsys") if payload.get("hsys") is not None else 0,
+            "zodiacal": payload.get("zodiacal") if payload.get("zodiacal") is not None else 0,
+            "siderealAyanamsa": payload.get("siderealAyanamsa") or "",
+            "tradition": 1, "predictive": 0, "pdaspects": [0, 60, 90, 120, 180],
+        })
+        return self._call_remote("/chart", natal_chart_payload)
 
     def _election_effective_pd_time_key(self, payload: dict[str, Any], *, resolved: dict[str, Any] | None = None) -> str | None:
         """eff.pdTimeKey 由引擎自己的 resolveElectionParams 给（流派档 × 覆写四层合并），Python 不手抄默认表。"""

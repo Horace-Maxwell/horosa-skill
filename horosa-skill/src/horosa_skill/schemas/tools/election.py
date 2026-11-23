@@ -443,6 +443,10 @@ class ElectionInput(BirthInput):
     surgeryPart: str | None = Field(default=None, description="手术部位星座（surgery）：aries…pisces（按星座主管身体部位）。")
     surgeryPartOpposite: bool | None = Field(default=None, description="部位禁忌延及对宫（surgery）；缺省不延。")
     crisisBase: Any | None = Field(default=None, description="病始日期 YYYY-MM-DD（surgery/medication）：产 [危象日参照]。")
+    # 逐时 / 逐日择优（上游 v3.15.0 scan_election_moments）：hours = 当日 6–22 点逐时、days = 起点起 14 日同一时刻，每个候选按
+    # 同一口径打分排名（workflow.rankResults），第 1 名时刻出完整判读 + 末尾 [择优扫描]。不进 tools/list（预算），键表在 guidance。
+    scanMode: Any | None = _unadvertised()
+    scanLimit: Any | None = _unadvertised()
 
     # v0.50.0：用事 / 流派过词表（western_vocab.divination_vocabularies）——引擎对认不出的值静默回落 marriage / modern_main。
     @field_validator("topicId", "school", mode="before")

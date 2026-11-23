@@ -221,6 +221,11 @@ To search a window use a `*zeri` tool or `tianxing`; to judge one given moment u
 needs `startDate`, `endDate`, a base `date` / `time` / `place`, and a `conditions` tree. The condition types and their
 meaning come from `horosa_agent_guidance {"tool_name": "<tool>"}` → `condition_types`; do not invent keys.
 
+**Best hour / best day (Western election).** "今天几点最好 / 这两周哪天好" → `election` with `scanMode`: `"hours"` scores
+that `date` from 06:00 to 22:00 on the hour, `"days"` scores 14 days from `date` at the same `time`. The ranking is the
+last section `[择优扫描]`; the other sections judge the top-ranked moment. `scanLimit` (1–17, default 5) sets how many
+ranks are listed.
+
 **Polarity.** Some conditions carry their own sense: 黄历 `chong_shengxiao` with the default `mode`
 (`without`) means "does **not** clash the chosen sign". To avoid days that clash 马, write the condition with
 the default mode and **no** `negate`; adding `negate: true` gives exactly the clashing days. Every result's

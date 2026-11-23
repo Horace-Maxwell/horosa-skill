@@ -1602,6 +1602,11 @@ _V315_OPTIONS_KEYS: dict[str, dict[str, str]] = {
                     "Mercury 水星 | Venus 金星 | Mars 火星 | Uranus 天王星 | Neptune 海王星 | Pluto 冥王星；按此表顺序出，认不出报错",
         "erCount": "每体取前几回：1 | 2 | 3 | 4 | 5（缺省）| 6 | 8 | 10 | 12",
     },
+    "election": {
+        "scanMode": "择优扫描（用户问「今天几点最好 / 这两周哪天好」时给）：hours = date 当日 6–22 点逐时 | days = 从 date 起 14 日的同一 time；"
+                    "每个候选按同一口径打分排名，第 1 名时刻出完整判读，排名在末尾 [择优扫描] 段",
+        "scanLimit": "择优扫描列前几名：1–17（缺省 5）；只在给了 scanMode 时有效",
+    },
 }
 for _tool, _keys in _V315_OPTIONS_KEYS.items():
     TOOL_GUIDANCE[_tool] = {**TOOL_GUIDANCE[_tool], "options_keys": {**(TOOL_GUIDANCE[_tool].get("options_keys") or {}), **_keys}}

@@ -10,6 +10,7 @@ import { WEST_SCHOOLS, schoolOf } from '../vendor/divination/election/westernSch
 import { buildFacts } from '../vendor/divination/engine/chartFacts.js';
 import { SIGN_ORDER } from '../vendor/divination/data/signs.js';
 import { CLASSICAL_PLANETS } from '../vendor/divination/data/planets.js';
+import { rankResults, buildScanRecommendation } from '../vendor/divination/election/workflow.js';
 import { judgeLayerFromPlain } from '../vendor/utils/judgeLayerHeadless.js';
 import { checkSpecValue } from '../shared/specOptions.js';
 
@@ -151,6 +152,48 @@ export function runElectionTool(payload) {
     } catch (error) {
       natalError = `${(error && error.message) || error}`;
     }
+  }
+  // 逐时 / 逐日择优（上游 v3.15.0 utils/aiTools/tools/scanElectionMoments.js run()）：Python 按 electionScanCandidates 两种窗
+  // 生成候选、逐个起盘（candidates[i].chart，起不来 = null）；这里对每个候选跑同一个核（runElectionForRecord 的
+  // runElection(chart, topicId, natalFacts, undefined, opts)：本命合参 / 危象日 / 流派口径与单刻判读同 opts），
+  // 行形状、排名（workflow.rankResults）、推荐语（workflow.buildScanRecommendation）、total / failed 口径都照上游。
+  if (input.action === 'scan') {
+    const cands = Array.isArray(input.candidates) ? input.candidates : [];
+    const rows = invalid.length ? [] : cands.map((c) => {
+      if (!c || !c.chart || typeof c.chart !== 'object') return null;
+      try {
+        const rep = runElection(c.chart, topicId, natalFacts, null, opts);
+        if (!rep || !rep.overall) return null;
+        const flags = Array.isArray(rep.hard_flags) ? rep.hard_flags : [];
+        return {
+          time: c.time, label: c.label, idx: c.idx, score: rep.overall.score, grade: rep.overall.gradeCn,
+          crit: flags.filter((x) => x.severity === 'critical').length, high: flags.filter((x) => x.severity === 'high').length,
+        };
+      } catch (error) {
+        return null;
+      }
+    });
+    const ranked = rankResults(rows);
+    const limit = Number.isInteger(input.limit) && input.limit >= 1 && input.limit <= 17 ? input.limit : 5;
+    return {
+      tool: 'election',
+      topicId,
+      data: {
+        ok: ranked.length > 0,
+        mode: input.mode === 'days' ? 'days' : 'hours',
+        total: ranked.length,
+        failed: cands.length - ranked.length,
+        ranked: ranked.slice(0, limit).map(({ time, label, score, grade, crit, high }) => ({ time, label, score, grade, crit, high })),
+        recommendation: ranked.length ? buildScanRecommendation(ranked) : '',
+        school: westSchool || 'modern_main',
+        params_applied: Object.keys(electionParams).sort(),
+        params_global: Object.keys(globals).sort(),
+        params_ignored: ignoredParams.sort(),
+        invalid_inputs: invalid,
+        natal: natalChart ? { integrated: !!natalFacts, error: natalError } : undefined,
+        extra_errors: extraErrors,
+      },
+    };
   }
   // [回归与主限]（上游 v3.11 [Q-445]）：页面按需拉取物经 extra 进快照（ElectionJudgment.js:289）。
   const extraIn = input.extra && typeof input.extra === 'object' ? input.extra : null;

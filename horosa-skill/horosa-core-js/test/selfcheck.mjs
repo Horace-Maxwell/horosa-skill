@@ -137,6 +137,30 @@ check('election unknown topic falls back to marriage', () => {
   assert(r.topicId === 'marriage', `expected marriage, got ${r.topicId}`);
 });
 
+// 逐时 / 逐日择优（上游 v3.15.0 scanElectionMoments.js run()）：每个候选跑单刻判读同一个核（同 opts / 本命合参），
+// 起不来的候选（chart=null）算 failed；同分按 idx 先后（workflow.rankResults）；推荐语取第 1 名标签。
+check('election action=scan：逐候选同核评分 + rankResults / buildScanRecommendation', () => {
+  const opts = { topicId: 'surgery', school: 'persian', natalChart: chart, options: { vocMode: 'by_orb' } };
+  const single = runElectionTool({ chart, ...opts });
+  const r = runElectionTool({
+    action: 'scan', mode: 'days', limit: 1, ...opts,
+    candidates: [
+      { time: '2026-03-02 09:00:00', label: '03/02 09:00', idx: 1, chart },
+      { time: '2026-03-01 09:00:00', label: '03/01 09:00', idx: 0, chart },
+      { time: '2026-03-03 09:00:00', label: '03/03 09:00', idx: 2, chart: null },
+    ],
+  });
+  const d = r.data;
+  assert(d.ok === true && d.mode === 'days' && d.total === 2 && d.failed === 1, `counts: ${JSON.stringify(d)}`);
+  assert(d.ranked.length === 1 && d.ranked[0].time === '2026-03-01 09:00:00', `tie must fall back to idx: ${JSON.stringify(d.ranked)}`);
+  assert(d.ranked[0].score === single.data.overall.score && d.ranked[0].grade === single.data.overall.gradeCn, 'same core as the single moment');
+  assert(d.ranked[0].crit + d.ranked[0].high <= single.data.hard_flags, 'crit/high are a subset of hard_flags');
+  assert(d.recommendation.startsWith(`窗口内较优：03/01 09:00（${single.data.overall.score} 分 · ${single.data.overall.gradeCn}）`), d.recommendation);
+  assert(d.natal.integrated === true && d.school === 'persian' && d.params_applied.includes('vocMode'), `receipts: ${JSON.stringify(d)}`);
+  const bad = runElectionTool({ action: 'scan', candidates: [{ time: 't', label: 'l', idx: 0, chart }], options: { vocMode: 'nope' } });
+  assert(bad.data.ok === false && bad.data.total === 0 && bad.data.invalid_inputs.length === 1, 'invalid opts must not score');
+});
+
 check('progextra(balbillus) emits the 旺距削减 table', () => {
   const r = runProgExtra({ technique: 'balbillus', chart });
   const s = r.snapshot_text || '';

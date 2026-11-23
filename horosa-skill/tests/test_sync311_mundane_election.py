@@ -203,7 +203,8 @@ def test_mundane_and_election_presets_mirror_upstream_order() -> None:
 
     _version, upstream = load_upstream_aiexport(UPSTREAM_AIEXPORT)
     assert AI_EXPORT_PRESET_SECTIONS["mundane"] == upstream["mundane"]
-    assert AI_EXPORT_PRESET_SECTIONS["election"] == upstream["election"]
+    # 择日：上游段序逐字 + skill 段 [择优扫描] 缀后（scanMode，上游 v3.15.0 scan_election_moments 走 AI 工具 JSON、不进 aiExport）。
+    assert AI_EXPORT_PRESET_SECTIONS["election"] == [*upstream["election"], "择优扫描"]
 
 
 def test_cycle_defaults_are_anchored_to_the_vendored_builder() -> None:
