@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import shutil
@@ -187,7 +188,7 @@ def test_classic_tables_equal_upstream_value_for_value() -> None:
         assert ours[char]["words"] == words, char
         assert ours[char]["to"] == ("範" if char == "范" else "裡")   # hantRules.js CLASSIC_INDEX 的 to
         assert set(ours[char]["right_veto"]) == set(up["CLASSIC_NOT_RIGHT"].get(char, set())), char
-    test_js = (UPSTREAM_UI / "utils" / "__tests__" / "hantClassicScope.test.js").read_text(encoding="utf-8")
+    test_js = upstream_source(UPSTREAM_UI / "utils" / "__tests__" / "hantClassicScope.test.js")
     cases = re.findall(r"\['([^']+)', '([^']+)'\]", test_js)
     assert len(cases) >= 18
     for simplified, traditional in cases:

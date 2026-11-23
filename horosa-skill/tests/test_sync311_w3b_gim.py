@@ -7,6 +7,7 @@ chart :8877 / java :9977 实抓）：桩只供后端真值，段文本全部由�
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import math
@@ -310,7 +311,7 @@ UPSTREAM_ASTROCONST = upstream_path("Horosa-Web/astrostudyui/src/constants/Astro
 def test_shared_astroconst_shim_string_ids_equal_upstream_values() -> None:
     """shim 里每个字符串常量都必须逐值等于上游 constants/AstroConst.js 同名常量（猜值会静默对不上排盘 objects[].id）。"""
     shim = (Path(__file__).resolve().parents[1] / "horosa-core-js" / "src" / "constants" / "AstroConst.js").read_text(encoding="utf-8")
-    upstream = UPSTREAM_ASTROCONST.read_text(encoding="utf-8")
+    upstream = upstream_source(UPSTREAM_ASTROCONST)
     pat = re.compile(r"^export const ([A-Z_0-9]+)\s*=\s*'([^']*)'", re.M)
     up = dict(pat.findall(upstream))
     mine = dict(pat.findall(shim))

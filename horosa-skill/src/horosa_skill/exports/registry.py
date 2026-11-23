@@ -4,6 +4,8 @@ from copy import deepcopy
 from typing import Any
 
 AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
+# v18 (v0.53.0): 上游 v3.15.0（aiExport v65→v68）全量重同步。v66：bazi [卦释]（胎元 + 四柱逐行本卦 / 互卦 / 旁通，干支合冲之后）；
+#   v67：germany [行运接触]（挂载给了 transitAt 才出）；v68：germany [图形星历]（给了 ephemStart/ephemEnd 才出）。三段都是条件段。
 # v17 (v0.51.0): 上游 v3.14.0（aiExport v60→v65）全量重同步。v61：astrochart / astrochart_like / relocation / locastro(acg)
 #   [盘面细节]、mundane [世运周期表]；v62：indiachart [Yoga 判定表] / [印占补充表]、relative [八重合]（首位）；v64：babylon
 #   [天象实算]、新技法键 dongya / zhufang；v65：indiachart [穿界时刻]，indiazeri = 印占全文段 + 择时三段。新技法键另有
@@ -42,8 +44,8 @@ AI_EXPORT_SETTINGS_KEY = "horosa.ai.export.settings.v1"
 #   geomancy 升 v3.5.1 地占大改版段表、primarydirect 段名对齐 v48、sixyao [断卦结构] 富化。
 # v8: 新技法 yizhangjing/acg/astrodata 入册，heluo/canping 补全生涯流年与断验段，fengshui 扩十三派。
 # v7: sanshiunited 追加三独立技法富化段、mundane 追加子盘群段。
-AI_EXPORT_SETTINGS_VERSION = 17
-AI_EXPORT_SECTION_MIGRATION_VERSION = 17
+AI_EXPORT_SETTINGS_VERSION = 18
+AI_EXPORT_SECTION_MIGRATION_VERSION = 18
 # 镜像基线（机读）：vendored aiExport.js 的版本，也就是本注册表**对账所依据**的上游版本。
 #
 # ⚠️ 语义澄清（v0.23.0 的教训）：这个数字表示「对到了哪一版」，**不**表示「该版的段全都有了」。
@@ -57,7 +59,8 @@ AI_EXPORT_SECTION_MIGRATION_VERSION = 17
 # v0.46.0（2026-10）：重同步至上游 v3.13.0（HEAD 965af0f4，aiExport v60；v3.12.0 起 aiExport.js 是门面 +
 #   aiExport/ 目录，版本号在 aiExport/presets.js —— 读源码一律经 scripts/_upstream_preset.read_aiexport_source）。
 # v0.51.0（2026-11）：重同步至上游 v3.14.0（HEAD e55c3a66，aiExport v65）。
-MIRRORED_UPSTREAM_AIEXPORT_VERSION = 65
+# v0.53.0（2026-11）：重同步至上游 v3.15.0（HEAD 5da8e539，aiExport v68：v66 八字 [卦释]、v67 量化盘 [行运接触]、v68 量化盘 [图形星历]）。
+MIRRORED_UPSTREAM_AIEXPORT_VERSION = 68
 AI_EXPORT_SECTION_MIGRATION_KEYS = [
     "liureng", "qimen", "sanshiunited", "mundane",
     "yizhangjing", "acg", "astrodata", "heluo", "canping", "fengshui",
@@ -359,7 +362,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     # （无勾选则 body 为空、整段不产），headless 侧要驱动它需要新增一组显式的时段选择入参 ——
     # 属功能缺口而非段名/取数问题，登记成 preset 只会变成死条目。
     # v14（上游 v3.9.2）：+干支合冲（后端字段纯排版，恒出）；段序对齐上游 v56（分野→合冲→大运）。
-    "bazi": ["起盘信息", "四柱与三元", "神煞（四柱与三元）", "五行力量", "格局·用神", "盲派结构", "月令司令（分野）", "干支合冲", "大运", "流年行运概略", "多运限·指定时段"],
+    "bazi": ["起盘信息", "四柱与三元", "神煞（四柱与三元）", "五行力量", "格局·用神", "盲派结构", "月令司令（分野）", "干支合冲", "卦释", "大运", "流年行运概略", "多运限·指定时段"],
     # [运限] 与 [流派叠层] 未登记：前者由用户勾选的大运/流年/流月组合驱动（无勾选整段不产，
     # 同 bazi 多运限）；后者由紫微流派开关（ZWEngineOptions 的太岁入卦等）驱动，本仓尚未开放
     # 这组开关。两者都属需新增显式入参的功能缺口，登记成 preset 会变死条目。
@@ -391,7 +394,7 @@ AI_EXPORT_PRESET_SECTIONS = {
     # v15（上游 v3.11 [Q-442/T-405]，aiExport.js:857）：+六宫框落宫（后端 houseFrames 缺省即带）/ 校时预览
     # （仅给了 rectifyEvents 才产）——两段都是上游 builder 的条件段（段内容为空不产段）→ 双登记。
     "guolao": ["起盘信息", "七政四余宫位与二十八宿星曜", "星曜庙旺与星点动态（殿垣庙旺乐喜怒 · 顺逆留伏迟速）", "神煞", "大限", "三主与化曜", "限法实算", "虚实", "本命化曜", "流年流曜", "政余格局", "相位"],
-    "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表", "六宫框落宫", "赤纬接触", "校时预览", "中点坐标", "公式求解", "汉堡学派要素", "组合盘", "戴维森盘", "虚星参考"],
+    "germany": ["起盘信息", "宫位宫头", "行星", "中点", "TNP星体", "中点相位", "90°中点盘", "行星图", "映点", "中点列表", "六宫框落宫", "赤纬接触", "校时预览", "行运接触", "图形星历", "中点坐标", "公式求解", "汉堡学派要素", "组合盘", "戴维森盘", "虚星参考"],
     "agepoint": ["起盘信息", "年龄推进点（Age Point / Huber）", "当前时点", "方法说明"],
     # 上游 v3.11 [Q-106/T-10] 星运三页（aiExport.js:635-637 逐字）。全段恒出：builder 在后端无数据时
     # 整体返回空（skill 侧改抛结构化错误），不存在「部分段缺席」的形态 → 无 optional。
@@ -826,7 +829,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # 挂载齿轮无此项、无头恒空 → 永不产，照上游 preset 留名只为识别外部导出。
     # v16：[伙伴星期] 只在后端回 distPartners 非空时产（AstroDistributions.buildDistributionsSnapshotFromResult）→ 条件段。
     "distributions": ["伙伴星期"],
-    "germany": ["六宫框落宫", "赤纬接触", "校时预览", "中点坐标", "公式求解", "汉堡学派要素", "组合盘", "戴维森盘"],
+    # v18（上游 v67/v68）：[行运接触] 只在给了 transitAt、[图形星历] 只在给了 ephemStart/ephemEnd 时产 → 条件段。
+    "germany": ["六宫框落宫", "赤纬接触", "校时预览", "行运接触", "图形星历", "中点坐标", "公式求解", "汉堡学派要素", "组合盘", "戴维森盘"],
     # 骰子盘/天象盘相位：上游 DiceMain.buildChartAspectLines 有 normalAsp 才产段（Q-455）。
     "otherbu": ["骰子盘相位", "天象盘相位"],
     # 二十四节气：种子行来自 Java /jieqi/year（上游页面种子请求同路）；Java 不可用时不产 + warnings。
@@ -835,7 +839,8 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # builder 自身就是条件段 —— [五行力量]/[格局·用神]/[盲派结构]/[月令司令（分野）] 只有本地引擎结果带
     # （公元前等回退 Java /bazi/* 时缺席，上游同）；[干支合冲] heCongLines 全空不产；[大运]/[流年行运概略]
     # 要 mainDirection/smallDirection/direction（Java /bazi/birth 回退不带 direction）；[多运限·指定时段] 只在给了 period 时产。
-    "bazi": ["大运", "多运限·指定时段", "五行力量", "格局·用神", "盲派结构", "月令司令（分野）", "干支合冲", "流年行运概略"],
+    # v18（上游 v66）：[卦释] 要各柱卦数据（本地引擎带；Java 回退结果没有 → 不产段）→ 条件段。
+    "bazi": ["大运", "多运限·指定时段", "五行力量", "格局·用神", "盲派结构", "月令司令（分野）", "干支合冲", "卦释", "流年行运概略"],
     # 太乙 (星阙 v2.6.x): kintaiyi 后端返回的 太乙解读段（起盘信息/太乙盘/十六宫标记为 builder 恒出，
     # 进 preset）。其余按起局式/选项条件出（命法/博弈/某些式不出）→ 列为可选段，避免随式误报 missing。
     "taiyi": ["太乙诸神", "风游", "主客定算", "八门与宿曜", "十二神", "断法", "七大兵法", "博弈", "命法", "命宫行限"],

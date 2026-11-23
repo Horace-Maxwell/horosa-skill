@@ -208,7 +208,8 @@ def test_mundane_and_election_presets_mirror_upstream_order() -> None:
 
 def test_cycle_defaults_are_anchored_to_the_vendored_builder() -> None:
     # 页面缺省（MundaneMain.js:554/:557）Python 端手持用于发请求；vendored builder 的显示回落必须同值。
-    text = (VENDOR / "mundane" / "MundaneMain.js").read_text(encoding="utf-8")
+    # v3.15.0：世俗盘页拆成壳 + main/*，卡片段与表格常量在 vendored mundane/main/{cards,tables}.js（壳不再 vendor）。
+    text = "".join(path.read_text(encoding="utf-8") for path in sorted((VENDOR / "mundane" / "main").glob("*.js")))
     gc, bb = HorosaSkillService._MUNDANE_GC_DEFAULT_STATE, HorosaSkillService._MUNDANE_BB_DEFAULT_STATE
     assert f"clampYear(st.gcStart, {gc['gcStart']})" in text and f"clampYear(st.gcEnd, {gc['gcEnd']})" in text
     assert f"clampYear(st.bbStart, {bb['bbStart']})" in text and f"clampYear(st.bbEnd, {bb['bbEnd']})" in text

@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import re
 import shutil
@@ -77,11 +78,11 @@ def test_astrotext_shim_is_the_upstream_file_and_new_ids_carry_upstream_values()
     """AstroText shim = 上游 constants/AstroText.js 全文，唯一改动是 Node ESM 要的 `.js` 后缀（不在 vendor 清单里，这里逐字比）。
     AstroConst shim 里每个字符串常量 == 上游同名常量（既有 test_shared_astroconst_shim_string_ids_equal_upstream_values 同款，
     这里另断言这轮补的那批确实在）。上游 AstroText 一改，本用例红 → 重拷 + 跑 missing_astroconst_ids 补常量。"""
-    upstream_text = upstream_path("Horosa-Web/astrostudyui/src/constants/AstroText.js").read_text(encoding="utf-8")
+    upstream_text = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/constants/AstroText.js"))
     assert TEXT_SHIM.read_text(encoding="utf-8") == upstream_text.replace(
         "import * as AstroConst from './AstroConst'", "import * as AstroConst from './AstroConst.js'", 1)
     pattern = re.compile(r"^export const ([A-Za-z_0-9]+)\s*=\s*'([^']*)'", re.M)
-    upstream_const = dict(pattern.findall(upstream_path("Horosa-Web/astrostudyui/src/constants/AstroConst.js").read_text(encoding="utf-8")))
+    upstream_const = dict(pattern.findall(upstream_source(upstream_path("Horosa-Web/astrostudyui/src/constants/AstroConst.js"))))
     mine = dict(pattern.findall(CONST_SHIM.read_text(encoding="utf-8")))
     assert {name: value for name, value in mine.items() if upstream_const.get(name) != value} == {}
     assert {"STAR_REGULUS", "STAR_SIRIUS", "HSYS_Whole_Sign", "HSYS_Fortuna_Whole", "VERTEX", "ERIS", "CUPIDO", "ARIES_POINT",

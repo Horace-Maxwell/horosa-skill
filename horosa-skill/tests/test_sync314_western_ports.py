@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import re
 import shutil
@@ -115,11 +116,11 @@ def test_live_relative_score_follows_the_orb_scale(tmp_path) -> None:
 @needs_upstream("Horosa-Web/astropy/astrostudy/modern/chartcomp.py", "Horosa-Web/astropy/astrostudy/astroextra_parts/relative.py",
                 "Horosa-Web/astropy/websrv/webmodernsrv.py")
 def test_backend_reads_the_orb_keys_where_the_skill_sends_them() -> None:
-    comp = upstream_path("Horosa-Web/astropy/astrostudy/modern/chartcomp.py").read_text(encoding="utf-8")
+    comp = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/modern/chartcomp.py"))
     assert "CROSS_ASPECT_ORB = 1.0" in comp and "d.get('orbScale')" in comp
-    score = upstream_path("Horosa-Web/astropy/astrostudy/astroextra_parts/relative.py").read_text(encoding="utf-8")
+    score = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/astroextra_parts/relative.py"))
     assert "for key in ('orbs', 'orbScale'):" in score
-    modern = upstream_path("Horosa-Web/astropy/websrv/webmodernsrv.py").read_text(encoding="utf-8")
+    modern = upstream_source(upstream_path("Horosa-Web/astropy/websrv/webmodernsrv.py"))
     assert "'orbs', 'orbScale'):" in modern
 
 
@@ -142,7 +143,7 @@ def test_transform_chart_house_modes_follow_upstream_jest() -> None:
 
 @needs_upstream("Horosa-Web/astrostudyui/src/utils/wholeSignRulers.js", "Horosa-Web/astropy/astrostudy/transform_charts.py")
 def test_transform_house_mode_strings_equal_upstream_source() -> None:
-    js = upstream_path("Horosa-Web/astrostudyui/src/utils/wholeSignRulers.js").read_text(encoding="utf-8")
+    js = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/utils/wholeSignRulers.js"))
     labels = dict(re.findall(r"export const (\w+_LABEL) = '([^']+)';", js))
     assert labels == {
         "DERIVED_WHOLE_SIGN_LABEL": astro_rulers.DERIVED_WHOLE_SIGN_LABEL, "COMPOSITE_WHOLE_SIGN_LABEL": astro_rulers.COMPOSITE_WHOLE_SIGN_LABEL,
@@ -150,7 +151,7 @@ def test_transform_house_mode_strings_equal_upstream_source() -> None:
     }
     modes = re.search(r"if\(m === '([^)]*)'\)\{\s*return m;", js).group(0)
     assert sorted(re.findall(r"'(\w+)'", modes)) == sorted((astro_rulers._DERIVED_HOUSE_MODE, astro_rulers._COMPOSITE_HOUSE_MODE, *astro_rulers._TRANSFORM_HOUSE_MODES))
-    backend = upstream_path("Horosa-Web/astropy/astrostudy/transform_charts.py").read_text(encoding="utf-8")
+    backend = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/transform_charts.py"))
     assert f"EQUAL_HOUSE_MODE = '{astro_rulers._TRANSFORM_EQUAL_HOUSE_MODE}'" in backend
     assert f"BASE_HOUSE_MODE = '{astro_rulers._TRANSFORM_BASE_HOUSE_MODE}'" in backend
 
@@ -159,7 +160,7 @@ def test_transform_house_mode_strings_equal_upstream_source() -> None:
 @needs_upstream("Horosa-Web/astrostudyui/src/utils/classicalParamSpec.js")
 def test_topocentric_moon_note_tracks_the_upstream_hint() -> None:
     """classicalParamSpec.js v3.14.0 给 topocentricMoon 的提示补了「印占各盘恒用地心月」——skill 的字段说明是手抄，跟上。"""
-    spec = upstream_path("Horosa-Web/astrostudyui/src/utils/classicalParamSpec.js").read_text(encoding="utf-8")
+    spec = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/utils/classicalParamSpec.js"))
     hint = re.search(r"key: 'topocentricMoon'.*?hint: '([^']+)'", spec, flags=re.S).group(1)
     assert hint == "影响月亮黄经 ≤1° · 福点随动 · 印占各盘恒用地心月"
     description = str(BirthInput.model_fields["topocentricMoon"].description)

@@ -12,10 +12,10 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+from node_esm import run_node_esm
 
 CORE_JS = Path(__file__).resolve().parents[1] / "horosa-core-js"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="[host] node not installed")
@@ -33,13 +33,11 @@ def _reference_bits(tape: bytes, domain: str, offset: int, length: int, n: int) 
 
 
 def _js_bits(seed: str, lane: dict | None, n: int) -> list[int]:
-    script = ("import { entropyReader } from './src/vendor/utils/entropyTape.js';"
-              "const [seed, lane, n] = JSON.parse(process.argv[1]);"
+    script = ("const { entropyReader } = await import(process.argv[1]);"
+              "const [seed, lane, n] = JSON.parse(process.argv[2]);"
               "const r = entropyReader(seed, lane || undefined);"
               "process.stdout.write(JSON.stringify(Array.from({length: n}, () => r.bits(1))));")
-    out = subprocess.run(["node", "--input-type=module", "-e", script, json.dumps([seed, lane, n])], cwd=CORE_JS,
-                         capture_output=True, text=True, check=True, encoding="utf-8")
-    return json.loads(out.stdout)
+    return json.loads(run_node_esm(script, CORE_JS / "src" / "vendor" / "utils" / "entropyTape.js", json.dumps([seed, lane, n])))
 
 
 @pytest.mark.parametrize(("tape_hex", "lane"), [

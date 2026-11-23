@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import os
@@ -128,7 +129,7 @@ def test_polar_note_follows_the_backend_flag_in_all_three_header_ports() -> None
 
 @needs_upstream
 def test_polar_note_text_tracks_upstream() -> None:
-    src = (_UPSTREAM_SRC / "utils/wholeSignRulers.js").read_text(encoding="utf-8")
+    src = upstream_source(_UPSTREAM_SRC / "utils/wholeSignRulers.js")
     assert f"export const POLAR_MC_NOTE = '{POLAR_MC_NOTE}';" in src
     assert f"export const COMPOSITE_WHOLE_SIGN_LABEL = '{COMPOSITE_WHOLE_SIGN_LABEL}';" in src
 
@@ -252,7 +253,7 @@ def test_hermetic_lots_calibre_label_is_six_star_points() -> None:
 
 @needs_upstream
 def test_hermetic_lots_calibre_label_tracks_upstream() -> None:
-    src = (_UPSTREAM_SRC / "utils/astroAiSnapshot.js").read_text(encoding="utf-8")
+    src = upstream_source(_UPSTREAM_SRC / "utils/astroAiSnapshot.js")
     assert "hermeticLotsReversal: { label: '六星点', map: { 0: '恒同式(批判本校勘)' } }" in src
 
 

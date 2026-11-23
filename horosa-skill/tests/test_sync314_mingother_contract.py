@@ -14,6 +14,7 @@ Python 只取后端数据（/chart、/astroextra/zhufang）并把「此刻」交
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -509,11 +510,11 @@ def test_neighbouring_words_keep_their_own_tools(query: str, tools: list[str]) -
 @requires_upstream
 def test_upstream_presets_mount_schema_and_page_texts_still_say_what_this_port_assumes() -> None:
     """skill 侧手写的那几样（段表、词表标签来源、流年值域、拒绝文案、请求体抽出件）逐条锚到上游源。"""
-    presets = (UPSTREAM_UI / "utils" / "aiExport" / "presets.js").read_text(encoding="utf-8")
+    presets = upstream_source(UPSTREAM_UI / "utils" / "aiExport" / "presets.js")
     assert "dongya: ['藏历', '藏占', '蒙古 Zurkhai', '算命学', '九星气学', '洛书流年', '易卦星盘']," in presets
     assert "zhufang: ['玛雅历', '十三月亮历', '人类图', '灵名字母']," in presets
     assert "{ key: 'dongya', label: '东亚诸术' }" in presets and "{ key: 'zhufang', label: '诸方杂术' }" in presets
-    mount = (UPSTREAM_UI / "utils" / "techniqueMountSettings.js").read_text(encoding="utf-8")
+    mount = upstream_source(UPSTREAM_UI / "utils" / "techniqueMountSettings.js")
     # 挂载齿轮：流年 1–9999、留空 = 今年；三个诸方口径的选项值。
     assert "{ name: 'dongyaFlowYear', label: '流年(留空 = 今年)', type: 'number', default: '', min: 1, max: 9999" in mount
     for literal in ("{ value: 'common', label: '通行版（默认）' }", "{ value: 'fajue', label: '法诀版' }",
@@ -522,33 +523,33 @@ def test_upstream_presets_mount_schema_and_page_texts_still_say_what_this_port_a
                     "{ value: 'true', label: '真交点（默认）' }", "{ value: 'mean', label: '平交点' }",
                     "{ value: 1, label: '1 · 4 · 7 · 10 宫（默认）' }"):
         assert literal in mount, literal
-    page = (UPSTREAM_UI / "components" / "dongya" / "EastAsiaMain.js").read_text(encoding="utf-8")
+    page = upstream_source(UPSTREAM_UI / "components" / "dongya" / "EastAsiaMain.js")
     tool = (CORE_JS / "src" / "tools" / "dongya.js").read_text(encoding="utf-8")
     for sentence in ("公元前出生暂不排东亚诸术:干支历只覆盖公元 1 年以后。", "这份出生资料排不出东亚诸术(日期超出干支历范围)。"):
         assert sentence in page and sentence in tool, sentence
-    assert "<InputNumber min={1} max={9999} value={this.state.flowYear" in page
+    assert "<XQInputNumber min={1} max={9999} value={this.state.flowYear" in page   # v3.15.0 全站统一控件（InputNumber → XQInputNumber）
     # 无头挂载取本命盘、取不到只少那一段；诸方取不到写未算出——本仓 runner 的降级口径照这两处。
-    regen = (UPSTREAM_UI / "utils" / "aiAnalysisContext" / "regenChart.js").read_text(encoding="utf-8")
+    regen = upstream_source(UPSTREAM_UI / "utils" / "aiAnalysisContext" / "regenChart.js")
     assert "try{ chartObj = await fetchChartResultForRecord(record); }catch(e){ chartObj = null; }" in regen
     assert "{ fenyeVersion: record.dongyaFenyeVersion, ichingMerge: record.dongyaIchingMerge, flowYear: record.dongyaFlowYear }" in regen
     assert "const zfRemote = await fetchZhufangRemote(zfParams, zfSettings);" in regen
     # 请求体抽出件：两处纯逻辑在上游网络件里逐字存在（另有 vendor_manifest 的 derived_sha256 看守整份文件）。
-    remote = (UPSTREAM_UI / "utils" / "zhufangRemote.js").read_text(encoding="utf-8")
+    remote = upstream_source(UPSTREAM_UI / "utils" / "zhufangRemote.js")
     extract = (CORE_JS / "src" / "vendor" / "zhufang" / "zhufangRequest.js").read_text(encoding="utf-8")
     body = "{ ...(params || {}), hdTrueNode: s.hdTrueNode === false || `${s.hdTrueNode}` === '0' || s.hdTrueNode === 'mean' ? 0 : 1, spiritQuadrant: Number(s.spiritQuadrant) || 1 }"
     accepted = "return res && (res.humanDesign || res.spiritNames) ? res : null;"
     for expression in (body, accepted, "const res = data && (data.Result || data);"):
         assert expression in remote and expression in extract, expression
     # 后端把两块的异常各自吞成 null（runner 的逐块 warnings 就是为它写的）。
-    backend = (UPSTREAM_WEB / "astropy" / "astrostudy" / "zhufang_arts.py").read_text(encoding="utf-8")
+    backend = upstream_source(UPSTREAM_WEB / "astropy" / "astrostudy" / "zhufang_arts.py")
     assert "out['humanDesign'] = None" in backend and "out['spiritNames'] = None" in backend
     assert "params['zodiacal'] = 0" in backend  # 灵名字母固定回归黄道 → zodiacal=1 的 warning
 
 
 @requires_upstream
 def test_copied_upstream_goldens_still_equal_the_upstream_files() -> None:
-    upstream = json.loads((UPSTREAM_UI / "utils" / "__tests__" / "fixtures" / "tibetanCalendarGolden.json").read_text(encoding="utf-8"))
+    upstream = json.loads(upstream_source(UPSTREAM_UI / "utils" / "__tests__" / "fixtures" / "tibetanCalendarGolden.json"))
     assert TIBETAN["reference"] == upstream["reference"] and TIBETAN["lonEast"] == upstream["lonEast"]
     spirit = json.loads((FIXTURES / "sync314_mingother_spirit_names_golden.json").read_text(encoding="utf-8"))
-    upstream_spirit = json.loads((UPSTREAM_WEB / "astropy" / "tests" / "data" / "golden_spirit_names.json").read_text(encoding="utf-8"))
+    upstream_spirit = json.loads(upstream_source(UPSTREAM_WEB / "astropy" / "tests" / "data" / "golden_spirit_names.json"))
     assert {key: spirit[key] for key in upstream_spirit} == upstream_spirit

@@ -9,6 +9,7 @@ AstroPrenatalSyzygy.js / astroProgSnapshot.js / astroAiSnapshot.js / AstroExtraC
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import os
@@ -659,7 +660,7 @@ def test_every_upstream_builder_literal_is_in_the_port() -> None:
     port = Path(A.__file__).read_text(encoding="utf-8")
     missing = []
     for rel, names in _UPSTREAM_BUILDERS.items():
-        text = (_UPSTREAM_SRC / rel).read_text(encoding="utf-8")
+        text = upstream_source(_UPSTREAM_SRC / rel)
         for name in names:
             for frag in _static_fragments(_upstream_function(text, name)):
                 # 嵌套模板字符串会被切出 `: '—'}` 这类代码碎片（含引号/花括号）——不是文案，跳过。
@@ -755,7 +756,7 @@ def test_ephemeris_event_positions_equal_upstream_ephpos(tmp_path: Path) -> None
 
 @needs_upstream
 def test_method_notes_variants_and_tables_track_upstream() -> None:
-    snap = (_UPSTREAM_SRC / "utils/astroAiSnapshot.js").read_text(encoding="utf-8")
+    snap = upstream_source(_UPSTREAM_SRC / "utils/astroAiSnapshot.js")
     block = snap[snap.index("export const PREDICTIVE_METHOD_NOTES = {") :]
     block = block[: block.index("\n};")]
     # v0.46（上游 v3.13.0）起覆盖**全部**星运键：此前只钉 4 个新键，distributions / agepoint / yearsystem129 /
@@ -767,13 +768,13 @@ def test_method_notes_variants_and_tables_track_upstream() -> None:
         ours = NOTES[key][:2] if key == "persiandirected" else NOTES[key]
         assert ours == lines, key
     assert NOTES["persiandirected"][2].startswith("指定日期：传 datetime=")
-    prog_src = (_UPSTREAM_SRC / "components/astro/astroProgSnapshot.js").read_text(encoding="utf-8")
+    prog_src = upstream_source(_UPSTREAM_SRC / "components/astro/astroProgSnapshot.js")
     for variant in A.PROG_SNAPSHOT_VARIANTS.values():
         for field in ("section", "intro", "posCol"):
             assert f"'{variant[field]}'" in prog_src, (field, variant[field])
-    const = (_UPSTREAM_SRC / "constants/AstroConst.js").read_text(encoding="utf-8")
+    const = upstream_source(_UPSTREAM_SRC / "constants/AstroConst.js")
     consts = dict(re.findall(r"export const ([A-Za-z_0-9]+)\s*=\s*'([^']*)'", const))
-    text = (_UPSTREAM_SRC / "constants/AstroText.js").read_text(encoding="utf-8")
+    text = upstream_source(_UPSTREAM_SRC / "constants/AstroText.js")
     seg = text[text.index("export const AstroTxtMsg = {") : text.index("export const UranianAbbr")]
     txt = dict(re.findall(r"^\s*(Asp\d+):\s*'([^']*)'", seg, re.M))
     txt.update({consts[k]: v for k, v in re.findall(r"AstroTxtMsg\[AstroConst\.([A-Za-z_0-9]+)\]\s*=\s*'([^']*)';", seg)})

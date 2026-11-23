@@ -21,6 +21,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import gzip
 import json
 import math
@@ -349,12 +350,12 @@ def test_python_tables_equal_the_vendored_tables() -> None:
 def test_field_names_equal_the_upstream_mount_gear_and_page_keys() -> None:
     """字段名 = 上游挂载齿轮字段（techniqueMountSettings.js TIMELORD_FIELDS）= 星运页保存键（directionPageSettings.js）。"""
     assert UPSTREAM_UI is not None
-    mount = (UPSTREAM_UI / "src" / "utils" / "techniqueMountSettings.js").read_text(encoding="utf-8")
+    mount = upstream_source(UPSTREAM_UI / "src" / "utils" / "techniqueMountSettings.js")
     block = mount[mount.index("const TIMELORD_FIELDS = ["):]
     block = block[: block.index("\n];")]
     assert set(re.findall(r"TL_FIELD\('(\w+)'", block)) == set(TIMELORD_DEFAULTS)
     assert "...DIRECTED_TARGET_FIELDS" in block   # 目标日期 / 时刻两键与推运图族共用
-    page = (UPSTREAM_UI / "src" / "utils" / "directionPageSettings.js").read_text(encoding="utf-8")
+    page = upstream_source(UPSTREAM_UI / "src" / "utils" / "directionPageSettings.js")
     assert set(re.findall(r"^\t(tl\w+): \{", page, re.M)) == set(TIMELORD_DEFAULTS)
 
 

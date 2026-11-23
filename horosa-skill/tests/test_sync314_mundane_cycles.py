@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import re
@@ -103,7 +104,8 @@ def test_cycle_table_descriptions_name_every_upstream_table_and_default() -> Non
 
 
 def test_barbault_harmonic_range_covers_the_page_dropdown() -> None:
-    text = (VENDOR / "mundane" / "MundaneMain.js").read_text(encoding="utf-8")
+    # v3.15.0：世俗盘页拆成壳 + main/*，卡片段与表格常量在 vendored mundane/main/{cards,tables}.js（壳不再 vendor）。
+    text = "".join(path.read_text(encoding="utf-8") for path in sorted((VENDOR / "mundane" / "main").glob("*.js")))
     page = [int(v) for v in re.findall(r"\{ v: (\d+), cn:", text.split("const BARBAULT_HARMONICS = ")[1].split("\n")[0])]
     low, high = HorosaSkillService._MUNDANE_BB_HARM_RANGE
     assert page == [1, 2, 3, 4] and low == 1 and set(page) <= set(range(low, high + 1))
@@ -111,7 +113,7 @@ def test_barbault_harmonic_range_covers_the_page_dropdown() -> None:
 
 @needs_upstream("Horosa-Web/astropy/astrostudy/astroextra_parts/cycles.py")
 def test_barbault_harmonic_range_is_the_backend_range() -> None:
-    text = upstream_path("Horosa-Web/astropy/astrostudy/astroextra_parts/cycles.py").read_text(encoding="utf-8")
+    text = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/astroextra_parts/cycles.py"))
     low, high = HorosaSkillService._MUNDANE_BB_HARM_RANGE
     assert f"if harm < {low} or harm > {high}:" in text
 

@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import re
@@ -157,7 +158,7 @@ def _relative(tmp_path, *, inner: dict | None = None, outer: dict | None = None,
 @needs_upstream("Horosa-Web/astropy/tests/data/golden_india_tables.json")
 def test_literals_equal_the_upstream_golden() -> None:
     """本文件抄下来的期望值 == 上游后端金标文件里的值（抄错一位就红）。"""
-    golden = json.loads(upstream_path("Horosa-Web/astropy/tests/data/golden_india_tables.json").read_text(encoding="utf-8"))
+    golden = json.loads(upstream_source(upstream_path("Horosa-Web/astropy/tests/data/golden_india_tables.json")))
     chart = golden["charts"]["beijing-1990"]
     assert [row[0] for row in chart["yoga"] if row[1]] == UPSTREAM_GOLDEN_BEIJING["yogaHitIds"]
     assert [row[0] for row in chart["yoga"] if row[2]] == UPSTREAM_GOLDEN_BEIJING["yogaClassicHitIds"]
@@ -577,7 +578,7 @@ def test_presets_carry_the_new_sections_in_upstream_order() -> None:
 
 @needs_upstream("Horosa-Web/astrostudyui/src/utils/aiExport/presets.js")
 def test_presets_match_the_upstream_source() -> None:
-    src = upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport/presets.js").read_text(encoding="utf-8")
+    src = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport/presets.js"))
     assert "'瑜伽格局 Yogas', '副星 Upagraha',\n\t\t'Yoga 判定表', '印占补充表', '穿界时刻'," in src
     assert "relative: ['八重合', '关系起盘信息'," in src
     assert "AI_EXPORT_PRESET_SECTIONS.indiazeri = [...(AI_EXPORT_PRESET_SECTIONS.indiachart || []), '择时搜索配置', '择时条件', '命中时段'];" in src

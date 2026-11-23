@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import os
@@ -300,7 +301,7 @@ def test_guolao_default_mansion_system_tracks_upstream_default(tmp_path: Path) -
 @pytest.mark.skipif(not _UPSTREAM_SRC.is_dir(), reason="[upstream-checkout] drift sentinel needs HOROSA_SOURCE_ROOT (upstream checkout)")
 def test_guolao_default_mansion_system_sentinel() -> None:
     """上游再改 GUOLAO_DEFAULT_SU28_MODE → 红 → 同步 runners/guolao.py _GUOLAO_DEFAULT_SU28_MODE 与上一条测试。"""
-    style = (_UPSTREAM_SRC / "components/guolao/GuoLaoChartStyle.js").read_text(encoding="utf-8")
+    style = upstream_source(_UPSTREAM_SRC / "components/guolao/GuoLaoChartStyle.js")
     assert int(re.search(r"export const GUOLAO_DEFAULT_SU28_MODE = (\d+);", style).group(1)) == 0
 
 

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import re
 from pathlib import Path
@@ -106,13 +107,13 @@ def test_request_fields_equal_the_vendored_upstream_function_for_every_kind() ->
 def test_every_kind_and_version_is_known_to_the_upstream_backend() -> None:
     """后端认不出的种类 / 版本会静默退回缺省（transform_charts.build_transform_chart / zodiac_systems.build_zodiac_systems）：
     词表里的每一项都要是后端真认识的；请求键都在 Java 白名单里（漏登记会被静默丢弃）。"""
-    engine = upstream_path(_ENGINE_PY).read_text(encoding="utf-8")
+    engine = upstream_source(upstream_path(_ENGINE_PY))
     for kind in V.TRANSFORM_KINDS:
         assert re.search(rf"['\"]{kind}['\"]", engine), kind
-    zodiac = upstream_path(_ZODIAC_DATA_PY).read_text(encoding="utf-8")
+    zodiac = upstream_source(upstream_path(_ZODIAC_DATA_PY))
     rows = [m.groups() for m in re.finditer(r"^ {4}'([^']+)': \{'label': '([^']+)'", zodiac, re.MULTILINE)]
     assert sorted(rows) == sorted(V.ZODIAC_VERSIONS)
-    java = upstream_path(_JAVA).read_text(encoding="utf-8")
+    java = upstream_source(upstream_path(_JAVA))
     for field in (*V.TRANSFORM_FIELD_TO_SETTING, "zodiacVersion"):
         assert f'"{field}"' in java, field
 
@@ -245,7 +246,7 @@ def test_family_sets_and_endpoints() -> None:
 
 @needs_upstream(_PRESETS_JS, _PIPELINE_JS)
 def test_upstream_key_sets_carry_both_keys_the_way_the_skill_mirrors_them() -> None:
-    presets = upstream_path(_PRESETS_JS).read_text(encoding="utf-8")
+    presets = upstream_source(upstream_path(_PRESETS_JS))
 
     def js_list(name: str) -> list[str]:
         body = re.search(rf"{name} = (?:new Set\()?\[(.*?)\]", presets, re.DOTALL).group(1)
@@ -259,6 +260,6 @@ def test_upstream_key_sets_carry_both_keys_the_way_the_skill_mirrors_them() -> N
     transform = re.search(r"^\ttransformchart: \[(.*?)\],$", presets, re.MULTILINE).group(1)
     assert re.findall(r"'([^']+)'", transform) == [t for t in AI_EXPORT_PRESET_SECTIONS["transformchart"] if t != "月宿"]
     assert re.search(r"^\tzodiacsystems: \['黄道制'\],$", presets, re.MULTILINE)
-    pipeline = upstream_path(_PIPELINE_JS).read_text(encoding="utf-8")
+    pipeline = upstream_source(upstream_path(_PIPELINE_JS))
     skip = re.search(r"CLASSICAL_SKIP_KEYS = \[(.*?)\]", pipeline).group(1)
     assert {"transformchart", "zodiacsystems"} <= set(re.findall(r"'([^']+)'", skip))

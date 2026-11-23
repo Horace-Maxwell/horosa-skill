@@ -12,6 +12,7 @@ skill 的 /chart 请求由 Python 拼（手抄件）：horary / election 走 `{*
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -201,13 +202,13 @@ def test_python_send_discipline_equals_the_vendored_chart_orb_overrides() -> Non
 @requires_upstream
 def test_upstream_still_spreads_the_orb_pair_where_the_python_port_does() -> None:
     """Python 手抄的三处请求（卜卦 / 择日盘、天星择日选中时刻盘）对着上游这三行；上游挪走 / 改名时这里先红。"""
-    request = (UPSTREAM_UI / "divination" / "engine" / "chartRequest.js").read_text(encoding="utf-8")
+    request = upstream_source(UPSTREAM_UI / "divination" / "engine" / "chartRequest.js")
     assert "...chartOrbOverridesFromFields(fields)," in request
-    tianxing = (UPSTREAM_UI / "components" / "zeri" / "TianxingElectionMain.js").read_text(encoding="utf-8")
+    tianxing = upstream_source(UPSTREAM_UI / "components" / "zeri" / "TianxingElectionMain.js")
     preview = tianxing[tianxing.index("previewChartParams = (row, which) => {"):]
     preview = preview[: preview.index("\n\t};")]
     assert "...chartOrbOverridesFromFields(this.props.fields)," in preview
-    globals_js = (UPSTREAM_UI / "utils" / "classicalChartGlobals.js").read_text(encoding="utf-8")
+    globals_js = upstream_source(UPSTREAM_UI / "utils" / "classicalChartGlobals.js")
     assert "export const CHART_ORB_KEYS = ['orbs', 'orbScale'];" in globals_js
     assert CHART_ORB_KEYS == ("orbs", "orbScale")
     # 扫描后端的口径白名单里没有这一对（election_scan.ScanContext 不读它）
@@ -218,7 +219,7 @@ def test_upstream_still_spreads_the_orb_pair_where_the_python_port_does() -> Non
 @requires_upstream
 def test_orb_panel_defaults_in_the_guidance_match_upstream_value_for_value() -> None:
     """guidance 里写的「星阙面板的星体与默认度数」抄自 AstroOrbSetting.js DEFAULT_ORBS。负向对照：把 Venus 改成 7 → 红（实跑过）。"""
-    text = (UPSTREAM_UI / "components" / "astro" / "AstroOrbSetting.js").read_text(encoding="utf-8")
+    text = upstream_source(UPSTREAM_UI / "components" / "astro" / "AstroOrbSetting.js")
     block = text[text.index("export const DEFAULT_ORBS = ["):]
     block = block[: block.index("];")]
     upstream = [(body, int(orb)) for body, orb in re.findall(r"\{\s*id:\s*'([^']+)',\s*name:\s*'[^']*',\s*orb:\s*(\d+)\s*\}", block)]

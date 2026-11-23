@@ -38,7 +38,7 @@ _CONSUMER = {
     "xiaoliuren": ["tools/xiaoliuren.js"], "feigong": ["tools/feigong.js", "vendor/feigong/feigongJu.js"],
     "xiaochengtu": ["tools/xiaochengtu.js", "vendor/xiaochengtu"], "zhengchuan": ["tools/zhengchuan.js", "vendor/zhengchuan"],
     "canping": ["tools/canping.js"], "heluo": ["tools/heluo.js"], "yizhangjing": ["tools/yizhangjing.js", "vendor/yizhangjing"],
-    "tongshefa": ["vendor/tongshefa/TongSheFaCore.js"], "lingqi": ["vendor/lingqi"],
+    "tongshefa": ["vendor/tongshefa"], "lingqi": ["vendor/lingqi"],
 }
 CASES = [(tool, field) for tool, fields in CN_VOCABULARIES.items() for field in fields]
 

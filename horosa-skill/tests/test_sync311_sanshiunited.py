@@ -408,15 +408,23 @@ def test_truncate_before_keeps_the_tail_export_list_for_head_defined_names() -> 
 
 @requires_node
 def test_vendored_sanshi_head_loads_and_liureng_main_keeps_its_tail_exports() -> None:
-    """vendored SanShiUnitedMain.js（截断到 :1690）可载入且导出 builder；LiuRengMain.js 截断后仍导出上游尾部清单的
-    8 个头部函数（buildLiuRengReferenceBundle 等，SanShiUnitedMain.js:95-105 具名 import 它们）。"""
+    """v3.15.0 起三式合一页拆成壳 + sanshi/main/*，三式快照 builder 在 main/snapshot.js（壳不再 vendor）；sanshi/main/* 与
+    六壬择日仍经 LiuRengMain 门面具名 import —— 截断后的 LiuRengMain 必须导出它们全部（名单从 vendored import 语句现取，
+    不手抄：上游一加名字，这里跟着查）。"""
+    import re
+
+    vendor = CORE_JS / "src" / "vendor"
+    wanted: set[str] = set()
+    for path in [*(vendor / "sanshi" / "main").glob("*.js"), *(vendor / "divination" / "zeri").glob("liureng*.js")]:
+        for block in re.findall(r"import\s*\{([^}]*)\}\s*from\s*'[./]*/liureng/LiuRengMain\.js'", path.read_text(encoding="utf-8")):
+            wanted.update(n.strip().split(" as ")[0] for n in block.split(",") if n.strip())
+    assert "buildLiuRengSnapshotText" in wanted and len(wanted) >= 5, wanted
     res = _node(
-        """
-const ss = await import('./src/vendor/sanshi/SanShiUnitedMain.js');
+        f"""
+const ss = await import('./src/vendor/sanshi/main/snapshot.js');
 const lr = await import('./src/vendor/liureng/LiuRengMain.js');
-const names = ['buildLiuRengReferenceBundle', 'buildReferenceDocumentText', 'buildOverviewReferenceText',
-  'XIAO_JU_REFERENCE_TAB_KEYS', 'liurengChouBranch', 'buildQiZhengItems', 'QIZHENG_PLANET_COLOR', 'QIZHENG_WUXING_COLOR'];
-console.log(JSON.stringify({ builder: typeof ss.buildSanShiUnitedSnapshotText, missing: names.filter((n) => !(n in lr)) }));
+const names = {json.dumps(sorted(wanted))};
+console.log(JSON.stringify({{ builder: typeof ss.buildSanShiUnitedSnapshotText, missing: names.filter((n) => !(n in lr)) }}));
 """
     )
     assert res == {"builder": "function", "missing": []}

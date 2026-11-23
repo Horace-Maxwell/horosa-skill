@@ -550,7 +550,7 @@ def test_sixyao_time_based_gua_varies_with_time_and_is_deterministic() -> None:
         {"year": "丙午", "monthInt": 5, "dayInt": 9, "time": "丙午"},
         {"year": "丙午", "monthInt": 11, "dayInt": 23, "time": "丙子"},
     ]
-    module = Path(__file__).resolve().parents[1] / "horosa-core-js" / "src" / "vendor" / "guazhan" / "GuaZhanMain.js"
+    module = Path(__file__).resolve().parents[1] / "horosa-core-js" / "src" / "vendor" / "guazhan" / "main" / "gua.js"
     script = (
         "import(process.argv[1]).then((m) => { const cs = JSON.parse(process.argv[2]);"
         " process.stdout.write(JSON.stringify(cs.map((n) => m.buildTimeGua(n).yao.map((y) => ({ value: y.value, change: y.change }))))); });"

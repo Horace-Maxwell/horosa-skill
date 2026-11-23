@@ -269,7 +269,7 @@ def test_qimen_route_predicate_mirrors_vendored_isQimenLocalRoute() -> None:
         "import { isQimenLocalRoute } from './src/vendor/dunjia/DunJiaCalc.js';\n"
         "import { readFileSync } from 'node:fs';\n"
         f"const cases = {json.dumps(cases, ensure_ascii=False)};\n"
-        "const src = readFileSync('./src/vendor/dunjia/DunJiaCalc.js', 'utf8');\n"
+        "const src = readFileSync('./src/vendor/dunjia/calc/kinqimen.js', 'utf8');   // v3.15.0 DunJiaCalc 拆成门面 + calc/*\n"
         "const body = src.slice(src.indexOf('export function qimenLocalOnlyOverrides'), src.indexOf('export function isQimenLocalRoute'));\n"
         "const keys = [...body.matchAll(/out\\.push\\('(\\w+)'\\)/g)].map((m) => m[1]);\n"
         "console.log(JSON.stringify({ routes: cases.map((c) => isQimenLocalRoute(c)), keys }));"

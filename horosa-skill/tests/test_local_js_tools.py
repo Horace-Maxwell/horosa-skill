@@ -1607,7 +1607,7 @@ def _pd_live_payload(**overrides):
 # vendored 树缺席（CI / 发版矩阵 lane）时退回 PD_SYNC_REV_FALLBACK。v0.51.0 发版矩阵三 lane 全红在此：上游 v3.14.0 已推到 v28、
 # 回退值仍是 v26；本机有 vendored 树、CI 没有 chart 服务（这条跳过），只有 lane（无 vendored 树、有真 chart 服务）走回退。
 # test_pd_sync_rev_fallback_tracks_the_vendored_engine 在 vendored 树在场时把二者钉成相等，re-vendor 漏推进当场红。
-PD_SYNC_REV_FALLBACK = "pd_method_sync_v28"   # 上游星阙 v3.14.0（Horosa-Public e55c3a66）
+PD_SYNC_REV_FALLBACK = "pd_method_sync_v29"   # 上游星阙 v3.15.0（Horosa-Public 5da8e539）
 
 
 def _vendored_helper_pd_sync_rev() -> str | None:

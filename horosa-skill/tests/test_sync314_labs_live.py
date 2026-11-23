@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import re
 
@@ -93,7 +94,7 @@ def test_live_every_transform_kind_equals_the_upstream_full_golden(tmp_path, key
 @pytest.mark.parametrize("kind", V.TRANSFORM_KINDS)
 def test_live_southern_chart_equals_the_upstream_full_golden(tmp_path, kind: str) -> None:
     """悉尼盘（南半球）：上游金标另一半，直接读上游文件。"""
-    full = json.loads(upstream_path(_GOLDEN_FULL).read_text(encoding="utf-8"))
+    full = json.loads(upstream_source(upstream_path(_GOLDEN_FULL)))
     key = f"{kind}/improved"
     result = make_service(tmp_path).run_tool("transformchart", {**BIRTH_S, **_extra(key)}, save_result=False)
     _assert_matches(result, full[f"S/{key}"], f"S/{key}")

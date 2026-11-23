@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import math
 import os
@@ -261,7 +262,7 @@ _UPSTREAM = Path(os.environ.get("HOROSA_SOURCE_ROOT", "")) / "Horosa-Web/astrost
 
 @pytest.mark.skipif(not os.environ.get("HOROSA_SOURCE_ROOT") or not _UPSTREAM.is_file(), reason="[upstream-checkout] needs HOROSA_SOURCE_ROOT")
 def test_independent_aspect_table_matches_upstream() -> None:
-    src = _UPSTREAM.read_text(encoding="utf-8")
+    src = upstream_source(_UPSTREAM)
     block = src[src.index("const MOIRA_ASPECTS = ["):src.index("const MOIRA_DEFAULT_ASPECTS")]
     rows = re.findall(r"\{key: '([^']+)', angle: (\d+)(?:, alt: (\d+))?, orb: ([\d.]+)", block)
     assert tuple((k, int(a), int(alt) if alt else None, float(o)) for k, a, alt, o in rows) == tuple(

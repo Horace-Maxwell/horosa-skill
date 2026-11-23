@@ -19,6 +19,7 @@ test_sync311_chartexport::test_classical_param_spec_mirror_matches_vendored_js �
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import os
 import re
 from pathlib import Path
@@ -107,7 +108,7 @@ def test_sunrise_mode_is_hidden_from_tools_list_but_documented() -> None:
 @requires_upstream
 def test_calibre_head_defaults_match_upstream() -> None:
     """astroAiSnapshot.js CLS_CALIBRE_HEAD_DEFAULTS 逐键逐值（含键序）+ 新增 sunriseMode 标签。"""
-    text = (_UI / "utils" / "astroAiSnapshot.js").read_text(encoding="utf-8")
+    text = upstream_source(_UI / "utils" / "astroAiSnapshot.js")
     block = text[text.index("const CLS_CALIBRE_HEAD_DEFAULTS = {"):]
     block = block[block.index("{") + 1: block.index("};")]
     upstream = []
@@ -118,7 +119,7 @@ def test_calibre_head_defaults_match_upstream() -> None:
     assert m is not None
     label, mapping, _fmt = snap._CLS_CALIBRE_LABELS["sunriseMode"]
     assert (label, mapping) == (m.group(1), {"apparent": m.group(2)})
-    spec = (_UI / "utils" / "classicalParamSpec.js").read_text(encoding="utf-8")
+    spec = upstream_source(_UI / "utils" / "classicalParamSpec.js")
     entry = spec[spec.index("{ key: 'sunriseMode'"):]
     entry = entry[: entry.index("] },")]
     assert re.search(r"default: '([^']*)'", entry).group(1) == SUNRISE_MODE_DEFAULT
@@ -161,10 +162,11 @@ def test_draconic_shift_sends_house_mode_and_states_it(tmp_path) -> None:
 
 @requires_upstream
 def test_draconic_house_vocab_matches_upstream() -> None:
-    text = (_UI / "components" / "auxchart" / "AstroDraconicLab.js").read_text(encoding="utf-8")
+    # v3.15.0：宫位口径词表挪到 utils/derivedAstroLabs.js（龙盘页与无头复算共读），页面设置缺省仍在 AstroDraconicLab.js。
+    text = upstream_source(_UI / "utils" / "derivedAstroLabs.js") + upstream_source(_UI / "components" / "auxchart" / "AstroDraconicLab.js")
     modes = re.search(r"export const DRACONIC_HOUSE_MODES = \[([^\]]*)\]", text).group(1)
     assert tuple(re.findall(r"'([^']*)'", modes)) == DRACONIC_HOUSE_MODES
-    labels = re.search(r"const DRACONIC_HOUSE_LABELS = \{([^}]*)\}", text).group(1)
+    labels = re.search(r"export const DRACONIC_HOUSE_LABELS = \{([^}]*)\}", text).group(1)
     assert dict(re.findall(r"(\w+): '([^']*)'", labels)) == DRACONIC_HOUSE_LABELS
     assert re.search(r"houseMode: \{ label: '宫位口径', def: '(\w+)'", text).group(1) == DRACONIC_HOUSE_MODE_DEFAULT
     assert "out.push(`宫位口径：${DRACONIC_HOUSE_LABELS[houseMode] || DRACONIC_HOUSE_LABELS.whole}${houseMode === 'shift' ? '，各星落宫与本命一致' : ''}`);" in text

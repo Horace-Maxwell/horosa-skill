@@ -24,6 +24,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import re
 import subprocess
@@ -105,19 +106,20 @@ def test_qimen_overview_labels_carry_luoshu_palace_numbers() -> None:
 def test_suzhan_and_jinkou_snapshot_builders_are_verbatim_vendored() -> None:
     """两份手抄件已换成流水线产物：清单里是 verbatim（上游全文件 + 声明式 deviation），旧 bespoke 条目与文件都不在了；
     工具从 verbatim 模块取 builder。"""
-    for vendor, upstream in (("suzhan/SuZhanMain.js", "components/suzhan/SuZhanMain.js"),
-                             ("jinkou/JinKouMain.js", "components/jinkou/JinKouMain.js")):
-        entry = MANIFEST[vendor]
-        assert entry["mode"] == "verbatim" and entry["upstream"] == upstream, vendor
-        kinds = [dev["kind"] for dev in entry["deviations"]]
-        assert kinds[0] == "truncate_before", vendor   # 剥 React 尾部：正则锚点，上游改名即报错
-        assert (CORE_JS / "src" / "vendor" / vendor).is_file()
+    entry = MANIFEST["suzhan/SuZhanMain.js"]
+    assert entry["mode"] == "verbatim" and entry["upstream"] == "components/suzhan/SuZhanMain.js"
+    assert [dev["kind"] for dev in entry["deviations"]][0] == "truncate_before"   # 剥 React 尾部：正则锚点，上游改名即报错
+    assert (CORE_JS / "src" / "vendor" / "suzhan" / "SuZhanMain.js").is_file()
+    # v3.15.0：上游把 JinKouMain 拆成壳 + main/*，快照 builder 在纯逻辑模块 main/snapshot.js —— 整文件 verbatim、零偏离，壳不再 vendor。
+    entry = MANIFEST["jinkou/main/snapshot.js"]
+    assert entry["mode"] == "verbatim" and entry["upstream"] == "components/jinkou/main/snapshot.js" and entry["deviations"] == []
+    assert "jinkou/JinKouMain.js" not in MANIFEST and not (CORE_JS / "src" / "vendor" / "jinkou" / "JinKouMain.js").exists()
     for gone in ("suzhan/suzhanSnapshot.js", "jinkou/JinKouSnapshot.js"):
         assert gone not in MANIFEST and not (CORE_JS / "src" / "vendor" / gone).exists(), gone
     assert MANIFEST["suzhan/suzhanAstroHelper.js"]["mode"] == "curated"
     assert MANIFEST["suzhan/suzhanAstroHelper.js"]["extracts"] == ["signDegMin", "astroMsgPlainText"]
     assert "../vendor/suzhan/SuZhanMain.js" in (CORE_JS / "src" / "tools" / "suzhan.js").read_text(encoding="utf-8")
-    assert "../vendor/jinkou/JinKouMain.js" in (CORE_JS / "src" / "tools" / "jinkou.js").read_text(encoding="utf-8")
+    assert "../vendor/jinkou/main/snapshot.js" in (CORE_JS / "src" / "tools" / "jinkou.js").read_text(encoding="utf-8")
 
 
 def _js_block(source: str, start_marker: str) -> str:
@@ -135,7 +137,7 @@ _UPSTREAM_ASTRO_HELPER = "Horosa-Web/astrostudyui/src/components/astro/AstroHelp
 def test_suzhan_astro_helper_subset_is_line_for_line_upstream() -> None:
     """curated 子集逐块对上游 components/astro/AstroHelper.js（sha 戳只证明看过）：signDegMin / SIMPLE_TOKEN_MAP /
     isEncodedToken / astroMsgPlainText 四块源码逐字相同。负向：子集里改一个字 → 红。"""
-    upstream = upstream_path(_UPSTREAM_ASTRO_HELPER).read_text(encoding="utf-8")
+    upstream = upstream_source(upstream_path(_UPSTREAM_ASTRO_HELPER))
     mine = (CORE_JS / "src" / "vendor" / "suzhan" / "suzhanAstroHelper.js").read_text(encoding="utf-8")
     for marker in ("export function signDegMin(", "const SIMPLE_TOKEN_MAP = {", "function isEncodedToken(", "export function astroMsgPlainText("):
         assert _js_block(mine, marker) == _js_block(upstream, marker), marker
@@ -143,15 +145,15 @@ def test_suzhan_astro_helper_subset_is_line_for_line_upstream() -> None:
 
 @requires_node
 def test_jinkou_verbatim_module_keeps_headless_stubs_unreachable() -> None:
-    """jinkou/JinKouMain.js 的两处 headless stub（DateTime / utils/constants）只在页面出生档缺省 buildBirthFields /
-    cloneDateTimeSafe 上（模块私有、headless 无调用方）；快照 builder 一行都不碰。stub 是「调到 / 读到即抛明确错误」的同名绑定
-    （不是 ReferenceError，也不是静默 undefined），模块照常加载并导出 builder。"""
-    source = (CORE_JS / "src" / "vendor" / "jinkou" / "JinKouMain.js").read_text(encoding="utf-8")
-    builder = _js_block(source, "export function buildJinKouSnapshotText(")
-    assert not re.search(r"\b(DateTime|Constants|buildBirthFields|cloneDateTimeSafe|resolveDisplayRunYear)\b", builder)
-    assert "class DateTime { constructor(){ throw new Error('headless stub: comp/DateTime is not vendored'); } }" in source
-    assert "throw new Error(`headless stub: utils/constants.${String(key)} is not vendored`)" in source
-    exports = _node("import('./src/vendor/jinkou/JinKouMain.js').then((m)=>{console.log(JSON.stringify(Object.keys(m).sort()));});")
+    """v3.14.0 的 JinKouMain.js 带两处 headless stub（DateTime / utils/constants）；v3.15.0 上游把快照 builder 拆进纯逻辑模块
+    jinkou/main/snapshot.js（只 import JinKouDoc / LRZhangSheng），skill 直接取它 —— 不再需要任何 stub。这里钉住：
+    builder 模块不碰页面件（DateTime / Constants / 出生档回退链）、不 import React / UI，照常加载并导出 builder。"""
+    source = (CORE_JS / "src" / "vendor" / "jinkou" / "main" / "snapshot.js").read_text(encoding="utf-8")
+    assert not re.search(r"\b(DateTime|Constants|buildBirthFields|cloneDateTimeSafe)\b", source)
+    imports = re.findall(r"^import .* from '([^']+)';", source, re.M)
+    assert imports and all(spec.startswith("../") for spec in imports), imports
+    assert not any(re.search(r"react|antd|xq-ui|comp/", spec) for spec in imports), imports
+    exports = _node("import('./src/vendor/jinkou/main/snapshot.js').then((m)=>{console.log(JSON.stringify(Object.keys(m).sort()));});")
     assert "buildJinKouSnapshotText" in exports
 
 

@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -117,7 +118,7 @@ def test_taiyizeri_display_day_boundary_default_follows_scan_engine() -> None:
 @requires_upstream
 def test_taiyizeri_upstream_build_fields_uses_global_day_boundary() -> None:
     """上游源对拍：TaiyiZeriMain.buildFields 的日界缺省是 defaultAfter23NewDay()（不再是字面 0）。"""
-    src = (UPSTREAM_UI / "components" / "zeri" / "TaiyiZeriMain.js").read_text(encoding="utf-8")
+    src = upstream_source(UPSTREAM_UI / "components" / "zeri" / "TaiyiZeriMain.js")
     start = src.index("buildFields(frozen){")
     body = src[start: src.index("onEmbedFieldsChange", start)]
     assert "o.after23NewDay !== undefined ? o.after23NewDay : defaultAfter23NewDay()" in body
@@ -158,7 +159,7 @@ def test_wuzhao_replay_note_wording_matches_upstream_source() -> None:
     """shenshu.py 手抄了上游 buildWuZhaoSnapshotForFields 的复现说明原句；上游 v3.13.0 改了措辞。
     这里从上游源取原句模板，代入「日干起盘」比对 skill 实发的那句（tests/test_sync311_shenshu.py 钉 skill 侧整句）。
     负向对照：shenshu.py 换回「开启「手动分爻复现」…已按干支起例」→ 红。"""
-    src = (UPSTREAM_UI / "components" / "wuzhao" / "WuZhaoMain.js").read_text(encoding="utf-8")
+    src = upstream_source(UPSTREAM_UI / "components" / "wuzhao" / "WuZhaoMain.js")
     match = re.search(r"replayNote = `挂载无法复现随机起兆\(所选「\$\{wuzhaoModeLabel\(calc\.mode\)\}」需\$\{.*?: '([^']+)'\)?\};([^`]+)`", src)
     assert match, "上游 WuZhaoMain.js 的复现说明模板变形了——复核 shenshu._wuzhao_calc_payload"
     upstream = f"挂载无法复现随机起兆(所选「日干起盘」需{match.group(1)};{match.group(2)}"

@@ -60,6 +60,43 @@ def upstream_path(relative: str) -> Path | None:
     return SOURCE_ROOT / relative if SOURCE_ROOT is not None else None
 
 
+_SOURCE_SET_BASES = (("Horosa-Web/astrostudyui/src/", "sets"), ("Horosa-Web/astropy/", "pySets"))
+
+
+def source_set_files(path: Path) -> list[Path]:
+    """Upstream's「门面 + 子模块」全集 for one file (v0.53.0, upstream v3.15.0 split ~40 big files).
+
+    Same rule as upstream's own `src/utils/__tests__/helpers/sourceSet.js` (registry =
+    `Horosa-Web/astrostudyui/scripts/source-sets.json`): a registered facade → its submodules in registered order, then the
+    facade itself; anything else → just the file. Works for any checkout root (matched on the path tail), so tests that read
+    an older pin or the gitignored vendor tree keep working."""
+    norm = path.as_posix()
+    for base, group in _SOURCE_SET_BASES:
+        marker = "/" + base
+        cut = norm.rfind(marker)
+        if cut < 0:
+            continue
+        root, rel = Path(norm[: cut + len(marker)]), norm[cut + len(marker):]
+        registry = Path(norm[:cut]) / "Horosa-Web" / "astrostudyui" / "scripts" / "source-sets.json"
+        if not registry.is_file():
+            return [path]
+        import json
+
+        entry = (json.loads(registry.read_text(encoding="utf-8")).get(group) or {}).get(rel)
+        if not entry:
+            return [path]
+        return [root / entry["dir"] / name for name in entry["files"]] + [path]
+    return [path]
+
+
+def upstream_source(path: Path | str) -> str:
+    """Text of an upstream source file read the way upstream reads it: a split facade comes back as its full source set
+    (submodules + facade, concatenated). Reading only the facade after v3.15.0 sees import lines and re-exports — a
+    port-parity test then either fails on a missing function or, worse, passes because the pattern it forbids moved away."""
+    path = upstream_path(path) if isinstance(path, str) else path
+    return "".join(part.read_text(encoding="utf-8") for part in source_set_files(path))
+
+
 def needs_upstream(*relatives: str, why: str = "") -> pytest.MarkDecorator:
     """skipif the checkout is not configured or lacks any of `relatives` (paths under the checkout root)."""
     missing = SOURCE_ROOT is None or any(not (SOURCE_ROOT / rel).exists() for rel in relatives)

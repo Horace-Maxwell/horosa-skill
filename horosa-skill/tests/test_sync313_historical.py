@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import hashlib
 import json
 import os
@@ -186,7 +187,7 @@ _STRIP_TREE_JS = "const strip = (n) => [n.planet, n.date, n.active, n.nominal, n
 
 def _upstream_decennials() -> dict[str, Any]:
     assert UPSTREAM_UI is not None
-    src = (UPSTREAM_UI / "src" / "utils" / "decennials.js").read_text(encoding="utf-8")
+    src = upstream_source(UPSTREAM_UI / "src" / "utils" / "decennials.js")
     for old, new in (
         ("import moment from 'moment';", f"import moment from '{_vurl(_MOMENT)}';"),
         ("from '../constants/AstroConst';", f"from '{_vurl('src/constants/AstroConst.js')}';"),
@@ -269,7 +270,7 @@ def _upstream_datetime_format() -> list[Any]:
     """components/comp/DateTime.js：parse(串, 'YYYY-MM-DD HH:mm:ss') → ad / format('YYYY/MM/DD') / format('HH:mm:ss') /
     format('YYYY-MM')（momentPipeline.chartAtMoment、七政 fieldsToParams、农历「查询月份」都是这一形）。"""
     assert UPSTREAM_UI is not None
-    src = (UPSTREAM_UI / "src" / "components" / "comp" / "DateTime.js").read_text(encoding="utf-8")
+    src = upstream_source(UPSTREAM_UI / "src" / "components" / "comp" / "DateTime.js")
     for old, new in (
         ("import moment from 'moment';", f"import moment from '{_vurl(_MOMENT)}';"),
         ("import request from '../../utils/request';", "const request = () => { throw new Error('no network'); };"),

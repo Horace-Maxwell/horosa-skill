@@ -13,6 +13,7 @@ tools/auxLabs.js（vendored 上游 transformSnapshotLines / transformSnapshotCha
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import gzip
 import hashlib
 import json
@@ -117,9 +118,9 @@ def _position_line(lines: list[str], name: str) -> tuple[float, float]:
 
 @needs_upstream(_GOLDEN_FULL, _GOLDEN_ZODIAC)
 def test_the_copied_upstream_goldens_equal_the_upstream_files() -> None:
-    full = json.loads(upstream_path(_GOLDEN_FULL).read_text(encoding="utf-8"))
+    full = json.loads(upstream_source(upstream_path(_GOLDEN_FULL)))
     assert golden()["transform_full_B"] == {key[2:]: value for key, value in full.items() if key.startswith("B/")}
-    assert golden()["zodiac_tables"] == json.loads(upstream_path(_GOLDEN_ZODIAC).read_text(encoding="utf-8"))["tables"]
+    assert golden()["zodiac_tables"] == json.loads(upstream_source(upstream_path(_GOLDEN_ZODIAC)))["tables"]
     for relative, recorded in golden()["sources"].items():
         text = upstream_path(relative).read_bytes().replace(b"\r\n", b"\n")
         assert hashlib.sha256(text).hexdigest() == recorded, f"{relative} changed upstream: re-capture and re-check the goldens"

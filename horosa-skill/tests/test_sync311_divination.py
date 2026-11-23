@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -175,7 +176,7 @@ def test_liuyao_gear_table_is_guidance_complete() -> None:
 @requires_upstream
 def test_liuyao_gear_table_matches_upstream_schema() -> None:
     """LIUYAO_GEAR_FIELDS 逐键 = 上游 techniqueMountSettings.SIXYAO_FIELDS（name + switch/select/multiselect）。"""
-    source = (UPSTREAM_UI / "utils" / "techniqueMountSettings.js").read_text(encoding="utf-8")
+    source = upstream_source(UPSTREAM_UI / "utils" / "techniqueMountSettings.js")
     block = source[source.index("const SIXYAO_FIELDS = ["): source.index("\n];", source.index("const SIXYAO_FIELDS = ["))]
     upstream = dict(re.findall(r"\{ name: '(\w+)', label: '[^']*', type: '(\w+)'", block))
     assert _node_json("tools/liuyao.js", "m.LIUYAO_GEAR_FIELDS") == upstream
@@ -254,7 +255,7 @@ def test_xiaochengtu_snapshot_builder_is_byte_identical_to_upstream() -> None:
         return text[start: text.index("\n}\n", start) + 3]
 
     vendored = (CORE_JS_SRC / "vendor" / "xiaochengtu" / "xiaochengtuSnapshot.js").read_text(encoding="utf-8")
-    upstream = (UPSTREAM_UI / "components" / "xiaochengtu" / "XiaoChengTuMain.js").read_text(encoding="utf-8")
+    upstream = upstream_source(UPSTREAM_UI / "components" / "xiaochengtu" / "XiaoChengTuMain.js")
     assert body(vendored) == body(upstream)
 
 

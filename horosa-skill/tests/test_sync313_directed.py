@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import shutil
@@ -226,7 +227,7 @@ def test_option_domains_equal_the_upstream_page_settings() -> None:
     import re
 
     assert UPSTREAM_UI is not None
-    text = (UPSTREAM_UI / "src" / "utils" / "directionPageSettings.js").read_text(encoding="utf-8")
+    text = upstream_source(UPSTREAM_UI / "src" / "utils" / "directionPageSettings.js")
 
     def entry(key: str) -> str:
         match = re.search(rf"^\t{key}: \{{(.*)\}},$", text, re.M)

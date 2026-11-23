@@ -7,6 +7,7 @@ v3.13.0 同步时发现 `_INDIA_MOUNT_VARGA_OPTIONS`（chart_family.py，抄自 
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import os
 import re
 from pathlib import Path
@@ -23,7 +24,7 @@ requires_upstream = pytest.mark.skipif(
 
 
 def _upstream_block(name: str) -> str:
-    text = _ASTRO_CONST.read_text(encoding="utf-8")
+    text = upstream_source(_ASTRO_CONST)
     start = text.index(f"export const {name} = [")
     return text[start: text.index("];", start)]
 
@@ -39,7 +40,7 @@ def test_india_mount_varga_options_match_upstream_value_for_value() -> None:
 
 @requires_upstream
 def test_india_extra_varga_max_matches_upstream() -> None:
-    text = _ASTRO_CONST.read_text(encoding="utf-8")
+    text = upstream_source(_ASTRO_CONST)
     assert re.search(r"export const INDIA_MOUNT_EXTRA_VARGA_MAX = (\d+);", text).group(1) == str(
         chart_family._INDIA_MOUNT_EXTRA_VARGA_MAX)
 

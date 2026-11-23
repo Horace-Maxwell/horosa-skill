@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -49,7 +50,7 @@ def _node(module: str, body: str, *args: str) -> Any:
 
 def _upstream_module(tmp_path: Path, rel: str, rewrites: dict[str, str], name: str) -> Path:
     """把上游源文件原文拷进 tmp_path，只把 import 说明符换成本机可解析的路径（不改任何逻辑行）。"""
-    text = (UPSTREAM_UI / rel).read_text(encoding="utf-8")
+    text = upstream_source(UPSTREAM_UI / rel)
     for spec, target in rewrites.items():
         assert f"from '{spec}'" in text, spec
         text = text.replace(f"from '{spec}'", f"from '{target}'")

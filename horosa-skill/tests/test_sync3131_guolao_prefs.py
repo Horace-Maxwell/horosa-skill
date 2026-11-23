@@ -16,6 +16,7 @@ GuoLaoMoiraWheel.js:200-240 computeMoiraAspectPairs（只列勾选相位、按�
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import os
 import re
 import tempfile
@@ -211,9 +212,9 @@ requires_upstream = pytest.mark.skipif(
 
 @requires_upstream
 def test_runner_tables_match_upstream_value_for_value() -> None:
-    style = (_GUOLAO_DIR / "GuoLaoChartStyle.js").read_text(encoding="utf-8")
-    wheel = (_GUOLAO_DIR / "GuoLaoMoiraWheel.js").read_text(encoding="utf-8")
-    const = (_GUOLAO_DIR.parent.parent / "constants" / "AstroConst.js").read_text(encoding="utf-8")
+    style = upstream_source(_GUOLAO_DIR / "GuoLaoChartStyle.js")
+    wheel = upstream_source(_GUOLAO_DIR / "GuoLaoMoiraWheel.js")
+    const = upstream_source(_GUOLAO_DIR.parent.parent / "constants" / "AstroConst.js")
 
     def str_list(pattern: str, text: str) -> list[str]:
         return re.findall(r"'([^']+)'", re.search(pattern, text).group(1))

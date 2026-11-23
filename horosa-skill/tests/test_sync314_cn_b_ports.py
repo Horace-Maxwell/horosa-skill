@@ -6,6 +6,7 @@ checkout 时跑；其余离线可跑（真 node 的用例要 PATH 上有 node）
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import re
 import shutil
 from pathlib import Path
@@ -77,7 +78,7 @@ def test_bespoke_extract_declarations_are_verbatim_upstream(vendored: str, sourc
     upstream_file = upstream_path(f"{UI}/{source}")
     assert upstream_file is not None
     ours = _top_level_declarations((VENDOR / vendored).read_text(encoding="utf-8"))
-    theirs = _top_level_declarations(upstream_file.read_text(encoding="utf-8"))
+    theirs = _top_level_declarations(upstream_source(upstream_file))
     assert set(ours) == names, f"{vendored} 的顶层声明变了：{sorted(set(ours) ^ names)}——新抽进来的函数登记到 BESPOKE_EXTRACTS"
     for name in sorted(names):
         assert name in theirs, f"上游 {source} 已没有 {name}（改名 / 挪走了？）"
@@ -127,7 +128,7 @@ def test_geomancy_question_type_line_uses_the_chinese_short_name() -> None:
 def test_geomancy_question_short_names_equal_upstream_table() -> None:
     source = upstream_path(f"{UI}/components/geomancy/GeomancyMain.js")
     assert source is not None
-    text = source.read_text(encoding="utf-8")
+    text = upstream_source(source)
     block = text[text.index("const QUESTION_TYPE_OPTIONS = ["):]
     block = block[:block.index("\n];")]
     upstream = dict(re.findall(r"\{ key: '([a-z]+)', label: '[^']*', short: '([^']+)' \}", block))

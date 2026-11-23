@@ -13,6 +13,7 @@ skill 在边界并成逗号串（service/text/chart_family._india_comma_lists）
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import os
 import re
 from pathlib import Path
@@ -99,7 +100,7 @@ def test_upstream_still_splits_str_of_prashna_schools_and_custom_rp() -> None:
     text = _INDIA_SRV.read_text(encoding="utf-8")
     assert "str(data.get('prashnaSchools') or 'kp').split(',')" in text
     assert "str(d.get('rectifyCustomRp') or '').split(',')" in text
-    page = (_WEB / "astrostudyui" / "src" / "components" / "astro" / "IndiaChartMain.js").read_text(encoding="utf-8")
+    page = upstream_source(_WEB / "astrostudyui" / "src" / "components" / "astro" / "IndiaChartMain.js")
     assert "{ schools: arr.join(',') }" in page
 
 

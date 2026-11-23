@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import os
 import re
 from pathlib import Path
@@ -51,7 +52,7 @@ _NON_DEFAULT: dict[str, Any] = {
 
 @requires_upstream
 def test_dead_key_list_matches_upstream_value_for_value() -> None:
-    text = _TMS.read_text(encoding="utf-8")
+    text = upstream_source(_TMS)
     block = re.search(r"const SUZHAN_DEAD_CLASSICAL_KEYS = \[(.*?)\];", text, re.DOTALL)
     assert block is not None
     upstream = re.findall(r"'([^']+)'", block.group(1))

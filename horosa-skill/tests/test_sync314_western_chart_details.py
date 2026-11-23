@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import gzip
 import hashlib
@@ -154,8 +155,8 @@ def test_request_field_port_equals_the_upstream_function_for_every_combination()
 @needs_upstream("Horosa-Web/astropy/astrostudy/chart_details_more.py", "Horosa-Web/astropy/astrostudy/chart_details.py")
 def test_option_domains_equal_what_the_backend_accepts() -> None:
     """后端对认不出的值静默回缺省：词表必须正好是后端认的那几档（chart_details_more.py 的三张表 + chart_details.py 的两个判断）。"""
-    more = upstream_path("Horosa-Web/astropy/astrostudy/chart_details_more.py").read_text(encoding="utf-8")
-    main = upstream_path("Horosa-Web/astropy/astrostudy/chart_details.py").read_text(encoding="utf-8")
+    more = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/chart_details_more.py"))
+    main = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/chart_details.py"))
 
     def values(name: str) -> list[str]:
         return [row["value"] for row in vocab.CHART_DETAIL_VOCABULARIES[name].accepted]
@@ -180,7 +181,7 @@ def test_fixture_matches_upstream() -> None:
     raw = upstream_path("Horosa-Web/astropy/tests/data/golden_chart_details.json").read_bytes()
     assert hashlib.sha256(raw).hexdigest() == FX["source"]["golden_sha256"]
     goldens = json.loads(raw)
-    source = upstream_path("Horosa-Web/astropy/tests/test_chart_details.py").read_text(encoding="utf-8")
+    source = upstream_source(upstream_path("Horosa-Web/astropy/tests/test_chart_details.py"))
     namespace: dict = {}
     for name in ("CHART", "DAY_CHART", "POLAR"):
         exec(re.search(rf"^{name} = .*$", source, flags=re.M).group(0), {"dict": dict}, namespace)  # noqa: S102 — 上游测试源里的三行字面量
@@ -243,7 +244,7 @@ def test_export_presets_register_the_section_where_upstream_does() -> None:
 
 @needs_upstream("Horosa-Web/astrostudyui/src/utils/aiExport/presets.js", "Horosa-Web/astrostudyui/src/utils/aiExport/pipeline.js")
 def test_section_placement_and_skip_table_track_upstream_source() -> None:
-    presets = upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport/presets.js").read_text(encoding="utf-8")
+    presets = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport/presets.js"))
     union = presets[presets.index("AI_EXPORT_V61_SECTION_UNION = {"):]
     union = union[: union.index("};")]
     assert re.findall(r"(\w+): \['盘面细节'\]", union) == ["astrochart", "astrochart_like", "relocation", "locastro"]
@@ -254,7 +255,7 @@ def test_section_placement_and_skip_table_track_upstream_source() -> None:
         mine = [t for t in AI_EXPORT_PRESET_SECTIONS[skill_key] if t in titles]   # skill 多出的段（月宿 / 占星地图明细）不比
         assert mine == [t for t in titles if t in AI_EXPORT_PRESET_SECTIONS[skill_key]], upstream_key
         assert "盘面细节" in titles
-    pipeline = upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport/pipeline.js").read_text(encoding="utf-8")
+    pipeline = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/utils/aiExport/pipeline.js"))
     assert "const CLASSICAL_SKIP_KEYS = ['hellenastro', 'dwadasamsa', 'harmonic', 'draconic', 'transformchart', 'zodiacsystems'];" in pipeline
     # 与 [古典格局] 同进同退，重置盘不再按本命出生地另补（两段随重置盘快照进正文）。
     assert "const derived = relocated ? [] : await Promise.all([fetchAstroClassicalAnalysisSectionForExport(), fetchChartDetailsSectionForExport()]);" in pipeline

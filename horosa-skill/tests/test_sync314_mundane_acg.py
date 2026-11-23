@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import copy
 import json
 import math
@@ -111,14 +112,15 @@ def test_layer_vocabularies_equal_the_vendored_upstream_constants() -> None:
 
 @needs_upstream("Horosa-Web/astropy/astrostudy/acg/eclipse_path.py", "Horosa-Web/astrostudyui/src/components/acg/AstroAcg.js")
 def test_layer_vocabularies_track_the_backend_and_page_settings() -> None:
-    backend = upstream_path("Horosa-Web/astropy/astrostudy/acg/eclipse_path.py").read_text(encoding="utf-8")
+    backend = upstream_source(upstream_path("Horosa-Web/astropy/astrostudy/acg/eclipse_path.py"))
     assert "WHICH = ('prenatal', 'postnatal')" in backend and "FILTERS = ('any', 'central')" in backend
-    page = upstream_path("Horosa-Web/astrostudyui/src/components/acg/AstroAcg.js").read_text(encoding="utf-8")
+    page = upstream_source(upstream_path("Horosa-Web/astrostudyui/src/components/acg/AstroAcg.js"))
     for key, default, const in (("eclipse", "off", "ECLIPSE_MODES"), ("eclipseFilter", "any", "ECLIPSE_FILTERS"),
                                 ("climes", "off", "CLIMES_MODES"), ("climesObliquity", "date", "CLIMES_OBLIQUITY")):
         assert re.search(rf"\b{key}: \{{ label: '[^']+', def: '{default}', oneOf: {const} \}}", page), key
     # 开了才下发（关 = 零回归）：genParams 的这一段。
-    assert "if (this.state.eclipse && this.state.eclipse !== 'off') {" in page and "p.eclipseFilter = this.state.eclipseFilter || 'any';" in page
+    # v3.15.0：genParams 挪成模块级函数（state 形参 st），条件与缺省不变。
+    assert "if (st.eclipse && st.eclipse !== 'off') {" in page and "p.eclipseFilter = st.eclipseFilter || 'any';" in page
 
 
 def test_unknown_layer_values_are_refused_at_the_schema(tmp_path) -> None:

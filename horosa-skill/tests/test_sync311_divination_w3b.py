@@ -8,6 +8,7 @@ HOROSA_SOURCE_ROOT 指向上游 checkout 时跑。
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 
 import pytest
@@ -17,6 +18,7 @@ from test_sync311_divination_w3 import (
     CORE_JS_SRC,
     DOCTRINE_CACHE,
     GUAZHAN,
+    GUAZHAN_SOURCES,
     NONGLI,
     SH,
     SIX,
@@ -184,8 +186,8 @@ def test_vendored_buildGuaSnapshotText_is_upstream_source() -> None:
     buildCaseSnapshotFields → buildTimeGua → buildGuaSnapshotText(fields, st)，buildTimeGua 仍只回 {yao,currentGua,nongli}
     （无 guaDesc/god → [卦辞与断语] 只有段头、逐爻无六神）、buildCaseSnapshotFields 的 gender 缺省仍为 1。任一处上游改了就红
     —— 提示重审 skill 的装配。"""
-    upstream = (UPSTREAM_UI / "components" / "guazhan" / "GuaZhanMain.js").read_text(encoding="utf-8")
-    vendored = GUAZHAN.read_text(encoding="utf-8")
+    upstream = read_facade_source(UPSTREAM_UI / "components" / "guazhan" / "GuaZhanMain.js")   # v3.15.0：门面 + main/*
+    vendored = "".join(f.read_text(encoding="utf-8") for f in GUAZHAN_SOURCES)
     for head in ("export function buildGuaSnapshotText(fields, st){", "function guaText(gua){", "function guaFromYaoValues(values){"):
         start = upstream.index(head)
         body = upstream[start: upstream.index("\n}\n", start) + 3]
@@ -263,20 +265,20 @@ def test_shusuan_time_alg_default_evidence_still_holds_upstream() -> None:
     assert ("after23NewDay: { value: (record.after23NewDay !== undefined && record.after23NewDay !== null) "
             "? record.after23NewDay : missing(record, 'after23NewDay', defaultAfter23NewDay) },") in ctx
     assert "const missing = (record, key, legacy)=>recordMissingOr(record, key, legacy, undefined);" in ctx
-    restore = (UPSTREAM_UI / "utils" / "recordFieldsRestore.js").read_text(encoding="utf-8")
+    restore = upstream_source(UPSTREAM_UI / "utils" / "recordFieldsRestore.js")
     assert "\tif(!recordHasCaptureMark(record)){\n\t\treturn { kind: 'keep' };" in restore
     assert "return typeof legacy === 'function' ? legacy() : legacy;" in restore
     params = ctx[ctx.index("function buildChartBaziParams(record){"):]
     params = params[: params.index("\n}\n")]
     assert "timeAlg: fields.timeAlg.value," in params and "after23NewDay: fields.after23NewDay.value," in params
-    seeds = (UPSTREAM_UI / "utils" / "newChartSeeds.js").read_text(encoding="utf-8")
+    seeds = upstream_source(UPSTREAM_UI / "utils" / "newChartSeeds.js")
     assert "timeAlg: { def: 0," in seeds
-    model = (UPSTREAM_UI / "models" / "astro.js").read_text(encoding="utf-8")
+    model = upstream_source(UPSTREAM_UI / "models" / "astro.js")
     assert "value: newChartSeedValue('timeAlg')," in model
-    mount = (UPSTREAM_UI / "utils" / "techniqueMountSettings.js").read_text(encoding="utf-8")
+    mount = upstream_source(UPSTREAM_UI / "utils" / "techniqueMountSettings.js")
     assert "{ name: 'timeAlg', label: '时间算法', type: 'select', options: TIME_ALG_OPTIONS, default: 0, group: '时间换算' }," in mount
     for page in ("shusuan/CanPingMain.js", "shusuan/HeLuoMain.js", "yizhangjing/YiZhangJingMain.js"):
-        src = (UPSTREAM_UI / "components" / page).read_text(encoding="utf-8")
+        src = upstream_source(UPSTREAM_UI / "components" / page)
         assert "timeAlg: fieldVal(f, 'timeAlg', 1)," in src, page
 
 
@@ -329,5 +331,5 @@ def test_zhengchuan_headless_lunar_day_evidence_still_holds_upstream() -> None:
     shu = shu[: shu.index("\n}\n")]
     assert "lunarDay: Number((bazi.lunar || bazi.nongli || {}).dayNum || (bazi.lunar || bazi.nongli || {}).day) || 0," in shu
     assert "lunarByDayBoundary" not in shu
-    page = (UPSTREAM_UI / "components" / "shusuan" / "ZhengChuanMain.js").read_text(encoding="utf-8")
+    page = upstream_source(UPSTREAM_UI / "components" / "shusuan" / "ZhengChuanMain.js")
     assert "const lb = lunarByDayBoundary(nl);" in page

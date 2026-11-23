@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -27,18 +28,20 @@ from horosa_skill.service import HorosaSkillService
 
 PKG = Path(__file__).resolve().parents[1]
 CORE_JS_SRC = PKG / "horosa-core-js" / "src"
-GUAZHAN = CORE_JS_SRC / "vendor" / "guazhan" / "GuaZhanMain.js"
+# v3.15.0：GuaZhanMain 壳不再 vendor；对拍入口并起 main/gua.js + main/snapshot.js，逐字检查读这两个文件。
+GUAZHAN = Path(__file__).resolve().parent / "fixtures" / "js" / "guazhan_entry.mjs"
+GUAZHAN_SOURCES = (CORE_JS_SRC / "vendor" / "guazhan" / "main" / "gua.js", CORE_JS_SRC / "vendor" / "guazhan" / "main" / "snapshot.js")
 DOCTRINE_CACHE = CORE_JS_SRC / "vendor" / "gua" / "data" / "liuyaoDoctrineCache.js"
 _UPSTREAM_ROOT = os.environ.get("HOROSA_SOURCE_ROOT")
 UPSTREAM_UI = Path(_UPSTREAM_ROOT) / "Horosa-Web" / "astrostudyui" / "src" if _UPSTREAM_ROOT else None
 
 
 def read_facade_source(path: Path) -> str:
-    """上游 v3.12.0 把 aiAnalysisContext.js / aiExport.js 拆成「门面 + 同名目录」，门面注明读源码的检查一律读
-    「本文件 + 该目录」；只读门面会读不到实现（与 scripts/_upstream_preset.read_aiexport_source 同一口径）。"""
-    folder = path.with_suffix("")
-    files = [path, *sorted(folder.glob("*.js"))] if folder.is_dir() else [path]
-    return "\n".join(f.read_text(encoding="utf-8") for f in files)
+    """上游 v3.12.0 起把大文件拆成「门面 + 子模块」，门面注明读源码的检查一律读全集。v3.15.0 起子模块目录不再总是同名
+    （DunJiaCalc → calc/、MundaneMain → main/），全集以上游登记表 scripts/source-sets.json 为准（tests/skips.upstream_source）。"""
+    from skips import upstream_source
+
+    return upstream_source(path)
 requires_upstream = pytest.mark.skipif(
     UPSTREAM_UI is None or not UPSTREAM_UI.is_dir(), reason="[upstream-checkout] HOROSA_SOURCE_ROOT (upstream checkout) not set"
 )
@@ -161,10 +164,10 @@ def test_sixyao_gua_code_without_lines_is_the_given_gua(tmp_path) -> None:
 @requires_upstream
 def test_vendored_buildTimeGua_is_upstream_source() -> None:
     """上游 buildTimeGua 源码原样切出、在 Node 里对真 GuaConst 求值，与 vendored 函数逐格对拍（12 时辰 × 月日网格）。"""
-    source = (UPSTREAM_UI / "components" / "guazhan" / "GuaZhanMain.js").read_text(encoding="utf-8")
+    source = read_facade_source(UPSTREAM_UI / "components" / "guazhan" / "GuaZhanMain.js")   # v3.15.0：实现在 main/gua.js
     start = source.index("export function buildTimeGua(nongli){")
     body = source[start: source.index("\n}\n", start) + 3]
-    vendored = GUAZHAN.read_text(encoding="utf-8")
+    vendored = "".join(f.read_text(encoding="utf-8") for f in GUAZHAN_SOURCES)
     assert body in vendored  # 函数体逐字
     script = """
 const [G, L, V] = await Promise.all([import(process.argv[1]), import(process.argv[2]), import(process.argv[3])]);
@@ -342,9 +345,9 @@ def test_yizhangjing_headless_default_evidence_still_holds_upstream() -> None:
     """证据链源码锚：无头挂载传 record.annualMethod、引擎把非 xiaoxian/liunian 归 ''、挂载齿轮缺省 'xiaoxian'（拨「小限」
     被 prune 成无覆盖）、页面出厂 'xiaoxian'。任一处上游改了就红 —— 提示重审 skill 的缺省。"""
     ctx = read_facade_source(UPSTREAM_UI / "utils" / "aiAnalysisContext.js")   # v3.12.0：门面 + aiAnalysisContext/ 目录
-    report = (UPSTREAM_UI / "utils" / "yizhangjingReport.js").read_text(encoding="utf-8")
-    mount = (UPSTREAM_UI / "utils" / "techniqueMountSettings.js").read_text(encoding="utf-8")
-    page = (UPSTREAM_UI / "components" / "kinastro" / "KinAstroMain.js").read_text(encoding="utf-8")
+    report = upstream_source(UPSTREAM_UI / "utils" / "yizhangjingReport.js")
+    mount = upstream_source(UPSTREAM_UI / "utils" / "techniqueMountSettings.js")
+    page = upstream_source(UPSTREAM_UI / "components" / "kinastro" / "KinAstroMain.js")
     call = ctx[ctx.index("return await buildYizhangjingSnapshotForRecord(record, {"):]
     assert "annualMethod: record.annualMethod," in call[: call.index("});")]
     assert "const annualMethod = (o.annualMethod === 'liunian' || o.annualMethod === 'xiaoxian') ? o.annualMethod : '';" in report
@@ -378,7 +381,7 @@ def test_geomancy_always_sends_quesited_house_scope_and_zodiac(tmp_path) -> None
 @requires_upstream
 def test_geomancy_question_house_table_matches_upstream() -> None:
     """_GEOMANCY_QUESTION_HOUSE 逐值 = 上游 QUESTION_TYPE_HOUSE（GeomancyMain.js:205-208）。"""
-    source = (UPSTREAM_UI / "components" / "geomancy" / "GeomancyMain.js").read_text(encoding="utf-8")
+    source = upstream_source(UPSTREAM_UI / "components" / "geomancy" / "GeomancyMain.js")
     block = source[source.index("const QUESTION_TYPE_HOUSE = {"): source.index("};", source.index("const QUESTION_TYPE_HOUSE = {"))]
     upstream = {k: int(v) for k, v in re.findall(r"(\w+): (\d+)", block)}
     assert upstream == service_module._GEOMANCY_QUESTION_HOUSE

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
 import re
@@ -138,7 +139,7 @@ def test_bazi_tianyi_school_declared_hidden_and_documented() -> None:
 def test_bazi_tianyi_vocab_matches_upstream_domains() -> None:
     """值域逐值对上游 baziStoredOpt.js BAZI_OPT_DOMAINS.tianyiSchool（八字页左栏 / 挂载齿轮同表）。
     负向对照：把 _BAZI_OPTION_VOCAB 的 tianyiSchool 改成 ("xieji",) → 红（实跑过）。"""
-    src = (UPSTREAM_UI / "utils" / "baziStoredOpt.js").read_text(encoding="utf-8")
+    src = upstream_source(UPSTREAM_UI / "utils" / "baziStoredOpt.js")
     m = re.search(r"tianyiSchool:\s*\[([^\]]*)\]", src)
     assert m
     upstream = tuple(re.findall(r"'([^']+)'", m.group(1)))
@@ -156,7 +157,7 @@ def test_bespoke_bazi_snapshot_builder_matches_upstream_body() -> None:
         return text[start: text.index("\n}\n", start) + 3]
 
     vendored = (CORE_JS_SRC / "vendor" / "bazi" / "baziSnapshot.js").read_text(encoding="utf-8")
-    upstream = (UPSTREAM_UI / "components" / "cntradition" / "BaZi.js").read_text(encoding="utf-8")
+    upstream = upstream_source(UPSTREAM_UI / "components" / "cntradition" / "BaZi.js")
     assert body(vendored) == body(upstream)
 
 
