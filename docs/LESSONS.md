@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.0-dev (2026-11-23) | 接量化盘 v3.15.0 时间层时读上游 buildHamburgLines，发现 skill 的 [虚星参考] 一直无条件附加：当初移植只抄了块内条件（showTnp && school≠cosmo），漏了外层 showHamburg 门（缺省 classic 全关 → 整段不出）；导出目录也把它登成恒出段 | 汉堡要素整段改由上游原函数出（app-text 通道），[虚星参考] 进条件段；移植块级逻辑时连同外层门一起读，测试钉「缺省调用不出、且不起 node」 |
 | v0.53.0-dev (2026-11-23) | 核调波 / 龙盘 / 重置盘写中文时，拿 vendored 的上游 `derivedAstroLabs.js`（逐字）对拍 Python 移植，重置盘四角只出两行：它 `import * as AstroConst` 后用 `AstroConst.DESC / IC`，而 skill 的 AstroConst 是 curated 子集，没有这两个——命名空间成员缺了不报错、只是 undefined，loadcheck 照绿 | 子集按上游原序补 DESC / IC；loadcheck 新增「命名空间导入的每个 `NS.名字` 都要是目标模块的导出」（全树 96 处，负向对照：删 IC → 红）；Python 移植与 vendored 函数同输入逐行对拍 |
 | v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0 做到一半才发现报告盘图 bundle（dist/app-charts.cjs）还是 v3.14.0 打的：re-vendor Runbook 没有这一步，工单照 Runbook 列也就没有；`build.mjs --check` 只在发版 preflight 跑。同轮：真随机那次提交只跑了 pytest、没跑 `npm test`，两条旧 selfcheck（小成图无种子拒收、灵棋同刻幂等）红着进了提交 | Runbook 加 app-charts 重打包 + 塔罗牌面两步；守卫 `test_the_bundle_is_built_from_the_recorded_upstream_pin`（包 / 牌面的上游提交 == provenance pin，负向对照实跑）；改起卦行为的提交同时跑 pytest 与 npm test |
 | v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0「随机起卦一律真随机」时，我把 skill 旧的「无头只走确定性种子」当既定政策延续，把要不要真随机当待定项抛给用户；用户：「当然要做真的随机」。旧注释的理由（同刻同卦、测试难写）早被上游的「真随机记录 + 原样重开」解决 | 随机起法取系统随机源、缺省跟上游页面；所有起卦技法回传 data.cast.replay（重开配方，不依赖记忆库）；记录长度 / 骰子池 / 五兆重开配方读上游源对拍；上游已定的口径不再抛给用户拍板 |
@@ -270,6 +271,17 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.0-dev / 2026-11-23 — 移植只抄了块内条件，漏了外层门（量化盘 [虚星参考]）
+
+**症状**：v3.15.0 量化盘的差值表改在 [汉堡学派要素] 里，读上游 AstroMidpoint.buildHamburgLines 时看到 [戴维森盘] / [虚星参考] 也住在它里面，
+整个函数开头有一道 `showHamburg` 门（流派非 classic 或任一汉堡开关）——缺省 classic 全关时直接返回空。skill 的 `uranian_extra` 却每次都附
+[虚星参考]（缺省调用也有），导出目录也把它登成恒出段。
+
+**根因**：当初移植这两段时照着块内的 `disp.showTnp !== false && disp.school !== 'cosmo'` 抄了条件，没往上看函数入口的门。
+
+**守卫**：整段改由上游原函数出（报告盘图 bundle 的 app-text 通道，不再移植），`uranian_extra` 删除；导出目录把 [虚星参考] 移进条件段；
+`tests/test_sync315_germany_time_layer.py` 钉「缺省调用不出这几段、且不起 node」（负向对照：门恒开 → 红）。移植块级逻辑时，连同外层门一起读。
 
 ### v0.53.0-dev / 2026-11-23 — curated 子集缺成员，命名空间导入静默得 undefined
 

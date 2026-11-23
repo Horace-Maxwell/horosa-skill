@@ -830,7 +830,9 @@ AI_EXPORT_OPTIONAL_SECTIONS = {
     # v16：[伙伴星期] 只在后端回 distPartners 非空时产（AstroDistributions.buildDistributionsSnapshotFromResult）→ 条件段。
     "distributions": ["伙伴星期"],
     # v18（上游 v67/v68）：[行运接触] 只在给了 transitAt、[图形星历] 只在给了 ephemStart/ephemEnd 时产 → 条件段。
-    "germany": ["六宫框落宫", "赤纬接触", "校时预览", "行运接触", "图形星历", "中点坐标", "公式求解", "汉堡学派要素", "组合盘", "戴维森盘"],
+    # v0.53.0-dev：[虚星参考] 改由上游 buildHamburgLines 出（与 [组合盘] / [戴维森盘] 同在 showHamburg 门内：流派非 classic 或开了汉堡开关）
+    # → 缺省 classic 不产，进条件段（skill 旧版无条件附它，漏看了这道门）。
+    "germany": ["六宫框落宫", "赤纬接触", "校时预览", "行运接触", "图形星历", "中点坐标", "公式求解", "汉堡学派要素", "组合盘", "戴维森盘", "虚星参考"],
     # 骰子盘/天象盘相位：上游 DiceMain.buildChartAspectLines 有 normalAsp 才产段（Q-455）。
     "otherbu": ["骰子盘相位", "天象盘相位"],
     # 二十四节气：种子行来自 Java /jieqi/year（上游页面种子请求同路）；Java 不可用时不产 + warnings。

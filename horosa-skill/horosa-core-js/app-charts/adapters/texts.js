@@ -15,6 +15,7 @@ import {
   DEFAULT_PLANETS as GEPHEM_DEFAULT_PLANETS, natalLines as gephemNatalLines, storedGephemDisp,
 } from '@horosa-app/components/germany/UranianGraphicEphemeris.js';
 import { chartToPoints } from '@horosa-app/components/germany/UranianDialMain.js';
+import { getStoredUranianDisplay } from '@horosa-app/components/germany/UranianDialStyle.js';
 import { buildChartDetailFullTables, CHART_DETAIL_TABLE_KEYS } from '@horosa-app/components/astro/chartDetailTablesText.js';
 import * as UD from '@horosa-app/utils/uranianDial.js';
 import { tieSort } from '@horosa-app/utils/stableOrder.js';
@@ -26,16 +27,30 @@ function germanyPoints(args) {
   return pts;
 }
 
+// 无头挂载的显示口径 = 显示仓缺省 ⊕ 挂载覆盖（buildGermanySnapshotForFields 的 dispReq）；Python 只传用户给了的键。
+const dispOf = (a) => ({ ...getStoredUranianDisplay(), ...((a && a.disp) || {}) });
+
 export const TEXTS = {
-  germany_hamburg: (a) => buildHamburgLines(a.disp || {}, a.dialPoints || [], a.result || {}, a.snapOrb, a.extras).join('\n'),
-  germany_transit: (a) => uranianTransitContactText(a.natalPts || [], a.transitPts || [], a.opts || {}),
+  // buildGermanySnapshotText 末尾：SNAP_ORB = disp.orb（>0）否则 1，交给 buildHamburgLines
+  germany_hamburg: (a) => {
+    const disp = dispOf(a);
+    const snapOrb = Number.isFinite(Number(disp.orb)) && Number(disp.orb) > 0 ? Number(disp.orb) : 1;
+    return buildHamburgLines(disp, a.dialPoints || [], a.result || {}, snapOrb, a.extras).join('\n');
+  },
+  // uranianTransitSection 的末两行：盘基 / 容许度随显示口径（挂载可覆盖），at = transitAt 原串
+  germany_transit: (a) => {
+    const disp = dispOf(a);
+    const opts = { base: Number(disp.dialBase) > 0 ? Number(disp.dialBase) : 90, orb: Number(disp.orb) > 0 ? Number(disp.orb) : 1, at: `${disp.transitAt}`.trim() };
+    return uranianTransitContactText(a.natalPts || [], a.transitPts || [], opts);
+  },
   germany_points: (a) => germanyPoints(a),
   germany_gephem_plan: (a) => {
     // 区间 + 行运星集 + 盘基：与 uranianGraphicEphemerisSection 同一套（页面保存的显示口径缺省、挂载盘基覆盖）。
-    const rg = gephemRangeOf(a.disp || {});
+    const disp = dispOf(a);
+    const rg = gephemRangeOf(disp);
     if (!rg) return null;
     const st = storedGephemDisp();
-    const base = [90, 45, 22.5].indexOf(Number((a.disp || {}).dialBase)) >= 0 ? Number(a.disp.dialBase) : st.base;
+    const base = [90, 45, 22.5].indexOf(Number(disp.dialBase)) >= 0 ? Number(disp.dialBase) : st.base;
     const planets = st.includeMoon ? [AstroConst.MOON, ...GEPHEM_DEFAULT_PLANETS] : GEPHEM_DEFAULT_PLANETS.slice();
     return { range: rg, base, planets };
   },
@@ -48,7 +63,11 @@ export const TEXTS = {
       return tieSort(a.items || [], ...(a.keys || []).map((k) => (row) => row[k]));
     }
     if (typeof fn !== 'function') throw new Error(`uranianDial has no ${a.fn}`);
-    return fn(...(a.args || []));
+    // opts 的 personal / uranian 是 Set（JSON 传不了）：数组原样转 Set，其余键不动
+    const toSets = (x) => (x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, (k === 'personal' || k === 'uranian') && Array.isArray(v) ? new Set(v) : v]))
+      : x);
+    return fn(...(a.args || []).map(toSets));
   },
 };
 

@@ -42,9 +42,67 @@ def _dial_norm360(x: float) -> float:
     return ((x % 360) + 360) % 360
 
 
+# 上游 v3.15.0 utils/stableOrder.js：差不到 TIE_EPS 的两个数当相等（南北交点成对的相位、A+B−C=D 与 A+B−D=C、正对两点的两个中点——
+# 数学上相等、末位各差各的）；并列的按下一个键、最后按原来的先后排。不这样排，谁先谁后由浮点末位决定，换台机器就换序。
+_TIE_EPS = 1e-9
+
+
+def _tie_is_num(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _tie_cmp_raw(a: Any, b: Any) -> int:
+    """stableOrder.cmpRaw：数值按大小（NaN 排最后），其余按字符串。"""
+    if _tie_is_num(a) and _tie_is_num(b):
+        na, nb = math.isnan(a), math.isnan(b)
+        if na or nb:
+            return 0 if na == nb else (1 if na else -1)
+        return -1 if a < b else (1 if a > b else 0)
+    sa, sb = f"{a}", f"{b}"
+    return -1 if sa < sb else (1 if sa > sb else 0)
+
+
+def _tie_same(a: Any, b: Any, eps: float = _TIE_EPS) -> bool:
+    """stableOrder.sameValue。"""
+    if _tie_is_num(a) and _tie_is_num(b):
+        if math.isnan(a) or math.isnan(b):
+            return math.isnan(a) and math.isnan(b)
+        return abs(a - b) <= eps
+    return a == b
+
+
+def _tie_sort(items: list[Any], *keys: Any) -> list[Any]:
+    """stableOrder.tieSort 逐行移植：按若干键依次排；相邻两项差不到 eps 算并列，并列的再按下一键；键用完按原先后。"""
+    from functools import cmp_to_key
+
+    def walk(arr: list[tuple[int, Any]], level: int) -> list[tuple[int, Any]]:
+        if len(arr) < 2:
+            return arr
+        if level >= len(keys):
+            return sorted(arr, key=lambda x: x[0])
+        of = keys[level]
+        dec = [(x, of(x[1])) for x in arr]
+        dec.sort(key=cmp_to_key(lambda p, q: _tie_cmp_raw(p[1], q[1]) or (p[0][0] - q[0][0])))
+        out: list[tuple[int, Any]] = []
+        run: list[tuple[int, Any]] = []
+        for i, (x, v) in enumerate(dec):
+            if i > 0 and not _tie_same(dec[i - 1][1], v):
+                out.extend(walk(run, level + 1))
+                run = []
+            run.append(x)
+        out.extend(walk(run, level + 1))
+        return out
+
+    return [item for _, item in walk(list(enumerate(items)), 0)]
+
+
 def _dial_mid(a: float, b: float) -> float:
+    """uranianDial.js midpoint（v3.15.0）：两点正对（相距恰 180°，如南北交点）时两个中点一样近，取黄经小的那个。"""
     m = _dial_norm360((a + b) / 2)
-    if abs(m - _dial_norm360(a)) > 90:
+    gap = abs(m - _dial_norm360(a))
+    if abs(gap - 90) <= _TIE_EPS or abs(gap - 270) <= _TIE_EPS:
+        return min(m, _dial_norm360(m + 180))
+    if gap > 90:
         m = _dial_norm360(m + 180)
     return m
 
@@ -112,8 +170,8 @@ def _dial_planetary_pictures(points: list[dict[str, Any]], base: float = 90.0, o
                         "a": a["id"], "b": b["id"], "c": c["id"], "d": d["id"], "sep": sep,
                         "hp": any(x in _DIAL_PERSONAL for x in ids), "ht": any(x in _DIAL_URANIAN for x in ids),
                     })
-    out.sort(key=lambda p: (_dial_rank(p["hp"], p["ht"]), p["sep"]))
-    return out[:limit]
+    # v3.15.0：误差相等的（A+B−C=D 与 A+B−D=C、南北交点成对的图）保持生成时的先后，不由浮点末位定
+    return _tie_sort(out, lambda p: _dial_rank(p["hp"], p["ht"]), lambda p: p["sep"])[:limit]
 
 
 def _dial_midpoint_list(points: list[dict[str, Any]], base: float = 90.0) -> list[dict[str, Any]]:
@@ -127,8 +185,7 @@ def _dial_midpoint_list(points: list[dict[str, Any]], base: float = 90.0) -> lis
                 "hp": a["id"] in _DIAL_PERSONAL or b["id"] in _DIAL_PERSONAL,
                 "ht": a["id"] in _DIAL_URANIAN or b["id"] in _DIAL_URANIAN,
             })
-    out.sort(key=lambda p: (_dial_rank(p["hp"], p["ht"]), p["lon"]))
-    return out
+    return _tie_sort(out, lambda p: _dial_rank(p["hp"], p["ht"]), lambda p: p["lon"])
 
 
 def _dial_spiegel(points: list[dict[str, Any]], base: float = 90.0, orb: float = 1.0) -> list[dict[str, Any]]:
@@ -145,8 +202,7 @@ def _dial_spiegel(points: list[dict[str, Any]], base: float = 90.0, orb: float =
                 "hp": a["id"] in _DIAL_PERSONAL or b["id"] in _DIAL_PERSONAL,
                 "ht": a["id"] in _DIAL_URANIAN or b["id"] in _DIAL_URANIAN,
             })
-    out.sort(key=lambda p: (_dial_rank(p["hp"], p["ht"]), p["sep"]))
-    return out
+    return _tie_sort(out, lambda p: _dial_rank(p["hp"], p["ht"]), lambda p: p["sep"])
 
 
 # 上游 AstroText.AstroTxtMsg 的 8 颗汉堡虚星 + 白羊点（AstroText.js:458-467）；其余点走 `_astro_msg_short`。
@@ -174,7 +230,12 @@ def _dial_planet_house(lon: float, cusps: list[Any]) -> int:
     position = _dial_norm360(lon)
     for index in range(12):
         start, end = float(cusps[index]), float(cusps[(index + 1) % 12])
-        if _dial_norm360(position - start) < _dial_norm360(end - start):
+        # v3.15.0：恰在宫头上的算进这一宫（差值被浮点末位带到 359.99… 按 0 计）；恰在下一宫头上的不算本宫
+        d = _dial_norm360(position - start)
+        if 360 - d <= _TIE_EPS:
+            d = 0.0
+        width = _dial_norm360(end - start)
+        if d < width and width - d > _TIE_EPS:
             return index + 1
     return 12
 
@@ -292,7 +353,7 @@ def _germany_rectify_lines(payload: dict[str, Any], rectify_events: Any, dial_po
                     separation = _dial_sep(directed, point["lon"], base)
                     if separation <= orb:
                         hits.append((point["id"], angle_name, separation))
-            hits.sort(key=lambda hit: hit[2])
+            hits = _tie_sort(hits, lambda hit: hit[2])   # v3.15.0 rectificationHits：误差相等保持生成先后
         total += len(hits)
         hit_text = "，".join(f"{angle}→{_uranian_msg(factor)}·{separation:.2f}°" for factor, angle, separation in hits[:8]) or "无命中"
         date_text = when.strftime("%Y-%m-%d") if when is not None else ""
@@ -470,7 +531,7 @@ def _build_germany_snapshot_text(
     dial_points = _dial_points(objects, tnp)
     dial_factor_lines = [
         f"{_planet_label(p['id'])} = {(_dial_norm360(p['lon']) % 90):.2f}°"
-        for p in sorted(dial_points, key=lambda q: _dial_norm360(q["lon"]) % 90)
+        for p in _tie_sort(dial_points, lambda q: _dial_norm360(q["lon"]) % 90)   # 折叠位相等的（南北交点）保持收集先后
         if p["id"] != "AriesPoint"
     ]
     picture_lines = [

@@ -9,7 +9,11 @@ from horosa_skill.astro_rulers import (
     DRACONIC_HOUSE_MODES,
 )
 from horosa_skill.astro_rulers import js_template_str as _js_template_str
-from horosa_skill.civil_calendar import _parse_date_parts, _round_hour_to_minute
+from horosa_skill.civil_calendar import (
+    _ad_of_date,
+    _parse_date_parts,
+    _round_hour_to_minute,
+)
 from horosa_skill.engine.astroextra_snapshots import fmt_num
 from horosa_skill.errors import ToolTransportError, ToolValidationError, bilingual
 from horosa_skill.schemas.tools.astro import INDIA_RECTIFY_DEAD_KEYS
@@ -20,7 +24,6 @@ from horosa_skill.service._common import (
 )
 from horosa_skill.service._context import _degrade
 from horosa_skill.service.text.astro_core import (
-    ASTRO_TEXT_MAP,
     _astro_msg,
     _round3,
     _sign_degree,
@@ -37,6 +40,7 @@ from horosa_skill.service.text.western import (
     _derived_cn,
     _derived_conjunction_lines,
     _derived_position_lines,
+    _dial_points,
     _reloc_display_degree,
     _with_natal_planet_sign,
 )
@@ -424,23 +428,7 @@ class WesternRunners:
         chart_response = self._call_remote("/chart", chart_payload)
         germany_result = self._call_remote("/germany/midpoint", chart_payload)
         snapshot_text = _build_germany_snapshot_text(chart_payload, chart_response, germany_result, rectify_events=rectify_events)
-        # [戴维森盘]（后端 davison 字段，仅在请求带 davison 第二人时返回）+ [虚星参考]（静态口径表）。
-        # 两段由 vendored 上游排版逐字产出；失败只是这两段不出，不影响主盘。
-        try:
-            extra = self.js_client.run(
-                "uranian_extra",
-                {
-                    "davison": germany_result.get("davison") if isinstance(germany_result, dict) else None,
-                    "school": payload.get("school"),
-                    "showTnp": payload.get("showTnp", True),
-                    "labels": ASTRO_TEXT_MAP,
-                },
-            )
-            extra_text = f"{(extra or {}).get('text') or ''}".strip()
-            if extra_text:
-                snapshot_text = f"{snapshot_text}\n{extra_text}".strip()
-        except Exception as exc:  # noqa: BLE001 — 附注段失败不影响量化盘
-            _degrade("uranian extra sections failed: %s", exc)
+        snapshot_text = self._germany_upstream_tail(payload, chart_payload, chart_response, germany_result, snapshot_text)
         result = {
             "chart": chart_response.get("chart"),
             "midpoints": germany_result.get("midpoints", germany_result if isinstance(germany_result, list) else []),
@@ -450,6 +438,100 @@ class WesternRunners:
         }
         result["export_snapshot"] = self._augment_export_payload(technique="germany", snapshot_text=snapshot_text)
         return result
+
+    # 汉堡要素的门（上游 buildHamburgLines 的 showHamburg）里 skill 接得上的那几键：流派非 classic / 差值表 / 严格因子集 / 戴维森第二人。
+    # 门内正文全由上游函数出；门外不起 node（缺省调用零开销，正文与上游缺省同样没有这几段）。
+    _GERMANY_TIME_KEYS = ("transitAt", "showDiffList", "diffTargetAge", "saKey", "dialBase", "ephemStart", "ephemEnd")
+
+    def _germany_upstream_tail(
+        self, payload: dict[str, Any], chart_payload: dict[str, Any], chart_response: dict[str, Any], germany_result: Any, text: str,
+    ) -> str:
+        """量化盘正文的上游尾段（v3.15.0 AstroMidpoint.buildGermanySnapshotText 末 + buildGermanySnapshotForFields 时间层）：
+
+        - [汉堡学派要素]（+ 组合盘 / [戴维森盘] / [虚星参考]）= 上游 buildHamburgLines：只在流派非 classic 或开了汉堡开关时出
+          （上游缺省 classic 全关 → 不出；skill 旧版无条件附 [虚星参考]，是漏看了这道门）；
+        - [行运接触] = uranianTransitContactText：给了 transitAt 才出，行运盘同地点在该时刻起 + 中点服务取 TNP；
+        - [图形星历] = graphicEphemerisText：给了 ephemStart / ephemEnd 才出，/astroextra/ephemeris 逐日黄经。
+        三段都经报告盘图 bundle 的 app-text 通道跑上游原函数；bundle / 后端不可用 → 该段不出 + warnings（上游同：取不到就不出）。
+        """
+        disp: dict[str, Any] = {k: payload[k] for k in ("school", "orb", "strictFactors", *self._GERMANY_TIME_KEYS)
+                                if payload.get(k) not in (None, "")}
+        if payload.get("personalOrb") not in (None, ""):
+            disp["orbPersonal"] = payload["personalOrb"]
+        if payload.get("showTnp") is not None:
+            disp["showTnp"] = bool(payload.get("showTnp"))
+        if isinstance(payload.get("davison"), dict):
+            disp["showDavison"] = True
+        tnp = germany_result.get("tnp") if isinstance(germany_result, dict) else None
+        hamburg_gate = disp.get("school", "classic") != "classic" or bool(disp.get("showDiffList")) or bool(disp.get("strictFactors")) \
+            or bool(disp.get("showDavison"))
+        want_transit = bool(disp.get("transitAt"))
+        want_gephem = bool(disp.get("ephemStart")) and bool(disp.get("ephemEnd"))
+        if not (hamburg_gate or want_transit or want_gephem):
+            return text
+        dial_points = _dial_points((chart_response.get("chart") or {}).get("objects"), tnp)
+        first = [
+            {"name": "germany_hamburg", "args": {"disp": disp, "dialPoints": dial_points, "result": germany_result}},
+            {"name": "germany_points", "args": {"chart": chart_response, "tnp": tnp}},
+            {"name": "germany_gephem_plan", "args": {"disp": disp}},
+        ]
+        runs = self.js_client.run_app_texts(first)
+        if not isinstance(runs, list):
+            _degrade("germany upstream tail: app-charts bundle unavailable",
+                     note="量化盘的 [汉堡学派要素] / [行运接触] / [图形星历] 本次未产出（上游正文代码不可用）；其余段照常。")
+            return text
+        hamburg, natal_points, plan = (r.get("value") if r.get("ok") else None for r in runs)
+        if hamburg_gate and f"{hamburg or ''}".strip():
+            text = f"{text}\n{f'{hamburg}'.strip()}"
+        second: list[dict[str, Any]] = []
+        if want_transit and isinstance(natal_points, list):
+            at = f"{disp['transitAt']}".strip()
+            date_part, _, time_part = at.replace("T", " ").partition(" ")
+            time_text = (time_part or "12:00")[:8]
+            time_text = f"{time_text}:00" if len(time_text) == 5 else time_text
+            transit_payload = {k: v for k, v in chart_payload.items() if k not in ("davison", *self._GERMANY_TIME_KEYS)}
+            transit_payload.update(date=date_part, time=time_text, ad=_ad_of_date(date_part))
+            try:
+                t_chart = self._call_remote("/chart", transit_payload)
+                t_mid = self._call_remote("/germany/midpoint", transit_payload)
+                second.append({"name": "germany_points", "args": {"chart": t_chart, "tnp": (t_mid or {}).get("tnp") if isinstance(t_mid, dict) else None}})
+            except Exception as exc:  # noqa: BLE001 — 上游：行运盘取不到 → 不出时间层
+                _degrade("germany transit chart failed: %s", exc, note=f"[行运接触] 本次未产出（{at} 的行运盘取不到）。")
+        if want_gephem and isinstance(plan, dict):
+            rg = plan.get("range") or {}
+            body = {k: chart_payload.get(k) for k in ("date", "time", "zone", "lat", "lon", "gpsLat", "gpsLon", "hsys", "zodiacal", "siderealAyanamsa")}
+            body.update(startDate=_to_slash_date(rg.get("start")), endDate=_to_slash_date(rg.get("end")),
+                        startTime="00:00:00", endTime="00:00:00", planets=plan.get("planets"), includeTransits=False)
+            try:
+                eph = self._call_remote("/astroextra/ephemeris", {k: v for k, v in body.items() if v is not None})
+                rows = eph.get("dailyPositions") if isinstance(eph, dict) else None
+                if isinstance(rows, list) and rows:
+                    second.append({"name": "germany_gephem", "args": {"rows": rows, "planets": plan.get("planets"), "chart": chart_response,
+                                                                      "base": plan.get("base"), "range": rg}})
+            except Exception as exc:  # noqa: BLE001 — 上游：星历取不到 → 不出该段
+                _degrade("germany graphic ephemeris failed: %s", exc, note="[图形星历] 本次未产出（逐日星历取不到）。")
+        if not second:
+            return text
+        runs2 = self.js_client.run_app_texts(second)
+        if not isinstance(runs2, list):
+            _degrade("germany time layer: app-charts bundle unavailable", note="量化盘时间层本次未产出（上游正文代码不可用）。")
+            return text
+        tail: list[str] = []
+        for call, run in zip(second, runs2):
+            if not run.get("ok"):
+                continue
+            if call["name"] == "germany_points":
+                t3 = self.js_client.run_app_texts([{"name": "germany_transit", "args": {"disp": disp, "natalPts": natal_points, "transitPts": run.get("value")}}])
+                if isinstance(t3, list) and t3 and t3[0].get("ok"):
+                    tail.append(f"{t3[0].get('value')}".strip())
+            else:
+                tail.append(f"{run.get('value')}".strip())
+        # 上游顺序：正文 → [行运接触] → [图形星历]
+        tail.sort(key=lambda s: 0 if s.startswith("[行运接触]") else 1)
+        for block in tail:
+            if block:
+                text = f"{text}\n{block}"
+        return text
 
     def _run_harmonic_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 调波盘: a backend chart-extra computation on the Python chart service (/astroextra/harmonic).

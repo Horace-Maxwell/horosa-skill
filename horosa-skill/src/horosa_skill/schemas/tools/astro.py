@@ -379,7 +379,8 @@ class GermanyInput(BirthInput):
     # 后端 webgermanysrv.midpoint 读这些键）。此前未声明：CLI 经 extra 透传得到，MCP 扁平面却静默丢弃、流派写错也不报。
     # 照常声明（校验 + MCP 扁平面收顶层键），不进 tools/list 广告层（预算）；说明见 agent_guidance options_keys。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset(
-        {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison", "mpCoord"}
+        {"school", "orb", "personalOrb", "strictFactors", "frames", "declination", "davison", "mpCoord",
+         "transitAt", "showDiffList", "diffTargetAge", "saKey", "dialBase", "ephemStart", "ephemEnd"}
     )
     school: Literal["classic", "pure", "uranian", "cosmo"] | None = Field(
         default=None, description="汉堡流派：classic 原始汉堡（缺省）| pure 纯净派 | uranian 美国对称 | cosmo 宇宙生物学（不用虚星，缺省容许度 1.5°）。"
@@ -395,6 +396,42 @@ class GermanyInput(BirthInput):
     mpCoord: Literal["lon", "ra", "decl"] | None = Field(
         default=None, description="中点坐标：lon 黄经（缺省，不另成段）| ra 赤经 | decl 赤纬（后两者产 [中点坐标] 段）。"
     )
+    # 星阙 v3.15.0 挂载齿轮 GERMANY_FIELDS「时间层」七键（AstroMidpoint.buildGermanySnapshotForFields）：给了才出段，缺省逐字同旧。
+    transitAt: str | None = Field(default=None, description="行运时刻 YYYY-MM-DD[ HH:MM[:SS]]：产 [行运接触]（行运因子落本命单点 / 中点轴）。")
+    showDiffList: bool | None = Field(default=None, description="差值表（太阳弧到期）：true 进 [汉堡学派要素]。")
+    diffTargetAge: float | None = Field(default=None, ge=0, le=120, description="差值表目标年龄（岁；缺省 30）：命中的行标 ★到期 并排前。")
+    saKey: Literal["naibod", "oneDeg", "cardan"] | None = Field(default=None, description="太阳弧换算：naibod 均日弧（缺省）| oneDeg 1°/年 | cardan 59′12″/年。")
+    dialBase: float | None = Field(default=None, description="盘基：90（缺省）| 45 | 22.5 | 11.25（差值表 / 行运接触；图形星历只认 90 / 45 / 22.5）。")
+    ephemStart: str | None = Field(default=None, description="图形星历起 YYYY-MM-DD：与 ephemEnd 都给才产 [图形星历]（相隔 ≤366 天，超出截到起点后 366 天）。")
+    ephemEnd: str | None = Field(default=None, description="图形星历止 YYYY-MM-DD。")
+
+    @field_validator("transitAt", "ephemStart", "ephemEnd", mode="before")
+    @classmethod
+    def _germany_time_layer_dates(cls, value: Any, info: Any) -> Any:
+        if value in (None, ""):
+            return None
+        import re
+
+        text = f"{value}".strip()
+        pattern = r"-?\d{1,5}-\d{1,2}-\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?" if info.field_name == "transitAt" else r"-?\d{1,5}-\d{1,2}-\d{1,2}"
+        if not re.fullmatch(pattern, text):
+            raise ValueError(f"{info.field_name} 要 YYYY-MM-DD{'[ HH:MM[:SS]]' if info.field_name == 'transitAt' else ''}，收到 {value!r} / "
+                             f"{info.field_name} must be a date{' (optionally with time)' if info.field_name == 'transitAt' else ''}.")
+        return text
+
+    @field_validator("dialBase", mode="before")
+    @classmethod
+    def _germany_dial_base(cls, value: Any) -> Any:
+        if value in (None, ""):
+            return None
+        try:
+            number = float(f"{value}".strip())
+        except ValueError:
+            number = float("nan")
+        if number not in (90.0, 45.0, 22.5, 11.25):
+            raise ValueError(f"dialBase 只收 90 / 45 / 22.5 / 11.25，收到 {value!r} / dialBase must be 90, 45, 22.5 or 11.25.")
+        return number
+
     # 上游 v3.11 [Q-442/T-405]「校时」页签（只读预览）：待校事件 → 太阳弧（Naibod）推进 MC/Asc 看是否触动本命因子。
     rectifyEvents: list[dict[str, Any]] | None = Field(
         default=None,

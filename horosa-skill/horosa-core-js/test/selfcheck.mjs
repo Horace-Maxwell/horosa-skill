@@ -65,7 +65,6 @@ import { runEgyptSection } from '../src/tools/egyptSection.js';
 import { runChartDetails } from '../src/tools/chartDetails.js';
 import { runClassicalDerived } from '../src/tools/classicalDerived.js';
 import { runJinkou } from '../src/tools/jinkou.js';
-import { runUranianExtra } from '../src/tools/uranianExtra.js';
 import { runSanshiUnited } from '../src/tools/sanshiUnited.js';
 import { calcDunJia } from '../src/vendor/dunjia/DunJiaCalc.js';
 import { buildLocalJieqiYearSeed } from '../src/vendor/utils/localNongliAdapter.js';
@@ -2257,14 +2256,6 @@ check('zeriParamCheck 标签读成规范值、界外值报错并给通书用事�
   assert(msg === '「宜」的「用事」取值 「搬家」 不在可选值里（可选：移徙/入宅/嫁娶/开市）；是不是指：移徙 / 入宅？', msg);
 });
 
-check('uranianExtra 虚星参考 = 上游八颗汉堡学派虚星表（周期 / 距离，vendored）', () => {
-  const text = runUranianExtra({ showTnp: true, labels: {} }).text;
-  // 录（vendored 上游表）：丘比特 262/262.5 年 41AU，波塞冬 720/765.3/745 年 83.5AU；八星分前后两组。
-  assert(text.includes('丘比特(第一组(前四星))：周期 甲262/乙262.5 年 · 41AU'), 'cupido');
-  assert(text.includes('波塞冬(第二组(后四星))：周期 甲720/乙765.3/丙745 年 · 83.5AU'), 'poseidon');
-  assert(text.split('\n').filter((l) => /^ {2}\S+\(第[一二]组/.test(l)).length === 8, 'eight TNPs');
-  assert(runUranianExtra({ showTnp: false, labels: {} }).text === '' || !runUranianExtra({ showTnp: false, labels: {} }).text.includes('丘比特'), 'showTnp=false hides the table');
-});
 
 // 地名检索（v0.48.0，tools/placeSearch.js 懒加载：tz-lookup + 城市库）。期望值 = 上游 resolvePlaceOffline / dstAwareZoneAt 在上游源上
 // 跑出的值（tests/fixtures/place_search_upstream.json，test_fixture_matches_upstream 对着 HOROSA_SOURCE_ROOT 复核）：

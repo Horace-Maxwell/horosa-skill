@@ -633,6 +633,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   **子集被新 vendor 的逐字件用 `import * as` 引用时**，取不到的成员只是 undefined、加载照样过（v0.53.0-dev：逐字的
   `utils/derivedAstroLabs.js` 用 `AstroConst.DESC / IC`，子集没有 → 重置盘四角对照只剩两行）。`npm test` 的 loadcheck 逐文件把
   `NS.名字` 对上目标模块的导出，缺了即红；补子集时按上游原序逐值抽取。
+- **移植上游的一段正文逻辑时连同外层门一起读（v0.53.0-dev）**：量化盘 [虚星参考] 当初只抄了块内条件、漏了 buildHamburgLines 入口的 showHamburg 门，缺省调用多出一段。
 - **家族共享的隐藏旋钮放 mixin，不进 `BirthInput`**：广告层以「不在 BirthInput」判定子类自有字段，塞进 BirthInput 的键会把各子类
   已广告的同名键静默踢出 tools/list（v0.40.0 `after23NewDay` 事故，见 LESSONS）；用 `_ChartDayBoundaryKnobs` 一类 mixin + `ADVERTISE_HIDDEN`。
 - **vendored JSON 数据与 `.js` 同等登记**：`horosa-core-js/src/vendor/**` 下每个 `.js` / `.json` 都必须在

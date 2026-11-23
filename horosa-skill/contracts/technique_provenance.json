@@ -337,16 +337,14 @@
       "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "germany": {
-      "compute_class": "headless_js",
-      "engines": [
-        "uranian_extra"
-      ],
+      "compute_class": "python_chart_backend",
+      "engines": [],
       "endpoints": [
         "/chart",
         "/germany/midpoint"
       ],
       "export_technique": "germany",
-      "notes": "纯 headless JS，无后端引擎"
+      "notes": "Python _call_remote 打 chart 服务（/chart · /predict/* · /astroextra/* · /india/* …）+ Python snapshot builder"
     },
     "givenyear": {
       "compute_class": "python_chart_backend",
