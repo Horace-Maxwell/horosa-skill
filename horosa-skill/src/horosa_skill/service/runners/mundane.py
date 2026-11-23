@@ -233,9 +233,14 @@ class MundaneRunners:
     # 后端 astroextra_parts/cycles.py compute_barbault：`if harm < 1 or harm > 12: harm = 1`（越界静默按原指数）。
     _MUNDANE_BB_HARM_RANGE = (1, 12)
     _MUNDANE_CYCLES_KEYS = (*_MUNDANE_CYCLE_OPTION_KEYS, *_MUNDANE_CYCLE_YEAR_KEYS, *_MUNDANE_BB_KEYS)
+    # 吠陀世运入境盘（星阙 v3.15.0 挂载设置 vedicEvent，regenMundane.MUNDANE_VEDIC_EVENTS + 齿轮下拉中文名；测试读上游源对拍）。
+    _MUNDANE_VEDIC_EVENTS: tuple[tuple[str, str], ...] = (
+        ("ingress_0", "梅沙入境(年度主盘)"), ("ingress_90", "夏季盘"), ("ingress_180", "秋季盘"), ("ingress_270", "冬季盘"),
+    )
+
     _MUNDANE_ONLY_KEYS = frozenset({
         "year", "ingressTerm", "mundaneType", "mhKind", "solunarType", "solunarWeights", "solunarOrb", "vedicYear",
-        "regionKey", "regionCandidate",
+        "regionKey", "regionCandidate", "vedicEvent", "regionTargetYear",
         *_MUNDANE_SETTING_KEYS,
         *_MUNDANE_CYCLES_KEYS,
     })
@@ -356,6 +361,10 @@ class MundaneRunners:
         lon = payload.get("lon")
         lat = payload.get("lat")
         settings = self._mundane_settings(payload)
+        vedic_events = dict(self._MUNDANE_VEDIC_EVENTS)
+        vedic_event = f"{payload.get('vedicEvent') or 'ingress_0'}".strip()
+        if vedic_event not in vedic_events:   # 上游认不出静默回 ingress_0；skill 报错（不发任何请求）
+            raise self._mundane_invalid_setting([{"key": "vedicEvent", "value": payload.get("vedicEvent"), "allowed": list(vedic_events)}])
         # 行星周期盘型的页面设置（世运周期表 / Barbault）：入口先校验，认不出的值不发任何请求。
         cycle_settings = self._mundane_cycle_settings(payload, f"{payload.get('mundaneType') or ''}".strip())
         # 地区盘（上游 MUNDANE_TYPES 'region'）：底盘 = 预置建置盘（regionKey），不求入宫时刻——另走一条流程。
@@ -468,19 +477,24 @@ class MundaneRunners:
         if mundane_type == "vedicmundane":
             try:
                 vedic_year = f"{payload.get('vedicYear') or year}".strip()
-                v_moment = self._solve_vedic_ingress("ingress_0", int(vedic_year), payload)
+                # v3.15.0 vedicEvent：入境盘可选梅沙（缺省）/ 夏 / 秋 / 冬（regenMundane solveVedicSolarIngress(ev, year)）；
+                # 「体系」行上游照旧写梅沙为年度主盘（compute.js 固定文案），年之九主按年份算、王职取梅沙前新月 → 梅沙时刻另求。
+                v_moment = self._solve_vedic_ingress(vedic_event, int(vedic_year), payload)
                 if v_moment:
                     v_chart = self._call_remote("/chart", self._vedic_chart_payload(v_moment, payload))
                     type_chart_ctx["vedicmundane"] = (v_moment, v_chart)
+                    moment_lines = ([f"梅沙入境时刻：{v_moment}"] if vedic_event == "ingress_0"
+                                    else [f"入境盘：{vedic_events[vedic_event]}", f"入境时刻：{v_moment}"])
                     vedic_text = "\n".join(
                         [
                             "[吠陀世运]",
                             f"年份：{vedic_year}",
                             "体系：恒星黄道 Lahiri · 梅沙入境为年度主盘",
-                            f"梅沙入境时刻：{v_moment}",
+                            *moment_lines,
                         ]
                     )
-                    nav = self._build_navanayaka_section(int(vedic_year), v_moment, payload)
+                    mesha = v_moment if vedic_event == "ingress_0" else self._solve_vedic_ingress("ingress_0", int(vedic_year), payload)
+                    nav = self._build_navanayaka_section(int(vedic_year), mesha, payload) if mesha else ""
                     if nav:
                         vedic_text = f"{vedic_text}\n\n{nav}"
                 else:
@@ -630,13 +644,16 @@ class MundaneRunners:
         fields = data.get("fields") or {}
         extra = data.get("extra") or {}
         region = data.get("region") or {}
+        # 推运目标年：v3.15.0 挂载设置 regionTargetYear 优先（regenMundane progTargetYear），没给照旧取 year。
+        target_key = "regionTargetYear" if payload.get("regionTargetYear") not in (None, "") else "year"
         try:
-            target_year = int(f"{payload.get('year')}".strip())
+            target_year = int(f"{payload.get(target_key)}".strip())
         except (TypeError, ValueError):
             raise ToolValidationError(
-                bilingual(f"地区盘的 year（推运目标年）须为整数：{payload.get('year')!r}", f"mundane region: year (progression target year) must be an integer: {payload.get('year')!r}"),
+                bilingual(f"地区盘的 {target_key}（推运目标年）须为整数：{payload.get(target_key)!r}",
+                          f"mundane region: {target_key} (progression target year) must be an integer: {payload.get(target_key)!r}"),
                 code="tool.mundane_invalid_setting",
-                details={"invalid": [{"key": "year", "value": payload.get("year"), "allowed": "int"}]},
+                details={"invalid": [{"key": target_key, "value": payload.get(target_key), "allowed": "int"}]},
             ) from None
         # 建置盘 = 页面 fields（黄道/岁差/宫制/古典全局键随盘）+ 建置记录的时刻与地点（applyRegion 的 patchFields 同键）。
         chart_payload = {

@@ -569,11 +569,16 @@ class MundaneInput(FlexibleModel):
     solunarWeights: str | None = Field(default=None, description="恒星派权重方案（scheme_a 默认）。")
     solunarOrb: float | None = Field(default=None, description="角化容许度（默认 3°）。")
     vedicYear: int | None = Field(default=None, description="吠陀世运年份（缺省取 year）。")
+    # 星阙 v3.15.0 挂载设置：吠陀世运入境盘 ingress_0 梅沙（缺省）/ ingress_90 夏 / ingress_180 秋 / ingress_270 冬；
+    # 地区盘推运目标年（缺省取 year）。隐藏键，值域见 guidance。
+    vedicEvent: str | None = Field(default=None, description="吠陀世运入境盘：ingress_0 梅沙入境·年度主盘（缺省）/ ingress_90 夏季盘 / ingress_180 秋季盘 / ingress_270 冬季盘；认不出报错。")
+    regionTargetYear: int | str | None = Field(default=None, description="地区盘推运目标年（[地区盘推运] 的盘龄 = 目标年 − 建置年；缺省取 year）。")
     # 世运口径（上游页面设置 MundaneMain.js:519-526 + 吠陀世运 :1330-1340）与入宫盘的黄道口径：照常声明（校验 + MCP 扁平面
     # 收顶层键），不进 tools/list 广告层（预算）；值域见 agent_guidance。古典全局键（cazimiOrb…）经 request 整包透传进 /chart。
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
         "mundaneRuleset", "mundaneOrbScheme", "mundaneIngressRule", "vedicDashaYearLen", "vedicFoundingYear",
-        "vedicNatalAsc", "zodiacal", "siderealAyanamsa", "regionKey", "regionCandidate", *MUNDANE_SNAPSHOT_KEYS,
+        "vedicNatalAsc", "zodiacal", "siderealAyanamsa", "regionKey", "regionCandidate", "vedicEvent", "regionTargetYear",
+        *MUNDANE_SNAPSHOT_KEYS,
         # v3.14.0 行星周期盘型（mundaneType=cycles）的页面设置：世运周期表 15 键 + 年份 + Barbault 两键。
         "cycleTable", "conjKind", "meanTable", "flood", "cycleYear", "firdariaLevel", "firdariaYears", "profRate", "profBase",
         "dawrStart", "eraKind", "ingressPoint", "cycleVariant", "mpdKey", "weatherMonths", "cycleStartYear", "cycleEndYear",
