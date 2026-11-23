@@ -1595,6 +1595,17 @@ _MINGLI_OPTIONS_KEYS["zhufang"] = {
 for _tool, _keys in _MINGLI_OPTIONS_KEYS.items():
     TOOL_GUIDANCE[_tool] = {**TOOL_GUIDANCE[_tool], "options_keys": _keys}  # 写时复制，同上
 
+# 星阙 v3.15.0 新挂载设置里 skill 以隐藏键接上的（不进 tools/list，键表只在这里）。与已有 options_keys 合并，不覆盖。
+_V315_OPTIONS_KEYS: dict[str, dict[str, str]] = {
+    "extrareturns": {
+        "erBodies": "返照星体（列表；缺省土星 / 木星 / 月交三体）：Saturn 土星 | Jupiter 木星 | Node 月交 | Sun 太阳 | Moon 月亮 | "
+                    "Mercury 水星 | Venus 金星 | Mars 火星 | Uranus 天王星 | Neptune 海王星 | Pluto 冥王星；按此表顺序出，认不出报错",
+        "erCount": "每体取前几回：1 | 2 | 3 | 4 | 5（缺省）| 6 | 8 | 10 | 12",
+    },
+}
+for _tool, _keys in _V315_OPTIONS_KEYS.items():
+    TOOL_GUIDANCE[_tool] = {**TOOL_GUIDANCE[_tool], "options_keys": {**(TOOL_GUIDANCE[_tool].get("options_keys") or {}), **_keys}}
+
 
 REPORT_AND_MEMORY_GUIDANCE: dict[str, dict[str, Any]] = {
     "horosa_report_template": _policy(

@@ -5,7 +5,7 @@ from typing import Any, ClassVar
 
 from pydantic import Field, field_validator
 
-from horosa_skill.schemas.tools.base import BirthInput
+from horosa_skill.schemas.tools.base import BirthInput, _unadvertised
 
 
 class PredictiveInput(BirthInput):
@@ -269,6 +269,10 @@ class ExtraReturnsInput(BirthInput):
         description="日月返照年表起始年（给了本参数或 timelineCount 才加产 [日月返照年表] 段；缺省取出生年）",
     )
     timelineCount: int | None = Field(default=None, description="年表年数（缺省 10，上限 40）")
+    # 星阙 v3.15.0 挂载设置（buildExtraReturnsSnapshotText opts）：返照星体（十一体，缺省土 / 木 / 月交）与回数（缺省 5）。
+    # 不进 tools/list（预算），词表在 guidance options_keys。
+    erBodies: Any | None = _unadvertised()
+    erCount: Any | None = _unadvertised()
 
 
 class YearSystem129Input(BirthInput):

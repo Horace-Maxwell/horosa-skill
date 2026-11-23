@@ -1078,10 +1078,43 @@ class PredictiveRunners:
     # 多重回归 (星阙 v2.6.x): 土/木/月交三体返照。上游前端 buildExtraReturnsSnapshotText 是「请求型」——
     # 逐体拉 /astroextra/planetreturn。skill 把这三次后端调用放在 Python 侧（headless JS 不发 HTTP），
     # 再按上游同格式拼 [多重回归] 段。
-    _EXTRARETURNS_BODIES = (("Saturn", "土星返照", "≈29.5 年"), ("Jupiter", "木星返照", "≈11.9 年"), ("Node", "月交返照", "≈18.6 年"))
-
-    # 上游 components/astro/AstroExtraReturns.js:40：导出取 5 回（与组件 state.count=5 对齐；此前 4 回是上游已修的 bug）。
+    # 上游 AstroExtraReturns.js BODIES（页面可逐个查看的十一体，键 / 中文名 / 周期；测试读上游源逐项对拍）与 AI 快照缺省三体。
+    _EXTRARETURNS_ALL_BODIES = (
+        ("Saturn", "土星返照", "≈29.5 年"), ("Jupiter", "木星返照", "≈11.9 年"), ("Node", "月交返照", "≈18.6 年"),
+        ("Sun", "太阳返照", "≈1 年"), ("Moon", "月亮返照", "≈27.3 天"), ("Mercury", "水星返照", "≈1 年"),
+        ("Venus", "金星返照", "≈1 年"), ("Mars", "火星返照", "≈1.9 年"), ("Uranus", "天王星返照", "≈84 年"),
+        ("Neptune", "海王星返照", "≈165 年"), ("Pluto", "冥王星返照", "≈248 年"),
+    )
+    _EXTRARETURNS_SNAPSHOT_BODIES = ("Saturn", "Jupiter", "Node")
+    # COUNT_OPTIONS（页面下拉）与缺省回数 EXTRA_RETURN_SNAPSHOT_COUNT（与组件 state.count=5 对齐）。
+    _EXTRARETURNS_COUNT_OPTIONS = (1, 2, 3, 4, 5, 6, 8, 10, 12)
     _EXTRARETURNS_COUNT = 5
+
+    @classmethod
+    def _extrareturns_pick(cls, payload: dict[str, Any]) -> tuple[list[tuple[str, str, str]], int]:
+        """星阙 v3.15.0 挂载设置 erBodies / erCount（buildExtraReturnsSnapshotText opts）：星体按页面表的顺序出、缺 = 三体，
+        回数只认下拉里的档、缺 = 5。上游对认不出的键 / 档静默丢弃回缺省；skill 报错（不让「要了海王星却出土木交」无声发生）。"""
+        known = [key for key, _cn, _period in cls._EXTRARETURNS_ALL_BODIES]
+        raw_bodies = payload.get("erBodies")
+        if raw_bodies in (None, "", []):
+            picked = list(cls._EXTRARETURNS_SNAPSHOT_BODIES)
+        else:
+            items = raw_bodies if isinstance(raw_bodies, (list, tuple)) else f"{raw_bodies}".replace("，", ",").split(",")
+            picked = [f"{item}".strip() for item in items if f"{item}".strip()]
+            bad = [item for item in picked if item not in known]
+            if bad or not picked:
+                _require_option(bad[0] if bad else raw_bodies, tuple(known), field="erBodies", tool="extrareturns")
+        raw_count = payload.get("erCount")
+        count = cls._EXTRARETURNS_COUNT
+        if raw_count not in (None, ""):
+            try:
+                count = int(f"{raw_count}".strip())
+            except ValueError:
+                count = -1
+            if isinstance(raw_count, bool) or count not in cls._EXTRARETURNS_COUNT_OPTIONS:
+                # 值域闸按字符串比（True == 1 在 `in` 下会混过去）
+                _require_option(f"{raw_count}", tuple(f"{n}" for n in cls._EXTRARETURNS_COUNT_OPTIONS), field="erCount", tool="extrareturns")
+        return [body for body in cls._EXTRARETURNS_ALL_BODIES if body[0] in picked], count
 
     @staticmethod
     def _extrareturns_node_type_text(natal_params: dict[str, Any] | None, payload: dict[str, Any]) -> str:
@@ -1127,17 +1160,18 @@ class PredictiveRunners:
         return f"{cn}{node}（{period}）：{dates_txt}；时刻：{times_txt}{natal_lon_txt}"
 
     def _run_extrareturns_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        bodies, count = self._extrareturns_pick(payload)   # 先校验（坏值在任何后端调用之前报）
         remote_base = {**payload, "predictive": 0}
-        for key in ("datetime", "dirZone", "dirLat", "dirLon"):
+        for key in ("datetime", "dirZone", "dirLat", "dirLon", "erBodies", "erCount"):
             remote_base.pop(key, None)
         lines = ["[多重回归]"]
         # 本命盘先取（[起盘信息] + 月交行的真/平交点标注都读它；上游 chartObj 同一份）。
         natal_header = self._natal_header("extrareturns", payload)
         node_txt = self._extrareturns_node_type_text((natal_header or {}).get("params"), payload)
-        for body_key, cn, period in self._EXTRARETURNS_BODIES:
+        for body_key, cn, period in bodies:
             try:
                 resp = self._call_remote(
-                    "/astroextra/planetreturn", {**remote_base, "body": body_key, "count": self._EXTRARETURNS_COUNT}
+                    "/astroextra/planetreturn", {**remote_base, "body": body_key, "count": count}
                 )
             except Exception as exc:
                 _degrade("extrareturns planetreturn failed (body=%s): %s", body_key, exc)
