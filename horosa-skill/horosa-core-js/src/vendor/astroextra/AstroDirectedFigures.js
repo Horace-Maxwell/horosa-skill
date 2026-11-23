@@ -44,7 +44,7 @@ const DIRECTION_PAGE_SETTINGS = { load: () => ({}) };
 
 import {
 	DIRECTED_FIGURES, NEROMAN_EQUATOR_OPTIONS, BEZZA_KIND_LABELS, BEZZA_MUNDANE_ASPECTS, ZODIAC_ASPECT_LABELS, MICHON_FAMILY_LABELS,
-	directedFigureRequestFields, buildDirectedFigureText, pointName, fmtLon, fmtN,
+	directedFigureRequestFields, buildDirectedFigureText, pointName, fmtLon, fmtN, fmtHour,
 } from '../utils/directedFigures.js';
 
 

@@ -18,23 +18,31 @@ export const SANSHI_MAX_SPAN_DAYS_TOTAL = 1830;
 export function computeSanshiScanPan(scanCtx, geoParams, options, dateStr, timeStr){
 	const split = splitSanshiOptions(options);
 	const out = { liureng: null, qimen: null, taiyi: null, _famFail: {} };
-	try{
-		out.liureng = computeLiurengScanPan(geoParams, split.liureng, dateStr, timeStr);
-		if(!out.liureng){ out._famFail.liureng = '供数/排盘返回空'; }
-	}catch(e){
-		out._famFail.liureng = (e && e.message) || '异常';
+	// 家级掩码(扫描时由条件树定;逐刻解释 / 预览不给 = 三家全排)
+	const fams = (scanCtx && scanCtx.fams) || { lr: true, qm: true, ty: true };
+	if(fams.lr){
+		try{
+			out.liureng = computeLiurengScanPan(geoParams, split.liureng, dateStr, timeStr);
+			if(!out.liureng){ out._famFail.liureng = '供数/排盘返回空'; }
+		}catch(e){
+			out._famFail.liureng = (e && e.message) || '异常';
+		}
 	}
-	try{
-		out.qimen = computeQimenScanPan(geoParams, split.qimen, scanCtx && scanCtx.seeds, dateStr, timeStr);
-		if(!out.qimen){ out._famFail.qimen = '供数/排盘返回空'; }
-	}catch(e){
-		out._famFail.qimen = (e && e.message) || '异常';
+	if(fams.qm){
+		try{
+			out.qimen = computeQimenScanPan(geoParams, split.qimen, scanCtx && scanCtx.seeds, dateStr, timeStr);
+			if(!out.qimen){ out._famFail.qimen = '供数/排盘返回空'; }
+		}catch(e){
+			out._famFail.qimen = (e && e.message) || '异常';
+		}
 	}
-	try{
-		out.taiyi = computeTaiyiScanPan(geoParams, split.taiyi, dateStr, timeStr);
-		if(!out.taiyi){ out._famFail.taiyi = '供数/排盘返回空'; }
-	}catch(e){
-		out._famFail.taiyi = (e && e.message) || '异常';
+	if(fams.ty){
+		try{
+			out.taiyi = computeTaiyiScanPan(geoParams, split.taiyi, dateStr, timeStr);
+			if(!out.taiyi){ out._famFail.taiyi = '供数/排盘返回空'; }
+		}catch(e){
+			out._famFail.taiyi = (e && e.message) || '异常';
+		}
 	}
 	if(!out.liureng && !out.qimen && !out.taiyi){
 		return null;	// 三家全失败=样本跳过(外壳契约)
@@ -133,10 +141,14 @@ function rowExtras(pan, mask){
 const engine = makeHourlyScanEngine({
 	name: 'sanshi',
 	makeScanCtx: (args)=>{
-		const { geoParams, w0, w1, options } = args || {};
+		const { geoParams, w0, w1, options, tree } = args || {};
+		let fams = null;
+		if(tree){ try{ fams = sanshiKeyMaskOf(tree).fams; }catch(e){ fams = null; } }
 		return {
 			seeds: (w0 && w1) ? buildQimenScanSeeds(w0.y, w1.y, geoParams && geoParams.zone) : null,
 			natal: (options && options._natal) || null,
+			// 只排条件树涉及的家:未涉家不进判定、行键为 SKIP 段 → 结果与三家全排一致
+			fams,
 		};
 	},
 	computePanAt: (scanCtx, geoParams, options, dateStr, timeStr)=>{

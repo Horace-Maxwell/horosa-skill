@@ -6,6 +6,9 @@ import { buildYearAuspicious } from './yearAuspicious.js';   // 年度吉日榜(
 import { EVENT_CATEGORIES } from './tongshuData.js';
 import { parseDateParts } from '../bazi/dateStrSafe.js';
 
+// 十二「节」(交节换月;中气不换月),简繁两写都认
+const MONTH_JIE = ['立春', '惊蛰', '驚蟄', '清明', '立夏', '芒种', '芒種', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+
 function joinArr(arr, sep = '、') {
 	return (Array.isArray(arr) ? arr : []).filter(Boolean).join(sep);
 }
@@ -22,7 +25,13 @@ export function buildHuangliSnapshotText(day, opts) {
 	lines.push(`农历：${day.lunar.text}`);
 	lines.push(`干支：${day.lunar.yearGZ}年 ${day.lunar.monthGZ}月 ${day.lunar.dayGZ}日`);
 	lines.push(`生肖：${day.lunar.shengxiao}`);
-	if (day.lunar.jieqi) { lines.push(`节气：${day.lunar.jieqi}${day.lunar.jieqiTime ? `（交节 ${day.lunar.jieqiTime}）` : '（当日交节）'}`); }
+	if (day.lunar.jieqi) {
+		lines.push(`节气：${day.lunar.jieqi}${day.lunar.jieqiTime ? `（交节 ${day.lunar.jieqiTime}）` : '（当日交节）'}`);
+		// 交「节」日(换月):历书按日整天记新月(立春兼新年),而按时刻起的盘在交节前仍属上一月 —— 写明,免得与同一时刻的盘面对不上
+		if (MONTH_JIE.indexOf(day.lunar.jieqi) >= 0) {
+			lines.push(`干支口径：历书按日，本日整日记${day.lunar.monthGZ}月${day.lunar.jieqi === '立春' ? `、${day.lunar.yearGZ}年` : ''}；按时刻排的盘在交节前仍属上一${day.lunar.jieqi === '立春' ? '年、上一月' : '月'}`);
+		}
+	}
 	if (joinArr(day.solar.festivals)) { lines.push(`节日：${joinArr(day.solar.festivals)}`); }
 
 	lines.push('');

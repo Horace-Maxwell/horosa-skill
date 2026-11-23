@@ -4,7 +4,7 @@
 // 日期:Δt(tithi,超整月基数部分)= Δλ(度)+ c(各行星常数)。
 
 import { sexParse, norm360 } from './units.js';
-import { SYSTEM_A, SYSTEM_B, DATE_CONSTANTS, LUNAR } from '../divination/data/babylonianData.js';
+import { SYSTEM_A, SYSTEM_B, DATE_CONSTANTS } from '../divination/data/babylonianData.js';
 
 const S = sexParse;
 

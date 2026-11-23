@@ -66,6 +66,13 @@ export function fmtN(v, d = 2){
 	return Number.isFinite(n) ? n.toFixed(d) : '-';
 }
 
+// 世俗时位(0..24 时,天顶 = 0)的写法:四舍五入后到 24 的写成 0 —— 24 时与 0 时是同一个位置,
+// 天顶的时位数学上正是 0,浮点上可能是 23.999999…,不这样写有的机器显示 24.000、有的显示 0.000
+export function fmtHour(v, d = 3){
+	const s = fmtN(v, d);
+	return s !== '-' && Number(s) >= 24 ? fmtN(0, d) : s;
+}
+
 function num(v, def){
 	const n = Number(v);
 	return Number.isFinite(n) ? n : def;
@@ -135,7 +142,7 @@ export function buildDirectedFigureText(key, r){
 		lines.push(`推运弧：${fmtN(r.arc, 4)}°(真太阳弧,赤经;各点随自身半弧周日运动推进)`);
 		lines.push('');
 		lines.push('[推运图位置]');
-		table(lines, ['点', '本命黄经', '本命时位', '推运时位', '推运黄经'], r.points.map((p)=>[pointName(p.id), fmtLon(p.lon), fmtN(p.hp0, 3), fmtN(p.hp1, 3), fmtLon(p.dp)]));
+		table(lines, ['点', '本命黄经', '本命时位', '推运时位', '推运黄经'], r.points.map((p)=>[pointName(p.id), fmtLon(p.lon), fmtHour(p.hp0, 3), fmtHour(p.hp1, 3), fmtLon(p.dp)]));
 		lines.push('');
 		lines.push('[推运图接触]');
 		const cs = r.contacts || [];

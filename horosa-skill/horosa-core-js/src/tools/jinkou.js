@@ -3,7 +3,7 @@ import { unwrapNamedObject, unwrapResultEnvelope } from '../shared/unpack.js';
 import * as LRConst from '../vendor/liureng/LRConst.js';
 import { buildJinKouData, normalizeKinjinkouData } from '../vendor/jinkou/JinKouCalc.js';
 import { resolveJinKouDiFen } from '../vendor/jinkou/JinKouState.js';
-import { buildJinKouSnapshotText } from '../vendor/jinkou/JinKouMain.js';
+import { buildJinKouSnapshotText } from '../vendor/jinkou/main/snapshot.js';
 
 function normalizeTimeBranch(timeValue) {
   const text = `${timeValue || ''}`;

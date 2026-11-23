@@ -1,4 +1,5 @@
-import { buildMundaneCardSections, MUNDANE_ORB_SCHEME_CN, MUNDANE_INGRESS_RULE_CN, BARBAULT_SETS } from '../vendor/mundane/MundaneMain.js';
+import { buildMundaneCardSections } from '../vendor/mundane/main/cards.js';
+import { MUNDANE_ORB_SCHEME_CN, MUNDANE_INGRESS_RULE_CN, BARBAULT_SETS } from '../vendor/mundane/main/tables.js';
 import {
   MUNDANE_CYCLE_TABLES, MUNDANE_CYCLE_OPTIONS, MUNDANE_CYCLE_DEFAULTS,
   mundaneCycleFields, mundaneCycleRequestFields, mundaneCycleTable, buildMundaneCycleText,

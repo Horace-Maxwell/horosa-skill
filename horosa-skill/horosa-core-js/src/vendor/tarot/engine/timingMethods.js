@@ -9,7 +9,7 @@ import { isTrumpArcana } from './arcana.js'; // 王牌判据单一真值源(零�
 import { timing } from './verdict.js';
 import {
 	SUITS, DECAN, DECAN_DATE, signDateRange, SIGN_CN, PLANET_CN, PLANET_WEEKDAY,
-	COURT_SPAN_SIGNS, ACE_QUADRANT_SIGNS, SIGN_MODE,
+	COURT_SPAN_SIGNS, ACE_QUADRANT_SIGNS,
 } from '../decks/correspondences.js';
 
 export const TIMING_METHODS = ['suit_unit', 'major_number', 'major_zodiac', 'decan_full', 'ace_hunt'];

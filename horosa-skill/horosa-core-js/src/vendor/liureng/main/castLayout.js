@@ -202,6 +202,21 @@ export function computeQiXY(castMethod, chartObj, yueEff, opts){
 	return { X, Y };
 }
 
+// 所选起课法缺它要的那一项输入时(本命支 / 行年支 / 所选时辰 / 所报之数),computeQiXY 把缺的那一支退回月将或占时支 ——
+// 盘照样起得出来,但已不是所选的法。本函数给出「缺什么」,快照据此如实标注(此前标题仍写所选法,读的人拿着错标的盘去断)。
+// 判据与 computeQiXY 逐项同源:支不在十二支里 / 数不是有限数 = 缺。不缺回 ''。
+export function liurengCastMethodMissingInput(castMethod, opts){
+	const o = opts || {};
+	const isZhi = (z)=>!!z && LRConst.ZiList.indexOf(z) >= 0;
+	switch(castMethod){
+		case 'bake9': case 'bake11': case 'bmjs': return isZhi(o.benmingZhi) ? '' : '本命支';
+		case 'bake10': case 'bake12': case 'xnjs': return isZhi(o.xingnianZhi) ? '' : '行年支';
+		case 'xuanshi': return isZhi(o.xuanShiZhi) ? '' : '所选时辰';
+		case 'yanshu': case 'baoshu': return isFinite(parseInt(o.yanShuNum, 10)) ? '' : '所报之数';
+		default: return '';
+	}
+}
+
 // 涉害三键(取舍 / 起讫 / 始入课)→ 三传核的 seHaiOpts(单一来源:页面起课与择日扫描同用)
 export function liurengSeHaiOptsOf(opts){
 	const o = opts || {};

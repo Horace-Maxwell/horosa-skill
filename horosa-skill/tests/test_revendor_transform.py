@@ -197,3 +197,25 @@ def test_inline_requires_of_declared_packages_become_one_top_level_import() -> N
     assert out.count("import moment from 'moment';") == 1 and "require('moment')" not in out
     assert "const x = require('left-pad');" in out  # 未声明的包留着
     assert any("package require→import moment" in n for n in notes)
+
+
+# --- facade re-exports of stripped fetch helpers (v0.53.0, upstream v3.15.0 split DunJiaCalc / JinKouCalc) ------------
+
+
+def test_a_facade_reexport_of_a_stripped_fetch_helper_is_pruned() -> None:
+    """`export { …, fetchQimenPan } from './calc/kinqimen'` would fail at link time once kinqimen.js loses fetchQimenPan."""
+    src = ("export { isKinqimenMode, normalizeKinqimenData, fetchQimenPan } from './calc/kinqimen';\n"
+           "export { fetchJinKouPan } from './calc/backend';\nexport { a as fetchy, b } from './x';\n")
+    out, notes = rv.transform(src)
+    assert "fetchQimenPan" not in out and "fetchJinKouPan" not in out
+    assert "isKinqimenMode, normalizeKinqimenData" in out and "./calc/kinqimen.js" in out
+    assert "a as fetchy, b" in out   # 本地名不是 fetch* —— 只看被导出的源名
+    assert any("pruned re-export" in n for n in notes)
+
+
+def test_without_the_pruning_the_facade_keeps_the_dead_name() -> None:
+    """Negative control: strip alone leaves the re-export list untouched."""
+    src = "export { x, fetchQimenPan } from './calc/kinqimen';\n"
+    stripped, _ = rv._strip_fetch_helpers(src)
+    assert "fetchQimenPan" in stripped
+    assert "fetchQimenPan" not in rv._prune_fetch_reexports(stripped)[0]

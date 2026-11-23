@@ -4,7 +4,7 @@
 //   accidentalMode='heuristic'(默认) → 本表不参与裁决（零回归）；
 //   accidentalMode='lilly' → planetCondition 附带本表明细 + 以合计分极性入裁决（单条聚合项）。
 // 本表只管「偶然」项；必然尊贵(庙旺三分界面/陷落/peregrine)在 signs/dignities 侧，勿混入。
-import { MEAN_DAILY_MOTION, motionRateOf } from './planets.js';
+import { motionRateOf } from './planets.js';
 import { FIXED_STARS, starLonAt, starOrbFor } from './fixedStars.js';
 import { aspectsOf } from '../engine/aspectsEngine.js';
 import { isBesieged } from '../engine/conditions.js';

@@ -11,7 +11,7 @@
 //  切换只改主显名与副名次序,不臆造任何名。星钟家族差异则由「星钟法」承担。)
 
 import {
-	EGYPT_DECANS, greekDecan,
+	greekDecan,
 	EGYPT_DECAN_RULER_SYSTEMS, EGYPT_DECAN_RULER_DEFAULT, decanRulerAt,
 	EGYPT_DECAN_ANCHORS, EGYPT_DECAN_ANCHOR_DEFAULT, decanNumberAt, decansOrderedBy,
 	EGYPT_STAR_CLOCKS, EGYPT_STAR_CLOCK_DEFAULT,

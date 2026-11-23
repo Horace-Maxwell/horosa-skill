@@ -6,7 +6,7 @@ import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
 import { viaCombustaRange, inViaCombusta, hourAgreementTest, ascRulerKey as lord1Of } from '../engine/radicality.js';   // 1 宫主单一来源
 import { resolveMoonVoc } from '../engine/moon.js';   // 月空单源(六口径)
-import { applyingAspects, aspectBetween } from '../engine/aspectsEngine.js';
+import { applyingAspects } from '../engine/aspectsEngine.js';
 import { isBesieged } from '../engine/conditions.js';
 import { norm360, angularDist } from '../engine/utils.js';
 

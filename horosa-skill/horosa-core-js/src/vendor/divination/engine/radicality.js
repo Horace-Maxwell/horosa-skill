@@ -2,7 +2,7 @@
 // 卜卦根本性门禁（构建清单 §2.6）+ Hephaistion 一般禁忌（2/8 宫）+ 痣验证（可选）
 // + 判断前考量 19 条全表（05§3.1，含救济层与时主-命主双口径）。
 // 警告不阻断，交用户决定；19 条为加法式新字段（considerations），既有 warnings 字节不变。
-import { SIGNS, signOfLon } from '../data/signs.js';
+import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
 import { triplicityRulers } from '../data/dignities.js';
 import { FIXED_STARS, starLonAt } from '../data/fixedStars.js';

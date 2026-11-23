@@ -7,6 +7,162 @@
     "needs-review": "有真实漂移，待人工分类为上面三种之一（这就是 re-vendor 工单）"
   },
   "files": {
+    "astroextra/AstroAgePoint.js": {
+      "upstream": "components/astro/AstroAgePoint.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0 重写年龄推进点快照（新首行口径、| 年龄 | 日期 | 落座 | 宫 | 事件 | 表、下一事件定位行、相位左右）。纯逻辑段 buildAgePointSnapshotFromResult(chartObj, r, opts) 在 React 类之前；Python 拉 /predict/agepoint 后经 tools/progextra.js 的 FROM_RESULT 分支调它。此前是 Python 手抄移植（service/text/predictive.py），上游改写时零信号。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^const SETTING_KEYS = ",
+          "why": "剥掉 React 组件尾部；锚点是正则，找不到会报错而非悄悄剪错。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是页面公共件（antd 表格 / 卡片样式 / 请求键 / 加载停车位），纯逻辑段只在\n// 「请求型」包装（buildXxxSnapshotText 内 fetch 后端、xxxRequestBody 拼请求体）里用到 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这两条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
+          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "UI 组件库，只服务 React 尾部（模块级 `const Option = Select.Option;` 另由 replace_text 删）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const Option = Select.Option;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
+        }
+      ]
+    },
+    "astroextra/AstroDirectedFigures.js": {
+      "upstream": "components/astro/AstroDirectedFigures.js",
+      "mode": "verbatim",
+      "why": "上游推运图族四子页。纯逻辑段（directedFigureOptsFromSettings 页面键→口径、snapshotText 正文装配、buildDirectedFigureSnapshotText 合并规则）在 React 类之前；tools/progextra.js 的 DIRECTED_FIGURE 分支用 directedFigureOptsFromSettings + snapshotText（_reexport_required 自动补 export）排版 Python 拉回的 /astroextra/<接口> 结果。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^const sm = \\(id, on\\)=>",
+          "why": "剥掉 React 子页（DirectedFigurePage 及四个子类）；锚点是正则，找不到会报错而非悄悄剪错。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "react",
+          "stub": "",
+          "why": "React 组件基类，只服务被截掉的子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "UI 组件库，只服务 React 尾部（模块级 `const { Option } = Select;` 另由 replace_text 删）。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../css/styles.less.js",
+          "stub": "",
+          "why": "样式表，headless 无意义。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroChart.js",
+          "stub": "",
+          "why": "单盘绘图组件（上游 v3.14.0 起周日小限子页用它画月亮盘），只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroDoubleChart.js",
+          "stub": "",
+          "why": "本命 + 推运双盘绘图组件，只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./MichonDualRing.js",
+          "stub": "",
+          "why": "双黄道回归 / 恒星双环 SVG 绘图组件（上游 59465ffe 起双黄道子页用它画盘），只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { Option } = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是页面公共件；纯逻辑段只在请求型包装 fetchDirectedFigure 里用 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
+          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroProgSnapshot.js",
+          "stub": "// headless stub：today / chartZone 只服务 buildDirectedFigureSnapshotText 的「目标时刻缺省 = 本盘时区今日」——skill 由\n// Python 侧按同一口径（_today_for_chart(zone)）先定好 targetDate 再发请求，这条路径不可达。\nconst headlessUnreachableProg = (name) => () => { throw new Error(`headless: astroProgSnapshot.${name} 不可达（目标时刻在 Python 侧定）`); };\nconst today = headlessUnreachableProg('today');\nconst chartZone = headlessUnreachableProg('chartZone');",
+          "why": "astroProgSnapshot 拖进 request / DateTime 组件 / AstroProgChart；只有请求型包装用到，调到即抛。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/directionPageSettings.js",
+          "stub": "// headless stub：星阙页面保存值（localStorage）在 headless 下不存在 = 全新安装：load() 返回空记录，各口径回落\n// directedFigures.js 的 *_DEFAULTS（directedFigureRequestFields 的 num(…, DEFAULTS) 兜底），与页面首装同值。\nconst DIRECTION_PAGE_SETTINGS = { load: () => ({}) };",
+          "why": "directionPageSettings 拖进全部星运页口径模块（triplicityRulers / profectionSummary / decennials …）；headless 无页面保存值，空记录 = 缺省。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
+        }
+      ]
+    },
+    "astroextra/AstroDistributions.js": {
+      "upstream": "components/astro/AstroDistributions.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0 重写界推运快照（7 列表含起始岁 / 时长 / 期内伙伴星、新 [伙伴星期] 段、发放点黄经、当前伙伴星定位行）。纯逻辑段 buildDistributionsSnapshotFromResult(chartObj, r, opts) 在 React 类之前；Python 拉 /predict/dist 后经 tools/progextra.js 的 FROM_RESULT 分支调它。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^const SETTING_KEYS = ",
+          "why": "剥掉 React 组件尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../common/UpdatingBadge.js",
+          "stub": "",
+          "why": "默认导入的 UI 徽标组件，只服务 React 尾部；headless 树里没有它。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是页面公共件（antd 表格 / 卡片样式 / 请求键 / 加载停车位），纯逻辑段只在\n// 「请求型」包装（buildXxxSnapshotText 内 fetch 后端、xxxRequestBody 拼请求体）里用到 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这两条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
+          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "UI 组件库，只服务 React 尾部（模块级 `const Option = Select.Option;` 另由 replace_text 删）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const Option = Select.Option;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../utils/astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
+        }
+      ]
+    },
     "astroextra/balbillus.js": {
       "upstream": "utils/balbillus.js",
       "mode": "verbatim",
@@ -92,6 +248,31 @@
         }
       ]
     },
+    "astroextra/yearSystem129.js": {
+      "upstream": "utils/yearSystem129.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0 删了后端 astrostudy/yearsystem129.py（/chart 不再回 predictives.yearsystem129），129 年系统改由前端 utils/yearSystem129 单源计算（起始星 / 次序 / 年制 / 子限铺法四项可选）。verbatim vendor 后经 tools/progextra.js 的 yearsystem129 分支调 buildYearSystem129SnapshotText。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "./progConst.js",
+          "why": "同 balbillus：只用 7 经典行星常量 + LIST_SIGNS，progConst 窄 shim 足够。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "./progConst.js",
+          "why": "只用 AstroTxtMsg 单字行星名（progConst 逐值对齐上游 AstroText.js）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "./astroAiSnapshot.js",
+          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
+          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
+        }
+      ]
+    },
     "babylon/babylonSchools.js": {
       "upstream": "divination/babylon/babylonSchools.js",
       "mode": "verbatim",
@@ -134,11 +315,10 @@
         }
       ]
     },
-    "bazi/baziSnapshot.js": {
-      "mode": "bespoke",
-      "why": "v0.40 mingli F9：自上游 BaZi.js 逐字抽出的八字快照闭包（gzText/gzCells/buildBaziPeriodLines/buildBaziSnapshotText/normalizeBaziResult 及其常量，:34-43/:79-265/:267-610/:658-687）；该文件其余是 React 组件，整份 vendor 不可行。此前八字快照是 Python 手写 port（缺纳音长生列/命宫起法标注/起运行/小运年龄口径/三维分列…）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/cntradition/BaZi.js",
-      "derived_sha256": "07eb4ac4c433cc251ec53c7a06a80ea746a823f54343078094a55aec3228be0e"
+    "bazi/baziAgeText.js": {
+      "upstream": "components/cntradition/baziAgeText.js",
+      "mode": "verbatim",
+      "why": "v3.11.2：八字岁数显示单源（虚岁 nominal / 周岁 real），buildBaziSnapshotText 的小运表与大运板块表改经它取值。零 import。"
     },
     "bazi/baziFenYe.js": {
       "upstream": "utils/baziFenYe.js",
@@ -171,6 +351,12 @@
       "upstream": "utils/baziShenShaLocal.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "bazi/baziSnapshot.js": {
+      "mode": "bespoke",
+      "why": "v0.40 mingli F9：自上游 BaZi.js 逐字抽出的八字快照闭包（gzText/gzCells/buildBaziPeriodLines/buildBaziSnapshotText/normalizeBaziResult 及其常量，:34-43/:79-265/:267-610/:658-687）；该文件其余是 React 组件，整份 vendor 不可行。此前八字快照是 Python 手写 port（缺纳音长生列/命宫起法标注/起运行/小运年龄口径/三维分列…）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/cntradition/BaZi.js",
+      "derived_sha256": "07eb4ac4c433cc251ec53c7a06a80ea746a823f54343078094a55aec3228be0e"
     },
     "bazi/baziTiaoHou.js": {
       "upstream": "utils/baziTiaoHou.js",
@@ -254,6 +440,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "canping/data/canpingTiaowen.json": {
+      "upstream": "utils/data/canpingTiaowen.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "constants/AstroConst.js": {
       "upstream": "constants/AstroConst.js",
       "mode": "curated",
@@ -278,6 +469,11 @@
     },
     "divination/data/babylonianData.js": {
       "upstream": "divination/data/babylonianData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/babylonianData.json": {
+      "upstream": "divination/data/babylonianData.json",
       "mode": "verbatim",
       "deviations": []
     },
@@ -353,6 +549,16 @@
     },
     "divination/data/hellenisticData.js": {
       "upstream": "divination/data/hellenisticData.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/hellenisticData.json": {
+      "upstream": "divination/data/hellenisticData.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "divination/data/hellenisticDataExt.json": {
+      "upstream": "divination/data/hellenisticDataExt.json",
       "mode": "verbatim",
       "deviations": []
     },
@@ -803,6 +1009,11 @@
       "upstream": "divination/zeri/zeriExplainText.js",
       "mode": "verbatim"
     },
+    "divination/zeri/zeriPageCalibre.js": {
+      "upstream": "divination/zeri/zeriPageCalibre.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "divination/zeri/ziweiZeriConditionTypes.js": {
       "upstream": "divination/zeri/ziweiZeriConditionTypes.js",
       "mode": "verbatim",
@@ -824,6 +1035,25 @@
       "upstream": "divination/zeri/ziweiZeriSnapshot.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "dongya/eastAsiaArts.js": {
+      "upstream": "utils/eastAsiaArts.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 新技法「东亚诸术」的算法层：藏历（浦派时轮历）/ 藏占（八卦 Parkha · 九宫 Mewa · 魂命煞）/ 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年 / 易卦星盘与推运，全部纯算术。依赖 baziFenYe / baziLunarLocal.eastAsiaPillarFacts / fengshui liqiCore · zibai · fengshuiData / gua GuaConst 均已在树里。",
+      "deviations": []
+    },
+    "dongya/eastAsiaSnapshot.js": {
+      "upstream": "utils/eastAsiaSnapshot.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 东亚诸术的页面 / 无头挂载共用层：eastAsiaParamsFromFields（字段 → 入参）、EAST_ASIA_PAGE_SETTINGS（口径词表与出厂值）、buildEastAsiaModel（出生资料 + 本命盘 → 整页数据）、eastAsiaSnapshotLines（七段快照）。tools/dongya.js 逐个调它们，不自排版。",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "../components/astro/AstroHelper.js",
+          "stub": "// headless：AstroHelper 顶层 import d3 + DOM helper，不能整份载入；这两个函数只被 geoChangeFieldsPatch（页面左栏选点的字段补丁）用到。\nfunction convertLatToStr(){ throw new Error('eastAsiaSnapshot.geoChangeFieldsPatch 是页面专用（headless 没有 AstroHelper.convertLatToStr）'); }\nfunction convertLonToStr(){ throw new Error('eastAsiaSnapshot.geoChangeFieldsPatch 是页面专用（headless 没有 AstroHelper.convertLonToStr）'); }",
+          "why": "上游 AstroHelper.js 顶层依赖 d3 与 DOM，headless 不可载入；convertLatToStr / convertLonToStr 只服务页面左栏选点的 geoChangeFieldsPatch（skill 的地点由 Python 侧 place 解析）。stub 定义同名函数、调到即抛明确错误（stub 审计要求）。"
+        }
+      ]
     },
     "dunjia/DunJiaBaGongRules.js": {
       "upstream": "components/dunjia/DunJiaBaGongRules.js",
@@ -851,8 +1081,63 @@
       "why": "零 import 纯数据/格式化模块；liureng/LRXiangDoc.js 的 buildXiangContext 取十天干象意时依赖它（六壬 [取象] 段）。",
       "deviations": []
     },
+    "dunjia/calc/basics.js": {
+      "upstream": "components/dunjia/calc/basics.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/juMeta.js": {
+      "upstream": "components/dunjia/calc/juMeta.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/kinqimen.js": {
+      "upstream": "components/dunjia/calc/kinqimen.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/options.js": {
+      "upstream": "components/dunjia/calc/options.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/overlay.js": {
+      "upstream": "components/dunjia/calc/overlay.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/pan.js": {
+      "upstream": "components/dunjia/calc/pan.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/shensha.js": {
+      "upstream": "components/dunjia/calc/shensha.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/snapshot.js": {
+      "upstream": "components/dunjia/calc/snapshot.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/tables.js": {
+      "upstream": "components/dunjia/calc/tables.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/calc/yinyangdun.js": {
+      "upstream": "components/dunjia/calc/yinyangdun.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "dunjia/jinhanRiJia.js": {
       "upstream": "components/dunjia/jinhanRiJia.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "dunjia/qimenPageShared.js": {
+      "upstream": "components/dunjia/qimenPageShared.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -898,6 +1183,12 @@
     "fengshui/zeriDeep.js": {
       "upstream": "components/fengshui/zeriDeep.js",
       "mode": "verbatim",
+      "deviations": []
+    },
+    "fengshui/zibai.js": {
+      "upstream": "components/fengshui/zibai.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0：九星值日统一到日紫白（黄历 huangliDay 与东亚诸术 eastAsiaArts 共用 zibai.dayCenter / monthCenter，离至日最近的甲子置闰的连续序列）。整份 vendored，依赖 liqiCore / fengshuiData 已在树里。",
       "deviations": []
     },
     "gua/GuaConst.js": {
@@ -1074,107 +1365,30 @@
       "extracts": [],
       "upstream_sha256": "62276c73199a1712e61549f8ff9a98f0bf23c20d98c38463f5b8fe4897f97716"
     },
-    "guazhan/GuaZhanMain.js": {
-      "upstream": "components/guazhan/GuaZhanMain.js",
-      "mode": "verbatim",
-      "why": "上游把六爻快照的纯逻辑（buildTimeGua 以时起卦 / liuyaoStructLines [断卦结构] / buildGuaSnapshotText / GUAZHAN_PAGE_SETTINGS）与 React 页面放在同一个 2191 行文件里：1–400 行纯逻辑，401 起 `class GuaZhanMain extends Component`。AI 挂载无头路径（aiAnalysisContext.regenerateSixyaoSnapshot :1739-1760）正是 fetchPreciseNongli → buildTimeGua → buildGuaSnapshotText。skill 此前在 service.py 手写以时起卦（立春年支 + 月/日取地支序 + 钟表时辰；上游是 nongli.year 年支——后端该键为农历年干支 —— + monthInt/dayInt 数字 + 时柱支序，同一时刻起出不同的卦）并手抄 [断卦结构]（旧行式、缺次用神/取用说明/岁破日破）。整头 vendored、React 尾部由 truncate_before 机械剥离，tools/liuyao.js 直接调用。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^class GuaZhanMain extends Component",
-          "why": "剥掉 React 组件尾部（401–2191）。锚点是正则而非行号：上游一编辑行号就漂，锚点找不到会报错而不是悄悄剪错。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "UI 组件库；React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../common/QuickDockBar.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import {randomStr, randomNum, littleEndian,} from '../../utils/helper.js';",
-          "to": "import { littleEndian } from '../gua/littleEndian.js';",
-          "why": "纯逻辑段只用 helper 里的 littleEndian（guaFromYaoValues / buildTimeGua）；randomStr/randomNum 只在 React 尾部。三名同一行，孤儿 import 清理按「任一名在用即整行保留」不会拆行，import_redirect 到窄副本又缺另两名 → 加载即 SyntaxError，故声明式改写成只取 littleEndian 的窄副本 gua/littleEndian.js。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./GuaZhanInput.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./GuaZhanChart.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./GuaDesc.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./LiuYaoDuanJueView.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./LiuYaoZhanLeiView.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./LiuYaoCastPad.js",
-          "stub": "",
-          "why": "React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./LiuYaoBoard.js",
-          "stub": "",
-          "why": "右栏卡片组件（JSX）。孤儿清理没删它，是因为纯逻辑段的一条注释提到了「LiuYaoReference」（按全文匹配）；代码里一次没用，stub 审计按去注释正文判定、不报。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/DateTime.js",
-          "stub": "",
-          "why": "默认导出的日期组件（带网络 request 依赖，不 vendor）；纯逻辑段一次都没用到。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-icons.js",
-          "stub": "",
-          "why": "图标库；React 元素，只服务被 truncate_before 剥掉的组件尾部。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const {Option} = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务被剥离的 React 尾部（Option 在纯逻辑段一次都没用到）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { TabPane } = Tabs;\n",
-          "to": "",
-          "why": "同上（TabPane 在纯逻辑段一次都没用到）。"
-        }
-      ]
-    },
     "guazhan/liuyaoSnapshotEx.js": {
       "upstream": "components/guazhan/liuyaoSnapshotEx.js",
       "mode": "verbatim",
       "why": "[断诀命中] / [占类断语] 两段的上游单源（buildSnapshotAnalysis + duanJueLines + zhanleiLines，GuaZhanMain.buildGuaSnapshotText:381-388 调用）。skill 此前从不产这两段，tools/liuyao.js 只在 [断卦结构] 里手写了一小截断诀行（段名/行式/取项都与上游不同）；六个只影响这两段的判读键（shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn）因此恒为死开关。只 import 已 vendored 的 gua/ 引擎与断语库访问层。",
       "deviations": []
+    },
+    "guazhan/main/gua.js": {
+      "upstream": "components/guazhan/main/gua.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../utils/helper.js",
+          "to": "../../gua/littleEndian.js",
+          "why": "只用 helper 里的 littleEndian；本仓的窄副本是 gua/littleEndian.js（helper 其余是 DOM/tooltip/请求）。"
+        }
+      ],
+      "why": "v3.15.0 拆出：buildTimeGua 以时起卦（tools/liuyao.js 直接取；GuaZhanMain 壳不再 vendor）。"
+    },
+    "guazhan/main/snapshot.js": {
+      "upstream": "components/guazhan/main/snapshot.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "v3.15.0 拆出：buildGuaSnapshotText / 断卦结构（tools/liuyao.js 直接取）。"
     },
     "guice/core/guiceConst.js": {
       "upstream": "components/guice/core/guiceConst.js",
@@ -1257,17 +1471,32 @@
       "derived_from": "components/guolao/GuoLaoMoiraPanel.js",
       "derived_sha256": "22eaafc23b5c42a692969503730be30840543d8b5eee307520eddb45296605a1"
     },
-    "guolao/guolaoMoiraWheelLimits.js": {
+    "guolao/guolaoMoira.js": {
       "mode": "bespoke",
-      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖，另 wave3b 抽 cleanText / formatGodName / godsFromRuleHits / longLifeCharFor（[神煞] 段 buildRulesGodsSection 的 moira* 依赖）；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写；guolaoMoira.js 亦从这里取同一份），getStoredGuolaoLifeMode 为 headless 缺省 asc。v3.13.1 另逐字抽 PLANET_DEFS / MOIRA_ASPECTS / MOIRA_DEFAULT_ASPECTS / moiraHiddenIds / moiraObjSpeed / computeMoiraAspectPairs（七政相位单源，guolaoMoira.js 的 [相位] 段 import）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 v3.14.0（复核）：上游该文件改的是 UI（suNameOf 悬浮提示按显示度取宿名、speedText toFixed 4→3、mapCuspsToDisplay 注释、shouldComponentUpdate、measureContainer 塌缩守卫、背景 rect stroke），本件抽出的函数（lifeDegree / buildGuolaoLimitTable / birthYearBasis / computeMoiraAspectPairs / PLANET_DEFS / MOIRA_ASPECTS …）无一处改动，副本不动。",
-      "derived_from": "components/guolao/GuoLaoMoiraWheel.js",
-      "derived_sha256": "91412a151a3eb02a5d3eaa3333cbb500f3fc5a4b8bd0fed466d332c2e5715711"
+      "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包，外加 wave3b 同源快照段（与格局闭包共用 msg/objectLon/houseFullLabel/computeAscSignIndex/orderGods 与同一 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、[神煞] buildRulesGodsSection → buildHouseGodsSection、[相位] buildGuolaoAspectSection（v3.13.1 起含 buildGuolaoAspectRows → guolaoMoiraWheelLimits.js 的 computeMoiraAspectPairs 七政相位单源；此前为 GUOLAO_ASPECT_LABEL_CN/aspectName/buildAspectRows 通用占星表）与 splitDegree，逐字；buildGuolaoSnapshotTablesForSnapshot 为 skill 桥接（同 buildLocalMoiraPatternsForSnapshot）。normalizeGuolaoLifeMode 取 guolaoMoiraWheelLimits.js 的 GuoLaoChartStyle 逐字版（此前本文件留着只认 yumao/cotrans 的旧平移件）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 v3.13.0：上游把 GuoLaoChartMain.js 的这些闭包拆进 components/guolao/main/（snapshot.js 为主源，另 moiraConst/format/fieldModes/aspectsNodeMode）；msg/signDegMin 取 AstroHelper.js，formatGodName 取 GuoLaoMoiraWheel.js，命主/宿度制偏好取 GuoLaoChartStyle.js —— derived_from 改指 main/snapshot.js，其余源登记 also_derived_from 逐个看守。 v3.14.0（复核）：main/snapshot.js 只改 _buildGuolaoSnapshotTextV2Core 开头（赤仪上升取法：按 guolaoAscRaModeOf 换上升点）与 [起盘信息] 多一行，本件抽出的格局闭包 / 宫宿 / 神煞 / 相位段函数体未动；换上升点收在 guolaoSnapshotSections.js 的 applyGuolaoAscRaMode，由 tools/guolaoMoira.js、tools/guolaoStarDignity.js 各入口先调（上游在 core 里一次换、各段同读）。GuoLaoMoiraWheel.js 的改动（suNameOf 悬浮提示取宿 / speedText 小数位 / shouldComponentUpdate / 量尺寸 / rect 描边）都在未抽出的 UI 部分。",
+      "derived_from": "components/guolao/main/snapshot.js",
+      "derived_sha256": "2a18ed60eb00935d3526c8f2e9e725f9a3493cb4e4415f3d61bffe5f6c5b724e",
+      "also_derived_from": {
+        "components/guolao/main/moiraConst.js": "f94c5e26109da2401b3abeffb4e6f644c59acbca6679a279ed4c275476fb79d9",
+        "components/guolao/main/format.js": "3b1960703d573c17d2849ed0da78d295f6b112d55aa31d07c4f36920c3216fc5",
+        "components/guolao/main/fieldModes.js": "2efaf950e2f0c197bb45333b986c09b35a0e504573005821142e71aa028383c7",
+        "components/guolao/main/aspectsNodeMode.js": "ddf44e20e53cd26167cb459672b32fb88b88a387e6b7e318bb7bc98559bb4d38",
+        "components/astro/AstroHelper.js": "83143d6d3530f9279845a93edb394ade88962351d441f6a6b60d927bf75c6636",
+        "components/guolao/GuoLaoChartStyle.js": "1f9777c766cf9dcb8fd1201abc5cc1b6252014b71be1843ed0ef75601eccca1b",
+        "components/guolao/GuoLaoMoiraWheel.js": "91412a151a3eb02a5d3eaa3333cbb500f3fc5a4b8bd0fed466d332c2e5715711"
+      }
     },
     "guolao/guolaoMoiraTables.js": {
       "upstream": "components/guolao/guolaoMoiraTables.js",
       "mode": "verbatim",
       "why": "零 import 纯函数（Moira 难仇恩用 / 虚实 / 飞限小限童限月限 / 限度查表）。[三主与化曜]/[限法实算] 事实层（guolaoInfoFacts.js）与百六大限（guolaoMoiraWheelLimits.js）依赖它。",
       "deviations": []
+    },
+    "guolao/guolaoMoiraWheelLimits.js": {
+      "mode": "bespoke",
+      "why": "自上游 GuoLaoMoiraWheel.js（2485 行 SVG 轮盘 React 组件）逐字抽出「命度 → 百六大限」算法闭包：buildGuolaoLimitTable / birthYearBasis（含立春/冬至年界本地节气精算）/ currentLimitIndex / lifeDegree 及依赖，另 wave3b 抽 cleanText / formatGodName / godsFromRuleHits / longLifeCharFor（[神煞] 段 buildRulesGodsSection 的 moira* 依赖）；上游 GuoLaoMoiraPanel 与 GuoLaoChartMain 即以 moira* 别名 import 这几个函数。GUOLAO_LIFE_MODE_* / normalizeGuolaoLifeMode 逐字取自 GuoLaoChartStyle.js（未单独看守：该文件其余为 localStorage 偏好读写；guolaoMoira.js 亦从这里取同一份），getStoredGuolaoLifeMode 为 headless 缺省 asc。v3.13.1 另逐字抽 PLANET_DEFS / MOIRA_ASPECTS / MOIRA_DEFAULT_ASPECTS / moiraHiddenIds / moiraObjSpeed / computeMoiraAspectPairs（七政相位单源，guolaoMoira.js 的 [相位] 段 import）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 v3.14.0（复核）：上游该文件改的是 UI（suNameOf 悬浮提示按显示度取宿名、speedText toFixed 4→3、mapCuspsToDisplay 注释、shouldComponentUpdate、measureContainer 塌缩守卫、背景 rect stroke），本件抽出的函数（lifeDegree / buildGuolaoLimitTable / birthYearBasis / computeMoiraAspectPairs / PLANET_DEFS / MOIRA_ASPECTS …）无一处改动，副本不动。",
+      "derived_from": "components/guolao/GuoLaoMoiraWheel.js",
+      "derived_sha256": "91412a151a3eb02a5d3eaa3333cbb500f3fc5a4b8bd0fed466d332c2e5715711"
     },
     "guolao/guolaoSnapshotSections.js": {
       "mode": "bespoke",
@@ -1287,20 +1516,10 @@
       "why": "行运法（洞微大限 / 小限 / 月限 / 童限）纯前端 compute，只 import 同目录 guolaoData。[限法实算] 与 [大限] 的所选行运法结构依赖它。",
       "deviations": []
     },
-    "guolao/guolaoMoira.js": {
-      "mode": "bespoke",
-      "why": "自上游 GuoLaoChartMain.js verbatim 抽出的政余格局 Moira DSL 闭包，外加 wave3b 同源快照段（与格局闭包共用 msg/objectLon/houseFullLabel/computeAscSignIndex/orderGods 与同一 SNAPSHOT_PREFER_LON 黄仪窗口）：[七政四余宫位与二十八宿星曜] buildHouseSuAndGodsSection、[神煞] buildRulesGodsSection → buildHouseGodsSection、[相位] buildGuolaoAspectSection（v3.13.1 起含 buildGuolaoAspectRows → guolaoMoiraWheelLimits.js 的 computeMoiraAspectPairs 七政相位单源；此前为 GUOLAO_ASPECT_LABEL_CN/aspectName/buildAspectRows 通用占星表）与 splitDegree，逐字；buildGuolaoSnapshotTablesForSnapshot 为 skill 桥接（同 buildLocalMoiraPatternsForSnapshot）。normalizeGuolaoLifeMode 取 guolaoMoiraWheelLimits.js 的 GuoLaoChartStyle 逐字版（此前本文件留着只认 yumao/cotrans 的旧平移件）。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。 🔴 v3.13.0：上游把 GuoLaoChartMain.js 的这些闭包拆进 components/guolao/main/（snapshot.js 为主源，另 moiraConst/format/fieldModes/aspectsNodeMode）；msg/signDegMin 取 AstroHelper.js，formatGodName 取 GuoLaoMoiraWheel.js，命主/宿度制偏好取 GuoLaoChartStyle.js —— derived_from 改指 main/snapshot.js，其余源登记 also_derived_from 逐个看守。 v3.14.0（复核）：main/snapshot.js 只改 _buildGuolaoSnapshotTextV2Core 开头（赤仪上升取法：按 guolaoAscRaModeOf 换上升点）与 [起盘信息] 多一行，本件抽出的格局闭包 / 宫宿 / 神煞 / 相位段函数体未动；换上升点收在 guolaoSnapshotSections.js 的 applyGuolaoAscRaMode，由 tools/guolaoMoira.js、tools/guolaoStarDignity.js 各入口先调（上游在 core 里一次换、各段同读）。GuoLaoMoiraWheel.js 的改动（suNameOf 悬浮提示取宿 / speedText 小数位 / shouldComponentUpdate / 量尺寸 / rect 描边）都在未抽出的 UI 部分。",
-      "derived_from": "components/guolao/main/snapshot.js",
-      "derived_sha256": "2a18ed60eb00935d3526c8f2e9e725f9a3493cb4e4415f3d61bffe5f6c5b724e",
-      "also_derived_from": {
-        "components/guolao/main/moiraConst.js": "f94c5e26109da2401b3abeffb4e6f644c59acbca6679a279ed4c275476fb79d9",
-        "components/guolao/main/format.js": "3b1960703d573c17d2849ed0da78d295f6b112d55aa31d07c4f36920c3216fc5",
-        "components/guolao/main/fieldModes.js": "2efaf950e2f0c197bb45333b986c09b35a0e504573005821142e71aa028383c7",
-        "components/guolao/main/aspectsNodeMode.js": "ddf44e20e53cd26167cb459672b32fb88b88a387e6b7e318bb7bc98559bb4d38",
-        "components/astro/AstroHelper.js": "83143d6d3530f9279845a93edb394ade88962351d441f6a6b60d927bf75c6636",
-        "components/guolao/GuoLaoChartStyle.js": "1f9777c766cf9dcb8fd1201abc5cc1b6252014b71be1843ed0ef75601eccca1b",
-        "components/guolao/GuoLaoMoiraWheel.js": "91412a151a3eb02a5d3eaa3333cbb500f3fc5a4b8bd0fed466d332c2e5715711"
-      }
+    "heluo/data/heluoTiaowen.json": {
+      "upstream": "utils/data/heluoTiaowen.json",
+      "mode": "verbatim",
+      "deviations": []
     },
     "heluo/heluoLocal.js": {
       "upstream": "utils/heluoLocal.js",
@@ -1370,82 +1589,51 @@
       "mode": "verbatim",
       "deviations": []
     },
-    "jinkou/JinKouMain.js": {
-      "upstream": "components/jinkou/JinKouMain.js",
-      "mode": "verbatim",
-      "why": "金口诀 AI 快照单源 buildJinKouSnapshotText（:330）及其模块级格式化助手（fmtValue / pushMdRows / cleanKey / appendMapSection / mapObjToRows / MD_DASH）与 React 组件同在一个文件里。v0.50 前是 bespoke 手抄件 jinkou/JinKouSnapshot.js（源 sha 看守、不比内容）；上游 v3.14.0 同步时改成「上游全文件 + 声明式 deviation」，流水线逐字可复现、漂移即红（AGENTS §5.2 末条）。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^function getAppliedBirth\\(",
-          "why": "剥掉 :793 起的页面状态 helper（getAppliedBirth / clonePlain / buildCacheKey / pushCache / JINKOU_PAGE_SETTINGS / jinkouSnapshotMeta）与 React 组件 JinKouMain。buildJinKouSnapshotText 及其助手都在锚点之前；锚点是正则，上游一改名就报错而不是悄悄剪错。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/DateTime.js",
-          "stub": "// headless stub：comp/DateTime 是页面的日期时间类（moment 包装），只被行年回退链 cloneDateTimeSafe / buildBirthFields /\n// buildFallbackRunYearByYearDiff 用到——金口诀非行年盘，headless 的 buildJinKouSnapshotText 以 runyear=null 调、不走这条链。\n// 定义同名类让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: comp/DateTime is not vendored'); } }\n// utils/constants（含 ServerRoot，流水线按「后端 import」整条删）的缺省经纬度只在 buildBirthFields 里读，同一条不可达链；读到即抛。\nconst Constants = new Proxy({}, { get(_t, key){ throw new Error(`headless stub: utils/constants.${String(key)} is not vendored`); } });",
-          "why": "行年回退链（页面表单的 DateTime 对象 + utils/constants 的缺省经纬度）headless 不可达；声明成调到 / 读到即抛的同名绑定。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../lrzhan/LiuRengInput.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../lrzhan/LiuRengBirthInput.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../common/QuickDockBar.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./JinKouChart.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./JinKouRelationMini.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import {\n\tXQButton as Button,\n\tXQSelect as Select,\n\tXQInput,\n\tXQTabs as Tabs, XQSideSection\n} from '../xq-ui.js';\n",
-          "to": "",
-          "why": "React/antd UI 元素（多行 import，stub_import 只认单行），只服务被剥掉的 React 尾部与下面两条模块级解构。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-icons.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { Option } = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部（纯逻辑段一次都没用到）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const TabPane = Tabs.TabPane;\n",
-          "to": "",
-          "why": "同上。"
-        }
-      ]
-    },
     "jinkou/JinKouState.js": {
       "upstream": "components/jinkou/JinKouState.js",
       "mode": "verbatim",
       "deviations": []
+    },
+    "jinkou/calc/backend.js": {
+      "upstream": "components/jinkou/calc/backend.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/calc/basics.js": {
+      "upstream": "components/jinkou/calc/basics.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/calc/layers.js": {
+      "upstream": "components/jinkou/calc/layers.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/calc/readings.js": {
+      "upstream": "components/jinkou/calc/readings.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/calc/shensha.js": {
+      "upstream": "components/jinkou/calc/shensha.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/calc/tables.js": {
+      "upstream": "components/jinkou/calc/tables.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/calc/wangShuai.js": {
+      "upstream": "components/jinkou/calc/wangShuai.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "jinkou/main/snapshot.js": {
+      "upstream": "components/jinkou/main/snapshot.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "v3.15.0 拆出：buildJinKouSnapshotText（tools/jinkou.js 直接取；JinKouMain 壳不再 vendor）。"
     },
     "lingqi/core/lingqiCast.js": {
       "upstream": "components/lingqi/core/lingqiCast.js",
@@ -1543,15 +1731,15 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "liureng/LRShenShaDoc.js": {
+      "upstream": "components/liureng/LRShenShaDoc.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "liureng/LRXiangDoc.js": {
       "upstream": "components/liureng/LRXiangDoc.js",
       "mode": "verbatim",
       "why": "纯前端取象聚合（buildXiangContext）。LiuRengMain.js 纯逻辑段 buildLiuRengSnapshotText 的 [取象] 段在调用它，此前 import 被当作「仅 React 尾部使用」stub 成空 → 走到 [取象] 即 ReferenceError（v3.11.x 同步时真数据整链跑出来的第二个潜伏断点）。",
-      "deviations": []
-    },
-    "liureng/LRShenShaDoc.js": {
-      "upstream": "components/liureng/LRShenShaDoc.js",
-      "mode": "verbatim",
       "deviations": []
     },
     "liureng/LRZhanDuanDoc.js": {
@@ -1576,12 +1764,6 @@
         },
         {
           "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "UI 组件库（同上）。"
-        },
-        {
-          "kind": "stub_import",
           "specifier": "../xq-icons.js",
           "stub": "",
           "why": "图标库（同上）。"
@@ -1594,45 +1776,15 @@
         },
         {
           "kind": "stub_import",
-          "specifier": "./LiuRengInput.js",
-          "stub": "",
-          "why": "React 元素（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./LiuRengBirthInput.js",
-          "stub": "",
-          "why": "React 元素（同上）。"
-        },
-        {
-          "kind": "stub_import",
           "specifier": "../comp/DateTime.js",
           "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
           "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
         },
         {
           "kind": "stub_import",
-          "specifier": "../common/QuickDockBar.js",
+          "specifier": "../../utils/mixinMethods.js",
           "stub": "",
-          "why": "React 元素（同上）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const {Option} = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务被剥离的 React 尾部（Option 在纯逻辑段一次都没用到）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const TabPane = Tabs.TabPane;\n",
-          "to": "",
-          "why": "同上（TabPane 在纯逻辑段一次都没用到）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../liureng/LRSanChuanRelationMini.js",
-          "stub": "",
-          "why": "上游 v3.12.0 起本文件只默认导入 JSX 小图（只在被剥掉的 React 尾部用）；纯函数 sanChuanRelationSnapshotLines 已随快照拆到 main/snapshot.js 具名导入。vendored 的 LRSanChuanRelationMini.js 已剥掉默认导出。"
+          "why": "v3.15.0 起组件方法拆在 main/* 由类后 mixinMethods 挂回原型；截断后它只剩文件头注释里的字面提及（孤儿清理按全文匹配认它在用）。"
         }
       ]
     },
@@ -1640,113 +1792,64 @@
       "mode": "bespoke",
       "why": "no upstream file of this name (skill-authored)"
     },
-    "mundane/MundaneMain.js": {
-      "upstream": "components/mundane/MundaneMain.js",
+    "liureng/main/birthRunYear.js": {
+      "upstream": "components/lrzhan/main/birthRunYear.js",
       "mode": "verbatim",
-      "why": "上游 v3.11 [Q-444/T-407] 把右栏 25 张卡折进 AI 快照，产段函数 buildMundaneCardSections 是 React 文件里的模块级纯函数（MundaneMain.js:232，与 render*Card 同源同参）。手抄 270 行卡片排版必漂移，故整头 vendored，`const CARD` 起的 UI 常量与 React 组件由 truncate_before 机械剥离；页面按需拉取物（四季种子/相位格局/木土会合/Barbault/食时长…）由 Python 取数后经 state/extra 传入（请求型编排归 Python，AGENTS §5）。用 verbatim：截断/桩/改写全部机械可复现，流水线输出必须与 vendored 文件逐字相同。",
       "deviations": [
         {
-          "kind": "truncate_before",
-          "anchor": "^const CARD = \\{",
-          "why": "剥掉 `const CARD` 起的卡片样式常量、页面设置与 `class MundaneMain extends Component`（UI 尾部）。锚点是正则而非行号。"
-        },
-        {
           "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "// headless stub：模块顶层 `const Option = XQSelect.Option; const TabPane = XQTabs.TabPane;` 只服务已截断的 UI；空对象令其求值为 undefined 而不抛。\nconst XQSelect = {}; const XQTabs = {};",
-          "why": "UI 组件库；两行模块级解构仍在截断点之前，故给空对象而不是删 import。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../divination/DivinationChartShell.js",
-          "stub": "",
-          "why": "React 壳（默认导入，孤儿清理不覆盖默认导入）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../astro/PlusMinusTime.js",
-          "stub": "",
-          "why": "React 组件（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/QuickTimeField.js",
-          "stub": "",
-          "why": "React 组件（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/DateTime.js",
-          "stub": "",
-          "why": "只服务已截断的类方法（同上）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../astro/AstroExtraCommon.js",
-          "stub": "// headless stub：AstroExtraCommon 是 React/AstroMeaning 依赖的前端文件，不 vendor。\n// astroSymbol 只被 pGlyph/sGlyph（UI 字形，快照不调）引用；chartRequestKey 只用于 [盘型格局] 的\n// `st.patKey === chartRequestKey(chart)` 缓存一致性判定——headless 的相位格局就是对**同一张盘**现取的，\n// 故恒等键即正解：调用方（tools/mundaneCards.js）传 patKey 时用同一常量 HEADLESS_PAT_KEY。\nconst astroSymbol = (id) => id; const chartRequestKey = () => 'headless';",
-          "why": "前端 UI 文件；两个符号的 headless 语义见 stub 注释。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "rulerDeathSignature, solveSiderealIngress, describeSolunar",
-          "to": "rulerDeathSignature, describeSolunar",
-          "why": "solveSiderealIngress 是网络求根器，vendored solunar.js 已被流水线剥掉（Python 端口 _solve_sidereal_ingress）；ESM 具名导入缺失导出会在链接期整模块失败。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "NAVANAYAKA_OFFICES, computeNavanayaka, solveVedicSolarIngress, vimshottariFromMoon",
-          "to": "NAVANAYAKA_OFFICES, vimshottariFromMoon",
-          "why": "同上：两者是网络编排，vendored vedicMundane.js 已剥（Python 端口 _solve_navanayaka / _solve_vedic_ingress）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import { SIGNS } from '../../divination/data/signs.js';",
-          "to": "import { SIGNS } from '../../divination/data/signs.js';\nimport { ingressGovernance } from './momentPipeline.js';",
-          "why": "流水线按规则丢掉整条 momentPipeline 具名导入（网络编排模块），但 [年盘概要] 要其中的纯函数 ingressGovernance；改指向截断后只剩纯函数的 vendored momentPipeline.js。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../../divination/mundane/describe.js",
-          "to": "./describe.js",
-          "why": "vendor 树里有两个 describe.js（mundane/ 与 divination/…），relocate 按 basename 无法消歧，钉死到世运那份。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const MUNDANE_ORB_SCHEME_CN = {",
-          "to": "export const MUNDANE_ORB_SCHEME_CN = {",
-          "why": "页面级覆盖行「受冲容许度：…（页面级覆盖）」的查名表（上游只在类方法 buildAiSnapshot:2866 内用，模块私有）；headless 的快照头在 skill 侧拼，补具名导出供 tools/mundaneCards.js 取名与校验值域，不手抄。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const MUNDANE_INGRESS_RULE_CN = {",
-          "to": "export const MUNDANE_INGRESS_RULE_CN = {",
-          "why": "同上：「入境主管制：…（页面级覆盖）」（buildAiSnapshot:2859）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const PLANET_CN = { sun: '太阳', moon: '月亮', mercury: '水星', venus: '金星', mars: '火星', jupiter: '木星', saturn: '土星' };",
-          "to": "export const PLANET_CN = { sun: '太阳', moon: '月亮', mercury: '水星', venus: '金星', mars: '火星', jupiter: '木星', saturn: '土星' };",
-          "why": "上游 buildAiSnapshot:2913 [地理分野] 托勒密四象限主星查名用本文件私有 PLANET_CN（七曜表，与 describe.js 的 MUN_PLANET_CN 不是同一张）；bespoke 抽出件 mundane/mundaneAiSnapshot.js 逐字保留该引用，故补具名导出而不手抄。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "function currentYear(){",
-          "to": "export function currentYear(){",
-          "why": "同上：buildAiSnapshot 的 [年之九主] 年份 / [地区盘推运] 目标年缺省（:2919/:2951）读本文件私有 currentYear()，抽出件逐字保留。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./MundaneCycleTables.js",
-          "stub": "",
-          "why": "上游 v3.14.0 的「周期表」页签 React 组件（默认导入），只服务已截断的类；周期表正文由 utils/mundaneCycles.js 的 buildMundaneCycleText 出。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const BARBAULT_SETS = [",
-          "to": "export const BARBAULT_SETS = [",
-          "why": "上游 v3.14.0 把 Barbault 慢星组合（bbSet）与谐波（bbHarm）收进页面设置 MUNDANE_PAGE_SETTINGS（在截断点之后）；组合键 → 行星名表是本文件私有常量。headless 的 /astroextra/barbault 请求由 Python 发，补具名导出供 tools/mundaneCards.js 校验 bbSet 值域并回组合的行星名表，不手抄。"
+          "specifier": "../../comp/DateTime.js",
+          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
+          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
         }
       ]
+    },
+    "liureng/main/castLayout.js": {
+      "upstream": "components/lrzhan/main/castLayout.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/ganzhiHelpers.js": {
+      "upstream": "components/lrzhan/main/ganzhiHelpers.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/panData.js": {
+      "upstream": "components/lrzhan/main/panData.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "../../comp/DateTime.js",
+          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
+          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
+        }
+      ]
+    },
+    "liureng/main/referenceDaGe.js": {
+      "upstream": "components/lrzhan/main/referenceDaGe.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/referenceMatch.js": {
+      "upstream": "components/lrzhan/main/referenceMatch.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/referenceOverview.js": {
+      "upstream": "components/lrzhan/main/referenceOverview.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/referenceXiaoJu.js": {
+      "upstream": "components/lrzhan/main/referenceXiaoJu.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "liureng/main/snapshot.js": {
+      "upstream": "components/lrzhan/main/snapshot.js",
+      "mode": "verbatim",
+      "deviations": []
     },
     "mundane/chorography.js": {
       "upstream": "divination/mundane/chorography.js",
@@ -1768,6 +1871,50 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "mundane/main/cards.js": {
+      "upstream": "components/mundane/main/cards.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../divination/mundane/describe.js",
+          "to": "../describe.js",
+          "why": "vendor 树里有两个 describe.js（mundane/ 与 divination/…），relocate 按 basename 无法消歧，钉死到世运那份（v3.14.0 MundaneMain 条目同一条，v3.15.0 随拆文件挪到 main/*）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../astro/AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是 React 页面公共件，不 vendor。chartRequestKey 只用于 [盘型格局] 的\n// `st.patKey === chartRequestKey(chart)` 缓存一致性判定——headless 的相位格局就是对**同一张盘**现取的，\n// 故恒等键即正解：调用方（tools/mundaneCards.js）传 patKey 时用同一常量 HEADLESS_PAT_KEY。\nconst chartRequestKey = () => 'headless';",
+          "why": "前端 UI 文件；chartRequestKey 的 headless 语义见 stub 注释（与 v3.14.0 MundaneMain 条目同义）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import { SIGNS } from '../../../divination/data/signs.js';",
+          "to": "import { SIGNS } from '../../../divination/data/signs.js';\nimport { ingressGovernance } from '../momentPipeline.js';",
+          "why": "流水线按规则丢掉整条 momentPipeline 具名导入（网络编排模块），但 [年盘概要] 要其中的纯函数 ingressGovernance；改指向截断后只剩纯函数的 vendored momentPipeline.js（v3.14.0 MundaneMain 条目同一条，v3.15.0 拆文件时随 [年盘概要] 迁到 main/cards.js——漏迁则入宫盘静默少这张卡，selfcheck 值级金标抓到）。"
+        }
+      ],
+      "why": "v3.15.0 上游把世俗盘页拆成 MundaneMain 壳 + main/*：右栏卡片段 buildMundaneCardSections 与 MUNDANE_PAGE_SETTINGS 在这里（tools/mundaneCards.js、bespoke mundaneAiSnapshot.js 直接取）。"
+    },
+    "mundane/main/tables.js": {
+      "upstream": "components/mundane/main/tables.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../divination/mundane/describe.js",
+          "to": "../describe.js",
+          "why": "vendor 树里有两个 describe.js（mundane/ 与 divination/…），relocate 按 basename 无法消歧，钉死到世运那份（v3.14.0 MundaneMain 条目同一条，v3.15.0 随拆文件挪到 main/*）。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../astro/AstroExtraCommon.js",
+          "stub": "// headless stub：AstroExtraCommon 是 React 页面公共件，不 vendor。astroSymbol 只被 UI 字形（pGlyph/sGlyph）用，快照不调；\n// 恒等映射保持「拿到的就是 id」。\nconst astroSymbol = (id) => id;",
+          "why": "前端 UI 文件；astroSymbol 只服务字形（与 v3.14.0 MundaneMain 条目同义）。"
+        }
+      ],
+      "why": "v3.15.0 拆出的世俗盘表格件：宫位表 / 分野表 / 三张口径名表（MUNDANE_ORB_SCHEME_CN 等）与 PLANET_CN、currentYear（v3.14.0 曾要 replace_text 补 export，现上游已导出）。"
+    },
     "mundane/momentPipeline.js": {
       "upstream": "divination/mundane/momentPipeline.js",
       "mode": "verbatim",
@@ -1785,6 +1932,12 @@
           "why": "DateTime 只服务已截断的 momentToDateTime / chartAtMoment；默认导入不走孤儿清理，须显式去掉。"
         }
       ]
+    },
+    "mundane/mundaneAiSnapshot.js": {
+      "mode": "bespoke",
+      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（v3.14.0 :2871-3018；10fb75de→e55c3a66 方法体逐字未变）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。",
+      "derived_from": "components/mundane/MundaneMain.js",
+      "derived_sha256": "d638e0ecd2c9f4281600dfc425a77985dd99fc375ad26d1262ba862c4b44cf02"
     },
     "mundane/mundaneHorary.js": {
       "upstream": "divination/mundane/mundaneHorary.js",
@@ -1807,12 +1960,6 @@
       "why": "[地区盘推运]（buildAiSnapshot:2947-2960）的小限 Profections + 法达 Firdaria 纯函数（WP-6 §11.2）；纯常量表 + 两个导出函数、无 import。消费方 mundane/mundaneAiSnapshot.js。",
       "deviations": []
     },
-    "mundane/mundaneAiSnapshot.js": {
-      "mode": "bespoke",
-      "why": "自上游 MundaneMain.js 类方法 buildAiSnapshot（v3.14.0 :2871-3018；10fb75de→e55c3a66 方法体逐字未变）逐字抽出的世俗盘 AI 快照四件（headLines / judge=[世俗宫义] / extraSecs=[定局·年主/盘主]·[入境骨架]·[地理分野]·[年之九主]·[世运问判]·[角化]·[地区盘推运] / cardSecs）：this.state → 参数 state、盘面正文与拼接归 Python（同一 buildAstroSnapshotContent 的段）。此前 [世俗宫义]/[定局·年主/盘主]/[入境骨架]/[地理分野] 是 skill 自拟 Python 行（不随 mundaneRuleset），[地区盘] 类型 headless 不支持。与 mundane/MundaneMain.js（verbatim，只到 `const CARD` 截断，类方法在截断之后）看守同一源 sha。源一动即红、复核后 --restamp。",
-      "derived_from": "components/mundane/MundaneMain.js",
-      "derived_sha256": "d638e0ecd2c9f4281600dfc425a77985dd99fc375ad26d1262ba862c4b44cf02"
-    },
     "mundane/ruleset.js": {
       "upstream": "divination/mundane/ruleset.js",
       "mode": "verbatim",
@@ -1828,8 +1975,240 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "mundane/solunarTypes.js": {
+      "upstream": "divination/mundane/solunarTypes.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "mundane/vedicMundane.js": {
       "upstream": "divination/mundane/vedicMundane.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/cityMatch.js": {
+      "upstream": "components/amap/cityMatch.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/data/cities.json": {
+      "upstream": "data/cities.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/data/citiesFull.json": {
+      "upstream": "data/citiesFull.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/data/cityTradSimpMap.json": {
+      "upstream": "data/cityTradSimpMap.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/geoCompass.js": {
+      "upstream": "utils/aiTools/normalize/geoCompass.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "place/place.js": {
+      "upstream": "utils/aiTools/normalize/place.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../data/cities.json",
+          "to": "./data/cities.json",
+          "why": "城市库三份 JSON 逐字节 vendor 在 place/data/（上游在 src/data/）。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../data/cityTradSimpMap.json",
+          "to": "./data/cityTradSimpMap.json"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../components/amap/cityMatch.js",
+          "to": "./cityMatch.js"
+        },
+        {
+          "kind": "replace_text",
+          "find": "import('../../../data/citiesFull.json'",
+          "to": "import('./data/citiesFull.json'",
+          "why": "大库懒加载的动态 import：import_redirect 只认静态 `from`，动态形态声明式改写（JSON 属性已由 transform 补齐）。"
+        }
+      ]
+    },
+    "place/zone.js": {
+      "upstream": "utils/aiTools/normalize/zone.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../timezone.js",
+          "to": "../utils/timezone.js",
+          "why": "上游 utils/timezone.js 落在 vendor/utils/（与 dateTimeParse.js 同目录）；place/ 是 AI 地名解析三件的平铺目录。"
+        }
+      ]
+    },
+    "sanshi/SanShiZiWeiSihua.js": {
+      "upstream": "components/sanshi/SanShiZiWeiSihua.js",
+      "mode": "verbatim",
+      "why": "三式合一 [紫微四化] 段的纯函数 buildSanShiZiweiSihuaSnapshotLines（与该 tab 同源计算）。此前 tools/sanshiZiweiSihua.js 里手抄了一份函数体；现在 SanShiUnitedMain.js 与该 JS 工具都 import 这份逐字 vendored 的。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^export default class SanShiZiWeiSihua extends Component",
+          "why": "剥掉紫微四化 tab 的 React 组件（默认导出）；锚点是正则。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../ziwei/ZWLuckPanel.js",
+          "to": "../ziwei/zwLuckItems.js",
+          "why": "上游 ZWLuckPanel.js 是 React 组件文件；本仓的 zwLuckItems.js 是它的运限项闭包（bespoke，derived_from 看守），导出同名三函数。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../xq-ui.js",
+          "stub": "",
+          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "const { Option } = Select;\n",
+          "to": "",
+          "why": "模块级 UI 解构，只服务 React 尾部。"
+        }
+      ]
+    },
+    "sanshi/main/format.js": {
+      "upstream": "components/sanshi/main/format.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../constants/AstroConst.js",
+          "to": "../sanshiAstroConst.js",
+          "why": "共享 AstroConst shim 没有 URANUS/NEPTUNE/PLUTO/MC——外圈「星盘」行会静默少四颗；钉到逐值抽出的 curated 子集（v3.14.0 SanShiUnitedMain 条目同一条，随拆文件挪到 main/*）。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../constants/AstroText.js",
+          "to": "../sanshiAstroText.js",
+          "why": "msg() 读 AstroMsgCN；共享 AstroText shim 以缺四颗的共享 AstroConst 为键，天王/海王/冥王/天顶会回显英文 id。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../../utils/shellZoom.js",
+          "stub": "// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的视口高度；headless 无视口。\n// 定义同名函数让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。\nfunction getPageLayoutHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }",
+          "why": "getViewportHeight 引用它，但只在 React 构造器里被调。"
+        }
+      ],
+      "why": "v3.15.0 上游把三式合一页拆成 SanShiUnitedMain 壳 + main/*；tools/sanshiUnited.js 直接取子模块（壳不再 vendor）。"
+    },
+    "sanshi/main/liureng.js": {
+      "upstream": "components/sanshi/main/liureng.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "v3.15.0 上游把三式合一页拆成 SanShiUnitedMain 壳 + main/*；tools/sanshiUnited.js 直接取子模块（壳不再 vendor）。"
+    },
+    "sanshi/main/options.js": {
+      "upstream": "components/sanshi/main/options.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../constants/AstroConst.js",
+          "to": "../sanshiAstroConst.js",
+          "why": "共享 AstroConst shim 没有 URANUS/NEPTUNE/PLUTO/MC——外圈「星盘」行会静默少四颗；钉到逐值抽出的 curated 子集（v3.14.0 SanShiUnitedMain 条目同一条，随拆文件挪到 main/*）。"
+        }
+      ],
+      "why": "v3.15.0 上游把三式合一页拆成 SanShiUnitedMain 壳 + main/*；tools/sanshiUnited.js 直接取子模块（壳不再 vendor）。"
+    },
+    "sanshi/main/outerRing.js": {
+      "upstream": "components/sanshi/main/outerRing.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../../../constants/AstroConst.js",
+          "to": "../sanshiAstroConst.js",
+          "why": "共享 AstroConst shim 没有 URANUS/NEPTUNE/PLUTO/MC——外圈「星盘」行会静默少四颗；钉到逐值抽出的 curated 子集（v3.14.0 SanShiUnitedMain 条目同一条，随拆文件挪到 main/*）。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../../astro/AstroHelper.js",
+          "to": "../sanshiAstroHelper.js",
+          "why": "只用 splitDegree（外圈宫内度分）；上游 AstroHelper 顶层 import d3 + DOM helper，headless 不可整份载入，用逐字抽出的三函数子集。"
+        }
+      ],
+      "why": "v3.15.0 上游把三式合一页拆成 SanShiUnitedMain 壳 + main/*；tools/sanshiUnited.js 直接取子模块（壳不再 vendor）。"
+    },
+    "sanshi/main/snapshot.js": {
+      "upstream": "components/sanshi/main/snapshot.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "v3.15.0 上游把三式合一页拆成 SanShiUnitedMain 壳 + main/*；tools/sanshiUnited.js 直接取子模块（壳不再 vendor）。"
+    },
+    "sanshi/sanshiAstroConst.js": {
+      "upstream": "constants/AstroConst.js",
+      "mode": "curated",
+      "why": "SanShiUnitedMain.js 纯逻辑段读到的 24 个常量（十行星 / 十二星座 / ASC / MC）逐值抽出。共享 src/constants/AstroConst.js 缺 URANUS/NEPTUNE/PLUTO/MC（外圈「星盘」行会静默少四颗），而它另有七政 / 卜卦 / 天星消费方，故不在此改它。 v3.14.0（复核）：上游 AstroConst.js 只改一处 tabs 列表（'16' 后加 '17'），不在这 24 个常量里，副本不动。",
+      "extracts": [
+        "SUN",
+        "MOON",
+        "MERCURY",
+        "VENUS",
+        "MARS",
+        "JUPITER",
+        "SATURN",
+        "URANUS",
+        "NEPTUNE",
+        "PLUTO",
+        "ARIES",
+        "TAURUS",
+        "GEMINI",
+        "CANCER",
+        "LEO",
+        "VIRGO",
+        "LIBRA",
+        "SCORPIO",
+        "SAGITTARIUS",
+        "CAPRICORN",
+        "AQUARIUS",
+        "PISCES",
+        "ASC",
+        "MC"
+      ],
+      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
+    },
+    "sanshi/sanshiAstroHelper.js": {
+      "upstream": "components/astro/AstroHelper.js",
+      "mode": "curated",
+      "why": "逐字抽出 splitDegree / convertLatToStr / convertLonToStr（:34-87）。上游全文件顶层 import d3 + utils/helper 并在加载期调 detectOS()，headless 不可整份 vendor；SanShiUnitedMain.js 纯逻辑段只用 splitDegree。",
+      "extracts": [
+        "splitDegree",
+        "convertLatToStr",
+        "convertLonToStr"
+      ],
+      "upstream_sha256": "83143d6d3530f9279845a93edb394ade88962351d441f6a6b60d927bf75c6636"
+    },
+    "sanshi/sanshiAstroText.js": {
+      "upstream": "constants/AstroText.js",
+      "mode": "curated",
+      "why": "SanShiUnitedMain.js 的 msg() 只查 MAIN_STAR_IDS 十二体的 AstroMsgCN 中文名；逐行抽出（:92-101/:128/:130），键取 sanshiAstroConst.js。",
+      "extracts": [
+        "AstroMsgCN"
+      ],
+      "upstream_sha256": "170e176886db63ce4a28bd381ddb50f3c182141c2a8ff1ebf528300ee814211c"
+    },
+    "sanshi/sanshiSnapshotSections.js": {
+      "upstream": "components/sanshi/sanshiSnapshotSections.js",
+      "mode": "verbatim",
+      "why": "三式合一挑段单源（太乙 / 奇门 / 六壬断卦段名 + parseSnapshotSections），零依赖；SanShiUnitedMain.js 纯逻辑段直接消费。",
+      "deviations": []
+    },
+    "su28/Su28Helper.js": {
+      "upstream": "components/su28/Su28Helper.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -1845,11 +2224,6 @@
           "why": "模块加载期就读 localStorage（盘形/起宫制偏好）；headless 无浏览器存储，Node ≥25 的实验性全局还会告警/抛 → 注入空 shim，偏好回落缺省（AGENTS §5 闭包提取陷阱 ②）。"
         }
       ]
-    },
-    "su28/Su28Helper.js": {
-      "upstream": "components/su28/Su28Helper.js",
-      "mode": "verbatim",
-      "deviations": []
     },
     "suzhan/SuZhanMain.js": {
       "upstream": "components/suzhan/SuZhanMain.js",
@@ -2140,59 +2514,29 @@
       "mode": "verbatim",
       "deviations": []
     },
-    "tongshefa/TongSheFaCore.js": {
-      "upstream": "components/tongshefa/TongSheFaMain.js",
+    "tongshefa/main/data.js": {
+      "upstream": "components/tongshefa/main/data.js",
       "mode": "verbatim",
-      "why": "统摄法纯计算层：React 类之前的全部常量与函数。v0.40.0 前是 bespoke（手工截取）：上游 v3.11 新增 [爻位] 段时要人读 diff 才补上。改 truncate_before 机械截断后流水线逐字可复现（AGENTS §5 re-vendor 抽壳纪律：剥壳用锚点不手抄）。",
+      "deviations": []
+    },
+    "tongshefa/main/model.js": {
+      "upstream": "components/tongshefa/main/model.js",
+      "mode": "verbatim",
       "deviations": [
         {
-          "kind": "truncate_before",
-          "anchor": "^class TongSheFaMain extends Component",
-          "why": "剥掉 React 组件尾部；锚点是正则，找不到会报错而非悄悄剪错。"
-        },
-        {
           "kind": "import_redirect",
-          "specifier": "../../utils/helper.js",
-          "to": "../gua/littleEndian.js",
-          "why": "纯逻辑段只用 helper 里的 littleEndian；本仓的窄副本是 gua/littleEndian.js（helper 其余是 DOM/tooltip）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "react",
-          "stub": "",
-          "why": "`import React, { Component }` 的默认+具名混合形态不在孤儿 import 清理的覆盖面内；纯逻辑段不用 React。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import {\n\tXQButton as Button,\n\tXQCard as Card,\n\tXQSelect as Select,\n\tXQTabs as Tabs,\n\tXQSideSection,\n\tXQSwitch,\n} from '../xq-ui.js';\n",
-          "to": "",
-          "why": "UI 组件库（多行 import，stub_import 的单行形态匹配不到）；只服务 React 尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/SpaceTimePanel.js",
-          "stub": "",
-          "why": "时空面板组件（默认+具名混合 import），只服务 React 尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../css/styles.less.js",
-          "stub": "",
-          "why": "样式表，headless 无意义。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { Option } = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { TabPane } = Tabs;\n",
-          "to": "",
-          "why": "同上。"
+          "specifier": "../../../utils/helper.js",
+          "to": "../../gua/littleEndian.js",
+          "why": "只用 helper 里的 littleEndian；本仓的窄副本是 gua/littleEndian.js（helper 其余是 DOM/tooltip/请求）。"
         }
-      ]
+      ],
+      "why": "v3.15.0 拆出：buildTongSheFaModel（tools/tongshefa.js 直接取；TongSheFaCore 截取件退役）。"
+    },
+    "tongshefa/main/snapshot.js": {
+      "upstream": "components/tongshefa/main/snapshot.js",
+      "mode": "verbatim",
+      "deviations": [],
+      "why": "v3.15.0 拆出：buildTongSheFaSnapshot。"
     },
     "tongshu/donggong.js": {
       "upstream": "components/calendar/tongshu/donggong.js",
@@ -2249,9 +2593,57 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/acgLayers.js": {
+      "upstream": "utils/acgLayers.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 占星地图两层：日食路径（eclipseSummaryLines）与气候带 / 纬圈（climesSummaryLines），acgSnapshot.js 的新依赖。",
+      "deviations": []
+    },
     "utils/acgSnapshot.js": {
       "upstream": "utils/acgSnapshot.js",
       "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/agePointOptions.js": {
+      "upstream": "utils/agePointOptions.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0 年龄推进点四项口径单源（推进方式 / 事件 / 年长 / 年限；与后端 agepoint.py 逐值相同）。",
+      "deviations": []
+    },
+    "utils/aiAnalysisContext/derivedLabsHeadless.js": {
+      "upstream": "utils/aiAnalysisContext/derivedLabsHeadless.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 辅盘「变换盘」「黄道制」的无头复算：只取纯函数 transformRequestOptions（变换盘只发这种变换真正用到的选项，与页面 AstroTransformLab.requestOptions 同口径）与键表 DERIVED_LAB_HEADLESS_KEYS。取本命盘、发请求、缓存归 Python（JS 层不发 HTTP）。",
+      "deviations": [
+        {
+          "kind": "truncate_before",
+          "anchor": "^// 结果与别的技法重算共用一份内存小缓存",
+          "why": "其后是请求编排（取本命盘 → 请求后端 → 内存缓存 → 拼正文）：headless 侧由 Python runner 承担，正文仍由 vendored transformCharts.js 的同一组函数出。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "async function loaders(){\n\tconst [common, tc, das, req, consts, text] = await Promise.all([\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../../components/astro/AstroExtraCommon.js'),\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../transformCharts.js'),\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../derivedAstroSnapshot.js'),\n\t\timport('../request.js'),\n\t\timport('../constants.js'),\n\t\timport('../../constants/AstroText.js'),\n\t]);\n\treturn { common, tc, das, request: req.default || req, Constants: consts, AstroText: text };\n}\n\n",
+          "to": "",
+          "why": "loaders() 只给被截掉的请求编排用：它按需载入页面侧模块（AstroExtraCommon / derivedAstroSnapshot / request / constants），vendor 树没有这些路径，留着就是一组指向不存在文件的动态 import。"
+        },
+        {
+          "kind": "replace_text",
+          "find": "\ttry{ return __req1.DRACONIC_PAGE_SETTINGS.load().houseMode || ''; }catch(e){ return ''; }",
+          "to": "\treturn '';   // headless：没有「辅盘页已存的龙盘设置」（口径由调用方显式传）——即上游读不到时的回退值",
+          "why": "v3.15.0 新增 draconicPageHouseMode 按需 require 龙盘页（React 组件）取其已存设置；headless 不 vendor 页面组件，读不到即上游自己的 catch 回退 ''。"
+        },
+        {
+          "kind": "stub_import",
+          "specifier": "../../components/auxchart/AstroDraconicLab.js",
+          "stub": "",
+          "why": "同上：上一条改写后该 import（流水线由 require 转来）已无引用。"
+        }
+      ]
+    },
+    "utils/ascRaMode.js": {
+      "upstream": "utils/ascRaMode.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0「上升起盘两档」：二十八宿 / 宿占 / 节气盘 / 七政 / 三式外圈赤道分宫的上升点取真赤经（改进，缺省）或东点黄经（经典）。normalizeAscRaMode / withAscRaMode / ascRaModeSnapshotLine 的单一来源。",
       "deviations": []
     },
     "utils/astroClassicalDerived.js": {
@@ -2271,6 +2663,39 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/beijingTimeShift.js": {
+      "upstream": "utils/beijingTimeShift.js",
+      "mode": "verbatim",
+      "why": "v3.11.2 [#92]：北京时间 ↔ 当地钟表折算（parseZoneHours/bjShiftMinutes/shiftSolarMinutes，从 baziLunarLocal 抽出成单源）；baziLunarLocal / heluoLocal / localNongliAdapter 共用，只依赖 lunar-javascript。"
+    },
+    "utils/caseDivTime.js": {
+      "upstream": "utils/caseDivTime.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/chartDetails.js": {
+      "upstream": "utils/chartDetails.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 占星「盘面细节」的单一来源：30 张表的目录 CHART_DETAIL_TABLES、五项口径的缺省与值域（CHART_DETAIL_DEFAULTS / CHART_DETAIL_OPTIONS）、请求体映射 chartDetailRequestFields 与「结果 → 快照正文」buildChartDetailsText。计算全在后端 astrostudy/chart_details.py（/astroextra/chartdetails，Python 侧发请求）；页面设置仓 CHART_DETAIL_SETTINGS 在 headless 下只读得到缺省（pageSettingsStore 的 safeStorage 是 no-op），口径一律由调用方入参给。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/starNamesCn.js：detailPointName 查的 AstroTxtMsg 在共享 AstroText shim。"
+        }
+      ]
+    },
+    "utils/civilCalendar.js": {
+      "upstream": "utils/civilCalendar.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/civilMoment.js": {
+      "upstream": "utils/civilMoment.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/classicalChartGlobals.js": {
       "upstream": "utils/classicalChartGlobals.js",
       "mode": "verbatim",
@@ -2284,9 +2709,49 @@
       "upstream": "utils/customCalibreStores.js",
       "mode": "verbatim"
     },
+    "utils/dateTimeParse.js": {
+      "upstream": "utils/dateTimeParse.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/dayBoundaryResolve.js": {
+      "upstream": "utils/dayBoundaryResolve.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/derivedAstroLabs.js": {
+      "upstream": "utils/derivedAstroLabs.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/directedFigures.js": {
+      "upstream": "utils/directedFigures.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0+ 推运图族四法（演进推运 Néroman / 推运图 Bezza / 周日小限 Jay / 双黄道 Michon）的单一来源：技法键、后端接口、缺省、选项名、请求体映射 directedFigureRequestFields 与「结果 → 快照正文」buildDirectedFigureText。计算全在后端 astrostudy/directed_figures.py（/astroextra/<接口>，Python 侧发请求）。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "树里有两个 AstroConst.js（AGENTS §4.3）：上游写法在 vendor 树里会解析到 32 行 Uranian 子集（没有 LIST_SIGNS）→ signOfLon 静默 undefined。钉死到共享 shim。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "AstroTxtMsg 单字名表在共享 shim（与 AstroAgePoint.js 同一份）。"
+        }
+      ]
+    },
     "utils/dispositorChain.js": {
       "upstream": "utils/dispositorChain.js",
       "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/distributionsOptions.js": {
+      "upstream": "utils/distributionsOptions.js",
+      "mode": "verbatim",
+      "why": "上游 v3.13.0 界推运四项口径单源（发放点 / 时间算法 / 年长 / 年限；与后端 distributions.py 逐值相同）。",
       "deviations": []
     },
     "utils/divinationJudgeGlobals.js": {
@@ -2294,9 +2759,75 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/divinationShellSettings.js": {
+      "upstream": "utils/divinationShellSettings.js",
+      "mode": "verbatim",
+      "why": "盘壳宿主页的排盘设置共用件；mundane/main/cards.js 在模块加载期用 shellFieldSchema(0) 定义 MUNDANE_PAGE_SETTINGS，须是真代码而非 stub。",
+      "deviations": [
+        {
+          "kind": "replace_text",
+          "find": "import { HOUSE_SYSTEM_OPTIONS, INDIA_AYANAMSA_OPTIONS } from '../constants/AstroConst.js';",
+          "to": "import { HOUSE_SYSTEM_OPTIONS } from '../../constants/AstroConst.js';\nimport { INDIA_AYANAMSA_OPTIONS } from '../india/indiaConst.js';",
+          "why": "vendor 树里两张表分住两处：宫制候选在共享 shim src/constants/AstroConst.js，岁差候选在 curated india/indiaConst.js（vendor/constants/AstroConst.js 是另一份 curated 子集，两名都没有）。"
+        }
+      ]
+    },
+    "utils/entropyTape.js": {
+      "upstream": "utils/entropyTape.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "stub_import",
+          "specifier": "node-forge",
+          "stub": "// headless shim：上游只用 node-forge 的 SHA-256 与 encodeUtf8。改用 Node 内置 crypto，语义逐字对齐 forge：\n// update(s, 'raw') 每个字符取低 8 位为一字节（forge 缺省编码就是 raw）、'utf8' 先编 UTF-8；digest().getBytes() 回「一字符一字节」串；\n// util.encodeUtf8 把字符串编成 UTF-8 后同样写成一字符一字节串。tests/test_entropy_tape_shim.py 对真 node-forge 逐字节对拍。\nimport { createHash } from 'node:crypto';\nconst _rawBuf = (s) => { const str = String(s); const b = Buffer.alloc(str.length); for(let i = 0; i < str.length; i++){ b[i] = str.charCodeAt(i) & 255; } return b; };\nfunction _sha256Md(){\n\tconst parts = [];\n\treturn {\n\t\tupdate(s, enc){ parts.push(enc === 'utf8' ? Buffer.from(String(s), 'utf8') : _rawBuf(s)); return this; },\n\t\tdigest(){ const d = createHash('sha256').update(Buffer.concat(parts)).digest(); return { getBytes: () => d.toString('latin1'), toHex: () => d.toString('hex') }; },\n\t};\n}\nconst forge = { md: { sha256: { create: _sha256Md } }, util: { encodeUtf8: (s) => Buffer.from(String(s), 'utf8').toString('latin1') } };",
+          "why": "与 tarot/engine/shuffle.js、lingqi/core/lingqiCast.js 同因：headless 不引 node-forge 依赖；本文件还用 'raw' 编码与 getBytes / encodeUtf8，故 shim 比那两份多三处，语义按 forge 文档逐条对齐并对真包对拍。"
+        }
+      ],
+      "why": "v3.15.0「随机起卦一律真随机」：真随机记录（tr1-…十六进制）的读法——按位读出每个随机决定、读完用 SHA-256(记录|域|序号) 续接。塔罗洗牌 / 灵棋等重开卦例按它逐字回放。"
+    },
+    "utils/fieldsDateTime.js": {
+      "upstream": "utils/fieldsDateTime.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/ganzhiYearBase.js": {
       "upstream": "utils/ganzhiYearBase.js",
       "mode": "verbatim"
+    },
+    "utils/geoName.js": {
+      "upstream": "utils/geoName.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 eastAsiaSnapshot.geoChangeFieldsPatch 的依赖（选点地名并入 pos 字段的补丁）；零 import 的纯函数，整份 vendored 以免为它开 stub。",
+      "deviations": []
+    },
+    "utils/globalSetupStore.js": {
+      "upstream": "utils/globalSetupStore.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/indiaExtraTables.js": {
+      "upstream": "utils/indiaExtraTables.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 印占四张新表的界面文字与快照正文单一来源：Yoga 判定表（buildYogaTableLines）、印占补充表（buildExtraTableLines）、穿界时刻（buildTransitEventLines + TRANSIT_* 选项 / 缺省）、合盘八重合（buildAshtakootaLines / maleSideOf / ashtakootaDoshas）。算法全在后端 astrostudy/india（/india/chart 的 jyotish.yogaTable / extraTables、/astroextra/transitevents、/astroextra/ashtakoota，Python 侧发请求）。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../india/indiaConst.js",
+          "why": "只取五个印度常量（INDIA_AYANAMSA_OPTIONS / INDIA_NAKSHATRA_COUNT_* / INDIA_STAGE_MODE_*）；vendor 树里该相对路径落到 32 行 Uranian 子集（没有这些名字 → 模块加载即 SyntaxError）。钉到 curated 的印度常量子集。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/timeLordTables.js：AstroTxtMsg 单字星名表在共享 shim（日月水金火木土天海冥与上游逐值相同）。"
+        }
+      ]
+    },
+    "utils/jianChu.js": {
+      "upstream": "utils/jianChu.js",
+      "mode": "verbatim",
+      "deviations": []
     },
     "utils/judgeLayerHeadless.js": {
       "mode": "bespoke",
@@ -2333,30 +2864,84 @@
         }
       ]
     },
+    "utils/kinAstroFieldsSync.js": {
+      "upstream": "utils/kinAstroFieldsSync.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 东亚诸术 / 诸方杂术两页的共同依赖：normBinaryGender（性别归一成 '0' / '1'，缺省 '1' 男）。整份 vendored，依赖 dateStrSafe / lunarDomainGuard / lunar-javascript 都已在树里。",
+      "deviations": []
+    },
+    "utils/localNongliAdapter.js": {
+      "upstream": "utils/localNongliAdapter.js",
+      "mode": "verbatim",
+      "why": "v0.40.0 复审：skill 自 v0.9 起用的 src/shared/localNongliAdapter.js 是 1900–2100 定气近似公式（S_TERM_INFO）自写件，而上游 buildLocalJieqiYearSeed 一直取 lunar-javascript 精确节气表；v3.11.2 又把交节折成当地钟表。奇门当前节气 / 择日扫描 / 七政大限年界都吃这份种子——改为逐字 vendor 上游，删自写件。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "./lunarDomainGuard.js",
+          "to": "../bazi/lunarDomainGuard.js",
+          "why": "lunarDomainGuard 已 vendor 在 bazi/ 下（单份）。"
+        }
+      ]
+    },
+    "utils/lunarText.js": {
+      "upstream": "utils/lunarText.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/mundaneCycles.js": {
+      "upstream": "utils/mundaneCycles.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 世俗盘「世运周期表」14 张的单一来源：表清单 MUNDANE_CYCLE_TABLES、选项 MUNDANE_CYCLE_OPTIONS、缺省 MUNDANE_CYCLE_DEFAULTS、请求体映射 mundaneCycleRequestFields 与「结果 → 快照正文」buildMundaneCycleText（段头 [世运周期表]）。计算全在后端 astrostudy/mundane_cycles.py（/astroextra/mundanecycles，Python 侧发请求）；消费方 tools/mundaneCards.js。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/starNamesCn.js：钉到共享 AstroText shim（mundanePointName 读 AstroTxtMsg）。"
+        }
+      ]
+    },
     "utils/pageSettingsStore.js": {
       "upstream": "utils/pageSettingsStore.js",
       "mode": "verbatim"
     },
-    "utils/transformCharts.js": {
-      "upstream": "utils/transformCharts.js",
+    "utils/perfFlags.js": {
+      "upstream": "utils/perfFlags.js",
       "mode": "verbatim",
-      "why": "上游 v3.14.0 辅盘「变换盘」「黄道制」的单一来源：变换清单 TRANSFORM_GROUPS（每种变换用到哪些选项）、基准星 / 宫头候选、页面缺省 TRANSFORM_PAGE_SETTINGS / ZODIAC_PAGE_SETTINGS、黄道版本表 ZODIAC_VERSIONS，以及「结果 → 快照正文」transformSnapshotLines / transformSnapshotChart / zodiacSnapshotLines。计算全在后端 astrostudy/transform_charts.py、zodiac_systems.py（/astroextra/transformchart、/astroextra/zodiacsystems，Python 侧发请求）。"
+      "why": "v3.11.2：huangliDay.js 新引 flagEnabled（九星值日 / 时辰宜忌惰性计算开关）。整文件是无副作用的纯函数集（每个开关一函数，读 window.localStorage 且全部 try/window 守卫）——headless 下 flagEnabled 恒 true = 上游缺省全开。",
+      "deviations": []
     },
-    "utils/aiAnalysisContext/derivedLabsHeadless.js": {
-      "upstream": "utils/aiAnalysisContext/derivedLabsHeadless.js",
+    "utils/planetHouseInfo.js": {
+      "upstream": "utils/planetHouseInfo.js",
       "mode": "verbatim",
-      "why": "上游 v3.14.0 辅盘「变换盘」「黄道制」的无头复算：只取纯函数 transformRequestOptions（变换盘只发这种变换真正用到的选项，与页面 AstroTransformLab.requestOptions 同口径）与键表 DERIVED_LAB_HEADLESS_KEYS。取本命盘、发请求、缓存归 Python（JS 层不发 HTTP）。",
+      "why": "外圈「星盘」行的星名后缀（落宫 / 宫主，SanShiUnitedMain.buildOuterData 的 appendPlanetHouseInfo，AI 导出口径 showHouse+showRuler）；零依赖纯函数。",
+      "deviations": []
+    },
+    "utils/scriptConvert/scriptMatch.js": {
+      "upstream": "utils/scriptConvert/scriptMatch.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/scriptMode.js": {
+      "upstream": "utils/scriptMode.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/segmentIndex.js": {
+      "upstream": "utils/segmentIndex.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/starNamesCn.js": {
+      "upstream": "utils/starNamesCn.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 恒星 / 星官中文名表（starNameCn）：盘面细节 chartDetails.js 与世运周期表 mundaneCycles.js 的共同依赖。",
       "deviations": [
         {
-          "kind": "truncate_before",
-          "anchor": "^// 结果与别的技法重算共用一份内存小缓存",
-          "why": "其后是请求编排（取本命盘 → 请求后端 → 内存缓存 → 拼正文）：headless 侧由 Python runner 承担，正文仍由 vendored transformCharts.js 的同一组函数出。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "async function loaders(){\n\tconst [common, tc, das, req, consts, text] = await Promise.all([\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../../components/astro/AstroExtraCommon.js'),\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../transformCharts.js'),\n\t\timport(/* webpackChunkName: \"aux-derived-headless\" */ '../derivedAstroSnapshot.js'),\n\t\timport('../request.js'),\n\t\timport('../constants.js'),\n\t\timport('../../constants/AstroText.js'),\n\t]);\n\treturn { common, tc, das, request: req.default || req, Constants: consts, AstroText: text };\n}\n\n",
-          "to": "",
-          "why": "loaders() 只给被截掉的请求编排用：它按需载入页面侧模块（AstroExtraCommon / derivedAstroSnapshot / request / constants），vendor 树没有这些路径，留着就是一组指向不存在文件的动态 import。"
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同 utils/timeLordTables.js：钉到共享 AstroText shim。"
         }
       ]
     },
@@ -2365,8 +2950,64 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "utils/timeLordTables.js": {
+      "upstream": "utils/timeLordTables.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 星运「时主轮转」十二法的单一来源：方法表、缺省、选项、请求体映射 timeLordRequestFields 与「结果 → 快照正文」buildTimeLordText。计算全在后端 astrostudy/timelord_tables.py（/astroextra/timelords，Python 侧发请求）。directedFigures.js 也从这里取名字。",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroConst.js",
+          "to": "../../constants/AstroConst.js",
+          "why": "同 utils/directedFigures.js：vendor 树里该相对路径落到 32 行 Uranian 子集，钉到共享 shim。"
+        },
+        {
+          "kind": "import_redirect",
+          "specifier": "../constants/AstroText.js",
+          "to": "../../constants/AstroText.js",
+          "why": "同上：AstroTxtMsg / AstroMsgCN 在共享 shim。"
+        }
+      ]
+    },
+    "utils/timeLordYears.js": {
+      "upstream": "utils/timeLordYears.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/timezone.js": {
+      "upstream": "utils/timezone.js",
+      "mode": "verbatim",
+      "deviations": [
+        {
+          "kind": "import_redirect",
+          "specifier": "./dateStrSafe.js",
+          "to": "../bazi/dateStrSafe.js",
+          "why": "dateStrSafe 已 vendor 在 bazi/ 下（单份）；显式钉住，不靠 basename 重指。"
+        }
+      ]
+    },
+    "utils/transformCharts.js": {
+      "upstream": "utils/transformCharts.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 辅盘「变换盘」「黄道制」的单一来源：变换清单 TRANSFORM_GROUPS（每种变换用到哪些选项）、基准星 / 宫头候选、页面缺省 TRANSFORM_PAGE_SETTINGS / ZODIAC_PAGE_SETTINGS、黄道版本表 ZODIAC_VERSIONS，以及「结果 → 快照正文」transformSnapshotLines / transformSnapshotChart / zodiacSnapshotLines。计算全在后端 astrostudy/transform_charts.py、zodiac_systems.py（/astroextra/transformchart、/astroextra/zodiacsystems，Python 侧发请求）。"
+    },
+    "utils/trueRandom.js": {
+      "upstream": "utils/trueRandom.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "utils/zeriSnapshotPrefs.js": {
       "upstream": "utils/zeriSnapshotPrefs.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/zoneOffset.js": {
+      "upstream": "utils/zoneOffset.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "utils/zoneText.js": {
+      "upstream": "utils/zoneText.js",
       "mode": "verbatim",
       "deviations": []
     },
@@ -2445,6 +3086,21 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "yizhangjing/data/yizhangjingData.json": {
+      "upstream": "utils/data/yizhangjingData.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/data/yizhangjingLore.json": {
+      "upstream": "utils/data/yizhangjingLore.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "yizhangjing/data/yizhangjingShensha.json": {
+      "upstream": "utils/data/yizhangjingShensha.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "yizhangjing/yizhangjingLocal.js": {
       "upstream": "utils/yizhangjingLocal.js",
       "mode": "verbatim",
@@ -2452,6 +3108,36 @@
     },
     "yizhangjing/yizhangjingReport.js": {
       "upstream": "utils/yizhangjingReport.js",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanLiuqinTables.json": {
+      "upstream": "utils/data/zhengchuanLiuqinTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanShaoziTables.json": {
+      "upstream": "utils/data/zhengchuanShaoziTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanShaoziVerses.json": {
+      "upstream": "utils/data/zhengchuanShaoziVerses.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanTiebanTables.json": {
+      "upstream": "utils/data/zhengchuanTiebanTables.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanTiebanVerses.json": {
+      "upstream": "utils/data/zhengchuanTiebanVerses.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
+    "zhengchuan/data/zhengchuanXinyiTables.json": {
+      "upstream": "utils/data/zhengchuanXinyiTables.json",
       "mode": "verbatim",
       "deviations": []
     },
@@ -2490,6 +3176,18 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "zhufang/zhufangArts.js": {
+      "upstream": "utils/zhufangArts.js",
+      "mode": "verbatim",
+      "why": "上游 v3.14.0 新技法「诸方杂术」的前端层：玛雅历（长计历 / 卓尔金 / 哈布 / 九夜神 / 十三日组，关联常数可调）与十三月亮历纯算，zhufangParamsFromFields / ZHUFANG_PAGE_SETTINGS / localZhufangModel / zhufangSnapshotLines（四段快照；人类图 / 灵名字母两段排版后端 /astroextra/zhufang 的结果）。网络件 utils/zhufangRemote.js 不 vendor——请求由 Python 发。",
+      "deviations": []
+    },
+    "zhufang/zhufangRequest.js": {
+      "mode": "bespoke",
+      "why": "自上游 utils/zhufangRemote.js（网络件：import request + ServerRoot，fetchZhufangRemote 发 POST /astroextra/zhufang）逐字抽出的两处纯逻辑——请求体映射（params + hdTrueNode 0/1 + spiritQuadrant）与回包判据（两块都没有 = 没取到）。HTTP 由 Python 发（AGENTS §4：JS 层不说 HTTP），整份 vendor 只会剩空壳；源 sha 由 derived_sha256 看守，源一动即红、逐字核对后 --restamp。",
+      "derived_from": "utils/zhufangRemote.js",
+      "derived_sha256": "ab444423b5efcda8f4700f81c9f1cd00442a16ccefa317ac08d607110bc22690"
+    },
     "ziwei/ZiWeiHelper.js": {
       "upstream": "components/ziwei/ZiWeiHelper.js",
       "mode": "verbatim",
@@ -2497,129 +3195,6 @@
     },
     "ziwei/ZiweiCalc.js": {
       "upstream": "components/ziwei/ZiweiCalc.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/data/tables/ziweistarlight_quanshu_full.json": {
-      "upstream": "components/ziwei/data/tables/ziweistarlight_quanshu_full.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/data/ziweiTables.js": {
-      "upstream": "components/ziwei/data/ziweiTables.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/ziweiCore.js": {
-      "upstream": "components/ziwei/ziweiCore.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/ziweiOptions.js": {
-      "upstream": "components/ziwei/ziweiOptions.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/ziweiOverlays.js": {
-      "upstream": "components/ziwei/ziweiOverlays.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/ziweiPatterns.js": {
-      "upstream": "components/ziwei/ziweiPatterns.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/ziweiSchools.js": {
-      "upstream": "components/ziwei/ziweiSchools.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "ziwei/ziweiSnapshotText.js": {
-      "mode": "bespoke",
-      "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
-    },
-    "ziwei/ziweiSnapshotLayers.js": {
-      "mode": "bespoke",
-      "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/ziwei/ZiWeiMain.js",
-      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
-    },
-    "ziwei/zwLuckItems.js": {
-      "mode": "bespoke",
-      "why": "自上游 ZWLuckPanel.js 精确抽出的运限项构建闭包（其余是 React 组件，整份 vendor 不可行）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
-      "derived_from": "components/ziwei/ZWLuckPanel.js",
-      "derived_sha256": "f81c89d7d3ab59836006fd711b2e63dc8701eaebb85a9e896181806bafb8272b"
-    },
-    "canping/data/canpingTiaowen.json": {
-      "upstream": "utils/data/canpingTiaowen.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/data/babylonianData.json": {
-      "upstream": "divination/data/babylonianData.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/data/hellenisticData.json": {
-      "upstream": "divination/data/hellenisticData.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/data/hellenisticDataExt.json": {
-      "upstream": "divination/data/hellenisticDataExt.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "heluo/data/heluoTiaowen.json": {
-      "upstream": "utils/data/heluoTiaowen.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "yizhangjing/data/yizhangjingData.json": {
-      "upstream": "utils/data/yizhangjingData.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "yizhangjing/data/yizhangjingLore.json": {
-      "upstream": "utils/data/yizhangjingLore.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "yizhangjing/data/yizhangjingShensha.json": {
-      "upstream": "utils/data/yizhangjingShensha.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "zhengchuan/data/zhengchuanLiuqinTables.json": {
-      "upstream": "utils/data/zhengchuanLiuqinTables.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "zhengchuan/data/zhengchuanShaoziTables.json": {
-      "upstream": "utils/data/zhengchuanShaoziTables.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "zhengchuan/data/zhengchuanShaoziVerses.json": {
-      "upstream": "utils/data/zhengchuanShaoziVerses.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "zhengchuan/data/zhengchuanTiebanTables.json": {
-      "upstream": "utils/data/zhengchuanTiebanTables.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "zhengchuan/data/zhengchuanTiebanVerses.json": {
-      "upstream": "utils/data/zhengchuanTiebanVerses.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "zhengchuan/data/zhengchuanXinyiTables.json": {
-      "upstream": "utils/data/zhengchuanXinyiTables.json",
       "mode": "verbatim",
       "deviations": []
     },
@@ -2678,6 +3253,11 @@
       "mode": "verbatim",
       "deviations": []
     },
+    "ziwei/data/tables/ziweistarlight_quanshu_full.json": {
+      "upstream": "components/ziwei/data/tables/ziweistarlight_quanshu_full.json",
+      "mode": "verbatim",
+      "deviations": []
+    },
     "ziwei/data/tables/ziweistarsmain.json": {
       "upstream": "components/ziwei/data/tables/ziweistarsmain.json",
       "mode": "verbatim",
@@ -2708,810 +3288,53 @@
       "mode": "verbatim",
       "deviations": []
     },
-    "sanshi/SanShiUnitedMain.js": {
-      "upstream": "components/sanshi/SanShiUnitedMain.js",
-      "mode": "verbatim",
-      "why": "三式合一 AI 快照单源 buildSanShiUnitedSnapshotText（:1424）及其同文件纯逻辑前件（buildLrNongli / buildSanshiLiuRengCastOverride / buildLiuRengLayout / buildKeData / buildSanChuan / pickSanshiLiurengCastOpts / buildOuterData / computeSanshiXun / buildSanshiWeakSolid …）与 React 组件同在一个 5267 行文件里。v3.11.x 同步前 skill 在 service.py 里拿三个子技法导出的段自己拼三式快照：段名同、正文与段序全不同（[大六壬] 只有六壬的 [四课] 体、缺三传与递生递克徽记、【】段头写成 []、八宫/太乙派生段错序）。改为整头 vendored，由 tools/sanshiUnited.js 按上游 performRecalcByNongli 同链喂数据后直接调它 —— 手抄必漂移。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^export function getOuterLabelLayout\\(",
-          "why": "剥掉 :1691 起的外圈排版 / 悬浮释义 helper（getOuterLabelLayout … buildOuterStarMeaningTip，依赖 AstroMeaningData / QimenXiangDoc 等 UI 数据）与 :2008 起的 React 组件。buildSanShiUnitedSnapshotText 止于 :1689，锚点之前即纯逻辑全集；锚点是正则，上游一改名就报错而不是悄悄剪错。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../../constants/AstroConst.js",
-          "to": "./sanshiAstroConst.js",
-          "why": "vendor 树里该相对路径落到 src/constants/AstroConst.js 共享 shim，它没有 URANUS/NEPTUNE/PLUTO/MC —— MAIN_STAR_IDS 会静默收进 undefined，外圈「星盘」行少四颗。钉到逐值抽出的 curated 子集。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../../constants/AstroText.js",
-          "to": "./sanshiAstroText.js",
-          "why": "msg() 读 AstroMsgCN；共享 AstroText shim 以缺四颗的共享 AstroConst 为键，天王/海王/冥王/天顶会回显英文 id。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../astro/AstroHelper.js",
-          "to": "./sanshiAstroHelper.js",
-          "why": "只用 splitDegree（外圈宫内度分）；上游 AstroHelper 顶层 import d3 + DOM helper，headless 不可整份载入，用逐字抽出的三函数子集。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../utils/shellZoom.js",
-          "stub": "// headless stub：shellZoom 直接量 fixed 铺满元素的布局高（DOM），只服务组件构造期的视口高度；headless 无视口。\n// 定义同名函数让 stub 审计看到「已知且不可达」，真被调到时抛明确错误而不是 ReferenceError。\n// 上游 v3.12.0 起改名 getLayoutViewportHeight → getPageLayoutHeight。\nfunction getPageLayoutHeight(){ throw new Error('headless stub: utils/shellZoom is not vendored'); }",
-          "why": "模块私有 getViewportHeight 引用它，但只在 React 构造器里被调。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-icons.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../amap/GeoCoordModal.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import SanShiZiWeiSihua, { buildSanShiZiweiSihuaSnapshotLines }",
-          "to": "import { buildSanShiZiweiSihuaSnapshotLines }",
-          "why": "同一行既有紫微四化 tab 组件（默认导出，只在 React 尾部用）又有纯函数 buildSanShiZiweiSihuaSnapshotLines（快照 [紫微四化] 段在用）；vendored 的 SanShiZiWeiSihua.js 已剥掉默认导出，只保留具名那一半（孤儿 import 清理不认 `import X, { … }` 形态，须声明）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../astro/PlusMinusTime.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/DateTime.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../common/QuickDockBar.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../comp/SpaceTimePanel.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./SanshiUnitedBoard.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./SanShiUnitedMain.less.js",
-          "stub": "",
-          "why": "样式表，headless 无意义。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "\tfetchQimenPan,\n",
-          "to": "",
-          "why": "vendored DunJiaCalc.js 已按 §5 剥掉网络 helper fetchQimenPan（Python 发请求）；它只在 React 尾部被调，留在多行 import 里即链接失败。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import { fetchTaiyiPan, buildTaiyiSnapshotText,",
-          "to": "import { buildTaiyiSnapshotText,",
-          "why": "同上：vendored TaiYiCalc.js 无 fetchTaiyiPan（网络 helper），只在 React 尾部被调。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { Option, OptGroup } = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部（纯逻辑段一次都没用到）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const TabPane = Tabs.TabPane;\n",
-          "to": "",
-          "why": "同上。"
-        }
-      ]
-    },
-    "sanshi/sanshiSnapshotSections.js": {
-      "upstream": "components/sanshi/sanshiSnapshotSections.js",
-      "mode": "verbatim",
-      "why": "三式合一挑段单源（太乙 / 奇门 / 六壬断卦段名 + parseSnapshotSections），零依赖；SanShiUnitedMain.js 纯逻辑段直接消费。",
-      "deviations": []
-    },
-    "sanshi/SanShiZiWeiSihua.js": {
-      "upstream": "components/sanshi/SanShiZiWeiSihua.js",
-      "mode": "verbatim",
-      "why": "三式合一 [紫微四化] 段的纯函数 buildSanShiZiweiSihuaSnapshotLines（与该 tab 同源计算）。此前 tools/sanshiZiweiSihua.js 里手抄了一份函数体；现在 SanShiUnitedMain.js 与该 JS 工具都 import 这份逐字 vendored 的。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^export default class SanShiZiWeiSihua extends Component",
-          "why": "剥掉紫微四化 tab 的 React 组件（默认导出）；锚点是正则。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../ziwei/ZWLuckPanel.js",
-          "to": "../ziwei/zwLuckItems.js",
-          "why": "上游 ZWLuckPanel.js 是 React 组件文件；本仓的 zwLuckItems.js 是它的运限项闭包（bespoke，derived_from 看守），导出同名三函数。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "React/antd UI 元素，只服务被剥掉的 React 尾部（纯逻辑段一次都没用到；stub 审计守着「被 stub 的绑定仍被引用」）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { Option } = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部。"
-        }
-      ]
-    },
-    "utils/planetHouseInfo.js": {
-      "upstream": "utils/planetHouseInfo.js",
-      "mode": "verbatim",
-      "why": "外圈「星盘」行的星名后缀（落宫 / 宫主，SanShiUnitedMain.buildOuterData 的 appendPlanetHouseInfo，AI 导出口径 showHouse+showRuler）；零依赖纯函数。",
-      "deviations": []
-    },
-    "sanshi/sanshiAstroHelper.js": {
-      "upstream": "components/astro/AstroHelper.js",
-      "mode": "curated",
-      "why": "逐字抽出 splitDegree / convertLatToStr / convertLonToStr（:34-87）。上游全文件顶层 import d3 + utils/helper 并在加载期调 detectOS()，headless 不可整份 vendor；SanShiUnitedMain.js 纯逻辑段只用 splitDegree。",
-      "extracts": [
-        "splitDegree",
-        "convertLatToStr",
-        "convertLonToStr"
-      ],
-      "upstream_sha256": "83143d6d3530f9279845a93edb394ade88962351d441f6a6b60d927bf75c6636"
-    },
-    "sanshi/sanshiAstroConst.js": {
-      "upstream": "constants/AstroConst.js",
-      "mode": "curated",
-      "why": "SanShiUnitedMain.js 纯逻辑段读到的 24 个常量（十行星 / 十二星座 / ASC / MC）逐值抽出。共享 src/constants/AstroConst.js 缺 URANUS/NEPTUNE/PLUTO/MC（外圈「星盘」行会静默少四颗），而它另有七政 / 卜卦 / 天星消费方，故不在此改它。 v3.14.0（复核）：上游 AstroConst.js 只改一处 tabs 列表（'16' 后加 '17'），不在这 24 个常量里，副本不动。",
-      "extracts": [
-        "SUN",
-        "MOON",
-        "MERCURY",
-        "VENUS",
-        "MARS",
-        "JUPITER",
-        "SATURN",
-        "URANUS",
-        "NEPTUNE",
-        "PLUTO",
-        "ARIES",
-        "TAURUS",
-        "GEMINI",
-        "CANCER",
-        "LEO",
-        "VIRGO",
-        "LIBRA",
-        "SCORPIO",
-        "SAGITTARIUS",
-        "CAPRICORN",
-        "AQUARIUS",
-        "PISCES",
-        "ASC",
-        "MC"
-      ],
-      "upstream_sha256": "38b0b74cd39aa6f306ccd6c53040f60f0b83d3a5ccf461df5fb757a33b6a1898"
-    },
-    "sanshi/sanshiAstroText.js": {
-      "upstream": "constants/AstroText.js",
-      "mode": "curated",
-      "why": "SanShiUnitedMain.js 的 msg() 只查 MAIN_STAR_IDS 十二体的 AstroMsgCN 中文名；逐行抽出（:92-101/:128/:130），键取 sanshiAstroConst.js。",
-      "extracts": [
-        "AstroMsgCN"
-      ],
-      "upstream_sha256": "170e176886db63ce4a28bd381ddb50f3c182141c2a8ff1ebf528300ee814211c"
-    },
-    "utils/beijingTimeShift.js": {
-      "upstream": "utils/beijingTimeShift.js",
-      "mode": "verbatim",
-      "why": "v3.11.2 [#92]：北京时间 ↔ 当地钟表折算（parseZoneHours/bjShiftMinutes/shiftSolarMinutes，从 baziLunarLocal 抽出成单源）；baziLunarLocal / heluoLocal / localNongliAdapter 共用，只依赖 lunar-javascript。"
-    },
-    "utils/perfFlags.js": {
-      "upstream": "utils/perfFlags.js",
-      "mode": "verbatim",
-      "why": "v3.11.2：huangliDay.js 新引 flagEnabled（九星值日 / 时辰宜忌惰性计算开关）。整文件是无副作用的纯函数集（每个开关一函数，读 window.localStorage 且全部 try/window 守卫）——headless 下 flagEnabled 恒 true = 上游缺省全开。",
-      "deviations": []
-    },
-    "bazi/baziAgeText.js": {
-      "upstream": "components/cntradition/baziAgeText.js",
-      "mode": "verbatim",
-      "why": "v3.11.2：八字岁数显示单源（虚岁 nominal / 周岁 real），buildBaziSnapshotText 的小运表与大运板块表改经它取值。零 import。"
-    },
-    "utils/localNongliAdapter.js": {
-      "upstream": "utils/localNongliAdapter.js",
-      "mode": "verbatim",
-      "why": "v0.40.0 复审：skill 自 v0.9 起用的 src/shared/localNongliAdapter.js 是 1900–2100 定气近似公式（S_TERM_INFO）自写件，而上游 buildLocalJieqiYearSeed 一直取 lunar-javascript 精确节气表；v3.11.2 又把交节折成当地钟表。奇门当前节气 / 择日扫描 / 七政大限年界都吃这份种子——改为逐字 vendor 上游，删自写件。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "./lunarDomainGuard.js",
-          "to": "../bazi/lunarDomainGuard.js",
-          "why": "lunarDomainGuard 已 vendor 在 bazi/ 下（单份）。"
-        }
-      ]
-    },
-    "utils/civilMoment.js": {
-      "upstream": "utils/civilMoment.js",
+    "ziwei/data/ziweiTables.js": {
+      "upstream": "components/ziwei/data/ziweiTables.js",
       "mode": "verbatim",
       "deviations": []
     },
-    "utils/timeLordYears.js": {
-      "upstream": "utils/timeLordYears.js",
+    "ziwei/ziweiCore.js": {
+      "upstream": "components/ziwei/ziweiCore.js",
       "mode": "verbatim",
       "deviations": []
     },
-    "utils/dateTimeParse.js": {
-      "upstream": "utils/dateTimeParse.js",
+    "ziwei/ziweiOptions.js": {
+      "upstream": "components/ziwei/ziweiOptions.js",
       "mode": "verbatim",
       "deviations": []
     },
-    "utils/civilCalendar.js": {
-      "upstream": "utils/civilCalendar.js",
+    "ziwei/ziweiOverlays.js": {
+      "upstream": "components/ziwei/ziweiOverlays.js",
       "mode": "verbatim",
       "deviations": []
     },
-    "utils/zoneOffset.js": {
-      "upstream": "utils/zoneOffset.js",
+    "ziwei/ziweiPatterns.js": {
+      "upstream": "components/ziwei/ziweiPatterns.js",
       "mode": "verbatim",
       "deviations": []
     },
-    "utils/dayBoundaryResolve.js": {
-      "upstream": "utils/dayBoundaryResolve.js",
+    "ziwei/ziweiSchools.js": {
+      "upstream": "components/ziwei/ziweiSchools.js",
       "mode": "verbatim",
       "deviations": []
     },
-    "utils/globalSetupStore.js": {
-      "upstream": "utils/globalSetupStore.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/segmentIndex.js": {
-      "upstream": "utils/segmentIndex.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/lunarText.js": {
-      "upstream": "utils/lunarText.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "divination/zeri/zeriPageCalibre.js": {
-      "upstream": "divination/zeri/zeriPageCalibre.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/scriptMode.js": {
-      "upstream": "utils/scriptMode.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/fieldsDateTime.js": {
-      "upstream": "utils/fieldsDateTime.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "liureng/main/birthRunYear.js": {
-      "upstream": "components/lrzhan/main/birthRunYear.js",
-      "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "stub_import",
-          "specifier": "../../comp/DateTime.js",
-          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
-          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
-        }
-      ]
-    },
-    "liureng/main/castLayout.js": {
-      "upstream": "components/lrzhan/main/castLayout.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "liureng/main/panData.js": {
-      "upstream": "components/lrzhan/main/panData.js",
-      "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "stub_import",
-          "specifier": "../../comp/DateTime.js",
-          "stub": "// headless stub：DateTime 只在 UI 草稿恢复链（deserializeBirthDraft → buildBirthFields → cloneDateTimeSafe）里用，\n// 该链不被任何 headless 导出调用；真被调到时构造即抛明确错误，而不是被 try/catch 吞掉的 ReferenceError。\nclass DateTime { constructor(){ throw new Error('headless stub: components/comp/DateTime is not vendored'); } }",
-          "why": "上游 DateTime.js 带网络 request 依赖，不 vendor；stub 定义同名类让 stub 审计（_stubbed_names_still_used）明示「已知且不可达」"
-        }
-      ]
-    },
-    "liureng/main/snapshot.js": {
-      "upstream": "components/lrzhan/main/snapshot.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "liureng/main/referenceData.js": {
-      "upstream": "components/lrzhan/main/referenceData.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "liureng/main/referenceMatch.js": {
-      "upstream": "components/lrzhan/main/referenceMatch.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/zoneText.js": {
-      "upstream": "utils/zoneText.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "dunjia/qimenPageShared.js": {
-      "upstream": "components/dunjia/qimenPageShared.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/caseDivTime.js": {
-      "upstream": "utils/caseDivTime.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "liureng/main/ganzhiHelpers.js": {
-      "upstream": "components/lrzhan/main/ganzhiHelpers.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "utils/scriptConvert/scriptMatch.js": {
-      "upstream": "utils/scriptConvert/scriptMatch.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "astroextra/yearSystem129.js": {
-      "upstream": "utils/yearSystem129.js",
-      "mode": "verbatim",
-      "why": "上游 v3.13.0 删了后端 astrostudy/yearsystem129.py（/chart 不再回 predictives.yearsystem129），129 年系统改由前端 utils/yearSystem129 单源计算（起始星 / 次序 / 年制 / 子限铺法四项可选）。verbatim vendor 后经 tools/progextra.js 的 yearsystem129 分支调 buildYearSystem129SnapshotText。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroConst.js",
-          "to": "./progConst.js",
-          "why": "同 balbillus：只用 7 经典行星常量 + LIST_SIGNS，progConst 窄 shim 足够。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "./progConst.js",
-          "why": "只用 AstroTxtMsg 单字行星名（progConst 逐值对齐上游 AstroText.js）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./astroAiSnapshot.js",
-          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
-          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
-        }
-      ]
-    },
-    "utils/agePointOptions.js": {
-      "upstream": "utils/agePointOptions.js",
-      "mode": "verbatim",
-      "why": "上游 v3.13.0 年龄推进点四项口径单源（推进方式 / 事件 / 年长 / 年限；与后端 agepoint.py 逐值相同）。",
-      "deviations": []
-    },
-    "utils/distributionsOptions.js": {
-      "upstream": "utils/distributionsOptions.js",
-      "mode": "verbatim",
-      "why": "上游 v3.13.0 界推运四项口径单源（发放点 / 时间算法 / 年长 / 年限；与后端 distributions.py 逐值相同）。",
-      "deviations": []
-    },
-    "astroextra/AstroAgePoint.js": {
-      "upstream": "components/astro/AstroAgePoint.js",
-      "mode": "verbatim",
-      "why": "上游 v3.13.0 重写年龄推进点快照（新首行口径、| 年龄 | 日期 | 落座 | 宫 | 事件 | 表、下一事件定位行、相位左右）。纯逻辑段 buildAgePointSnapshotFromResult(chartObj, r, opts) 在 React 类之前；Python 拉 /predict/agepoint 后经 tools/progextra.js 的 FROM_RESULT 分支调它。此前是 Python 手抄移植（service/text/predictive.py），上游改写时零信号。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^const SETTING_KEYS = ",
-          "why": "剥掉 React 组件尾部；锚点是正则，找不到会报错而非悄悄剪错。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./AstroExtraCommon.js",
-          "stub": "// headless stub：AstroExtraCommon 是页面公共件（antd 表格 / 卡片样式 / 请求键 / 加载停车位），纯逻辑段只在\n// 「请求型」包装（buildXxxSnapshotText 内 fetch 后端、xxxRequestBody 拼请求体）里用到 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这两条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
-          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "UI 组件库，只服务 React 尾部（模块级 `const Option = Select.Option;` 另由 replace_text 删）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const Option = Select.Option;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../utils/astroAiSnapshot.js",
-          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
-          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
-        }
-      ]
-    },
-    "astroextra/AstroDistributions.js": {
-      "upstream": "components/astro/AstroDistributions.js",
-      "mode": "verbatim",
-      "why": "上游 v3.13.0 重写界推运快照（7 列表含起始岁 / 时长 / 期内伙伴星、新 [伙伴星期] 段、发放点黄经、当前伙伴星定位行）。纯逻辑段 buildDistributionsSnapshotFromResult(chartObj, r, opts) 在 React 类之前；Python 拉 /predict/dist 后经 tools/progextra.js 的 FROM_RESULT 分支调它。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^const SETTING_KEYS = ",
-          "why": "剥掉 React 组件尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "antd",
-          "stub": "",
-          "why": "UI 组件库，只服务 React 尾部（截断后孤儿清理没认出：`Col` 等短名在正文注释/标识里还有子串命中）。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../common/UpdatingBadge.js",
-          "stub": "",
-          "why": "默认导入的 UI 徽标组件，只服务 React 尾部；headless 树里没有它。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./AstroExtraCommon.js",
-          "stub": "// headless stub：AstroExtraCommon 是页面公共件（antd 表格 / 卡片样式 / 请求键 / 加载停车位），纯逻辑段只在\n// 「请求型」包装（buildXxxSnapshotText 内 fetch 后端、xxxRequestBody 拼请求体）里用到 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这两条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
-          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "UI 组件库，只服务 React 尾部（模块级 `const Option = Select.Option;` 另由 replace_text 删）。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const Option = Select.Option;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../utils/astroAiSnapshot.js",
-          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
-          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
-        }
-      ]
-    },
-    "utils/directedFigures.js": {
-      "upstream": "utils/directedFigures.js",
-      "mode": "verbatim",
-      "why": "上游 v3.13.0+ 推运图族四法（演进推运 Néroman / 推运图 Bezza / 周日小限 Jay / 双黄道 Michon）的单一来源：技法键、后端接口、缺省、选项名、请求体映射 directedFigureRequestFields 与「结果 → 快照正文」buildDirectedFigureText。计算全在后端 astrostudy/directed_figures.py（/astroextra/<接口>，Python 侧发请求）。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroConst.js",
-          "to": "../../constants/AstroConst.js",
-          "why": "树里有两个 AstroConst.js（AGENTS §4.3）：上游写法在 vendor 树里会解析到 32 行 Uranian 子集（没有 LIST_SIGNS）→ signOfLon 静默 undefined。钉死到共享 shim。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "../../constants/AstroText.js",
-          "why": "AstroTxtMsg 单字名表在共享 shim（与 AstroAgePoint.js 同一份）。"
-        }
-      ]
-    },
-    "astroextra/AstroDirectedFigures.js": {
-      "upstream": "components/astro/AstroDirectedFigures.js",
-      "mode": "verbatim",
-      "why": "上游推运图族四子页。纯逻辑段（directedFigureOptsFromSettings 页面键→口径、snapshotText 正文装配、buildDirectedFigureSnapshotText 合并规则）在 React 类之前；tools/progextra.js 的 DIRECTED_FIGURE 分支用 directedFigureOptsFromSettings + snapshotText（_reexport_required 自动补 export）排版 Python 拉回的 /astroextra/<接口> 结果。",
-      "deviations": [
-        {
-          "kind": "truncate_before",
-          "anchor": "^const sm = \\(id, on\\)=>",
-          "why": "剥掉 React 子页（DirectedFigurePage 及四个子类）；锚点是正则，找不到会报错而非悄悄剪错。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "react",
-          "stub": "",
-          "why": "React 组件基类，只服务被截掉的子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../xq-ui.js",
-          "stub": "",
-          "why": "UI 组件库，只服务 React 尾部（模块级 `const { Option } = Select;` 另由 replace_text 删）。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../css/styles.less.js",
-          "stub": "",
-          "why": "样式表，headless 无意义。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./AstroChart.js",
-          "stub": "",
-          "why": "单盘绘图组件（上游 v3.14.0 起周日小限子页用它画月亮盘），只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./AstroDoubleChart.js",
-          "stub": "",
-          "why": "本命 + 推运双盘绘图组件，只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./MichonDualRing.js",
-          "stub": "",
-          "why": "双黄道回归 / 恒星双环 SVG 绘图组件（上游 59465ffe 起双黄道子页用它画盘），只服务子页。孤儿清理只认具名 / namespace 形态，默认导入要显式删。"
-        },
-        {
-          "kind": "replace_text",
-          "find": "const { Option } = Select;\n",
-          "to": "",
-          "why": "模块级 UI 解构，只服务 React 尾部。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./AstroExtraCommon.js",
-          "stub": "// headless stub：AstroExtraCommon 是页面公共件；纯逻辑段只在请求型包装 fetchDirectedFigure 里用 unwrapResult / chartParams。\n// skill 的请求在 Python 侧发（AGENTS §4.2：JS 层不发 HTTP），这条路径不可达——调到即抛明确错误，不留空 stub。\nconst headlessUnreachable = (name) => () => { throw new Error(`headless: AstroExtraCommon.${name} 不可达（请求在 Python 侧发，见 service/runners/predictive.py）`); };\nconst unwrapResult = headlessUnreachable('unwrapResult');\nconst chartParams = headlessUnreachable('chartParams');",
-          "why": "只服务请求型包装（Python 侧发请求）；AGENTS §5.2 stub 审计：保留代码仍引用的绑定由 stub 定义同名、调到即抛。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "./astroProgSnapshot.js",
-          "stub": "// headless stub：today / chartZone 只服务 buildDirectedFigureSnapshotText 的「目标时刻缺省 = 本盘时区今日」——skill 由\n// Python 侧按同一口径（_today_for_chart(zone)）先定好 targetDate 再发请求，这条路径不可达。\nconst headlessUnreachableProg = (name) => () => { throw new Error(`headless: astroProgSnapshot.${name} 不可达（目标时刻在 Python 侧定）`); };\nconst today = headlessUnreachableProg('today');\nconst chartZone = headlessUnreachableProg('chartZone');",
-          "why": "astroProgSnapshot 拖进 request / DateTime 组件 / AstroProgChart；只有请求型包装用到，调到即抛。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../utils/directionPageSettings.js",
-          "stub": "// headless stub：星阙页面保存值（localStorage）在 headless 下不存在 = 全新安装：load() 返回空记录，各口径回落\n// directedFigures.js 的 *_DEFAULTS（directedFigureRequestFields 的 num(…, DEFAULTS) 兜底），与页面首装同值。\nconst DIRECTION_PAGE_SETTINGS = { load: () => ({}) };",
-          "why": "directionPageSettings 拖进全部星运页口径模块（triplicityRulers / profectionSummary / decennials …）；headless 无页面保存值，空记录 = 缺省。"
-        },
-        {
-          "kind": "stub_import",
-          "specifier": "../../utils/astroAiSnapshot.js",
-          "stub": "// headless stub：上游 [YB] 三段补厚用它产 [起盘信息]/[当前时点]/[方法说明]，但 skill 的 Python 层\n// 已经产这三段（_predictive_setup_section_text / _predictive_common_sections_text），再让 JS 产一遍会重段。\n// 上游每个调用点都写了 typeof …==='function' 守卫：未定义的 helper 回退 []（不产段）。唯一例外是\n// buildCurrentMomentLines——它收下 builder 自算的 [当前时点] 定位行（extraLines，如「当前主限」），交给\n// tools/progextra.js 回传 Python 追加进 [当前时点]（= 上游 buildCurrentMomentLines(chartObj, extraLines)），自身仍返 []。\nconst astroAiSnapshot = {\n\tbuildCurrentMomentLines: (chartObj, extraLines) => {\n\t\tglobalThis.__horosaProgMomentLines = Array.isArray(extraLines) ? extraLines.filter(Boolean).map((l) => `${l}`) : [];\n\t\treturn [];\n\t},\n};",
-          "why": "避免与 Python 层重复产段；上游调用点自带 typeof 守卫。buildCurrentMomentLines 只截获 builder 的 [当前时点] 定位行回传 Python"
-        }
-      ]
-    },
-    "utils/timezone.js": {
-      "upstream": "utils/timezone.js",
-      "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "./dateStrSafe.js",
-          "to": "../bazi/dateStrSafe.js",
-          "why": "dateStrSafe 已 vendor 在 bazi/ 下（单份）；显式钉住，不靠 basename 重指。"
-        }
-      ]
-    },
-    "place/cityMatch.js": {
-      "upstream": "components/amap/cityMatch.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "place/geoCompass.js": {
-      "upstream": "utils/aiTools/normalize/geoCompass.js",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "place/zone.js": {
-      "upstream": "utils/aiTools/normalize/zone.js",
-      "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../../timezone.js",
-          "to": "../utils/timezone.js",
-          "why": "上游 utils/timezone.js 落在 vendor/utils/（与 dateTimeParse.js 同目录）；place/ 是 AI 地名解析三件的平铺目录。"
-        }
-      ]
-    },
-    "place/place.js": {
-      "upstream": "utils/aiTools/normalize/place.js",
-      "mode": "verbatim",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../../../data/cities.json",
-          "to": "./data/cities.json",
-          "why": "城市库三份 JSON 逐字节 vendor 在 place/data/（上游在 src/data/）。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../../../data/cityTradSimpMap.json",
-          "to": "./data/cityTradSimpMap.json"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../../../components/amap/cityMatch.js",
-          "to": "./cityMatch.js"
-        },
-        {
-          "kind": "replace_text",
-          "find": "import('../../../data/citiesFull.json'",
-          "to": "import('./data/citiesFull.json'",
-          "why": "大库懒加载的动态 import：import_redirect 只认静态 `from`，动态形态声明式改写（JSON 属性已由 transform 补齐）。"
-        }
-      ]
-    },
-    "place/data/cities.json": {
-      "upstream": "data/cities.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "place/data/cityTradSimpMap.json": {
-      "upstream": "data/cityTradSimpMap.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "place/data/citiesFull.json": {
-      "upstream": "data/citiesFull.json",
-      "mode": "verbatim",
-      "deviations": []
-    },
-    "fengshui/zibai.js": {
-      "upstream": "components/fengshui/zibai.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0：九星值日统一到日紫白（黄历 huangliDay 与东亚诸术 eastAsiaArts 共用 zibai.dayCenter / monthCenter，离至日最近的甲子置闰的连续序列）。整份 vendored，依赖 liqiCore / fengshuiData 已在树里。",
-      "deviations": []
-    },
-    "utils/ascRaMode.js": {
-      "upstream": "utils/ascRaMode.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0「上升起盘两档」：二十八宿 / 宿占 / 节气盘 / 七政 / 三式外圈赤道分宫的上升点取真赤经（改进，缺省）或东点黄经（经典）。normalizeAscRaMode / withAscRaMode / ascRaModeSnapshotLine 的单一来源。",
-      "deviations": []
-    },
-    "utils/acgLayers.js": {
-      "upstream": "utils/acgLayers.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 占星地图两层：日食路径（eclipseSummaryLines）与气候带 / 纬圈（climesSummaryLines），acgSnapshot.js 的新依赖。",
-      "deviations": []
-    },
-    "utils/indiaExtraTables.js": {
-      "upstream": "utils/indiaExtraTables.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 印占四张新表的界面文字与快照正文单一来源：Yoga 判定表（buildYogaTableLines）、印占补充表（buildExtraTableLines）、穿界时刻（buildTransitEventLines + TRANSIT_* 选项 / 缺省）、合盘八重合（buildAshtakootaLines / maleSideOf / ashtakootaDoshas）。算法全在后端 astrostudy/india（/india/chart 的 jyotish.yogaTable / extraTables、/astroextra/transitevents、/astroextra/ashtakoota，Python 侧发请求）。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroConst.js",
-          "to": "../india/indiaConst.js",
-          "why": "只取五个印度常量（INDIA_AYANAMSA_OPTIONS / INDIA_NAKSHATRA_COUNT_* / INDIA_STAGE_MODE_*）；vendor 树里该相对路径落到 32 行 Uranian 子集（没有这些名字 → 模块加载即 SyntaxError）。钉到 curated 的印度常量子集。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "../../constants/AstroText.js",
-          "why": "同 utils/timeLordTables.js：AstroTxtMsg 单字星名表在共享 shim（日月水金火木土天海冥与上游逐值相同）。"
-        }
-      ]
-    },
-    "utils/timeLordTables.js": {
-      "upstream": "utils/timeLordTables.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 星运「时主轮转」十二法的单一来源：方法表、缺省、选项、请求体映射 timeLordRequestFields 与「结果 → 快照正文」buildTimeLordText。计算全在后端 astrostudy/timelord_tables.py（/astroextra/timelords，Python 侧发请求）。directedFigures.js 也从这里取名字。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroConst.js",
-          "to": "../../constants/AstroConst.js",
-          "why": "同 utils/directedFigures.js：vendor 树里该相对路径落到 32 行 Uranian 子集，钉到共享 shim。"
-        },
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "../../constants/AstroText.js",
-          "why": "同上：AstroTxtMsg / AstroMsgCN 在共享 shim。"
-        }
-      ]
-    },
-    "utils/starNamesCn.js": {
-      "upstream": "utils/starNamesCn.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 恒星 / 星官中文名表（starNameCn）：盘面细节 chartDetails.js 与世运周期表 mundaneCycles.js 的共同依赖。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "../../constants/AstroText.js",
-          "why": "同 utils/timeLordTables.js：钉到共享 AstroText shim。"
-        }
-      ]
-    },
-    "utils/chartDetails.js": {
-      "upstream": "utils/chartDetails.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 占星「盘面细节」的单一来源：30 张表的目录 CHART_DETAIL_TABLES、五项口径的缺省与值域（CHART_DETAIL_DEFAULTS / CHART_DETAIL_OPTIONS）、请求体映射 chartDetailRequestFields 与「结果 → 快照正文」buildChartDetailsText。计算全在后端 astrostudy/chart_details.py（/astroextra/chartdetails，Python 侧发请求）；页面设置仓 CHART_DETAIL_SETTINGS 在 headless 下只读得到缺省（pageSettingsStore 的 safeStorage 是 no-op），口径一律由调用方入参给。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "../../constants/AstroText.js",
-          "why": "同 utils/starNamesCn.js：detailPointName 查的 AstroTxtMsg 在共享 AstroText shim。"
-        }
-      ]
-    },
-    "utils/mundaneCycles.js": {
-      "upstream": "utils/mundaneCycles.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 世俗盘「世运周期表」14 张的单一来源：表清单 MUNDANE_CYCLE_TABLES、选项 MUNDANE_CYCLE_OPTIONS、缺省 MUNDANE_CYCLE_DEFAULTS、请求体映射 mundaneCycleRequestFields 与「结果 → 快照正文」buildMundaneCycleText（段头 [世运周期表]）。计算全在后端 astrostudy/mundane_cycles.py（/astroextra/mundanecycles，Python 侧发请求）；消费方 tools/mundaneCards.js。",
-      "deviations": [
-        {
-          "kind": "import_redirect",
-          "specifier": "../constants/AstroText.js",
-          "to": "../../constants/AstroText.js",
-          "why": "同 utils/starNamesCn.js：钉到共享 AstroText shim（mundanePointName 读 AstroTxtMsg）。"
-        }
-      ]
-    },
-    "utils/kinAstroFieldsSync.js": {
-      "upstream": "utils/kinAstroFieldsSync.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 东亚诸术 / 诸方杂术两页的共同依赖：normBinaryGender（性别归一成 '0' / '1'，缺省 '1' 男）。整份 vendored，依赖 dateStrSafe / lunarDomainGuard / lunar-javascript 都已在树里。",
-      "deviations": []
-    },
-    "utils/geoName.js": {
-      "upstream": "utils/geoName.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 eastAsiaSnapshot.geoChangeFieldsPatch 的依赖（选点地名并入 pos 字段的补丁）；零 import 的纯函数，整份 vendored 以免为它开 stub。",
-      "deviations": []
-    },
-    "dongya/eastAsiaArts.js": {
-      "upstream": "utils/eastAsiaArts.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 新技法「东亚诸术」的算法层：藏历（浦派时轮历）/ 藏占（八卦 Parkha · 九宫 Mewa · 魂命煞）/ 蒙古 Zurkhai / 算命学 / 九星气学 / 洛书流年 / 易卦星盘与推运，全部纯算术。依赖 baziFenYe / baziLunarLocal.eastAsiaPillarFacts / fengshui liqiCore · zibai · fengshuiData / gua GuaConst 均已在树里。",
-      "deviations": []
-    },
-    "dongya/eastAsiaSnapshot.js": {
-      "upstream": "utils/eastAsiaSnapshot.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 东亚诸术的页面 / 无头挂载共用层：eastAsiaParamsFromFields（字段 → 入参）、EAST_ASIA_PAGE_SETTINGS（口径词表与出厂值）、buildEastAsiaModel（出生资料 + 本命盘 → 整页数据）、eastAsiaSnapshotLines（七段快照）。tools/dongya.js 逐个调它们，不自排版。",
-      "deviations": [
-        {
-          "kind": "stub_import",
-          "specifier": "../components/astro/AstroHelper.js",
-          "stub": "// headless：AstroHelper 顶层 import d3 + DOM helper，不能整份载入；这两个函数只被 geoChangeFieldsPatch（页面左栏选点的字段补丁）用到。\nfunction convertLatToStr(){ throw new Error('eastAsiaSnapshot.geoChangeFieldsPatch 是页面专用（headless 没有 AstroHelper.convertLatToStr）'); }\nfunction convertLonToStr(){ throw new Error('eastAsiaSnapshot.geoChangeFieldsPatch 是页面专用（headless 没有 AstroHelper.convertLonToStr）'); }",
-          "why": "上游 AstroHelper.js 顶层依赖 d3 与 DOM，headless 不可载入；convertLatToStr / convertLonToStr 只服务页面左栏选点的 geoChangeFieldsPatch（skill 的地点由 Python 侧 place 解析）。stub 定义同名函数、调到即抛明确错误（stub 审计要求）。"
-        }
-      ]
-    },
-    "zhufang/zhufangArts.js": {
-      "upstream": "utils/zhufangArts.js",
-      "mode": "verbatim",
-      "why": "上游 v3.14.0 新技法「诸方杂术」的前端层：玛雅历（长计历 / 卓尔金 / 哈布 / 九夜神 / 十三日组，关联常数可调）与十三月亮历纯算，zhufangParamsFromFields / ZHUFANG_PAGE_SETTINGS / localZhufangModel / zhufangSnapshotLines（四段快照；人类图 / 灵名字母两段排版后端 /astroextra/zhufang 的结果）。网络件 utils/zhufangRemote.js 不 vendor——请求由 Python 发。",
-      "deviations": []
-    },
-    "zhufang/zhufangRequest.js": {
+    "ziwei/ziweiSnapshotLayers.js": {
       "mode": "bespoke",
-      "why": "自上游 utils/zhufangRemote.js（网络件：import request + ServerRoot，fetchZhufangRemote 发 POST /astroextra/zhufang）逐字抽出的两处纯逻辑——请求体映射（params + hdTrueNode 0/1 + spiritQuadrant）与回包判据（两块都没有 = 没取到）。HTTP 由 Python 发（AGENTS §4：JS 层不说 HTTP），整份 vendor 只会剩空壳；源 sha 由 derived_sha256 看守，源一动即红、逐字核对后 --restamp。",
-      "derived_from": "utils/zhufangRemote.js",
-      "derived_sha256": "ab444423b5efcda8f4700f81c9f1cd00442a16ccefa317ac08d607110bc22690"
+      "why": "自上游 ZiWeiMain.js 逐字抽出的紫微快照运限层 builder（[运限概览]/[运限]/[流派叠层] + formatLuckLayerLines/findDaxianForYear + 两张模块级常量）；该文件其余是 React 组件，整份 vendor 不可行。此前这些函数手抄在 tools/ziweiExtras.js 里、无源 sha 看守 → 上游 v3.11.0 的 [运限概览] 段与 [运限] 沈氏三限行静默缺了一版。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/ziwei/ZiWeiMain.js",
+      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
+    },
+    "ziwei/ziweiSnapshotText.js": {
+      "mode": "bespoke",
+      "why": "v0.40 mingli F8：自上游 ZiWeiMain.js 逐字抽出的紫微快照主 builder（normalizeGan…getLifeHouse :55-169 + buildZiWeiSnapshotText :407-614），与 ziweiSnapshotLayers.js 同源互补；此前紫微快照是 Python 手写 port（无四化流派/传本设置行、宫位总览无四化括注与庙旺档），22 个传本开关与 sihuaSchool 都进不了快照。源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/ziwei/ZiWeiMain.js",
+      "derived_sha256": "f82ad2be3a681a5e190196db96540880c4b71ca74f64cd509338c69865166ac9"
+    },
+    "ziwei/zwLuckItems.js": {
+      "mode": "bespoke",
+      "why": "自上游 ZWLuckPanel.js 精确抽出的运限项构建闭包（其余是 React 组件，整份 vendor 不可行）；源 sha 由 derived_sha256 看守，源一动即红、复核后 --restamp。",
+      "derived_from": "components/ziwei/ZWLuckPanel.js",
+      "derived_sha256": "f81c89d7d3ab59836006fd711b2e63dc8701eaebb85a9e896181806bafb8272b"
     }
   }
 }

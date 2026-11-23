@@ -54,6 +54,7 @@ export const TRANSFORM_KINDS = KIND_LIST.map((item)=>item.value);
 export function transformKindDef(kind){
 	return KIND_LIST.find((item)=>item.value === kind) || KIND_LIST[0];
 }
+export const TRANSFORM_KIND_OPTIONS = KIND_LIST.map((item)=>({ value: item.value, label: item.label }));
 export const TRANSFORM_PLANETS = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'];
 export const TRANSFORM_HOUSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
@@ -79,6 +80,31 @@ export const ZODIAC_PAGE_SETTINGS = definePageSettings('horosa.zodiacsystems.set
 	version: { label: '黄道版本', def: 'z13a', oneOf: ZODIAC_VERSIONS.map((item)=>item.value) },
 	view: { label: '当前表', def: 'rows', oneOf: ZODIAC_VIEWS },
 });
+
+// 记录上的单次覆盖(挂载设置 / 外部智能体:transformKind / transformPlanet / transformShift / transformHouse / transformVariant;zodiacVersion)
+// 叠在辅盘页保存值之上;不认的值丢掉。回 { settings, overridden }:overridden = 记录上确有生效的覆盖(此时不用页面已存的那张)。
+export function transformSettingsFor(record, pageSettings){
+	const r = record || {};
+	const out = { ...(pageSettings || {}) };
+	let overridden = false;
+	const pick = (key, val, ok)=>{ if(val !== undefined && val !== null && `${val}` !== '' && ok(val) && `${out[key]}` !== `${val}`){ out[key] = val; overridden = true; } };
+	pick('kind', r.transformKind, (v)=>TRANSFORM_KINDS.indexOf(v) >= 0);
+	pick('planet', r.transformPlanet, (v)=>TRANSFORM_PLANETS.indexOf(v) >= 0);
+	if(r.transformShift !== undefined && r.transformShift !== null && `${r.transformShift}` !== ''){
+		const b = r.transformShift === true || `${r.transformShift}` === '1' || `${r.transformShift}` === 'true';
+		if(!!out.shift !== b){ out.shift = b; overridden = true; }
+	}
+	pick('house', Number(r.transformHouse), (v)=>TRANSFORM_HOUSES.indexOf(v) >= 0);
+	pick('variant', r.transformVariant, (v)=>v === 'improved' || v === 'classic');
+	return { settings: out, overridden };
+}
+export function zodiacSettingsFor(record, pageSettings){
+	const out = { ...(pageSettings || {}) };
+	const v = record && record.zodiacVersion;
+	const ok = v !== undefined && v !== null && `${v}` !== '' && ZODIAC_VERSIONS.some((item)=>item.value === v) && out.version !== v;
+	if(ok){ out.version = v; }
+	return { settings: out, overridden: !!ok };
+}
 
 export function zodiacVersionLabel(key){
 	const hit = ZODIAC_VERSIONS.find((item)=>item.value === key);

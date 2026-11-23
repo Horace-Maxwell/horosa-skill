@@ -80,6 +80,9 @@ export function chartDetailSettingsFor(record){
 		const v = r[k];
 		if(v !== undefined && v !== null && v !== '' && CHART_DETAIL_OPTIONS[DETAIL_GEAR_KEYS[k]].some((item)=>item.value === v)){ out[k] = v; }
 	});
+	// 按表取全表(挂载齿轮 detailFullTables):点名的表另出页面同列的全表;缺省空 = 只出摘要(与此前同)
+	const full = Array.isArray(r.detailFullTables) ? r.detailFullTables.filter((k)=>CHART_DETAIL_TABLES.some((t)=>t.value === k)) : [];
+	if(full.length){ out.detailFullTables = [...new Set(full)]; }
 	return out;
 }
 

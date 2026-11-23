@@ -10,18 +10,19 @@
 //
 // v3.11.x 同步之前 skill 在 service.py 里用三个子工具导出的段自己拼三式快照：[大六壬] 只有六壬的 [四课] 体（缺三传 /
 // 递生递克 / 空禄马徽记），【】段头写成 []，段序也不同；六壬层还另起一张 /liureng/gods 盘（真太阳时农历），占时不随三式农历。
+// v3.15.0 起上游 SanShiUnitedMain 只剩 import + 组件类 + re-export，逻辑拆在 sanshi/main/*：直接取子模块（壳不再 vendor）。
+import { SANSHI_PAGE_SETTINGS } from '../vendor/sanshi/main/options.js';
 import {
-  SANSHI_PAGE_SETTINGS,
   buildSanshiLiuRengCastOverride,
   buildLrNongli,
   buildLiuRengLayout,
   buildKeData,
   buildSanChuan,
   pickSanshiLiurengCastOpts,
-  buildOuterData,
-  buildSanShiUnitedSnapshotText,
-  safe,
-} from '../vendor/sanshi/SanShiUnitedMain.js';
+} from '../vendor/sanshi/main/liureng.js';
+import { buildOuterData } from '../vendor/sanshi/main/outerRing.js';
+import { buildSanShiUnitedSnapshotText } from '../vendor/sanshi/main/snapshot.js';
+import { safe } from '../vendor/dunjia/qimenPageShared.js';
 import { buildLiuRengReferenceBundle, buildLiuRengSnapshotText } from '../vendor/liureng/LiuRengMain.js';
 import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
 import { ASC_RA_MODE_IMPROVED, normalizeAscRaMode, chartHasEastPoint } from '../vendor/utils/ascRaMode.js';

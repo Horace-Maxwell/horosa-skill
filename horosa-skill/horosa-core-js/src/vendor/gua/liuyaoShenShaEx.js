@@ -2,7 +2,7 @@
 // 与既有 liuyaoShenSha.js 并存:既有 10 种为「基础集」不动(零回归);本模块提供扩展集,facade 合并标注。
 // 起例原语:月序顺行/逆行、四位循环、按季、按三合、按日干组、按年支、世前后位。正文与今注两套并存以 variant 区分。
 import { YUELING_TABLE } from './data/tianjiShenSha.js'; // 抽取管线产物:模块加载即注入,同步可用
-import { DIZHI, ZHI_WUXING, LIUCHONG } from './LiuYaoConst.js';
+import { DIZHI } from './LiuYaoConst.js';
 
 const zi = (i) => DIZHI[((i % 12) + 12) % 12];
 const idx = (z) => DIZHI.indexOf(z);

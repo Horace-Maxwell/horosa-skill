@@ -22,10 +22,11 @@ import { MUNDANE_HORARY_KINDS, describeWarQuestion, describeWeatherQuestion, des
 import { rulesetConfig } from './ruleset.js';
 import { describeChorography } from './chorography.js';
 import { mundaneProfection, mundaneFirdaria } from './progressions.js';
+import { buildMundaneCardSections } from './main/cards.js';
 import {
-	buildMundaneCardSections, formatMundaneHouseTable, formatMundaneChorographyTable,
+	formatMundaneHouseTable, formatMundaneChorographyTable,
 	MUNDANE_ORB_SCHEME_CN, MUNDANE_INGRESS_RULE_CN, PLANET_CN, currentYear,
-} from './MundaneMain.js';
+} from './main/tables.js';
 
 const chartRequestKey = () => 'headless';
 const fmtDegree = () => { throw new Error('fmtDegree（AstroExtraCommon）未 vendor：headless 不供给 state.srData，此路不可达 / fmtDegree is not vendored (headless never supplies state.srData)'); };

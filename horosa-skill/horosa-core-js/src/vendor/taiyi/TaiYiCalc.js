@@ -147,6 +147,8 @@ export function buildTaiyiBaziLocal(fields, options){
 			after23NewDay: options ? options.after23NewDay : undefined,
 			// v2.2.1: 太乙也要把时柱开关透传给 buildLocalBaziResult,否则 hour==23 + lateZi=0 时太乙的时柱会算错。
 			lateZiHourUseNextDay: options ? options.lateZiHourUseNextDay : undefined,
+			// 太乙只读四柱与农历(显示行),不读大运 / 流年 / 小运:不算运限(择日扫描每刻一盘,此前 97% 耗时在这)
+			withoutLuck: true,
 		});
 	}catch(e){
 		return null;

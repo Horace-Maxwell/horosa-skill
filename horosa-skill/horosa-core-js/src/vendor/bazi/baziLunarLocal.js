@@ -1206,11 +1206,20 @@ function buildBaziCore(params){
 	const ziweiLunar = ziweiLunarFor(lunar, solar, dayPillarShift, apparentParts.hour);
 	// 三推运 builder(流年/主运/小运,lunar.js 逐年重演)≈ 全函数 97% 耗时,
 	// 且只依赖核心键参数 → 随核心一并缓存;消费侧以 slice() 发新数组防外部 push/splice 互染。
+	// 惰性:第一次有人读运限才算(随核心一并缓存);只要四柱 / 农历的调用方(太乙排盘、东亚诸术、择日扫描)不再白算三推运
 	const dayGan = eightChar.getDayGan();
-	const direction = buildDirection(daYunList, dayGan, solar);
-	const mainDirection = buildMainDirection(daYunList, dayGan);
-	const smallDirection = buildSmallDirection(daYunList, dayGan, solar);
-	return { rawParts, apparentParts, solar, lunar, baziLunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar, direction, mainDirection, smallDirection };
+	const bundle = { rawParts, apparentParts, solar, lunar, baziLunar, eightChar, dayPillarShift, gender, yun, daYunList, ziweiLunar };
+	let luck = null;
+	const luckOf = ()=>{
+		if(!luck){
+			luck = { direction: buildDirection(daYunList, dayGan, solar), mainDirection: buildMainDirection(daYunList, dayGan), smallDirection: buildSmallDirection(daYunList, dayGan, solar) };
+		}
+		return luck;
+	};
+	['direction', 'mainDirection', 'smallDirection'].forEach((k)=>{
+		Object.defineProperty(bundle, k, { enumerable: true, get: ()=>luckOf()[k] });
+	});
+	return bundle;
 }
 function getBaziCore(params){
 	if(!baziCoreMemoEnabled()){
@@ -1316,9 +1325,10 @@ export function buildLocalBaziResult(params){
 			mangpai,
 			fenYe,
 			gong12God: {},
-			direction: core.direction.slice(),
-			mainDirection: core.mainDirection.slice(),
-			smallDirection: core.smallDirection.slice(),
+			// withoutLuck:只要四柱 / 农历的调用方(太乙盘显示行)不算运限,三表给空
+			direction: params && params.withoutLuck ? [] : core.direction.slice(),
+			mainDirection: params && params.withoutLuck ? [] : core.mainDirection.slice(),
+			smallDirection: params && params.withoutLuck ? [] : core.smallDirection.slice(),
 		directTime: yun.getStartSolar().toYmdHms(),
 		directInfo: formatStartLuck(yun, params && params.dayunPrecision),
 		tiaohou: [],

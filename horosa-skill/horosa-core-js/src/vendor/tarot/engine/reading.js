@@ -4,6 +4,7 @@ import { getDeck, getDeckCards, DEFAULT_DECK } from './deckRegistry.js';
 import { makeBlankCard } from '../decks/core78.js';
 import { SPREADS, DEFAULT_SPREAD, drawSpread } from './spreads.js';
 import { shuffle } from './shuffle.js';
+import { isEntropySeed } from '../../utils/trueRandom.js';
 import { resolveSignificatorSid } from './significator.js';
 import { dignify } from './dignities.js';
 import { synthesize, YESNO_MODES } from './verdict.js';
@@ -88,7 +89,7 @@ export function buildReading(deckId, spreadType, seed, settings){
 	// TP1 逆位产生方式(仅逆位开启时生效;order 恒不变=同一副牌只换朝向):
 	//   fingers3=「三指定牌」古法:全副转正,由独立种子流确定性选 3 张翻转(出现在阵中则权重大增);all=全逆位阵。
 	if(eff.reversals && eff.reversalGen === 'fingers3'){
-		const chosen = new Set(shuffle(`${seed}|fof`, { size: poolSize, usesReversals: false }).order.slice(0, 3));
+		const chosen = new Set(shuffle(`${seed}|fof`, { size: poolSize, usesReversals: false, take: 3 }).order.slice(0, 3));
 		reversed = order.map((cid) => chosen.has(cid));
 	}else if(eff.reversals && eff.reversalGen === 'all'){
 		reversed = order.map(() => true);
@@ -194,7 +195,11 @@ export function buildReading(deckId, spreadType, seed, settings){
 	// TP4 切牌(问卜者对此问的心态):独立种子流定切位,取当前池该位牌(含朝向);不动抽牌。
 	let cutCard = null;
 	if(eff.showCutCard && order.length){
-		const cutIdx = shuffle(`${seed}|cut`, { size: poolSize, usesReversals: false }).order[0] % order.length;
+		// 真随机记录:直接在当前池的张数里等概率取一位(选了指示牌时池子少一张;先按整副取再取模,第 0 位的机会是别处的两倍)。
+		// 确定性种子(生辰 / 手填)沿用原算法:旧卦例重开切牌不变。
+		const cutIdx = isEntropySeed(seed)
+			? shuffle(`${seed}|cut`, { size: order.length, usesReversals: false, take: 1 }).order[0]
+			: shuffle(`${seed}|cut`, { size: poolSize, usesReversals: false, take: 1 }).order[0] % order.length;
 		cutCard = { card: resolve(order[cutIdx]), isReversed: !!reversed[cutIdx] };
 	}
 	return {

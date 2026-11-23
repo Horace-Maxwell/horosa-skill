@@ -1,113 +1,16 @@
+// 六爻 AI 快照:旺衰与结构分析行、卦辞取数、快照正文与排盘设置跨会话保留
+// 从 GuaZhanMain.js 按职责拆出(门面保留原导入路径与对外导出;读源码的检查读「子模块 + 门面」全集,见 scripts/source-sets.json)。
+import { normalizeLiuyaoSettings, LIUYAO_PRESETS } from '../../gua/liuyaoSchools.js';
+import { Gua64, getXunEmpty, LiuQi } from '../../gua/GuaConst.js';
+import { analyzeLiuyao } from '../../gua/liuyaoFacade.js';
 
 
 
-
-
-
-
-
-
-import * as AstroConst from '../../constants/AstroConst.js';
-import { littleEndian } from '../gua/littleEndian.js';
-
-
-
-import { getGua64, Gua64, Gua8, randYao, ZiList, HourZi, SixGods, getXunEmpty, LiuQi } from '../gua/GuaConst.js';
-import { pureGuaOf } from '../gua/LiuYaoEngine.js';   // 伏神卦(本宫首卦)——快照补完整装卦用
-
-import { analyzeLiuyao } from '../gua/liuyaoFacade.js';
-import { normalizeLiuyaoSettings, applyPreset, factoryLiuyaoSettings, setOption, selectionDelta, applySelectionDelta, LIUYAO_SCHOOL_OPTIONS, LIUYAO_PRESETS, loadPersistedLiuyaoSettings, persistLiuyaoSettings } from '../gua/liuyaoSchools.js';
-import { definePageSettings } from '../utils/pageSettingsStore.js';
-
-
-
-
-
-import { duanJueLines, zhanleiLines, buildSnapshotAnalysis } from './liuyaoSnapshotEx.js';
-
-import { CHISHI_JUE, FADONG_JUE, LIUSHEN_FADONG, YAOWEI_XIANG, ZHANLEI_GANGYAO } from '../gua/liuyaoReference.js';
-
-
-
-
-
-
-
-
-
-
-
-// 最小尺寸是屏幕可读意图(物理 px),壳缩放 z 下按 1/z 折算成布局 px;z=1 恒等。
-
-
-
-
-function guaText(gua){
-	if(!gua){
-		return '';
-	}
-	const ord = gua.ord !== undefined ? `第${gua.ord}卦` : '';
-	const house = gua.house ? `${gua.house.name || ''}宫${gua.house.elem || ''}` : '';
-	return `${ord} ${gua.name || ''} ${gua.desc || ''} ${house}`.trim();
-}
-
-function lineText(line){
-	if(line === undefined || line === null){
-		return '';
-	}
-	return `${line}`.trim();
-}
-
-// 从六爻线值(0阴/1阳,初爻→上爻)算任一卦对象。自给自足:AI挂载经 regenerateSixyaoSnapshot→buildTimeGua 时
-// gua 无 guaDesc(故旧版只剩本卦),但 yao 六爻线值始终在 → 据此稳定算出 之/互/错/综卦,挂载与导出都全面。
-function guaFromYaoValues(values){
-	if(!values || values.length !== 6 || values.some((v)=>v !== 0 && v !== 1)){
-		return null;
-	}
-	const g = getGua64(littleEndian(values));
-	const idx = g ? g.index : null;
-	return (idx !== null && idx !== undefined && Gua64[idx]) ? Gua64[idx] : null;
-}
-
-// 时间起卦（梅花/时间确定式法）——纯函数，供 AI 挂载「起课时间」无头复用（与 genTimeGua 同口径）。
-export function buildTimeGua(nongli){
-	if(!nongli || !nongli.year || !nongli.time || nongli.monthInt === undefined || nongli.dayInt === undefined){
-		return null;
-	}
-	const y = ZiList.indexOf(('' + nongli.year).substr(1)) + 1;
-	const m = nongli.monthInt;
-	const d = nongli.dayInt;
-	const t = ZiList.indexOf(('' + nongli.time).substr(1)) + 1;
-	let up = (y + m + d) % 8 - 1; up = up < 0 ? 7 : up;
-	let down = (y + m + d + t) % 8 - 1; down = down < 0 ? 7 : down;
-	let cyao = (y + m + d + t) % 6 - 1; cyao = cyao < 0 ? 5 : cyao;
-	const upGua = Gua8[up];
-	const downGua = Gua8[down];
-	if(!upGua || !downGua){ return null; }
-	const yao = [0, 0, 0, 0, 0, 0].map(() => ({ value: -1, change: false, color: AstroConst.AstroColor.Stroke, name: null }));
-	for(let i = 0; i < downGua.value.length; i++){ yao[i].value = downGua.value[i]; }
-	for(let i = 0; i < upGua.value.length; i++){ yao[i + 3].value = upGua.value[i]; }
-	yao[cyao].change = true;
-	const gua = getGua64(littleEndian(yao.map((x) => x.value)));
-	const guaidx = gua ? gua.index : null;
-	if(guaidx !== null && Gua64[guaidx]){
-		for(let i = 0; i < yao.length; i++){ yao[i].name = Gua64[guaidx].yaoname[i]; }
-	}
-	return { yao, currentGua: guaidx, nongli };
-}
-
-// 按爻起卦(用户亲手摇出 / 报出的六爻)——纯函数,与 buildTimeGua 同形产物;装配与 onManualCast 逐步相同
-// (emptyYao → 填爻值与动爻 → getCurrentGua → setupYao),仅爻源不同。lines = 0 阴 / 1 阳 ×6(初爻在前);moving = 动爻位 1-6。
-export function buildLinesGua(lines, moving, nongli){
-	if(!Array.isArray(lines) || lines.length !== 6 || lines.some((v) => v !== 0 && v !== 1)){ return null; }
-	const mv = Array.isArray(moving) ? moving : [];
-	const yao = lines.map((v, i) => ({ value: v, change: mv.indexOf(i + 1) >= 0, color: AstroConst.AstroColor.Stroke, name: null }));
-	const gua = getGua64(littleEndian(lines));
-	const guaidx = gua ? gua.index : null;
-	if(guaidx === null || guaidx === undefined || !Gua64[guaidx]){ return null; }
-	for(let i = 0; i < yao.length; i++){ yao[i].name = Gua64[guaidx].yaoname[i]; }
-	return { yao, currentGua: guaidx, nongli: nongli || null };
-}
+import { pureGuaOf } from '../../gua/LiuYaoEngine.js';   // 伏神卦(本宫首卦)——快照补完整装卦用
+import { CHISHI_JUE, FADONG_JUE, LIUSHEN_FADONG, YAOWEI_XIANG, ZHANLEI_GANGYAO } from '../../gua/liuyaoReference.js';
+import { buildSnapshotAnalysis, duanJueLines, zhanleiLines } from '../liuyaoSnapshotEx.js';
+import { definePageSettings } from '../../utils/pageSettingsStore.js';
+import { lineText, guaFromYaoValues, guaText } from './gua.js';
 
 // GFM 表化同构数据行(空 cell → —),供 AI 导出/挂载可读化;数据层零变化——表行可逆变换逐字复原旧格式行。
 const MD_DASH = '—';
@@ -122,7 +25,7 @@ function pushMdRows(lines, header, rows){
 // 年干支取法单一化:此前只有 [断卦结构] 段按「定年界线」取(lunar 档取农历年支),
 // 而 [起盘信息] 首段与左栏概览恒取立春系 → 立春↔正月初一窗口内同一快照/同一页出现两个年干支。
 // 缺省(lichun)档与既有取法逐字相同,只有 lunar 档且落在该窗口内的盘首段文字才变。
-function yearGzByBoundary(nongli, settings){
+export function yearGzByBoundary(nongli, settings){
 	const n = nongli || {};
 	const lichun = n.yearJieqi || n.year || n.yearGanZi;
 	return (normalizeLiuyaoSettings(settings).yearBoundary === 'lunar') ? (n.yearGZByLunar || lichun) : lichun;
@@ -219,6 +122,22 @@ export function liuyaoStructLines(st){
 	}
 }
 
+// 本 / 之 / 互三卦的卦辞键(页面取卦辞与无头起卦 / 重算同一算法):本卦 = 六爻线值,之卦 = 动爻翻转,互卦 = 二至四爻 + 三至五爻
+export function guaDescIdsOf(st){
+	const guaIdx = st ? st.currentGua : null;
+	if(guaIdx === null || guaIdx === undefined){ return null; }
+	const gua = Gua64[guaIdx];
+	if(!gua){ return null; }
+	const org = gua.value.slice(0);
+	const res = org.slice(0);
+	(Array.isArray(st.yao) ? st.yao : []).forEach((y, i)=>{ if(y && y.change){ res[i] = res[i] ? 0 : 1; } });
+	const v = gua.value;
+	const middle = [v[1], v[2], v[3], v[2], v[3], v[4]];
+	return { guaOrg: org.join(''), guaRes: res.join(''), guaMiddle: middle.join('') };
+}
+
+// 取卦辞:成功即按单卦缓存;网络层失败读缓存(离线 / 后端未起仍有卦辞);都没有回 undefined(此次不更新、重试即恢复)
+// 无头起卦 / 重算:卦象里没带卦辞时补上(页面是挂载后异步取的;不补则「卦辞与断语」段只有段名)。取不到原样返回
 export function buildGuaSnapshotText(fields, st){
 	const lines = [];
 	const nowGua = st && st.currentGua !== null && Gua64[st.currentGua] ? Gua64[st.currentGua] : null;

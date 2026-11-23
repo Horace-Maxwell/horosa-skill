@@ -2,8 +2,8 @@
 // 纯函数：给定 干支/月日时/性别 → 完整 chart（形状对齐 Java，供 ZWChart.js 渲染、ZiWeiHelper 运限消费）。
 // 四化单一真值源 = ZWConst.getActiveSiHuaGan()（随流派切换）。农历(birth→干支月日时)由上层提供，不在此。
 import {
-	ZHI, GAN, z, zi, gi, isYangGan, isYangZhi, xiaoxianClockwiseFor,
-	palaceGans, mingGong, shenGong, ziweiPos, tianfuPos,
+	ZHI, z, zi, gi, isYangGan, isYangZhi, xiaoxianClockwiseFor,
+	palaceGans, ziweiPos, tianfuPos,
 	CHANGSHENG_12, CHANGSHENG_START, CHANGSHENG_START_HUO_TU, isClockwise, NORTH_MAIN_STEP, SOUTH_MAIN_STEP,
 	wuxingJu as coreWuxingJu,
 } from './ziweiCore.js';
@@ -13,7 +13,7 @@ import {
 	HOUSES as HOUSE_NAMES, monthCnOf, XIAOXIAN_START, starLightOf,
 } from './data/ziweiTables.js';
 import { getActiveSiHuaGan } from '../bazi/ZWConst.js';
-import { ZWEngineOptions, collectEngineOpts } from './ziweiOptions.js';
+import { collectEngineOpts } from './ziweiOptions.js';
 import { buildLocalBaziResult, buildLocalNongliLite } from '../bazi/baziLunarLocal.js';
 import { placeShangShi, placeKuiYue } from './ziweiSchools.js';
 

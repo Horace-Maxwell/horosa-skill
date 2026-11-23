@@ -1,7 +1,9 @@
 // 灵棋经起卦引擎(纯函数,零 UI 依赖)。
 // 古法口径(《靈棋經》卷首):十二棋子(上4/中4/下4)一時擲之,依所得上中下成卦,不可再擲。
 // 掷法=每枚独立正/覆 → 层内正面数服从二项 B(4,½)(物理掷棋分布;不做均匀 5 档臆造)。
-// 确定性:sha256(seed)→mulberry32→固定序恰 12 次消费(上4→中4→下4),同 seed 字节幂等(塔罗 shuffle 同款范式)。
+// 随机掷棋 = 真随机:种子是一段「真随机记录」(系统随机源取的两个字节,见 utils/trueRandom.js),十二枚棋按 上4→中4→下4
+// 各读记录里的一位;重开卦例是回放这条记录,不经伪随机数发生器。
+// 手动种子 / 时间种子是确定性起法:sha256(seed)→mulberry32→固定序恰 12 次消费,同 seed 字节幂等(旧卦例照旧)。
 // headless shim：上游只用 node-forge 取 SHA-256。改用 Node 内置 crypto —— 摘要逐字节一致，
 // 却省掉一个 npm 依赖（离线 runtime 要打包，且 loadcheck 会因缺包整棵 tarot/engine 加载失败）。
 // 保留 forge 的调用形状而不改上游函数体，是为了让本文件其余部分继续逐字 verbatim。
@@ -14,6 +16,11 @@ function _sha256Md(){
 	};
 }
 const forge = { md: { sha256: { create: _sha256Md } } };
+import { isEntropySeed, newEntropySeed } from '../../utils/trueRandom.js';
+import { entropyReader } from '../../utils/entropyTape.js';
+
+// 一次随机掷棋取的真随机记录长度:十二枚棋 = 12 位,两个字节。
+export const LINGQI_ENTROPY_BYTES = 2;
 
 function sha256Hex(str) {
 	const md = forge.md.sha256.create();
@@ -33,16 +40,23 @@ function mulberry32(a) {
 // 掷十二棋:seed → { counts:[上,中,下], faces:[[bool×4]×3] }(faces[i][j]=true 为字面朝上)。
 // 恒消费 12 次 rng(层序 上→中→下、枚序 0→3),任何口径开关都不得改变消费序列(塔罗逆位铁律同款)。
 export function castLingqi(seed) {
-	const hex = sha256Hex(seed);
-	const seedNum = parseInt(hex.substring(0, 8), 16) >>> 0;
-	const rng = mulberry32(seedNum);
+	let faceUp;
+	if (isEntropySeed(seed)) {
+		const reader = entropyReader(seed);
+		faceUp = () => reader.bool();
+	} else {
+		const hex = sha256Hex(seed);
+		const seedNum = parseInt(hex.substring(0, 8), 16) >>> 0;
+		const rng = mulberry32(seedNum);
+		faceUp = () => rng() < 0.5;
+	}
 	const faces = [];
 	const counts = [];
 	for (let layer = 0; layer < 3; layer++) {
 		const row = [];
 		let n = 0;
 		for (let k = 0; k < 4; k++) {
-			const up = rng() < 0.5;
+			const up = faceUp();
 			row.push(up);
 			if (up) { n += 1; }
 		}
@@ -82,14 +96,12 @@ export function computeTimeSeed(fields) {
 	return v % 2147483647;
 }
 
-// 种子来源归一(塔罗 resolveSeed 同款三态;time_seed 档取占时种子)。
+// 种子来源归一(塔罗 resolveSeed 同款三态;time_seed 档取占时种子;随机档 = 当场取一段真随机记录)。
 export function resolveLingqiSeed(seedMode, manualSeed, fields) {
 	// 手动种子原样用;空 / 纯空白回落 0(文本框清空后与旧数字框清空同一局)。
 	if (seedMode === 'manual') { return `${manualSeed === undefined || manualSeed === null || `${manualSeed}`.trim() === '' ? 0 : manualSeed}`; }
 	if (seedMode === 'time_seed') { return `t-${computeTimeSeed(fields)}`; }
-	const r = (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues)
-		? window.crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random() * 4294967296);
-	return `rnd-${r}`;
+	return newEntropySeed(LINGQI_ENTROPY_BYTES);
 }
 
 // ── 三才数性结构(刘基后序明文,不推衍) ──

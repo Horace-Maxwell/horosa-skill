@@ -83,6 +83,32 @@ def _strip_fetch_helpers(text: str) -> tuple[str, list[str]]:
         text = text[:start] + text[index:].lstrip("\n")
 
 
+_REEXPORT_LIST = re.compile(r"^export\s*\{([^}]*)\}\s*from\s*(['\"][^'\"]+['\"]);?[ \t]*$", re.M)
+
+
+def _prune_fetch_reexports(text: str) -> tuple[str, list[str]]:
+    """Drop `fetch*` names from `export { … } from '…'` re-export lists (v0.53.0).
+
+    v3.15.0 split big modules into a facade + `calc/*`: `DunJiaCalc.js` re-exports
+    `fetchQimenPan` from `./calc/kinqimen`. `_strip_fetch_helpers` removes every exported `fetch*` from the source module,
+    so a facade that still lists it fails at **link** time (`does not provide an export named 'fetchQimenPan'`) and takes
+    every importer down with it (qimen / sanshi / 择日 in loadcheck). Same naming rule as `_strip_fetch_helpers`.
+    """
+    notes: list[str] = []
+    while True:
+        for match in _REEXPORT_LIST.finditer(text):
+            names = [s.strip() for s in match.group(1).split(",") if s.strip()]
+            kept = [n for n in names if not re.match(r"fetch\w*$", n.split(" as ")[0].strip())]
+            if len(kept) == len(names):
+                continue
+            notes.append("pruned re-export " + ", ".join(n for n in names if n not in kept))
+            replacement = f"export {{ {', '.join(kept)} }} from {match.group(2)};" if kept else ""
+            text = text[: match.start()] + replacement + text[match.end():]
+            break  # 重新搜索：偏移量已失效
+        else:
+            return text, notes
+
+
 def _strip_network_orchestrators(text: str, removed: list[str]) -> tuple[str, list[str]]:
     """剥掉引用了已删 `fetch*` 的导出 async 编排函数（`buildXForFields` 一类）。
 
@@ -354,6 +380,8 @@ def transform(text: str) -> tuple[str, list[str]]:
         if count:
             notes.append(f"dropped {count} backend import(s)")
     text, removed = _strip_fetch_helpers(text)
+    text, reexport_notes = _prune_fetch_reexports(text)
+    notes.extend(reexport_notes)
     removed = removed + dropped_symbols
     if removed:
         notes.append("stripped " + ", ".join(removed))

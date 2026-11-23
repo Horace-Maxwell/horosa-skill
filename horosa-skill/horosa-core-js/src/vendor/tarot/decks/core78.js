@@ -2,8 +2,7 @@
 // 牌对象同时带:facade 兼容字段(id 0..77/suit/number/name_cn/name_en/element/symbol/keywords_*)
 // + 富对应字段(sid/arcana/court/names/hebrew/astro/path/decan*/courtEie/courtSpan/polarity/countingValue)。
 import {
-	SUITS, SUIT_ELEMENT, MAJORS_CORR, DECAN, COURT_ASTRO, COURT_ORDER,
-	PATH_JOIN, COURT_SEPHIRA,
+	SUITS, SUIT_ELEMENT, MAJORS_CORR, DECAN, COURT_ASTRO, PATH_JOIN, COURT_SEPHIRA,
 } from './correspondences.js';
 import {
 	SUIT_KW, MAJOR_KW, NUM_KW, COURT_KW, ACE_KW,

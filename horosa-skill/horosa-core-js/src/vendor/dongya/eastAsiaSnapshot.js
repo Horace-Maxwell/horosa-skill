@@ -178,7 +178,8 @@ export function eastAsiaSnapshotLines(model){
 	out.push('[算命学]');
 	const sm = model.sanmei;
 	if(sm){
-		out.push(`三柱:${sm.pillars.map((p)=>`${p.label}柱 ${p.gz}`).join(' · ')};节入 ${sm.prevJie || ''} 后 ${sm.daysAfterJie} 日`);
+		// 日界写明:算命学日柱按出生地民用 0 点换日,不随八字的晚子时 / 23 点换日设置(两边日柱可能差一天,不是算错)
+		out.push(`三柱:${sm.pillars.map((p)=>`${p.label}柱 ${p.gz}`).join(' · ')};节入 ${sm.prevJie || ''} 后 ${sm.daysAfterJie} 日;日柱按 0 点换日(不随晚子时设置)`);
 		out.push(`藏干(按节入日数):${sm.hidden.map((h)=>`${h.label}支 ${h.zhi} → ${h.ruler || '—'}(${h.rulerPos || ''})`).join(';')}`);
 		out.push(`天中杀:${sm.tenchusatsu.join('')}${sm.years.length ? `;近年 ${sm.years.map((y)=>`${y.year}(${y.zhi})`).join('、')}` : ''}`);
 		if(sm.relations.length){ out.push(`三支关系:${sm.relations.map((r)=>`${r.a}${r.b} ${r.kind} ${r.text}`).join(';')}`); }

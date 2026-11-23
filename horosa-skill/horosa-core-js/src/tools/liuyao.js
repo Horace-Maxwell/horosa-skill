@@ -14,7 +14,8 @@
 //   GuaZhanMain.js:62-63 注明挂载路径无 guaDesc）；卦辞原文仍由 Python 侧 /gua/desc 回在 data.descriptions。
 //   无头卦亦不带 god（页面 fillYaoGods 渲染期才写，GuaZhanMain.js:1666-1677）→ 逐爻行无「六神:」后缀，
 //   六神在 [断卦结构] 表内（同上游无头路径）。
-import { buildTimeGua, buildGuaSnapshotText } from '../vendor/guazhan/GuaZhanMain.js';
+import { buildTimeGua } from '../vendor/guazhan/main/gua.js';
+import { buildGuaSnapshotText } from '../vendor/guazhan/main/snapshot.js';
 import { loadDoctrine } from '../vendor/gua/data/liuyaoDoctrineCache.js';
 import { getGua64, Gua64 } from '../vendor/gua/GuaConst.js';
 import { littleEndian } from '../vendor/gua/littleEndian.js';

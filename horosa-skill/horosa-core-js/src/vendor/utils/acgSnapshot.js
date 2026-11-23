@@ -69,10 +69,15 @@ function ascAnchor(pts){
 
 // 生成【占星地图】导出段。无快照(用户没开过占星地图 tab)返回 ''(优雅降级,不报错)。
 export function buildAcgSectionText(){
-	if(!latest || !latest.data || !latest.data.planets){
+	return buildAcgTextFor(latest);
+}
+
+// 给定一次地图状态 { data, uiState } 出正文(AI 工具 cast_acg 用;不动页面的「最近一次地图状态」)
+export function buildAcgTextFor(snap){
+	if(!snap || !snap.data || !snap.data.planets){
 		return '';
 	}
-	const d = latest.data;
+	const d = snap.data;
 	const meta = d.meta || {};
 	const lines = [];
 	lines.push('【占星地图】');
@@ -136,7 +141,7 @@ export function buildAcgSectionText(){
 	if(Array.isArray(d.stars) && d.stars.length){
 		lines.push(`固定星线(${d.stars.length} 恒星):${d.stars.map((s) => `${s.name} MC ${fmtLon(s.lines && s.lines.mc && s.lines.mc.lon)}`).join(';')}`);
 	}
-	const point = latest.uiState && latest.uiState.pointReport;
+	const point = snap.uiState && snap.uiState.pointReport;
 	if(point && Array.isArray(point.hits)){
 		lines.push(`落点分析(${Math.abs(point.lat).toFixed(2)}°${point.lat >= 0 ? 'N' : 'S'} ${fmtLon(point.lon)},orb ${point.orb}°):` + (point.hits.length
 			? point.hits.map((h) => `${PLANET_CN[h.planet] || h.planet}${({ Asc: '上升', Desc: '下降', MC: '中天', IC: '天底' })[h.angle] || h.angle}线(偏差 ${h.orb}°)`).join('、')
@@ -144,7 +149,7 @@ export function buildAcgSectionText(){
 	}
 	// ◆ 本地空间线 / ◆ 地理等价线:两图层开启时才进快照(纯渲染开关,数据恒在响应里),
 	// 数据=后端 lines.lsAz(方位/高度)与 lines.geodetic(地理 MC/IC 经度),口径行写画法/流派/取数/子午线。
-	const uiLayers = latest.uiState || {};
+	const uiLayers = snap.uiState || {};
 	if(uiLayers.showLS){
 		const rows = [];
 		Object.keys(d.planets).forEach((pk) => {
@@ -178,7 +183,7 @@ export function buildAcgSectionText(){
 	}
 	// ◆ 行星交映 Parans:条件子块(仅当图层开关开启且后端有数据;与「落点分析」同风格)。
 	// 数据=后端响应 d.parans(两行星同时角化的纬度线);过滤(lum=仅日月对)与 1° 去重口径同 AcgD3Map 图面。
-	const ui = latest.uiState || {};
+	const ui = snap.uiState || {};
 	if(ui.paranMode && ui.paranMode !== 'off' && Array.isArray(d.parans) && d.parans.length){
 		const isLum = (p) => p.a === 'Sun' || p.b === 'Sun' || p.a === 'Moon' || p.b === 'Moon';
 		const list = ui.paranMode === 'all' ? d.parans : d.parans.filter(isLum);

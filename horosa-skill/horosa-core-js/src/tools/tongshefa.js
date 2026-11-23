@@ -1,4 +1,5 @@
-import { buildTongSheFaModel, buildTongSheFaSnapshot } from '../vendor/tongshefa/TongSheFaCore.js';
+import { buildTongSheFaModel } from '../vendor/tongshefa/main/model.js';
+import { buildTongSheFaSnapshot } from '../vendor/tongshefa/main/snapshot.js';
 
 /**
  * 统摄法（纳甲筮法）九段快照。

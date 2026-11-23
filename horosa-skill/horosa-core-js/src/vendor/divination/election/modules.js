@@ -10,7 +10,7 @@ import { SIGNS } from '../data/signs.js';
 import { PLANETS } from '../data/planets.js';
 import { FIXED_STARS, starLonAt, starOrbFor } from '../data/fixedStars.js';
 import { angularDist, norm360, chartYearFromFacts } from '../engine/utils.js';
-import { PLANETARY_HOURS, DAY_RULERS } from '../data/planetaryHours.js';
+import { PLANETARY_HOURS } from '../data/planetaryHours.js';
 import { mansionOf, MANSION_ELECTION_SETS, TOPIC_MANSION_MAP } from '../data/lunarMansions.js';
 import { paransAt } from '../engine/paransLocal.js';
 import { radicality, viaCombustaRange } from '../engine/radicality.js';

@@ -2,7 +2,7 @@
 // 变爻六亲仍以「本卦卦宫五行」为我(传统派通例)。传统派变爻只回头作用本位;盲派扩展由 bianyaoScope 开关上层处理。
 import { littleEndian } from './guaHelper.js';
 import { getGua64, LiuQi } from './GuaConst.js';
-import { ZHI_WUXING, LIUCHONG, LIUHE, shengKe } from './LiuYaoConst.js';
+import { LIUCHONG, LIUHE, shengKe } from './LiuYaoConst.js';
 import { parseYaoName, changshengOf, isYuePo, isXunKong } from './LiuYaoEngine.js';
 
 // 化进神(同五行地支顺进):寅卯/巳午/申酉/亥子/丑辰未戌(土循环)

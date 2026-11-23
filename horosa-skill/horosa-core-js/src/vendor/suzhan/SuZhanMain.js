@@ -44,18 +44,6 @@ function houseStartModeName(mode){
 	return mode === SZConst.SZHouseStart_ASC ? 'ASC起盘' : '八字公式起盘';
 }
 
-function signFromLon(lon){
-	if(lon === undefined || lon === null || Number.isNaN(Number(lon))){
-		return null;
-	}
-	let val = Number(lon) % 360;
-	if(val < 0){
-		val += 360;
-	}
-	const idx = Math.floor(val / 30) % 12;
-	return AstroConst.LIST_SIGNS[idx];
-}
-
 function resolveHouseStartMode(fields){
 	if(fields && fields.houseStartMode && fields.houseStartMode.value !== undefined && fields.houseStartMode.value !== null){
 		return parseInt(fields.houseStartMode.value, 10) === SZConst.SZHouseStart_ASC
@@ -100,23 +88,22 @@ function computeAscSignIndex(rootObj, chart, fields){
 	return (sunidx - tmsigidx - 5 + 24) % 12;
 }
 
-function houseFullLabel(house, idx, ascSignIndex){
-	let houseName = msg(house && house.id ? house.id : null) || `第${idx + 1}宫`;
-	const sign = signFromLon(house ? house.lon : null);
-	if(!sign){
-		return houseName;
-	}
-	const signIdx = AstroConst.LIST_SIGNS.indexOf(sign);
-	if(signIdx >= 0 && ascSignIndex >= 0){
-		const hnum = (signIdx - ascSignIndex + 12) % 12 + 1;
-		houseName = `第${hnum}宫`;
-	}
+// 宫宿表的宫:与宿盘同一分宫 —— 赤经每 30° 一宫(白羊段起),从命宫所在那一段数第 1 宫(宿盘 getHouseNum 同式)。
+// 此前按西洋宫头的黄经取座:非整宫制(缺省 Alcabitius)两个宫头常落同一座 → 表里地支重复、另一支缺位。
+function palaceLabel(signIdx, hnum){
+	const sign = AstroConst.LIST_SIGNS[signIdx];
 	const zi = SZConst.SignZi[sign] || '';
 	const area = (SZConst.SZSigns[signIdx] && SZConst.SZSigns[signIdx].length >= 2)
 		? `${SZConst.SZSigns[signIdx][0]}${SZConst.SZSigns[signIdx][1]}`
 		: '';
 	const signName = AstroText.AstroMsgCN[sign] || msg(sign);
-	return `${zi}—${area}—${signName}座—${houseName}`;
+	return `${zi}—${area}—${signName}座—第${hnum}宫`;
+}
+
+function raSignIndex(obj){
+	const ra = Number(obj && obj.ra);
+	if(!Number.isFinite(ra)){ return -1; }
+	return Math.floor((((ra % 360) + 360) % 360) / 30);
 }
 
 export function buildHouseObjectLines(chart){
@@ -210,10 +197,15 @@ function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
 		visibleSet = new Set(planetDisplay);
 	}
 
-	houses.forEach((house, idx)=>{
-		lines.push(`宫位：${houseFullLabel(house, idx, ascSignIndex)}`);
+	if(!houses.length && !objects.length){
+		return lines;
+	}
+	const start = ascSignIndex >= 0 ? ascSignIndex : 0;
+	for(let k = 0; k < 12; k++){
+		const signIdx = (start + k) % 12;
+		lines.push(`宫位：${palaceLabel(signIdx, k + 1)}`);
 		let inHouse = objects.filter((obj)=>{
-			if(obj.house !== house.id){
+			if(raSignIndex(obj) !== signIdx){
 				return false;
 			}
 			if(visibleSet){
@@ -232,7 +224,7 @@ function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
 			lines.push('二十八宿：无');
 			lines.push('星曜：无');
 			lines.push('');
-			return;
+			continue;
 		}
 
 		const suMap = new Map();
@@ -282,7 +274,7 @@ function buildHouseSuLines(rootObj, chart, planetDisplay, fields){
 			});
 		});
 		lines.push('');
-	});
+	}
 
 	return lines;
 }

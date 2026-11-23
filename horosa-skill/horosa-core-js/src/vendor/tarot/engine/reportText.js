@@ -8,6 +8,7 @@ import { REVERSAL_TEMPLATES } from './reversalModes.js';
 import { comboHints, COMBO_GUARD_NOTES } from '../decks/comboThemes.js';
 import { computeTimingLines, TIMING_METHOD_LABEL } from './timingMethods.js';
 import { courtSignDetect } from '../decks/courtSystems.js';
+import { seedDisplayText } from '../../utils/trueRandom.js';
 
 // 含义列（G5 双轨 + G2 逆位模式）:按 meaningSystem/reversalMode 走 cardMeaning 单一真值。
 function meaningOf(card, isReversed, system, reversalMode){
@@ -49,7 +50,7 @@ export function buildReadingText(reading, question, opts){
 	// 各段为条件产出(无内容即不出该段头,⊆ 语义天然豁免)。段头仅进 AI 快照文本,不影响右栏牌面渲染。
 	const lines = [];
 	lines.push('[牌阵综览]');
-	lines.push(`【${reading.deckTitle || (deck && deck.title) || '塔罗'}】${reading.spreadTitle || ''}(种子:${reading.seed})`);
+	lines.push(`【${reading.deckTitle || (deck && deck.title) || '塔罗'}】${reading.spreadTitle || ''}(种子:${seedDisplayText(reading.seed)})`);
 	// 设置行与 [定局] 按 deck.caps 门控(与页面同源):无变体能力的牌组(雷诺曼/基帕/西比拉/扑克)不写「变体 A」,
 	// 雷诺曼读法不出「定局」页,快照亦不写 Yes/No(此前 AI 拿到页面不承认的定局结论)。
 	const caps = (deck && deck.caps) || {};

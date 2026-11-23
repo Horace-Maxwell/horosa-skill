@@ -1,6 +1,6 @@
 // 六爻应期引擎:按用神状态归集诸法候选应期(值/冲/合/填实/冲空/出月/冲墓/逢生/进退到位),
 // 另附出空填空冲空的短中长期口径与占类专用规则(期日章)。只出「候选支+依据」,不作绝对日期断言。
-import { DIZHI, TIANGAN, LIUCHONG, LIUHE, CHANGSHENG_START, CHANGSHENG_START_ALT } from './LiuYaoConst.js';
+import { DIZHI, LIUCHONG, LIUHE, CHANGSHENG_START, CHANGSHENG_START_ALT } from './LiuYaoConst.js';
 
 // 五行墓支(水土同宫:金丑木未火戌水土辰;火土同宫:土戌)
 export function muZhiOf(wx, tuMode){

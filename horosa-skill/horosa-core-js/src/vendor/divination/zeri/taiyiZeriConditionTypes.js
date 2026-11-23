@@ -3,7 +3,7 @@
 // 主太乙算法/格局表修正,择日自动跟(制度层1)。spec 契约与 QIMEN/HUANGLI/BAZI 逐字段同构;
 // ctx=makeTaiyiZeriEvalCtx(pan)(格局/胜负惰性一次)。一键一行 Tab 缩进(preflight 键集契约)。
 import { computeGeju } from '../../taiyi/core/taiyiGeju.js';
-import { computeVictory, computeEhui, computeShiJing, computeShenSuan, computeFenye, computeSanyuan, computeWuziyuan, TAIYI_GONG_INFO } from '../../taiyi/core/taiyiDuanfa.js';
+import { computeVictory, computeEhui, computeShiJing, computeShenSuan, computeFenye, computeSanyuan, computeWuziyuan } from '../../taiyi/core/taiyiDuanfa.js';
 import { computeTaiyiShuli } from '../../taiyi/core/taiyiShuli.js';
 import { computeTaiyiNayin } from '../../taiyi/core/taiyiNayin.js';
 import { GROUP_TYPES, JOINER_CN, makeConditionTreeApi } from './conditionTypes.js';

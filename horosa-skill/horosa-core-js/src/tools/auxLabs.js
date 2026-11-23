@@ -32,6 +32,7 @@ import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
 const planetName = (id) => (AstroText.AstroMsgCN && AstroText.AstroMsgCN[id]) || id;
 
 const TRANSFORM_KEYS = ['kind', 'planet', 'shift', 'house', 'variant'];
+const AUX_LAB_TECHNIQUES = ['transformchart', 'zodiacsystems'].filter((key) => DERIVED_LAB_HEADLESS_KEYS.indexOf(key) >= 0);
 
 function invalidSettings(store, keys, settings) {
   const invalid = [];
@@ -96,8 +97,10 @@ function runZodiac(source) {
 export function runAuxLabs(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
   const technique = `${source.technique || ''}`;
-  if (DERIVED_LAB_HEADLESS_KEYS.indexOf(technique) < 0) {
-    throw new Error(`horosa-core-js: aux_labs does not know technique "${technique}" (expected one of ${DERIVED_LAB_HEADLESS_KEYS.join(' / ')})`);
+  // 只认本入口真实现了的两种。上游 v3.15.0 把 DERIVED_LAB_HEADLESS_KEYS 扩到七种派生盘（十三分 / 十二分 / 调波 / 龙盘 /
+  // 重置盘也按出生资料当场算），那五种的专属段走各自的入口；拿上游键表当闸会让 'draconic' 混进来、落到黄道制分支。
+  if (AUX_LAB_TECHNIQUES.indexOf(technique) < 0) {
+    throw new Error(`horosa-core-js: aux_labs does not know technique "${technique}" (expected one of ${AUX_LAB_TECHNIQUES.join(' / ')})`);
   }
   return technique === 'transformchart' ? runTransform(source) : runZodiac(source);
 }

@@ -2,7 +2,7 @@
 // 飞伏生克与伏神可用、三层环境(太岁岁破/月建月破/日建日破)、承刚/穿害推导、真空口诀、灭没卦、
 // 余气旺衰、金锁八要素(德合刑冲克旺墓空)、新派量化打分、长生鬼沐浴鬼、怪爻。
 // 全部输出结构真值+古籍断义标签,吉凶综合交 AI。规则忠于《断易天机》《增删卜易》通行口径。
-import { ZHI_WUXING, ZHI_YINYANG, WUXING_SHENG, WUXING_KE, LIUCHONG, LIUHE, HAI, shengKe, isXing } from './LiuYaoConst.js';
+import { ZHI_WUXING, WUXING_SHENG, WUXING_KE, LIUCHONG, LIUHE, HAI, shengKe, isXing } from './LiuYaoConst.js';
 import { changshengOf, wangShuaiByMonth } from './LiuYaoEngine.js';
 
 // 六亲生克链(父母生兄弟…;父母克子孙…)

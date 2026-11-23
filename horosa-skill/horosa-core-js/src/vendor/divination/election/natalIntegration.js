@@ -4,7 +4,7 @@
 import { ageAt, profectionHouse, firdariaAt, zrL1At, profectionMD, fractionalAge, firdariaSubAt, zrL2At } from '../engine/timeLords.js';
 import { norm360 as norm360TL } from '../engine/utils.js';
 import { SIGNS } from '../data/signs.js';
-import { norm360, angularDist } from '../engine/utils.js';
+import { angularDist } from '../engine/utils.js';
 import { PLANETS } from '../data/planets.js';
 
 function cn(k){ return (PLANETS[k] || {}).cn || k; }

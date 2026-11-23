@@ -2,7 +2,7 @@
 // 纯函数、确定性;全部输出为「结构真值+原文断义标签」,吉凶解读交 AI。起例逐字忠于《断易天机》(校注中性称「今注」)。
 import { littleEndian } from './guaHelper.js';
 import { getGua64 } from './GuaConst.js';
-import { DIZHI, TIANGAN, ZHI_WUXING, WUXING_SHENG, LIUCHONG } from './LiuYaoConst.js';
+import { DIZHI, TIANGAN, ZHI_WUXING, WUXING_SHENG } from './LiuYaoConst.js';
 import { parseYaoName, palaceTypeOf, guaShenOf } from './LiuYaoEngine.js';
 
 const ZI = DIZHI; // ['子'..'亥']

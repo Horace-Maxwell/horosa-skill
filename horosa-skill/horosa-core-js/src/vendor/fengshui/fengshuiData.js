@@ -208,11 +208,7 @@ export const YEAR_GOD_JX = {
 };
 
 // ── 择日 · 建除十二神（正统古法）：建日=日支==月建支，顺布 ─────────────────
-export const JIANCHU_12 = ['建', '除', '满', '平', '定', '执', '破', '危', '成', '收', '开', '闭'];
-export const JIANCHU_JX = {
-	建: 'neutral', 除: 'good', 满: 'neutral', 平: 'neutral', 定: 'good', 执: 'good',
-	破: 'bad', 危: 'neutral', 成: 'good', 收: 'neutral', 开: 'good', 闭: 'bad',
-};
+export { JIANCHU_12, JIANCHU_JX } from '../utils/jianChu.js';   // 单一来源(黄历 / 三式合一右栏同用)
 
 // ── 择日 · 黄道黑道十二值神（正统古法）────────────────────────────────────
 export const HUANG_HEI_ORDER = ['青龙', '明堂', '天刑', '朱雀', '金匮', '天德', '白虎', '玉堂', '天牢', '玄武', '司命', '勾陈'];
@@ -242,7 +238,7 @@ export const FENJIN_GAN_JX = {
 // 起点常量（子山正中=0°；通行盘 甲子起壬山初）。度数分区在 liqiCore 用之，皆注需按门派校。
 export const XIANFA_START = { 子中: 0, chuanshanStartDeg: 337.5, toudiStartDeg: 337.5, fenjinStartDeg: 337.5 };
 
-// ── 形势派参考（正统体系，判定清单用；纯参考文本）────────────────────────
+// ── 峦头形法参考（正统体系，判定清单用；纯参考文本）────────────────────────
 export const XINGSHI_9STAR = [   // 寻龙九星形体（2.2，廖公《泄天机》）
 	{ name: '贪狼', wuxing: '木', shape: '尖耸如笋、文笔', jx: 'good', zhu: '文贵' },
 	{ name: '巨门', wuxing: '土', shape: '方平如屏、御屏', jx: 'good', zhu: '财富禄位' },

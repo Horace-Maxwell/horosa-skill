@@ -5,7 +5,7 @@
 // 终点样/「递归转变分解」到分钟/plateKey 行折叠/pick 两端内缩 1 分钟/CHUNK 让出主线程/
 // AbortSignal/maxHits·maxSpan 防呆/进度契约 {done,total,hits,partial}。
 // 技法注入面(makeHourlyScanEngine 五参+可选掩码):
-//   makeScanCtx({cfg,geoParams,options,w0,w1}) → 一次性昂贵准备(节气种子/三家 ctx…)
+//   makeScanCtx({cfg,geoParams,options,w0,w1,tree}) → 一次性昂贵准备(节气种子/三家 ctx…;tree 只在扫描时给,逐刻解释不给)
 //   computePanAt(scanCtx, geoParams, options, dateStr, timeStr) → pan|null
 //   plateKeyOf(pan, mask?) → string   🔴 必须覆盖全部条件可见判定面,且**排除时间戳类回显字段**
 //     (太乙 applyNongliDisplay 的 clockTime/realSunTime 类字段入 key = 逐分钟成行爆炸)
@@ -162,7 +162,7 @@ export function makeHourlyScanEngine({
 		}
 		const w0 = msToWall(t0, offsetMin);
 		const w1 = msToWall(t1, offsetMin);
-		const scanCtx = typeof makeScanCtx === 'function' ? makeScanCtx({ cfg, geoParams, options, w0, w1 }) : null;
+		const scanCtx = typeof makeScanCtx === 'function' ? makeScanCtx({ cfg, geoParams, options, w0, w1, tree }) : null;
 		// 依赖感知掩码:整棵树算一次(树/参数扫描期不变);异常=null 回退全位(保守)。
 		let keyMask = null;
 		if(typeof keyMaskOf === 'function'){

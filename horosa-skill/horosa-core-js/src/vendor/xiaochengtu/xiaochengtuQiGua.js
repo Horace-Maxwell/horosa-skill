@@ -2,6 +2,7 @@
 // 纯函数，零 UI 零接线。复用 gua/GuaConst 的 Gua8 / Gua64（卦爻 value 均为自下而上 littleEndian）。
 import { Gua8, Gua64 } from '../gua/GuaConst.js';
 import { TIAN_DI_SHU_GUA, XIAN_TIAN_GUA } from './xiaochengtuConst.js';
+import { randomBit, randomInt } from '../utils/trueRandom.js';
 
 // ── 卦体工具 ───────────────────────────────────────────
 /** 按名取八卦（Gua8 条目） */
@@ -71,10 +72,19 @@ export function qiGuaManual({ up, lo, dongYaos = [] }) {
 
 // ── 模式一·补：大衍蓍草起卦（十八变，可复现） ───────────
 // 每爻三变得 6/7/8/9（老阴6/少阳7/少阴8/老阳9,蓍草概率 1/5/7/3 之十六);老阴老阳为动爻。
-// 之卦=动爻取变,无动爻则之卦=本卦(沿用现口径)。seed 入 payload 可复现;或手录每爻 6/7/8/9。
+// 之卦=动爻取变,无动爻则之卦=本卦(沿用现口径)。
+// 三种来源:手录每爻 6/7/8/9;填了整数种子 = 按种子确定性派生(同种子同卦,可复现);
+// 两样都没给 = 随机起卦,每一爻当场取系统真随机数(见 utils/trueRandom.js),所得之卦由调用方冻结存档。
 function seededRng(seed) {
 	let s = (Math.trunc(Number(seed)) || 1) >>> 0;
 	return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+const noSeed = (seed) => seed === undefined || seed === null || `${seed}` === '';
+// 蓍草十六分之一格(0–15 等概率)、一枚钱(0/1 各半)的取数器
+function rollSource(seed) {
+	if (noSeed(seed)) { return { roll16: () => randomInt(16), coin: () => randomBit() }; }
+	const rng = seededRng(seed || 1);
+	return { roll16: () => Math.floor(rng() * 16), coin: () => (rng() < 0.5 ? 1 : 0) };
 }
 function yaoFromRoll16(n) {
 	const r = (((n % 16) + 16) % 16);
@@ -89,8 +99,8 @@ export function qiGuaByDaYan({ seed, manualCounts } = {}) {
 	if (Array.isArray(manualCounts) && manualCounts.length === 6 && manualCounts.every((v) => [6, 7, 8, 9].indexOf(Number(v)) >= 0)) {
 		counts = manualCounts.map(Number);
 	} else {
-		const rng = seededRng(seed || 1);
-		counts = Array.from({ length: 6 }, () => yaoFromRoll16(Math.floor(rng() * 16)));
+		const src = rollSource(seed);
+		counts = Array.from({ length: 6 }, () => yaoFromRoll16(src.roll16()));
 	}
 	// 本卦自下而上:老阳9/少阳7=阳(1);老阴6/少阴8=阴(0)。动爻=老阴6或老阳9。
 	const benLines = counts.map((c) => ((c === 9 || c === 7) ? 1 : 0));
@@ -107,15 +117,15 @@ export function qiGuaByDaYan({ seed, manualCounts } = {}) {
 // 🔴 惟书中只记所得之卦而未记铜钱规则,故此处按通行摇钱古法:三枚铜钱一掷为一变,三变成一爻;
 //    背数 0/1/2/3 → 老阴6(三字,1/8) / 少阳7(3/8) / 少阴8(3/8) / 老阳9(三背,1/8),老阴老阳为动爻。
 //    与大衍蓍草之十六分概率(3/5/7/1)不同,是为两法之别(同为六爻十八变而分布有异)。
-// 之卦=动爻取变,无动爻则之卦=本卦(沿用现口径)。seed 可复现;或手录每爻 6/7/8/9。
+// 之卦=动爻取变,无动爻则之卦=本卦(沿用现口径)。来源同上:手录 / 整数种子 / 都没给 = 真随机。
 export function qiGuaByYaoQian({ seed, manualCounts } = {}) {
 	let counts;
 	if (Array.isArray(manualCounts) && manualCounts.length === 6 && manualCounts.every((v) => [6, 7, 8, 9].indexOf(Number(v)) >= 0)) {
 		counts = manualCounts.map(Number);
 	} else {
-		const rng = seededRng(seed || 1);
+		const src = rollSource(seed);
 		// 每爻三掷,每掷背(1)/字(0);背数 + 6 = 该爻之数。
-		counts = Array.from({ length: 6 }, () => 6 + [0, 1, 2].reduce((acc) => acc + (rng() < 0.5 ? 1 : 0), 0));
+		counts = Array.from({ length: 6 }, () => 6 + [0, 1, 2].reduce((acc) => acc + src.coin(), 0));
 	}
 	const benLines = counts.map((c) => ((c === 9 || c === 7) ? 1 : 0));
 	const dongYaos = counts.map((c, i) => ((c === 6 || c === 9) ? i + 1 : 0)).filter(Boolean);

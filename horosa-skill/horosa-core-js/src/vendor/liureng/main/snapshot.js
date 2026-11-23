@@ -11,10 +11,11 @@ import { matchBiFa } from '../../liureng/LRBiFaDoc.js';
 import { sanChuanRelationSnapshotLines } from '../../liureng/LRSanChuanRelationMini.js';   // 小图与快照共用同一纯函数
 import { fmtValue, appendMapSection } from './birthRunYear.js';
 import { buildQiZhengItems } from './ganzhiHelpers.js';
-import { QI_METHODS, YUE_JIANG_METHODS, FEN_ZHOU_YE_METHODS, buildLiuRengCastOverride } from './castLayout.js';
+import { QI_METHODS, YUE_JIANG_METHODS, FEN_ZHOU_YE_METHODS, buildLiuRengCastOverride, liurengCastMethodMissingInput } from './castLayout.js';
 import { buildLiuRengPanRows, buildLiuRengSanChuanRows, buildLiuRengSuiShaRows, buildLiuRengZhangShengRows } from './panData.js';
-import { XIAO_JU_REFERENCE_TAB_KEYS } from './referenceData.js';
-import { buildOverviewReferenceText, buildLiuRengReferenceBundle, appendReferenceSnapshotSection } from './referenceMatch.js';
+import { XIAO_JU_REFERENCE_TAB_KEYS } from './referenceXiaoJu.js';
+import { buildOverviewReferenceText } from './referenceOverview.js';
+import { buildLiuRengReferenceBundle, appendReferenceSnapshotSection } from './referenceMatch.js';
 
 export function buildLiuRengSnapshotText(params, liureng, runyear, chartObj, guirengType, zhangshengElem, gender, castOpts){
 	const lines = [];
@@ -54,7 +55,13 @@ export function buildLiuRengSnapshotText(params, liureng, runyear, chartObj, gui
 		lines.push(`四柱：${fmtValue(cols.year && cols.year.ganzi)}年 ${fmtValue(cols.month && cols.month.ganzi)}月 ${fmtValue(cols.day && cols.day.ganzi)}日 ${fmtValue(cols.time && cols.time.ganzi)}时`);
 	}
 	lines.push(`贵人体系：${['六壬法贵人', '遁甲法贵人', '星占法贵人', '甲戊兼牛羊', '干合阳阴贵'][guirengType] || '星占法贵人'}`);
-	lines.push(`起课法：${(QI_METHODS.find((m)=>m.key === (_castOpts.castMethod || 'zheng')) || QI_METHODS[0]).name}`);
+	{
+		// 所选法缺输入(本命支 / 行年支 / 所选时辰 / 所报之数)时如实写:此法未生效 + 实际按哪两支起。调用方直接给了 castOverride(三式合一)时不判(那边自有口径)
+		const _qiName = (QI_METHODS.find((m)=>m.key === (_castOpts.castMethod || 'zheng')) || QI_METHODS[0]).name;
+		const _qiMissing = (_castOpts.castOverride && typeof _castOpts.castOverride === 'object') ? '' : liurengCastMethodMissingInput(_castOpts.castMethod || 'zheng', _castOpts);
+		const _qiActual = _qiMissing && castOverride && castOverride.yue && castOverride.timeZhi ? `；实际按「${castOverride.yue}加${castOverride.timeZhi}」起` : '';
+		lines.push(_qiMissing ? `起课法：${_qiName}（缺${_qiMissing}，此法未生效${_qiActual}）` : `起课法：${_qiName}`);
+	}
 	if(_castOpts.castMethod === 'xuanshi' && _castOpts.xuanShiZhi){ lines.push(`选时：${_castOpts.xuanShiZhi}时`); }
 	if((_castOpts.castMethod === 'yanshu' || _castOpts.castMethod === 'baoshu') && (_castOpts.yanShuNum || _castOpts.yanShuNum === 0)){ lines.push(`${_castOpts.castMethod === 'baoshu' ? '报数/端法(÷12定支)' : '演数'}：${_castOpts.yanShuNum}`); }
 	lines.push(`换将：${(YUE_JIANG_METHODS.find((m)=>m.key === (_castOpts.yueJiangMethod || 'zhongqi')) || YUE_JIANG_METHODS[0]).name}`);
