@@ -1115,14 +1115,17 @@ check('feigong 时上起青龙飞九宫，7 段 + determinism', () => {
   assert(again.snapshot_text === r.snapshot_text, '同起支须同盘（冻结局）');
 });
 
-check('xiaochengtu 洛书九宫 + 股市段条件 + 大衍 seed 确定性', () => {
+check('xiaochengtu 洛书九宫 + 股市段条件 + 大衍真随机 / seed 确定性 / counts 重开', () => {
   const manual = runXiaoChengTu({ qiguaFa: 'manual', up: '乾', lo: '兑', dongYaos: [3], yongGong: 1, askEvent: '求财' });
   ['[问事]', '[起卦]', '[佈局]', '[推导]', '[四象]', '[应期]'].forEach((h) => assert(manual.snapshot_text.includes(h), `missing ${h}`));
   assert(!manual.snapshot_text.includes('[股市]'), 'non-stock must not emit [股市]');
   const stock = runXiaoChengTu({ qiguaFa: 'stock', open: '1563.60', close: '1571.10', yongGong: 1 });
   assert(stock.snapshot_text.includes('[股市]'), 'stock mode must emit [股市]');
+  // v3.15.0 起同上游页面：不给 seed / manualCounts = 取系统随机源当场起卦，回传六爻之数 counts；counts 作 manualCounts 传回即原样重开。
   const noSeed = runXiaoChengTu({ qiguaFa: 'dayan' });
-  assert(noSeed.data.reason === 'dayan_seed_required', 'dayan without seed must refuse');
+  assert(!noSeed.data.reason && Array.isArray(noSeed.data.counts) && noSeed.data.counts.length === 6, 'dayan without seed must cast at random and return counts');
+  const reopened = runXiaoChengTu({ qiguaFa: 'dayan', manualCounts: noSeed.data.counts });
+  assert(reopened.snapshot_text === noSeed.snapshot_text, '大衍 counts 传回须原样重开');
   const a = runXiaoChengTu({ qiguaFa: 'dayan', seed: 12345 });
   const b = runXiaoChengTu({ qiguaFa: 'dayan', seed: 12345 });
   assert(a.snapshot_text === b.snapshot_text, '大衍同 seed 须同盘');
@@ -1196,12 +1199,15 @@ try {
 // 灵棋经（上游 v3.9.0）值级金标 —— 段集恒定 + 同刻同卦幂等 + 卦是冻结值。
 // 这三条是上游 __tests__/lingqi*.test.js 的不变量，headless 侧必须同样成立：
 //   ① 七段恒出（注家开关只影响段内行，不改段集 —— 上游 parityAll 双向哨兵口径）；
-//   ② 同一占时两次调用字节幂等（占时种子；headless 不走 random 档，否则古法「不可再擲」失守）；
-//   ③ 给了 counts 就复排、绝不重掷（读档/事盘纪律）。
-check('lingqi 七段恒出 + 同刻幂等 + counts 冻结不重掷', () => {
-  const at = { year: 2028, month: 4, day: 6, hour: 9, minute: 33, question: '事业', category: 'career' };
+//   ② 占时种子档（seedMode time_seed）同一占时两次调用字节幂等；缺省档 = 真随机（v3.15.0 同上游页面缺省），回传 counts；
+//   ③ 给了 counts 就复排、绝不重掷（读档/事盘纪律 —— 真随机的「不可再擲」也靠它：回传 counts 即原卦）。
+check('lingqi 七段恒出 + 占时档幂等 + 缺省真随机 + counts 冻结不重掷', () => {
+  const at = { year: 2028, month: 4, day: 6, hour: 9, minute: 33, question: '事业', category: 'career', seedMode: 'time_seed' };
   const a = runLingqi(at);
   const b = runLingqi({ ...at });
+  const rnd = runLingqi({ ...at, seedMode: undefined });
+  assert(rnd.seed_mode === 'random' && Array.isArray(rnd.counts) && rnd.counts.length === 3, '缺省档须为真随机并回传 counts');
+  assert(runLingqi({ ...at, seedMode: undefined, counts: rnd.counts }).snapshot_text === rnd.snapshot_text, '真随机 counts 传回须字节原样重开');
   const titles = a.snapshot_text.split('\n').filter((l) => l.startsWith('[')).map((l) => l.trim());
   assert(
     JSON.stringify(titles) === JSON.stringify(['[起盘信息]', '[棋势]', '[卦象]', '[繇辞]', '[诸家注]', '[课断]', '[断诗]']),

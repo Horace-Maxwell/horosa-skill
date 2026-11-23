@@ -389,6 +389,45 @@ def _js_parse_int(value: Any) -> int | None:
     return int(match.group(1)) if match else None
 
 
+# 奇门盘面口径词表（= vendored 上游 dunjia/calc/options.js JIGONG_MODE_OPTIONS / ZHISHI_OPTIONS / ANGAN_MODE_OPTIONS 与
+# dunjia/calc/overlay.js TUIYAN_VIEW_OPTIONS / TUIYAN_GONG_OPTIONS 的 value 列；tests/test_qimen_overlays.py 在 Node 里读 vendored 表逐项对拍）。
+# 上游 calcDunJia 认不出就静默回落缺省；skill 照「认不出就报错」的口径在入口拦下。v3.15.0 新增：寄宫「阳遁寄坤·阴遁寄艮」、
+# 值使「阳遁死门·阴遁生门」(3)、暗干第六法「时干加值使·按天盘干序转」与附加层五键（寄干 / 天禽 / 推演 ×2 / 十二建星，缺省关）。
+_QIMEN_JIGONG_MODES = ("kun", "yang_gen_yin_kun", "yang_kun_yin_gen", "gen", "siwei", "bajie")
+_QIMEN_ZHISHI_TYPES = (0, 1, 2, 3)
+_QIMEN_ANGAN_MODES = ("off", "dipan", "zhishi_fei", "zhishi_zhuan", "manpan_fei", "tianpan_zhuan")
+_QIMEN_TUIYAN_VIEWS = ("off", "fan", "zhuan")
+_QIMEN_TUIYAN_GONGS = ("shigan", "zhifu", "zhishi", "8", "3", "4", "1", "9", "6", "7", "2")
+_QIMEN_OVERLAY_SWITCHES = ("showJiGan", "showTianQin", "showJianChu")
+
+
+def _qimen_validate_vocab(options: dict[str, Any]) -> None:
+    """盘面口径与附加层的值域闸（只校验给了的键；缺省照上游）。开关收 true/false/1/0 并归成布尔。"""
+    for key, allowed in (("jiGongMode", _QIMEN_JIGONG_MODES), ("anGanMode", _QIMEN_ANGAN_MODES), ("tuiYanView", _QIMEN_TUIYAN_VIEWS)):
+        value = options.get(key)
+        if value not in (None, "") and value not in allowed:
+            raise _qimen_option_error(key, value, list(allowed))
+    if options.get("zhiShiType") not in (None, ""):
+        zhi_shi = _js_parse_int(options.get("zhiShiType"))
+        if zhi_shi not in _QIMEN_ZHISHI_TYPES:
+            raise _qimen_option_error("zhiShiType", options.get("zhiShiType"), list(_QIMEN_ZHISHI_TYPES))
+    if options.get("tuiYanGong") not in (None, ""):
+        gong = f"{options['tuiYanGong']}".strip()
+        if gong not in _QIMEN_TUIYAN_GONGS:
+            raise _qimen_option_error("tuiYanGong", options.get("tuiYanGong"), list(_QIMEN_TUIYAN_GONGS))
+        options["tuiYanGong"] = gong
+    for key in _QIMEN_OVERLAY_SWITCHES:
+        value = options.get(key)
+        if value is None:
+            continue
+        if value in (True, 1, "1", "true", "True"):
+            options[key] = True
+        elif value in (False, 0, "0", "false", "False"):
+            options[key] = False
+        else:
+            raise _qimen_option_error(key, value, [True, False])
+
+
 def _qimen_option_error(field: str, value: Any, allowed: list[Any]) -> ToolValidationError:
     return ToolValidationError(
         bilingual(
@@ -442,6 +481,7 @@ def _qimen_effective_options(payload: dict[str, Any]) -> dict[str, Any]:
         if pai_pan not in _QIMEN_PAIPAN_TYPES:
             raise _qimen_option_error("paiPanType", options.get("paiPanType"), list(_QIMEN_PAIPAN_TYPES))
         options["paiPanType"] = pai_pan
+    _qimen_validate_vocab(options)
     if options.get("timeAlg") not in (None, ""):
         # 上游奇门只两档（DunJiaCalc.js TIME_ALG_OPTIONS）；JS normalizeTimeAlg 只认数字 1（`=== 1`），
         # 字符串 "1" 会被当真太阳时 —— 故此处统一收成 int，不让两层对同一个值各读一套。

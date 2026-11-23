@@ -84,8 +84,12 @@ _SANSHI_OPTIONS_KEYS: dict[str, str] = {
         "options（盘面口径；缺省 = 上游 DunJiaMain DEFAULT_OPTIONS，认不出报 tool.qimen_invalid_option）："
         "qijuMethod zhirun 置闰(缺省)/chaibu 拆补/maoshan 茅山/wurun 无闰/shuzi 阴盘报数(需 shuziReportNumber)；"
         "paiPanType 3 时家(缺省)/0 年家/1 月家/2 日家/4 刻家/6 日家·金函；school 转盘(缺省)/飞盘/混合；"
-        "timeAlg 0 真太阳时(缺省)/1 直接时间；zhiShiType 0/1/2；zhirunLeapDays 9；godsPreset baihu_xuanwu；"
-        "jiGongMode kun；anGanMode off；kongMarkBoth；shiftPalace + shiftZhiFuMode follow/recalc；kongMode/yimaMode day/time 等。"
+        "timeAlg 0 真太阳时(缺省)/1 直接时间；zhiShiType 0 死门(缺省)/1 阴阳遁/2 节气/3 阳遁死门·阴遁生门；zhirunLeapDays 9；"
+        "godsPreset baihu_xuanwu；jiGongMode kun 恒寄坤(缺省)/yang_gen_yin_kun/yang_kun_yin_gen 阳寄坤阴寄艮/gen/siwei/bajie；"
+        "anGanMode off(缺省)/dipan/zhishi_fei/zhishi_zhuan/manpan_fei/tianpan_zhuan 按天盘干序转；kongMarkBoth；shiftPalace + "
+        "shiftZhiFuMode follow/recalc；kongMode/yimaMode day/time 等。"
+        "附加层（v3.15.0，缺省关，开了才进快照、不改排盘）：showJiGan 寄干 / showTianQin 天禽落宫（飞盘无）/ tuiYanView off|fan 翻宫|"
+        "zhuan 转宫 + tuiYanGong shigan(缺省)|zhifu|zhishi|洛书宫数 / showJianChu 十二建星（日值按逢节重复，同黄历）。"
         "路由同上游 isQimenLocalRoute：paiPanType∉{3,5}、飞盘/混合、shuzi，或 zhiShiType/zhirunLeapDays/godsPreset/"
         "jiGongMode/anGanMode/kongMarkBoth/shiftZhiFuMode=recalc 任一非缺省 → 本地 calcDunJia（不打 ken，data.route.local=true，"
         "compute_sources.pan=local_route_calcDunJia）；其余由 ken 算盘。"
@@ -110,7 +114,7 @@ _SANSHI_OPTIONS_KEYS: dict[str, str] = {
     "liureng_gods": _LIURENG_OPTIONS_KEYS,
     "liureng_runyear": _LIURENG_OPTIONS_KEYS + "行年盘：date/time=问测人出生，guaDate/guaTime=起课时刻（课盘按起课时刻起）。",
     "sanshiunited": (
-        "qimen_options 同 qimen options；taiyi_options 同 taiyi options（上游键 taiyiTimeBasis 亦可放顶层）；"
+        "qimen_options 同 qimen options（附加层 showJiGan / showTianQin / tuiYanView / showJianChu 开了进【概览】段，同上游）；taiyi_options 同 taiyi options（上游键 taiyiTimeBasis 亦可放顶层）；"
         "liureng_options = 上游 SANSHI_PAGE_SETTINGS 六壬层：guirengType(或 guireng) 0-4（缺省 2 星占法）/ yueJiangMethod / "
         "fenZhouYe / seHaiMethod / seHaiBoundary / shiRuKe / yearShenShaSort / yinyangSystem / tuWangShuai（词表同 liureng_gods）"
         "+ zhanCategory；castMethod 锁 zheng（同上游），timeAlg 用顶层共享值，其余键（wuxing 等上游三式没有的）报错。"

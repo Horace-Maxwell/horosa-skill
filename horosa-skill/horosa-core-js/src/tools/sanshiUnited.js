@@ -173,6 +173,10 @@ export function runSanshiUnited(payload) {
   }
   const nongli = input.nongli && typeof input.nongli === 'object' ? input.nongli : null;
   const dunjia = input.dunjia && typeof input.dunjia === 'object' ? input.dunjia : null;
+  // 十二建星（v3.15.0）：上游三式页面一份 options 同管奇门层与快照，概览段按 options.showJianChu 出行；skill 的奇门层
+  // 由 qimen 工具按 qimen_options 起盘，开关开了盘上才有 jianChu 键 —— 以盘为准回填，免得两处开关各说各话。
+  // 寄干 / 推演两行快照直接读盘（dunjia.jiGan / dunjia.tuiYan），无需回填。
+  if (dunjia && dunjia.jianChu) options.showJianChu = true;
   const taiyi = input.taiyi && typeof input.taiyi === 'object' ? input.taiyi : null;
   const chartWrap = input.chart && typeof input.chart === 'object'
     ? (input.chart.chart ? input.chart : { chart: input.chart })
