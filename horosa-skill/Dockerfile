@@ -4,7 +4,7 @@
 # and both stages share one Debian release so the copied binary finds the glibc / libstdc++ it was built against
 # (tests/test_dockerfile_matches_wheel_includes.py keeps the pin, the floor and the copies in step).
 # 审计 PF-15：基础镜像钉 tag@digest（只钉 tag 会被上游改写）；Dependabot 跟进。
-FROM node:22.23.2-trixie-slim@sha256:c5849ff9c9ebcd66615412f0b548ca5b8ecaef84003dc9ac2e077ebe46aaa3f6 AS corejs
+FROM node:22.23.5-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64 AS corejs
 
 WORKDIR /opt/horosa-core-js
 # Production dependencies exactly as locked (astronomy-engine / lunar-javascript / moment / tz-lookup); dev deps never enter.
