@@ -1943,7 +1943,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **service 层设置确认闸**（`service/api/gate.py`）：`run_tool / dispatch / hecan / report_from_tool` 缺省 enforce；入口已过闸、内部嵌套、脚本一律写
   `gate="checked"`（AST 守卫 `test_every_internal_and_surface_call_says_which_gate`）。测试套件缺省 checked，专测闸门标 `@pytest.mark.service_gate`。
 - **改输出缺省形态时，测「下一层」的老用例显式放开上一层**（full 视图超模型预算回目录，线上预算层的用例放开 `mcp.result_budget`），别为了让它们绿去改新形态。
-- **技法登记普查**：`scripts/technique_census.py <技法名>` 列它在哪些表里；`contracts/technique_census.json` 由 `--write` 录，改了表成员要重录（`tests/test_technique_census.py`）。
+- **技法登记普查**：`scripts/technique_census.py <技法名>` 列它在哪些表里；`contracts/technique_census.json` 由 `--write` 录，改了表成员要重录（`tests/test_technique_census.py`）。普查把模块全局里「技法名 ≥3 且过半」的容器都当表，所以模块 / 类体的推导式里不许写 `:=`（它会泄漏成全局，值随 frozenset 遍历顺序变——v0.52.0 发版矩阵只在 Windows ARM 红，`tests/test_no_leaked_walrus.py`）；只有一条 lane 的普查红，先查遍历顺序，别重录。
 
 ### 9.6 发布 · 分发（release / distribution）
 

@@ -29,11 +29,16 @@ _RAW_ARGUMENTS: ContextVar[dict[str, Any] | None] = ContextVar("horosa_mcp_raw_a
 # 技法输入模型：这一层只校验、原样交给 run_tool（它再归一化一次并把解读说明写进 warnings）。
 _TECHNIQUE_MODELS = frozenset(definition.input_model for definition in TOOL_DEFINITIONS.values())
 # 错误文案里的技法名：一个模型只服务一个技法时用它的名字（神数 14 支共用一个模型，写不出具体哪支就写「technique」）。
-_MODEL_TOOL_NAMES = {
-    model: names[0]
-    for model in _TECHNIQUE_MODELS
-    if len(names := [name for name, definition in TOOL_DEFINITIONS.items() if definition.input_model is model]) == 1
-}
+# 放进函数里算（v0.52.0）：原先模块级推导式里的 `names := …` 会泄漏成模块全局 `names`，值取决于 frozenset 按对象地址的遍历顺序；
+# 最后一个碰上多技法共用的模型（推运 6 个 / 神数 11 个 / 星盘 3 个）时，技法普查把它当成一张登记表，Windows ARM lane 因此随机红（tests/test_no_leaked_walrus.py）。
+def _single_tool_models() -> dict[type[BaseModel], str]:
+    by_model: dict[type[BaseModel], list[str]] = {}
+    for name, definition in TOOL_DEFINITIONS.items():
+        by_model.setdefault(definition.input_model, []).append(name)
+    return {model: names[0] for model, names in by_model.items() if len(names) == 1}
+
+
+_MODEL_TOOL_NAMES = _single_tool_models()
 
 
 @contextmanager

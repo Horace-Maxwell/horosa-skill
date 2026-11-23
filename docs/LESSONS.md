@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.52.0 (2026-11-23) | 发版矩阵 Windows ARM lane 红 1 条：`test_technique_census` 说推运六技法多出一张表 `surfaces.mcp_requests:names`——模块级推导式里的 `names := …` 泄漏成模块全局，值看 frozenset 按对象地址的遍历顺序，另两条 lane 恰好没碰上 | 挪进函数里算；AST 守卫禁止模块 / 类体推导式里的 `:=`（负向对照：原代码被抓）；普查红在单 lane 时先怀疑遍历顺序 |
 | v0.52.0 (2026-11-22) | `bump_version.py 0.52.0` 把 README / README_EN / 受限网络文档里十四处「从哪版起」改成 0.52.0——历史判定只认带 v 的整行标记，「自 0.50.0 起」「since 0.50.0」「(v0.41.0;」「0.50.0 之前的发布」每次 bump 都跟着走；查 git 才知道 v0.51.0 那次已经全改成 0.51.0 | 逐处判（前缀 自 / since / from / before / pre- / as of / 左括号，后缀 之前 / 及以后 / 起 / on）；按首次写入的提交把十四处恢复成 0.50.0 / 0.41.0；测试对真站点模拟下一次 bump（负向对照：旧脚本 3 条红） |
 | v0.52.0 (2026-11-22) | 发版前 live 复验：`surface_audit.py` 红 1/386（`[mcp-full] bazi_direct: tool.unknown`）——6008fd80 让 `horosa_cn_bazi_direct` 不再单独广告，产品对、审计脚本没跟上，照普通技法调它；脚本要 vendored 实例、不进 CI，v0.51.0 带着这条红发了版没人看见 | 未广告的注册键走 `judge_unadvertised`（须回 tool.unknown 且替代工具在 tools/list 里）；判定抽成纯函数，离线用服务器真回包测（负向对照：旧 `judge` 判它红）；改工具面时同一提交改 surface_audit |
 | v0.52.0-dev (2026-11-20) | 三件加固（wheel 钉 runtime 摘要、升级失败自动回滚、出生时刻未知模式）；未知模式的西洋过滤器离线样例全绿，对 vendored 实例实跑才看到六类宫位 / 阿拉伯点漏网，德国派「主体：Asc」只删标题把相位行挂到上一块 | 过滤正文按块删；改过滤器必须实跑真盘读正文；新行为与旧测试冲突时改写旧测试的契约而不是删；macOS 布局夹具碰上按宿主判定的完整性 → 加模拟 Linux 档 |
@@ -266,6 +267,18 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.52.0 / 2026-11-23 — 发版矩阵只在 Windows ARM 红：普查看见一张「随机表」
+
+- **症状**：v0.52.0 草稿矩阵 darwin / win x64 绿，win-arm64 pytest 8349 passed 1 failed——`test_technique_census`：givenyear / lunarreturn / pd /
+  pdchart / solararc / solarreturn 各多一张 `surfaces.mcp_requests:names`。本机与 CI test job 都绿。
+- **根因**：`mcp_requests._MODEL_TOOL_NAMES` 是模块级字典推导式，条件里写 `len(names := [...]) == 1`。推导式里的赋值表达式绑定到**外层作用域**，
+  于是模块多了一个全局 `names`，值是遍历到的最后一个模型对应的技法名单。遍历对象是输入模型类的 frozenset，顺序随对象地址（类的 hash 就是 id）而变；
+  最后一个恰是推运六技法共用的 `PredictiveInput` 时，普查（模块全局里「技法名 ≥3 且过半」即算一张表）就把它记成登记表。哪个平台、哪次进程碰上全看内存布局。
+- **修复**：挪进 `_single_tool_models()` 函数里按模型分组再取单技法者；语义不变（99 个单技法模型）。
+- **守卫**：`tests/test_no_leaked_walrus.py`——AST 扫 `src/horosa_skill`，模块 / 类体（不在函数里）的推导式不得含 `:=`；`mcp_requests` 不得有 `names` 全局。
+  负向对照：原代码片段被抓到第 4 行 `names`、类体同样被抓、函数体不报。
+- **规则**：只有一条 lane 红、别处全绿的「表变了 / 顺序变了」，先查集合 / 字典的遍历顺序与模块全局的意外泄漏，别急着重录金标；lane 用例取自 main HEAD，修在 main 上即可重跑发布。
 
 ### v0.52.0 / 2026-11-22 — bump 脚本每次发版都把「从哪版起」改成当前版本
 
