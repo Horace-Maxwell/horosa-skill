@@ -594,6 +594,22 @@ RECOVERY_TABLE: dict[str, dict[str, _Any]] = {
         ),
         "next_action": "close_foreign_service_or_change_ports",
     },
+    # 审计 PF-01 第 3 层：发布页 wheel 带的钉值与清单不一致 / 清单是本包没钉过的版本。
+    "runtime.install_pin_mismatch": {"kind": "runtime", "prompt_to_user": bilingual(
+        "发布清单的摘要与本包钉住的不一致（镜像或缓存可能被换过），已拒绝安装：换 https 镜像或直连 github.com 后重试；details 里是两边的摘要。",
+        "The release manifest's digest differs from the one pinned in this package (a mirror or cache may have been tampered with); "
+        "nothing was installed: retry via github.com or a trusted https mirror; both digests are in details."),
+        "next_action": "use_trusted_source"},
+    "runtime.install_unpinned_version": {"kind": "runtime", "prompt_to_user": bilingual(
+        "要装的 runtime 版本本包没钉过摘要：给该版本归档的 `--sha256`，或确知来源时加 `--allow-unpinned`。",
+        "This package pins no digests for the requested runtime version: pass that release's `--sha256`, or `--allow-unpinned` if you trust the source."),
+        "next_action": "pass_sha256_or_allow_unpinned"},
+    # 审计 PF-04：升级后新 runtime 第一次起不来 → 已自动换回旧版。
+    "runtime.install_rolled_back": {"kind": "runtime", "prompt_to_user": bilingual(
+        "新装的 runtime 起不来，已自动换回旧版（details 里是两个版本与启动错误）。再起一次即可用旧版；新版的问题看 `horosa-skill doctor`。",
+        "The newly installed runtime failed to start and the previous one was restored (versions and the start error are in details). "
+        "Start again to use it; check `horosa-skill doctor` for the new version's problem."),
+        "next_action": "retry_start"},
     "runtime.install_previous_locked": {
         "kind": "runtime",
         "prompt_to_user": bilingual(

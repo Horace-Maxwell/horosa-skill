@@ -1302,6 +1302,16 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **端口占用看 socket，不只看 HTTP（E-07）。** `ports.port_taken`：有人 accept，或绑不上且点得出监听进程 = 占着；start 起启动器前、
   `runtime.start_timeout` 的 `port_takers`、doctor 都用它；非自家的占用者 → `runtime.port_taken`（不起、不杀）。测试里与 `classify_endpoint`
   一样钉住（`_managed_mode`），因为维护机的 9999 / 8899 上跑着桌面端。
+- **升级先留后路，第一次干净启动才删旧版（v0.52.0-dev，PF-04）。** install 换入新载荷后不再立刻删 `previous/`，而是写
+  `<runtime 根>/.upgrade-pending.json`（`manager._mark_upgrade_pending`）；`start_local_services` 是 `_start_local_services_impl` 的外壳：干净起来
+  （ok、非 starting / degraded / external）→ `_confirm_pending_upgrade` 删标记与 `previous/`（删不掉进结果的 `previous_cleanup` 告警，不算失败）；
+  `runtime.start_failed` / `runtime.start_timeout` 且没有 `port_takers`（端口被别人占不是新版的错）→ `_rollback_pending_upgrade`：停服务、拿换入锁、
+  `current` → `failed-upgrade`、`previous` → `current`、删标记，抛 `runtime.install_rolled_back`（`next_action: retry_start`）。doctor 报 `upgrade_pending`。
+- **wheel 带 runtime 校验和清单（v0.52.0-dev，PF-01 第三层）。** `horosa_skill/data/runtime_pins.json` 只在 release-runtime.yml 的 assemble 里
+  由双平台清单生成（`scripts/write_runtime_pins.py`，缺平台 / 缺 core_js / 缺版本即拒），从 tag 的 worktree 重建 wheel（hatch 收 untracked 文件），
+  `verify_wheel_contents.py --pinned-wheel` 验过才替换上传。安装时 `RuntimeManager.check_runtime_pin`：钉着的版本 sha 对不上 → `runtime.install_pin_mismatch`
+  （镜像 / 清单被换了），**清单 sha 与钉值一致时走镜像也算 `sha256_verified`**；包里没钉这个版本 → `runtime.install_unpinned_version`，除非
+  `--sha256` 或 `--allow-unpinned`。源码树 / 开发版 wheel 没有 pins 文件 = 不检查（不能让开发机装不上）。JS 引擎资产（`core_js`）同一道检查。
 
 ### 9.2 MCP 面 · schema · 错误信封（MCP surface / schema / errors）
 
@@ -1919,6 +1929,10 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **lane 的环境 ≠ CI 的环境**（v0.50.1 发版矩阵三 lane 同红）：lane 的 pytest 设着 `HOROSA_RUNTIME_START_TIMEOUT_SECONDS` 等行为开关，断言「没有 warnings」
   的用例要先清 `HOROSA_*`；时间上限按要拦的回归定（脱敏旧实现 43.7 s → 线 10 s），给 ARM 仿真 lane 留余量。lane 的用例取自 main HEAD，修用例不必重打 tag。
 - **改 horosa-core-js/package.json 同一提交重生锁文件**（`npm install --package-lock-only`；v0.50.0 tag 因此作废，`test_lockfile_root_mirrors_package_json` 守）。
+- **夹具是 macOS 布局、判定按宿主平台（v0.52.0-dev，PR #30 Linux + Windows 同红）**：`create_runtime_archive` 造 `runtime/mac/…`，而
+  `_payload_is_complete` / `_required_paths` 按宿主取 `runtime/linux/…` / `runtime/windows/…`——凡断言「载荷完整」才会发生的行为（升级标记、
+  崩溃后恢复），本机绿、CI 两个平台都红。用例里按宿主补齐（`tests/test_runtime_manager.py::_complete_for_this_host`），并加 `host=linux` 档
+  （`monkeypatch` `platform.system` → "Linux"），让 macOS 本机就能看见这一类。
 
 ### 9.5.3 审计后半程的四条（v0.51.0-dev）
 
@@ -1947,6 +1961,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   写进清单是规范外字段）；stdio 条目只许 `type`（必填）/ `command`（单个可执行名，不展开占位符）/ `args` / `env` / `cwd`；Cursor 不展开
   `${PLUGIN_ROOT}` → 一个占位符都不写，命令是 `uvx` + 钉当前版本的 wheel、精简面。VS Code / Copilot CLI / Codex / OpenHands 优先读它，
   OpenClaw / Claude Code 仍读 `.claude-plugin/`——两套并存不会重复注册。`verify_client_configs.check_agent_plugin` 锁；`bump_version` 同改两份。
+- **发布的 wheel 是 assemble 重建的那份（v0.52.0-dev）。** `publish_release.sh --draft` 先传的 wheel 不带 `runtime_pins.json`；release-runtime.yml
+  assemble 生成双平台清单后在 tag worktree 里写 pins、`uv build --wheel`、断言文件名 = `horosa_skill-<ver>-py3-none-any.whl` 并 `--pinned-wheel` 验，
+  在 `sha256sum` 之前放进 `dist/runtime`，与清单一起覆盖草稿资产（SHA256SUMS 因此算的是带 pins 的那份）。`test_release_pipeline_shape.py` 锁这段形状。
 - **零安装 = wheel 资产 + 镜像前缀 + 钉版本锁。** 每个 Release 附 `horosa_skill-<ver>-py3-none-any.whl`（发布脚本
   [6/9] `uv build --wheel`；`release-completeness.yml` 对 ≥ 0.38.0 断言在场并真跑 `uvx --from <URL> horosa-skill --version`）；
   `HOROSA_RUNTIME_MIRROR` 由 `runtime/mirrors.py` 统一改写清单/归档/wheel 三种 URL；`client config --launcher uvx-wheel`
@@ -1955,6 +1972,15 @@ A global stability pass hardened these; keep them true when you touch the releva
   受限网络的三条路成文于 `docs/INSTALL_RESTRICTED_NETWORK.md`（v0.38.0 B3）。
 
 ## 10. 上游镜像注记（upstream 星阙 — skill 必须镜像的行为）
+
+**skill 自有：出生时刻未知模式（v0.52.0-dev，审计输入一路待决项 1 第二档；上游没有对应功能）**：本命类角色的 `time` 是明确的「不详 / 未知 / unknown」
+（`TIME_UNKNOWN_WORDS`）时——八字（`bazi_birth` 等）、西洋本命五盘（chart / chart13 / hellen_chart / draconic / harmonic）、germany 按当地 12:00 算，
+`service/birth_time.py::apply` 在导出契约挂上之前过滤快照再重解析：八字去时柱 / 命宫 / 身宫 / 小运 / 五行力量 / 格局·用神 / 盲派结构、起运注「约数」；
+西洋只留起盘信息 / 星与虚点 / 相位 / 行星 / 月宿 / 12分度 / 主宰星链 / 埃及历，**整块**删四轴与阿拉伯点（◆ 小节、`主体：` 块、带宫位标记的点名小标题，
+只删标题会让下面的行挂到上一块下），去 `(10th; 1R)` 宫位标记，落宫 / 入垣宫 / 地平坐标 / 分值列抹成 —，日夜三分注「须白天 / 夜间出生」。
+略去的段保留段名 + 一行说明（否则导出契约补「本次计算未返回」占位，像引擎没给）。结果挂 `data.birth_time`（技法卡同挂）+ 中英告警。其余本命技法抛
+`tool.time_unknown`（`refusal_text` 按族说还能用什么，`must_ask_user`）；**缺 time 仍是缺**，照旧要问。离线样例过滤看不出漏网——改过滤器必须对
+vendored 实例实跑 chart / germany 读一遍正文（2026-11-20 第一次实跑查出六类漏网）。
 
 **有意偏离上游缺省：推运目标时刻的时区（v0.51.0-dev，审计 F03）**：上游缺省 `dirZone = 本命时区`；skill 在没给 `dirZone`、给了带钟点的目标时刻时，
 按目标地点（`dirLat` / `dirLon`，否则出生地）**在目标日期**的偏移取（`service/api/tools._default_target_zone`，与地名补时区同一个 `dstAwareZoneAt` +

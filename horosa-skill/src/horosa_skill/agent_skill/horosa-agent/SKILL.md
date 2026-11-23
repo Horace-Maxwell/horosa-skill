@@ -75,11 +75,17 @@ How the server read each value is written in `summary` / `warnings` (e.g. "地�
 
 **Rules a small model gets wrong:**
 
-- **No birth time.** There is no "time unknown" mode. Do not send `12:00` or `00:00` on your own; `"不详"`
-  is refused (`tool.time_unknown`). Tell the user the hour decides the hour pillar / Ascendant / houses. If the
-  user then chooses a time ("use noon"), send it, write that choice in `clarification_notes`, and say in your
-  answer that hour-dependent parts are uncertain. A 时辰 like `辰时` is refused (`tool.time_is_shichen`, the
-  error gives its clock span): the user picks the clock time.
+- **No birth time.** Never send `12:00` or `00:00` on your own, and never leave `time` out to mean "unknown"
+  (a missing `time` is still missing: ask). Tell the user the hour decides the hour pillar / Ascendant / houses.
+  If they truly do not know it, send `time: "不详"` (or `未知` / `unknown`): `bazi_birth` gives three pillars,
+  `chart` / `chart13` / `hellen_chart` / `draconic` / `harmonic` / `germany` give a no-houses chart (planets in
+  signs and aspects only); `data.birth_time` lists what was removed — say so, and do not read houses, the
+  Ascendant, lots or the hour pillar from the raw tree. Every other natal technique refuses `"不详"` with
+  `tool.time_unknown`; its message says what still works — relay it. If only the 时辰 is known (`辰时`), the
+  Chinese 命理 techniques (八字 / 紫微 / 河洛 / 神数 …) accept it (midpoint, disclosed); Western / 七政 / Indian
+  charts refuse it (`tool.time_is_shichen`, the error gives its clock span): the user picks the clock time. If the
+  user chooses a time ("use noon"), send it, write that choice in `clarification_notes`, and say in your answer
+  that hour-dependent parts are uncertain.
 - **Zone vs daylight saving.** With `place` and no `zone`, the zone comes from the place and the date (China
   used +09:00 in summers 1986–1991; the USA / Europe shift every year). An explicit `zone` offset is used **as
   given**, even if it contradicts the place and date. So: pass `place` and leave `zone` out. An IANA name

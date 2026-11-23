@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import partial
@@ -88,6 +89,40 @@ from horosa_skill.agent_guidance.questions import gender_required, place_fields_
 _INSIDE_TECHNIQUE: ContextVar[bool] = ContextVar("horosa_inside_technique", default=False)
 # 这次 run_tool 是否要在 service 层判设置确认闸（审计 A-4）：档案并进来之后、地名解析之前判（与入口层同一份裁决）。
 _GATE_ENFORCE: ContextVar[bool] = ContextVar("horosa_gate_enforce", default=False)
+# 这次 run_tool 是不是「出生时刻未知」模式（service/birth_time.py）：每次 run_tool 进入时置 False、退出时还原（嵌套调用互不串）。
+_BIRTH_TIME_UNKNOWN: ContextVar[bool] = ContextVar("horosa_birth_time_unknown", default=False)
+
+
+@contextmanager
+def _birth_time_scope() -> Iterator[None]:
+    token = _BIRTH_TIME_UNKNOWN.set(False)
+    try:
+        yield
+    finally:
+        _BIRTH_TIME_UNKNOWN.reset(token)
+
+
+def _birth_time_unknown(definition: Any, payload: Any) -> Any:
+    """`time` 明说不知道（不详 / unknown …）的本命类调用：支持的族按正午起（导出层再过滤，见 service/birth_time.py），
+    其余按族拒绝并说清楚还能用什么。缺 time 不在这里（那是没给，照旧问）。"""
+    from horosa_skill.engine.time_roles import NATAL, NATAL_MOMENT, NATAL_TARGET, time_role
+    from horosa_skill.input_fields import TIME_UNKNOWN_WORDS, clean_text
+    from horosa_skill.service import birth_time
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("time"), str):
+        return payload
+    if clean_text(payload["time"]).lower() not in TIME_UNKNOWN_WORDS or time_role(definition.name) not in (NATAL, NATAL_TARGET, NATAL_MOMENT):
+        return payload
+    if definition.name in birth_time.SUPPORTED_TOOLS:
+        _BIRTH_TIME_UNKNOWN.set(True)
+        return {**payload, "time": birth_time.NOON}
+    zh, en = birth_time.refusal_text(definition.name)
+    raise ToolValidationError(
+        bilingual(zh, en), code="tool.time_unknown",
+        details={"field": "time", "fields": [{"field": "time", "code": "tool.time_unknown", "message": bilingual(zh, en)}],
+                 "agent_recovery": {"kind": "input", "must_ask_user": True, "next_action": "ask_user_for_time",
+                                    "prompt_to_user": bilingual(zh, en)}},
+    )
 
 
 def _key_paths(payload: Any) -> frozenset[str]:
@@ -691,6 +726,7 @@ class ToolsAPI:
                 raise
         payload = _anchor_window_search(definition, payload)
         payload = _accept_shichen(definition, payload)
+        payload = _birth_time_unknown(definition, payload)
         try:
             payload = self._resolve_dir_place(definition, payload)
             # 地名 → 坐标 + 时区（v0.48.0，service/api/place.py）：lat / lon / zone 是必填，place 得在归一化与校验之前补上；
@@ -763,10 +799,18 @@ class ToolsAPI:
         response_data = self._attach_relative_comp_charts(tool_name, input_normalized, response_data)
         response_data = self._attach_jieqi_year_extras(tool_name, input_normalized, response_data)
         response_data = _attach_export_contract(tool_name, input_normalized, response_data)
+        if _BIRTH_TIME_UNKNOWN.get():
+            # 出生时刻未知：过滤快照里依赖时刻的段 / 行，再按过滤后的快照重新解析导出（正文里就不再有时柱 / 上升段）
+            from horosa_skill.service import birth_time
+
+            response_data = _attach_export_contract(tool_name, input_normalized, birth_time.apply(tool_name, response_data))
         response_data = self._attach_condition_echo(tool_name, input_normalized, response_data)
         # 技法依据卡：必须在 save_result **之前**挂，memory 才存到全量卡；
         # `_apply_response_view` 在存档之后裁剪，且显式豁免这个键（见那里的说明）。
-        return self._attach_technique_card(tool_name, input_normalized, response_data)
+        response_data = self._attach_technique_card(tool_name, input_normalized, response_data)
+        if isinstance(response_data, dict) and isinstance(response_data.get("birth_time"), dict) and isinstance(response_data.get("technique_card"), dict):
+            response_data["technique_card"]["birth_time"] = response_data["birth_time"]
+        return response_data
 
     def _resolve_dir_place(self, definition: Any, payload: Any) -> Any:
         """推运地点按地名给（审计 F19）：「我现在住纽约，看今年的太阳返照」以前 dirPlace 只换来「不是本技法的参数」，盘按出生地算。
@@ -1028,7 +1072,7 @@ class ToolsAPI:
                 "payload": payload,
                 "evaluation_case_id": evaluation_case_id,
             },
-        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), _run_tool_scope() as depth, input_notes_scope(fresh=_INSIDE_TECHNIQUE.get()) as input_notes:
+        ) as trace, _degrade_collector() as degrade_notes, decision_records(), _run_query_scope(query_text), _run_tool_scope() as depth, input_notes_scope(fresh=_INSIDE_TECHNIQUE.get()) as input_notes, _birth_time_scope():
             nested = depth > 1
             if name_note:
                 F.add_input_note(*name_note)
