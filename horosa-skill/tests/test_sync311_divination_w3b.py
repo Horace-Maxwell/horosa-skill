@@ -56,7 +56,12 @@ if (manual.length) {
 } else {
   gua = gz.buildTimeGua(nongli);
 }
-const st = Object.keys(gear).length ? { ...gua, liuyaoSettings: gear } : gua;
+const geared = Object.keys(gear).length ? { ...gua, liuyaoSettings: gear } : gua;
+// v3.15.0 withGuaDesc(st)（main/snapshot.js）：按 guaDescIdsOf(st) 三码取 /gua/desc，回包按码填 guaDesc（fetchGuaDescByIds）。
+// 回包 = 测试 RecordingClient 的 /gua/desc 桩（每码 {name:'卦'+码, 卦辞:'亨。'}）。
+const ids = gz.guaDescIdsOf(geared);
+const desc = Object.fromEntries([ids.guaOrg, ids.guaRes, ids.guaMiddle].map((c) => [c, { name: `卦${c}`, 卦辞: '亨。' }]));
+const st = { ...geared, guaDesc: { guaOrg: desc[ids.guaOrg], guaRes: desc[ids.guaRes], guaMiddle: desc[ids.guaMiddle] } };
 const dt = { format: (p) => (p === 'YYYY-MM-DD' ? rec.date : rec.time) };
 const fields = { date: { value: dt }, time: { value: dt }, zone: { value: rec.zone || '+08:00' },
   lon: { value: rec.lon || '' }, lat: { value: rec.lat || '' },
@@ -124,8 +129,8 @@ def test_sixyao_whole_snapshot_is_the_upstream_headless_builder(tmp_path, date: 
                          "综卦逐爻（初→上）：", "错卦逐爻（初→上）："]
         fu = rel.index("伏神卦(本宫首卦)逐爻（初→上）：")
         assert rel[fu + 1] == "第1爻：阴爻，爻名:丑土妻财"  # 巽为风（巽宫首卦）初爻
-        # 无头卦无 guaDesc：[卦辞与断语] 只有段头，紧接 [判语库·参考诀表]（GuaZhanMain.js:338-369）。
-        assert "[卦辞与断语]\n[判语库·参考诀表]\n◆ 诸爻持世诀" in ours
+        # v3.15.0 无头也补卦辞（withGuaDesc）：[卦辞与断语] 段首是本卦卦名 + 卦辞，此后才到 [判语库·参考诀表]。
+        assert "[卦辞与断语]\n本卦：卦" in ours and "[卦辞与断语]\n[判语库·参考诀表]" not in ours
 
 
 def test_sixyao_manual_lines_are_the_page_cast_state(tmp_path) -> None:
@@ -160,15 +165,20 @@ def test_sixyao_querent_gender_line_follows_the_record(tmp_path) -> None:
 
 
 def test_sixyao_drops_skill_only_lines_but_keeps_descriptions(tmp_path) -> None:
-    """skill 自写行一律退场：上游 [卦辞与断语] 无「问题：」行、无头卦也无卦辞行（builder 只按 st.guaDesc 出，
-    GuaZhanMain.js:338-363）。问题原文仍在 data.question；/gua/desc 卦辞仍在 data.descriptions（结构化面）。
-    负向对照：旧 runner 的 [卦辞与断语] = 「问题：求财 / 本卦：卦100011 / 卦辞：亨。/ 之卦：… / 之卦卦辞：亨。」。"""
-    env = _ok(_service(tmp_path), "sixyao", SIX)
+    """skill 自写行一律退场：上游 [卦辞与断语] 无「问题：」行，正文只按 st.guaDesc 出（main/snapshot.js）。v3.15.0 起上游无头
+    也补卦辞（withGuaDesc：本卦 / 变卦 / 互卦三码一次取），段内是 本卦 → 互卦 → 之卦 三块、各带卦辞。问题原文仍在
+    data.question；/gua/desc 回包仍在 data.descriptions（三码）。
+    负向对照：旧 runner 的 [卦辞与断语] = 「问题：求财 / 本卦：卦100011 / 卦辞：亨。/ 之卦：… / 之卦卦辞：亨。」；
+    v3.14 的无头路径 = 段头下空行（无卦辞）。"""
+    client = RecordingClient()
+    env = _ok(_service(tmp_path, client=client), "sixyao", SIX)
     text = env.data["snapshot_text"]
-    assert "问题：" not in text and "卦辞：" not in text and "之卦卦辞" not in text
-    assert _sections(text)["卦辞与断语"] == [""]
+    assert "问题：" not in text and "之卦卦辞" not in text
+    assert _sections(text)["卦辞与断语"][:8] == ["本卦：卦100011", "卦辞：亨。", "", "互卦：卦000001", "卦辞：亨。", "",
+                                             "之卦：卦100010", "卦辞：亨。"]
     assert env.data["question"] == "求财"
-    assert set(env.data["descriptions"]) == {"100011", "100010"}
+    assert set(env.data["descriptions"]) == {"100011", "100010", "000001"}
+    assert client.sent("/gua/desc") == [{"name": ["100011", "100010", "000001"]}]   # 上游请求体：本卦、变卦、互卦
 
 
 def test_sixyao_incomplete_lines_fail_loudly(tmp_path) -> None:
@@ -197,8 +207,13 @@ def test_vendored_buildGuaSnapshotText_is_upstream_source() -> None:
     regen = ctx[ctx.index("async function regenerateSixyaoSnapshot(record, gearFlat){"):]
     regen = regen[: regen.index("\n}\n")]
     for needle in ("const fields = buildCaseSnapshotFields(record);", "const gua = buildTimeGua(nongli);",
-                   "return buildGuaSnapshotText(fields, st);"):
+                   "return buildGuaSnapshotText(fields, await withGuaDesc(st));"):   # v3.15.0：后台起卦补卦辞
         assert needle in regen, needle
+    # tools/liuyao.js 的「回包 → st.guaDesc」映射 = 上游 fetchGuaDescByIds 的请求体与取值（JS 不发 HTTP，取数在 Python）。
+    for needle in ("body: JSON.stringify({ name: [guaids.guaOrg, guaids.guaRes, guaids.guaMiddle] }),",
+                   "const desc = { guaOrg: descresult[guaids.guaOrg], guaRes: descresult[guaids.guaRes], guaMiddle: descresult[guaids.guaMiddle] };",
+                   "const desc = await fetchGuaDescByIds(guaDescIdsOf(st));"):
+        assert needle in upstream, needle
     fields = ctx[ctx.index("function buildCaseSnapshotFields(record){"):]
     fields = fields[: fields.index("\n}\n")]
     assert "gender: { value: record && record.gender !== undefined && record.gender !== null ? record.gender : 1 }," in fields

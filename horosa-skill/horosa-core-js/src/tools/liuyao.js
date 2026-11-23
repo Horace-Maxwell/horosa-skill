@@ -10,12 +10,14 @@
 //      regenerateSixyaoSnapshot:1756 同一调用）：[起盘信息]（含 旬空 行与起卦时间「X时」后缀）/ [卦象]（本/互/之/
 //      错/综卦）/ [六爻与动爻]（本卦逐爻 + 之/互/伏神/综/错卦逐爻装卦）/ [断卦结构] / [卦辞与断语] /
 //      [判语库·参考诀表] / [断诀命中] / [占类断语]，段序、行式逐字节即上游。
-//   无头卦不带 guaDesc（buildTimeGua 只回 {yao,currentGua,nongli}）→ [卦辞与断语] 只有段头（上游同形，
-//   GuaZhanMain.js:62-63 注明挂载路径无 guaDesc）；卦辞原文仍由 Python 侧 /gua/desc 回在 data.descriptions。
+//   ⑤ 卦辞（v3.15.0「六爻后台起卦补卦辞」）：上游无头路径改为 buildGuaSnapshotText(fields, await withGuaDesc(st))——
+//      withGuaDesc 按 guaDescIdsOf(st) 的 本卦 / 变卦 / 互卦 三码请求 /gua/desc，回包按码取进 st.guaDesc。JS 层不发 HTTP：
+//      本工具每次回 data.gua_desc_ids（三码），Python 照上游请求体取回后把整包作 guaDescResult 再交回本工具出快照；
+//      取不到（后端不可用 / 回包空）就不带卦辞（= 上游「取不到原样返回」）。
 //   无头卦亦不带 god（页面 fillYaoGods 渲染期才写，GuaZhanMain.js:1666-1677）→ 逐爻行无「六神:」后缀，
 //   六神在 [断卦结构] 表内（同上游无头路径）。
 import { buildTimeGua } from '../vendor/guazhan/main/gua.js';
-import { buildGuaSnapshotText } from '../vendor/guazhan/main/snapshot.js';
+import { buildGuaSnapshotText, guaDescIdsOf } from '../vendor/guazhan/main/snapshot.js';
 import { loadDoctrine } from '../vendor/gua/data/liuyaoDoctrineCache.js';
 import { getGua64, Gua64 } from '../vendor/gua/GuaConst.js';
 import { littleEndian } from '../vendor/gua/littleEndian.js';
@@ -261,7 +263,13 @@ export async function runLiuyao(payload) {
   }
 
   // 齿轮判读设置注入：与上游同 —— 只在给了键时才叠 liuyaoSettings（regenerateSixyaoSnapshot:1753-1755）。
-  const st = gear && Object.keys(gear).length ? { ...gua, liuyaoSettings: mergeLiuyaoGearSettings({}, gear) } : gua;
+  const geared = gear && Object.keys(gear).length ? { ...gua, liuyaoSettings: mergeLiuyaoGearSettings({}, gear) } : gua;
+  // withGuaDesc（上游 main/snapshot.js）的取数在 Python：这里只做「回包 → st.guaDesc」的同一映射（fetchGuaDescByIds）。
+  const guaDescIds = guaDescIdsOf(geared);
+  const descResult = input.guaDescResult && typeof input.guaDescResult === 'object' ? input.guaDescResult : null;
+  const st = descResult && guaDescIds
+    ? { ...geared, guaDesc: { guaOrg: descResult[guaDescIds.guaOrg], guaRes: descResult[guaDescIds.guaRes], guaMiddle: descResult[guaDescIds.guaMiddle] } }
+    : geared;
   const doctrine = await loadDoctrine();   // ensureLiuyaoDoctrineLoaded（:1735-1737）
   if (!doctrine) {
     warnings.push('六爻《断易天机》断语库未能载入：[占类断语] 缺「断语·占类门」摘要行（上游同样不阻断快照）。');
@@ -272,6 +280,8 @@ export async function runLiuyao(payload) {
     // 整份快照 = 上游 buildGuaSnapshotText(fields, st)（regenerateSixyaoSnapshot:1756），不再拼接、不裁段。
     snapshot_text: buildGuaSnapshotText(caseSnapshotFields(input.record), st),
     data: {
+      gua_desc_ids: guaDescIds,
+      gua_desc_applied: !!(st.guaDesc && Object.keys(st.guaDesc).some((k) => st.guaDesc[k])),
       // 实际生效的判读口径（归一后），供 Python 如实回执。
       settings: {
         school: settings.school, askType: settings.askType, yongOverride: settings.yongOverride,

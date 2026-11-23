@@ -584,7 +584,7 @@
       {
         "callee": "setOption",
         "module": "../vendor/gua/liuyaoSchools.js",
-        "line": 77,
+        "line": 80,
         "arg": 2,
         "keys": [
           "on"
@@ -593,7 +593,7 @@
       {
         "callee": "buildLocalBaziResult",
         "module": "../vendor/bazi/baziLunarLocal.js",
-        "line": 110,
+        "line": 113,
         "arg": 0,
         "keys": [
           "after23NewDay",
@@ -610,7 +610,7 @@
       {
         "callee": "mundaneCycleRequestFields",
         "module": "../vendor/utils/mundaneCycles.js",
-        "line": 145,
+        "line": 146,
         "arg": 1,
         "keys": [
           "endYear",
@@ -638,6 +638,16 @@
           "dateStr",
           "limit"
         ]
+      },
+      {
+        "callee": "resolvePlaceOffline",
+        "module": "../vendor/place/place.js",
+        "line": 92,
+        "arg": 1,
+        "keys": [
+          "dateStr",
+          "limit"
+        ]
       }
     ],
     "qimen.js": [
@@ -658,7 +668,7 @@
       {
         "callee": "explainQimenAt",
         "module": "../vendor/divination/zeri/qimenScanEngine.js",
-        "line": 39,
+        "line": 40,
         "arg": 0,
         "keys": [
           "geoParams",
@@ -670,7 +680,7 @@
       {
         "callee": "buildQimenZeriSnapshotExtra",
         "module": "../vendor/divination/zeri/qimenZeriSnapshot.js",
-        "line": 42,
+        "line": 43,
         "arg": 0,
         "keys": [
           "cfg",
@@ -685,7 +695,7 @@
       {
         "callee": "scanQimen",
         "module": "../vendor/divination/zeri/qimenScanEngine.js",
-        "line": 89,
+        "line": 110,
         "arg": 0,
         "keys": [
           "cfg",
@@ -699,8 +709,8 @@
     "sanshiUnited.js": [
       {
         "callee": "buildSanshiLiuRengCastOverride",
-        "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 196,
+        "module": "../vendor/sanshi/main/liureng.js",
+        "line": 197,
         "arg": 0,
         "keys": [
           "nongli"
@@ -708,8 +718,8 @@
       },
       {
         "callee": "buildLiuRengLayout",
-        "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 215,
+        "module": "../vendor/sanshi/main/liureng.js",
+        "line": 216,
         "arg": 0,
         "via_local": "chartForLr",
         "keys": [
@@ -718,8 +728,8 @@
       },
       {
         "callee": "buildKeData",
-        "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 216,
+        "module": "../vendor/sanshi/main/liureng.js",
+        "line": 217,
         "arg": 1,
         "via_local": "chartForLr",
         "keys": [
@@ -728,8 +738,8 @@
       },
       {
         "callee": "buildSanChuan",
-        "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 217,
+        "module": "../vendor/sanshi/main/liureng.js",
+        "line": 218,
         "arg": 2,
         "via_local": "chartForLr",
         "keys": [
@@ -739,7 +749,7 @@
       {
         "callee": "buildLiuRengReferenceBundle",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 250,
+        "line": 251,
         "arg": 0,
         "via_local": "liureng",
         "keys": [
@@ -754,7 +764,7 @@
       {
         "callee": "buildLiuRengReferenceBundle",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 250,
+        "line": 251,
         "arg": 1,
         "via_local": "chartForLr",
         "keys": [
@@ -764,7 +774,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 259,
+        "line": 260,
         "arg": 1,
         "via_local": "liureng",
         "keys": [
@@ -779,7 +789,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 259,
+        "line": 260,
         "arg": 3,
         "via_local": "chartForLr",
         "keys": [
@@ -789,7 +799,7 @@
       {
         "callee": "buildLiuRengSnapshotText",
         "module": "../vendor/liureng/LiuRengMain.js",
-        "line": 259,
+        "line": 260,
         "arg": 7,
         "keys": [
           "castOverride"
@@ -797,8 +807,8 @@
       },
       {
         "callee": "buildSanShiUnitedSnapshotText",
-        "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 275,
+        "module": "../vendor/sanshi/main/snapshot.js",
+        "line": 276,
         "arg": 0,
         "keys": [
           "displaySolarTime",
@@ -823,8 +833,8 @@
       },
       {
         "callee": "buildSanShiUnitedSnapshotText",
-        "module": "../vendor/sanshi/SanShiUnitedMain.js",
-        "line": 275,
+        "module": "../vendor/sanshi/main/snapshot.js",
+        "line": 276,
         "arg": 0,
         "nested_under": "liurengChartForLr",
         "via_local": "chartForLr",
@@ -910,8 +920,8 @@
     "tongshefa.js": [
       {
         "callee": "buildTongSheFaModel",
-        "module": "../vendor/tongshefa/TongSheFaCore.js",
-        "line": 31,
+        "module": "../vendor/tongshefa/main/model.js",
+        "line": 32,
         "arg": 0,
         "via_local": "selection",
         "keys": [
@@ -1077,7 +1087,7 @@
       {
         "callee": "conditionSummaryText",
         "module": "../vendor/divination/zeri/conditionGlyph.js",
-        "line": 42,
+        "line": 43,
         "arg": 0,
         "keys": [
           "params",

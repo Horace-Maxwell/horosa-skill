@@ -127,7 +127,7 @@ def _house_label(sign_idx: int, life_idx: int) -> str:
 def test_vocabularies_are_anchored_to_the_vendored_upstream_tables() -> None:
     """ascRaMode / outerCoord 的规范值与缺省 = vendored 上游表（utils/ascRaMode.js ASC_RA_MODE_OPTIONS；SANSHI_PAGE_SETTINGS.schema）。"""
     up = _node(
-        "Promise.all([import('./src/vendor/utils/ascRaMode.js'),import('./src/vendor/sanshi/SanShiUnitedMain.js')]).then(([a,s])=>{"
+        "Promise.all([import('./src/vendor/utils/ascRaMode.js'),import('./src/vendor/sanshi/main/options.js')]).then(([a,s])=>{"
         "console.log(JSON.stringify({values:a.ASC_RA_MODE_OPTIONS.map((o)=>o.value),labels:a.ASC_RA_MODE_OPTIONS.map((o)=>o.label),"
         "def:a.ASC_RA_MODE_DEFAULT,coord:s.SANSHI_PAGE_SETTINGS.schema.outerCoord.oneOf,coordDef:s.SANSHI_PAGE_SETTINGS.defaults().outerCoord,"
         "sanshiAsc:s.SANSHI_PAGE_SETTINGS.schema.ascRaMode.oneOf,sanshiAscDef:s.SANSHI_PAGE_SETTINGS.defaults().ascRaMode}));});"
@@ -230,10 +230,12 @@ def test_suzhan_tool_reproduces_the_upstream_two_tier_fixture() -> None:
     out = _node(script)
     for key in ("imp", "impX"):
         lines = out[key]["text"].split("\n")
-        assert IMPROVED_LINE in lines and "| 未—鹑首—巨蟹座—第1宫 | 无 | 无 |" in lines, key
+        # 上游断言只到「巨蟹座—第1宫」（/巨蟹座—第1宫/）。v3.15.0 宿占改按赤经分宫、星曜按赤经落宫，上升本身也落进第 1 宫一行，
+        # 行尾不再是「无 | 无」—— 这里与上游同口径只钉宫位列。
+        assert IMPROVED_LINE in lines and any(line.startswith("| 未—鹑首—巨蟹座—第1宫 |") for line in lines), key
         assert out[key]["data"]["ascRaMode"] == "improved"
     lines = out["cls"]["text"].split("\n")
-    assert CLASSIC_LINE in lines and "| 未—鹑首—巨蟹座—第2宫 | 无 | 无 |" in lines
+    assert CLASSIC_LINE in lines and any(line.startswith("| 未—鹑首—巨蟹座—第2宫 |") for line in lines)
     assert lines[lines.index("人事十二宫起盘：ASC起盘") + 1] == CLASSIC_LINE   # 紧跟起盘行（SuZhanMain.js:355-357）
     assert out["cls"]["data"] == {"ok": True, "nongliHour": None, "ascRaMode": "classic", "eastPointAvailable": True}
     assert "上升取法" not in out["bazi"]["text"] and out["bazi"]["data"]["ascRaMode"] == "improved"
@@ -288,7 +290,7 @@ def test_sanshi_outer_ring_reproduces_the_upstream_two_tier_fixture() -> None:
     """上游同文件「三式:只在外圈赤道分宫时起作用」：赤道分宫第 1 宫落 未（赤经 100° 巨蟹段）/ 申（东点黄经 85° 双子段），
     快照行挂在第 1 宫那一支；黄道分宫逐字现状。经 tools/sanshiUnited.js 的 resolveSanshiOuter（词表锚 vendored schema）。"""
     script = (
-        "Promise.all([import('./src/tools/sanshiUnited.js'),import('./src/vendor/sanshi/SanShiUnitedMain.js')]).then(([t,v])=>{"
+        "Promise.all([import('./src/tools/sanshiUnited.js'),import('./src/vendor/sanshi/main/outerRing.js')]).then(([t,v])=>{"
         "const chart=" + json.dumps(_up_chart(), ensure_ascii=False) + ";"
         "const first=(od)=>Object.keys(od.housesByBranch).find((b)=>od.housesByBranch[b].indexOf('1')>=0);"
         "const run=(input)=>{const o=t.resolveSanshiOuter(input);if(!o.ok){return {error:o.error};}"

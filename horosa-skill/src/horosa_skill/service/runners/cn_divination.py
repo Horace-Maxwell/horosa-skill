@@ -866,9 +866,15 @@ class CnDivinationRunners:
             lines = _normalize_gua_lines(struct.get("lines")) or lines
         current_code = _derive_gua_code(lines)
         changed_code = _derive_changed_gua_code(lines)
-        # 卦辞原文：上游无头卦不带 guaDesc，[卦辞与断语] 只有段头（GuaZhanMain.js:475-506 + :62-63）；
-        # /gua/desc 照旧取来放 data.descriptions（结构化数据面，不进快照）。
-        descs = self._call_remote("/gua/desc", {"name": [current_code, changed_code]})
+        # 卦辞（v3.15.0「六爻后台起卦补卦辞」）：上游无头路径 buildGuaSnapshotText(fields, await withGuaDesc(st))——按
+        # guaDescIdsOf(st) 的 本卦 / 变卦 / 互卦 三码请求 /gua/desc（main/snapshot.js fetchGuaDescByIds 同一请求体），回包
+        # 按码填进 st.guaDesc，[卦辞与断语] 段才有正文（此前无头只有段头）。JS 不发 HTTP：第一遍出三码，这里取回后再跑一遍出快照。
+        desc_ids = struct_data.get("gua_desc_ids") if isinstance(struct_data.get("gua_desc_ids"), dict) else None
+        desc_names = [desc_ids.get(k) for k in ("guaOrg", "guaRes", "guaMiddle")] if desc_ids else [current_code, changed_code]
+        descs = self._call_remote("/gua/desc", {"name": desc_names})
+        if desc_ids and isinstance(descs, dict) and any(descs.get(name) for name in desc_names):
+            struct = self.js_client.run("liuyao", {**js_request, "guaDescResult": descs})
+            struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
         snapshot_text = struct.get("snapshot_text") or ""
         if not snapshot_text.strip():
             raise ToolTransportError(
