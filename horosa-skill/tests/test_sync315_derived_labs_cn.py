@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 from node_esm import run_node_esm
+from skips import needs_upstream, upstream_source
 
 from horosa_skill.service.text import western as W
 
@@ -49,3 +50,25 @@ def test_python_lines_equal_the_vendored_upstream_functions() -> None:
                 for a in ("Asc", "MC", "Desc", "IC") if angles[0].get(a) or angles[1].get(a)]
     assert js["reloc"][2:] == py_reloc
     assert "日：本命黄经 11.88° → 调波 牡羊 16.91°" in body and "NotAnId：" in "\n".join(body), body[:3]
+
+
+@needs_upstream("Horosa-Web/astrostudyui/src/constants/AstroConst.js")
+def test_curated_astroconst_extracts_hold_the_upstream_values() -> None:
+    """curated 子集逐值抽取：manifest `extracts` 里每个字符串常量与上游（门面 + 子模块全集）同值；DESC / IC 在册。"""
+    import re
+
+    manifest = json.loads((Path(__file__).resolve().parents[1] / "contracts" / "vendor_manifest.json").read_text(encoding="utf-8"))
+    extracts = (manifest.get("files") or manifest)["constants/AstroConst.js"]["extracts"]
+    assert {"DESC", "IC"} <= set(extracts)
+    pattern = r"^export const {name} = (['\"][^'\"]*['\"])"
+    vendored = (CORE_JS / "src" / "vendor" / "constants" / "AstroConst.js").read_text(encoding="utf-8")
+    upstream = upstream_source("Horosa-Web/astrostudyui/src/constants/AstroConst.js")
+    checked = 0
+    for name in extracts:
+        mine = re.search(pattern.format(name=name), vendored, re.MULTILINE)
+        if mine is None:
+            continue   # 数组 / 表达式常量（LIST_URANIAN）不在这条比
+        theirs = re.search(pattern.format(name=name), upstream, re.MULTILINE)
+        assert theirs and theirs.group(1) == mine.group(1), name
+        checked += 1
+    assert checked >= 20

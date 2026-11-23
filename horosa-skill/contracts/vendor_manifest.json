@@ -474,7 +474,9 @@
         "VERTEX",
         "EAST_POINT",
         "ASC",
-        "MC"
+        "DESC",
+        "MC",
+        "IC"
       ],
       "upstream_sha256": "496dbbcef3146065c91d661013dc3ab7268ff93514185556ab08ecfaab6e428d",
       "also_derived_from": {

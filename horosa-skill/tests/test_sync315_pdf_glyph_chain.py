@@ -73,9 +73,9 @@ def test_tables_are_the_pinned_upstream_ones() -> None:
         ("Duʾūzu", "Du'uzu"),
         ("日11宫✓", "日11宫√"),
         ("Utu/Šamaš LÚ.ḪUN.GÁ", "Utu/Samas LÚ.HUN.GÁ"),
-        ("H̱olon", "Holon"),
-        ("甲​乙‍丙﻿丁", "甲乙丙丁"),
-        ("‪右‬", "右"),
+        ("H\u0331olon", "Holon"),
+        ("甲\u200b乙\u200d丙\ufeff丁", "甲乙丙丁"),
+        ("\u202a右\u202c", "右"),
         ("主尅客,主勝", "主克客,主勝"),
         ("隂盛尅陽", "阴盛克陽"),
         ("齡 週 兇", "龄 周 凶"),
@@ -97,7 +97,7 @@ def test_every_output_is_drawable_in_both_upstream_weights() -> None:
         out = _pdf_safe_text(sample, charset)
         assert all(ord(ch) < 0x20 or ord(ch) in charset for ch in out), (relative, out)
     assert len(_pdf_safe_text("🜨", _charset(FONT))) == 1, "四字节字符按一个字处理"
-    assert _pdf_safe_text("注意⚠️", _charset(FONT)) == _pdf_safe_text("注意⚠", _charset(FONT)), "变体选择符不多出一格"
+    assert _pdf_safe_text("注意⚠\ufe0f", _charset(FONT)) == _pdf_safe_text("注意⚠", _charset(FONT)), "变体选择符不多出一格"
 
 
 def test_pdf_renderer_swaps_only_what_no_font_in_the_chain_draws() -> None:
@@ -109,5 +109,5 @@ def test_pdf_renderer_swaps_only_what_no_font_in_the_chain_draws() -> None:
     assert _wrap_missing_glyphs_chain("26˚", primary, [("Sym", symbols)]) == '26<font name="Sym">˚</font>'
     # 整条链都画不了 → 照上游换写法；繁体异体换通行写法；不占位的字不画
     missing: set[str] = set()
-    assert _wrap_missing_glyphs_chain("26˚ 360⁄14 尅 隂 ✗ 克​阴", primary, [("Sym", set())], missing) == "26° 360/14 克 阴 × 克阴"
+    assert _wrap_missing_glyphs_chain("26˚ 360⁄14 尅 隂 ✗ 克\u200b阴", primary, [("Sym", set())], missing) == "26° 360/14 克 阴 × 克阴"
     assert not missing, "换掉的字不算缺字"
