@@ -1,11 +1,11 @@
 {
   "_comment": "vendored 树对到的上游状态。只由 verify_upstream_sync.py --write-state 在**全部检查通过**时写入——红着写等于把失败洗成一条持久的「已核对」声明。",
   "upstream_repository": "Horace-Maxwell/Horosa-Web-App-comprehensively-improved-MacOS",
-  "upstream_git_sha": "e55c3a669bd1222c036a0b1a68b6b473e14ed63e",
-  "upstream_git_committed_at": "2026-11-12T14:35:09-05:00",
-  "upstream_app_version": "3.14.0",
-  "aiexport_settings_version": 65,
-  "skill_mirrored_version": 65,
+  "upstream_git_sha": "5da8e53939839c423234b99c45872672b0441a49",
+  "upstream_git_committed_at": "2026-11-23T03:49:21-05:00",
+  "upstream_app_version": "3.15.0",
+  "aiexport_settings_version": 68,
+  "skill_mirrored_version": 68,
   "upstream_checked_at_package_version": "0.52.0",
   "upstream_preset_keys": [
     "agepoint",
@@ -118,9 +118,9 @@
     "zodialrelease"
   ],
   "core_js": {
-    "files_compared": 422,
+    "files_compared": 455,
     "files_unmatched": 28,
-    "tree_sha256": "7ec8fe3fa765f083cd7efa425884502b85955c49c85c3fabf0f55b37eb44ea8f"
+    "tree_sha256": "d98e9b62d7c2037980e5de28e30a3442b6dd52a3a8fc6bda564f2c6b0d2efc28"
   },
   "runtime_source": {
     "sentinels_verified": 7
