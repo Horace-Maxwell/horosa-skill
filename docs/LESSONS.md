@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0 做到一半才发现报告盘图 bundle（dist/app-charts.cjs）还是 v3.14.0 打的：re-vendor Runbook 没有这一步，工单照 Runbook 列也就没有；`build.mjs --check` 只在发版 preflight 跑。同轮：真随机那次提交只跑了 pytest、没跑 `npm test`，两条旧 selfcheck（小成图无种子拒收、灵棋同刻幂等）红着进了提交 | Runbook 加 app-charts 重打包 + 塔罗牌面两步；守卫 `test_the_bundle_is_built_from_the_recorded_upstream_pin`（包 / 牌面的上游提交 == provenance pin，负向对照实跑）；改起卦行为的提交同时跑 pytest 与 npm test |
 | v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0「随机起卦一律真随机」时，我把 skill 旧的「无头只走确定性种子」当既定政策延续，把要不要真随机当待定项抛给用户；用户：「当然要做真的随机」。旧注释的理由（同刻同卦、测试难写）早被上游的「真随机记录 + 原样重开」解决 | 随机起法取系统随机源、缺省跟上游页面；所有起卦技法回传 data.cast.replay（重开配方，不依赖记忆库）；记录长度 / 骰子池 / 五兆重开配方读上游源对拍；上游已定的口径不再抛给用户拍板 |
 | v0.52.0 (2026-11-23) | 发版矩阵 Windows ARM lane 红 1 条：`test_technique_census` 说推运六技法多出一张表 `surfaces.mcp_requests:names`——模块级推导式里的 `names := …` 泄漏成模块全局，值看 frozenset 按对象地址的遍历顺序，另两条 lane 恰好没碰上 | 挪进函数里算；AST 守卫禁止模块 / 类体推导式里的 `:=`（负向对照：原代码被抓）；普查红在单 lane 时先怀疑遍历顺序 |
 | v0.52.0 (2026-11-22) | `bump_version.py 0.52.0` 把 README / README_EN / 受限网络文档里十四处「从哪版起」改成 0.52.0——历史判定只认带 v 的整行标记，「自 0.50.0 起」「since 0.50.0」「(v0.41.0;」「0.50.0 之前的发布」每次 bump 都跟着走；查 git 才知道 v0.51.0 那次已经全改成 0.51.0 | 逐处判（前缀 自 / since / from / before / pre- / as of / 左括号，后缀 之前 / 及以后 / 起 / on）；按首次写入的提交把十四处恢复成 0.50.0 / 0.41.0；测试对真站点模拟下一次 bump（负向对照：旧脚本 3 条红） |
@@ -268,6 +269,24 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.0-dev / 2026-11-23 — 同步工单漏了报告盘图 bundle；改起卦行为的提交漏跑 npm test
+
+**症状**：星阙 v3.15.0 同步做了大半（引擎 re-vendor、真随机、奇门附加层都已提交），核奇门报告图能不能画附加层时才看到
+`contracts/app_charts_bundle.json` 的 `upstream_commit` 还是 e55c3a66（v3.14.0）；`build.mjs --check` 对新 pin 报过期。上游这一版绘图
+文件 126 改 / 110 新 / 16 退。同一轮，`npm test` 红两条：小成图大衍无种子「必须拒收」、灵棋「同刻必须幂等」——真随机那次提交
+（1e97d897）只跑了 pytest。
+
+**根因**：① OPERATIONS「re-vendor Runbook」只列引擎侧（sync_vendored_runtime_sources → revendor_core_js → npm test → …），
+报告盘图 bundle 与随包塔罗牌面是另一条从上游树打包的产物，Runbook 没写，工单照 Runbook 起也就没有；唯一的检查
+`verify_app_charts_bundle.py` 在 preflight_release 里，同步期间不跑。② 本机门禁镜像 `run_ci_gates.py` 不含 JS selfcheck
+（CI 另一步 `npm test`），改了 JS 工具行为却只跑 pytest。
+
+**守卫**：Runbook 在 `npm test` 后加两步（`node app-charts/build.mjs --source-root <pin> --check`，过期就重打包并新旧包逐图比、变了的
+目检；`sync_tarot_art.py`）。`tests/test_app_charts.py::test_the_bundle_is_built_from_the_recorded_upstream_pin`：包与牌面记的上游提交
+必须等于 `upstream_provenance.json` 的 pin——`--write-state` 一推进 pin，没重打的包当场红。负向对照：provenance 推到新 pin、包换回旧
+清单 → 红；两边都新 → 绿。重打后 31 张夹具图逐张比：29 张逐字节同，2 张（七政金标签避让、合盘信息字重）是上游画法改动，目检过。
+改 JS 工具行为的提交同时跑 pytest 与 `(cd horosa-core-js && npm test)`。
 
 ### v0.53.0-dev / 2026-11-23 — 上游已定「一律真随机」，我却把它当成待定项
 

@@ -60,6 +60,9 @@ uv run python scripts/revendor_core_js.py "$SRC" --from-manifest --check    # �
 uv run python scripts/revendor_core_js.py "$SRC" --from-manifest            # 新上游 import 解析不到 → 在 vendor_manifest.json 加条目或 import_redirect，再跑
 #   bespoke / curated：对上游 diff 逐 hunk 落改动，然后 --restamp <vendor/rel.js>；只有确认 diff 与 skill 无关时才直接 restamp
 (cd horosa-core-js && npm test)
+(cd horosa-core-js && npm ci && node app-charts/build.mjs --source-root "$HOROSA_SOURCE_ROOT" --check)   # 报告盘图 bundle + 罕见字 / PDF 缺字表
+#   过期 → 去掉 --check 重打；新旧包把 tests/fixtures/app_charts_live.json.gz 的图逐张渲染比对，变了的目检（上游画法改动才放行）
+uv run python scripts/sync_tarot_art.py                                         # 随包塔罗牌面跟 pin（包与牌面的提交 == provenance pin，test_app_charts 守）
 uv run python scripts/verify_export_contract_mirror.py            # aiExport 版本变了：推进 MIRRORED_UPSTREAM_AIEXPORT_VERSION、回填新段
 uv run python scripts/verify_export_section_baseline.py --source upstream --require-upstream
 uv run python scripts/gen_knowledge_packs.py && uv run python scripts/gen_bazi_pithy_pack.py   # 手册包：要 Node + horosa-core-js 的

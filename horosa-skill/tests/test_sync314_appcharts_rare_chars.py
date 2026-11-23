@@ -92,8 +92,10 @@ def test_a_missing_or_broken_table_never_blocks_a_report(tmp_path: Path, monkeyp
     broken = tmp_path / "rare_chars.json"
     broken.write_text("{not json", encoding="utf-8")
     monkeypatch.setattr(rare_chars, "DATA", broken)
-    rare_chars.table.cache_clear()
+    rare_chars.cache_clear()
     try:
         assert rare_chars.table() == {} and rare_chars.safe_text("天𠉀", lambda code: False) == "天𠉀"
+        assert rare_chars.glyph_fallback() == {} and rare_chars.pdf_fallback("龢", lambda code: True) is None
     finally:
-        rare_chars.table.cache_clear()
+        monkeypatch.undo()
+        rare_chars.cache_clear()

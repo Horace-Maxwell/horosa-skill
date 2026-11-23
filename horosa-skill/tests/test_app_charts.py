@@ -42,6 +42,20 @@ class _Client:
         return client.render_app_charts(figures)
 
 
+def test_the_bundle_is_built_from_the_recorded_upstream_pin() -> None:
+    """报告盘图 bundle（与随包塔罗牌面）必须出自 provenance 记的那一个上游提交。
+
+    v3.15.0 同步时工单漏了重打包：re-vendor 只管 core-js 引擎，bundle 另由 build.mjs 从上游树打，`build.mjs --check` 又只在
+    preflight 跑——整个同步期间旧包（e55c3a66）一直挂着没人报。`verify_upstream_sync --write-state` 记下新 pin 之后，这条就红，
+    直到照 pin 重打包（OPERATIONS「re-vendor Runbook」的 app-charts 一步）。负向对照：provenance 推到新 pin、包还是旧的 → 红（v0.53.0-dev 实测）。
+    """
+    provenance = json.loads((PKG_ROOT / "contracts" / "upstream_provenance.json").read_text(encoding="utf-8"))["upstream_git_sha"]
+    tarot = json.loads((PKG_ROOT / "src" / "horosa_skill" / "data" / "tarot-art" / "manifest.json").read_text(encoding="utf-8"))
+    rebuild = "node horosa-core-js/app-charts/build.mjs --source-root <pin> && scripts/sync_tarot_art.py"
+    assert json.loads(MANIFEST.read_text(encoding="utf-8"))["upstream_commit"] == provenance, f"app-charts bundle is not from the recorded pin — {rebuild}"
+    assert tarot["upstream_commit"] == provenance, f"tarot pictures are not from the recorded pin — {rebuild}"
+
+
 def _figures(tool: str) -> list[dict]:
     data = FIXTURE[tool]
     return app_charts.attach_app_svgs(extract_figures(tool, data, tool), tool, data, _Client())

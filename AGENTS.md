@@ -1054,6 +1054,8 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    docs-sync 不算数（v0.38.0：主干红了 19 个 commit，本机每次都「全绿」）；push 之后再看 `gh run list` 的结论。
    🔴 **不要 `for g in scripts/verify_*.py` 裸跑全部脚本**（v0.38.1 发布后本机误跑过一次）：`verify_runtime_live.py` 是**真 lane**（下载 ~730 MB、
    起服务），`verify_matrix_digests.py` 需要 publish job 的输入。门禁的本机镜像只有 `run_ci_gates.py`；本机跑 lane 要显式传参、自己决定。
+   `run_ci_gates.py` 不含 JS selfcheck（ci.yml 另一步 `npm test`）：改了 `horosa-core-js` 工具行为的提交同时跑 `(cd horosa-core-js && npm test)`
+   （v0.53.0-dev：真随机提交只跑了 pytest，两条旧 selfcheck 红着进了提交）。
 1. venv 坏了先修（miniconda symlink 触 macOS library-validation on `pydantic_core`）：
    `uv venv --clear --python-preference only-managed --python 3.12 && uv sync`（uv-managed CPython 无
    library-validation）。
@@ -1545,7 +1547,8 @@ A global stability pass hardened these; keep them true when you touch the releva
     Horosa-Public>` 打成 `dist/app-charts.cjs`（自带 d3 / linkedom，零运行时依赖）→ CLI `render-charts` 出 SVG → svglib 转矢量。 `render-charts` 写完 stdout 就 `process.exit(0)`（app 代码加载时留着轮询的 setTimeout，自然退出要空等约 2.5 s）；必须等写入回调再退，直接 exit 在管道下截断于 65 511 字节。守卫 `test_the_render_process_exits_as_soon_as_its_output_is_written`。
     报告服务在转繁体**之前**调 `_attach_app_figures`（一次 Node），成功的规格带 `app_svg`、`renderer: app`；拿不到就画自绘图并写
     `renderer: builtin` + `renderer_note`。PDF / DOCX / PNG 都经 `figure_drawing`（`is_drawn` 判是否画图），`drawing_to_png` 支持嵌套
-    Group / 变换 / Path / 旋转文字。规矩：①打包只用 pin 住的上游（本机 Horosa-Public 常超前）；改了 adapter 或上游动了就重打包，
+    Group / 变换 / Path / 旋转文字。规矩：①打包只用 pin 住的上游（本机 Horosa-Public 常超前）；改了 adapter 或上游动了就重打包（re-vendor Runbook 的一步，
+    v0.53.0-dev 起；包与随包塔罗牌面记的上游提交必须 == provenance pin，`test_the_bundle_is_built_from_the_recorded_upstream_pin` 守），
     `scripts/verify_app_charts_bundle.py`（preflight）逐字节核；②app 文件的裸 npm 引用只放行绘图栈，其余是桩——放新组件前先证
     放行版 / 桩版逐像素一致；③svglib 只认标准 14 字体：文字字族一律走 Courier 占位再换回嵌入 TTF，符号字体（ywastro / morinus，
     随包 `data/fonts/`，用户 2026-11-09 确认可分发）按文件注册；④adapter 只做无损的记法换算与「纸面无意义的交互件」剔除（如紫微中宫的

@@ -59,8 +59,10 @@
     }
   },
   "rare_chars": {
-    "sha256": "dd10784dc27f5651752a27c0ac8a0496cc9e6512e52cc3c2a391ac60bd62f7e8",
-    "count": 34
+    "sha256": "93c8c4340f097a022c801fcc35964d3bd3fa33d4b21ac14deb766966f86f3226",
+    "count": 34,
+    "pdf_char_fallback": 34,
+    "glyph_fallback": 1557
   },
   "packages": [
     "boolbase@1.0.0",

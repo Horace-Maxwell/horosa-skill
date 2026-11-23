@@ -288,8 +288,7 @@ def test_tarot_crossing_card_lies_across_in_every_celtic_variant() -> None:
 def test_the_bundle_draws_with_the_v3140_app_code() -> None:
     """重打包即跟上的几处（app 原版代码）：赤纬梯 0° 刻度不再与「赤道 0°」叠印；紫微中宫时区写 UTC+08:00（zoneText）；
     大六壬盘字一律 stroke="none"；巴比伦 / 米雄的 svg 根挂 horosa-plain-text-board（报告本来就不给字描边，等价）。
-    负向对照：换回 v3.13.2 的包 → 四条全红。"""
-    assert MANIFEST["upstream_commit"].startswith("e55c3a66")
+    负向对照：换回 v3.13.2 的包 → 四条全红。（包与 pin 是否同源归 test_app_charts 的 pin 守卫，这里不再钉提交号。）"""
     zw = app_charts.attach_app_svgs(extract_figures("ziwei_birth", FIXTURE["ziwei_birth"], "ziwei_birth"), "ziwei_birth", FIXTURE["ziwei_birth"], _Client())[0]["app_svg"]
     assert "时区：UTC+08:00" in zw
     lr = next(f for f in app_charts.attach_app_svgs(extract_figures("liureng_gods", FIXTURE["liureng_gods"], "liureng_gods"), "liureng_gods",

@@ -2549,8 +2549,9 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
 
     补不了的文字、主字体有的字原样留着（正文文字从不替换）；**符号**（So / emoji 区）主字体与补字链都画不了时换成 ▸
     （v0.50.0，评审 R-02：按真实 cmap 判，不按码位段猜）。标签内不动。primary / 链上的码位集合都只需支持 `in`。
-    一个例外照星阙 app（v3.14.0 `rareChars.js`）：登记过的罕见字（扩展 B 及以后）哪款字体都画不出时，换成它的通行写法，没有
-    通行写法的写成〔拆字说明〕——回退写法自己画不出、或没登记的字仍旧原样（reports/rare_chars.py）。
+    一个例外照星阙 app（v3.14.0 `rareChars.js`，v3.15.0 扩成 `pdfSafeText` 整条链）：哪款字体都画不出的字换写法——不占位的字不画、
+    符号换等价字（˚→°）、兼容分解、去附加符号、希腊字母名、繁体 / 异体换通行写法、罕见字换通行写法或〔拆字说明〕；
+    换不了的仍旧原样（reports/rare_chars.py `pdf_fallback`）。
     """
     from horosa_skill.reports import rare_chars
 
@@ -2581,9 +2582,10 @@ def _wrap_missing_glyphs_chain(markup: str, primary: Any, chain: list[tuple[str,
             out.append(ch)
             in_tag = ch != ">"
             continue
-        if rare_chars.is_rare(code) and not drawable(code):
-            replacement = rare_chars.fallback(ch, drawable)
-            if replacement:
+        if code >= _GLYPH_FALLBACK_FROM and not drawable(code):
+            # 整条补字链都画不了：照上游 v3.15.0 pdfSafeText 换写法（"" = 不占位的字直接不画；None = 没写法，往下照旧）
+            replacement = rare_chars.pdf_fallback(ch, drawable)
+            if replacement is not None:
                 pending = list(replacement) + pending
                 continue
         if code >= _GLYPH_FALLBACK_FROM and not drawable(code) and _is_symbol(ch):
