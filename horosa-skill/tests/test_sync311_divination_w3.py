@@ -129,7 +129,8 @@ def _node(script: str, *args) -> str:
     return run_node_esm(script, *args)
 
 
-SIX = {"date": "2026-09-24", "time": "10:58:00", **SH, "question": "求财"}
+# castMethod=time：本文件对拍上游无头以时起卦（buildTimeGua）。v3.15.0 起不给 lines / gua_code 缺省是真随机蓍草（tests/test_true_random_casting.py）。
+SIX = {"date": "2026-09-24", "time": "10:58:00", **SH, "question": "求财", "castMethod": "time"}
 
 
 # ── 1. 六爻以时起卦 = 上游 buildTimeGua ─────────────────────────────────────────────────────────

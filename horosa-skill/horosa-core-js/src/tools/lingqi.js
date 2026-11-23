@@ -2,10 +2,10 @@
 // 掷十二棋（上4/中4/下4）→ counts[上,中,下] → 六十四卦查表 → [起盘信息]/[棋势]/[卦象]/[繇辞]/
 // [诸家注]/[课断]/[断诗] 七段恒出（段头恒定，注家开关只影响段内行——上游 parityAll 双向哨兵口径）。
 //
-// 🔴 确定性：headless **只**走占时种子（`resolveLingqiSeed('time_seed', …)` → `t-<int>`），
-//    与 geomancy / tarot 的「以起卦时刻确定性起卦」同款。上游的 random 档读 `window.crypto`，
-//    headless 无 window 会落到 `Math.random()` —— 那会让同一时刻两次调用得到不同卦，
-//    既违背古法「不可再擲」，也让 golden/回归测试无从写起。故此处不暴露 random 档。
+// 起卦（v3.15.0 起同上游页面缺省 seedMode 'random'）：三档与上游 resolveLingqiSeed 同名同义——
+//    random（缺省）= 当场取系统随机记录 tr1-…（vendored trueRandom.js：Node crypto，取不到就报错、绝不退回伪随机），
+//    time_seed = 占时种子 `t-<int>`（同刻同卦），seed 显式 = 手动档（整数串 / 上次回传的 tr1- 记录，原样重开）。
+//    回传 seed + counts：传回 seed 或 counts 都能重开同一卦。
 // 🔴 卦是冻结值：调用方给了 `counts` 就照它复排，绝不重掷（读档/事盘纪律）。
 import { buildLingqiSnapshotText } from '../vendor/lingqi/lingqiSnapshot.js';
 import { castLingqi, resolveLingqiSeed, isWuDay } from '../vendor/lingqi/core/lingqiCast.js';
@@ -44,9 +44,12 @@ export function runLingqi(payload) {
       return { snapshot_text: '' };
     }
     const fields = fieldsFor(parts);
-    const seed = resolveLingqiSeed('time_seed', null, fields);
-    // 冻结优先：调用方带 counts（读档/重算）就复排，否则按占时种子掷一次。
-    const counts = normalizedCounts(p.counts) || castLingqi(seed).counts;
+    const frozen = normalizedCounts(p.counts);
+    const explicitSeed = p.seed !== undefined && p.seed !== null && `${p.seed}`.trim() !== '' ? `${p.seed}`.trim() : null;
+    const seedMode = explicitSeed ? 'manual' : (p.seedMode === 'time_seed' ? 'time_seed' : 'random');
+    // 冻结优先：调用方带 counts（读档/重算）就复排、不取种子；否则按所选档取种子掷一次。
+    const seed = frozen ? null : resolveLingqiSeed(seedMode, explicitSeed, fields);
+    const counts = frozen || castLingqi(seed).counts;
 
     const zhuVisible = {};
     ['yan', 'he', 'chen', 'liu', 'ke', 'shi'].forEach((key) => {
@@ -68,7 +71,7 @@ export function runLingqi(payload) {
     if (!snapshotText || !snapshotText.trim()) {
       return { snapshot_text: '' };
     }
-    return { snapshot_text: snapshotText, counts, seed };
+    return { snapshot_text: snapshotText, counts, seed, seed_mode: frozen ? 'counts' : seedMode };
   } catch (e) {
     return { snapshot_text: '' };
   }

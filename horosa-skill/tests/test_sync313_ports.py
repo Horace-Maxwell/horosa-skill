@@ -155,18 +155,30 @@ def test_liuyao_gear_merge_marks_custom_and_keeps_case_inputs() -> None:
 # ── 五兆：挂载复现说明原句（v3.13.0 措辞）─────────────────────────────────────────────────────────
 
 @requires_upstream
-def test_wuzhao_replay_note_wording_matches_upstream_source() -> None:
-    """shenshu.py 手抄了上游 buildWuZhaoSnapshotForFields 的复现说明原句；上游 v3.13.0 改了措辞。
-    这里从上游源取原句模板，代入「日干起盘」比对 skill 实发的那句（tests/test_sync311_shenshu.py 钉 skill 侧整句）。
-    负向对照：shenshu.py 换回「开启「手动分爻复现」…已按干支起例」→ 红。"""
+def test_wuzhao_replay_recipe_port_matches_the_upstream_function() -> None:
+    """v3.15.0：skill 不再回落干支起例（原「复现说明」手抄句随之退场），改照上游 wuzhaoReplayOptionsFromPan 回传重开配方。
+    这里把上游函数源（含 modeUsesManualSplits）切出来在 Node 里跑，与 shenshu._wuzhao_replay_options 逐分支对拍。
+    负向对照：把 Python 里的 dunhuang 分支改回 manual + manualSplits（敦煌法下 manualSplits 是策数，复现必错）→ 红。"""
+    import json
+
+    from horosa_skill.service.runners.shenshu import _wuzhao_replay_options
+    from node_esm import run_node_esm
+
     src = upstream_source(UPSTREAM_UI / "components" / "wuzhao" / "WuZhaoMain.js")
-    match = re.search(r"replayNote = `挂载无法复现随机起兆\(所选「\$\{wuzhaoModeLabel\(calc\.mode\)\}」需\$\{.*?: '([^']+)'\)?\};([^`]+)`", src)
-    assert match, "上游 WuZhaoMain.js 的复现说明模板变形了——复核 shenshu._wuzhao_calc_payload"
-    upstream = f"挂载无法复现随机起兆(所选「日干起盘」需{match.group(1)};{match.group(2)}"
-    shenshu_src = (PKG / "src" / "horosa_skill" / "service" / "runners" / "shenshu.py").read_text(encoding="utf-8")
-    skill = re.search(r'f"(挂载无法复现随机起兆\(所选「\{_WUZHAO_MODE_LABELS\[mode\]\}」[^"]+)"\s*"([^"]+)"', shenshu_src)
-    assert skill
-    assert (skill.group(1) + skill.group(2)).replace("{_WUZHAO_MODE_LABELS[mode]}", "日干起盘") == upstream
+    def grab(head: str) -> str:
+        at = src.index(head)
+        return src[at: src.index("\n}\n", at) + 3]
+    body = grab("function modeUsesManualSplits(mode){") + grab("export function wuzhaoReplayOptionsFromPan(pan, mode){").replace("export ", "")
+    six = [{"number": n} for n in (3, 1, 5, 2, 4, 1)]
+    cases = [
+        ({"positions": six}, "day"), ({"positions": six}, "tang"), ({"positions": six}, "dunhuang"), ({"positions": six}, "ganzhi"),
+        ({"positions": six, "shifaDetail": {"rows": [{"yang": y} for y in (0, 1, 2, 3, 4, 2.6)]}}, "qian"),
+        ({"positions": six}, "qian"), ({"positions": six[:5]}, "day"), ({"positions": [*six[:5], {"number": 9}]}, "day"),
+    ]
+    script = ("const fn = new Function(`${process.argv[1]}; return wuzhaoReplayOptionsFromPan;`)();"
+              "process.stdout.write(JSON.stringify(JSON.parse(process.argv[2]).map(([p, m]) => fn(p, m))));")
+    upstream = json.loads(run_node_esm(script, body, json.dumps(cases)))
+    assert [_wuzhao_replay_options(p, m) for p, m in cases] == upstream
 
 
 # ── 日子馆：当事人八字的日界 / 晚子时随全局（RiziMain.baziOf）──────────────────────────────────────

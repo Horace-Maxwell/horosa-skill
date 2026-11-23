@@ -68,8 +68,9 @@ CN_VOCABULARIES: dict[str, dict[str, Vocabulary]] = {
     },
     "xiaochengtu": {
         "qiguaFa": V("qiguaFa", {"manual": ("手动",), "number": ("两数", "数字", "报数"), "stock": ("股价", "股票"),
-                                 "dayan": ("大衍", "大衍筮法"), "time": ("占时", "时间", "梅花时间卦")},
-                     labels={"manual": "手动（缺省）", "number": "两数", "stock": "股价", "dayan": "大衍", "time": "占时梅花卦"}),
+                                 "dayan": ("大衍", "大衍筮法"), "yaoqian": ("摇钱", "掷钱", "金钱卦"), "time": ("占时", "时间", "梅花时间卦")},
+                     labels={"manual": "手动（缺省）", "number": "两数", "stock": "股价", "dayan": "大衍", "yaoqian": "摇钱",
+                             "time": "占时梅花卦"}),
         "qiguaShu": V("qiguaShu", {"tiandi": ("天地数",), "xiantian": ("先天数", "先天")},
                       labels={"tiandi": "天地数（缺省）", "xiantian": "先天数"}),
         # xiaochengtu.js `input.piKoujing === 'yiwen' ? 'yiwen' : 'zheng'`

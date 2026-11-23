@@ -76,11 +76,34 @@ normalized `勾→虎 / 雀→玄`.
 - Manual cast: `lines` = six objects bottom to top with coin values `6` / `7` / `8` / `9` (6 and 9 move), or `0` / `1`
   with `change`; or `gua_code` = a hexagram name (`火天大有`, `大有`, Traditional too) or a six-digit code. A cast that
   cannot be used (seven lines, unknown name) is refused, never replaced by a time cast. `data.cast_method` says which.
-- No `lines` and no `gua_code`: cast **by the moment** with 星阙's own `buildTimeGua`: 上卦 = (年支序 + 农历月数 + 农历日数) % 8,
-  下卦 = + 时支序, 动爻 = % 6, where the 时柱 follows `timeAlg` (0 = 真太阳时, default). Same input = same hexagram.
+- No `lines` and no `gua_code`: the software casts **true-random** (星阙 v3.15.0, same as its `cast_random_case`):
+  `castMethod` `yarrow` 大衍蓍草 (default) or `coins` 三钱, each line from the system random source. The six lines come back
+  in `data.lines` / `data.cast.replay.lines` — pass them back as `lines` to reopen the same hexagram. `castMethod: "time"` casts
+  **by the moment** with 星阙's own `buildTimeGua`: 上卦 = (年支序 + 农历月数 + 农历日数) % 8, 下卦 = + 时支序, 动爻 = % 6,
+  where the 时柱 follows `timeAlg` (0 = 真太阳时, default). Same moment = same hexagram.
 - `gender` (求测人) only labels the chart; default 男, shown on the technique card as a default.
 - 判读口径: `liuyaoSettings` (24 keys: 流派 `school`, 占类 `askType`, 用神 / 飞伏 / 旬空 / 神煞 …; see `options_keys`).
   [断诀命中] and [占类断语] depend on `askType` and these keys — the gate asks for them.
+
+## 随机起卦（v3.15.0：一律真随机）
+
+The cast is drawn from the **system random source** (never a pseudo-random formula), as in the 星阙 desktop pages. Every
+cast — random or not — returns `data.cast` = `{method, random, source, replay}`: `replay` holds exactly the fields to pass
+back (with the full `tr1-…` record) to reopen the same cast, no local memory needed. Deterministic modes stay available.
+
+| tool | default | deterministic modes | reopen with |
+| --- | --- | --- | --- |
+| `sixyao` | `castMethod` yarrow (or coins) | `time`, `lines`, `gua_code` | `lines` |
+| `lingqi` | `seedMode` random | `time_seed` | `seed` or `counts` |
+| `tarot` | `seedMode` random (1344-byte record) | `birth`, manual `seed` | `seed` |
+| `geomancy` | `seedMode` random (192-byte record; dice/coins/sand/tablets same source) | `time_seed`, `seed`, `castNumbers` | `seed` |
+| `jingjue` / `taixuan` | random (32-byte record) | `options.seedMode` `time_seed`, `options.seed` | `options.seed` |
+| `wuzhao` | `ganzhi` 干支起例 (deterministic, as upstream); random modes day/hour/minute/tang/dunhuang/qian | — | `data.replay_options` / `castSeed` |
+| `xiaochengtu` | dayan / yaoqian without seed | `seed`, `manualCounts` | `manualCounts` |
+| `otherbu` 骰子 | roll whatever of planet / sign / house is missing | give all three | the three values |
+
+A true-random record looks like `tr1-<hex>` (shown as 「真随机 xxxxxxxx…」). Records from the desktop app are accepted as
+the seed too. Never make up a seed to "reopen" a cast — only pass back the one the tool returned.
 
 ## 神数 (14 tools)
 
@@ -111,7 +134,8 @@ normalized `勾→虎 / 雀→玄`.
 - **`feigong` 飞宫小奇门**：`qiMode` hour 时支（默认，占时）/ manualZhi 选支 / manualNum 数取 / yearZhi 年支，
   + 日干支（占时自 `/nongli/time` 取）。命宫随 `mingAge`/`mingGender`；`koujing` 河魁口径 zheng/yi 两说。7 段严格。
 - **`xiaochengtu` 小成图**：`qiguaFa` manual（上/下卦 up/lo + dongYaos）/ number（upNum/loNum + qiguaShu）/
-  stock（open/close **字符串保末尾 0**）/ dayan（**须显式 seed 或 counts，禁静默随机**）/ time（占时梅花卦）。
+  stock（open/close **字符串保末尾 0**）/ dayan 大衍 · yaoqian 摇钱（不给 seed / manualCounts 即**软件真随机**，回传
+  `data.xiaochengtu.counts` 作 manualCounts 传回即原样重开）/ time（占时梅花卦）。
   `yongGong` 用宫 1-9 非5。[股市]段仅 stock 模式出。
 - **`guice` 皇极轨策**：`qiguaFa` 十二法（time/baoshu/wushu/shengyin/zizhan/zhangchi/chicun/weiren/ziji/
   dongwu/jingwu/duanfa）+ 各法专属输入；十开关流派（school/yanshuFa/qiguaShu/shuXi/shiFang…）。起卦时刻

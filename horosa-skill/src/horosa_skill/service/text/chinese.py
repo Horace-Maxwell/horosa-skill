@@ -313,7 +313,7 @@ def _gua_code_lines(gua_code: Any, changed_code: Any) -> list[dict[str, Any]]:
 _COIN_VALUES = {6: (0, True, "老阴（动）"), 7: (1, False, "少阳"), 8: (0, False, "少阴"), 9: (1, True, "老阳（动）")}
 _SIXYAO_EXPECTED = (
     ("lines：六爻（自下而上）每爻 value 0 阴 / 1 阳（动爻 change=true），或铜钱值 6 老阴动 / 7 少阳 / 8 少阴 / 9 老阳动；"
-     "或 gua_code：六位 0/1（初→上，1 阳）或卦名（火天大有 / 大有 / 乾）；都不给 = 以时起卦"),
+     "或 gua_code：六位 0/1（初→上，1 阳）或卦名（火天大有 / 大有 / 乾）；都不给 = 软件真随机起卦（castMethod=time 则以时起卦）"),
     ("lines: six lines bottom to top, value 0 yin / 1 yang (moving: change=true) or coin values 6 old yin (moving) / 7 young yang / "
      "8 young yin / 9 old yang (moving); or gua_code: six 0/1 digits (bottom to top, 1 = yang) or a hexagram name; give neither to cast by time"),
 )
@@ -331,13 +331,16 @@ def _sixyao_issue(field: str, got: Any, zh: str, en: str) -> Any:
 
 
 def resolve_sixyao_cast(payload: dict[str, Any]) -> dict[str, Any]:
-    """→ {"method": "manual" | "gua_code" | "gua_name" | "time", "lines": [...], "gua_name"?, "changed_name"?, "changed_bits"?, "notes": [...]}。
+    """→ {"method": "manual" | "gua_code" | "gua_name" | "yarrow" | "coins" | "time", "lines": [...], "gua_name"?, "changed_name"?, "changed_bits"?, "notes": [...]}。
+
+    都不给（无 lines / gua_code）时按 castMethod 起：yarrow 大衍蓍草（缺省，同上游 castRandomCase 代摇缺省）/ coins 三钱 —— 系统随机源真随机；
+    time = 以时起卦（buildTimeGua，同刻同卦）。
 
     lines 与 gua_code 同时给 → 以 lines 为准（旧口径），两者不一致时报错；`numbers`（报数起卦）引擎没有这条路 → 报错。"""
     if payload.get("numbers") not in (None, "", []):
         raise _sixyao_issue("numbers", payload.get("numbers"),
-                            "六爻引擎没有报数起卦：请改用 lines（六爻）或 gua_code（六位码 / 卦名），都不给就按时间起卦。",
-                            "The six-line engine has no number casting: use lines or gua_code instead, or give neither to cast by time.")
+                            "六爻引擎没有报数起卦：请改用 lines（六爻）或 gua_code（六位码 / 卦名），都不给就由软件真随机起卦（castMethod=time 则按时间起卦）。",
+                            "The six-line engine has no number casting: use lines or gua_code instead; give neither for a true-random cast (castMethod=time casts by the moment).")
     raw_lines = payload.get("lines")
     notes: list[str] = []
     if raw_lines not in (None, [], ""):
@@ -385,7 +388,11 @@ def resolve_sixyao_cast(payload: dict[str, Any]) -> dict[str, Any]:
     if code in (None, ""):
         if changed not in (None, ""):
             raise _sixyao_issue("changed_code", changed, "只给了变卦 changed_code、没给本卦 gua_code。", "changed_code was given without gua_code.")
-        return {"method": "time", "lines": [], "notes": notes}
+        method = payload.get("castMethod") or "yarrow"
+        if method not in ("yarrow", "coins", "time"):
+            raise _sixyao_issue("castMethod", method, "castMethod 只认 yarrow（大衍蓍草，缺省）/ coins（三钱）/ time（以时起卦）。",
+                                "castMethod must be yarrow (default) / coins / time.")
+        return {"method": method, "lines": [], "notes": notes}
     text = f"{code}".strip().replace(" ", "")
     changed_text = f"{changed}".strip().replace(" ", "") if changed not in (None, "") else ""
     is_bits = len(text) == 6 and set(text) <= {"0", "1"}

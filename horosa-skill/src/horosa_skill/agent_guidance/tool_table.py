@@ -696,7 +696,9 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             "（默认关段）/[断诀命中]/[占类断语]（含《断易天机》断语摘要）；shishen/tianshiSchool/yuqi/gufa/yueLiushen/shenshaExOn "
             "只改后两段。无头卦不带卦辞 → [卦辞与断语] 只有段头（上游同形），卦辞原文在 data.descriptions。"
             "认不出的键/不在词表的值回执在 warnings。"
-            "\n不给 lines/gua_code = 以时起卦（上游 buildTimeGua：年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）。"
+            "\n不给 lines/gua_code = 软件真随机起卦（castMethod：yarrow 大衍蓍草缺省 / coins 三钱，系统随机源；上游 castRandomCase 同口径），"
+            "起出的六爻在 data.lines / data.cast.replay.lines，作 lines 传回即原样重开；castMethod=time 才以时起卦（上游 buildTimeGua："
+            "年支序 + 农历月数 + 农历日数 + 时柱支序，时柱随 timeAlg）。"
         ),
         required_context=COMMON_LOCATION_FIELDS + ["question", "lines or gua_code"],
         ask_if_missing=[
@@ -990,10 +992,10 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["候选时刻", "用事类型", "本命出生资料 natal（只在用户给出时传，不可编造）"],
     ),
     "geomancy": _policy(
-        intent="天文地占 / astronomical geomancy：以「起卦时刻」确定性起卦（castMethod='time'，由 date/time 派生 timeSeed，同刻可复现），由 4 母卦推 16 图形入十二宫，取判官/见证/解读技法断吉凶。",
+        intent="天文地占 / astronomical geomancy：缺省由软件以系统随机源起卦（seedMode random，192 字节真随机记录作种子，同上游页面；dice/coins/sand/tablets 皮肤四法同源），回传 data.seed 传回即原样重开；seedMode=time_seed 按起卦时刻派生（同刻同盘）。由 4 母卦推 16 图形入十二宫，取判官/见证/解读技法断吉凶。",
         required_context=["起卦时刻 date/time/zone", "起卦地点 lon/lat", "所问 question", "问类 questionType"],
         ask_if_missing=[
-            {"field": "date/time/place", "question": "请提供起卦的日期、时间和地点（城市即可；地占以起卦时刻确定性起卦）。"},
+            {"field": "date/time/place", "question": "请提供起卦的日期、时间和地点（城市即可；随盘记录，起卦本身由软件真随机，也可传回上次的 seed 重开）。"},
             {"field": "question", "question": "所问何事？请给出具体问题。"},
             # 后端 _QTYPES 十一类（webgeomancysrv.py:42-46）；此前给的 lawsuit/theft/pregnancy/property/travel/hope
             # 后端不认、静默改回 custom。
@@ -1006,16 +1008,16 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "readingScope", "value": "L3", "meaning": "读取范围 L3（不随流派回落；arabic_raml 内核默认 L2 也按 L3 发）"},
             {"field": "zodiacSystem", "value": "classical", "meaning": "黄道体系 classical（不随流派回落；european_planetary 内核默认行星黄道也按 classical 发）"},
         ],
-        do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容"],
+        do_not_assume=["起卦时刻（须是真实起卦当下）", "所问内容", "不要替用户编种子：要重开同一盘只能用上次回传的 seed"],
         output_contract=(
             "includeCatalog=true 附 [十六卦目录] 段（16 图形五行/主星/星座/性/象意总表，判读 grounding 用）。"
         ),
     ),
     "tarot": _policy(
-        intent="塔罗 / tarot：以「起卦时刻」确定性抽牌（SHA-256(种子)→洗牌，同刻同盘可复现），按牌阵逐位取牌 + 正逆位 + 花色/元素/大牌统计 + Yes/No 定局与精华牌。",
-        required_context=["起卦时刻 date/time（派生种子）", "所问 question", "牌阵 spread"],
+        intent="塔罗 / tarot：缺省由软件以系统随机源洗牌（seedMode random，1344 字节真随机记录，同上游页面），回传 data.seed 传回即原样重开同一副牌；seedMode=birth 按姓名·出生时刻·地点派生。按牌阵逐位取牌 + 正逆位 + 花色/元素/大牌统计 + Yes/No 定局与精华牌。",
+        required_context=["起卦时刻 date/time（随盘记录）", "所问 question", "牌阵 spread"],
         ask_if_missing=[
-            {"field": "date/time", "question": "请提供起卦的日期与时间（塔罗以起卦时刻确定性抽牌）。也可直接给 seed。"},
+            {"field": "date/time", "question": "请提供起卦的日期与时间（随盘记录；抽牌由软件真随机，也可传回上次的 seed 重开同一副牌）。"},
             {"field": "question", "question": "想问什么？请给出具体问题。"},
             # 键名 = 引擎 SPREADS 真键（spreads.js）；此前给的 one / relationship 不存在，被静默换成 three。
             {"field": "spread", "question": "用哪种牌阵？", "options": ["三张·过去现在未来 three", "凯尔特十字 celtic", "单张 single", "关系 relation", "马蹄 horseshoe", "其它（见 guidance options_keys.spread）"]},
@@ -1024,16 +1026,16 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "spread", "value": "three", "meaning": "默认三张牌阵（过去·现在·未来）"},
             {"field": "deck", "value": "rws", "meaning": "默认韦特-史密斯牌（RWS 78 张）"},
         ],
-        do_not_assume=["起卦时刻/种子（决定抽到的牌，须真实）", "所问内容"],
+        do_not_assume=["起卦时刻（随盘记录，须真实）", "所问内容", "不要替用户编种子：要重开同一副牌只能用上次回传的 seed"],
     ),
     "lingqi": _policy(
         intent=(
-            "灵棋经 / lingqi：以「起卦时刻」确定性掷十二棋（上四·中四·下四，一时掷之，古法「不可再擲」），"
+            "灵棋经 / lingqi：缺省由软件以系统随机源掷十二棋（上四·中四·下四，一时掷之，古法「不可再擲」——要重看同一卦就传回上次的 seed / counts），"
             "上中下三层正面枚数成六十四卦之一，出 棋势（三才层位·耦敌·阴阳）/ 卦象 / 繇辞 / 诸家注（颜何陈刘）/ 课断 / 断诗。"
         ),
-        required_context=["起卦时刻 date/time（派生种子，同刻同卦可复现）", "所问 question"],
+        required_context=["起卦时刻 date/time（随盘记录；seedMode=time_seed 时据此派生种子）", "所问 question"],
         ask_if_missing=[
-            {"field": "date/time", "question": "请提供起卦的日期与时间（灵棋经以起卦时刻确定性掷棋）。"},
+            {"field": "date/time", "question": "请提供起卦的日期与时间（随盘记录；掷棋由软件真随机，也可传回上次的 seed / counts 重开）。"},
             {"field": "question", "question": "想问什么？请给出具体问题。"},
             {
                 "field": "category",
@@ -1085,7 +1087,7 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
             {"field": "qiguaShu", "value": "tiandi", "meaning": "两数模式默认天地数"},
             {"field": "piKoujing", "value": "zheng", "meaning": "闢卦细判口径=正传（得配害·失配利，上游缺省）；yiwen=异文（得配利·失配害），只改 [四象] 的闢卦判读"},
         ],
-        do_not_assume=["起卦法与起卦输入（决定卦，须真实；大衍禁静默随机）", "所问内容"],
+        do_not_assume=["起卦法与起卦输入（决定卦，须真实；大衍 / 摇钱不给 seed 即软件真随机，回传 counts 可原样重开）", "所问内容"],
     ),
     "guice": _policy(
         intent="皇极轨策 / guice：十二法之一起一卦，演策数（或轨数）成四位卦，取体用生克断吉凶，兼三要十应、元会运世、大定起数。卦为冻结值——起卦一经起出即不重起，改流派/十开关只重排断法。",
@@ -1358,16 +1360,15 @@ TOOL_GUIDANCE: dict[str, dict[str, Any]] = {
         do_not_assume=["birth time"],
     ),
     "otherbu": _policy(
-        intent="西洋游戏 / 占星骰子。",
-        required_context=["question", "sign/house/planet if not rolling randomly"],
+        intent="西洋游戏 / 占星骰子：星、座、宫三颗骰子，哪颗没给就由软件以系统随机源掷（同上游 DiceMain，v3.15.0 真随机），掷出的值在 data.dice / data.cast.replay，传回即重开同一盘。",
+        required_context=["question"],
         ask_if_missing=[
             {"field": "question", "question": "这次占问的问题是什么？"},
-            {"field": "dice values", "question": "骰子结果由用户指定还是需要随机/默认？", "options": ["用户指定星座/宫位/行星", "使用默认示例", "先询问用户掷骰结果"]},
         ],
         safe_defaults=[
-            {"field": "sign/house/planet", "value": "Aries/0/Sun", "meaning": "placeholder default; should not be used as real divination unless user accepts"}
+            {"field": "sign/house/planet", "value": None, "meaning": "不给 = 软件真随机掷（用户自己掷好了就照传三值）"}
         ],
-        do_not_assume=["random dice result"],
+        do_not_assume=["用户自己掷出的骰子值（给了就照用，不要替用户编）"],
     ),
     "ziwei_birth": _policy(
         intent="紫微斗数命盘（四化流派 + 22 个传本/排盘开关 + 流派叠层，键表见 options_keys；任一传本开关非缺省即走本地 ZiweiCalc 重排，同星阙）。",
@@ -1634,6 +1635,6 @@ _EXTRA_OPTIONS_DOC: dict[str, dict[str, str]] = {
         "options.ascSource / houseProjection": "real_chart / real_ephemeris 按所问时地起真实上升/真实星历（date/time/zone/lat/lon 已随请求下发）",
     },
     "wuzhao": {
-        "随机诸式": "dunhuang / qian(qianAuto=true) 按 castSeed 定兆（缺省=起课时刻 yyyyMMddHHmm mod 1e9，同刻同兆）；day/hour/minute/tang 须 manual=true(+manualSplits) 方可复现，否则照上游回落干支起例并在 [揲筮] 写复现说明；存档复现：mode=zhushu + zhaoNums=存档六位兆数",
+        "随机诸式": "dunhuang / qian(qianAuto=true) 按 castSeed 定兆（缺省=当场取 64 字节系统随机记录，每次新兆；显式 castSeed 整数 / tr1- 记录原样重开）；day/hour/minute/tang 由后端当场取系统随机分爻（不吃种子），起出后 data.replay_options 给重开配方（manual + manualSplits / zhushu + zhaoNums / qianThrows，同上游 wuzhaoReplayOptionsFromPan）；存档复现：mode=zhushu + zhaoNums=存档六位兆数",
     },
 }

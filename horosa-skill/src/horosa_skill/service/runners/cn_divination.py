@@ -31,6 +31,7 @@ from horosa_skill.service.text.divination import (
     _geomancy_time_seed,
 )
 from horosa_skill.service.text.western import _build_otherbu_snapshot_text
+from horosa_skill.true_random import cast_record, new_seed_for, normalized_entropy_seed, random_below, seed_display_text
 
 
 # 取不到日干支时不印「六戊日」提示（提示缺失好过按错口径印一行假的），但调用方要知道：没这行不等于不是戊日。
@@ -70,6 +71,13 @@ def _tarot_spread_key(value: Any) -> Any:
         F.add_input_note(f"牌阵「{text}」按 {key} 读。", f"Spread '{text}' was read as {key}.")
         return key
     return value
+
+# 骰子星池 / 星座序 = 上游 DiceMain.js ALL_PLANETS / TRAD_PLANETS 与 AstroConst.LIST_SIGNS（tests/test_true_random_casting.py 读上游源对拍）。
+_DICE_ALL_PLANETS = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto",
+                     "North Node", "South Node", "Dark Moon", "Purple Clouds")
+_DICE_TRAD_PLANETS = ("Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "North Node", "South Node", "Dark Moon", "Purple Clouds")
+_DICE_SIGNS = ("Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces")
+
 
 class CnDivinationRunners:
     def _run_xiaoliuren_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -287,12 +295,16 @@ class CnDivinationRunners:
                 details={"reason": reason, "qiguaFa": fa},
             )
         snapshot_text = js_result.get("snapshot_text")
-        return {
+        out = {
             "xiaochengtu": data,
             "input_normalized": js_result.get("input_normalized", {}),
             "snapshot_text": snapshot_text,
             "export_snapshot": self._augment_export_payload(technique="xiaochengtu", snapshot_text=snapshot_text),
         }
+        # 起卦记录（data.cast）：大衍 / 摇钱的六爻之数作 manualCounts 传回即原样重开（不给 seed 时是系统随机源真随机）。
+        random = bool((js_result.get("input_normalized") or {}).get("random"))
+        out["cast"] = cast_record(fa, random=random, replay={"qiguaFa": fa, "manualCounts": data.get("counts")} if data.get("counts") else {})
+        return out
 
     def _run_guice_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
         # 皇极轨策：十二法起卦 + 演数四位 + 卦变断法 + 元会运世 + 大定。卦为冻结值。占时四柱（立春界年柱 +
@@ -446,6 +458,16 @@ class CnDivinationRunners:
         }
 
     def _run_otherbu_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # 骰子三颗：没给的由软件以系统随机源掷（上游 DiceMain.clickRandom：星池随古典开关、座 LIST_SIGNS[0–11]、宫 0–11 各自等概率）。
+        rolled: dict[str, Any] = {}
+        if payload.get("planet") in (None, ""):
+            pool = _DICE_TRAD_PLANETS if payload.get("tradition") else _DICE_ALL_PLANETS
+            rolled["planet"] = pool[random_below(len(pool))]
+        if payload.get("sign") in (None, ""):
+            rolled["sign"] = _DICE_SIGNS[random_below(12)]
+        if payload.get("house") is None:
+            rolled["house"] = random_below(12)
+        payload = {**payload, **rolled}
         remote_payload = {
             **payload,
             "date": payload["date"],
@@ -459,28 +481,34 @@ class CnDivinationRunners:
             "zodiacal": payload.get("zodiacal", 0),
             "tradition": payload.get("tradition", False),
             "virtualPointReceiveAsp": payload.get("virtualPointReceiveAsp"),
-            "sign": payload.get("sign", "Aries"),
-            "house": payload.get("house", 0),
-            "planet": payload.get("planet", "Sun"),
+            "sign": payload["sign"],
+            "house": payload["house"],
+            "planet": payload["planet"],
         }
         response = self._call_remote("/predict/dice", remote_payload)
         snapshot_text = _build_otherbu_snapshot_text({**remote_payload, "question": payload.get("question")}, response)
         result = {**response, "question": payload.get("question"), "snapshot_text": snapshot_text}
+        result["dice"] = {"planet": payload["planet"], "sign": payload["sign"], "house": payload["house"]}
+        result["cast"] = cast_record("roll" if rolled else "given", random=bool(rolled), replay=dict(result["dice"]))
         result["export_snapshot"] = self._augment_export_payload(technique="otherbu", snapshot_text=snapshot_text)
         return result
 
     def _run_tarot_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 塔罗：core-js tarot 引擎 SHA-256 种子洗牌 + 解读。种子 = 上游「生辰」种子来源 seedFromFields
-        # （TarotMain.js:97-108）：name|date|time|lat|lon 取非空项以 | 相连（全空 → 'horosa-tarot-default'）；
-        # 显式 seed 覆盖。此前 skill 用 yyyyMMddHHmm，与上游同一盘抽出不同的牌（sync311 F10）。
+        # 塔罗：core-js tarot 引擎洗牌 + 解读。三种种子来源 = 上游页面 seedMode（main/settings.js seedFor）：
+        #   seed 显式（整数 / tr1- 真随机记录）→ 手动档，原样重开；
+        #   seedMode=birth → 上游「生辰」种子 seedFromFields：name|date|time|lat|lon 非空项以 | 相连（全空 → 'horosa-tarot-default'）；
+        #   缺省 random（v3.15.0 上游页面缺省）→ 当场取 1344 字节系统随机记录（newTarotRandomSeed），随结果回传供重开。
         seed = payload.get("seed")
-        # 抽牌方式（同六爻 data.cast_method）：seed 显式种子 / birth_fields 由 name|date|time|lat|lon 派生（同人同刻同地同牌）/
-        # default_seed 固定种子（只有内部调用缺全部字段时；BirthInput 要求日期地点，入口调用到不了这一档）。
-        cast_method = "seed"
-        if seed is None or f"{seed}".strip() == "":
+        if seed is not None and f"{seed}".strip() != "":
+            cast_method = "seed"
+            seed = normalized_entropy_seed(seed) or f"{seed}".strip()
+        elif (payload.get("seedMode") or "random") == "birth":
             parts = [f"{payload.get(k)}".strip() for k in ("name", "date", "time", "lat", "lon") if payload.get(k) not in (None, "")]
             seed = "|".join(p for p in parts if p) or "horosa-tarot-default"
             cast_method = "birth_fields" if parts else "default_seed"
+        else:
+            seed = new_seed_for("tarot")
+            cast_method = "random"
         js_payload: dict[str, Any] = {
             "seed": str(seed),
             "question": payload.get("question") or "",
@@ -526,6 +554,8 @@ class CnDivinationRunners:
             "spread": (isinstance(result, dict) and result.get("spread")) or js_payload.get("spread"),
             "seed": str(seed),
             "cast_method": cast_method,
+            "cast": cast_record(cast_method, random=cast_method == "random", replay={"seed": str(seed)}),
+            "seed_display": seed_display_text(seed),
             "params_applied": list(data.get("params_applied") or []),
             "params_ignored": ignored,
             "snapshot_text": snapshot_text,
@@ -566,6 +596,11 @@ class CnDivinationRunners:
             js_payload["counts"] = counts
         if isinstance(payload.get("zhuVisible"), dict):
             js_payload["zhuVisible"] = payload["zhuVisible"]
+        # 起卦档（v3.15.0 同上游页面缺省 random）：seed 显式 = 手动档原样重开；seedMode time_seed = 占时；缺省真随机。
+        if payload.get("seed") not in (None, ""):
+            js_payload["seed"] = normalized_entropy_seed(payload.get("seed")) or f"{payload.get('seed')}".strip()
+        elif payload.get("seedMode"):
+            js_payload["seedMode"] = payload.get("seedMode")
         # 六戊日提示（卷首「六戊日不宜占卜」）需要日干支。走本仓 nongli 后端拿，**不**在 JS 侧引
         # lunar-javascript 另算一份——同口径原则（法奇门 faRelatedPeople 年干也是这么处理的）。
         # 拿不到就不给该行：提示缺失远好于按错口径印一行假的。
@@ -576,10 +611,13 @@ class CnDivinationRunners:
         result = self.js_client.run("lingqi", js_payload)
         snapshot_text = result.get("snapshot_text")
         return {
-            # 起卦方式（同六爻 data.cast_method）：counts 照调用方给的冻结卦复排 / time 以占时种子掷
-            "cast_method": "counts" if "counts" in js_payload else "time",
+            # 起卦方式（同六爻 data.cast_method）：counts 照调用方给的冻结卦复排 / random 真随机（缺省）/ time 占时种子 / seed 手动种子
+            "cast_method": {"counts": "counts", "random": "random", "time_seed": "time", "manual": "seed"}.get(result.get("seed_mode"), "counts" if "counts" in js_payload else "random"),
             "counts": result.get("counts") or js_payload.get("counts"),
             "seed": result.get("seed") or None,
+            "cast": cast_record({"counts": "counts", "random": "random", "time_seed": "time", "manual": "seed"}.get(result.get("seed_mode"), "counts"),
+                                random=result.get("seed_mode") == "random",
+                                replay={"seed": result.get("seed")} if result.get("seed") else {"counts": result.get("counts") or js_payload.get("counts")}),
             "category": js_payload["category"],
             "day_ganzhi": day_ganzhi,
             "snapshot_text": snapshot_text,
@@ -620,7 +658,7 @@ class CnDivinationRunners:
         return stem
 
     def _run_geomancy_tool(self, payload: dict[str, Any]) -> dict[str, Any]:
-        # 天文地占：以起卦时刻确定性起卦（castMethod='time' + timeSeed 由 年月日时分 派生，同盘可复现），
+        # 天文地占：起卦档同上游页面 clickCast（main/cast.js）——缺省真随机记录 / 皮肤四法 / 时间档 / 手动种子 / 报数，
         # 后端 /geomancy/reading 由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法 + 转宫派生 + 定局落星。
         options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
         profile = payload.get("profile") or "european_classical"
@@ -659,10 +697,27 @@ class CnDivinationRunners:
         request: dict[str, Any] = {
             "question": payload.get("question") or "",
             "questionType": question_type,
-            "castMethod": "time",
-            "timeSeed": time_seed,
             "profile": profile,
         }
+        # 起卦档（上游 clickCast）：手动种子 > 时间档 > 真随机（缺省；皮肤四法 castMethod 如实回传）。报数在下面另行覆盖。
+        manual_seed = payload.get("seed")
+        seed_mode = payload.get("seedMode") or "random"
+        if manual_seed not in (None, ""):
+            entropy = normalized_entropy_seed(manual_seed)
+            try:
+                request.update({"seedMode": "manual", "seed": entropy if entropy else int(f"{manual_seed}".strip())})
+            except ValueError as exc:
+                raise _cast_issue("geomancy", "seed", manual_seed, "seed 要整数，或回传的真随机记录 tr1-…。",
+                                  "seed must be an integer or a returned true-random record tr1-….", example="tr1-0a1b…") from exc
+            cast_method = "seed"
+        elif seed_mode == "time_seed":
+            request.update({"castMethod": "time", "timeSeed": time_seed})
+            cast_method = "time"
+        else:
+            request.update({"seedMode": "random", "seed": new_seed_for("geomancy")})
+            if seed_mode != "random":
+                request["castMethod"] = seed_mode   # 皮肤四法：同一随机源，如实记所用之法
+            cast_method = "random"
         # 🔴 sync311 F12：所问之时地同发（上游 GeomancyMain.clickCast :1161-1167）——后端只在
         # ascSource=real_chart / houseProjection=real_ephemeris 时用它起真实上升/真实星历（webgeomancysrv
         # _parse_time_place），此前不发 → 两档静默回落图形取法。纪元前才发 ad（公元后请求体逐字节不变）。
@@ -711,6 +766,7 @@ class CnDivinationRunners:
             request.update({"castMethod": "numbers", "castNumbers": numbers, "seedMode": "manual"})
             request.pop("timeSeed", None)
             request["seed"] = int(options["seed"]) if options.get("seed") is not None else time_seed
+            cast_method = "numbers"
         # seed 只在报数起卦里有用（时间起卦恒用 timeSeed）：单给 seed 也照实回执为未用。
         known = set(_GEOMANCY_OPTION_KEYS) | {"castNumbers"} | ({"seed"} if cast_numbers is not None else set())
         geo_ignored = sorted(k for k in options if k not in known)
@@ -720,8 +776,19 @@ class CnDivinationRunners:
             "reading": response.get("reading") if isinstance(response, dict) else None,
             "figures": response.get("figures") if isinstance(response, dict) else None,
             "time_seed": request.get("timeSeed"),
+            "cast_method": cast_method,
+            "seed": (response.get("reading") or {}).get("seed", request.get("seed")) if isinstance(response, dict) else request.get("seed"),
             "params_ignored": geo_ignored,
         }
+        replay: dict[str, Any] = {"seed": result["seed"]}
+        if cast_method == "time":
+            replay = {"seedMode": "time_seed"}
+        elif cast_method == "numbers":
+            replay = {"options": {"castNumbers": request["castNumbers"], "seed": request["seed"]}}
+        elif request.get("castMethod") in ("dice", "coins", "sand", "tablets"):
+            replay = {"seed": result["seed"]}
+        result["cast"] = cast_record(request.get("castMethod") if cast_method == "random" and request.get("castMethod") else cast_method,
+                                     random=cast_method == "random", replay=replay)
         if geo_ignored:
             result["_warnings"] = [f"geomancy 未识别的 options 键已忽略（未转发后端）：{'、'.join(geo_ignored)}。"]
         # [十六卦目录]（v0.33.0 批 I-5，/geomancy/catalog）：16 图形属性总表（agent grounding 用）。
@@ -806,6 +873,8 @@ class CnDivinationRunners:
         for key in ("gua_name", "changed_name", "changed_bits"):
             if cast.get(key) is not None:
                 js_request[key] = cast[key]
+        if cast["method"] in ("yarrow", "coins"):
+            js_request["castMethod"] = cast["method"]   # 软件代摇：JS 按 vendored yarrowYao / randYao 逐爻取系统随机
         if isinstance(liuyao_settings, dict):
             js_request["liuyaoSettings"] = liuyao_settings
         try:
@@ -889,6 +958,9 @@ class CnDivinationRunners:
             "nongli": nongli,
             # 起卦方式（v0.50.0）：manual 手动六爻 / gua_code 六位码 / gua_name 卦名 / time 以时起卦。
             "cast_method": cast["method"],
+            # 起卦记录：六爻（初→上）作 lines 传回即原样重开，任何起法都成立（插件等无状态调用方据此重开）。
+            "cast": cast_record(cast["method"], random=cast["method"] in ("yarrow", "coins"),
+                                replay={"lines": [{"value": line["value"], "change": bool(line["change"])} for line in lines]}),
             "current_code": current_code,
             "changed_code": changed_code,
             "lines": lines,

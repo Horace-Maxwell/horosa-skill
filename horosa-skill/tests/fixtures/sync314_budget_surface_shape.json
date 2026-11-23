@@ -394,6 +394,7 @@
     "ad": "integer enum=[1,-1]",
     "question": "string",
     "gender": "string",
+    "castMethod": "string",
     "timeAlg": "integer",
     "after23NewDay": "integer",
     "lateZiHourUseNextDay": "integer",
@@ -564,6 +565,7 @@
     "clarification_notes": "string",
     "qiguaFa": "string",
     "seed": "integer",
+    "manualCounts": "array items={\"type\":\"string\"}",
     "piKoujing": "string",
     "askEvent": "string",
     "question": "string",
@@ -1933,7 +1935,7 @@
    }
   },
   "horosa_cn_geomancy": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以起卦时刻确定性起天文地占\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"起天文地占\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1944,6 +1946,8 @@
     "ad": "integer enum=[1,-1]",
     "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
     "question": "string",
+    "seedMode": "string",
+    "seed": "string",
     "questionType": "string",
     "includeCatalog": "boolean",
     "profile": "string",
@@ -1956,7 +1960,7 @@
    }
   },
   "horosa_cn_lingqi": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以起卦时刻确定性掷灵棋经十二棋\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"掷灵棋经十二棋\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1967,6 +1971,8 @@
     "ad": "integer enum=[1,-1]",
     "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
     "question": "string",
+    "seedMode": "string",
+    "seed": "string",
     "category": "string",
     "agent_confirmed_settings": "boolean",
     "defaults_accepted": "boolean",
@@ -1976,7 +1982,7 @@
    }
   },
   "horosa_cn_tarot": {
-   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"以问卦时刻确定性抽塔罗牌阵\"}",
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"抽塔罗牌阵\"}",
    "schema": "{\"type\":\"object\"}",
    "properties": {
     "date": "string",
@@ -1989,6 +1995,7 @@
     "question": "string",
     "spread": "string",
     "seed": "string",
+    "seedMode": "string",
     "options": "object",
     "agent_confirmed_settings": "boolean",
     "defaults_accepted": "boolean",
@@ -2569,6 +2576,9 @@
     "zodiacal": "integer enum=[0,1]",
     "siderealAyanamsa": "string",
     "response_view": "string enum=[\"reading\",\"sections\",\"titles\",\"full\"]",
+    "sign": "string",
+    "house": "integer",
+    "planet": "string",
     "question": "string",
     "agent_confirmed_settings": "boolean",
     "defaults_accepted": "boolean",

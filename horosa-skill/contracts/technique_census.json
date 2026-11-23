@@ -1,6 +1,6 @@
 {
  "_comment": "技法登记普查（审计 A-1 第 0 期 / PF-21）：一个技法散在几十张表里，新增 / 改名时漏一张没人知道。",
- "tables": 61,
+ "tables": 62,
  "techniques": {
   "acg": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -479,7 +479,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
-   "reports.figures:_APP_ONLY"
+   "reports.figures:_APP_ONLY",
+   "true_random:ENTROPY_BYTES"
   ],
   "germany": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -767,7 +768,8 @@
    "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
-   "shenshu_options:_RAW_KNOBS"
+   "shenshu_options:_RAW_KNOBS",
+   "true_random:ENTROPY_BYTES"
   ],
   "jinkou": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -834,7 +836,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
-   "reports.figures:_APP_ONLY"
+   "reports.figures:_APP_ONLY",
+   "true_random:ENTROPY_BYTES"
   ],
   "liureng_gods": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1409,7 +1412,8 @@
    "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
-   "shenshu_options:_RAW_KNOBS"
+   "shenshu_options:_RAW_KNOBS",
+   "true_random:ENTROPY_BYTES"
   ],
   "taiyi": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1452,7 +1456,8 @@
    "exports.registry:AI_EXPORT_PRESET_SECTIONS",
    "exports.registry:AI_EXPORT_SECTION_MIGRATION_KEYS",
    "reports.app_charts:_APP_ONLY_PAYLOADS",
-   "reports.figures:_APP_ONLY"
+   "reports.figures:_APP_ONLY",
+   "true_random:ENTROPY_BYTES"
   ],
   "tianxing": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",
@@ -1614,7 +1619,8 @@
    "service.birth_time:_CHART_REFUSE",
    "service.runners.shenshu:SHENSHU_OPTION_KNOBS",
    "service:_SHENSHU_ENDPOINTS",
-   "shenshu_options:_RAW_KNOBS"
+   "shenshu_options:_RAW_KNOBS",
+   "true_random:ENTROPY_BYTES"
   ],
   "xianqin": [
    "agent_guidance.catalog:TOOL_DEFINITIONS",

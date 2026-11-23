@@ -13,8 +13,8 @@ from horosa_skill.exports import registry as r
 
 
 def test_versions_track_upstream_v60() -> None:
-    assert r.MIRRORED_UPSTREAM_AIEXPORT_VERSION == 65
-    assert r.AI_EXPORT_SETTINGS_VERSION == r.AI_EXPORT_SECTION_MIGRATION_VERSION == 17
+    assert r.MIRRORED_UPSTREAM_AIEXPORT_VERSION == 68   # v0.53.0：上游 v3.15.0
+    assert r.AI_EXPORT_SETTINGS_VERSION == r.AI_EXPORT_SECTION_MIGRATION_VERSION == 18
 
 
 @pytest.mark.parametrize(("key", "old", "new"), [

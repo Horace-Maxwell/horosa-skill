@@ -23,12 +23,12 @@ from horosa_skill.service.options_cn import (
     _WANGJI_TRIGRAMS,
     _WANGJI_XINYI_METHODS,
     _WUZHAO_CALC_DEFAULTS,
-    _WUZHAO_MODE_LABELS,
     _append_replay_note,
     _day_boundary_switches,
     _split_birth_ymdhm,
     _upstream_cast_time_seed,
 )
+from horosa_skill.true_random import cast_record, is_entropy_seed, new_seed_for, random_below, seed_display_text
 from horosa_skill.shenshu_options import SHENSHU_OPTION_KNOBS, resolve_shenshu_options
 
 
@@ -119,17 +119,30 @@ class ShenshuRunners:
         replay_note = ""
         result_extra: dict[str, Any] = {}
         if key in {"jingjue", "taixuan"}:
-            # 🔴 起筮种子（sync311 F1/F2）：上游无头挂载按起课时刻 yyyyMMddHHmm mod 1e9 派生（同刻同卦），
-            # 显式 seed 覆盖（0 合法，挂载自检 F-23）。此前 skill 不发 seed：荆诀后端 random.randint 真随机、
-            # 太玄后端缺省只到小时（yyyyMMddHH）——同一时刻两次调用得不同卦 / 同一小时内恒同卦。
+            # 起筮种子（v3.15.0 同上游页面）：缺省 seedMode=random → 当场取 32 字节系统随机记录 tr1-…（页面 defaultSeed），
+            # 后端逐位读它定每一次分策、原样回传；time_seed → 起课时刻 yyyyMMddHHmm mod 1e9（上游挂载重算同口径，同刻同卦）；
+            # 显式 seed（整数，0 合法 —— 挂载自检 F-23；或回传的 tr1- 记录）= 手动档原样重开。
             explicit = knobs.backend.get("seed")
-            seed = int(explicit) % 1_000_000_000 if explicit is not None else _upstream_cast_time_seed(parts)
+            seed_mode = knobs.skill.get("seedMode") or "random"
+            if explicit is not None:
+                seed = explicit if is_entropy_seed(explicit) else int(explicit) % 1_000_000_000
+                label = "起筮种子（显式，原样重开）"
+            elif seed_mode == "time_seed":
+                seed = _upstream_cast_time_seed(parts)
+                label = "起筮种子（起课时刻 yyyyMMddHHmm mod 1e9 派生）"
+            else:
+                seed = new_seed_for(key)
+                label = "起筮种子（系统随机源，真随机记录）"
+            result_extra["cast"] = cast_record("seed" if explicit is not None else seed_mode, random=explicit is None and seed_mode != "time_seed",
+                                               replay={"options": {"seed": seed}})
             remote_payload["seed"] = seed
             result_extra["seed"] = seed
-            settings_applied["seed"] = {
-                "label": "起筮种子" + ("（显式）" if explicit is not None else "（起课时刻 yyyyMMddHHmm mod 1e9 派生）"),
-                "value": seed,
-            }
+            settings_applied["seed"] = {"label": label, "value": seed_display_text(seed) if is_entropy_seed(seed) else seed}
+        elif key == "wangji" and remote_payload.get("historyYear") == "random":
+            # 皇极「随机历史年」（上游 HuangJiMain.randomHistoryYear）：1900–2100 等概率，系统随机源；掷出的年随结果回传。
+            remote_payload["historyYear"] = 1900 + random_below(201)
+            result_extra["cast"] = cast_record("random_history_year", random=True, replay={"options": {"historyYear": remote_payload["historyYear"]}})
+            settings_applied["historyYear"] = {"label": "所推之年（随机历史年，系统随机源）", "value": remote_payload["historyYear"]}
         elif key == "wuzhao":
             remote_payload, replay_note = self._wuzhao_calc_payload(payload, parts, knobs.backend, remote_payload, settings_applied, result_extra)
         elif key == "cetian":
@@ -171,6 +184,13 @@ class ShenshuRunners:
         if replay_note:
             # 上游 buildWuZhaoSnapshotForFields：回落干支起例后复现说明并入 [揲筮] 段（:394）。
             snapshot_text = _append_replay_note(snapshot_text, "揲筮", replay_note)
+        cast = result_extra.get("cast")
+        if key == "wuzhao" and isinstance(cast, dict) and cast.get("random") and not cast.get("replay"):
+            # 折竹 / 唐法随机分爻的重开配方（上游 wuzhaoReplayOptionsFromPan）：传回这几个键即逐位同兆。
+            replay = _wuzhao_replay_options(response, (settings_applied.get("mode") or {}).get("value"))
+            if replay:
+                result_extra["replay_options"] = replay
+                cast["replay"] = {"options": {k: v for k, v in replay.items() if k != "replayNote"}}
         # 铁板「框架推演层」五段：kinastro 后端出盘面与条文，刻分/三元/八卦滚这层是上游前端按四柱
         # 本地推演的。后端响应里的 pillars 即入参，失败只是这几段不出。
         if key == "tieban":
@@ -271,10 +291,10 @@ class ShenshuRunners:
         * 11 个计算键全量下发（缺省同上游 DEFAULT_OPTIONS）；
         * 性别：五兆后端只认 'male'/'female'（webwuzhaosrv.py:497-499）——顶层 gender 1/0 与 options.gender
           （输入归一化会把嵌套 'male' 改成 1）一律归回 'male'/'female'，此前恒被后端清成「未指定」；
-        * 随机诸式：敦煌揲筮 / 以钱代筮（自动掷）后端按 castSeed 定兆（v3.11「按存档兆数复现」同一枚种子）——
-          缺省由起课时刻派生（同刻同兆，与灵棋经/太玄/荆诀同一「以时起卦」语义），显式 castSeed 覆盖；
-        * 折竹（日/时/分干起盘）与唐法揲筮的随机分爻后端不吃种子，无头不可复现：未开 manual 手动分爻复现时
-          照上游挂载回落干支起例，并把上游原句「复现说明」并入 [揲筮] 段 + envelope 警告（不静默）。
+        * 随机诸式（v3.15.0 同上游页面：系统随机源，每次新兆）：敦煌揲筮 / 以钱代筮（自动掷）后端按 castSeed 定兆——缺省当场取
+          64 字节真随机记录（WuZhaoMain newCastSeed），显式 castSeed（整数 / tr1- 记录）原样重开；折竹（日/时/分干起盘）与唐法揲筮的
+          随机分爻后端当场取系统随机、不吃种子 —— 不再像上游「挂载重算存档」那样回落干支起例（那条路拿不到存档兆数；skill 是新起一卦），
+          起出后照上游 wuzhaoReplayOptionsFromPan 把兆数写成重开配方回传（data.replay_options）。
         """
         calc = {**_WUZHAO_CALC_DEFAULTS}
         calc.update({k: v for k, v in backend_knobs.items() if k in _WUZHAO_CALC_DEFAULTS})
@@ -283,30 +303,22 @@ class ShenshuRunners:
             calc["gender"] = {1: "male", 0: "female", "1": "male", "0": "female"}.get(gender, "") if gender is not None else ""
         mode = calc["mode"]
         replay_note = ""
+        result_extra["cast"] = cast_record(mode, random=False, replay={"options": {"mode": mode}})   # 确定性起例；随机诸式下面覆盖
         if mode in {"day", "hour", "minute", "tang"} and not calc["manual"]:
-            replay_note = (
-                # 原句逐字取自上游 buildWuZhaoSnapshotForFields（v3.13.0 WuZhaoMain.js 措辞：「把「揲筮模式」设为手动复现」
-                # 「已按干支起盘」；v3.11 是「开启「手动分爻复现」」「已按干支起例」）。
-                f"挂载无法复现随机起兆(所选「{_WUZHAO_MODE_LABELS[mode]}」需把「揲筮模式」设为手动复现并填分爻数;存档亦无兆数)"
-                "→ 已按干支起盘"
-            )
-            calc["mode"] = "ganzhi"
-            _degrade(
-                "五兆 %s 在无头起课下不可复现（后端随机分爻不吃种子）：已按上游挂载口径回落干支起例；"
-                "要该法请传 options.manual=true + manualSplits（六数）", mode,
-                note=f"五兆「{_WUZHAO_MODE_LABELS[mode]}」无 manual 手动分爻时不可复现，已回落干支起例（见 [揲筮] 复现说明）。",
-            )
+            result_extra["cast"] = cast_record(mode, random=True, replay={})   # 分爻在后端当场取系统随机；配方在回包后填
         out = {k: v for k, v in remote_payload.items() if k != "castSeed"}
         out.update(calc)
         random_cast = calc["mode"] == "dunhuang" or (calc["mode"] == "qian" and bool(calc["qianAuto"]))
         if random_cast:
             explicit = backend_knobs.get("castSeed")
-            cast_seed = int(explicit) if explicit is not None else _upstream_cast_time_seed(parts)
+            cast_seed = explicit if explicit is not None else new_seed_for("wuzhao")
             out["castSeed"] = cast_seed
             result_extra["castSeed"] = cast_seed
+            result_extra["cast"] = cast_record(calc["mode"] if explicit is None else "seed", random=explicit is None,
+                                               replay={"options": {"mode": calc["mode"], "castSeed": cast_seed}})
             settings_applied["castSeed"] = {
-                "label": "起兆种子" + ("（显式）" if explicit is not None else "（起课时刻 yyyyMMddHHmm mod 1e9 派生）"),
-                "value": cast_seed,
+                "label": "起兆种子" + ("（显式，原样重开）" if explicit is not None else "（系统随机源，真随机记录）"),
+                "value": seed_display_text(cast_seed),
             }
         settings_applied["mode"] = {"label": "五兆起例", "value": calc["mode"]}
         return out, replay_note
@@ -472,3 +484,37 @@ class ShenshuRunners:
         result["xinyi"] = {"method": method, "result": xinyi}
         body = [f"{k}：{_human_scalar(v)}" for k, v in xinyi.items()]
         return _replace_snapshot_section(snapshot_text, "心易发微", body)
+
+
+def _wuzhao_replay_options(pan: Any, mode: Any) -> dict[str, Any] | None:
+    """= 上游 WuZhaoMain.wuzhaoReplayOptionsFromPan（v3.15.0，逐分支移植；tests/test_true_random_casting.py 对上游源对拍）：
+    随机起兆后把六位兆数写成重开配方 —— 折竹 / 唐法 → manual + manualSplits；敦煌 → zhushu + zhaoNums；
+    以钱代筮 → qianAuto=false + qianThrows（逐掷阳面数，取不到则 zhushu）。材料不全 → None。"""
+    positions = pan.get("positions") if isinstance(pan, dict) else None
+    if not isinstance(positions, list) or len(positions) != 6:
+        return None
+    nums: list[int] = []
+    for position in positions:
+        try:
+            number = float(position.get("number")) if isinstance(position, dict) else float("nan")
+        except (TypeError, ValueError):
+            return None
+        if not (number == number and 1 <= number <= 5):   # NaN / 越界 → 不成配方
+            return None
+        nums.append(int(number) if number == int(number) else number)
+    if mode == "qian":
+        detail = pan.get("shifaDetail") if isinstance(pan.get("shifaDetail"), dict) else {}
+        rows = detail.get("rows") if isinstance(detail.get("rows"), list) else None
+        def _yang(row: Any) -> float | None:
+            try:
+                return float(row.get("yang")) if isinstance(row, dict) else None
+            except (TypeError, ValueError):
+                return None
+        if rows and len(rows) == 6 and all(_yang(r) is not None for r in rows):
+            return {"qianAuto": False, "qianThrows": [max(0, min(4, round(_yang(r)))) for r in rows], "replayNote": "按存档逐掷阳面数复现(以钱代筮)"}
+        return {"mode": "zhushu", "zhaoNums": nums, "replayNote": "按存档六位兆数直输复现(起盘方式行显示为直输五兆数)"}
+    if mode in ("day", "hour", "minute", "tang"):
+        return {"manual": True, "manualSplits": nums, "replayNote": "按存档六位兆数复现(揲筮段显示为手动复现)"}
+    if mode == "dunhuang":
+        return {"mode": "zhushu", "zhaoNums": nums, "replayNote": "按存档六位兆数直输复现(起盘方式行显示为直输五兆数)"}
+    return None

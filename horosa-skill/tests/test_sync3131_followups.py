@@ -247,8 +247,14 @@ def _upstream_age_lines(cases: list[tuple[str, Any]], tmp_path: Path) -> list[st
         "   static now() { return now; } }"
         " const build = new Function('parseLocalDateTimeMs', 'Date', body + '; return buildCurrentMomentLines;')(dtp.parseLocalDateTimeMs, FrozenDate);"
         " return cases.map(([birth, zone]) => (build({ params: { birth, zone } }).find((l) => l.startsWith('盘主当前年龄：')) || null));",
-        CORE_JS_SRC / "vendor" / "utils" / "dateTimeParse.js", UPSTREAM_UI / "utils" / "astroAiSnapshot.js", payload,
+        CORE_JS_SRC / "vendor" / "utils" / "dateTimeParse.js", _age_source(), payload,
     )
+
+
+def _age_source() -> Path:
+    """birthInstantMsInZone / buildCurrentMomentLines 所在文件：v3.15.0 起 astroAiSnapshot.js 是门面，两函数原样搬进 astroAiSnapshot/predictive.js。"""
+    split = UPSTREAM_UI / "utils" / "astroAiSnapshot" / "predictive.js"
+    return split if split.is_file() else UPSTREAM_UI / "utils" / "astroAiSnapshot.js"
 
 
 @pytest.fixture

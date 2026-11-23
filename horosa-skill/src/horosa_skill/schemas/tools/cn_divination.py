@@ -1,7 +1,7 @@
 """中国占卜与三式族输入：大六壬、卦、奇门、太乙、金口诀、小六壬、飞宫、小成图、皇极轨策、神数正传、三式合一、宿占、天文地占、塔罗、灵棋经、六爻。"""
 from __future__ import annotations
 
-from typing import Any
+from typing import Literal, Any
 
 from pydantic import Field, field_validator
 
@@ -186,8 +186,9 @@ class FeiGongInput(FlexibleModel):
 class XiaoChengTuInput(FlexibleModel):
     # 小成图：洛书九宫佈局·正旁推·四象·应期·股市研判。卦为【冻结值】——起卦一经起出即不重起。
     # qiguaFa：manual 手动(上/下卦 up/lo + 动爻 dongYaos) / number 两数(upNum/loNum + qiguaShu 天地数
-    # tiandi/先天 xiantian) / stock 股价(open/close 字符串保末尾 0) / dayan 大衍(seed 或 manualCounts，
-    # 须显式，禁静默随机) / time 占时梅花卦(date/time → 年支序+月+日=上数、+时支序=下数)。yongGong 用宫(1-9 非5)。
+    # tiandi/先天 xiantian) / stock 股价(open/close 字符串保末尾 0) / dayan 大衍蓍草 · yaoqian 摇钱（v3.15.0 同上游页面：
+    # 不给 seed / manualCounts 即以系统随机源当场起卦，回传 counts 作 manualCounts 传回即原样重开）/ time 占时梅花卦
+    # (date/time → 年支序+月+日=上数、+时支序=下数)。yongGong 用宫(1-9 非5)。
     qiguaFa: str | None = "manual"
     up: str | None = None
     lo: str | None = None
@@ -197,8 +198,8 @@ class XiaoChengTuInput(FlexibleModel):
     qiguaShu: str | None = "tiandi"
     open: str | None = None
     close: str | None = None
-    seed: int | None = None
-    manualCounts: list[int] | None = None
+    seed: int | None = Field(default=None, description="大衍 / 摇钱的确定性种子（可选）；不给即真随机。")
+    manualCounts: list[int] | None = Field(default=None, description="大衍 / 摇钱六爻之数（6/7/8/9，初→上）：传回上次的 counts 即原样重开。")
     yongGong: int | None = 1
     # 闢卦细判口径（上游挂载 schema xiaochengtu.piKoujing）：'zheng'★ 正传 得配害·失配利 | 'yiwen' 异文 → [四象]
     piKoujing: str | None = Field(default=None, description="闢卦口径 zheng/yiwen")
@@ -388,10 +389,16 @@ class SuZhanInput(BirthInput, _AscRaModeKnob):
 
 
 class GeomancyInput(BirthInput):
-    # 天文地占 (astronomical geomancy): 以起卦时刻(date/time/place)确定性起卦(castMethod='time' + timeSeed 由时刻派生)。
+    # 天文地占 (astronomical geomancy)。起卦（v3.15.0 同上游页面缺省 seedMode 'random'）：random = 当场取 192 字节系统随机记录
+    # tr1-… 作种子，后端逐位读它揲出四母卦；dice/coins/sand/tablets 皮肤四法走同一随机源、castMethod 如实回传；time_seed = 起卦时刻派生
+    # timeSeed（同刻同盘）；seed 显式（整数 / 回传的 tr1- 记录）= 手动档原样重开；options.castNumbers = 报数起卦。
     # 后端由 4 母卦推 16 图形 + 十二宫图形入宫 + 判官/见证/解读技法 + 转宫派生 + 定局落星。question 为所问，
     # questionType 择 11 类问类。
     question: str | None = None
+    seedMode: Literal["random", "time_seed", "dice", "coins", "sand", "tablets"] | None = Field(
+        default=None, description="起卦方式：random 真随机（缺省，同上游页面）/ dice 掷骰 / coins 抛硬币 / sand 沙痕 / tablets 掷片（四法同一随机源，"
+                                   "如实记所用之法）/ time_seed 按起卦时刻派生（同刻同盘）。给了 seed 或报数时不看本项。")
+    seed: str | None = Field(default=None, description="手动种子：整数，或回传的真随机记录 tr1-…（原样重开同一盘）。")
     # 问类（后端 _QTYPES 十一类，webgeomancysrv.py:42-46）：custom/life/health/wealth/marriage/career/children/
     # journey/religion/enemy/death；其它值结构化报错（此前 lawsuit/theft/… 被后端静默改回 custom）。
     questionType: str | None = "custom"
@@ -418,14 +425,17 @@ class GeomancyInput(BirthInput):
 
 
 class TarotInput(BirthInput):
-    # 塔罗：确定性抽牌。种子 = 上游「生辰」种子来源 seedFromFields（TarotMain.js:97-108）：
-    # name|date|time|lat|lon（空项跳过）——同人同刻同地同牌；seed 显式种子覆盖。
+    # 塔罗抽牌（v3.15.0 起同上游页面缺省：真随机）。seedMode：random（缺省）= 当场取 1344 字节系统随机记录 tr1-… 洗牌
+    # （上游 newTarotRandomSeed）；birth = 上游「生辰」种子来源 seedFromFields（name|date|time|lat|lon，空项跳过）——同人同刻同地同牌。
+    # seed 显式给（整数或桌面版 / 上次回传的 tr1- 真随机记录）= 手动档，原样重开那一副牌，优先于 seedMode。
     # spread 牌阵（缺省 three；须在该牌组 caps.spreads 允许表内，键名见 guidance：single/relation/celtic…），
     # deck 牌系（默认 rws 韦特），question 所问。
     question: str | None = None
     spread: str | None = None
     deck: str | None = "rws"
-    seed: str | None = None
+    seed: str | None = Field(default=None, description="手动种子：整数，或回传的真随机记录 tr1-…（原样重开同一副牌）。")
+    seedMode: Literal["random", "birth"] | None = Field(
+        default=None, description="抽牌方式：random 真随机（缺省，同上游页面）/ birth 按姓名·出生时刻·地点派生（同人同刻同地同牌）。给了 seed 时不看本项。")
     # 缺省随牌组（deck.usesReversals）；显式 true/false 一律下发（此前 true 从不下发，马赛系开不了逆位）。
     usesReversals: bool | None = None
     # dignities 元素尊位强弱、variant 对应体系（A/B/C），影响逐牌详解与综合断语。
@@ -441,10 +451,13 @@ class TarotInput(BirthInput):
 
 
 class LingqiInput(BirthInput):
-    # 灵棋经（上游 v3.9.0）：十二棋子（上4/中4/下4）一时掷之成卦，古法「不可再擲」。
-    # 以起卦时刻确定性起卦（date/time 派生种子，同刻同卦可复现）——headless 不暴露 random 档，
-    # 否则同一时刻两次调用得到不同卦，既违古法也让回归测试无从写起。
+    # 灵棋经（上游 v3.9.0）：十二棋子（上4/中4/下4）一时掷之成卦，古法「不可再擲」——一问一掷，要重看同一卦就传回结果。
+    # 起卦档（v3.15.0 同上游页面缺省）：random 真随机（缺省，系统随机源）/ time_seed 占时种子（同刻同卦）；
+    # seed 显式（整数串 / 回传的 tr1- 记录）或 counts 冻结 = 原样重开。
     question: str | None = None
+    seedMode: Literal["random", "time_seed"] | None = Field(
+        default=None, description="起卦方式：random 真随机（缺省，同上游页面）/ time_seed 按起卦时刻派生（同刻同卦）。给了 seed 或 counts 时不看本项。")
+    seed: str | None = Field(default=None, description="手动种子：整数串，或回传的真随机记录 tr1-…（原样重开同一卦）。")
     # 问类：general 通用 / career 仕途 / wealth 求财 / marriage 婚姻 / health 疾病 /
     # travel 行人 / lawsuit 官讼 / home 家宅。只影响[起盘信息]的问类标注。
     category: str | None = "general"
@@ -480,6 +493,10 @@ class SixYaoInput(FlexibleModel):
     gua_code: str | None = None
     changed_code: str | None = None
     lines: list[SixYaoLineInput] = Field(default_factory=list)
+    # 起卦法（都不给 lines / gua_code 时；v3.15.0 同上游 castRandomCase 代摇）：yarrow 大衍蓍草（缺省）/ coins 三钱 —— 系统随机源，
+    # 起出的六爻随结果回传（作 lines 传回即原样重开）；time = 以时起卦（buildTimeGua，同刻同卦）。
+    castMethod: Literal["yarrow", "coins", "time"] | None = Field(
+        default=None, description="起卦法（不给 lines / gua_code 时）：yarrow 大衍蓍草（缺省，真随机）/ coins 三钱（真随机）/ time 以时起卦。")
     # 占时时间算法（上游 [Q-390/T-372]：页面 > 全局 > 缺省真太阳时 0）；None = 按 0 发送。
     timeAlg: int | None = Field(default=None, description="占时时间算法：0=真太阳时（缺省）1=直接时间")
     # 日界/晚子时：None = 不发送（后端 1/1 = 星阙出厂全局默认）；显式 0/1 直达 /nongli/time。

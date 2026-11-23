@@ -2059,7 +2059,6 @@
  "otherbu": {
   "bare": {
    "ask": [
-    "dice values",
     "question"
    ],
    "code": "agent_guidance.required",

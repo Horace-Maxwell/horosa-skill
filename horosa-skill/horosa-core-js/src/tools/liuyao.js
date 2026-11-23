@@ -19,7 +19,8 @@
 import { buildTimeGua } from '../vendor/guazhan/main/gua.js';
 import { buildGuaSnapshotText, guaDescIdsOf } from '../vendor/guazhan/main/snapshot.js';
 import { loadDoctrine } from '../vendor/gua/data/liuyaoDoctrineCache.js';
-import { getGua64, Gua64 } from '../vendor/gua/GuaConst.js';
+import { getGua64, Gua64, randYao } from '../vendor/gua/GuaConst.js';
+import { yarrowYao } from '../vendor/gua/LiuYaoConst.js';
 import { littleEndian } from '../vendor/gua/littleEndian.js';
 import { normalizeLiuyaoSettings, applyPreset, setOption, LIUYAO_PRESETS } from '../vendor/gua/liuyaoSchools.js';
 import { YONGSHEN_CATEGORIES } from '../vendor/gua/liuyaoYongShen.js';
@@ -235,6 +236,14 @@ export async function runLiuyao(payload) {
     input.lines = named.lines;
   }
 
+  // 软件代摇（v3.15.0「随机起卦一律真随机」，上游 castRandomCase.randomInputsOf）：castMethod=yarrow 大衍蓍草（逐爻
+  // yarrowYao：老阳 3/16 · 少阳 5/16 · 少阴 7/16 · 老阴 1/16）/ coins 三钱（逐爻 randYao：老阳老阴各 1/8），随机数取 vendored
+  // trueRandom（系统随机源，取不到就报错）。起出的六爻按手动卦同形装卦、随结果回传——作 lines 传回即原样重开。
+  const randomCast = !(Array.isArray(input.lines) && input.lines.length) && (input.castMethod === 'yarrow' || input.castMethod === 'coins');
+  if (randomCast) {
+    const draw = input.castMethod === 'yarrow' ? yarrowYao : randYao;
+    input.lines = Array.from({ length: 6 }, () => { const y = draw(); return { value: y.value, change: !!y.change }; });
+  }
   // 卦：手动摇卦（lines 六爻俱全）按页面 state 同形（currentGua = Gua64 序、yao 自下而上、爻名取卦 yaoname）；
   // 否则以时起卦 = 上游无头路径 buildTimeGua(nongli)。
   const hasLines = Array.isArray(input.lines) && input.lines.length > 0;
@@ -250,7 +259,7 @@ export async function runLiuyao(payload) {
   const castInfo = {
     lines,
     time_cast: !hasLines,
-    cast_method: input.gua_name ? 'gua_name' : (hasLines ? 'manual' : 'time'),
+    cast_method: randomCast ? input.castMethod : (input.gua_name ? 'gua_name' : (hasLines ? 'manual' : 'time')),
     current_gua: gua && Gua64[gua.currentGua] ? { index: gua.currentGua, name: Gua64[gua.currentGua].name } : null,
   };
   if (!gua) {

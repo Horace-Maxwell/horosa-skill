@@ -235,7 +235,8 @@ def test_pdf_docx_and_png_reports_carry_the_card_faces(tmp_path: Path) -> None:
     js = HorosaJsEngineClient(settings)
     js._candidate_engine_roots = lambda: [CORE_JS]  # type: ignore[method-assign]
     service = HorosaSkillService(settings, client=FakeClient(), store=MemoryStore(settings), js_client=js)
-    env = service.run_tool("tarot", build_sample_payloads()["tarot"], save_result=True)
+    # 牌面色量按一副定牌量：钉生辰种子（v3.15.0 起缺省真随机，同一用例每次抽到的牌不同）。
+    env = service.run_tool("tarot", {**build_sample_payloads()["tarot"], "seedMode": "birth"}, save_result=True)
     assert env.ok and env.memory_ref
     run_id = env.memory_ref.run_id
     cards = len(env.data["board_context"]["draws"])

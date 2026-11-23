@@ -453,7 +453,8 @@ def test_sixyao_names_go_to_the_engine_table_with_a_traditional_fallback() -> No
     assert cast["method"] == "gua_name" and cast["gua_name"] == ["火天大有"]
     assert cast["changed_name"] == ["乾為天", "乾为天"]  # 逐字折叠、「乾」不折成「干」
     assert resolve_sixyao_cast({"gua_code": "111101"})["method"] == "gua_code"
-    assert resolve_sixyao_cast({})["method"] == "time"
+    assert resolve_sixyao_cast({})["method"] == "yarrow"   # v3.15.0：都不给 = 真随机蓍草
+    assert resolve_sixyao_cast({"castMethod": "time"})["method"] == "time"
 
 
 # ───────────────────────── 推运目标年（IN-13） ─────────────────────────

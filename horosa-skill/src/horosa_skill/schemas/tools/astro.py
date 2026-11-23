@@ -665,7 +665,9 @@ class MundaneInput(FlexibleModel):
 
 class OtherBuInput(BirthInput):
     tradition: bool | None = False
-    sign: str | None = "Aries"
-    house: int | None = 0
-    planet: str | None = "Sun"
+    # 骰子三颗（v3.15.0 同上游 DiceMain：星、座、宫各在自己的面数上等概率掷，系统随机源）：哪颗没给就由软件真随机掷，
+    # 掷出的值随结果回传（data.dice / data.cast.replay）；给了就照用（重开同一盘 = 把三个值传回）。
+    sign: str | None = Field(default=None, description="骰子·星座（Aries…Pisces）；不给 = 真随机掷。")
+    house: int | None = Field(default=None, description="骰子·宫位（0–11，0 = 第 1 宫）；不给 = 真随机掷。")
+    planet: str | None = Field(default=None, description="骰子·星体（不给 = 真随机掷；古典开着从 7 星 + 交点 / 暗月 / 紫炁池取，否则从 10 星 + 交点 / 暗月 / 紫炁池取）。")
     question: str | None = None

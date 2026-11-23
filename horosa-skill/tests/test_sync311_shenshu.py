@@ -105,15 +105,13 @@ def _section(text: str, title: str) -> str:
 
 @pytest.mark.parametrize("tool", ["jingjue", "taixuan"])
 def test_cast_seed_is_the_upstream_headless_minute_seed(tmp_path, tool: str) -> None:
-    """F1/F2：上游无头挂载 seed = yyyyMMddHHmm mod 1e9（JingJueMain.js:105-117 / TaiXuanMain.js:141-152）。
-
-    旧码不发 seed：荆诀后端 random.randint（webjingjuesrv.py:351）真随机；太玄后端缺省只到小时
-    （webtaixuansrv.py:409 yyyyMMddHH）→ 两处 `sent["seed"]` 在旧码上都是 KeyError。
-    """
+    """F1/F2 时间档（seedMode=time_seed）：seed = yyyyMMddHHmm mod 1e9（上游挂载重算同口径，JingJueMain / TaiXuanMain
+    buildXxxSnapshotForFields）。v3.15.0 起缺省是真随机记录（tests/test_true_random_casting.py）。"""
     service, client, _ = _service(tmp_path)
-    assert _run(service, tool, BASE).ok
+    timed = {**BASE, "options": {"seedMode": "time_seed"}}
+    assert _run(service, tool, timed).ok
     assert client.sent(f"/{tool}/pan")[-1]["seed"] == SEED_19980220_2048
-    assert _run(service, tool, {**BASE, "time": "20:49:00"}).ok
+    assert _run(service, tool, {**timed, "time": "20:49:00"}).ok
     assert client.sent(f"/{tool}/pan")[-1]["seed"] == SEED_19980220_2048 + 1, "分钟级：同一小时内不同分钟必异种子"
     # 显式种子覆盖；0 是合法种子（挂载自检 F-23：旧式 `> 0` 把 0 当未设）。
     result = _run(service, tool, {**BASE, "options": {"seed": 0}})
@@ -125,15 +123,22 @@ def test_cast_seed_is_the_upstream_headless_minute_seed(tmp_path, tool: str) -> 
 # ---------------------------------------------------------------- F3 / F4：五兆
 
 
-def test_wuzhao_random_cast_modes_get_a_deterministic_cast_seed(tmp_path) -> None:
-    """F3：敦煌揲筮 / 以钱代筮（自动掷）后端按 castSeed 定兆（webwuzhaosrv.py:640-643），旧码从不送 → 真随机。"""
+def test_wuzhao_random_cast_modes_send_a_replayable_cast_seed(tmp_path) -> None:
+    """敦煌揲筮 / 以钱代筮（自动掷）后端按 castSeed 定兆（webwuzhaosrv）。v3.15.0：缺省当场取 64 字节真随机记录（上游 newCastSeed），
+    每次新兆、记录随结果回传；显式 castSeed（整数 / tr1- 记录）原样重开。"""
+    from horosa_skill.true_random import is_entropy_seed
+
     service, client, _ = _service(tmp_path)
     for options in ({"mode": "dunhuang"}, {"mode": "qian"}):
         result = _run(service, "wuzhao", {**BASE, "options": options})
         assert result.ok, result.error
         sent = client.sent("/wuzhao/pan")[-1]
-        assert sent["mode"] == options["mode"] and sent["castSeed"] == SEED_19980220_2048, sent
-        assert result.data["castSeed"] == SEED_19980220_2048
+        assert sent["mode"] == options["mode"] and is_entropy_seed(sent["castSeed"]) and len(sent["castSeed"]) == 4 + 128, sent
+        assert result.data["castSeed"] == sent["castSeed"] and result.data["cast"] == {"method": options["mode"], "random": True, "source": "system",
+                                                                                "replay": {"options": {"mode": options["mode"], "castSeed": sent["castSeed"]}}}
+    record = client.sent("/wuzhao/pan")[-1]["castSeed"]
+    assert _run(service, "wuzhao", {**BASE, "options": {"mode": "qian", "castSeed": record}}).ok
+    assert client.sent("/wuzhao/pan")[-1]["castSeed"] == record
     assert client.sent("/wuzhao/pan")[-1]["qianAuto"] is True, "上游 DEFAULT_OPTIONS.qianAuto=true"
     # 显式 castSeed 覆盖；非随机诸式不带种子（上游 buildPanPayload :657-661 同律）。
     assert _run(service, "wuzhao", {**BASE, "options": {"mode": "dunhuang", "castSeed": 7}}).ok
@@ -145,21 +150,20 @@ def test_wuzhao_random_cast_modes_get_a_deterministic_cast_seed(tmp_path) -> Non
     assert "castSeed" not in client.sent("/wuzhao/pan")[-1]
 
 
-def test_wuzhao_unreplayable_modes_fall_back_to_ganzhi_with_the_upstream_note(tmp_path) -> None:
-    """F3：折竹/唐法的随机分爻不吃种子——上游挂载在未开手动分爻时回落干支起例，并把复现说明并入 [揲筮]
-    （WuZhaoMain.js:368-394，原句逐字）。旧码把 mode=day 原样送后端 → 每次调用不同兆。"""
-    realistic = (
-        "[起盘]\n起盘方式：干支起盘\n\n[揲筮]\n起兆：干支\n\n[兆]\n宫位：巽"
-    )
-    client = RecordingClient({"/wuzhao/pan": lambda p: {"engine": "kinwuzhao", "snapshot": realistic}})
+def test_wuzhao_split_modes_cast_true_random_and_return_the_replay_recipe(tmp_path) -> None:
+    """折竹 / 唐法的随机分爻由后端当场取系统随机（不吃种子）。v3.15.0 起 skill 照上游页面原样起这一法（不再像上游「挂载重算存档」
+    那样回落干支起例——那条路拿不到存档兆数，skill 是新起一卦），并照上游 wuzhaoReplayOptionsFromPan 回传重开配方。
+    负向对照：v3.14 skill 把 mode=day 改成 ganzhi 发出、附「复现说明」。"""
+    pan = {"engine": "kinwuzhao", "snapshot": "[起盘]\n起盘方式：日干起盘\n\n[揲筮]\n起兆：随机\n\n[兆]\n宫位：巽",
+           "positions": [{"number": n} for n in (3, 1, 5, 2, 4, 1)]}
+    client = RecordingClient({"/wuzhao/pan": lambda p: pan})
     service, client, _ = _service(tmp_path, client)
     result = _run(service, "wuzhao", {**BASE, "options": {"mode": "day"}})
     assert result.ok, result.error
-    assert client.sent("/wuzhao/pan")[-1]["mode"] == "ganzhi"
-    # 原句随上游 v3.13.0 改写（「把「揲筮模式」设为手动复现」「已按干支起盘」；上游源对拍见 test_sync313_ports.py）。
-    note = "复现说明：挂载无法复现随机起兆(所选「日干起盘」需把「揲筮模式」设为手动复现并填分爻数;存档亦无兆数)→ 已按干支起盘"
-    assert note in _section(result.data["snapshot_text"], "揲筮"), "复现说明须并入 [揲筮] 段（上游 appendReplayNote）"
-    assert any("日干起盘" in warning for warning in result.warnings), "回落不许静默"
+    assert client.sent("/wuzhao/pan")[-1]["mode"] == "day" and "复现说明" not in result.data["snapshot_text"]
+    assert result.data["cast"] == {"method": "day", "random": True, "source": "system",
+                                   "replay": {"options": {"manual": True, "manualSplits": [3, 1, 5, 2, 4, 1]}}}
+    assert result.data["replay_options"] == {"manual": True, "manualSplits": [3, 1, 5, 2, 4, 1], "replayNote": "按存档六位兆数复现(揲筮段显示为手动复现)"}
     manual = _run(service, "wuzhao", {**BASE, "options": {"mode": "day", "manual": True}})
     sent = client.sent("/wuzhao/pan")[-1]
     assert manual.ok and sent["mode"] == "day" and sent["manual"] is True and sent["manualSplits"] == [18, 8, 5, 2, 1, 1]
@@ -332,10 +336,11 @@ def test_tarot_seed_is_upstream_birth_seed(tmp_path) -> None:
     """F10：上游「生辰」种子 seedFromFields = name|date|time|lat|lon 非空项（TarotMain.js:97-108）；
     旧码 yyyyMMddHHmm（199802202048）。"""
     service, _, js = _service(tmp_path)
-    result = _run(service, "tarot", TAROT)
-    assert result.ok and result.data["seed"] == "1998-02-20|20:48:00|31n13|121e28"
+    birth = {**TAROT, "seedMode": "birth"}   # v3.15.0 起缺省真随机；生辰种子是可选的确定性档
+    result = _run(service, "tarot", birth)
+    assert result.ok and result.data["seed"] == "1998-02-20|20:48:00|31n13|121e28" and result.data["cast_method"] == "birth_fields"
     assert [p for t, p in js.calls if t == "tarot"][-1]["seed"] == "1998-02-20|20:48:00|31n13|121e28"
-    assert _run(service, "tarot", {**TAROT, "name": "张三"}).data["seed"] == "张三|1998-02-20|20:48:00|31n13|121e28"
+    assert _run(service, "tarot", {**birth, "name": "张三"}).data["seed"] == "张三|1998-02-20|20:48:00|31n13|121e28"
 
 
 def test_tarot_engine_settings_reach_the_engine(tmp_path) -> None:
@@ -384,7 +389,8 @@ def test_geomancy_time_seed_and_time_place_follow_upstream(tmp_path) -> None:
     """F10/F12：timeSeed = 上游 computeTimeSeed (YY)MMDDHHmm mod 2^31−1（GeomancyMain.js:229-246）；
     所问时地随请求下发（:1161-1167）——否则 ascSource=real_chart / houseProjection=real_ephemeris 静默回落。"""
     service, client, _ = _service(tmp_path)
-    result = _run(service, "geomancy", {**GEO, "options": {"housePlacement": "angular", "planetaryChart": True, "planetaryChartNodes": True, "nope": 1}})
+    result = _run(service, "geomancy", {**GEO, "seedMode": "time_seed",   # 时间档（v3.15.0 起缺省真随机）
+                                        "options": {"housePlacement": "angular", "planetaryChart": True, "planetaryChartNodes": True, "nope": 1}})
     assert result.ok, result.error
     sent = client.sent("/geomancy/reading")[-1]
     assert sent["timeSeed"] == (98 * 100000000 + 2 * 1000000 + 20 * 10000 + 20 * 100 + 48) % 2147483647 == 1212267460

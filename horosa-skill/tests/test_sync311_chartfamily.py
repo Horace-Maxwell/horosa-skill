@@ -420,8 +420,9 @@ def test_presets_place_new_sections_at_upstream_positions() -> None:
     assert relative[relative.index("B对A反映点") + 1: relative.index("B对A反映点") + 3] == ["比较盘-星盘A", "比较盘-星盘B"]
     assert AI_EXPORT_PRESET_SECTIONS["otherbu"][-2:] == ["骰子盘相位", "天象盘相位"]
     germany = AI_EXPORT_PRESET_SECTIONS["germany"]
-    # v3.13.0 presets.js:873（aiExport v59/v60）：[赤纬接触] 插在六宫框落宫与校时预览之间，[中点坐标]/[公式求解] 紧随校时预览。
-    assert germany[germany.index("中点列表") + 1: germany.index("中点列表") + 5] == ["六宫框落宫", "赤纬接触", "校时预览", "中点坐标"]
+    # v3.13.0 presets.js（aiExport v59/v60）：[赤纬接触] 插在六宫框落宫与校时预览之间；v3.15.0（v67/v68）[行运接触]/[图形星历]
+    # 紧随校时预览、在 [中点坐标]/[公式求解] 之前。
+    assert germany[germany.index("中点列表") + 1: germany.index("中点列表") + 7] == ["六宫框落宫", "赤纬接触", "校时预览", "行运接触", "图形星历", "中点坐标"]
     assert AI_EXPORT_PRESET_SECTIONS["jieqi"][:2] == ["节气盘参数", "二十四节气"]
     # 条件段双登记（AGENTS §5.5）
     for key, titles in {

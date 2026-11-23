@@ -38,7 +38,7 @@ _TIME_RE = re.compile(r"^\d{1,2}:\d{1,2}(:\d{1,2})?$")
 
 @dataclass(frozen=True)
 class Knob:
-    kind: str  # int | num | bool01 | bool | enum | text | ints | ganzhi | date | time | gender_mf
+    kind: str  # int | num | bool01 | bool | enum | text | ints | ganzhi | date | time | gender_mf | seed | year_or_random
     doc: str
     choices: tuple[Any, ...] = ()
     lo: float | None = None
@@ -58,12 +58,13 @@ _KE_MODES = ("auto", "manual")
 _RAW_KNOBS: dict[str, dict[str, Knob]] = {
     # webwangjisrv.py:309-330 —— 心易起卦诸键见 WangjiInput 顶层字段（xinyiMethod/upperNum/…）。
     "wangji": {
-        "historyYear": _k("int", "所推之年（元会运世值卦；缺省=盘面年）", lo=-4712, hi=9999),
+        "historyYear": _k("year_or_random", "所推之年（元会运世值卦；缺省=盘面年；\"random\" = 软件以系统随机源在 1900–2100 等概率取一年，同上游「随机历史年」）",
+                          lo=-4712, hi=9999),
         "classicKey": _k("enum", "典籍", choices=("huangji_jingshi_shu", "xinyi_fawei", "guanwu_yanyi")),
     },
     # webwuzhaosrv.py:476-506,650-667；上游 WuZhaoMain.normalizeCalcOptions（:296-322）同域。
     "wuzhao": {
-        "mode": _k("enum", "起例模式（随机诸式见 guidance：揲筮/掷钱按起课时刻定 castSeed；折竹/唐法须 manual 复现，否则回落干支起例）",
+        "mode": _k("enum", "起例模式（缺省 ganzhi 干支起例；随机诸式——折竹日/时/分干、唐法、敦煌揲筮、自动掷钱——取系统随机源，回传重开配方）",
                    choices=("ganzhi", "day", "hour", "minute", "tang", "dunhuang", "qian", "zhushu")),
         "number": _k("int", "报数（日/时/分干起盘与干支起例读取；0=不用）", lo=0, hi=9),
         "manual": _k("bool", "手动分爻复现（日/时/分干起盘·唐法揲筮）"),
@@ -77,15 +78,19 @@ _RAW_KNOBS: dict[str, dict[str, Knob]] = {
         # 🔴 输入归一化会把嵌套 options.gender 的 'male'/'female' 递归改成 1/0（为八字链设计），而五兆后端
         # 只认 'male'/'female'（webwuzhaosrv.py:497-499）——gender_mf 规格把两种写法都收回后端口径。
         "gender": _k("gender_mf", "性别（行年/年立用；male/female，1/0、男/女 亦可）", choices=("male", "female")),
-        "castSeed": _k("int", "随机诸式（敦煌揲筮/自动掷钱）的起兆种子；缺省=起课时刻派生（同刻同兆）", lo=0, hi=2147483646),
+        "castSeed": _k("seed", "随机诸式（敦煌揲筮/自动掷钱）的起兆种子：整数或回传的真随机记录 tr1-…；缺省=当场取系统随机记录（每次新兆）", lo=0, hi=2147483646),
     },
     # webtaixuansrv.py:396-417；上游 TaiXuanMain.buildTaiXuanSnapshotForFields（:141-152）。
     "taixuan": {
-        "seed": _k("int", "起筮种子（缺省=起课时刻 yyyyMMddHHmm mod 1e9，同刻同卦）", lo=0),
+        "seed": _k("seed", "起筮种子：整数或回传的真随机记录 tr1-…（原样重开）；缺省按 seedMode", lo=0),
+        "seedMode": _k("enum", "起筮方式：random 真随机（缺省，同上游页面）/ time_seed 起课时刻 yyyyMMddHHmm mod 1e9（同刻同卦）",
+                       choices=("random", "time_seed"), layer="skill"),
     },
     # webjingjuesrv.py:351；上游 JingJueMain.buildJingJueSnapshotForFields（:105-117）。
     "jingjue": {
-        "seed": _k("int", "起筮种子（缺省=起课时刻 yyyyMMddHHmm mod 1e9，同刻同卦）", lo=0),
+        "seed": _k("seed", "起筮种子：整数或回传的真随机记录 tr1-…（原样重开）；缺省按 seedMode", lo=0),
+        "seedMode": _k("enum", "起筮方式：random 真随机（缺省，同上游页面）/ time_seed 起课时刻 yyyyMMddHHmm mod 1e9（同刻同卦）",
+                       choices=("random", "time_seed"), layer="skill"),
     },
     # webshenyishusrv.py；上游 techniqueMountSettings SHENYISHU_FIELDS。
     "shenyishu": {
@@ -300,6 +305,25 @@ def _range_text(knob: Knob) -> str:
 def coerce_knob(tool: str, key: str, knob: Knob, value: Any) -> Any:
     """按规格归一一个值；不合法抛 tool.shenshu_invalid_option（不换默认值）。"""
     kind = knob.kind
+    if kind == "year_or_random":
+        # 上游皇极「随机历史年」（HuangJiMain.randomHistoryYear：1900 + randomInt(201)，系统随机源）：收 "random" / 「随机」，由 runner 掷。
+        if isinstance(value, str) and value.strip().lower() in {"random", "随机"}:
+            return "random"
+        number = _as_int(value)
+        if number is None or not _in_range(knob, number):
+            raise _bad(tool, key, value, f"整数 {_range_text(knob)}，或 \"random\"（随机历史年）")
+        return number
+    if kind == "seed":
+        # 起卦种子（v3.15.0）：非负整数（旧存案 / 手动种子），或真随机记录 tr1-<hex>（软件代摇或桌面版回传，原样重开）。
+        from horosa_skill.true_random import normalized_entropy_seed
+
+        entropy = normalized_entropy_seed(value)
+        if entropy:
+            return entropy
+        number = _as_int(value)
+        if number is None or not _in_range(knob, number):
+            raise _bad(tool, key, value, f"整数 {_range_text(knob)}，或真随机记录 tr1-…")
+        return number
     if kind == "int":
         number = _as_int(value)
         if number is None or not _in_range(knob, number):

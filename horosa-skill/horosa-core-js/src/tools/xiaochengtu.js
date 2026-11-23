@@ -1,8 +1,9 @@
 // 小成图 formatter —— 洛书九宫佈局·正旁推·四象·应期·股市研判，纯函数进程内计算，零后端。
 // 卦为【冻结值】：起卦（手动 manual / 两数 number / 股价 stock / 大衍 dayan / 占时 time）一经起出即不重起。
 // 占时=梅花时间卦（年支序+农历月+日 为上数、加时支序为下数），由 Python service 层 前置 /nongli/time 算 upNum/loNum
-// 后作 number 模式传入。大衍 dayan 须显式 seed 或 manualCounts，禁静默随机（不吐用户没见过的卦）。
-import { qiGuaManual, qiGuaByNumbers, qiGuaByStock, qiGuaByDaYan } from '../vendor/xiaochengtu/xiaochengtuQiGua.js';
+// 后作 number 模式传入。大衍 dayan / 摇钱 yaoqian（v3.15.0 同上游页面）：不给 seed / manualCounts 即取系统随机源当场起卦
+// （vendored rollSource → trueRandom，取不到就报错、绝不退回伪随机）；回传六爻之数 counts，作 manualCounts 传回即原样重开。
+import { qiGuaManual, qiGuaByNumbers, qiGuaByStock, qiGuaByDaYan, qiGuaByYaoQian } from '../vendor/xiaochengtu/xiaochengtuQiGua.js';
 import { buildPan } from '../vendor/xiaochengtu/xiaochengtuPan.js';
 import { buildXiaoChengTuSnapshotText } from '../vendor/xiaochengtu/xiaochengtuSnapshot.js';
 
@@ -35,13 +36,13 @@ export function runXiaoChengTu(payload) {
   } else if (fa === 'stock') {
     // 价格务必字符串传（保留末尾 0，如 '1563.60'）；qiGuaByStock 按位数起卦。
     qi = qiGuaByStock({ open: input.open, close: input.close });
-  } else if (fa === 'dayan') {
-    if ((input.seed === undefined || input.seed === null || input.seed === '') && !Array.isArray(input.manualCounts)) {
-      return insufficient(normalized, 'dayan_seed_required', 'xiaochengtu dayan (大衍蓍草) mode requires an explicit seed or manualCounts — no silent random cast.');
-    }
-    qi = qiGuaByDaYan({ seed: input.seed, manualCounts: input.manualCounts });
+  } else if (fa === 'dayan' || fa === 'yaoqian') {
+    const seed = input.seed !== undefined && input.seed !== null && `${input.seed}`.trim() !== '' ? input.seed : undefined;
+    const cast = fa === 'dayan' ? qiGuaByDaYan : qiGuaByYaoQian;
+    qi = cast({ seed, manualCounts: Array.isArray(input.manualCounts) ? input.manualCounts : undefined });
+    normalized.random = seed === undefined && !Array.isArray(input.manualCounts);
   } else {
-    return insufficient(normalized, 'invalid_qiguaFa', `unknown qiguaFa: ${fa} (use manual/number/stock/dayan/time).`);
+    return insufficient(normalized, 'invalid_qiguaFa', `unknown qiguaFa: ${fa} (use manual/number/stock/dayan/yaoqian/time).`);
   }
   if (!qi || !qi.ben) {
     return insufficient(normalized, 'qigua_failed', 'xiaochengtu could not derive 本卦 from the given input.');
@@ -60,6 +61,8 @@ export function runXiaoChengTu(payload) {
       ben: qi.ben && qi.ben.name,
       zhi: qi.zhi && qi.zhi.name,
       dongYaos: qi.dongYaos || [],
+      // 大衍 / 摇钱的六爻之数（6/7/8/9，初→上）：作 manualCounts 传回即原样重开。
+      ...(Array.isArray(qi.counts) ? { counts: qi.counts } : {}),
       yongGong,
       // 报告盘图（app 原版 XiaoChengTuMain.renderCenter）要的整卦对象（爻 / 上下卦 / 互卦）——正文所用的同一份 qi，不另算
       board_context: { ben: qi.ben, zhi: qi.zhi },

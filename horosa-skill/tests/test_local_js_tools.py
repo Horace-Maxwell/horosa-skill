@@ -760,9 +760,9 @@ def test_xiaochengtu_local_tool_runs_headless_engine(tmp_path) -> None:
     # stock 模式出 [股市]。
     stock = service.run_tool("xiaochengtu", {"qiguaFa": "stock", "open": "1563.60", "close": "1571.10", "yongGong": 1}, save_result=False)
     assert "[股市]" in stock.data["snapshot_text"]
-    # 大衍须显式 seed：缺则结构化拒绝，不静默随机。
-    dayan_no_seed = service.run_tool("xiaochengtu", {"qiguaFa": "dayan"}, save_result=False)
-    assert dayan_no_seed.ok is False and dayan_no_seed.error.code == "tool.xiaochengtu_dayan_seed_required"
+    # v3.15.0：大衍不给 seed / manualCounts = 软件真随机起卦（同上游页面），六爻之数回传可重开（tests/test_true_random_casting.py）。
+    dayan_random = service.run_tool("xiaochengtu", {"qiguaFa": "dayan"}, save_result=False)
+    assert dayan_random.ok is True and dayan_random.data["cast"]["random"] is True
     # 大衍同 seed 同盘。
     a = service.run_tool("xiaochengtu", {"qiguaFa": "dayan", "seed": 12345}, save_result=False)
     b = service.run_tool("xiaochengtu", {"qiguaFa": "dayan", "seed": 12345}, save_result=False)
@@ -1770,15 +1770,12 @@ def test_lingqi_local_tool_runs_headless_engine(tmp_path) -> None:
 
 
 def test_lingqi_is_deterministic_per_query_moment_and_honours_frozen_counts(tmp_path) -> None:
-    """古法「不可再擲」：同一占时必须同卦；给了 counts 就复排，绝不重掷。
-
-    这条同时挡住一个很容易犯的实现错误 —— 上游 random 档读 `window.crypto`，headless 无 window 会
-    落到 `Math.random()`，于是同一时刻两次调用得到不同卦。skill 侧只走占时种子，正是为了这个。
-    """
+    """时间档（seedMode=time_seed）：同一占时必须同卦；给了 counts 就复排，绝不重掷。
+    v3.15.0 起缺省是真随机（tests/test_true_random_casting.py）；时间档是可选的确定性起法。"""
     service = make_service(tmp_path)
     payload = {
         "date": "2028-04-06", "time": "09:33:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28",
-        "question": "事业", "agent_confirmed_settings": True, "clarification_notes": "test fixture",
+        "question": "事业", "agent_confirmed_settings": True, "clarification_notes": "test fixture", "seedMode": "time_seed",
     }
     first = service.run_tool("lingqi", payload, save_result=False)
     second = service.run_tool("lingqi", dict(payload), save_result=False)

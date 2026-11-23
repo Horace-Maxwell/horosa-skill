@@ -72,7 +72,7 @@ _ZONE_QUESTION = {
     "options": ["+08:00 北京时间", "其它时区（如 -05:00 / Asia/Tokyo）"],
 }
 SHENSHU_ZONE_POLICY = _policy(
-    intent="神数 (太玄筮法)：以起课时刻起筮（种子=起课时刻派生，同刻同卦），四柱按时区定立春/节气；需日期、时间与时区。",
+    intent="神数 (太玄筮法)：缺省由软件以系统随机源起筮（32 字节真随机记录作种子，同上游页面；回传 data.seed 传回即原样重开；options.seedMode=time_seed 按起课时刻派生），四柱按时区定立春/节气；需日期、时间与时区。",
     required_context=["date (公历日期)", "time", "zone (时区)"],
     ask_if_missing=[*SHENSHU_POLICY["ask_if_missing"], _ZONE_QUESTION],
     safe_defaults=SHENSHU_POLICY["safe_defaults"],
