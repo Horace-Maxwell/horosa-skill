@@ -67,6 +67,11 @@ LIURENG_CAST_METHODS: tuple[tuple[str, str], ...] = (
     ("alnr", "年日对齐"), ("alns", "年时对齐"), ("alyr", "月日对齐"), ("alys", "月时对齐"),
     ("xuanshi", "选时"), ("yanshu", "演数"), ("baoshu", "报数"),
 )
+# 问测人出生（星阙 v3.15.0，六壬 / 金口诀挂载设置）：顶层键，不在 options 里。
+_QUERENT_KEYS = (
+    "顶层 querentBirth（问测人公历出生 YYYY-MM-DD，缺省不用）+ querentGender male(缺省)/female：给了即按年差法推行年、"
+    "本命支取出生年、出生年柱按正午八字——喂起课法本命 / 行年各档与 [行年] 段（金口诀另出属相 / 虚岁行年）；行年盘已有行年时不用。"
+)
 _LIURENG_OPTIONS_KEYS = (
     "options（起课口径；缺省 = 上游 LIURENG_PAGE_SETTINGS 出厂值，认不出的值报 tool.liureng_invalid_option）："
     "castMethod 起课法 " + " / ".join(f"{k}={v}" for k, v in LIURENG_CAST_METHODS) + "（缺省 zheng；"
@@ -110,8 +115,8 @@ _SANSHI_OPTIONS_KEYS: dict[str, str] = {
         "路由同上游：五键全缺省且两源日柱对齐 → ken(kinjinkou) 盘；任一非缺省 → 本地 buildJinKouData"
         "（compute_sources.jinkou=local_route_buildJinKouData）。timeBasis 两条路由都生效（v3.12.0：/liureng/gods 按它取四柱 / 占时）；"
         "贵神昼夜按真实地平（未给 isDiurnal 时取 /chart）。"
-    ),
-    "liureng_gods": _LIURENG_OPTIONS_KEYS,
+    ) + _QUERENT_KEYS,
+    "liureng_gods": _LIURENG_OPTIONS_KEYS + _QUERENT_KEYS,
     "liureng_runyear": _LIURENG_OPTIONS_KEYS + "行年盘：date/time=问测人出生，guaDate/guaTime=起课时刻（课盘按起课时刻起）。",
     "sanshiunited": (
         "qimen_options 同 qimen options（附加层 showJiGan / showTianQin / tuiYanView / showJianChu 开了进【概览】段，同上游）；taiyi_options 同 taiyi options（上游键 taiyiTimeBasis 亦可放顶层）；"

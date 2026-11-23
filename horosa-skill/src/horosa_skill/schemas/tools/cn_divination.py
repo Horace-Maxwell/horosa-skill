@@ -36,6 +36,35 @@ class LiuRengGodsInput(FlexibleModel):
     # seHaiMethod、seHaiBoundary、shiRuKe、yearShenShaSort、yinyangSystem、tuWangShuai、wuxing、timeAlg）。
     # tools/list 字节预算吃紧：描述 ≤20 字，词表住 agent_guidance 的 options_keys；JS 按上游词表校验、认不出即报错。
     options: dict[str, Any] | None = Field(default=None, description="起课口径，见 guidance")
+    # 问测人出生（星阙 v3.15.0 挂载设置，六壬 / 金口诀）：给了出生日期即按年差法推行年 / 本命支（tools/liureng.js
+    # querentRunYearOf），喂起课法本命 / 行年各档、[行年] 段与金口诀属相 / 虚岁；已有行年（行年盘）时不用。说明在 guidance。
+    querentBirth: str | None = _unadvertised()
+    querentGender: Any | None = _unadvertised()
+
+    @field_validator("querentBirth", mode="before")
+    @classmethod
+    def _querent_birth(cls, value: Any) -> Any:
+        if value in (None, ""):
+            return None
+        import re
+
+        text = f"{value}".strip()
+        if not re.fullmatch(r"\d{1,4}-\d{1,2}-\d{1,2}", text):
+            raise ValueError(f"querentBirth 要公历出生日期 YYYY-MM-DD，收到 {value!r} / querentBirth must be a YYYY-MM-DD birth date.")
+        return text
+
+    @field_validator("querentGender", mode="before")
+    @classmethod
+    def _querent_gender(cls, value: Any) -> Any:
+        # 上游下拉 male（缺省）/ female；只认这两档与常见写法，认不出报错（不静默按男）。
+        if value in (None, ""):
+            return None
+        key = f"{value}".strip().lower()
+        if key in ("male", "1", "男", "m", "true"):
+            return "male"
+        if key in ("female", "0", "女", "f", "false"):
+            return "female"
+        raise ValueError(f"querentGender 只收 male / female（或 1 / 0、男 / 女），收到 {value!r} / querentGender must be male or female.")
 
 
 class LiuRengRunYearInput(LiuRengGodsInput):

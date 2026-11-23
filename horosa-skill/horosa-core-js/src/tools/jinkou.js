@@ -4,6 +4,7 @@ import * as LRConst from '../vendor/liureng/LRConst.js';
 import { buildJinKouData, normalizeKinjinkouData } from '../vendor/jinkou/JinKouCalc.js';
 import { resolveJinKouDiFen } from '../vendor/jinkou/JinKouState.js';
 import { buildJinKouSnapshotText } from '../vendor/jinkou/main/snapshot.js';
+import { querentRunYearOf } from './liureng.js';
 
 function normalizeTimeBranch(timeValue) {
   const text = `${timeValue || ''}`;
@@ -40,6 +41,19 @@ export function runJinkou(payload) {
     throw new Error('Jinkou requires a liureng calculation payload.');
   }
   const options = { ...(payload.options || {}) };
+  // 问测人出生（v3.15.0）→ 行年：交给 [行年] 段与本地引擎的属相 / 虚岁（上游 regenerateJinkouSnapshot：benMing / birthGanZi / age
+  // 取自 runyear，派生函数 = components/jinkou/main/runYear.js deriveBenMingFromRunYear / deriveXuSuiFromRunYear，逐字移植如下）。
+  const querent = querentRunYearOf(payload.date, payload.zone, payload);
+  const runyear = querent ? querent.runyear : (payload.runyear ?? null);
+  if (runyear) {
+    const gz = runyear.birthGanZi ? `${runyear.birthGanZi}` : '';
+    const zhi = gz.length >= 2 ? gz.charAt(1) : '';
+    const age = runyear.age !== undefined && runyear.age !== null ? Number(runyear.age) : NaN;
+    if (options.benMing === undefined) options.benMing = LRConst.ZiList.indexOf(zhi) >= 0 ? zhi : '';
+    if (options.birthGanZi === undefined) options.birthGanZi = gz;
+    if (options.age === undefined) options.age = Number.isFinite(age) && age >= 0 ? age + 1 : '';
+    if (options.gender === undefined && payload.gender !== undefined && payload.gender !== null) options.gender = payload.gender;
+  }
   options.diFen = resolveJinKouDiFen(
     options.diFen || payload.diFen || '',
     options.diFenAuto === true,
@@ -93,11 +107,11 @@ export function runJinkou(payload) {
     data.platesNote = '月将或占时未定，三盘环待起课后产出 —— 先以上方四位盘为准';
   }
   // 星阙 buildJinKouSnapshotText(params, liureng, runyear, jinkouData, wuxing, guirengType, gender)：
-  // 20 段含解读层（用神强弱/四位生克/应期/地支关系/相关神煞/分类用神·求财）。runyear=null（金口诀非行年盘）。
+  // 20 段含解读层（用神强弱/四位生克/应期/地支关系/相关神煞/分类用神·求财）。runyear：问测人出生推出的行年（没给 = null，[行年] 段「无」）。
   const snapshot_text = buildJinKouSnapshotText(
     buildJinkouParams(payload),
     liureng,
-    payload.runyear ?? null,
+    runyear,
     data,
     wuxing,
     options.guirengType,

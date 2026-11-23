@@ -22,7 +22,9 @@ import {
 } from '../vendor/liureng/LiuRengMain.js';
 // 上游 v3.12.0 把 LiuRengMain 的纯逻辑拆进 main/*.js；这两个没在 LiuRengMain 重导出，直接从子模块取。
 import { liurengBenmingXingnian } from '../vendor/liureng/main/panData.js';
-import { getSolarYearFromField } from '../vendor/liureng/main/birthRunYear.js';
+import { getSolarYearFromField, resolveDisplayRunYear } from '../vendor/liureng/main/birthRunYear.js';
+import { parseDateParts } from '../vendor/bazi/dateStrSafe.js';
+import { buildLocalBaziResult } from '../vendor/bazi/baziLunarLocal.js';
 import { validateSettingValue } from '../vendor/utils/pageSettingsStore.js';
 import { formatTimeLikeDateTime } from '../shared/fields.js';
 
@@ -192,6 +194,30 @@ function applyExplicitYue(chartObj, castOpts, castOverride, explicitYue) {
   };
 }
 
+// 问测人出生（星阙 v3.15.0 挂载设置 querentBirth / querentGender，六壬 / 金口诀）：没有存档行年时，行年按年差法
+// （resolveDisplayRunYear，与六壬 / 金口诀页的兜底同一函数）、本命支按出生公历年、出生年柱按本地八字引擎（正午）——
+// 交给起课法「本命 / 行年」各档、[行年] 段与金口诀属相 / 虚岁。逐行移植上游 utils/aiAnalysisContext/regenCase.js
+// querentRunYearOf（该文件拖着整个无头重算树，不 vendor）；guaDateText = 起课日期（上游 record.divTime || record.birth）。
+// 已有行年（行年盘 / 调用方给了 runyear）或没给出生 → null（上游同）。
+export function querentRunYearOf(guaDateText, zone, p) {
+  const bp = parseDateParts(p && p.querentBirth);
+  if (!bp || bp.year < 1 || (p && p.runyear)) return null;
+  const gp = parseDateParts(`${guaDateText || ''}`);
+  if (!gp) return null;
+  const g = p.querentGender === 'female' || `${p.querentGender}` === '0' ? 0 : 1;
+  const birthF = { date: { value: { year: bp.year, ad: 1 } }, gender: { value: g } };
+  const guaF = { date: { value: { year: gp.year, ad: 1 } } };
+  const runyear = resolveDisplayRunYear(null, birthF, guaF);
+  if (!runyear) return null;
+  let birthGanZi = '';
+  try {
+    const r = buildLocalBaziResult({ date: `${bp.year}-${`${bp.month}`.padStart(2, '0')}-${`${bp.day}`.padStart(2, '0')}`, time: '12:00:00', zone: zone || '+08:00', gender: g });
+    birthGanZi = (r && r.bazi && r.bazi.fourColumns && r.bazi.fourColumns.year && r.bazi.fourColumns.year.ganZhi) || '';
+  } catch (e) { birthGanZi = ''; }
+  const bx = liurengBenmingXingnian(birthF, runyear);
+  return { runyear: { ...runyear, birthGanZi }, benmingZhi: bx.benmingZhi, xingnianZhi: bx.xingnianZhi };
+}
+
 export function runLiureng(payload) {
   const resolved = resolveLiurengOptions(payload);
   if (!resolved.ok) {
@@ -199,18 +225,22 @@ export function runLiureng(payload) {
   }
   const { castOpts, guirengType } = resolved;
   const liureng = payload.liureng || {};
-  const runyear = payload.runyear || null;
   const chartObj = normalizeChart(payload);
   // 起课时刻（行年盘 = guaDate/guaTime；正盘 = date/time）：月将换将的岁差年与快照 [起盘信息] 的「日期」行都按它取。
   const keDate = payload.guaDate || payload.date || '';
+  const querent = querentRunYearOf(keDate, payload.guaZone || payload.zone, payload);
+  const runyear = querent ? querent.runyear : (payload.runyear || null);
   // 上游 genGodsParams / genRunYearParams 取 format('HH:mm:ss')（LiuRengMain.js:643 / :629，v3.14.0 起不再把时刻降到分钟）。
   const keTime = formatTimeLikeDateTime(payload.guaTime || payload.time || '');
   const keYear = parseYearAd(keDate, payload.guaAd ?? payload.ad);
   const solarYear = keYear ? getSolarYearFromField({ value: keYear }) : NaN;
   // 本命支 / 行年支（第九~十二客、本命 / 行年加时）：上游 liurengBenmingXingnian 按问测人出生公历年 + 行年干支取。
   // 正盘无单独出生档时同上游缺省「问测人 = 起课档」取起课年（buildBirthFields(this.props.fields)）。
+  // 给了问测人出生：本命 / 行年支取它推出的那一对（上游 p.benmingZhi || qr.benmingZhi —— skill 不收调用方直给的两支）。
   const birthYear = parseYearAd(payload.date, payload.ad);
-  const bx = liurengBenmingXingnian(birthYear ? { date: { value: birthYear } } : null, runyear);
+  const bx = querent
+    ? { benmingZhi: querent.benmingZhi, xingnianZhi: querent.xingnianZhi }
+    : liurengBenmingXingnian(birthYear ? { date: { value: birthYear } } : null, runyear);
   const fullCastOpts = {
     ...castOpts,
     ...(Number.isFinite(solarYear) ? { solarYear } : {}),
