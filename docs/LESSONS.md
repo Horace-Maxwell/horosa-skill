@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.0-dev (2026-11-23) | 核调波 / 龙盘 / 重置盘写中文时，拿 vendored 的上游 `derivedAstroLabs.js`（逐字）对拍 Python 移植，重置盘四角只出两行：它 `import * as AstroConst` 后用 `AstroConst.DESC / IC`，而 skill 的 AstroConst 是 curated 子集，没有这两个——命名空间成员缺了不报错、只是 undefined，loadcheck 照绿 | 子集按上游原序补 DESC / IC；loadcheck 新增「命名空间导入的每个 `NS.名字` 都要是目标模块的导出」（全树 96 处，负向对照：删 IC → 红）；Python 移植与 vendored 函数同输入逐行对拍 |
 | v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0 做到一半才发现报告盘图 bundle（dist/app-charts.cjs）还是 v3.14.0 打的：re-vendor Runbook 没有这一步，工单照 Runbook 列也就没有；`build.mjs --check` 只在发版 preflight 跑。同轮：真随机那次提交只跑了 pytest、没跑 `npm test`，两条旧 selfcheck（小成图无种子拒收、灵棋同刻幂等）红着进了提交 | Runbook 加 app-charts 重打包 + 塔罗牌面两步；守卫 `test_the_bundle_is_built_from_the_recorded_upstream_pin`（包 / 牌面的上游提交 == provenance pin，负向对照实跑）；改起卦行为的提交同时跑 pytest 与 npm test |
 | v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0「随机起卦一律真随机」时，我把 skill 旧的「无头只走确定性种子」当既定政策延续，把要不要真随机当待定项抛给用户；用户：「当然要做真的随机」。旧注释的理由（同刻同卦、测试难写）早被上游的「真随机记录 + 原样重开」解决 | 随机起法取系统随机源、缺省跟上游页面；所有起卦技法回传 data.cast.replay（重开配方，不依赖记忆库）；记录长度 / 骰子池 / 五兆重开配方读上游源对拍；上游已定的口径不再抛给用户拍板 |
 | v0.52.0 (2026-11-23) | 发版矩阵 Windows ARM lane 红 1 条：`test_technique_census` 说推运六技法多出一张表 `surfaces.mcp_requests:names`——模块级推导式里的 `names := …` 泄漏成模块全局，值看 frozenset 按对象地址的遍历顺序，另两条 lane 恰好没碰上 | 挪进函数里算；AST 守卫禁止模块 / 类体推导式里的 `:=`（负向对照：原代码被抓）；普查红在单 lane 时先怀疑遍历顺序 |
@@ -269,6 +270,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.0-dev / 2026-11-23 — curated 子集缺成员，命名空间导入静默得 undefined
+
+**症状**：v3.15.0 把调波盘 / 龙盘 / 重置盘专属段的行收进 `utils/derivedAstroLabs.js`（星、点、星座改写中文、星座与度数间加空格），
+skill 这三段是 Python 移植。写对拍测试（同一份输入交给 vendored 上游函数与 Python）时，上游一侧的重置盘四角对照只有上升 / 中天两行。
+
+**根因**：`derivedAstroLabs.js` 是本次新 vendor 的逐字件，`import * as AstroConst from '../constants/AstroConst.js'` 后取
+`AstroConst.DESC` / `AstroConst.IC`；skill 的 `constants/AstroConst.js` 是 curated 子集（Uranian 虚星表所需），只有 ASC / MC。
+ESM 命名空间对象取不到的成员是 undefined，不是链接错误——loadcheck（只看能否加载）、selfcheck（不走这条路径）都绿。
+运行时没炸只因 skill 的重置盘行由 Python 出；哪天改调 vendored 函数就会静悄悄少两行。
+
+**守卫**：子集按上游原序补 `DESC` / `IC`。`horosa-core-js/test/loadcheck.mjs` 新增一节：逐文件找 `import * as NS from './…'`，
+把正文里 `NS.名字` 的每个用法对上目标模块的实际导出（先去掉 import / export-from 行，免得把路径里的「AstroConst.js」当用法），
+缺了即红——全树 96 处命名空间导入现全齐。负向对照：删掉 `IC` → `vendor/utils/derivedAstroLabs.js: AstroConst.IC is not exported`。
+Python 移植的三段行改用 `cn()` / `signPos()` 语义，`tests/test_sync315_derived_labs_cn.py` 与 vendored 函数逐行对拍。
 
 ### v0.53.0-dev / 2026-11-23 — 同步工单漏了报告盘图 bundle；改起卦行为的提交漏跑 npm test
 

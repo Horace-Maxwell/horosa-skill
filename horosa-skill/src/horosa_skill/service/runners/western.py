@@ -34,6 +34,7 @@ from horosa_skill.service.text.western import (
     _angle_text,
     _build_germany_snapshot_text,
     _chart_angles,
+    _derived_cn,
     _derived_conjunction_lines,
     _derived_position_lines,
     _reloc_display_degree,
@@ -648,7 +649,7 @@ class WesternRunners:
             for angle_id in ("Asc", "MC", "Desc", "IC"):
                 n, r = natal_angles.get(angle_id), reloc_angles.get(angle_id)
                 if n or r:
-                    lines.append(f"{angle_id}：本命 {_angle_text(n)} → 重置后 {_angle_text(r)}")
+                    lines.append(f"{_derived_cn(angle_id)}：本命 {_angle_text(n)} → 重置后 {_angle_text(r)}")
         except Exception as exc:  # noqa: BLE001 - 角点对比失败不阻断重置盘本体，但四轴对比行缺了要说
             _degrade("relocation natal-angle comparison failed: %s", exc)
         return {

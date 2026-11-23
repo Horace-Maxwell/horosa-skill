@@ -11,9 +11,9 @@
 // `with { type: 'json' }` attribute. AGENTS §5 is explicit that this is necessary but NOT sufficient —
 // "load 过 ≠ 真盘不崩" — so selfcheck.mjs still has to run real data through the engines.
 
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VENDOR = join(HERE, '..', 'src', 'vendor');
@@ -56,6 +56,25 @@ for (const name of toolNames) {
 	}
 }
 
+// 命名空间导入（`import * as AstroConst from …`）取不到的成员不会让加载失败，只是 undefined：v3.15.0 新 vendor 的
+// utils/derivedAstroLabs.js（逐字）用 AstroConst.DESC / IC，而 skill 的 AstroConst 是按需抽取的子集，没有这两个 →
+// 重置盘四角对照只剩上升 / 中天两行，静悄悄。逐个文件把 `NS.名字` 的用法对上目标模块的导出（import / export-from 行先去掉，
+// 免得把路径里的「AstroConst.js」当成用法）。
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1');
+let nsChecked = 0;
+for (const file of files) {
+	const src = stripComments(readFileSync(file, 'utf8'));
+	const body = src.replace(/^\s*(import|export)\b[^;]*?from\s+['"][^'"]+['"];?/gm, '');
+	for (const [, ns, spec] of src.matchAll(/import\s+\*\s+as\s+(\w+)\s+from\s+['"](\.[^'"]+)['"]/g)) {
+		let mod;
+		try { mod = await import(pathToFileURL(resolve(dirname(file), spec)).href); } catch { continue; }   // 加载失败上面已记
+		nsChecked += 1;
+		for (const [, name] of body.matchAll(new RegExp(`(?<![\\w.$])${ns}\\.(\\w+)`, 'g'))) {
+			if (!(name in mod)) failures.push(`${relative(SRC, file)}: ${ns}.${name} is not exported by ${spec} (undefined at run time)`);
+		}
+	}
+}
+
 if (failures.length) {
 	console.error(`loadcheck: FAIL — ${failures.length}/${files.length} modules (vendor + tools + shared) do not load:`);
 	for (const line of failures) console.error(`  - ${line}`);
@@ -64,4 +83,4 @@ if (failures.length) {
 	process.exit(1);
 }
 
-console.log(`loadcheck: ok (${files.length} modules — vendor + tools + shared — load cleanly; ${toolNames.length} tools/index.js entries resolve)`);
+console.log(`loadcheck: ok (${files.length} modules — vendor + tools + shared — load cleanly; ${toolNames.length} tools/index.js entries resolve; ${nsChecked} namespace imports fully exported)`);

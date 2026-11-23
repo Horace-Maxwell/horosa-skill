@@ -930,27 +930,40 @@ def _build_relative_snapshot_text(payload: dict[str, Any], response: dict[str, A
     return _render_snapshot_text(rendered)
 
 
+def _derived_cn(value: Any) -> str:
+    """上游 v3.15.0 utils/derivedAstroLabs.js `cn(id)`：星 / 点 / 星座写中文——AstroTxtMsg（日 / 月 / 室女…）→ AstroMsgCN → 原样；
+    空值写空串。与快照「星与虚点」表同一张名表（v3.14.0 以前这三段印英文 id：Sun / Virgo）。"""
+    if not value:
+        return _js_template_str(value or "")
+    return _astro_msg(value, short=True)
+
+
+def _derived_sign_pos(sign: Any, signlon: Any) -> str:
+    """derivedAstroLabs.js `signPos`：`${sign ? cn(sign) + ' ' : ''}${signlon != null ? Number(signlon).toFixed(2) + '°' : ''}`。"""
+    head = f"{_derived_cn(sign)} " if sign else ""
+    return f"{head}{fmt_num(signlon, 2)}°" if signlon is not None else head
+
+
 def _derived_position_lines(positions: Any, label: str) -> list[str]:
-    """派生盘位置行——镜像 AuxLab（AstroHarmonicLab.js:75-77 / AstroDraconicLab.js:54-56）：
-    `${row.id}：本命黄经 ${Number(natalLon).toFixed(2)}° → {label} ${sign}${Number(signlon).toFixed(2)}°`。
+    """派生盘位置行——镜像 derivedAstroLabs.js positionAndConjunctionLines（v3.15.0 起调波 / 龙盘共用）：
+    `${cn(row.id)}：本命黄经 ${fix2(natalLon)}° → {label} ${signPos(sign, signlon)}`。
     toFixed 取 double 精确值、平局取大（fmt_num），不是 Python `:.2f` 的银行家舍入。"""
     out: list[str] = []
     for row in positions if isinstance(positions, list) else []:
         if not isinstance(row, dict) or not row.get("id"):
             continue
         natal = fmt_num(row["natalLon"], 2) if row.get("natalLon") is not None else "—"
-        signlon = f"{fmt_num(row['signlon'], 2)}°" if row.get("signlon") is not None else ""
-        out.append(f"{_js_template_str(row['id'])}：本命黄经 {natal}° → {label} {_js_template_str(row.get('sign') or '')}{signlon}")
+        out.append(f"{_derived_cn(row['id'])}：本命黄经 {natal}° → {label} {_derived_sign_pos(row.get('sign'), row.get('signlon'))}")
     return out
 
 
 def _derived_conjunction_lines(conjunctions: Any) -> list[str]:
-    """AuxLab 同频行：`同频：${c.a} 合 ${c.b}（误差 ${Number(orb).toFixed(3)}）`。"""
+    """derivedAstroLabs.js 同频行：`同频：${cn(c.a)} 合 ${cn(c.b)}（误差 ${Number(orb).toFixed(3)}）`。"""
     out: list[str] = []
     for c in conjunctions if isinstance(conjunctions, list) else []:
         if isinstance(c, dict) and c.get("a") and c.get("b"):
             orb = fmt_num(c["orb"], 3) if c.get("orb") is not None else "—"
-            out.append(f"同频：{_js_template_str(c['a'])} 合 {_js_template_str(c['b'])}（误差 {orb}）")
+            out.append(f"同频：{_derived_cn(c['a'])} 合 {_derived_cn(c['b'])}（误差 {orb}）")
     return out
 
 
@@ -966,11 +979,10 @@ def _chart_angles(chart_shaped: Any) -> dict[str, dict[str, Any]]:
 
 
 def _angle_text(obj: dict[str, Any] | None) -> str:
-    """AstroRelocationLab.js:144：`n ? `${n.sign || ''}${Number(n.signlon).toFixed(2)}°` : '—'`（角点在而空 → 空串，不补 —）。"""
+    """derivedAstroLabs.js relocationSnapshotSpecialty `pos`：`o ? signPos(o.sign, o.signlon) : '—'`（角点在而空 → 空串，不补 —）。"""
     if not isinstance(obj, dict):
         return "—"
-    signlon = f"{fmt_num(obj['signlon'], 2)}°" if obj.get("signlon") is not None else ""
-    return f"{_js_template_str(obj.get('sign') or '')}{signlon}"
+    return _derived_sign_pos(obj.get("sign"), obj.get("signlon"))
 
 
 def _with_natal_planet_sign(reloc_chart: dict[str, Any], natal: Any) -> dict[str, Any]:

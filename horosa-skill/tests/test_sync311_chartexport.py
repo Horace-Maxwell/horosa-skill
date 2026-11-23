@@ -375,4 +375,4 @@ def test_derived_chart_specialty_sections_follow_auxlab_templates(tmp_path) -> N
     assert reloc.splitlines()[0] == "重置地点：纬 40.7167 / 经 -74"
     harmonic = _split(service.run_tool("harmonic", {**base, "harmonic": 5}, save_result=False).data["snapshot_text"])["调波盘"].splitlines()
     assert harmonic[0] == "调波数：H5"
-    assert "Sun：本命黄经 11.87° → 调波 Capricorn16.90°" in harmonic
+    assert "日：本命黄经 11.87° → 调波 摩羯 16.90°" in harmonic   # v3.15.0 起星 / 星座写中文、星座与度数间空一格

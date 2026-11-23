@@ -29,4 +29,6 @@ export const NORTH_NODE = 'North Node'
 export const VERTEX = 'Vertex'
 export const EAST_POINT = 'EastPoint'  // 赤道上升(子午局 1 宫头);量化盘可选点,读后端 houseFrames.eastPoint
 export const ASC = 'Asc'
+export const DESC = 'Desc'
 export const MC = 'MC'
+export const IC = 'IC'
