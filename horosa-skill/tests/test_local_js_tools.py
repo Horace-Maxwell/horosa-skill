@@ -1066,7 +1066,8 @@ def test_geomancy_deterministic_cast_and_sections(tmp_path) -> None:
     # 天文地占（后端 /geomancy/reading，以起卦时刻确定性起卦）：[起卦信息]/[判定]/[十二宫·图形入宫]/[十六图形]。
     # v3.5.1 地占大改版：十二宫/十六图形改 markdown 表；解读技法/转宫派生/定局落星 随条件出。
     service = make_service(tmp_path)
-    base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "questionType": "career"}
+    base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "questionType": "career",
+            "seedMode": "time_seed"}   # v3.15.0 缺省真随机；以时起卦档才同刻同盘
     r1 = service.run_tool("geomancy", base, save_result=False)
     r2 = service.run_tool("geomancy", base, save_result=False)
     assert r1.ok is True, r1.error
@@ -1097,7 +1098,8 @@ def test_tarot_deterministic_draw_and_sections(tmp_path) -> None:
     # 塔罗（core-js tarot 引擎，SHA-256种子洗牌确定性抽牌）：引擎直接产出独占段头
     # [牌阵综览]/[逐牌详解]/[综合断语]/[定局]/([生命牌] 仅传 birth 时)。
     service = make_service(tmp_path)
-    base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "spread": "three"}
+    base = {"date": "2026-06-30", "time": "14:00:00", "zone": "+08:00", "lat": "31n13", "lon": "121e28", "question": "事业能否升迁", "spread": "three",
+            "seedMode": "birth"}   # v3.15.0 缺省真随机洗牌；生辰种子档才同刻同牌
     r1 = service.run_tool("tarot", base, save_result=False)
     r2 = service.run_tool("tarot", base, save_result=False)
     assert r1.ok is True, r1.error

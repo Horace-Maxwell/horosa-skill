@@ -137,8 +137,11 @@ def test_time_cast_is_not_retried_as_a_transport_error(tmp_path) -> None:
 def test_zone_free_tools_really_ignore_the_zone(tmp_path, tool: str) -> None:
     service = make_service(tmp_path)
     texts = []
+    payload = dict(SAMPLES[tool])
+    if tool in ("jingjue", "taixuan"):   # v3.15.0 缺省真随机：以时起筮档才比得了两次
+        payload["options"] = {**(payload.get("options") or {}), "seedMode": "time_seed"}
     for zone in ("+08:00", "-05:00"):
-        env = service.run_tool(tool, {**SAMPLES[tool], "zone": zone}, save_result=False)
+        env = service.run_tool(tool, {**payload, "zone": zone}, save_result=False)
         assert env.ok, env.error
         texts.append(env.data["export_snapshot"]["export_text"])
     assert texts[0] == texts[1], f"{tool} 的结果随时区变：不该在 ZONE_FREE_TOOLS 里"

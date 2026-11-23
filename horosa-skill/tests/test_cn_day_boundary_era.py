@@ -212,6 +212,9 @@ def test_live_day_boundary_header_and_body_agree(tmp_path, tool: str) -> None:
     if "startDate" in base:
         base.update({"startDate": "2028-04-06", "endDate": "2028-04-06"})
     options = dict(base.get("options") or {})
+    if tool in ("jingjue", "taixuan"):   # v3.15.0 缺省真随机：以时起筮档才看得出日界开关
+        options["seedMode"] = "time_seed"
+        base["options"] = options
     texts = {
         label: _export(service, tool, {**base, **extra})
         for label, extra in (

@@ -598,8 +598,9 @@ def _live(tmp_path, tool: str, payload: dict):
 @requires_current_runtime_contract
 @requires_chart
 def test_live_jingjue_same_moment_same_gua(tmp_path) -> None:
-    one = _live(tmp_path, "jingjue", BASE)
-    two = _live(tmp_path, "jingjue", BASE)
+    # v3.15.0 起缺省真随机；以时起筮档（time_seed）才是「同刻同卦」
+    one = _live(tmp_path, "jingjue", {**BASE, "options": {"seedMode": "time_seed"}})
+    two = _live(tmp_path, "jingjue", {**BASE, "options": {"seedMode": "time_seed"}})
     assert "起筮种子：802202048" in one["snapshot_text"] and one["snapshot_text"] == two["snapshot_text"]
 
 
@@ -607,8 +608,8 @@ def test_live_jingjue_same_moment_same_gua(tmp_path) -> None:
 @requires_chart
 def test_live_taixuan_minute_changes_the_cast(tmp_path) -> None:
     """旧码同一小时内恒同卦（后端缺省种子 yyyyMMddHH）；上游分钟级种子 → 20:05 与 20:48 必异。"""
-    early = _live(tmp_path, "taixuan", {**BASE, "time": "20:05:00"})
-    late = _live(tmp_path, "taixuan", BASE)
+    early = _live(tmp_path, "taixuan", {**BASE, "time": "20:05:00", "options": {"seedMode": "time_seed"}})   # 以时起筮档（v3.15.0 缺省真随机）
+    late = _live(tmp_path, "taixuan", {**BASE, "options": {"seedMode": "time_seed"}})
     assert early["seed"] == 802202005 and late["seed"] == SEED_19980220_2048
     assert _section(early["snapshot_text"], "方州部家") != _section(late["snapshot_text"], "方州部家")
 
@@ -616,9 +617,11 @@ def test_live_taixuan_minute_changes_the_cast(tmp_path) -> None:
 @requires_current_runtime_contract
 @requires_chart
 def test_live_wuzhao_dunhuang_is_reproducible_and_gender_is_read(tmp_path) -> None:
+    # v3.15.0：敦煌揲筮缺省真随机（64 字节记录），可复现靠 data.cast.replay 原样传回（旧码不带 castSeed → 后端真随机、无从重开）
     one = _live(tmp_path, "wuzhao", {**BASE, "options": {"mode": "dunhuang"}})
-    two = _live(tmp_path, "wuzhao", {**BASE, "options": {"mode": "dunhuang"}})
-    assert one["snapshot_text"] == two["snapshot_text"], "旧码不带 castSeed → 后端 random.Random() 真随机"
+    assert one["cast"]["random"] is True and one["cast"]["replay"]["options"].get("castSeed")
+    two = _live(tmp_path, "wuzhao", {**BASE, **one["cast"]["replay"]})
+    assert one["snapshot_text"] == two["snapshot_text"]
     male = _live(tmp_path, "wuzhao", {**BASE, "gender": 1, "options": {"mingZhi": "子"}})
     female = _live(tmp_path, "wuzhao", {**BASE, "gender": 0, "options": {"mingZhi": "子"}})
     assert "行年：辰" in male["snapshot_text"] and "行年：午" in female["snapshot_text"]
@@ -656,8 +659,8 @@ def test_live_wangji_xinyi_fawei_is_the_gua_not_the_wrapper(tmp_path) -> None:
 @requires_current_runtime_contract
 @requires_chart
 def test_live_geomancy_real_chart_uses_the_forwarded_time_place(tmp_path) -> None:
-    plain = _live(tmp_path, "geomancy", GEO)
-    real = _live(tmp_path, "geomancy", {**GEO, "options": {"ascSource": "real_chart"}})
+    plain = _live(tmp_path, "geomancy", {**GEO, "seedMode": "time_seed"})   # 以时起卦档（v3.15.0 缺省真随机）
+    real = _live(tmp_path, "geomancy", {**GEO, "seedMode": "time_seed", "options": {"ascSource": "real_chart"}})
     assert plain["time_seed"] == 1212267460 and plain["snapshot_text"] != real["snapshot_text"]
 
 
