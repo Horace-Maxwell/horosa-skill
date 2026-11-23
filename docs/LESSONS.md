@@ -16,6 +16,8 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.52.0 (2026-11-22) | `bump_version.py 0.52.0` 把 README / README_EN / 受限网络文档里十四处「从哪版起」改成 0.52.0——历史判定只认带 v 的整行标记，「自 0.50.0 起」「since 0.50.0」「(v0.41.0;」「0.50.0 之前的发布」每次 bump 都跟着走；查 git 才知道 v0.51.0 那次已经全改成 0.51.0 | 逐处判（前缀 自 / since / from / before / pre- / as of / 左括号，后缀 之前 / 及以后 / 起 / on）；按首次写入的提交把十四处恢复成 0.50.0 / 0.41.0；测试对真站点模拟下一次 bump（负向对照：旧脚本 3 条红） |
+| v0.52.0 (2026-11-22) | 发版前 live 复验：`surface_audit.py` 红 1/386（`[mcp-full] bazi_direct: tool.unknown`）——6008fd80 让 `horosa_cn_bazi_direct` 不再单独广告，产品对、审计脚本没跟上，照普通技法调它；脚本要 vendored 实例、不进 CI，v0.51.0 带着这条红发了版没人看见 | 未广告的注册键走 `judge_unadvertised`（须回 tool.unknown 且替代工具在 tools/list 里）；判定抽成纯函数，离线用服务器真回包测（负向对照：旧 `judge` 判它红）；改工具面时同一提交改 surface_audit |
 | v0.52.0-dev (2026-11-20) | 三件加固（wheel 钉 runtime 摘要、升级失败自动回滚、出生时刻未知模式）；未知模式的西洋过滤器离线样例全绿，对 vendored 实例实跑才看到六类宫位 / 阿拉伯点漏网，德国派「主体：Asc」只删标题把相位行挂到上一块 | 过滤正文按块删；改过滤器必须实跑真盘读正文；新行为与旧测试冲突时改写旧测试的契约而不是删；macOS 布局夹具碰上按宿主判定的完整性 → 加模拟 Linux 档 |
 | v0.51.1-dev (2026-11-17) | v0.51.0 的三条收尾：预算只有「发版前手算一次」的口头规则；ci.yml 两个 job 在 95–97% 才被取消时才发现；export-contract mirror 只在 preflight 跑 | `estimate_lane_budget.py`（本机 junit → 三 lane 估算，超 85% 退出 1）；`ci_job_budget.py` 首末两步、超 85% 打注解；mirror 进 CI 读钉住的公开上游、preflight 带 `--require-vendored`（各有负向对照） |
 | v0.51.0 (2026-11-17) | 第二次矩阵：预算够了（darwin 66% / x64 78%），x64 仍红 8 条——Windows 引擎与 macOS 金标的差不止末位：速度百分比 ~4e-6、截到秒的时刻差一秒、近乎并列的行换序；另 darwin 全量基准 124/125（`dispatch_qimen_liureng_combo` 把占时放 birth，被审计后的闸门拒） | 金标比较按主机分：POSIX 逐值、Windows 比形状 + 去数字的行（`golden_diff` 等）；基准 case 改 context + 离线过闸守卫（负向对照实跑） |
@@ -264,6 +266,36 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.52.0 / 2026-11-22 — bump 脚本每次发版都把「从哪版起」改成当前版本
+
+- **症状**：`bump_version.py 0.52.0` 的 diff 里，除了下载链接、`"version"` 等真站点，还有十四处历史说法变成了 0.52.0：「`install` 自 0.52.0 起改装 JS 引擎资产」
+  「JS engine installable (since 0.52.0)」「How the gate decides (v0.52.0)」「before v0.52.0 only agents that opened this repo saw it」「0.52.0 之前的发布」
+  「a pre-0.52.0 manifest」……
+- **根因**：`_is_history` 只在行里同时有 `HISTORY_MARKERS`（`as of v` / ` 起` / `Since v` / `自 v` / `from v`）**和** `v<旧版本>` 时整行跳过。不带 v 的
+  「自 0.50.0 起」、小写 `since v`、括号里的「(v0.41.0;」、「before v」、「之前」「pre-」都不算，于是每次 bump 整行替换。`git log -S` 查首次写入的提交：
+  这些原文是 0.50.0（JS 引擎资产、闸门、阅读视图、受限网络五处）和 v0.41.0（skill 装进客户端目录两处）——v0.51.0 的 bump 已经把它们全改成过 0.51.0，
+  发版 diff 没人逐行看。
+- **修复**：`rewrite` 改为逐处判：版本号前 12 个字符以 自 / since / from / before / pre- / as of / （ / ( 收尾（可带 v），或后面紧接 之前 / 以前 / 及以后 /
+  以后 / 起 / on / onward，就是历史，不改；同一行里的真站点照改（「本仓版本 `v…`」与「（自 0.50.0，…）」同行）。撤回第一次 bump 重跑，diff 只剩真站点；
+  十四处按首次写入的原文恢复。
+- **守卫**：`tests/test_bump_version_history.py`——九种历史写法不动、五种真站点照改、同行两种各归各；对 `SITES` 的真文件模拟把 0.50.0 / 0.41.0 bump 到一个新版本
+  必须零改动。负向对照：放回旧脚本 → 3 条红（其中真文件那条）。
+- **规则**：bump 后逐行看 diff（AGENTS 早有这句，v0.51.0 没做）；新写「从哪版起」用 自 / since / from / before 这几种写法，脚本才认得出是历史。
+
+### v0.52.0 / 2026-11-22 — 发版前表面审计红 1 条：工具面改了，审计脚本没跟
+
+- **症状**：v0.52.0 发版前按 Live 验证 Runbook 跑全套：pytest 8505 passed、section_harness 119/119 clean，`surface_audit.py` 却 failed=1——
+  `[mcp-full] bazi_direct: tool.unknown`。
+- **根因**：6008fd80（审计 S-16，2026-11-14）让 `bazi_direct` 只作注册键、不再广告成平铺工具，直呼 `horosa_cn_bazi_direct` 回结构化 `tool.unknown`
+  并点名 `horosa_cn_bazi_birth`——这是设计。surface_audit 的全量面循环遍历 `TOOL_DEFINITIONS` 全部键、照普通技法判，于是恒红。脚本要 vendored 实例，
+  不在 CI / `run_ci_gates.py` 里；v0.51.0 发版时这一条要么没跑、要么红了没人当回事——台账与 HANDOFF 都没有记录它的结果。
+- **修复**：`mcp_surface` 对 `UNADVERTISED_TECHNIQUES` 走 `judge_unadvertised`：必须回 `tool.unknown`，且 `details.replacement` 在本次 tools/list 里。
+  复跑 386/386。
+- **守卫**：`tests/test_surface_audit_unadvertised.py`（离线）：用 `mcp_runner._unknown_tool_result` 的真回包——新判定过；旧 `judge` 判它红（负向对照，
+  正是这次的红）；替代工具不在列表里、普通错误都红；源码断言全量面确实把未广告键分流到新判定。
+- **规则**：改工具面（广告 / 不广告、改名、门面增减）的同一提交改 `surface_audit.py` 的期望；发版前 live 三件（pytest / harness / surface）的结果数字
+  写进 HANDOFF，红了不发。
 
 ### v0.52.0-dev / 2026-11-20 — 三件加固；`birth_time.py` 的西洋过滤器离线全绿、实跑漏六类
 

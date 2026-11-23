@@ -51,7 +51,7 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PKG_ROOT / "src"))
 
 from horosa_skill.agent_guidance import build_tool_input_contract  # noqa: E402
-from horosa_skill.engine.registry import TOOL_DEFINITIONS  # noqa: E402
+from horosa_skill.engine.registry import TOOL_DEFINITIONS, UNADVERTISED_TECHNIQUES  # noqa: E402
 from horosa_skill.surfaces.mcp_server import COMPACT_SURFACE_TOOL_COUNT, FULL_SURFACE_TOOL_COUNT  # noqa: E402
 
 DESKTOP_PORTS = (":8899", ":9999")
@@ -126,6 +126,15 @@ def judge(envelope: dict[str, Any]) -> tuple[bool, Any]:
     return True, ""
 
 
+def judge_unadvertised(envelope: dict[str, Any], listed_names: set[str]) -> tuple[bool, Any]:
+    """A registry key kept off the flat list (UNADVERTISED_TECHNIQUES): calling its flat name must answer tool.unknown and name a
+    replacement that IS on tools/list — not run, not a bare SDK "Unknown tool"."""
+    replacement = ((envelope.get("error") or {}).get("details") or {}).get("replacement")
+    if error_code(envelope) == "tool.unknown" and replacement in listed_names:
+        return True, ""
+    return False, {"want": "tool.unknown + an advertised replacement", "got": [error_code(envelope), replacement]}
+
+
 def server_params(env: dict[str, str]):
     from mcp import StdioServerParameters
 
@@ -144,6 +153,7 @@ async def mcp_surface(report: Report, tools: list[str], *, compact: bool) -> Non
             listed = (await session.list_tools()).tools
             expected = COMPACT_SURFACE_TOOL_COUNT if compact else FULL_SURFACE_TOOL_COUNT
             report.check(area, "tools/list count", len(listed) == expected, f"{len(listed)} != {expected}")
+            listed_names = {tool.name for tool in listed}
             semaphore = asyncio.Semaphore(4)
 
             async def one(tool: str) -> None:
@@ -152,9 +162,15 @@ async def mcp_surface(report: Report, tools: list[str], *, compact: bool) -> Non
                     try:
                         if compact:
                             result = await session.call_tool("horosa_tool_run", {"tool_name": definition.mcp_name, "request": example_payload(tool)})
+                            ok, detail = judge(envelope_of(result))
+                        elif tool in UNADVERTISED_TECHNIQUES:
+                            # 审计 S-16（6008fd80）：注册键照收但不广告成平铺工具——直呼平铺名要回结构化 tool.unknown，
+                            # 且点名的替代工具真在 tools/list 里（v0.52.0 前这里把它当普通技法调，恒红 1 条）。
+                            result = await session.call_tool(definition.mcp_name, example_payload(tool))
+                            ok, detail = judge_unadvertised(envelope_of(result), listed_names)
                         else:
                             result = await session.call_tool(definition.mcp_name, example_payload(tool))
-                        ok, detail = judge(envelope_of(result))
+                            ok, detail = judge(envelope_of(result))
                     except Exception as exc:  # noqa: BLE001 - the audit reports, it does not crash
                         ok, detail = False, f"{type(exc).__name__}: {exc}"
                 report.check(area, tool, ok, detail)

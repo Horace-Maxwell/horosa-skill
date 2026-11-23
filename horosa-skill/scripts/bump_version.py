@@ -70,6 +70,23 @@ def _is_history(line: str, old: str) -> bool:
     return any(marker in line for marker in HISTORY_MARKERS) and f"v{old}" in line
 
 
+# 逐处判（v0.52.0）：上面的整行判只认带 v 的写法，「自 0.50.0 起」「since 0.50.0」「(v0.41.0;」「before v0.41.0」「0.50.0 之前的发布」
+# 每次 bump 都被改成当前版本——v0.52.0 发版时 README / 受限网络文档里十几处「从哪版起」全成了 0.52.0（原文是 0.50.0 / 0.41.0，已按首次写入的提交恢复）。
+# 一处出现紧跟在 自 / since / from / before / pre- / as of / 左括号 之后，或紧接 之前 / 以前 / 及以后 / 起 / on 之前，就是历史，不改。
+_HISTORY_BEFORE = re.compile(r"(?:自|[Ss]ince|[Ff]rom|[Bb]efore|pre-|[Aa]s of|（|\()\s*v?$")
+_HISTORY_AFTER = re.compile(r"^\s*(?:之前|以前|及以后|以后|起|on\b|onward)")
+
+
+def _rewrite_occurrences(line: str, old: str, new: str) -> str:
+    out, pos = [], 0
+    for match in re.finditer(re.escape(old), line):
+        start, end = match.span()
+        history = _HISTORY_BEFORE.search(line[max(0, start - 12):start]) or _HISTORY_AFTER.match(line[end:])
+        out.append(line[pos:start] + (old if history else new))
+        pos = end
+    return "".join(out) + line[pos:]
+
+
 def _lock_scoped(path: Path, text: str, old: str, new: str) -> str:
     """uv.lock / package-lock.json: only the horosa-skill / horosa-core-js package's own version lines."""
     if path.name == "uv.lock":
@@ -102,8 +119,10 @@ def rewrite(text: str, path: Path, old: str, new: str) -> tuple[str, int]:
     changed = 0
     for i, line in enumerate(lines):
         if old in line and not _is_history(line, old):
-            lines[i] = line.replace(old, new)
-            changed += 1
+            rewritten = _rewrite_occurrences(line, old, new)
+            if rewritten != line:
+                lines[i] = rewritten
+                changed += 1
     return "\n".join(lines), changed
 
 

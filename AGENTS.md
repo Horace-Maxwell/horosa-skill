@@ -880,7 +880,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
   `skills/horosa-agent/SKILL.md`（及 wheel 内生成的 `agent_skill/horosa-agent/SKILL.md`）/ `docs/INSTALL_RESTRICTED_NETWORK.md` 的钉版本命令与
   「当前版本」行、`docs/runtime-manifest.example.json` + `docs/runtime-payload-manifest.example.json`；这里不写数量——
   `tests/test_bump_version_sites_documented.py` 锁「每个站点都在这条里点名」）；`--check` 断言全部站点同版本，CI 由 `verify_docs_sync.check_versions` 锁步。
-  历史行（「自 vX 起」「as of vX」「Since vX」）不是站点，脚本按 `HISTORY_MARKERS` 跳过；bump 后 `git grep -n "<OLD>"` 只应剩合法历史引用
+  历史引用不是站点：脚本按 `HISTORY_MARKERS` 整行跳过，并逐处判（v0.52.0 起）——紧跟在 自 / since / from / before / pre- / as of / 左括号之后、或紧接 之前 / 以前 / 及以后 / 起 / on 之前的版本号不改（此前不带 v 的「自 0.50.0 起」「since 0.50.0」「(v0.41.0;」每次 bump 都被改成当前版本，v0.52.0 发版时恢复了十四处；`tests/test_bump_version_history.py` 对真站点模拟下一次 bump）；bump 后 `git grep -n "<OLD>"` 只应剩合法历史引用
   （CHANGELOG、台账、Windows 交接文档）。`docs/DATA_CONTRACTS.md` 的 `tool envelope: <ver>` 是**独立** schema 版本，不跟包版本连动。
   ⚠️ 两个 lock 只许字符串替换本包的版本串（脚本就是这么做的），禁 `json.dumps` 整文件重写——Python 默认把非 ASCII 转义成 `\uXXXX`，
   下次 `npm install` 又写回真 UTF-8，凭空造噪音 diff（v0.27.0 实踩）；core-js 的 lock 曾在锁步之外漏过一版（v0.26.0）。
@@ -1083,7 +1083,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
    optional 白名单放宽）。`section_harness.py` 的 clean 另要求依据卡 `matches_declaration` 不为 false（算源声明在
    `gen_technique_provenance.py` 的 `ENGINE_OVERRIDES` / `EXTRA_EVIDENCE` 修，不手改契约）。**service 层绿 ≠ agent 走得通**（v0.40.2 表面审计）：
    闸门、技法名写法、参数形状、CLI 退出码、HTTP 鉴权只存在于表面层，发版前另跑 `scripts/surface_audit.py`（全 119 技法 × MCP 全量 /
-   精简 / CLI / HTTP + 门面·资源·提示，failed=0）；它在全新数据目录上并行起 CLI，顺带守住记忆库首建的并发迁移（`_ensure_column`）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
+   精简 / CLI / HTTP + 门面·资源·提示，failed=0）；改工具面（广告与否、改名、门面增减）的同一提交改它的期望——它不进 CI，v0.52.0 发版前才发现 `bazi_direct` 不再广告后它恒红 1 条（未广告键走 `judge_unadvertised`）；它在全新数据目录上并行起 CLI，顺带守住记忆库首建的并发迁移（`_ensure_column`）。**反向陷阱：维护机装着 runtime，会让「其实依赖 runtime」的离线测试恒绿，
    只有 CI（唯一无 runtime 的环境）才炸**——离线/线材契约测试**禁以「算成功」为判据**（那是
    `@requires_runtime` 的活）；`tests/test_mcp_contract.py` 已用 autouse fixture 把 `HOROSA_RUNTIME_ROOT`
    钉到空目录强制与 CI 同形，发版前另跑一遍 `HOROSA_RUNTIME_ROOT=<空目录> uv run pytest` 复现该形状。
