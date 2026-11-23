@@ -36,6 +36,8 @@ def test_bazi_with_an_unknown_time_gives_three_pillars_and_says_so(tmp_path: Pat
     assert env.ok, env.error
     text = env.data["export_snapshot"]["export_text"]
     assert "| 时柱 |" not in text and "命宫：" not in text and "身宫：" not in text and "小运" not in text
+    # v3.15.0 新段 [卦释]：逐柱一行，时柱那行要去掉、其余柱留着（负向对照：过滤式不认「时柱 干支:」→ 红）
+    assert "[卦释]" in text and "日柱 " in text.split("[卦释]")[1] and not any(line.startswith("时柱 ") for line in text.split("\n"))
     assert "| 日柱 |" in text and "只给年 / 月 / 日三柱" in text and "起运岁数是约数" in text
     assert env.data["birth_time"]["precision"] == "unknown" and "格局·用神" in env.data["birth_time"]["omitted_sections"]
     assert env.data["technique_card"]["birth_time"]["computed_at"] == "12:00:00"

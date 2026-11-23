@@ -39,7 +39,8 @@ _CHART_REFUSE = frozenset({"guolao_chart", "india_chart", "chart12", "relocation
                            "yearsystem129", "zr", "india_rectify", "wangji", "wuzhao", "jingjue", "taixuan"})
 
 _BAZI_OMIT = ("五行力量", "格局·用神", "盲派结构")
-_BAZI_LINE_DROP = re.compile(r"^\|\s*时柱\s*\||^(?:时柱|命宫|身宫|十二串宫)：|^直接时间：")
+# 「时柱 戊午:本卦 …」是 v3.15.0 新段 [卦释] 的逐柱行（柱名 + 空格 + 干支 + 半角冒号），前两式都不认
+_BAZI_LINE_DROP = re.compile(r"^\|\s*时柱\s*\||^(?:时柱|命宫|身宫|十二串宫)：|^时柱 \S+[:：]|^直接时间：")
 _BAZI_PILLAR_MARK = re.compile(r"（(?:时|命|身)）")
 _WESTERN_KEEP = ("起盘信息", "星与虚点", "相位", "行星", "月宿", "12分度", "主宰星链", "埃及历")
 _GERMANY_KEEP = ("起盘信息", "行星", "TNP星体", "中点", "中点相位", "中点列表", "中点坐标", "赤纬接触")
