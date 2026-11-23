@@ -8,6 +8,7 @@ from typing import Any
 
 from horosa_skill import predictive_text as _ptext
 from horosa_skill.civil_calendar import (
+    _civil_date_str_of_jdn,
     _civil_jdn,
     _civil_ymd_exists,
     _format_signed_date,
@@ -643,14 +644,21 @@ class PredictiveRunners:
         natal = self._call_remote("/chart", natal_payload)
         # v3.12.0 defaultEphemerisWindow(zone)：「今日」按本盘时区钟面（DateTime.wallClockForChart；无时区 = 本机今日）。
         today = _wall_clock_for_chart(payload.get("zone"))
-        start_date = self._astroextra_date(payload, "startDate", code="tool.ephemeris_invalid_window") or today.strftime("%Y-%m-%d")
-        end_date = self._astroextra_date(payload, "endDate", code="tool.ephemeris_invalid_window") or (
-            today + timedelta(days=90)
-        ).strftime("%Y-%m-%d")
+        given_start = self._astroextra_date(payload, "startDate", code="tool.ephemeris_invalid_window")
+        given_end = self._astroextra_date(payload, "endDate", code="tool.ephemeris_invalid_window")
+        start_date = given_start or today.strftime("%Y-%m-%d")
+        if given_end:
+            end_date = given_end
+        elif given_start:
+            # v3.15.0 ephemerisWindowFromOptions（挂载 ephStartDate / ephEndDate，外部智能体口径）：只给起始日 = 起始日后 90 天
+            # （此前按页面 `{...defaults, ...opts}` 取「今日 + 90 天」，起始日在 90 天以后就自相矛盾）。民用历 JDN 加天数，带号年也对。
+            end_date = _civil_date_str_of_jdn(_civil_jdn(*_parse_date_parts(given_start)) + 90)
+        else:
+            end_date = (today + timedelta(days=90)).strftime("%Y-%m-%d")
         if _civil_jdn(*_parse_date_parts(end_date)) < _civil_jdn(*_parse_date_parts(start_date)):   # 带号年不能比字符串
             raise ToolValidationError(
-                f"星历结束日早于开始日：{start_date} → {end_date}（只给 startDate 时 endDate 仍按上游缺省=今日+90天）"
-                f" / ephemeris endDate precedes startDate: {start_date} → {end_date} (pass endDate too)",
+                f"星历结束日早于开始日：{start_date} → {end_date}"
+                f" / ephemeris endDate precedes startDate: {start_date} → {end_date}",
                 code="tool.ephemeris_invalid_window",
                 details={"startDate": start_date, "endDate": end_date},
             )

@@ -53,3 +53,15 @@ def test_ephemeris_window_order_compares_dates_not_strings(tmp_path: Path) -> No
     backwards = _service(tmp_path, _LiveFixtureClient(sc)).run_tool(
         "ephemeris", _payload(sc, startDate="-0400-01-01", endDate="-0500-01-01"), save_result=False)
     assert backwards.ok is False and backwards.error.code == "tool.ephemeris_invalid_window"
+
+
+def test_ephemeris_start_only_runs_ninety_days_from_the_start(tmp_path: Path) -> None:
+    """v3.15.0 ephemerisWindowFromOptions（挂载 ephStartDate / ephEndDate）：只给起始日 = 起始日后 90 天（民用历，带号年同样）。
+    旧口径「今日 + 90 天」对远期 / 公元前起始日恒报「结束日早于开始日」。负向对照：回到 today+90 → 本条红。"""
+    sc = _sc("sample")
+    for start, end in (("2040-03-01", "2040-05-30"), ("-0500-12-15", "-0499-03-15")):
+        client = _LiveFixtureClient(sc)
+        result = _service(tmp_path, client).run_tool("ephemeris", _payload(sc, startDate=start), save_result=False)
+        assert not (result.ok is False and result.error.code == "tool.ephemeris_invalid_window"), result.error
+        body = client.bodies("/astroextra/ephemeris")[0]
+        assert (body["startDate"], body["endDate"]) == (start, end)
