@@ -13,6 +13,8 @@ _JAVA_DATE_FALLBACK_ENDPOINTS = {
 }
 _PYTHON_CHART_ENDPOINTS = {
     "/chart",
+    # 天文馆（上游 v3.15.0 AI 工具 sky_at 取数；挂在主 chart 服务 webchartsrv → webplanetariumsrv，Java 侧无此路由）
+    "/planetarium/state",
     # 天星择日·征象搜索（上游 v3.7.0；挂在主 chart 服务，Java 侧无此路由）
     "/electionscan/scan",
     # 单时刻逐叶判读 + 条件类型自省（上游 v3.9.x R4；explainAt 参数与条件树报错自愈用）

@@ -42,6 +42,7 @@ from horosa_skill.schemas.tools import (
     MemoryManageInput,
     MemoryShowInput,
     PlaceSearchInput,
+    SkyAtInput,
     ProfileInput,
     ReportFromToolInput,
     ReportRenderInput,
@@ -480,6 +481,19 @@ def create_mcp_server(service: HorosaSkillService, settings: Settings) -> MCPSer
             "Offline place -> lat/lon + UTC offset: 星阙's own city library, ranking and zone rules (its place picker). "
             "Ranked candidates: lat/lon (31n13), gpsLat/gpsLon, zone on `date` (DST/LMT aware), iana. "
             "ambiguous=true: ask the user, never pick. Techniques also accept `place`."
+        ),
+    )
+
+    _register_service_facade(
+        name="horosa_sky_at",
+        method="sky_at",
+        model=SkyAtInput,
+        envelope=True,
+        title="天文馆取数 / sky at a moment",
+        annotations=_ANN_QUERY,
+        doc=(
+            "天文馆取数: Sun, Moon, planets (+ fixed / brightest stars) at one moment and place: azimuth, altitude, RA/Dec, "
+            "longitude, rise/transit/set, twilight, moon phase (pure astronomy). For 某星在哪、几点升落、看不看得见. Read `content`."
         ),
     )
 

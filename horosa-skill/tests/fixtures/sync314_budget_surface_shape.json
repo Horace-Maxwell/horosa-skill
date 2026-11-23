@@ -49,6 +49,23 @@
     "limit": "integer"
    }
   },
+  "horosa_sky_at": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"天文馆取数 / sky at a moment\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "request": "object",
+    "date": "string",
+    "time": "string",
+    "place": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "bodies": "array items={\"type\":\"string\"}",
+    "fixedStars": "boolean",
+    "brightestStars": "integer",
+    "visibleOnly": "boolean"
+   }
+  },
   "horosa_profile": {
    "tool": "{\"annotations\":{\"destructiveHint\":true,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":false},\"title\":\"命主档案 / birth profiles\"}",
    "schema": "{\"type\":\"object\"}",
@@ -2969,6 +2986,23 @@
     "date": "string",
     "time": "string",
     "limit": "integer"
+   }
+  },
+  "horosa_sky_at": {
+   "tool": "{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"title\":\"天文馆取数 / sky at a moment\"}",
+   "schema": "{\"type\":\"object\"}",
+   "properties": {
+    "request": "object",
+    "date": "string",
+    "time": "string",
+    "place": "string",
+    "zone": "string",
+    "lat": "string",
+    "lon": "string",
+    "bodies": "array items={\"type\":\"string\"}",
+    "fixedStars": "boolean",
+    "brightestStars": "integer",
+    "visibleOnly": "boolean"
    }
   },
   "horosa_profile": {

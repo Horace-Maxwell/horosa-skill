@@ -46,7 +46,7 @@ ENV_FLAG_DOCS: dict[str, str] = {
     "HOROSA_CORE_JS_ROOT": "A horosa-core-js directory to use before the runtime's copy and the `install --engine-only` asset (the Docker image sets it).",
     "HOROSA_JS_ENGINE_TIMEOUT_SECONDS": "Wall-clock limit for one JS-engine call (default 60 s; long election searches raise it for themselves).",
     # ── MCP 面 ──
-    "HOROSA_MCP_COMPACT": "`1` = expose the 14 facade tools instead of every technique tool.",
+    "HOROSA_MCP_COMPACT": "`1` = expose only the facade tools (plus horosa_tool_run, which runs any technique by name) instead of every technique tool.",
     "HOROSA_TOOLSETS": "Comma-separated technique groups to expose (for example `astro,cn`).",
     "HOROSA_MCP_MAX_CONCURRENT_TOOLS": "Most technique calls one MCP server runs at once (default 4).",
     "HOROSA_MCP_ELICIT": "`0` = never ask the user through MCP elicitation forms; missing settings come back as a structured refusal instead.",

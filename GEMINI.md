@@ -17,7 +17,7 @@ edit the template there, never this copy.
 4. No `horosa` tools in the list? One command registers everything:
    `horosa-skill setup --client gemini` (`uv run horosa-skill setup --client gemini` inside this checkout),
    then `horosa-skill doctor` for the machine-readable health report.
-5. **Compact surface.** By default this client sees only the facades + `horosa_tool_run` (15 in all, `HOROSA_MCP_COMPACT=1`); every
+5. **Compact surface.** By default this client sees only the facades + `horosa_tool_run` (16 in all, `HOROSA_MCP_COMPACT=1`); every
    technique is still reachable by name through `horosa_tool_run(tool_name="qimen", …)` and the full list is the
    `horosa://catalog/techniques` resource — a missing flat `horosa_*` name does not mean the technique is missing.
 6. Errors carry structured recovery: `details.agent_recovery.must_ask_user: true` → relay `prompt_to_user` and stop;

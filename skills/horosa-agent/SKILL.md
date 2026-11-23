@@ -292,12 +292,12 @@ as 「用户笔记《标题》第几行」. They never change a chart. An empty 
 horosa_knowledge_search {"query": "空亡是什么意思？"}
 ```
 
-## 12. Compact surface (14 facades + `horosa_tool_run`)
+## 12. Compact surface (15 facades + `horosa_tool_run`)
 
 Every client except Claude Code gets the compact surface by default (`HOROSA_MCP_COMPACT=1`; Claude Code defers tools
-behind tool search and gets the full surface, 全量 132; `setup --surface full|compact` overrides; the `.mcpb` bundle has a
-"Compact tool surface" checkbox, ticked by default). It has the 14 facades —
-`horosa_dispatch`, `horosa_agent_guidance`, `horosa_hecan`, `horosa_place_search`, `horosa_profile`,
+behind tool search and gets the full surface, 全量 133; `setup --surface full|compact` overrides; the `.mcpb` bundle has a
+"Compact tool surface" checkbox, ticked by default). It has the 15 facades —
+`horosa_dispatch`, `horosa_agent_guidance`, `horosa_hecan`, `horosa_place_search`, `horosa_sky_at`, `horosa_profile`,
 `horosa_knowledge_search`, `horosa_memory_query`, `horosa_memory_show`, `horosa_memory_record_answer`, `horosa_memory_manage`,
 `horosa_report_template`, `horosa_report_render`, `horosa_report_from_tool`, `horosa_technique_report` — plus
 `horosa_tool_run`, which runs **any** technique by key, MCP name or an unambiguous Chinese name (八字 / 小六壬) with the same fields and the same gate
@@ -321,6 +321,9 @@ Keys below are `tool_name` values (MCP name = `horosa_<group>_<key>`; `horosa_ag
   `relative` (合盘: `inner` + `outer`, both with a birth time),
   `germany` (midpoints / Uranian), `india_chart`, `guolao_chart` (七政四余), `babylon`, `acg`,
   `india_rectify` (birth-time rectification from dated events; the user decides), `astrodata` (celebrity data).
+- **Sky read-out** (pure astronomy, not a chart): `horosa_sky_at` (facade) — where the Sun, Moon, planets and bright stars
+  are in the sky at one moment and place, rise / transit / set, twilight, moon phase (「今晚几点能看到木星」); give `date` /
+  `time` / `place`, explain from `content`.
 - **Western predictive and timing** (most need a target, §4; which ones: `references/predictive.md`): `solarreturn`, `lunarreturn`, `givenyear`, `solararc`,
   `profection`, `pd`, `pdchart`, `zr`, `firdaria`, `decennials`, `agepoint`, `distributions`,
   `triplicityrulers`, `keypoints`, `lunationphase`, `extrareturns`, `jaynesprog`, `vedicprog`, `planetaryarc`,

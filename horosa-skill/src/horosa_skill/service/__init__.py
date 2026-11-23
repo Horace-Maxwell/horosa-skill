@@ -28,6 +28,7 @@ from horosa_skill.service._context import (
 from horosa_skill.service.api.dispatch import DispatchAPI
 from horosa_skill.service.api.place import PlaceAPI
 from horosa_skill.service.api.reports import ReportsAPI
+from horosa_skill.service.api.sky import SkyAPI
 from horosa_skill.service.api.tools import ToolsAPI
 from horosa_skill.service.endpoints import (
     _PYTHON_CHART_ENDPOINTS,
@@ -145,6 +146,7 @@ class HorosaSkillService(
     ReportsAPI,
     DispatchAPI,
     PlaceAPI,
+    SkyAPI,
 ):
     def __init__(
         self,

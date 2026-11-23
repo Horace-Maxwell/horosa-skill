@@ -1324,7 +1324,7 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **工具结果有线上体积预算（v0.46.1）**：官方 MCP SDK 客户端 streamable HTTP 单条 SSE 事件上限 1 MiB，超出整条调用失败。
   `mcp_runner.MCP_RESULT_WIRE_BUDGET`（900 000 B）：转换后超预算时只略去 `data` 里最大的原始子树（说明占位 + `memory show` 指引），
   快照 / 导出段 / 依据卡不动（`tests/test_mcp_result_budget.py`）。加大结果的工具或字段时，用进程内 MCP 客户端量线上字节。
-- **工具面（v0.45.0；v0.50.0 计数）**：全量面 = 118 个平铺技法 + 14 门面 = 132（`FULL_SURFACE_TOOL_COUNT`；`UNADVERTISED_TECHNIQUES` 里的 bazi_direct 只作注册键别名，v0.51.0-dev），精简面 = 14 门面 + `horosa_tool_run` = 15（`FACADE_TOOL_COUNT` / `COMPACT_SURFACE_TOOL_COUNT`）。新加的非技法工具做成门面，
+- **工具面（v0.45.0；v0.50.0 计数）**：全量面 = 118 个平铺技法 + 15 门面 = 133（`FULL_SURFACE_TOOL_COUNT`；`UNADVERTISED_TECHNIQUES` 里的 bazi_direct 只作注册键别名，v0.51.0-dev），精简面 = 15 门面 + `horosa_tool_run` = 16（`FACADE_TOOL_COUNT` / `COMPACT_SURFACE_TOOL_COUNT`）。新加的非技法工具做成门面，
   **别塞进 `TOOL_DEFINITIONS`**（那里每一项都计入技法总数）。检索与精读分两个工具（`horosa_knowledge_search` / `horosa_knowledge_read`）。常驻（`anthropic/alwaysLoad`）：
   guidance / dispatch / tool_run / knowledge_search。报告结果带 `file` 文件卡；MCP 层只给协商到 2025-06-18 及以后的客户端追加
   `resource_link`（老客户端按旧联合类型校验，多一个块可能整条作废）。守卫 `tests/test_mcp_tool_design.py`。

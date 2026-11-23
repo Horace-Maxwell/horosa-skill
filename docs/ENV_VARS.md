@@ -26,7 +26,7 @@ ignored (`HOROSA_STRICT_CONFIG=1` makes it an error). A value that cannot be par
 | `HOROSA_LOCAL_CHART_PORT` | Port the managed chart service listens on (default 8899). HOROSA_CHART_SERVER_ROOT follows it unless set. |
 | `HOROSA_MCP_ALLOWED_HOSTS` | Extra Host header values (comma-separated) the HTTP transport accepts. |
 | `HOROSA_MCP_ALLOWED_ORIGINS` | Browser Origins (comma-separated, e.g. http://localhost:6274) the HTTP transport accepts; empty by default. |
-| `HOROSA_MCP_COMPACT` | `1` = expose the 14 facade tools instead of every technique tool. |
+| `HOROSA_MCP_COMPACT` | `1` = expose only the facade tools (plus horosa_tool_run, which runs any technique by name) instead of every technique tool. |
 | `HOROSA_MCP_ELICIT` | `0` = never ask the user through MCP elicitation forms; missing settings come back as a structured refusal instead. |
 | `HOROSA_MCP_ELICIT_TIMEOUT_SECONDS` | How long an elicitation form waits for the user (default 120 s). |
 | `HOROSA_MCP_ISERROR` | `0` = never set `isError` on MCP results (old behaviour); default marks real failures, not ask-the-user refusals. |

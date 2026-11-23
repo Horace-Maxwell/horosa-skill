@@ -60,6 +60,9 @@ const APP_UI_ONLY = new RegExp([
   '^components/shusuan/(CanPingMain|HeLuoMain|ZhengChuanMain)$', '^components/yizhangjing/YiZhangJingMain$',
   '^components/yanqin/(YanQinBranchPanel|YanQinControls)$', '^utils/tiebanFrameworkLocal$',
   '^components/tarot/CardDetailDrawer$', // 塔罗单牌详情抽屉（点牌才开）：带进 ~140 KB 牌义表，牌阵图不用
+  // AI 助手工具壳：texts.js 只取工具文件里的纯正文函数（skyAt.skyStateText），工具自己的 run()（起课时间地点解析、
+  // 档案读写、发请求）一次都不调——createCaseRecord 一个文件就牵出整个挂载 / 档案 / 起课闭包。
+  '^utils/aiTools/tools/(createCaseRecord|_shared)$', '^services/planetarium$',
 ].join('|'));
 const CSS_MODULES = /components\/sanshi\/SanShiUnitedMain\.less$/;
 // react-dom: only its server renderer is real (SSR'd boards). The client renderer is a stub — a board reaches it only for

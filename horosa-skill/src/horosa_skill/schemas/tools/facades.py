@@ -275,6 +275,30 @@ class PlaceSearchInput(FlexibleModel):
     clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
 
 
+class SkyAtInput(FlexibleModel):
+    """horosa_sky_at（上游 v3.15.0 AI 工具 sky_at）：天文馆取数——某一时刻、某一地点的日月行星（可加恒星 / 亮星）方位、高度、
+    赤经赤纬、黄经、升中落，天光与月相。与天文馆同一个后端接口 /planetarium/state（纯天文口径：回归黄道、无岁差制），只读不存档。"""
+
+    # 六个出生 / 时刻字段的描述与全仓同一份（mcp_schema 的公用描述；tests/test_mcp_list_slim 按份数封顶）。缺 time = 当日 12:00:00（上游同）。
+    date: str = Field(description="公历 YYYY-MM-DD")
+    time: str | None = Field(default=None, description="HH:mm:ss")
+    place: str | None = Field(default=None, description="地名（可代 zone/lat/lon，首选）")
+    zone: str | None = Field(default=None, description="偏移，如 +08:00")
+    lat: str | float | None = Field(default=None, description="31n13 / 31.22")
+    lon: str | float | None = Field(default=None, description="121e28 / 121.47")
+    bodies: list[str] | None = Field(default=None, description="Sun…Pluto, North Node, South Node; default all")
+    fixedStars: bool | None = Field(default=None, description="add the fixed-star set")
+    brightestStars: int | None = Field(default=None, description="add N brightest stars (0–60)")
+    visibleOnly: bool | None = Field(default=None, description="stars above horizon only")
+    gpsLat: float | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    gpsLon: float | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    pos: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    cnUnifiedZone: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    agent_confirmed_settings: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    defaults_accepted: bool | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+    clarification_notes: str | None = Field(default=None, json_schema_extra={"x-horosa-hidden": True})
+
+
 class AgentGuidanceInput(FlexibleModel):
     tool_name: str | None = None
     intent: str | None = None

@@ -8,6 +8,7 @@
 //   germany_points    — UranianDialMain.chartToPoints(chart) (+ TNP), the point set both time-layer sections read
 //   chart_detail_full — chartDetailTablesText.buildChartDetailFullTables(result, tables, settings) → ■ 全表·… blocks
 //   uranian_dial      — utils/uranianDial.js pure functions + stableOrder.tieSort (parity probe for the Python port)
+//   sky_state         — utils/aiTools/tools/skyAt.js skyStateText(state, opts) → ■ 观测 / ■ 日月行星 / 恒星 / 亮星（/planetarium/state 的结果）
 import {
   buildHamburgLines, uranianTransitContactText, graphicEphemerisText, gephemRangeOf,
 } from '@horosa-app/components/germany/AstroMidpoint.js';
@@ -20,6 +21,7 @@ import { buildChartDetailFullTables, CHART_DETAIL_TABLE_KEYS } from '@horosa-app
 import * as UD from '@horosa-app/utils/uranianDial.js';
 import { tieSort } from '@horosa-app/utils/stableOrder.js';
 import * as AstroConst from '@horosa-app/constants/AstroConst.js';
+import { skyStateText, SKY_BODIES } from '@horosa-app/utils/aiTools/tools/skyAt.js';
 
 function germanyPoints(args) {
   const pts = chartToPoints(args.chart || {});
@@ -57,6 +59,9 @@ export const TEXTS = {
   germany_gephem: (a) => graphicEphemerisText(a.rows || [], a.planets || [], gephemNatalLines(a.chart || {}), a.base, a.range),
   chart_detail_full: (a) => buildChartDetailFullTables(a.result || null, a.tables || [], a.settings || {}),
   chart_detail_table_keys: () => CHART_DETAIL_TABLE_KEYS.slice(),
+  // 天文馆取数（上游 v3.15.0 AI 工具 sky_at 的回包正文）：Python 取 /planetarium/state（与工具 run() 同一请求体），这里只排版。
+  sky_state: (a) => skyStateText(a.data || {}, a.opts || {}),
+  sky_bodies: () => SKY_BODIES.slice(),
   uranian_dial: (a) => {
     const fn = UD[a.fn];
     if (a.fn === 'tieSortProbe') {
