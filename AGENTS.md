@@ -1166,7 +1166,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 | Codex 里 horosa 一堆报错 / 首轮看不到工具 | 多半是 `startup_timeout_sec`/`tool_timeout_sec` 没写（Codex 默认 10 s/60 s，冷启动与择日扫描都超） | `horosa-skill client check --client codex`（v0.38.0 起缺省也报 `codex_*_timeout_missing`）；重跑 `client config --format codex --write ~/.codex/config.toml` |
 | 矩阵 lane / 自己写的脚本把 live 闸门跑成 `java_routes_dead`，而 Java 明明活着 | `HOROSA_SERVER_ROOT` 被设成 doctor `endpoints[*].url`（带 `/common/time` 探测路径） | 只取 scheme://host:port（`verify_runtime_live.origin_of`）；闸门探的是 `<root>/nongli/time` |
 | live 全套只红在 `test_sync311_*` / sanshiunited 这类「钉上游新行为」的用例（`kook` 为 None、地点行回「星阙地点」、金标行格式差一列、castSeed 不复现） | 主干契约领先于已装 runtime：payload `export_registry_version` < 本树 `AI_EXPORT_SETTINGS_VERSION`（main × 公开 latest 的矩阵形状） | 偏斜非回归：这类用例挂 `requires_current_runtime_contract`（偏斜即 skip 并写明）；要验新行为就装下一版 runtime 或起 vendored 实例 |
-| live 只红 `test_live_chart_service_reproduces_the_upstream_goldens` 的 ephemeris，diff 只在「留与顺逆转向」表（Direct / Retrograde 对调、时刻差 1 s） | 上游 `calc_stations` 病态求根：方向 = 根处速度的符号（噪声），时刻落在速度噪声窗口里，跨平台 / 跨日网格各落一处（台账 v0.40.0 / 2026-09-30） | 非回归。0.40.0 起产品侧已按逐日速度纠正方向（`engine/ephemeris_stations.py`），live 比对停滞行时刻 ≤ 10 s、方向对 `station_truth`（`_lift_station_rows`）；仍红且报「停滞时刻超出噪声窗口」或星体 / 方向 / 位置不等才是真问题 |
+| live 只红 `test_live_chart_service_reproduces_the_upstream_goldens` 的 ephemeris，diff 只在「留与顺逆转向」表（时刻差几十秒 / 方向对调） | 后端与 fixture 不是同一代留算法：v3.15.0 起上游由位置求极值、取到分钟、速率变号定向；旧后端（≤ v3.14）按速度过零求根、方向取噪声符号（台账 v0.40.0 / v0.53.0-dev） | 先核实例是不是 pin 住的上游；fixture 已按 v3.15.0 实抓（v0.53.0），live 比对停滞行时刻 ≤ 10 s、方向 = `station_truth`；别回头加纠正 |
 | 改了端口（`HOROSA_PORTS=auto` / `HOROSA_LOCAL_*_PORT`）后 `runtime stop` 退出 0 却 `ok: false`、状态 `stop_requested`、端口仍在听 | 停脚本按端口命名的 pid 文件找进程，此前拿的是裸 os.environ（找默认端口的文件） | v0.38.0 起 start/stop 共用 `_launcher_env()`；升级后 `runtime stop` 即生效；残留进程按 PID 停（`lsof -nP -iTCP:<port> -sTCP:LISTEN`，永不 `pkill -f`） |
 | `doctor` 报 `quarantine:runtime_binaries` / macOS 首次起 runtime 失败且无日志 | 浏览器下载的归档解出的 python / java / node 带 `com.apple.quarantine`，Gatekeeper 首次执行拦下 | 跑报告 `quarantine.fix` 给的 `xattr -dr com.apple.quarantine <current>`，再 `runtime restart`（只报不改，v0.38.0 B6） |
 | 看不懂 doctor 的码 / agent 把 issue 码原样甩给用户 | 码是给脚本的 | `doctor --explain`（stderr 6–10 行人话，stdout 仍纯 JSON）；报告 `advice[]` 每码一句 `user_summary` + `next_action`（码表 `doctor._DOCTOR_ADVICE` 与 `manager.DOCTOR_ISSUE_CODES` 锁步） |
@@ -1204,7 +1204,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 | Codex 里 horosa 工具的参数**没有说明**（模型乱填参数） | Codex ≥ 0.158 对每个工具的 inputSchema 有 5000 B 预算，超出即「压缩」剥掉 description | 今日最大 3274 B（v0.48.0），`verify_mcp_list_budget` 硬顶 5000 B；若某天红了先瘦 schema，别加 `tool_input_schema_max_bytes`（老版本 Codex 对未知键整块拒收） |
 | 周一矩阵只有 Windows lane 红、step 是 `Live verification (Windows)`、产物里没有 pytest.log | pytest 预算到顶被杀（旧版无日志） | 看 lane-report `steps.pytest.seconds` 与 `budget_seconds`；预算按主机（nt 2700）；pytest.log 现在流式落盘，超时也有尾巴 |
 | 八字快照农历行「闰闰五月」 | 上游 BaZi.js:317 对本地引擎结果重复加「闰」前缀（上游页面同样如此） | 0.40.0 起 bespoke `baziSnapshot.js` 声明式偏离：month 已带「闰」不再叠加；Java 形状仍加前缀 |
-| 星历「留与顺逆转向」的方向与星阙桌面版不同（或与天象不符） | 上游 `astroextra.calc_stations` 按留点那一刻≈0 的速度正负定 Direct / Retrograde——浮点噪声，随编译器与采样网格翻转（金标 41 个留错 19 个） | 0.40.0 起声明式偏离 `engine/ephemeris_stations.py`：按同一响应的逐日速度复核（覆盖外按交替续推），改过的留带 `directionUpstream`；判不出则沿用上游标签并 warning |
+| 星历「留与顺逆转向」的方向与星阙桌面版不同（或与天象不符） | 桌面版 / runtime 还是 v3.14 及以前：旧 `calc_stations` 按留点那一刻≈0 的速度正负定向，是浮点噪声（金标 41 个留错 19 个） | v3.15.0 起上游速率变号定向、skill 原样转交（0.40.0–0.52.x 的方向纠正已在 0.53.0 撤）；升级桌面版 / runtime 即一致 |
 
 ## 9. Stability invariants（稳定性不变量 — don't regress these）
 
@@ -1863,11 +1863,9 @@ A global stability pass hardened these; keep them true when you touch the releva
   决定」的窗口里（实测冥王星 6.9 s、天王星 3.7 s、木土海 ≈ 0.5 s、水金火 ≤ 0.03 s）——mac 金标 41 行错 19、Windows 错 20，时刻跨平台差
   ±1 s。live 比对（`tests/test_sync311_newtools.py::_lift_station_rows`）把停滞行拿出来：星体 / 方向 / 位置逐字节、时刻 ≤ 10 s，其余
   逐字节；放宽前先证明漂移仍抓得到（退 Moshier 时停滞只挪 1–28 s，但约半数月相、四成月亮入座按秒变）。
-  产品层：用户 2026-10-01 拍板做声明式偏离 `engine/ephemeris_stations.py`——用同一响应的 `dailyPositions`（与停滞扫描同一网格）定留后
-  方向，覆盖（370 天）之外按同一行星交替续推，改过的留带 `directionUpstream`，判不出就 `_degrade`；上游 builder 的逐字移植
-  （`astroextra_snapshots.py`）不掺偏离。于是方向回到比对里，期望 = 金标 + fixture `station_truth`（前后半天速度变号的独立真值）的方向列
-  （`_with_true_station_directions`）。`test_upstream_station_direction_is_still_ill_conditioned` 自我退役：上游改按括号端速度判向、重抓
-  fixture 后变红 → 本仓偏离可撤（纠正成了空操作）。同类「在临界点上取值」的字段（边界上定星座、平局取整…）同步上游时一并审。
+  产品层：0.40.0–0.52.x 声明式偏离 `engine/ephemeris_stations.py` 按逐日速度纠正方向；**上游 v3.15.0 修好（位置求极值、速率变号定向、
+  时刻取到分钟），v0.53.0 撤除**——自我退役守卫照设计变红后翻成 `test_upstream_station_directions_match_the_derivation_and_the_truth`
+  （上游方向 = 交替推导 = `station_truth`）。同类「在临界点上取值」的字段（边界上定星座、平局取整…）同步上游时一并审。
 - **假 PID 的单测要替换所有按 PID 查真系统的入口（v0.40.0）。** `identity` 先问映像路径（`process_image_path`）再取命令行：只换了
   `listener_pids` / `process_command` 的用例在托管 runner 上 PID 4242 恰被占时拿到别人的映像、证据退成 `identity.app_marker`（release 模式矩阵
   ARM lane 红过一次）。守卫 `test_fake_pid_identity_tests_pin_the_image_lookup_too`：换了 `listener_pids` 字面 PID 的用例必须同时换 `process_image_path`。

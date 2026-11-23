@@ -108,9 +108,10 @@ def test_guard_flags_a_reexport_only_name_and_passes_a_used_one() -> None:
 
 
 # service 拆包后（v0.41.1）测试只 patch 用到名字的子模块，包根门面上不再有 patch 点——那正是想要的结果。
+# runners 包的代表此前是 runners.predictive（唯一的 patch 点是星历留的方向纠正，v0.53.0 随偏离撤除），现换 runners.auxlabs。
 @pytest.mark.parametrize("dotted", [
     "horosa_skill.service._clock",
-    "horosa_skill.service.runners.predictive",
+    "horosa_skill.service.runners.auxlabs",
     "horosa_skill.service.api.dispatch",
     "horosa_skill.surfaces.cli",
     "horosa_skill.runtime.manager",

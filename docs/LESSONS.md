@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.0-dev (2026-11-23) | 发版前 live 复验红两处：星历「留」的时刻与 v3.11 金标差几十秒（上游 v3.15.0 改了留的算法，同步时没看后端这份 diff）；塔罗 surface_audit 报缺 [对读]（导出目录当恒出段，其实是条件段，确定性种子掩盖了，真随机后才露） | 夹具按 v3.15.0 实抓、撤掉 v0.40.0 的方向纠正（上游已修、自我退役守卫按设计翻转）；[对读] 进条件段 + 确定性种子各钉一例；「实测恒出」的段在起卦改随机时逐一重审 |
 | v0.53.0-dev (2026-11-23) | 给奇门报告盘图补画 v3.15.0 附加层时发现：skill 照上游 DunJiaBoard「重画」的盘图还把暗干画在旧位置（上游已挪到门上、主字换留白档）；三式合一的 HTML→SVG 转换器把新的附加层元素整层丢掉；金口诀 / 宿占盘的 plain-text-board 规则（字不描边、字重 100→400）从没套上。手抄审计只扫 src/horosa_skill 与 core-js tools|shared，报告盘图适配器不在扫描里，一条都没报 | 审计 SCAN_ROOTS 加 app-charts/adapters（20 条新命中逐条给结论）；重画 / 转换类盘图在同步时与上游组件逐条对版式；附加层与 plain-text-board 各有测试 + 负向对照 |
 | v0.53.0-dev (2026-11-23) | 接量化盘 v3.15.0 时间层时读上游 buildHamburgLines，发现 skill 的 [虚星参考] 一直无条件附加：当初移植只抄了块内条件（showTnp && school≠cosmo），漏了外层 showHamburg 门（缺省 classic 全关 → 整段不出）；导出目录也把它登成恒出段 | 汉堡要素整段改由上游原函数出（app-text 通道），[虚星参考] 进条件段；移植块级逻辑时连同外层门一起读，测试钉「缺省调用不出、且不起 node」 |
 | v0.53.0-dev (2026-11-23) | 核调波 / 龙盘 / 重置盘写中文时，拿 vendored 的上游 `derivedAstroLabs.js`（逐字）对拍 Python 移植，重置盘四角只出两行：它 `import * as AstroConst` 后用 `AstroConst.DESC / IC`，而 skill 的 AstroConst 是 curated 子集，没有这两个——命名空间成员缺了不报错、只是 undefined，loadcheck 照绿 | 子集按上游原序补 DESC / IC；loadcheck 新增「命名空间导入的每个 `NS.名字` 都要是目标模块的导出」（全树 96 处，负向对照：删 IC → 红）；Python 移植与 vendored 函数同输入逐行对拍 |
@@ -272,6 +273,23 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.0-dev / 2026-11-23 — 发版前 live 复验抓到两处：上游改了留的算法；「实测恒出」的段其实是条件段
+
+**症状**：「全面发布」前对 vendored 实例（8877 / 9977）跑 live 全套。section_harness 119/119 clean，但有两处红：
+① `test_live_chart_service_reproduces_the_upstream_goldens[south_sidereal]` 星历「留」的时刻与金标差 1–83 秒，容差 10 秒；
+② surface_audit 386 项红 3 项，塔罗在 MCP 全量面、精简面和 CLI 上都报 `missing: ['对读']`。
+
+**根因**：① 上游 v3.15.0 重写了 `astroextra_parts/ephemeris.calc_stations`：由位置求黄经极值（25 点四次拟合求导）、逐日格点对齐整数儒略日、
+时刻取到分钟，方向由速率变号定。金标是 v3.11 后端录的。同步时没读这份后端 diff：手抄审计只按文件名或 JS 名字扫，skill 引的是
+`astroextra.calc_stations`，文件名 ephemeris.py 没被引用，所以零信号。② 塔罗 reportText 只在两两解读有行时才写 [对读] 段头。导出目录当年
+在确定性种子下「实测恒出」，就登成了恒出段；起卦改真随机后，抽到没有成对关系的牌就不出这一段。
+
+**守卫**：① 两个场景的留按 v3.15.0 实抓更新（个数、星体次序不变，新方向与 station_truth 逐条相同，金标只动停滞表的时刻与方向两列）。
+v0.40.0 起的方向纠正 `engine/ephemeris_stations.py` 撤除：上游已修，自我退役守卫按设计变红后翻成
+`test_upstream_station_directions_match_the_derivation_and_the_truth`（负向对照：夹具方向回到噪声 → 红）。
+② [对读] 进条件段，`tests/test_sync315_tarot_pairs_conditional.py` 用确定性种子各钉「出 / 不出」一例（负向对照：移出条件段 → 红）。
+起卦从确定性改成随机时，导出目录里凡是写着「实测恒出」的段都要回到 builder 代码逐一重审。
 
 ### v0.53.0-dev / 2026-11-23 — 重画类报告盘图跟不上上游组件，审计扫描也不看它
 

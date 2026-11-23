@@ -31,7 +31,6 @@ from horosa_skill.engine.decennials import (
     DECENNIAL_START_MODE_SECT_LIGHT,
     build_decennial_timeline,
 )
-from horosa_skill.engine.ephemeris_stations import correct_station_directions
 from horosa_skill.errors import (
     HorosaSkillError,
     ToolTransportError,
@@ -679,18 +678,9 @@ class PredictiveRunners:
         }
         if eclipse_mode != "max":
             body["eclipseTimeMode"] = eclipse_mode
+        # 「留」的时刻与顺逆方向直接用上游：v3.15.0 起由位置求黄经极值、方向由速率变号定（此前按留点≈0 速度的正负定向，
+        # 是噪声，本仓 v0.40.0–v0.52.x 用 engine/ephemeris_stations.py 按逐日速度纠正；上游修好后撤除）。
         response = self._call_remote("/astroextra/ephemeris", body)
-        if isinstance(response, dict) and isinstance(response.get("stations"), list):
-            # 本仓声明式偏离（v0.40.0）：上游按留点那一刻≈0 的速度正负定顺逆，标签是浮点噪声；改按同一响应的逐日速度复核
-            # （engine/ephemeris_stations.py）。判不出的留保留上游标签并明示。
-            stations, unresolved = correct_station_directions(response.get("stations"), response.get("dailyPositions"))
-            if unresolved:
-                _degrade(
-                    "ephemeris: %d station direction(s) could not be re-derived from dailyPositions; upstream labels kept",
-                    len(unresolved),
-                    note=f"降级：{len(unresolved)} 个留的顺逆方向无法按逐日速度复核，沿用上游标签（上游按留点时刻≈0 的速度正负定，可能不准）。",
-                )
-            response = {**response, "stations": stations}
         snapshot_text = build_ephemeris_snapshot_text(
             natal,
             response,
