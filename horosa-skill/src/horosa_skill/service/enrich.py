@@ -651,7 +651,7 @@ class EnrichMixin:
     # [盘面细节] 请求体不带的键：五项口径在请求体里另有键名（chartDetailRequestFields），「当前表」不进请求体；闸门 / 备注 / 知识库点名
     # 是 skill 自己的键。其余照 /chart 的请求体原样带（上游导出 = `{ ...chartObj.params, …口径 }`、挂载 = `{ ...fieldParams(fields), …口径 }`）。
     _CHART_DETAILS_DROP_KEYS = frozenset({
-        "detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", "detailTable",
+        "detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", "detailTable", "detailFullTables",
         "agent_confirmed_settings", "defaults_accepted", "clarification_notes", "knowledge", "profile",
         "includePrimaryDirection",
     })
@@ -750,6 +750,23 @@ class EnrichMixin:
                 code="tool.chart_details_setting_mismatch",
                 details={"not_applied": not_applied, "endpoint": "/astroextra/chartdetails"},
             )
+        # 按表取全表（v3.15.0 挂载 detailFullTables）：点名的表跑上游 chartDetailTablesText.buildChartDetailFullTables（细节页 tableOf
+        # 同一份列定义，React 树 → Markdown；同报告盘图 bundle 的 app-text 通道），接在摘要后空一行（上游 [summary, full].join('\n\n')）。
+        full_keys = payload.get("detailFullTables") or []
+        full_keys = [full_keys] if isinstance(full_keys, str) else list(full_keys)
+        if full_keys:
+            runs = self.js_client.run_app_texts(
+                [{"name": "chart_detail_full", "args": {"result": result, "tables": full_keys, "settings": settings}}]
+            )
+            full = runs[0] if isinstance(runs, list) and runs else None
+            if isinstance(full, dict) and full.get("ok") and f"{full.get('value') or ''}".strip():
+                full_text = f"{full.get('value')}".strip()
+                text = f"{text}\n\n{full_text}"
+            else:
+                _degrade(
+                    "chart details full tables unavailable (tool=%s): %s", tool_name, (full or {}).get("error") if isinstance(full, dict) else "no bundle",
+                    note=f"[盘面细节] 点名的全表（{'、'.join(full_keys)}）本次未产出（上游表格代码不可用）；摘要照常。",
+                )
         enriched = dict(response_data)
         enriched["_chartDetails"] = text
         enriched["chart_details"] = {

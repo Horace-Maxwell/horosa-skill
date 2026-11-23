@@ -208,6 +208,8 @@ def _static_doc(tool_name: str) -> dict[str, str]:
             + " ".join(f"{value}={label}" for value, label in CHART_DETAIL_TABLES)
             + f"。不改正文（正文恒为 30 张表的结论摘要，按{place}、回归黄道算），只决定 data.chart_details.tables 带哪几张表的后端原值；"
             "data.chart_details.settings 回显后端实际用的五项口径。",
+            "detailFullTables": "[盘面细节] 另出全表（上游 v3.15.0）：点名的表（id / 中文名同 detailTable）照页面同列转成 Markdown 表，"
+            "以「■ 全表·表名」小标题接在摘要后、仍在 [盘面细节] 段内；缺省空 = 只出摘要。表格由上游细节页的同一份列定义生成。",
         }
     if tool_name in {"neroman", "bezzafigure", "jayprofection", "michon"}:
         # 推运图族四法：后端 directed_figures._natal_from_request 强制 zodiacal=0（双黄道用自带 J2000 26°37′18″ 岁差）。

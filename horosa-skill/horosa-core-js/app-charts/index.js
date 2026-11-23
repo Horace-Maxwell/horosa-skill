@@ -29,6 +29,7 @@ import { renderWuzhao } from './adapters/wuzhao.js';
 import { renderYizhangjing } from './adapters/yizhangjing.js';
 import { renderTongshefa } from './adapters/tongshefa.js';
 import { renderAcg } from './adapters/acg.js';
+export { runTexts, listTexts } from './adapters/texts.js';
 import { renderSanshi } from './adapters/sanshi.js';
 import { renderHeluo } from './adapters/heluo.js';
 import { renderTarot } from './adapters/tarot.js';

@@ -366,7 +366,7 @@ class _ChartDetailKnobs(BaseModel):
     说明进 western_options_doc → horosa_agent_guidance 的 options_keys。"""
 
     ADVERTISE_HIDDEN: ClassVar[frozenset[str]] = frozenset({
-        "detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", "detailTable",
+        "detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", "detailTable", "detailFullTables",
     })
     detailFaces: str | None = Field(
         default=None,
@@ -397,6 +397,12 @@ class _ChartDetailKnobs(BaseModel):
         "horosa_agent_guidance）。不改 [盘面细节] 正文（正文恒为 30 张表的结论摘要），只决定 data.chart_details.tables 带哪几张表的后端原值。",
     )
 
+    detailFullTables: list[str] | str | None = Field(
+        default=None,
+        description="[盘面细节] 另出全表（上游 v3.15.0 挂载齿轮「盘面细节·另出全表」）：点名的表照页面同列转成 Markdown 表，并在段内以「■ 全表·表名」"
+        "小标题接在摘要后（缺省空 = 只出摘要）。表 id / 中文名同 detailTable。",
+    )
+
     @field_validator("detailFaces", "detailVariant", "detailLunar", "detailMundo", "detailMidpoint", mode="before")
     @classmethod
     def _chart_detail_vocabulary(cls, value: Any, info: Any) -> Any:
@@ -405,12 +411,12 @@ class _ChartDetailKnobs(BaseModel):
 
         return parse_with(CHART_DETAIL_VOCABULARIES[info.field_name], info.field_name, value)
 
-    @field_validator("detailTable", mode="before")
+    @field_validator("detailTable", "detailFullTables", mode="before")
     @classmethod
-    def _chart_detail_tables(cls, value: Any) -> Any:
+    def _chart_detail_tables(cls, value: Any, info: Any) -> Any:
         from horosa_skill.input_fields import field_validator_for, is_blank
         from horosa_skill.western_vocab import parse_chart_detail_tables
 
         if value is None or is_blank(value) or value == []:
             return None
-        return field_validator_for(parse_chart_detail_tables, "detailTable")(value)
+        return field_validator_for(lambda v: parse_chart_detail_tables(v, info.field_name), info.field_name)(value)

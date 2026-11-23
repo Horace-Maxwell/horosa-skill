@@ -48,6 +48,28 @@ async function main() {
     }
     return;
   }
+  if (command === 'app-text') {
+    // 上游 app 原版代码出的正文（同一个 bundle，见 app-charts/adapters/texts.js）：
+    // stdin = { calls: [{ name, args }] } → { ok, texts: [...可用名], results: [{ ok, value } | { ok:false, error }] }
+    try {
+      const bundlePath = fileURLToPath(new URL('../dist/app-charts.cjs', import.meta.url));
+      if (!existsSync(bundlePath)) {
+        printJson({ ok: false, error: { code: 'app_charts.missing', message: 'dist/app-charts.cjs is not built' } });
+        process.exitCode = 1;
+        return;
+      }
+      const raw = await readStdin();
+      const parsed = raw.trim() ? JSON.parse(raw) : {};
+      const bundle = createRequire(import.meta.url)(bundlePath);
+      const body = `${JSON.stringify({ ok: true, texts: bundle.listTexts(), results: bundle.runTexts(parsed.calls || []) })}\n`;
+      await new Promise((resolve) => process.stdout.write(body, resolve));
+      process.exit(0);   // 同 render-charts：app 代码加载时留着轮询 setTimeout，写完即退
+    } catch (error) {
+      printJson({ ok: false, error: { code: 'cli.execution_failed', message: error instanceof Error ? error.message : String(error) } });
+      process.exitCode = 1;
+    }
+    return;
+  }
   if (command !== 'run' || !arg) {
     printJson({
       ok: false,

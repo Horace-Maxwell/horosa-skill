@@ -418,7 +418,7 @@ _CHART_DETAIL_MUNDO: tuple[tuple[str, str], ...] = (
 
 
 def _detail_vocab(name: str, rows: tuple[tuple[str, str], ...], extra: Mapping[str, tuple[str, ...]] | None = None) -> Vocabulary:
-    default = CHART_DETAIL_DEFAULTS[name]
+    default = CHART_DETAIL_DEFAULTS.get(name)   # detailFullTables 没有缺省档（缺省空 = 只出摘要）
     return Vocabulary(
         name, {value: (label, *(extra or {}).get(value, ())) for value, label in rows},
         labels={value: label + ("（缺省）" if value == default else "") for value, label in rows},
@@ -450,9 +450,10 @@ def chart_detail_request_fields(settings: Mapping[str, Any]) -> dict[str, str]:
     return out
 
 
-def parse_chart_detail_tables(value: Any) -> Parsed:
-    """detailTable：一张表的 id / 中文名，或一组（列表、逗号 / 顿号 / 空白分隔的串）→ 去重后的规范 id 列表（原序）。"""
-    vocab = CHART_DETAIL_VOCABULARIES["detailTable"]
+def parse_chart_detail_tables(value: Any, field: str = "detailTable") -> Parsed:
+    """detailTable / detailFullTables：一张表的 id / 中文名，或一组（列表、逗号 / 顿号 / 空白分隔的串）→ 去重后的规范 id 列表（原序）。
+    同一张 30 表词表；报错按所给字段名说。"""
+    vocab = CHART_DETAIL_VOCABULARIES["detailTable"] if field == "detailTable" else _detail_vocab(field, CHART_DETAIL_TABLES)
     items = [part for part in re.split(r"[,，、;；\s]+", value) if part] if isinstance(value, str) else list(value) if isinstance(value, (list, tuple)) else [value]
     if not items:
         raise vocab.issue(value)

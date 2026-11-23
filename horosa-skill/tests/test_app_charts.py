@@ -361,9 +361,11 @@ def test_bundle_stays_free_of_page_ui() -> None:
     桩掉后 1.5 MB、输出逐字节不变。新接一种盘时若又拖进页面 UI，这里先红。上限随正当的盘面代码（地占 / 灵棋 / 轨策…）
     放宽到 4 MB；河洛信息板的卦辞 / 爻辞库（heluoTiaowen.json，388 KB，esbuild 把 CJK 转义成 \\u 后约 0.7 MB）在画图路径上，
     塔罗牌阵（renderCenter 要牌组表、牌名与牌义：+0.43 MB，单牌详情抽屉已桩掉）也在，合起来放宽到 5.5 MB。
+    v3.15.0 加 app-text 通道（adapters/texts.js：盘面细节全表要细节页 tableOf、量化盘时间层 / 汉堡要素要 AstroMidpoint 与图形星历），
+    多出 18 个上游文件约 61 KB（AstroChartDetails / AstroMidpoint / UranianGraphicEphemeris / chartDetails 等，无地图与城市库），放宽到 5.6 MB。
     地图 / 城市库 / 塔罗详情抽屉的逐项检查不变。"""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert manifest["bundle_bytes"] < 5_500_000, manifest["bundle_bytes"]
+    assert manifest["bundle_bytes"] < 5_600_000, manifest["bundle_bytes"]
     assert not any(path.startswith(("components/amap/", "data/cit")) for path in manifest["app_files"])
     assert "components/tarot/CardDetailDrawer.js" not in manifest["app_files"], "the per-card drawer (≈140 KB of meanings) is page UI"
 

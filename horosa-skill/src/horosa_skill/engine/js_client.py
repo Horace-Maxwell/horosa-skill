@@ -209,6 +209,42 @@ class HorosaJsEngineClient:
             return None
         return [result if isinstance(result, dict) else {"ok": False, "error": "malformed"} for result in results]
 
+    def run_app_texts(self, calls: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Snapshot text built by the 星阙 app's own code (same bundle as the report figures, app-charts/adapters/texts.js).
+
+        `calls` = [{name, args}]; returns one {ok, value} / {ok: False, error} per call, or None when no engine root carries
+        the bundle / Node cannot run. Never raises — callers treat None like an upstream request that failed (段不出 + warnings).
+        """
+        if not calls:
+            return []
+        roots = [root for root in self._candidate_engine_roots() if (root / "dist" / "app-charts.cjs").is_file()]
+        if not roots:
+            return None
+        try:
+            node_bin = self._resolve_node_binary()
+            self._require_node_new_enough(node_bin)
+        except ToolTransportError:
+            return None
+        try:
+            completed = subprocess.run(
+                [str(node_bin), str(roots[0] / "bin" / "cli.mjs"), "app-text"],
+                input=json.dumps({"calls": calls}, ensure_ascii=False),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                cwd=str(roots[0]),
+                timeout=self.settings.js_engine_timeout_seconds,
+                creationflags=NO_WINDOW,
+            )
+            parsed = json.loads(completed.stdout or "{}")
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            return None
+        results = parsed.get("results") if isinstance(parsed, dict) and parsed.get("ok") else None
+        if not isinstance(results, list) or len(results) != len(calls):
+            return None
+        return [result if isinstance(result, dict) else {"ok": False, "error": "malformed"} for result in results]
+
     def node_choice(self) -> node_runtime.NodeChoice:
         """这次调用会用哪个 Node（含来源、版本、问题）。doctor 读的也是它。"""
         return node_runtime.resolve_node(self.settings, self._installed_manifest())
