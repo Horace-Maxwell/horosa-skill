@@ -38,7 +38,7 @@ def test_full_tables_follow_the_summary_inside_the_section(tmp_path, monkeypatch
     summary, _, full = body.partition("\n■ 全表·")
     assert summary == FX["texts"]["seattle-night"]
     assert full.startswith("定位星链\n| 星 | 星链 | 终止 |") and "\n■ 全表·专题主星\n| 专题 | 日 | 月 |" in full   # 照所给的先后
-    for endpoint in ("/astroextra/chartdetails", "/astroextra/analysis"):   # /chart 现照旧带着细节口径键（既有行为，后端忽略）
+    for endpoint in ("/", "/astroextra/chartdetails", "/astroextra/analysis"):   # "/" = chart 服务上的 /chart
         assert "detailFullTables" not in _calls(client, endpoint)[0], endpoint
     plain = _service(tmp_path / "p").run_tool("chart", BIRTH, save_result=False)
     assert "■ 全表·" not in plain.data["snapshot_text"]
@@ -58,3 +58,24 @@ def test_unknown_table_is_refused(tmp_path) -> None:
         _service(tmp_path).run_tool("chart", {**BIRTH, "detailFullTables": ["topics", "nope"]}, save_result=False)
     assert err.value.code == "tool.invalid_option" and "detailFullTables" in str(err.value) and "nope" in str(err.value)
     assert "detailFullTables" not in DETAIL_KEYS   # 旧常量只列五口径 + 当前表
+
+
+@pytest.mark.parametrize("tool", ["chart", "relocation", "acg"])
+def test_detail_knobs_never_reach_the_chart_or_derived_requests(tmp_path, monkeypatch, tool) -> None:
+    """[盘面细节] 的口径键只喂 /astroextra/chartdetails：上游从不把它们发给 /chart 或派生盘端点（后端忽略未知键，但请求形状分叉、
+    结果缓存按键碎片化）。此前通用请求路径把整份 input_normalized 发给 /chart。
+    负向对照：去掉 service/api/tools.py 里按 CHART_DETAIL_ONLY_KEYS 剔键那一行 → chart 档红（实跑）。"""
+    from horosa_skill.western_vocab import CHART_DETAIL_ONLY_KEYS
+
+    _freeze(monkeypatch, "+08:00")
+    client = CaptureClient()
+    knobs = {"detailFaces": "element", "detailTable": "stats", "detailFullTables": ["topics"], "detailLunar": "tithi"}
+    extra = {"relocLat": "40n43", "relocLon": "74w00"} if tool == "relocation" else {}
+    service = _service(tmp_path, client=client)
+    service.js_client.run_app_texts = lambda calls: None
+    result = service.run_tool(tool, {**BIRTH, **extra, **knobs}, save_result=False)
+    assert result.ok, result.error
+    leaked = {endpoint: sorted(set(body) & CHART_DETAIL_ONLY_KEYS) for endpoint, body in client.calls
+              if endpoint != "/astroextra/chartdetails" and set(body) & CHART_DETAIL_ONLY_KEYS}
+    assert leaked == {}, leaked
+    assert _calls(client, "/astroextra/chartdetails")[0]["detailFaces"] == "element"   # 口径照旧到达细节端点

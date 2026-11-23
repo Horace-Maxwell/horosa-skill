@@ -44,10 +44,10 @@ from horosa_skill.service.text.western import (
     _reloc_display_degree,
     _with_natal_planet_sign,
 )
-from horosa_skill.western_vocab import CHART_DETAIL_DEFAULTS
+from horosa_skill.western_vocab import CHART_DETAIL_ONLY_KEYS
 
 # [盘面细节] 的五项口径 + 「当前表」只进 /astroextra/chartdetails（enrich._attach_chart_details 另拼请求体），不进起盘请求。
-_CHART_DETAIL_ONLY_KEYS = frozenset({*CHART_DETAIL_DEFAULTS, "detailFullTables"})   # 盘面细节专用键，不进 /chart 与派生盘请求
+_CHART_DETAIL_ONLY_KEYS = CHART_DETAIL_ONLY_KEYS   # 盘面细节专用键，不进 /chart 与派生盘请求（western_vocab 单源）
 
 
 class WesternRunners:

@@ -49,20 +49,20 @@ def test_missing_sections_warning_shape() -> None:
 
 
 def test_enrichment_failure_reaches_envelope_warnings(tmp_path, monkeypatch) -> None:
+    # 富化段（这里是本命盘的 [埃及历]，enrich._build_egypt_section）的 JS 调用抛错 → 主盘照出，异常原文随「降级：」说明到达信封。
+    # （v0.53.0-dev 前用量化盘的 uranian_extra 附注段当样例；那段改由上游 buildHamburgLines 出、工具已删。）
     service = _service(tmp_path)
     original = service.js_client.run
 
     def failing(tool_name: str, payload: dict) -> dict:
-        # 夹具 JS 客户端对天王附注段本就不产 → 把那次失败换成可辨认的异常文本，证明它原样到达信封。
-        try:
-            return original(tool_name, payload)
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError("engine exploded") from exc
+        if tool_name == "egypt_section":
+            raise RuntimeError("engine exploded")
+        return original(tool_name, payload)
 
     monkeypatch.setattr(service.js_client, "run", failing)
-    envelope = service.run_tool("germany", build_sample_payloads()["germany"], save_result=False)
+    envelope = service.run_tool("chart", build_sample_payloads()["chart"], save_result=False)
     assert envelope.ok is True
-    hits = [w for w in envelope.warnings if "uranian extra sections failed" in w and "engine exploded" in w]
+    hits = [w for w in envelope.warnings if "egypt section build failed" in w and "engine exploded" in w]
     assert hits, envelope.warnings
     assert hits[0].startswith("降级：")
 

@@ -390,6 +390,9 @@ CHART_DETAIL_DEFAULTS: dict[str, str] = {
     "detailTable": "topics", "detailFaces": "chaldean", "detailVariant": "improved",
     "detailLunar": "traditional", "detailMundo": "proportional", "detailMidpoint": "ecliptic",
 }
+# [盘面细节] 专用键（五项口径 + 当前表 + v3.15.0 另出全表）：只喂 /astroextra/chartdetails 与段正文，上游从不把它们发给 /chart
+# 或派生盘端点（后端忽略未知键，但请求形状与上游分叉、后端结果缓存按键碎片化）。通用请求路径与重置盘 runner 都按它剔。
+CHART_DETAIL_ONLY_KEYS: frozenset[str] = frozenset({*CHART_DETAIL_DEFAULTS, "detailFullTables"})
 # 页面设置键 → 请求体键（上游 chartDetailRequestFields；缺省值不下发）。detailTable 不进请求体（后端一次算全 30 张）。
 CHART_DETAIL_REQUEST_KEYS: dict[str, str] = {
     "detailFaces": "detailFaces", "detailVariant": "variant", "detailLunar": "lunarMethod",

@@ -47,6 +47,7 @@ from horosa_skill.service._context import (
 )
 from horosa_skill.reports.technique_card import annotate_setting_sources
 from horosa_skill.zeri_conditions import NEGATE_RULE, echo_summary_line, zeri_tools
+from horosa_skill.western_vocab import CHART_DETAIL_ONLY_KEYS
 from horosa_skill.service.api.place import place_caveat_notes, place_resolution_note
 from horosa_skill.service.text.predictive import _PERIOD_PREDICTIVE_TOOLS
 from horosa_skill.service.endpoints import _SHENSHU_ENDPOINTS
@@ -784,6 +785,8 @@ class ToolsAPI:
             if tool_name == "jieqi_year":
                 # 宿盘段的两个前端设置不进后端请求（enrich._JIEQI_SNAPSHOT_ONLY_KEYS；快照 builder 从 input_normalized 读）。
                 remote_input = {k: v for k, v in remote_input.items() if k not in self._JIEQI_SNAPSHOT_ONLY_KEYS}
+            # [盘面细节] 专用键只喂 /astroextra/chartdetails（enrich._attach_chart_details 从 input_normalized 读），不进主请求。
+            remote_input = {k: v for k, v in remote_input.items() if k not in CHART_DETAIL_ONLY_KEYS}
             response_data = self._call_remote(definition.endpoint, remote_input)
             response_data = self._attach_predictive_chart_context(tool_name, call.input_normalized, response_data)
         input_normalized = call.input_normalized
