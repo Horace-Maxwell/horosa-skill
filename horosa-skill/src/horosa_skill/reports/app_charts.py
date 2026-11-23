@@ -109,8 +109,9 @@ def _jinkou_payload(source: dict[str, Any]) -> dict[str, Any] | None:
 _SANSHI_TOOLS = frozenset({"sanshiunited", "sanshizeri"})
 # 奇门 pan 全给（三式盘的神煞 / 虚实 / 四柱助手各读不同的键），只去掉原始回包与导出段这些大块
 _SANSHI_QIMEN_HEAVY = frozenset({"raw", "allRaw", "sections", "source", "backend"})
+# jianChu = 十二建星外环（上游 v3.15.0，showJianChu 开了才有；格内附加字 anGan / jiTianGan / jiDiGan / tianQin / tuiYanTags 随 cells 走）
 _QIMEN_PAN_KEYS = ("cells", "ganzhi", "options", "keGanZhi", "juText", "zhiFu", "zhiShi", "xunKong", "kongWang", "xunShou", "allKong",
-                   "shiftPalace", "fengJu", "isJinhan", "dateStr", "timeStr", "realSunTime")
+                   "shiftPalace", "fengJu", "isJinhan", "dateStr", "timeStr", "realSunTime", "jianChu")
 _KIN_ZIWEI_KEYS = ("cetian", "dateStr", "hourBranch", "latitude", "longitude", "lunar", "mingGong", "palaceCards", "pillars",
                    "shenGong", "showFlags", "timeStr", "timezone", "xianqin", "yiyu", "ziwei")
 

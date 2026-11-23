@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { DOMParser } from 'linkedom';
 import SanshiUnitedBoard from '@horosa-app/components/sanshi/SanshiUnitedBoard.js';
 import { cnxText as tx, cnxWidth } from './cnxkit.js';
+import { ovDomSvg, OV_ACCENT } from './qimenov.js';
 
 const B = 720;
 const TEXT = 'var(--horosa-text, #262626)';
@@ -82,7 +83,9 @@ function outerCell(out, cell, ox, oy) {
   for (const child of cell.children) {
     const c = cls(child);
     const s = styleOf(child);
-    if (c.includes('outerLabel')) {
+    if (c.includes('outerBranchGroup')) {
+      outerBranchGroup(out, child, s, cx, cy, cw, chh);
+    } else if (c.includes('outerLabel')) {
       const fs = parseFloat(s['font-size']) || 18;
       const lh = parseFloat(s['line-height']) || fs;
       const house = c.includes('outerHouse');
@@ -119,6 +122,34 @@ function outerCell(out, cell, ox, oy) {
       });
     }
   }
+}
+
+// 地支 + 建星一组（上游 v3.15.0 十二建星开着时，SanShiUnitedMain.less .outerBranchGroup：inline-flex、gap 2、整组按地支原锚点
+// 定位）：建星（QimenJianChuMark，.horosa-qimen-jx：强调色 700；日值那一支内边距 1px 2px + 1px 描边）与地支（.outerBranch 灰 500）按 DOM 次序横排
+function outerBranchGroup(out, group, s, cx, cy, cw, chh) {
+  const parts = [...group.children].map((el) => {
+    const st = styleOf(el);
+    const fs = parseFloat(st['font-size']) || 18;
+    const mark = cls(el).includes('horosa-qimen-jx');
+    const day = mark && cls(el).includes('is-day');
+    return { text: textOf(el), fs, mark, day, w: cnxWidth(textOf(el), fs) + (day ? 4 : 0) };
+  });
+  if (!parts.length) return;
+  const W = parts.reduce((a, it) => a + it.w, 0) + 2 * (parts.length - 1);
+  const lh = Math.max(...parts.map((it) => (it.mark ? it.fs : (parseFloat(styleOf(group.querySelector('.outerBranch'))['line-height']) || it.fs))));
+  const y = s.top != null ? cy + len(s.top, chh) + lh / 2 : cy + chh - len(s.bottom, chh) - lh / 2;
+  let x = s.left != null ? cx + len(s.left, cw) : cx + cw - len(s.right, cw) - W;
+  parts.forEach((it) => {
+    if (it.day) out.push(`<rect x="${x + 0.5}" y="${y - it.fs / 2 - 1 + 0.5}" width="${it.w - 1}" height="${it.fs + 2 - 1}" rx="3" fill="none" stroke="var(--horosa-accent)" stroke-width="1"/>`);
+    out.push(tx(x + it.w / 2, y, it.text, it.fs, it.mark ? OV_ACCENT : MUTED, it.mark ? 700 : 500));
+    x += it.w + 2;
+  });
+}
+
+// 格旁空格（上游 v3.15.0 renderQimenSide，.qmSide：奇门环上每宫顺时针一侧那一格）：这一宫的暗干与推演标记
+function qmSide(out, el, ox, oy) {
+  const s = styleOf(el);
+  out.push(ovDomSvg(el, ox + len(s.left, B), oy + len(s.top, B), styleOf));
 }
 
 function lrMark(out, el, ox, oy) {
@@ -161,6 +192,8 @@ function qmBlock(out, el, ox, oy) {
     const fs = parseFloat(styleOf(door)['font-size']) || 18;
     out.push(tx(x + size / 2, y + size / 2, textOf(door), fs, 'var(--horosa-surface-solid, #fff)', 700));
   }
+  // 格内附加字（寄干紧跟所寄的干、天禽在九星上方；上游 sanshiCellGeometry 算好的字框，格子坐标）
+  out.push(ovDomSvg(el, x, y, styleOf));
 }
 
 function centerBlock(out, el, ox, oy) {
@@ -295,6 +328,8 @@ export function renderSanshi(data) {
     chartWrap: { chart: ctx.chart }, dunjia: data.qimen, lrLayout: data.liureng.layout, keData: { raw: data.liureng.ke || [] },
     sanChuan: data.liureng.sanChuan, nongli: data.liureng.nongli, liureng: data.liureng, fields,
     displaySolarTime: data.displaySolarTime, boardSize: B,
+    // 十二建星（上游左栏开关 → props.showJianChu）：奇门盘带了外环 / 开关开着就照挂（建星由组件自己按同一盘的干支起）
+    showJianChu: !!(data.qimen.jianChu || (data.qimen.options && data.qimen.options.showJianChu)),
   })));
   const doc = new DOMParser().parseFromString(`<!doctype html><html><body>${html}</body></html>`, 'text/html');
   const out = [];
@@ -313,6 +348,7 @@ export function renderSanshi(data) {
       else if (c.includes('lrMark')) lrMark(board, el, 0, 0);
       else if (c.includes('qmBlock') && el.querySelector('.centerKe, .centerChuan')) centerBlock(board, el, 0, 0);
       else if (c.includes('qmBlock')) qmBlock(board, el, 0, 0);
+      else if (c.includes('qmSide')) qmSide(board, el, 0, 0);
     }
   }
   out.push(`<g transform="translate(0,${boardTop})">${board.join('')}<rect x="0.5" y="0.5" width="${B - 1}" height="${B - 1}" fill="none" stroke="${BORDER}" stroke-width="1"/></g>`);

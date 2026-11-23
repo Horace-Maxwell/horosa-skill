@@ -56,6 +56,22 @@ export function reseed(value = 1) {
 }
 
 let counter = 0;
+
+/**
+ * The page rule for `svg.horosa-plain-text-board` (layouts/app/22-tail-fixes.less): board text is never stroked
+ * (`stroke: none !important` beats the text's own stroke attribute — the old boards fake a regular weight with a hair-line
+ * weight 100 + same-colour stroke), weight 100 goes back to 400, and a root without its own stroke attribute stops passing one
+ * down. The page puts the class on the svg of the boards that opt in (SuZhanChart; JinKouChart from v3.15.0); a report figure
+ * of those boards gets the same look by applying the rule here, after the app's own draw().
+ */
+export function plainTextBoard(svg) {
+  svg.setAttribute('class', `${svg.getAttribute('class') || ''} horosa-plain-text-board`.trim());
+  for (const node of svg.querySelectorAll('text')) {
+    node.setAttribute('stroke', 'none');
+    if (node.getAttribute('font-weight') === '100') node.setAttribute('font-weight', '400');
+  }
+  if (!svg.hasAttribute('stroke')) svg.setAttribute('stroke', 'none');
+}
 /** A fresh <svg id> of the given size in the document; clientWidth/Height are what the app's charts size themselves from. */
 export function mountSvg(width, height) {
   counter += 1;

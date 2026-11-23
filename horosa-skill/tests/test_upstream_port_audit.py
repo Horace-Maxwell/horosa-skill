@@ -67,3 +67,12 @@ def test_files_the_skill_cites_by_name_are_hits_too(tmp_path: Path, monkeypatch:
         "file:astrostudyui/src/utils/preciseCalcBridge.js": {"upstream": "changed", "skill_files": ["src/enrich.py", "src/qimen.js"]},
         "file:astropy/astrostudy/helper.py": {"upstream": "changed", "skill_files": ["src/enrich.py"]},
     }
+
+
+def test_redrawn_report_boards_are_in_the_scan() -> None:
+    """报告盘图适配器（app-charts/adapters）在扫描范围里：HTML 类盘图是照上游组件「重画」的 SVG，不跑上游代码，bundle pin 守卫
+    管不到它的版式。v3.15.0 上游把奇门暗干挪到门上、主字换留白档、金口诀盘去掉文字描边，旧的扫描范围（只有 src/horosa_skill 与
+    core-js tools|shared）一条都没报，盘图一直画旧样子。负向对照：去掉这一项，下面断言红；台账里这批结论随之成为「多余」。"""
+    roots = {p.relative_to(aup.PKG_ROOT).as_posix() for p in aup.SCAN_ROOTS}
+    assert "horosa-core-js/app-charts/adapters" in roots
+    assert any(p.name == "qimen.js" for p in (aup.PKG_ROOT / "horosa-core-js" / "app-charts" / "adapters").iterdir())

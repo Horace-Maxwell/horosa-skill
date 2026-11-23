@@ -10,7 +10,7 @@
 // 格子留空，并回一条说明（报告印在图下）。不替 app 画那几张小表，也不造行年。
 import JinKouPanChart, { JK_DESIGN_MIN_H, JK_DESIGN_MIN_W } from '@horosa-app/components/jinkou/JinKouPanChart.js';
 import { JinKouElementColor } from '@horosa-app/components/jinkou/JinKouCalc.js';
-import { mountSvg, mountTooltip, unmount } from '../dom.js';
+import { mountSvg, mountTooltip, plainTextBoard, unmount } from '../dom.js';
 
 // result.jinkou 的每一行带着 JinKouCalc 算盘时落下的颜色（contentColor / ganColor / powerColor = 它当时的五行色板）。页面重开一个
 // 事盘时会用今天的色板重算；存档里的结果不会。v3.14.0 把五行色全站统一（土 #805526 → #7a4f2a、金 #866a00 → #ab5500），升级前存下的
@@ -58,6 +58,7 @@ export function renderJinkou(data, options = {}) {
     pan.jinkou = jinkou;
     pan.gender = ctx.gender;
     pan.draw();
+    plainTextBoard(svg); // JinKouChart 的 <svg className="horosa-plain-text-board">（上游 v3.15.0 起）
     const note = dropRunYearPlaceholder(svg);
     return { svg: svg.outerHTML, width, height, ...(note ? { note } : {}) };
   } finally {

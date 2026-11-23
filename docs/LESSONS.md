@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.0-dev (2026-11-23) | 给奇门报告盘图补画 v3.15.0 附加层时发现：skill 照上游 DunJiaBoard「重画」的盘图还把暗干画在旧位置（上游已挪到门上、主字换留白档）；三式合一的 HTML→SVG 转换器把新的附加层元素整层丢掉；金口诀 / 宿占盘的 plain-text-board 规则（字不描边、字重 100→400）从没套上。手抄审计只扫 src/horosa_skill 与 core-js tools|shared，报告盘图适配器不在扫描里，一条都没报 | 审计 SCAN_ROOTS 加 app-charts/adapters（20 条新命中逐条给结论）；重画 / 转换类盘图在同步时与上游组件逐条对版式；附加层与 plain-text-board 各有测试 + 负向对照 |
 | v0.53.0-dev (2026-11-23) | 接量化盘 v3.15.0 时间层时读上游 buildHamburgLines，发现 skill 的 [虚星参考] 一直无条件附加：当初移植只抄了块内条件（showTnp && school≠cosmo），漏了外层 showHamburg 门（缺省 classic 全关 → 整段不出）；导出目录也把它登成恒出段 | 汉堡要素整段改由上游原函数出（app-text 通道），[虚星参考] 进条件段；移植块级逻辑时连同外层门一起读，测试钉「缺省调用不出、且不起 node」 |
 | v0.53.0-dev (2026-11-23) | 核调波 / 龙盘 / 重置盘写中文时，拿 vendored 的上游 `derivedAstroLabs.js`（逐字）对拍 Python 移植，重置盘四角只出两行：它 `import * as AstroConst` 后用 `AstroConst.DESC / IC`，而 skill 的 AstroConst 是 curated 子集，没有这两个——命名空间成员缺了不报错、只是 undefined，loadcheck 照绿 | 子集按上游原序补 DESC / IC；loadcheck 新增「命名空间导入的每个 `NS.名字` 都要是目标模块的导出」（全树 96 处，负向对照：删 IC → 红）；Python 移植与 vendored 函数同输入逐行对拍 |
 | v0.53.0-dev (2026-11-23) | 同步星阙 v3.15.0 做到一半才发现报告盘图 bundle（dist/app-charts.cjs）还是 v3.14.0 打的：re-vendor Runbook 没有这一步，工单照 Runbook 列也就没有；`build.mjs --check` 只在发版 preflight 跑。同轮：真随机那次提交只跑了 pytest、没跑 `npm test`，两条旧 selfcheck（小成图无种子拒收、灵棋同刻幂等）红着进了提交 | Runbook 加 app-charts 重打包 + 塔罗牌面两步；守卫 `test_the_bundle_is_built_from_the_recorded_upstream_pin`（包 / 牌面的上游提交 == provenance pin，负向对照实跑）；改起卦行为的提交同时跑 pytest 与 npm test |
@@ -271,6 +272,25 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.0-dev / 2026-11-23 — 重画类报告盘图跟不上上游组件，审计扫描也不看它
+
+**症状**：用户定了「奇门图补画」（v3.15.0 的寄干 / 天禽 / 推演标记 / 十二建星外环）。动手时对照上游 DunJiaBoard，发现 skill 的奇门报告盘图
+不止缺这几层：暗干还画在天盘干右侧，上游 v3.15.0 已挪到「门的正上方」，盘上有附注时主字还要整盘往四角让（留白档 46 / 32）。
+三式合一盘是 SSR 跑上游组件再转 SVG，上游组件已经输出了附加层的 div，转换器不认识 `.horosa-qimen-ov` / `.qmSide` /
+`.horosa-qimen-jx`，整层丢掉。顺查又发现金口诀盘 v3.15.0 起挂了 `svg.horosa-plain-text-board`（字不描边、字重 100→400），
+宿占盘早就挂着，可报告盘图两张都还是旧的描边写法。
+
+**根因**：HTML 类盘图（奇门、南印、灵棋、塔罗、小六壬……）在报告里是照上游组件「重画」或「把 SSR 标记转成 SVG」，版式规则抄在适配器里。
+bundle pin 守卫只保证跑的是新上游代码，管不到抄出来的版式。手抄审计（audit_upstream_ports）本来就是看守「抄过来的上游逻辑」的，
+但 SCAN_ROOTS 只有 `src/horosa_skill` 与 core-js `tools|shared`，`app-charts/adapters` 不在里面，上游改了 DunJiaBoard / JinKouChart 也一条都不报。
+
+**守卫**：审计 SCAN_ROOTS 加 `horosa-core-js/app-charts/adapters`。新命中 20 条逐条给结论：多数只是清理 import 或换控件；
+奇门 / 金口诀为 ported；format.js 两条是文件名撞名。`tests/test_upstream_port_audit.py` 钉扫描范围（去掉即红）。
+奇门盘与三式合一盘的附加层共用 `adapters/qimenov.js`，落位与字号调 bundle 里的上游 `qimenCellLayout`，不手抄几何；
+金口诀 / 宿占套 `dom.plainTextBoard`。`tests/test_sync315_qimen_figure_overlays.py` 有 7 条测试，各带负向对照：
+旧暗干位置、不换留白档、不交建星、三式不画格旁空格 / 不传 showJianChu / 不画格内字、金口诀不套规则，都会红。
+同步上游时，凡适配器头注释写了「重画」或「SSR 转 SVG」的盘，都要拿上游组件的 diff 逐条对一遍版式。
 
 ### v0.53.0-dev / 2026-11-23 — 移植只抄了块内条件，漏了外层门（量化盘 [虚星参考]）
 

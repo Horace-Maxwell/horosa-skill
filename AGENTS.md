@@ -563,7 +563,7 @@ OpenCC 管不到、上游也没有的词组修正（复核 → 複核）在 `dat
 **手抄件不在清单里（v0.46.0 教训）**：vendor 清单只看守 `horosa-core-js/src/vendor` 的**文件**；skill 侧手抄的上游逻辑（Python
 移植、`tools/*.js` 胶水、写死的缺省 / 文案 / 常量表）是第二份真相。重钉上游前必须
 `HOROSA_SOURCE_ROOT=… uv run python scripts/audit_upstream_ports.py --scan --from <旧 pin> --to <新 pin>`：新旧上游之间代码变了、
-且被 skill 提到的每个上游名字都要在 `contracts/upstream_port_audit.json` 有结论（no_port / port_unchanged / ported / reviewed），
+且被 skill 提到的每个上游名字（扫 Python、core-js tools|shared，v0.53.0-dev 起含报告盘图 `app-charts/adapters`）都要在 `contracts/upstream_port_audit.json` 有结论（no_port / port_unchanged / ported / reviewed），
 台账审到的 pin == 记录的上游 pin（preflight 硬闸）。**v0.47.0 起也按文件**：手抄常只写「照 utils/preciseCalcBridge.js 的 …」而不点出
 改了的内部函数（v3.13.1 冬至日柱订正改在 `fillJieqiDayGanzhiFromLocal`，名字级扫描零信号），所以 `Horosa-Web/` 下（前端 / Python
 后端 / Java / flatlib）两 pin 间改过、且文件名被 skill 引用的每个文件也是一条 `file:<路径>` 命中，同样要结论。扫描 0 hit 时先跑上一区间做对照（v0.47.2-dev），证明扫描器真在工作。**公开克隆不能 `--depth`**（`bazi_pithy` 的 `generated_at` 取文件历史，生成脚本已拒绝浅克隆），且缺 dist-file / node_modules：本地上游 == 公开远端时同步与 `--scan` 用本地。手抄表配逐值源码锚（`tests/test_sync313_ports_guard.py`），日期运算移植配
@@ -1556,8 +1556,8 @@ A global stability pass hardened these; keep them true when you touch the releva
     `scripts/verify_app_charts_bundle.py`（preflight）逐字节核；②app 文件的裸 npm 引用只放行绘图栈，其余是桩——放新组件前先证
     放行版 / 桩版逐像素一致；③svglib 只认标准 14 字体：文字字族一律走 Courier 占位再换回嵌入 TTF，符号字体（ywastro / morinus，
     随包 `data/fonts/`，用户 2026-11-09 确认可分发）按文件注册；④adapter 只做无损的记法换算与「纸面无意义的交互件」剔除（如紫微中宫的
-    「命盘信息」按钮），不改 app 的画法、不算位置；上游 bug 照「只报」处理（紫微经度科学计数法）。新加一种盘：adapter + `RENDERERS` +
-    `app_charts.plan` 登记 + `tests/test_app_charts.py` 用真实引擎夹具断言 + 对照 app 截图。`HOROSA_APP_CHARTS=0` 只画自绘图。
+    「命盘信息」按钮），不改 app 的画法、不算位置；上游 bug 照「只报」处理（紫微经度科学计数法）。⑤**重画 / SSR 转 SVG 的盘跟不上上游组件不报错**（v0.53.0-dev
+    奇门暗干旧位、三式丢附加层、金口诀描边）：同步时逐条核组件 diff，手抄审计扫 app-charts/adapters。新加一种盘：adapter + `RENDERERS` + `app_charts.plan` 登记 + `tests/test_app_charts.py` 用真实引擎夹具断言 + 对照 app 截图。`HOROSA_APP_CHARTS=0` 只画自绘图。
     已接：西洋单轮（AstroChartCircle）、合盘双圈（drawDoubleChart，内圈甲方）、紫微（ZWChart）、七政四余（GLChart，fields 取 params）、
     太乙（TaiyiBoardSvg，React 17 `renderToStaticMarkup`）、大六壬（RengChart；runner 在结果里留 `board_context` = 起课盘的
     objects / isDiurnal + 实用贵人 / 性别，盘上缺 nongli 时照 app `lrChartFor` 用 gods 农历覆盖）、六爻（GZChart + app 的 analyzeLiuyao；变卦与本卦 + 动爻对得上 / 无动爻才换）、

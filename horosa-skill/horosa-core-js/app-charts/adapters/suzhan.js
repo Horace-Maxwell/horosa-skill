@@ -3,7 +3,7 @@
 // printed in the center) = this run's params, the same values the app's form would hold.
 import SZChart from '@horosa-app/components/suzhan/SZChart.js';
 import * as AstroConst from '@horosa-app/constants/AstroConst.js';
-import { mountSvg, mountTooltip, unmount } from '../dom.js';
+import { mountSvg, mountTooltip, plainTextBoard, unmount } from '../dom.js';
 
 export function renderSuzhan(data, options = {}) {
   const chart = data && data.chart;
@@ -29,6 +29,7 @@ export function renderSuzhan(data, options = {}) {
     sz.fields = fields;
     sz.chart = value;
     sz.draw();
+    plainTextBoard(svg); // SuZhanChart 的 <svg className="horosa-plain-text-board">
     return { svg: svg.outerHTML, width: size, height: size };
   } finally {
     unmount(svg, div);

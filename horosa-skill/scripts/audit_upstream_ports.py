@@ -43,8 +43,10 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 LEDGER = PKG_ROOT / "contracts" / "upstream_port_audit.json"
 PROVENANCE = PKG_ROOT / "contracts" / "upstream_provenance.json"
 UI_SRC = "Horosa-Web/astrostudyui/src"
+# app-charts/adapters（v0.53.0-dev 补进）：HTML 类盘图是照上游组件「重画」的 SVG（奇门 DunJiaBoard、南印、量化盘…），不跑上游代码，
+# bundle pin 守卫管不到它的版式——上游 v3.15.0 把奇门暗干挪到门上、主字换留白档，重画的盘图一直画在旧位置，没有任何守卫报。
 SCAN_ROOTS = (PKG_ROOT / "src" / "horosa_skill", PKG_ROOT / "horosa-core-js" / "src" / "tools",
-              PKG_ROOT / "horosa-core-js" / "src" / "shared")
+              PKG_ROOT / "horosa-core-js" / "src" / "shared", PKG_ROOT / "horosa-core-js" / "app-charts" / "adapters")
 # no_port = 只是引用 / 调 vendored 函数 / 撞名；port_unchanged = 有移植，逐值核过上游改动不影响它；ported = 这轮已改；
 # reviewed = 该技法域在这轮同步里做过逐函数新旧上游比对（未逐名细分结论时如实写这一档，不冒充前三档）。
 VERDICTS = ("no_port", "port_unchanged", "ported", "reviewed")
