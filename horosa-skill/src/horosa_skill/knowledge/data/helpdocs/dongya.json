@@ -9,10 +9,10 @@
   ],
   "help_tab": "dongya",
   "upstream_source_marker": "xingque_help_docs",
-  "upstream_app_version": "3.14.0",
-  "upstream_git_sha": "e55c3a669bd1"
+  "upstream_app_version": "3.15.0",
+  "upstream_git_sha": "5da8e5393983"
  },
- "generated_at": "2026-11-12T14:35:09-05:00",
+ "generated_at": "2026-11-23T03:49:21-05:00",
  "groups": [
   {
    "key": "dongya",

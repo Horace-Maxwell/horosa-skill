@@ -572,7 +572,8 @@ def test_the_direction_manual_is_one_chapter_per_technique() -> None:
     assert len(pack["categories"][0]["entries"]) == 33 and not pack.get("includes")
     assert {entry["source"]["file"] for entry in pack["categories"][0]["entries"]} == {
         "components/help/direction/chaptersDirectional.js", "components/help/direction/chaptersTimelord.js"}
-    assert pack["source"]["upstream_app_version"] == "3.14.0"
+    # 33 章的形状自 v3.14.0 起（之后的版本照此；不钉死版本号，重同步时不必改这里）
+    assert tuple(int(x) for x in pack["source"]["upstream_app_version"].split(".")) >= (3, 14, 0)
 
 
 # ---- 检索：新内容的用例与新别名 -----------------------------------------------------------------------------------------
