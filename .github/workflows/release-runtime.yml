@@ -170,7 +170,7 @@ jobs:
           gh release download "${{ needs.resolve.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" -D dist/runtime --clobber \
             -p "${{ needs.resolve.outputs.seed }}" -p "${{ needs.resolve.outputs.core_js }}" -p '*.mcpb' -p '*.whl' || true
           test -f "dist/runtime/${{ needs.resolve.outputs.seed }}"
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: windows-payload
           path: horosa-skill/dist/runtime
@@ -293,7 +293,7 @@ jobs:
       # v0.38.1 R5: the bytes the three lanes installed must be the bytes on the draft. Each lane records the sha256 of the
       # archive it installed (lane-report.json → installed_archive_sha256); the draft's assets expose GitHub's own
       # `digest` (sha256:…), with SHA256SUMS.txt as the fallback. Any mismatch or missing lane evidence blocks the flip.
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           pattern: runtime-matrix-*
           path: ${{ runner.temp }}/lanes
