@@ -123,7 +123,7 @@ PREDICTIVE_INPUT_CONTRACTS: dict[str, dict[str, Any]] = {
             "pdProjection/pdFrame": "弧算法（14 种：ptolemy 默认/placidus/regiomontanus/campanus/topocentric/zodiacal/ra_direct/in_zodiaco_lon/in_zodiaco_abs/horosa_legacy/placidus_under_pole/morinus/horizontal/koch，决定弧与应期日期）× 盘面宫制（12 种：alcabitius 默认/placidus/regiomontanus/campanus/topocentric/meridian/porphyry/equal/wholesign/morinus/koch/equal_hour_circle，只改宫头）。给了 pdProjection 时 [主限法设置] 不再写「推运方法」行。",
             "pdGeometry": "几何口径：improved（默认）/ classic；只在部分 方向×弧算法（×宫制×平行）组合有差别，[主限法设置] 的弧算法行带「（改进）/（经典）」。",
             "主限设置项（相位侧/取点/日期）": "pdAspectSide 0 两侧（默认）/1 只右旋/2 只左旋；pdTradConverse 1 传统逆向（默认）/0 新式；pdIgnoreSigLat、pdIgnorePromLat、pdLunarParallax、pdTruePosition、pdSolarArcRegressive 0/1（默认 0）；pdYearDays 0 实际天数（默认）/1 365·366 定长年；pdPromAspectLat 0 在黄道上（默认）/1 合冲带黄纬/2 余弦递减/3 线性递减/4 按宫位。值逐行写进 [主限法设置]。",
-            "pdaspects": "纳入表格的相位角度，例如 [0, 60, 90, 120, 180]。",
+            "pdaspects": "纳入表格的相位角度，九档 0/30/45/60/90/120/135/150/180 任选（去重升序；空 = 托勒密五相 [0, 60, 90, 120, 180]，同上游缺省）。",
             "pdDirect": "顺向开关（1 开/0 关，默认开）。",
             "pdConverse": "逆向开关（1 开/0 关，默认开；与顺向按年龄交错）。",
             "pdAntiscia": "映点/反映点作迫星（1 开/0 关，默认关）。",

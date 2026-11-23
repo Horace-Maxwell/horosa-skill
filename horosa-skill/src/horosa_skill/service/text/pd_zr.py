@@ -385,6 +385,32 @@ def _pd_star_point_text(value: Any, name_of: Any) -> str | None:
     return f"{name}的{deg}度相位处" if point["deg"] else name
 
 
+# 主限法相位集（星阙 v3.15.0 挂载齿轮 `pdaspects`）：上游 techniqueMountSettings PD_ASPECT_CHOICES 九档；缺省 / 空 = 托勒密五相
+# （aiAnalysisContext/catalog.js DEFAULT_PD_ASPECTS）。上游 recordPdAspects 去重升序、数字串照收、坏值静默滤掉——skill 照收照排，
+# 坏值报错（同本闸其余键：认不出就说，不让「传了 7° 实算五相」无声发生）。测试读上游源对拍两张表。
+_PD_ASPECT_CHOICES: tuple[int, ...] = (0, 30, 45, 60, 90, 120, 135, 150, 180)
+_PD_DEFAULT_ASPECTS: tuple[int, ...] = (0, 60, 90, 120, 180)
+
+
+def _pd_normalize_aspects(payload: dict[str, Any], tool: str) -> None:
+    raw = payload.get("pdaspects")
+    if raw is None:
+        return
+    if not isinstance(raw, (list, tuple)):
+        _require_option(raw, (), field="pdaspects", tool=tool)  # 必然报错：要的是角度列表（单个 60 也不收）
+    picked: set[int] = set()
+    for item in raw:
+        value: Any = item
+        if isinstance(item, str) and item.strip().lstrip("-").isdigit():
+            value = int(item.strip())
+        elif isinstance(item, float) and item.is_integer():
+            value = int(item)
+        if isinstance(value, bool) or not isinstance(value, int) or value not in _PD_ASPECT_CHOICES:
+            _require_option(item, _PD_ASPECT_CHOICES, field="pdaspects", tool=tool)
+        picked.add(value)
+    payload["pdaspects"] = sorted(picked) or list(_PD_DEFAULT_ASPECTS)
+
+
 def _pd_validate_options(payload: dict[str, Any], tool: str) -> None:
     """pd / pdchart 的主限键值域闸（F20 同律：认不出就报错，不让「传了 X 实算另一档」无声发生）。
 
@@ -396,6 +422,7 @@ def _pd_validate_options(payload: dict[str, Any], tool: str) -> None:
     - 设置项登记表十键：认不出的值上游 normalizePdExtraValue 回缺省，而后端各有各的宽松解析（pdGeometry 大小写不敏感、
       pdAspectSide 取 int()），两边回落可能不同 → 自陈行与实算分叉。只收上游能命中的值。
     """
+    _pd_normalize_aspects(payload, tool)
     if payload.get("pdMethod") is not None:
         _require_option(payload["pdMethod"], tuple(_PD_METHOD_LABELS), field="pdMethod", tool=tool)
     if payload.get("pdTimeKey") is not None:
