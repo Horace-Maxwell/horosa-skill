@@ -7,6 +7,7 @@ Python 在 Windows 上的默认文本编码不是 UTF-8。AST 扫描 src/，基�
 from __future__ import annotations
 
 import ast
+import re
 
 import pytest
 from pathlib import Path
@@ -129,6 +130,25 @@ def test_esm_spawns_in_tests_all_go_through_the_node_esm_helper() -> None:
         if "--input-type=module" in line
     ]
     assert offenders == [], f"use node_esm.run_node_esm(...) instead of spawning node ESM by hand: {offenders}"
+
+
+# v0.53.2-dev 同一个坑的另一种形状：测试把模块路径拼进现写的 .mjs（`from '{路径}'` / `import('{路径}')`），绕开 node_esm，
+# 裸盘符路径进了 import 说明符。[upstream-checkout] 用例只在有上游 checkout 时跑，Windows 上从没跑过，五条一直是坏的。
+_IMPORT_SPECIFIER_FSTRING = re.compile(r"""(?:\bfrom\s+|\bimport\s*\(\s*)['"]\{([^{}]+)\}['"]""")
+_URL_HELPERS = ("module_url(", "_vurl(")
+
+
+def test_generated_esm_import_specifiers_in_tests_are_file_urls() -> None:
+    offenders = [
+        f"{path.name}:{lineno}: {match.group(1).strip()}"
+        for path in sorted(TESTS_DIR.glob("*.py"))
+        if path.name != Path(__file__).name
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        for match in _IMPORT_SPECIFIER_FSTRING.finditer(line)
+        # `spec` = 上游原文里的相对说明符（被替换的那一半），不是本机路径
+        if not match.group(1).strip().startswith(_URL_HELPERS) and match.group(1).strip() != "spec"
+    ]
+    assert offenders == [], f"interpolate module paths into ESM sources via node_esm.module_url(...): {offenders}"
 
 
 def test_node_esm_helper_turns_module_paths_into_file_urls_and_rejects_bare_strings(tmp_path: Path) -> None:

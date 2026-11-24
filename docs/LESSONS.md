@@ -16,7 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
-| v0.53.2-dev (2026-11-24) | Windows 复验 v0.53.1 候选：本机门禁镜像 `run_ci_gates.py` 26 步红 1（export-contract mirror 要 aiExport.js），182 条 [upstream-checkout] 测试静默跳过——v0.51.0 起 CI 先浅取钉住的公开上游、设 HOROSA_SOURCE_ROOT，镜像没跟上；mac 维护机有 vendored 树看不见 | `ensure_upstream` 照 ci.yml 取同一份到 `.upstream/horosa-public`（复用、离线 `--no-upstream`）；守卫 test_guard_wiring 两条负向对照各红 |
+| v0.53.2-dev (2026-11-24) | Windows 复验 v0.53.1 候选：本机门禁镜像 `run_ci_gates.py` 26 步红 1（export-contract mirror 要 aiExport.js），182 条 [upstream-checkout] 测试静默跳过——v0.51.0 起 CI 先浅取钉住的公开上游、设 HOROSA_SOURCE_ROOT，镜像没跟上；mac 维护机有 vendored 树看不见 | `ensure_upstream` 照 ci.yml 取同一份到 `.upstream/horosa-public`（LF、复用、离线 `--no-upstream`）。接上上游后又露出两处 Windows 专属坏：revendor relocate 写反斜杠说明符（112 条假漂移）、五条上游对照用例把裸盘符路径拼进 .mjs import；各修各守 |
 | v0.53.1 (2026-11-24) | v0.53.0 发布后实测：六爻代摇（蓍草 / 掷钱）的正文是一卦、data.lines 与重开配方是另一卦——补卦辞的第二遍 JS 仍带 castMethod、不带 lines，又摇了一次；只在后端回卦辞时出现，原测试只比结构化卦码，因错误的原因通过 | 第二遍钉第一遍的六爻；测试改比快照正文的六爻与重开后的整份快照（负向对照：旧 runner 两例全红） |
 | v0.53.0-dev (2026-11-23) | 发版前 live 复验红两处：星历「留」的时刻与 v3.11 金标差几十秒（上游 v3.15.0 改了留的算法，同步时没看后端这份 diff）；塔罗 surface_audit 报缺 [对读]（导出目录当恒出段，其实是条件段，确定性种子掩盖了，真随机后才露） | 夹具按 v3.15.0 实抓、撤掉 v0.40.0 的方向纠正（上游已修、自我退役守卫按设计翻转）；[对读] 进条件段 + 确定性种子各钉一例；「实测恒出」的段在起卦改随机时逐一重审 |
 | v0.53.0-dev (2026-11-23) | 给奇门报告盘图补画 v3.15.0 附加层时发现：skill 照上游 DunJiaBoard「重画」的盘图还把暗干画在旧位置（上游已挪到门上、主字换留白档）；三式合一的 HTML→SVG 转换器把新的附加层元素整层丢掉；金口诀 / 宿占盘的 plain-text-board 规则（字不描边、字重 100→400）从没套上。手抄审计只扫 src/horosa_skill 与 core-js tools|shared，报告盘图适配器不在扫描里，一条都没报 | 审计 SCAN_ROOTS 加 app-charts/adapters（20 条新命中逐条给结论）；重画 / 转换类盘图在同步时与上游组件逐条对版式；附加层与 plain-text-board 各有测试 + 负向对照 |
@@ -289,7 +289,18 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 - **核对**：手工设 `HOROSA_SOURCE_ROOT` 指向 5da8e539 的浅克隆后，mirror 一步 ok（v68 == v68）。守卫
   `test_run_ci_gates_checks_out_the_same_pinned_upstream_as_ci`：CI 与镜像读同一份钉子、放同一处；照用 / 复用 / 离线三种情形；main 必须接进环境。
   负向对照：main 不调 `ensure_upstream` → 红；去掉「只认自己的 .git」→ 红（`git -C` 会往上找到本仓的 HEAD）。
+- **接上上游以后露出来的（同一次复验）**：
+  - 带上游重跑：`8147 passed / 7 failed`，另 `verify_upstream_sync` 报 112 条 core-js 漂移。先怀疑换行——Git for Windows 系统级
+    `core.autocrlf=true` 把上游检出成 CRLF（CI 是 LF）。改 LF 检出后仍红，所以 CRLF 不是根因，但镜像照样钉 `core.autocrlf=false`，字节与 CI 同一份。
+  - 真根因一：`revendor_core_js._relocate_imports` 用 `os.path.relpath` 算重指的说明符，Windows 给 `..` + 反斜杠路径，渲染结果与仓里的
+    `/` 版逐字不等 → 112 条假漂移；在 Windows 上真去 re-vendor 会写出坏 import。改 `Path(...).as_posix()`；守卫
+    `test_relocated_import_specifiers_use_forward_slashes`（负向对照：换回 relpath → 红）。
+  - 真根因二：`test_sync313_bc_more.py` 把上游 / vendored 模块路径直接拼进现写的 .mjs（`from '{路径}'`），绕开了 `node_esm`；Windows 上
+    node 拒绝裸盘符说明符。v0.40.0 的守卫只查 `--input-type=module` 字面量，看不到这种形状。改 `module_url(...)`；新守卫
+    `test_generated_esm_import_specifiers_in_tests_are_file_urls`（负向对照：还原一处 → 红）。
+  - 修后：三个文件 58 passed，`verify_upstream_sync` ok（455 个 core-js 文件一致）。
 - **规则**：CI 每加一步 runner 胶水（取上游、设环境变量），同一提交里问一句本机镜像要不要跟；只在维护机上「恰好有」的东西不算镜像。
+  只在某种条件下才跑的用例（要上游、要 runtime、要某个平台），第一次满足条件的那台机器上要整套跑一遍再信。
 
 ### v0.53.1 / 2026-11-24 — 六爻代摇摇了两次：正文一卦、重开配方另一卦
 

@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from node_esm import module_url
 from skips import upstream_source  # 上游拆文件后读「门面 + 子模块」全集（v3.15.0）
 import json
 import os
@@ -53,7 +54,7 @@ def _upstream_module(tmp_path: Path, rel: str, rewrites: dict[str, str], name: s
     text = upstream_source(UPSTREAM_UI / rel)
     for spec, target in rewrites.items():
         assert f"from '{spec}'" in text, spec
-        text = text.replace(f"from '{spec}'", f"from '{target}'")
+        text = text.replace(f"from '{spec}'", f"from '{module_url(target)}'")
     out = tmp_path / name
     out.write_text(text, encoding="utf-8")
     return out
@@ -75,7 +76,7 @@ def _upstream_datetime(tmp_path: Path, moments: list[str]) -> list[dict[str, Any
     }, "DateTime.mjs")
     runner = tmp_path / "dt_run.mjs"
     runner.write_text(
-        f"import DateTime from '{mod}';\n"
+        f"import DateTime from '{module_url(mod)}';\n"
         "const out = JSON.parse(process.argv[2]).map((s) => { const d = new DateTime(); d.parse(s, 'YYYY-MM-DD HH:mm:ss');"
         " return { yyyy: d.format('YYYY'), ymd: d.format('YYYY-MM-DD'), slash: d.format('YYYY/MM/DD'), time: d.format('HH:mm:ss'), ad: d.ad }; });\n"
         "process.stdout.write(JSON.stringify(out));\n"
@@ -334,7 +335,7 @@ def test_iana_zone_offset_matches_upstream_offset_for_zone_at_date(tmp_path: Pat
     }, "timezone.mjs")
     runner = tmp_path / "tz_run.mjs"
     runner.write_text(
-        f"import {{ offsetForZoneAtDate, unifyCnZone }} from '{mod}';\n"
+        f"import {{ offsetForZoneAtDate, unifyCnZone }} from '{module_url(mod)}';\n"
         "process.stdout.write(JSON.stringify(JSON.parse(process.argv[2]).map(([z, d]) => offsetForZoneAtDate(unifyCnZone(z, d).zone, d))));\n"
     )
     expected = _run_mjs(runner, json.dumps(_ZONE_CASES))

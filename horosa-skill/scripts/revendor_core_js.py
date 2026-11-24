@@ -498,7 +498,8 @@ def _relocate_imports(text: str, target: Path) -> tuple[str, list[str]]:
             return match.group(0)
         candidates = index.get(Path(rel).name, [])
         if len(candidates) == 1:
-            new_rel = os.path.relpath(candidates[0], target.parent)
+            # ES import 说明符只认 `/`：Windows 上 relpath 给 `..\utils\x.js`，写进 JS 即坏（v0.53.2-dev）
+            new_rel = Path(os.path.relpath(candidates[0], target.parent)).as_posix()
             if not new_rel.startswith("."):
                 new_rel = f"./{new_rel}"
             notes.append(f"relocated {rel} → {new_rel}")

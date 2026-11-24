@@ -114,6 +114,8 @@ def ensure_upstream(env: dict[str, str], *, runner=subprocess.run) -> str | None
         UPSTREAM_DIR.mkdir(parents=True, exist_ok=True)
         for command in (
             ["git", "init", "-q"],
+            # Git for Windows 的系统级缺省 core.autocrlf=true 会把上游检出成 CRLF；CI（Linux）拿到的是 LF，逐字节对照要同一份
+            ["git", "config", "core.autocrlf", "false"],
             ["git", "-c", "core.longpaths=true", "fetch", "-q", "--depth", "1", f"https://github.com/{repo}.git", sha],
             ["git", "-c", "core.longpaths=true", "checkout", "-q", "--force", "--detach", "FETCH_HEAD"],
         ):

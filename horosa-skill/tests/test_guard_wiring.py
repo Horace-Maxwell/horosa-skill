@@ -259,6 +259,7 @@ def test_run_ci_gates_checks_out_the_same_pinned_upstream_as_ci(tmp_path: Path, 
     monkeypatch.setattr(module, "UPSTREAM_DIR", tmp_path / "up")
     assert module.ensure_upstream({}, runner=online) == str(tmp_path / "up")
     assert any(f"https://github.com/{repo}.git" in c and sha in c for c in calls), calls
+    assert ["git", "config", "core.autocrlf", "false"] in calls, "Windows 的系统缺省 autocrlf=true 会检出 CRLF，与 CI 的字节不同"
     calls.clear()
     assert module.ensure_upstream({}, runner=online) == str(tmp_path / "up") and not any("fetch" in c for c in calls), "钉子没变就复用"
     monkeypatch.setattr(module, "UPSTREAM_DIR", tmp_path / "offline")

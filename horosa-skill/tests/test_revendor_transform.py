@@ -228,3 +228,12 @@ def test_reexport_lists_count_as_exports_for_curated_checks() -> None:
     # Negative control: the declaration-only rule (pre-v0.53.0) saw only LOCAL.
     import re
     assert {m.group(1) for m in re.finditer(r"^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)", facade, re.M)} == {"LOCAL"}
+
+
+def test_relocated_import_specifiers_use_forward_slashes() -> None:
+    """v0.53.2-dev Windows 复验：`os.path.relpath` 在 Windows 给反斜杠路径（`..` + 反斜杠 + `utils`…），写进 JS 的 import 即坏，
+    `verify_upstream_sync` 在 Windows 上报 112 条 core-js 漂移。ES 说明符只认 `/`，与平台无关。"""
+    target = rv.VENDOR_ROOT / "bazi" / "dateStrSafe.js"
+    out, notes = rv._relocate_imports("import { civilWallMs } from './civilCalendar.js';\n", target)
+    assert out == "import { civilWallMs } from '../utils/civilCalendar.js';\n", (out, notes)
+    assert notes == ["relocated ./civilCalendar.js → ../utils/civilCalendar.js"]
