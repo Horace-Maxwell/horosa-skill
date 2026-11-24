@@ -1051,6 +1051,7 @@ vendored JS 差分测试。**后端把算法挪到前端**（v3.13.0 删 `yearsy
 - **live 验本仓 JS 改动要钉 `HOROSA_CORE_JS_ROOT`（v0.47.0）**：探针里直接 `Settings(...)` 不带 env 时，js_client 优先用已安装的
   `~/.horosa/runtime/current/horosa-core-js`，比的是旧 JS。
 - **tests/ 里起 node 的子进程必须 `encoding="utf-8"`（v0.40.0 首推 windows-smoke 红）**：`text=True` 在 Windows 按控制台代码页解，CJK 金标 JSON 直接 UnicodeDecodeError；`tests/test_subprocess_encoding.py` 的 node 扫描守着（负向对照），本机 macOS 复现不了，只有 Windows job 抓得到。起 node ESM 一律经 `tests/node_esm.py`（模块路径传 Path → `file://` URL；Windows 不认裸盘符路径 `ERR_UNSUPPORTED_ESM_URL_SCHEME`），别处不许再写 `--input-type=module`。
+  往现写的 .mjs 里拼 import 说明符一律 `node_esm.module_url(...)`（v0.53.2-dev：五条 [upstream-checkout] 用例拼了裸盘符路径——只在有上游时跑，Windows 上从没跑过；守卫同文件）。
 - **工作流 / 文档里的计数必须有真值文件（v0.40.0 首推 CI 红）**：ci.yml 的 stdio 探针工具数从 `contracts/mcp_list_budget.json` 读（`full_tools` / `compact_tools`），README 客户端表的「全量 N」由 `verify_docs_sync.check_full_surface_counts` 对同一契约锁；`run_ci_gates.py` 不跑「wheel 真起 stdio」两步，推之前核它们的断言值。
 **验证流程**：
 
@@ -1594,8 +1595,7 @@ A global stability pass hardened these; keep them true when you touch the releva
     换下自绘的六壬天地盘时标题随之改为「三式合一盘」——app 请求可带 `title`）。adapter 要读自己样式表的文字用 `@horosa-app/x.less?text`。
     ⑱app 图高 ≤ 600 pt（按宽高比收窄，标题与图同页）；格子盘 / 九宫图注一律走 `figure_notes`（含 legend）。
     ⑲塔罗牌阵（v0.49.0-dev，TarotMain.renderCenter）：core-js 交产出正文的同一个 reading（`board_context`，牌只记 id + sid，app 侧按牌组表取回、sid 不符就不画）；牌面图 = 上游 public/tarot-art 144 张**逐字节**随包（`data/tarot-art/` + manifest，`scripts/sync_tarot_art.py`，preflight 里与 pin 比对；扫描件来源 / 授权上游未记录，只认维护者 2026-11-09 准许分发，见第三方事实 `tarot-art.provenance`，别写成「公有领域」），app 侧只引用 `options.art` 里确有的图、其余画 app 的符号牌面；`embed_images` 只读 `tarot-art/` 白名单。app 的发牌动画（fill both）盖掉了内联 translate/rotate（上游 bug，只报），图照内联几何画（= 减少动态效果下的 app）。印不出的装饰符号走 `horosa-optional-glyph`，去掉不印方块；DOCX 有照片的图出 JPEG。
-    测试里跑 node ESM 一律走 `tests/node_esm.run_node_esm`（Windows 路径；守卫 test_subprocess_encoding）；往现写的 .mjs 里拼 import 说明符
-    也一律 `node_esm.module_url(...)`（v0.53.2-dev：五条 [upstream-checkout] 用例拼了裸盘符路径，只在有上游时跑、Windows 上从没跑过）。
+    测试里跑 node ESM 一律走 `tests/node_esm.run_node_esm`（Windows 路径；守卫 test_subprocess_encoding）。
     ⑲app 在结果之外另取的盘（推运图族 / 推运 / 恒星推运双盘、天星择日与产前朔望的时刻盘、七政四余与七政择日的 Moira 圆盘——七政页缺省盘式，方盘只作退路）**出报告时**经真引擎补算（v0.49.0-dev，`reports/aux_charts.py` + `ReportsAPI._report_figures`）：存档入参 + 结果里实际用过的时刻、runner 同一份请求体、`save_result=False`、先 probe 不起 runtime；工具调用仍 `withChart: 0`；「缺省今天」一律钉回原结果（Moira 流年钉 `generated_at`），重起须与存档一致；失败留原图 + `figure_gaps` 说明。app 文件的 `react-dom` 只放行 server（客户端渲染器的 scheduler 让进程永不退出）。⑦桩模块按（包, 导入方）生成、逐个导出具名导入，别回到单个 CJS Proxy；
     ⑧位图用 RGB 底 + RGBA 画笔（半透明要混合）；`<title>` / `<desc>` 规整时剔除；正文字体缺字形的符号走报告补字字体链。⑤颜色一律按 app **亮色主题令牌**解析（构建时从 `layouts/app/*.less`
     抽，`app-charts/theme.mjs`）——`var()` 的回退值有的是暗色（六壬底色 #090b0e），不能拿来当亮色；⑥读 app 代码、写 adapter 一律对照
