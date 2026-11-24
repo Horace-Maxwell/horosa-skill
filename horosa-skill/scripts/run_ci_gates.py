@@ -7,10 +7,15 @@ Parses `.github/workflows/ci.yml`, takes every `run:` step of the `test` job tha
 horosa-skill/ in CI shape (HOROSA_RUNTIME_ROOT → empty temp dir, both *_SERVER_ROOT unreachable).
 Exit 0 only when every step passes. Runner-only steps (`HOME=$(mktemp -d) uvx …`, the wheel-build block) never start
 with `uv run`, so `ci_test_steps` leaves them out by shape — no name list to keep in sync.
+
+The test job also checks out the pinned public upstream and points HOROSA_SOURCE_ROOT at it; `ensure_upstream` does the
+same here (shallow fetch into `.upstream/horosa-public`, reused while the pin is unchanged). `--no-upstream` skips that
+(offline): the export-contract mirror then fails and the [upstream-checkout] tests skip, as they would without it.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -28,6 +33,9 @@ from pathlib import Path
 PKG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PKG_ROOT.parent
 CI = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+PROVENANCE = PKG_ROOT / "contracts" / "upstream_provenance.json"
+# ci.yml 的 test job 把钉住的公开上游取到这里（.gitignore 已忽略 .upstream/）
+UPSTREAM_DIR = REPO_ROOT / ".upstream" / "horosa-public"
 
 
 def ci_test_steps(text: str) -> list[tuple[str, str]]:
@@ -82,8 +90,46 @@ def local_command(command: str, *, windows: bool | None = None) -> str:
     return command
 
 
+def ensure_upstream(env: dict[str, str], *, runner=subprocess.run) -> str | None:
+    """镜像 ci.yml test job 的「读钉住的公开上游 → 浅取 → 设 HOROSA_SOURCE_ROOT」三步，返回要设的路径。
+
+    v0.51.0 起 export-contract mirror 进了 CI，CI 读的是这份上游；本机没有 vendored 树也没设 HOROSA_SOURCE_ROOT 时，
+    镜像那一步恒红、182 条 [upstream-checkout] 对照测试静默跳过（v0.53.1 Windows 复验）。调用方已设 HOROSA_SOURCE_ROOT
+    就照用；`.upstream/horosa-public` 已在钉住的提交上就复用；取不到（离线）返回 None，那几步照旧按缺上游处理。
+    """
+    if env.get("HOROSA_SOURCE_ROOT"):
+        return env["HOROSA_SOURCE_ROOT"]
+    state = json.loads(PROVENANCE.read_text(encoding="utf-8"))
+    repo, sha = state["upstream_repository"], state["upstream_git_sha"]
+
+    def head() -> str:
+        # 只认 UPSTREAM_DIR 自己的 .git：目录还不是仓库时 `git -C` 会往上找到本仓
+        if not (UPSTREAM_DIR / ".git").exists():
+            return ""
+        result = runner(["git", "-C", str(UPSTREAM_DIR), "rev-parse", "HEAD"], capture_output=True, text=True)
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    if head() != sha:
+        print(f"ci-gates: 浅取钉住的公开上游 {repo}@{sha[:12]} → {UPSTREAM_DIR}（与 ci.yml 同一份）", flush=True)
+        UPSTREAM_DIR.mkdir(parents=True, exist_ok=True)
+        for command in (
+            ["git", "init", "-q"],
+            ["git", "-c", "core.longpaths=true", "fetch", "-q", "--depth", "1", f"https://github.com/{repo}.git", sha],
+            ["git", "-c", "core.longpaths=true", "checkout", "-q", "--force", "--detach", "FETCH_HEAD"],
+        ):
+            if runner(command, cwd=UPSTREAM_DIR).returncode != 0:
+                break
+    if head() != sha:
+        print(f"ci-gates: ⚠ 取不到钉住的上游（{repo}@{sha[:12]}）：export-contract mirror 会红、[upstream-checkout] 测试会跳过。"
+              "离线就设 HOROSA_SOURCE_ROOT 指向一份该提交的 checkout。", flush=True)
+        return None
+    return str(UPSTREAM_DIR)
+
+
 def main(argv: list[str] | None = None) -> int:
-    only = set(argv or [])
+    args = list(argv or [])
+    no_upstream = "--no-upstream" in args
+    only = {arg for arg in args if arg != "--no-upstream"}
     steps = ci_test_steps(CI.read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory(prefix="horosa-ci-shape-") as empty_root:
         env = {
@@ -92,6 +138,9 @@ def main(argv: list[str] | None = None) -> int:
             "HOROSA_SERVER_ROOT": "http://127.0.0.1:9",
             "HOROSA_CHART_SERVER_ROOT": "http://127.0.0.1:9",
         }
+        source_root = None if no_upstream else ensure_upstream(env)
+        if source_root:
+            env["HOROSA_SOURCE_ROOT"] = source_root
         failed: list[str] = []
         for name, command in steps:
             if only and not any(token in command or token in name for token in only):

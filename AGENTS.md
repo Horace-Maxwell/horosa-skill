@@ -1801,6 +1801,8 @@ A global stability pass hardened these; keep them true when you touch the releva
 - **本机门禁镜像也跑多行步骤：`run_ci_gates.ci_test_steps` 收「每一行都是 `uv run …`」的 `run: |` 块（v0.41.1）。** 旧解析器跳过所有多行块，
   两行的 `verify_runtime_scripts.py`（+ `--self-test`）从没在本机跑过，文档却写「每个 verify_* 都跑」；测试只核单行步骤，所以同样看不见。
   现在 `tests/test_guard_wiring.py` 要求 ci.yml test 作业里点名的**每一个** `verify_*.py` 都进镜像（镜像 26 步，v0.51.1-dev 加 export-contract mirror）。
+  CI 先取钉住的公开上游设 `HOROSA_SOURCE_ROOT`，镜像同样做（`ensure_upstream` → `.upstream/horosa-public`，钉子不变就复用；离线 `--no-upstream`），
+  否则没有 vendored 树的机器镜像恒红一步、[upstream-checkout] 测试静默跳过（v0.53.2-dev Windows 复验）。
 - **monkeypatch 目标必须被它所在的模块用到（`tests/test_monkeypatch_targets.py` 的 `useless_patch_reason`）。** 函数挪走、旧模块只留 re-export 时，
   `monkeypatch.setattr("horosa_skill.A.f", …)` 照样成功却不起作用，测试「因为错误的原因通过」。拆大模块时：被 patch 的名字跟着代码走，
   或让调用方经模块查名（`module.f()`），别靠 re-export 兜。

@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.2-dev (2026-11-24) | Windows 复验 v0.53.1 候选：本机门禁镜像 `run_ci_gates.py` 26 步红 1（export-contract mirror 要 aiExport.js），182 条 [upstream-checkout] 测试静默跳过——v0.51.0 起 CI 先浅取钉住的公开上游、设 HOROSA_SOURCE_ROOT，镜像没跟上；mac 维护机有 vendored 树看不见 | `ensure_upstream` 照 ci.yml 取同一份到 `.upstream/horosa-public`（复用、离线 `--no-upstream`）；守卫 test_guard_wiring 两条负向对照各红 |
 | v0.53.1 (2026-11-24) | v0.53.0 发布后实测：六爻代摇（蓍草 / 掷钱）的正文是一卦、data.lines 与重开配方是另一卦——补卦辞的第二遍 JS 仍带 castMethod、不带 lines，又摇了一次；只在后端回卦辞时出现，原测试只比结构化卦码，因错误的原因通过 | 第二遍钉第一遍的六爻；测试改比快照正文的六爻与重开后的整份快照（负向对照：旧 runner 两例全红） |
 | v0.53.0-dev (2026-11-23) | 发版前 live 复验红两处：星历「留」的时刻与 v3.11 金标差几十秒（上游 v3.15.0 改了留的算法，同步时没看后端这份 diff）；塔罗 surface_audit 报缺 [对读]（导出目录当恒出段，其实是条件段，确定性种子掩盖了，真随机后才露） | 夹具按 v3.15.0 实抓、撤掉 v0.40.0 的方向纠正（上游已修、自我退役守卫按设计翻转）；[对读] 进条件段 + 确定性种子各钉一例；「实测恒出」的段在起卦改随机时逐一重审 |
 | v0.53.0-dev (2026-11-23) | 给奇门报告盘图补画 v3.15.0 附加层时发现：skill 照上游 DunJiaBoard「重画」的盘图还把暗干画在旧位置（上游已挪到门上、主字换留白档）；三式合一的 HTML→SVG 转换器把新的附加层元素整层丢掉；金口诀 / 宿占盘的 plain-text-board 规则（字不描边、字重 100→400）从没套上。手抄审计只扫 src/horosa_skill 与 core-js tools|shared，报告盘图适配器不在扫描里，一条都没报 | 审计 SCAN_ROOTS 加 app-charts/adapters（20 条新命中逐条给结论）；重画 / 转换类盘图在同步时与上游组件逐条对版式；附加层与 plain-text-board 各有测试 + 负向对照 |
@@ -274,6 +275,21 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.2-dev / 2026-11-24 — 本机门禁镜像没跟上 CI 的「取钉住的上游」：没有 vendored 树的机器恒红一步
+
+- **现象**：Windows 复验机对 main `0ce5f80d`（v0.53.1 发版提交）跑 `run_ci_gates.py`：pytest 8025 passed / 670 skipped，26 步红 1——
+  `verify_export_contract_mirror.py` 报「no vendor/runtime-source tree, and HOROSA_SOURCE_ROOT is not set」；跳过原因里 `upstream-checkout 182`。
+  同一提交 CI 全绿。
+- **根因**：v0.51.0（a727bd65）把 export-contract mirror 放进 CI，CI 的 test job 先按 `contracts/upstream_provenance.json` 浅取公开上游、
+  设 `HOROSA_SOURCE_ROOT`。本机镜像只解析 `uv run …` 步骤，取上游那两步是 runner 胶水，不在镜像里。mac 维护机有 gitignored 的 vendored 树，
+  镜像那一步照绿，182 条对照测试也不在乎跳没跳；没有 vendored 树的机器（Windows 复验机、新克隆）本机门禁永远不绿，「全绿再推」名存实亡。
+- **修**：`run_ci_gates.ensure_upstream`——已设 `HOROSA_SOURCE_ROOT` 照用；否则把钉住的提交浅取到 `.upstream/horosa-public`（与 ci.yml 同一路径，
+  .gitignore 已有），已在该提交就复用；取不到（离线）明说并返回 None，不拿空目录充上游。`--no-upstream` 跳过。
+- **核对**：手工设 `HOROSA_SOURCE_ROOT` 指向 5da8e539 的浅克隆后，mirror 一步 ok（v68 == v68）。守卫
+  `test_run_ci_gates_checks_out_the_same_pinned_upstream_as_ci`：CI 与镜像读同一份钉子、放同一处；照用 / 复用 / 离线三种情形；main 必须接进环境。
+  负向对照：main 不调 `ensure_upstream` → 红；去掉「只认自己的 .git」→ 红（`git -C` 会往上找到本仓的 HEAD）。
+- **规则**：CI 每加一步 runner 胶水（取上游、设环境变量），同一提交里问一句本机镜像要不要跟；只在维护机上「恰好有」的东西不算镜像。
 
 ### v0.53.1 / 2026-11-24 — 六爻代摇摇了两次：正文一卦、重开配方另一卦
 

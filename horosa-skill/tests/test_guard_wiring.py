@@ -225,3 +225,43 @@ def test_run_ci_gates_mirrors_the_ci_test_job() -> None:
     assert named_in_ci <= verify_in_ci, named_in_ci - verify_in_ci
     assert any("verify_runtime_scripts.py --self-test" in c for c in commands), "the two-line launcher step must be mirrored"
     assert "run_ci_gates.py" in (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"), "AGENTS §8 必须指明 push 前跑它"
+
+
+def test_run_ci_gates_checks_out_the_same_pinned_upstream_as_ci(tmp_path: Path, monkeypatch) -> None:
+    """v0.53.1 Windows 复验：CI 的 test job 先取钉住的公开上游、设 HOROSA_SOURCE_ROOT；本机镜像没有这步时
+    export-contract mirror 恒红、182 条 [upstream-checkout] 测试静默跳过。镜像要取同一份、放同一处，取不到时不假装取到。"""
+    import importlib.util
+    import json
+    from types import SimpleNamespace
+
+    spec = importlib.util.spec_from_file_location("run_ci_gates", SCRIPTS / "run_ci_gates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8").split("\n  windows-smoke:")[0]
+    assert "horosa-skill/contracts/upstream_provenance.json" in ci
+    assert module.PROVENANCE == PKG_ROOT / "contracts" / "upstream_provenance.json"
+    assert "path: .upstream/horosa-public" in ci and module.UPSTREAM_DIR == REPO_ROOT / ".upstream" / "horosa-public"
+    state = json.loads(module.PROVENANCE.read_text(encoding="utf-8"))
+    repo, sha = state["upstream_repository"], state["upstream_git_sha"]
+
+    calls: list[list[str]] = []
+
+    def online(command, **_kwargs):
+        calls.append(command)
+        if command[:2] == ["git", "init"]:
+            (module.UPSTREAM_DIR / ".git").mkdir()
+        return SimpleNamespace(returncode=0, stdout=sha + "\n" if "rev-parse" in command else "")
+
+    def offline(command, **_kwargs):
+        return SimpleNamespace(returncode=1 if "fetch" in command else 0, stdout="")
+
+    assert module.ensure_upstream({"HOROSA_SOURCE_ROOT": "C:/given"}, runner=online) == "C:/given" and calls == [], "已设就照用"
+    monkeypatch.setattr(module, "UPSTREAM_DIR", tmp_path / "up")
+    assert module.ensure_upstream({}, runner=online) == str(tmp_path / "up")
+    assert any(f"https://github.com/{repo}.git" in c and sha in c for c in calls), calls
+    calls.clear()
+    assert module.ensure_upstream({}, runner=online) == str(tmp_path / "up") and not any("fetch" in c for c in calls), "钉子没变就复用"
+    monkeypatch.setattr(module, "UPSTREAM_DIR", tmp_path / "offline")
+    assert module.ensure_upstream({}, runner=offline) is None, "取不到时不能给出一个空目录当上游"
+    main_src = (SCRIPTS / "run_ci_gates.py").read_text(encoding="utf-8").split("def main")[1]
+    assert "ensure_upstream(env)" in main_src and 'env["HOROSA_SOURCE_ROOT"]' in main_src, "取到的上游必须接进门禁的环境"
