@@ -942,7 +942,13 @@ class CnDivinationRunners:
         desc_names = [desc_ids.get(k) for k in ("guaOrg", "guaRes", "guaMiddle")] if desc_ids else [current_code, changed_code]
         descs = self._call_remote("/gua/desc", {"name": desc_names})
         if desc_ids and isinstance(descs, dict) and any(descs.get(name) for name in desc_names):
-            struct = self.js_client.run("liuyao", {**js_request, "guaDescResult": descs})
+            # 第二遍必须装同一卦（v0.53.1）：代摇（yarrow / coins）时第一遍才摇出六爻，第二遍若仍带 castMethod、不带 lines，
+            # JS 会再摇一卦——快照成了第二卦，lines / current_code / cast.replay 却是第一卦。代摇时钉第一遍的六爻
+            # （以时 / 卦名 / 手动三档本就确定，第二遍原样重放即同一卦，不改它们的装卦路径）。
+            second = dict(js_request)
+            if second.pop("castMethod", None) in ("yarrow", "coins"):
+                second["lines"] = [{"value": line["value"], "change": bool(line["change"])} for line in lines]
+            struct = self.js_client.run("liuyao", {**second, "guaDescResult": descs})
             struct_data = struct.get("data") if isinstance(struct.get("data"), dict) else {}
         snapshot_text = struct.get("snapshot_text") or ""
         if not snapshot_text.strip():

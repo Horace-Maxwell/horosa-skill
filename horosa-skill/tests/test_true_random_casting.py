@@ -172,6 +172,12 @@ def test_sixyao_without_lines_is_a_true_random_cast_replayable_by_lines(tmp_path
     assert first["cast"]["replay"]["lines"] == [{"value": x["value"], "change": x["change"]} for x in first["lines"]]
     replay = _ok(svc, "sixyao", {**base, **first["cast"]["replay"]}).data   # 无状态调用方：data.cast.replay 原样传回
     assert (replay["current_code"], replay["changed_code"], replay["cast_method"]) == (first["current_code"], first["changed_code"], "manual")
+    # 正文与结构化数据必须是同一卦（v0.53.1）：AI 只按快照正文解读，用户按 replay 重开——两者不一致就是两卦。
+    # 负向对照：v0.53.0 补卦辞的第二遍 JS 仍带 castMethod、不带 lines → 又摇一卦，快照是第二卦、lines / replay 是第一卦，
+    # 下面两条全红（旧断言只比 current_code，两边都取自第一卦，因错误的原因通过）。
+    for r in runs:
+        assert _snapshot_lines(r["snapshot_text"]) == [x["value"] for x in r["lines"]], r["snapshot_text"][:400]
+    assert replay["snapshot_text"] == first["snapshot_text"]
     timed = [_ok(svc, "sixyao", {**base, "castMethod": "time"}).data for _ in range(2)]
     assert timed[0]["current_code"] == timed[1]["current_code"] and timed[0]["cast_method"] == "time"
 
@@ -224,3 +230,10 @@ def test_huangji_random_history_year(tmp_path) -> None:
     assert len(years) > 1
     fixed = _run(service, "wangji", {**BASE, "options": {"historyYear": 1999}})
     assert fixed.ok and client.sent("/wangji/pan")[-1]["historyYear"] == 1999
+
+
+def _snapshot_lines(text: str) -> list[int]:
+    """快照 [六爻与动爻] 段的本卦六爻（初→上），阳 1 / 阴 0。"""
+    section = text.split("[六爻与动爻]", 1)[1].split("\n[", 1)[0]
+    return [1 if kind == "阳" else 0 for kind in re.findall(r"^第[1-6]爻：(阳|阴)爻", section, re.M)][:6]
+
