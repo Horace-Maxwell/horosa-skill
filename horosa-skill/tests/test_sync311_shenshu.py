@@ -346,20 +346,24 @@ def test_tarot_seed_is_upstream_birth_seed(tmp_path) -> None:
 def test_tarot_engine_settings_reach_the_engine(tmp_path) -> None:
     """F9：19 个引擎设置经 options 送达（键集锚 resolveSettings）；verdictMode 八法全开；usesReversals=true 下发。"""
     service, _, js = _service(tmp_path, real_js=True)
-    base = _run(service, "tarot", {**TAROT, "spread": "three"})
-    timed = _run(service, "tarot", {**TAROT, "spread": "three", "options": {"timingMethod": "major_number", "timingUnit": "月"}})
+    # v3.15.0 起缺省真随机：另取大牌抽到愚者（0）时计时行是「此事难成于期内」、没有「个月内」，约 1/22 偶发红
+    # （v0.53.1 发版后 runtime-matrix macOS lane 实红）。走生辰种子这一确定性档，断言的才是设置有没有送达。
+    tarot = {**TAROT, "seedMode": "birth"}
+    base = _run(service, "tarot", {**tarot, "spread": "three"})
+    timed = _run(service, "tarot", {**tarot, "spread": "three", "options": {"timingMethod": "major_number", "timingUnit": "月"}})
     assert base.ok and timed.ok, (base.error, timed.error)
+    assert timed.data["cast_method"] == "birth_fields", "去掉生辰种子档就回到真随机：确定性红，而不是 1/22 偶发红"
     assert "计时(花色单位)" in base.data["snapshot_text"]
     assert "计时(大牌数字)" in timed.data["snapshot_text"] and "个月内" in timed.data["snapshot_text"]
-    anchor = _run(service, "tarot", {**TAROT, "spread": "three", "verdictMode": "anchor"})
+    anchor = _run(service, "tarot", {**tarot, "spread": "three", "verdictMode": "anchor"})
     assert "答案锚位" in _section(anchor.data["snapshot_text"], "定局"), "旧码把 anchor 截回 majority"
-    reversed_tdm = _run(service, "tarot", {**TAROT, "deck": "tdm", "usesReversals": True})
-    plain_tdm = _run(service, "tarot", {**TAROT, "deck": "tdm"})
+    reversed_tdm = _run(service, "tarot", {**tarot, "deck": "tdm", "usesReversals": True})
+    plain_tdm = _run(service, "tarot", {**tarot, "deck": "tdm"})
     assert [p for t, p in js.calls if t == "tarot"][-2]["usesReversals"] is True
     assert reversed_tdm.data["snapshot_text"] != plain_tdm.data["snapshot_text"], "马赛牌默认无逆位，显式开逆位必须生效"
-    ignored = _run(service, "tarot", {**TAROT, "options": {"notASetting": 1}})
+    ignored = _run(service, "tarot", {**tarot, "options": {"notASetting": 1}})
     assert ignored.ok and ignored.data["params_ignored"] == ["notASetting"]
-    bad = _run(service, "tarot", {**TAROT, "options": {"timingUnit": "年"}})
+    bad = _run(service, "tarot", {**tarot, "options": {"timingUnit": "年"}})
     assert bad.ok is False and bad.error.code == "tool.tarot_invalid_setting"
 
 

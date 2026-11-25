@@ -16,6 +16,7 @@
 
 | 时代 | 条目 | 一句话 |
 | --- | --- | --- |
+| v0.53.2-dev (2026-11-24) | v0.53.1 发版后 runtime-matrix macOS lane 红 1：`test_tarot_engine_settings_reach_the_engine` 断言「大牌数字」计时有「个月内」，缺省真随机下另取大牌抽到愚者（0）就是「此事难成于期内」，约 1/22；48926308 把其它起卦 live 用例改了确定性档，漏了这条（real_js，离线 CI 也会抽中） | 走生辰种子档 + 断言 `cast_method == birth_fields`（去掉即确定性红）；AGENTS 真随机条补「断言具体内容走确定性档」 |
 | v0.53.2-dev (2026-11-24) | Windows 复验 v0.53.1 候选：本机门禁镜像 `run_ci_gates.py` 26 步红 1（export-contract mirror 要 aiExport.js），182 条 [upstream-checkout] 测试静默跳过——v0.51.0 起 CI 先浅取钉住的公开上游、设 HOROSA_SOURCE_ROOT，镜像没跟上；mac 维护机有 vendored 树看不见 | `ensure_upstream` 照 ci.yml 取同一份到 `.upstream/horosa-public`（LF、复用、离线 `--no-upstream`）。接上上游后又露出两处 Windows 专属坏：revendor relocate 写反斜杠说明符（112 条假漂移）、五条上游对照用例把裸盘符路径拼进 .mjs import；各修各守 |
 | v0.53.1 (2026-11-24) | v0.53.0 发布后实测：六爻代摇（蓍草 / 掷钱）的正文是一卦、data.lines 与重开配方是另一卦——补卦辞的第二遍 JS 仍带 castMethod、不带 lines，又摇了一次；只在后端回卦辞时出现，原测试只比结构化卦码，因错误的原因通过 | 第二遍钉第一遍的六爻；测试改比快照正文的六爻与重开后的整份快照（负向对照：旧 runner 两例全红） |
 | v0.53.0-dev (2026-11-23) | 发版前 live 复验红两处：星历「留」的时刻与 v3.11 金标差几十秒（上游 v3.15.0 改了留的算法，同步时没看后端这份 diff）；塔罗 surface_audit 报缺 [对读]（导出目录当恒出段，其实是条件段，确定性种子掩盖了，真随机后才露） | 夹具按 v3.15.0 实抓、撤掉 v0.40.0 的方向纠正（上游已修、自我退役守卫按设计翻转）；[对读] 进条件段 + 确定性种子各钉一例；「实测恒出」的段在起卦改随机时逐一重审 |
@@ -275,6 +276,16 @@ Windows 侧离线 runtime 发布的逐版本经验台账。这里是**为什么*
 ---
 
 ## 台账正文（新条目加在最上方）
+
+### v0.53.2-dev / 2026-11-24 — 塔罗设置用例在缺省真随机下约 1/22 偶发红
+
+- **现象**：v0.53.1 公开后的 runtime-matrix（8a4879e1）macOS lane `8477 passed / 1 failed`：`test_sync311_shenshu.py::test_tarot_engine_settings_reach_the_engine`
+  断言 `"个月内" in snapshot`，正文是「计时(大牌数字):另取大牌=愚者:此事难成于期内」（种子：真随机）。两条 Windows lane 与本机 lane 同一条绿。
+- **根因**：v3.15.0 起塔罗缺省真随机。「大牌数字」计时取余牌里第一张大牌，愚者编号 0 → 不写期限。用例要验的是「设置送达引擎」，却让牌面随机；
+  48926308 把荆诀 / 太玄 / 地占 / 塔罗生辰种子的 live 用例改了确定性档，这条是 `real_js`（本地 core-js），不在那批 live 文件的视野里。离线 CI 有 node 也会抽中。
+- **修**：整条用例走 `seedMode: "birth"`，并断言 `timed.data["cast_method"] == "birth_fields"`——以后谁去掉种子档，是确定性红而不是 1/22。
+- **核对**：塔罗用例连跑三遍 3 passed；负向对照（种子档换回缺省）→ 红。
+- **规则**：断言具体内容的随机起卦用例走确定性档并断言起法；真随机只配「每次不同 / replay 重开」这类断言。
 
 ### v0.53.2-dev / 2026-11-24 — 本机门禁镜像没跟上 CI 的「取钉住的上游」：没有 vendored 树的机器恒红一步
 
