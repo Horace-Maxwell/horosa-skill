@@ -14,6 +14,7 @@ updates:
       - dependency-name: python
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       # Node 钉死跟离线 runtime 的工具链一致（contracts/runtime_toolchain.json → node.version），随工具链一起升，
-      # tests/test_dockerfile_matches_wheel_includes.py 在两者不一致时红。
+      # tests/test_dockerfile_matches_wheel_includes.py 在两者不一致时红——补丁版也一样（#34：22.23.2 → 22.23.5 红在这条守卫），
+      # 所以版本号一律不由 Dependabot 提；同版本的 digest 刷新（安全重建）照收。
       - dependency-name: node
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
