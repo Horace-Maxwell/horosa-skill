@@ -27,7 +27,7 @@ jobs:
       - name: Record job start
         shell: bash
         run: echo "HOROSA_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # 审计平台待决项 13 / PF-20：按契约里的提交号浅取公开上游（约 86 MB 工作树），设 HOROSA_SOURCE_ROOT——
       # 55 条 [upstream-checkout] 对照测试与跨树守卫以前在 CI 里整段跳过。上游再改写历史时这里红（该知道的事）。
       - name: Read the pinned public upstream (contracts/upstream_provenance.json)
@@ -40,7 +40,7 @@ jobs:
           print("repo=" + state["upstream_repository"])
           print("sha=" + state["upstream_git_sha"])
           PY
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ steps.upstream.outputs.repo }}
           ref: ${{ steps.upstream.outputs.sha }}
@@ -205,7 +205,7 @@ jobs:
       - name: Record job start
         shell: bash
         run: echo "HOROSA_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
